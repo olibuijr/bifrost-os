@@ -4563,11 +4563,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/wake_schedule.rs, springboard/core/src/sleep_assertions.rs, springboard/src/privd/methods.rs",
+   "bifrost": "springboard/core/src/wake_schedule.rs, springboard/core/src/sleep_assertions.rs, springboard/src/privd/methods.rs, springboard/src/shell/wake_page.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no Settings page schedules wake or power-on yet.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wake_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::battery_schedule_adds_and_edits_times_and_arms_the_wake"
+    }
+   ],
+   "ready_note": "Settings > Battery > Schedule (wake_page.rs) adds, edits (time picker, repeat, wake or power on, on or off) and removes repeating times, keeps them in the wake_schedule pref and returns Effect::WakeSchedule with the next moment; the shell binary arms the real-time clock through privd power.wake_alarm (earliest of the schedule and the Clock app's next alarm) at start, after each edit and when a moment has passed. Host tests only; not verified on Midget (needs a machine whose firmware honours the RTC alarm from off)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/shared_cache_page_prewarming.framework",

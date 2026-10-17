@@ -409,6 +409,9 @@ fn run() -> std::io::Result<()> {
             rtc_wake(at);
         }
     }
+    // the repeating wake and power-on times of Settings > Battery > Schedule
+    let mut wake_due = schedule_next(&dir);
+    rtc_wake_schedule(wake_due);
     // the logical frame the shell draws (turned on its side in landscape)
     // and the panel-sized buffer it is turned into before presenting
     let mut frame = vec![0u32; w * h];
@@ -1173,6 +1176,7 @@ fn run() -> std::io::Result<()> {
                     None => eprintln!("springboard: alarm (muted)"),
                 },
                 Effect::WakeAt(at) => rtc_wake(at),
+                Effect::WakeSchedule(at) => rtc_wake_schedule(at),
                 // the shell applies the timeout itself; log it for the record
                 Effect::SystemSleepAfter(min) => sleeper.set_after(sleep::system_sleep_after(Some(&min.to_string())), t),
                 Effect::AutoLock(ms) => eprintln!("springboard: auto-lock {ms} ms"),
@@ -1306,6 +1310,11 @@ fn run() -> std::io::Result<()> {
         let network_changed=wayland && springboard::shell::desktop_network::take_changed();
         if t - last_info > 1000.0 || network_changed {
             last_info = t;
+            // a scheduled moment has passed: arm the clock for the one after it
+            if wake_due > 0 && sys::wall_time().0 >= wake_due {
+                wake_due = schedule_next(&dir);
+                rtc_wake_schedule(wake_due);
+            }
             snap_due = true;
             let mut info = gather(level, &current_wallpaper, &history);
             info.power_profile = boost.profile().label().into();
@@ -1907,12 +1916,42 @@ fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_
 /// alarm while one is set, so the old one is cleared first.
 #[cfg(target_os = "linux")]
 fn rtc_wake(at: i64) {
-    const WAKEALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
-    let _ = std::fs::write(WAKEALARM, "0");
-    if at > 0 {
-        if let Err(e) = std::fs::write(WAKEALARM, at.to_string()) {
-            eprintln!("springboard: rtc wakealarm: {e}");
-        }
+    WAKE_CLOCK.store(at, std::sync::atomic::Ordering::Relaxed);
+    arm_rtc();
+}
+
+/// The next time of Settings > Battery > Schedule (Unix seconds, 0 = none), and the next alarm or timer of the Clock app.
+/// The hardware clock has one alarm, so it is armed for the earlier of the two that is still ahead.
+#[cfg(target_os = "linux")]
+static WAKE_SCHEDULE: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+#[cfg(target_os = "linux")]
+static WAKE_CLOCK: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// Records the next scheduled wake or power-on and re-arms the clock.
+#[cfg(target_os = "linux")]
+fn rtc_wake_schedule(at: i64) {
+    WAKE_SCHEDULE.store(at, std::sync::atomic::Ordering::Relaxed);
+    arm_rtc();
+}
+
+/// The next moment of the schedule kept in `dir`'s settings, from the file (the shell's own copy is the current one).
+#[cfg(target_os = "linux")]
+fn schedule_next(dir: &str) -> i64 {
+    let prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
+    let (unix, offset) = springboard::bare::sys::wall_time();
+    springboard::shell::wake_page::next_at(&springboard::shell::wake_page::load(&prefs), unix, i64::from(offset))
+}
+
+/// Arms the clock through the privileged helper (`power.wake_alarm`) for the earliest of the recorded times that is
+/// still ahead, or disarms it when there is none.
+#[cfg(target_os = "linux")]
+fn arm_rtc() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+    let at = [WAKE_CLOCK.load(Relaxed), WAKE_SCHEDULE.load(Relaxed)].into_iter().filter(|&t| t > now).min().unwrap_or(0);
+    let params = vec![("at", bifrost_core::json::Json::Num(at as f64))];
+    if let Err(e) = springboard::privd_client::connect().call("power.wake_alarm", params) {
+        eprintln!("springboard: rtc wakealarm: {}", e.message);
     }
 }
 

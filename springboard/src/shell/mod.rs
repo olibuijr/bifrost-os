@@ -211,6 +211,7 @@ pub mod js_automation;
 pub mod account_page;
 pub mod timeset_page;
 pub mod night_shift;
+pub mod wake_page;
 pub mod notify_page;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;
@@ -389,6 +390,8 @@ pub enum Effect {
     Alarm,
     /// arm the RTC to wake the device at this Unix time (0 = disarm)
     WakeAt(i64),
+    /// Battery > Schedule: the next scheduled wake or power-on (Unix seconds, 0 = none); the binary arms the clock
+    WakeSchedule(i64),
     /// the user picked a wallpaper: map `wallpapers/<id>.raw` ("" = the
     /// default wallpaper.raw) and `set_wallpaper`; the shell persists the id
     Wallpaper(String),

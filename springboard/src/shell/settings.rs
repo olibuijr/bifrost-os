@@ -12,7 +12,7 @@ use super::settings_load::Loaded;
 use super::settings_search::{self, Search};
 use super::night_shift::{NightEdit, NightShift};
 use super::notify_page::{self, NotifyChange, NotifyEdit, NotifyPrefs};
-use super::list::{Hit, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
+use super::list::{Group, Hit, Item, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
 use super::options::{Options, AUTO_LOCK, GAME_MODES, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::pages::{spec, Action, Command, Model, PageId, Pick, Slider, Toggle};
 use super::power_menu::PowerAction;
@@ -347,6 +347,10 @@ pub struct Settings {
     night: NightShift,
     /// the Night Shift time being picked: true for From
     night_edge: Option<bool>,
+    /// Battery > Schedule: the repeating wake and power-on times
+    wake: bifrost_core::wake_schedule::Schedule,
+    /// the Schedule entry whose time the time-of-day picker is editing
+    wake_edge: Option<usize>,
     alert: Option<Alert>,
     pressed: Option<Hit>,
     /// a thumbnail held on the Wallpaper page
@@ -566,6 +570,8 @@ impl Settings {
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
+            wake: super::wake_page::load(prefs),
+            wake_edge: None,
             alert: None,
             pw_pending: None,
             pw_revealed: None,
@@ -675,6 +681,20 @@ impl Settings {
             PageId::Notifications => notify_page::spec(&self.notify),
             PageId::NotificationApp => notify_page::app_spec(&self.notify, &self.detail),
             PageId::NightShift => self.night.spec(self.opts.clock_24h),
+            PageId::WakeSchedule => {
+                let (unix, off) = crate::bare::sys::wall_time();
+                super::wake_page::spec(&self.wake, self.opts.clock_24h, unix, i64::from(off))
+            }
+            PageId::Battery => {
+                // the Schedule row sits under Energy
+                let mut s = spec(id, &self.model());
+                let row = Item::new("Schedule").value(super::wake_page::summary(&self.wake)).link(PageId::WakeSchedule);
+                match s.groups.iter().position(|g| g.items.iter().any(|it| it.label == "Energy")) {
+                    Some(k) => s.groups[k].items.push(row),
+                    None => s.groups.push(Group::new(vec![row])),
+                }
+                s
+            }
             PageId::Focus => {
                 let mut s = spec(id, &self.model());
                 let prefs = NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() };
@@ -1175,6 +1195,39 @@ impl Settings {
         }
     }
 
+    /// A Battery > Schedule row was tapped: Time opens the picker, the others edit the schedule at once.
+    fn wake_edit(&mut self, ui: &Ui, prefs: &mut Prefs, edit: super::wake_page::WakeEdit) -> Vec<Effect> {
+        use super::wake_page::{self, WakeEdit};
+        if let WakeEdit::Time(i) = edit {
+            if wake_page::apply(&mut self.wake, edit) {
+                self.wake_edge = Some(i);
+                self.time_picker = Some(TimePicker::of_day(ui, self.w, self.h, wake_page::minute_of(&self.wake, i), "Time"));
+            }
+            return vec![];
+        }
+        if !wake_page::apply(&mut self.wake, edit) {
+            return vec![];
+        }
+        self.wake_changed(ui, prefs)
+    }
+
+    /// The time picker chose `minute` for Schedule entry `index`.
+    fn wake_set_minute(&mut self, ui: &Ui, prefs: &mut Prefs, index: usize, minute: u16) -> Vec<Effect> {
+        if super::wake_page::set_minute(&mut self.wake, index, minute) {
+            self.wake_changed(ui, prefs)
+        } else {
+            vec![]
+        }
+    }
+
+    /// Keeps the schedule, redraws the page and asks the shell binary to arm the clock for the next moment.
+    fn wake_changed(&mut self, ui: &Ui, prefs: &mut Prefs) -> Vec<Effect> {
+        super::wake_page::save(&self.wake, prefs);
+        self.rebuild(ui);
+        let (unix, off) = crate::bare::sys::wall_time();
+        vec![Effect::WakeSchedule(super::wake_page::next_at(&self.wake, unix, i64::from(off)))]
+    }
+
     /// The Screen Time pages from the day files and the config on disk.
     fn st_spec(&self, id: PageId) -> super::list::Spec {
         let (cfg, days) = &self.loads.screentime.value;
@@ -1397,7 +1450,7 @@ impl Settings {
         self.stack.truncate(usize::from(self.side_w == 0));
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
-                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
+                HomeScreen, Battery, WakeSchedule, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
                 BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, DwellControl, SlowKeys, AccessibilityShortcut, ScreenReaderSpeech]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
@@ -1625,6 +1678,7 @@ impl Settings {
             (ev, x, y)
         };
         if let Some(picker) = &mut self.time_picker {
+            let mut wake_fx = Vec::new();
             match picker.touch(ui, ev, t, |u| crate::bare::timezone::offset_at(u).unwrap_or(0)) {
                 TimeEvent::None => {}
                 TimeEvent::Cancel => {
@@ -1632,9 +1686,13 @@ impl Settings {
                     self.notify_edge = None;
                     self.st_edge = None;
                     self.night_edge = None;
+                    self.wake_edge = None;
                 }
                 TimeEvent::SetMinute(m) => {
                     self.time_picker = None;
+                    if let Some(index) = self.wake_edge.take() {
+                        wake_fx = self.wake_set_minute(ui, prefs, index, m);
+                    }
                     if let Some(from) = self.st_edge.take() {
                         self.st_set_edge(ui, from, m);
                     }
@@ -1653,7 +1711,7 @@ impl Settings {
                 }
                 TimeEvent::Set(unix) => self.apply_time(ui, unix),
             }
-            return vec![];
+            return wake_fx;
         }
         if let Some(picker) = &mut self.zone_picker {
             match picker.touch(ui, ev, t) {
@@ -2853,6 +2911,7 @@ impl Settings {
                 self.notify_edit(ui, edit, g, i, t);
                 vec![]
             }
+            Action::Wake(edit) => self.wake_edit(ui, prefs, edit),
             Action::Night(edit) => {
                 match edit {
                     NightEdit::Scheduled | NightEdit::Manual => {
@@ -4139,6 +4198,37 @@ mod tests {
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
+    }
+
+    #[test]
+    fn battery_schedule_adds_and_edits_times_and_arms_the_wake() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        tap_row(&mut st, &ui, &mut prefs, "Battery");
+        tap_row(&mut st, &ui, &mut prefs, "Schedule");
+        assert_eq!(st.page(), PageId::WakeSchedule);
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Add Time");
+        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
+        assert_eq!(prefs.get("wake_schedule"), Some("31,420,wake,1"));
+        tap_row(&mut st, &ui, &mut prefs, "Repeat");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,420,wake,1"));
+        tap_row(&mut st, &ui, &mut prefs, "Action");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,420,poweron,1"));
+        // the time row opens the time-of-day picker; its answer moves the entry and arms the clock again
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Time"), vec![]);
+        assert!(st.time_picker.is_some());
+        let fx = st.wake_set_minute(&ui, &mut prefs, 0, 8 * 60);
+        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,480,poweron,1"));
+        // a fresh Settings reads it back and the Battery page shows it
+        let reloaded = Settings::new(&ui, &info(), &prefs, 1200, 1920, Rc::new(vec![]));
+        assert_eq!(super::super::wake_page::summary(&reloaded.wake), "1 time");
+        // off disarms (0), and Remove deletes the entry
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Enabled");
+        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Remove");
+        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
+        assert_eq!(prefs.get("wake_schedule"), Some(""));
     }
 
     #[test]
