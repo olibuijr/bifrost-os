@@ -60,6 +60,40 @@ impl PixelTransfer {
         let turn = video_transfer::turn_for_degrees(degrees)?;
         Some(video_transfer::rotate_picture(img, turn, mirror_h, mirror_v))
     }
+
+    /// Turns a picture clockwise by any angle in degrees, about its centre. The output is the bounding box of the
+    /// turned picture, and pixels that fall outside the source are transparent. Sampling is nearest-neighbour. Returns
+    /// `None` for an empty picture or a non-finite angle.
+    pub fn rotated_by(&self, img: &Image, degrees: f64) -> Option<Image> {
+        if img.w == 0 || img.h == 0 || !degrees.is_finite() {
+            return None;
+        }
+        let (s, c) = degrees.to_radians().sin_cos();
+        let (w, h) = (img.w as f64, img.h as f64);
+        // The epsilon keeps a quarter turn, where cos is 6e-17 rather than 0, from gaining a row or column.
+        let out_w = ceil_eps(w * c.abs() + h * s.abs());
+        let out_h = ceil_eps(w * s.abs() + h * c.abs());
+        let (ocx, ocy) = (out_w as f64 / 2.0, out_h as f64 / 2.0);
+        let (icx, icy) = (w / 2.0, h / 2.0);
+        let mut px = vec![0u32; out_w * out_h];
+        for y in 0..out_h {
+            for x in 0..out_w {
+                // Map the output pixel centre back into the source (inverse of a clockwise turn on a y-down screen).
+                let dx = x as f64 + 0.5 - ocx;
+                let dy = y as f64 + 0.5 - ocy;
+                let sx = (dx * c + dy * s + icx).floor();
+                let sy = (-dx * s + dy * c + icy).floor();
+                if sx >= 0.0 && sy >= 0.0 && (sx as usize) < img.w && (sy as usize) < img.h {
+                    px[y * out_w + x] = img.px[sy as usize * img.w + sx as usize];
+                }
+            }
+        }
+        Some(Image { w: out_w, h: out_h, px })
+    }
+}
+
+fn ceil_eps(v: f64) -> usize {
+    (v - 1e-9).ceil().max(0.0) as usize
 }
 
 #[cfg(test)]
@@ -113,6 +147,41 @@ mod tests {
     #[test]
     fn an_angle_that_is_not_a_quarter_turn_is_refused() {
         assert!(PixelTransfer::new(1, 1).rotated(&solid(3, 2, 0), 45, false, false).is_none());
+    }
+
+    #[test]
+    fn an_arbitrary_angle_grows_the_bounding_box() {
+        let session = PixelTransfer::new(1, 1);
+        let square = solid(2, 2, 0xff00_00ff);
+        let turned = session.rotated_by(&square, 45.0).expect("turned");
+        assert_eq!((turned.w, turned.h), (3, 3));
+        // The centre stays inside the turned picture and the corner falls outside it.
+        assert_eq!(turned.px[1 * 3 + 1], 0xff00_00ff);
+        assert_eq!(turned.px[0], 0);
+    }
+
+    #[test]
+    fn a_zero_angle_is_the_identity() {
+        let session = PixelTransfer::new(1, 1);
+        let src = Image { w: 3, h: 2, px: vec![1, 2, 3, 4, 5, 6] };
+        let out = session.rotated_by(&src, 0.0).expect("turned");
+        assert_eq!((out.w, out.h), (3, 2));
+        assert_eq!(out.px, src.px);
+    }
+
+    #[test]
+    fn a_quarter_turn_by_any_path_gives_the_same_size() {
+        let session = PixelTransfer::new(1, 1);
+        let src = solid(3, 2, 0xff00_0000);
+        let by_angle = session.rotated_by(&src, 90.0).expect("turned");
+        assert_eq!((by_angle.w, by_angle.h), (2, 3));
+    }
+
+    #[test]
+    fn an_empty_picture_or_a_non_finite_angle_is_refused() {
+        let session = PixelTransfer::new(1, 1);
+        assert!(session.rotated_by(&solid(0, 0, 0), 10.0).is_none());
+        assert!(session.rotated_by(&solid(2, 2, 0), f64::NAN).is_none());
     }
 
     #[test]
