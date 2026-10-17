@@ -2522,7 +2522,9 @@ impl Shell {
             let app_notifs: Vec<(AppId, notify_page::AppNotif)> = apps().iter().filter_map(|a| self.prefs.get(&notify_page::pref_key(a.id)).map(|v| (a.id, notify_page::AppNotif::decode(v)))).collect();
             let focus_allowed = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_focus_allowed(a)).collect();
             let schedule = self.notify.store().schedule();
+            let (mode_names, mode_on) = self.focus_mode_view();
             if let Some(st) = &mut self.settings {
+                st.set_focus_modes(mode_names, mode_on);
                 st.set_notify(&self.ui, schedule, muted, app_notifs, focus_allowed);
             }
         }
@@ -3189,6 +3191,10 @@ impl Shell {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
                         notify_page::NotifyChange::ToggleMute(a) => self.toggle_mute(a),
                         notify_page::NotifyChange::FocusAllowed(a, on) => self.set_focus_allowed(a, on),
+                        notify_page::NotifyChange::Mode(i) => {
+                            let id = i.and_then(|i| self.notify.modes.list.get(i)).map(|m| m.id.clone());
+                            self.set_focus_mode(id.as_deref());
+                        }
                         notify_page::NotifyChange::App(a, n) => {
                             let _ = self.prefs.set(&notify_page::pref_key(a), &n.encode());
                             self.store_changed();
