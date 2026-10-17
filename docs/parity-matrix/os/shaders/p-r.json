@@ -16,11 +16,11 @@
     "size": 954320
    },
    "description": "",
-   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
+   "role": "Portrait filters (depth-driven blur, portrait lighting)",
    "doc": "",
-   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "bifrost": "springboard/render/src/depth_blur.rs",
    "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed"
   },

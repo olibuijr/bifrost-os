@@ -33,7 +33,7 @@
       "apple": "CIColorControls, CIExposureAdjust, CIHueAdjust, CITemperatureAndTint, CIToneCurve, CIVibrance, CIGammaAdjust",
       "bifrost": "springboard/render/src/color_curve.rs (vibrance, five-point tone curve); springboard/render/src/colorfx.rs (exposure, saturation, contrast, hue, temperature and tint, gamma); springboard/render/src/effect_chain.rs (named colour filters); springboard/sdk/src/image_effects.rs (app API for vibrance and tone curve); springboard/sdk/src/image_filter.rs (app API for the named filters)",
       "status": "partial",
-      "note": "built on parity/team-j-core-image; not yet verified on Midget. Vibrance and the tone curve are new models with unit tests. Exposure, hue, temperature and tint are reachable by apps through the named filter chain. The temperature model is a gain approximation, not a white-point conversion. Photos still uses brightness and contrast only."
+      "note": "built on parity/team-j-core-image; not yet verified on Midget. Vibrance and the tone curve are new models with unit tests. Exposure, hue, temperature and tint are reachable by apps through the named filter chain. The temperature model is a gain approximation, not a white-point conversion. Photos still uses brightness and contrast only. Built 2026-10-17: CIWhitePointAdjust (colorfx::white_point) and the monochrome colour kernel (colorfx::monochrome); both have host tests."
     },
     {
       "feature": "Photo and colour effects (sepia, mono, noir, vignette, false colour, posterize)",
@@ -87,9 +87,9 @@
     {
       "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
       "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
-      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps)",
+      "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps); springboard/render/src/generators.rs (random noise)",
       "status": "partial",
-      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget."
+      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test."
     },
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
@@ -136,9 +136,9 @@
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
       "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
-      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine)",
+      "status": "partial",
+      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: swipe, bars swipe and copy machine are CPU models with host tests (transition_filters.rs), not yet wired into an app or verified on Midget. Gap: flash, mod, page curl, ripple, accordion fold and disintegrate are missing. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md)."
     },
     {
       "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
@@ -166,7 +166,7 @@
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
       "bifrost": "springboard/render/src/filter_catalogue.rs; springboard/render/src/filter_input.rs (check_input, resolve_inputs)",
       "status": "partial",
-      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Input values are checked against the catalogue (known filter and key, finite, in range) and resolve_inputs fills defaults, tested headless in springboard/render/tests/parity_sdk-complete-33.rs. Covers only filters that exist; not wired to a CIFilter object, and the rest of the reference set and the detectors stay gaps, which need the other filter implementations. Headless tests in springboard/render/tests/parity_sdk-tests-07.rs: headless_catalogue_holds_the_28_built_filters_with_unique_reference_names, headless_detectors_and_render_destinations_are_not_catalogued, headless_category_listing_filters_by_category_in_catalogue_order, headless_attributes_use_the_reference_keys_and_defaults, headless_filter_info_carries_its_category_and_attribute_ranges, headless_filters_without_inputs_list_no_attributes, headless_every_default_lies_inside_its_range."
+      "note": "Registry of the 47 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs."
     }
   ],
   "gaps": [
