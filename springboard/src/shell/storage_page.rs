@@ -63,6 +63,8 @@ pub struct PageState<'a> {
     pub usage: Option<&'a Usage>,
     pub passcode_on: bool,
     pub dev: &'a DevState,
+    /// the packages Storage offers to remove (none before the read lands)
+    pub removable: &'a [String],
 }
 
 pub fn spec(id: PageId, st: &PageState) -> Spec {
@@ -81,6 +83,10 @@ pub fn spec(id: PageId, st: &PageState) -> Spec {
                     let item = Item::new(c.label()).value(human(n)).action(Action::Run(Command::ClearCache(c)));
                     groups.push(Group::new(vec![item.tint(if n > 0 { Tint::Blue } else { Tint::Dim })]).footer(c.footer()));
                 }
+            }
+            if !st.removable.is_empty() {
+                let items: Vec<Item> = st.removable.iter().map(|p| Item::new(p.as_str()).action(Action::Run(Command::RemovePackage(p.clone())))).collect();
+                groups.push(Group::new(items).header("APPLICATIONS").footer("Packages installed outside the App Store. Removing one deletes its program files; your files are kept."));
             }
             page("Storage", groups)
         }
@@ -229,7 +235,7 @@ mod tests {
     fn storage_page_shows_a_bar_the_categories_and_the_clear_actions() {
         let dev = DevState::new(true, true);
         let u = usage();
-        let s = spec(PageId::Storage, &PageState { usage: Some(&u), passcode_on: false, dev: &dev });
+        let s = spec(PageId::Storage, &PageState { usage: Some(&u), passcode_on: false, dev: &dev, removable: &[] });
         assert_eq!(s.title, "Storage");
         assert!(matches!(&s.groups[0].items[0].body, Body::Bar(b) if b.caption == "22.0 GB of 32.0 GB Used" && b.segments.len() == 8));
         let l = labels(&s);
@@ -243,9 +249,22 @@ mod tests {
     }
 
     #[test]
+    fn removable_packages_are_rows_that_ask_before_they_remove() {
+        let dev = DevState::new(true, true);
+        let names = vec!["firefox".to_string(), "gimp".to_string()];
+        let s = spec(PageId::Storage, &PageState { usage: None, passcode_on: false, dev: &dev, removable: &names });
+        let apps = s.groups.iter().find(|g| g.header.as_deref() == Some("APPLICATIONS")).expect("an APPLICATIONS group");
+        let labels: Vec<&str> = apps.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, vec!["firefox", "gimp"]);
+        assert_eq!(apps.items[1].action, Action::Run(Command::RemovePackage("gimp".into())));
+        let none = spec(PageId::Storage, &PageState { usage: None, passcode_on: false, dev: &dev, removable: &[] });
+        assert!(none.groups.iter().all(|g| g.header.as_deref() != Some("APPLICATIONS")));
+    }
+
+    #[test]
     fn storage_page_before_the_scan_finishes_only_has_the_bar() {
         let dev = DevState::new(true, true);
-        let s = spec(PageId::Storage, &PageState { usage: None, passcode_on: false, dev: &dev });
+        let s = spec(PageId::Storage, &PageState { usage: None, passcode_on: false, dev: &dev, removable: &[] });
         assert_eq!(s.groups.len(), 1);
         assert!(matches!(&s.groups[0].items[0].body, Body::Bar(b) if b.caption == "Calculating…" && b.segments.is_empty()));
     }
@@ -263,10 +282,10 @@ mod tests {
     #[test]
     fn passcode_page_offers_what_fits_the_state() {
         let dev = DevState::new(true, true);
-        let off = spec(PageId::Passcode, &PageState { usage: None, passcode_on: false, dev: &dev });
+        let off = spec(PageId::Passcode, &PageState { usage: None, passcode_on: false, dev: &dev, removable: &[] });
         assert_eq!(labels(&off), ["Turn Passcode On", "Custom Numeric Code"]);
         assert_eq!(off.groups[0].items[0].action, Action::Passcode(Purpose::TurnOn, false));
-        let on = spec(PageId::Passcode, &PageState { usage: None, passcode_on: true, dev: &dev });
+        let on = spec(PageId::Passcode, &PageState { usage: None, passcode_on: true, dev: &dev, removable: &[] });
         assert_eq!(labels(&on), ["Turn Passcode Off", "Change Passcode", "Require Passcode", "Custom Numeric Code"]);
         assert_eq!(on.groups[1].items[0].value, "Immediately");
         assert_eq!(on.groups[0].items[1].action, Action::Passcode(Purpose::Change, false));
@@ -275,7 +294,7 @@ mod tests {
     #[test]
     fn developer_page_shows_the_real_switch_states() {
         let dev = DevState::new(false, true);
-        let s = spec(PageId::Developer, &PageState { usage: None, passcode_on: false, dev: &dev });
+        let s = spec(PageId::Developer, &PageState { usage: None, passcode_on: false, dev: &dev, removable: &[] });
         assert_eq!(labels(&s), ["Performance HUD", "Zero-Copy GPU Output"]);
         assert_eq!(s.groups[0].items[0].accessory, super::super::list::Accessory::Switch(false));
         assert_eq!(s.groups[1].items[0].accessory, super::super::list::Accessory::Switch(false));

@@ -384,6 +384,8 @@ pub enum Command {
     DownloadSpeechModel,
     /// Keyboard > Dictation: removes the model and withdraws consent
     RemoveSpeechModel,
+    /// Storage > Applications: removes one package with pacman, after the confirmation alert
+    RemovePackage(String),
     /// Users & Groups: delete an account or a group
     Account(super::users_page::Danger),
     /// a failed change, shown as an alert with OK (its text is the reason)
