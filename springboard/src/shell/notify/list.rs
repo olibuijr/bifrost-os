@@ -64,6 +64,8 @@ pub enum Hit {
     Collapse(usize),
     /// the button under the list that drops everything
     ClearAll,
+    /// an action button under a card: the group, the notification (its store id) and the button's index in its category
+    Action { group: usize, id: u64, slot: usize },
 }
 
 /// One card, or a whole group, slid sideways by a finger.
@@ -199,8 +201,12 @@ impl Card {
 
     /// The identifier of the action whose button holds (px, py), for a card with its top-left at (x, y).
     pub fn action_at(&self, ui: &Ui, x: f32, y: f32, px: f32, py: f32) -> Option<&str> {
-        let rects = self.action_rects(ui, x, y);
-        action_index_at(&rects, px, py).map(|i| self.actions[i].id.as_str())
+        self.action_slot_at(ui, x, y, px, py).map(|i| self.actions[i].id.as_str())
+    }
+
+    /// The index in the category of the button under (px, py), for a card with its top-left at (x, y).
+    pub fn action_slot_at(&self, ui: &Ui, x: f32, y: f32, px: f32, py: f32) -> Option<usize> {
+        action_index_at(&self.action_rects(ui, x, y), px, py)
     }
 
     /// Draws the card with its top-left at (x, y), faded by `alpha` / 255.
@@ -352,6 +358,19 @@ impl ListView {
         ListView { mode, groups, clear_all: ui.text("Clear All", 13.0, Weight::Semibold, WHITE), reveal: [label("Options"), label("View"), label("Clear")] }
     }
 
+    /// Gives every card its category's action buttons. `actions` lists a notification's buttons by its store id.
+    /// Cards that hide their text (private previews) get none.
+    pub fn set_actions(&mut self, ui: &Ui, actions: &dyn Fn(u64) -> Vec<NotifAction>, icon: &dyn Fn(&str) -> Option<Image>) {
+        for g in &mut self.groups {
+            for c in g.cards.iter_mut().filter(|c| !c.private) {
+                let a = actions(c.id);
+                if !a.is_empty() {
+                    c.set_actions(ui, &a, icon);
+                }
+            }
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
@@ -365,10 +384,11 @@ impl ListView {
     pub fn group_h(&self, ui: &Ui, i: usize) -> f32 {
         let g = &self.groups[i];
         if g.expanded {
-            let n = g.cards.len() as f32;
-            ui.pt(HEADER_PT) + n * ui.pt(CARD_H_PT) + (n - 1.0).max(0.0) * ui.pt(GAP_PT) + if g.more.is_some() { ui.pt(MORE_PT) } else { 0.0 }
+            let cards: f32 = g.cards.iter().map(|c| c.height(ui)).sum();
+            ui.pt(HEADER_PT) + cards + (g.cards.len() as f32 - 1.0).max(0.0) * ui.pt(GAP_PT) + if g.more.is_some() { ui.pt(MORE_PT) } else { 0.0 }
         } else {
-            ui.pt(CARD_H_PT) + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + if g.caption.is_some() { ui.pt(CAPTION_PT) } else { 0.0 }
+            let top = g.cards.first().map_or(ui.pt(CARD_H_PT), |c| c.height(ui));
+            top + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + if g.caption.is_some() { ui.pt(CAPTION_PT) } else { 0.0 }
         }
     }
 
@@ -402,7 +422,8 @@ impl ListView {
     /// Card `j` of group `i`: (x, y) when the list starts at `top`.
     fn card_pos(&self, ui: &Ui, w: i32, top: f32, i: usize, j: usize) -> (f32, f32) {
         let gy = self.group_top(ui, top, i);
-        let y = if self.groups[i].expanded { gy + ui.pt(HEADER_PT) + j as f32 * ui.pt(CARD_H_PT + GAP_PT) } else { gy };
+        let above: f32 = self.groups[i].cards[..j].iter().map(|c| c.height(ui) + ui.pt(GAP_PT)).sum();
+        let y = if self.groups[i].expanded { gy + ui.pt(HEADER_PT) + above } else { gy };
         (Self::x(ui, w), y)
     }
 
@@ -479,7 +500,10 @@ impl ListView {
             }
             for (j, c) in g.cards.iter().enumerate() {
                 let (cx, cy) = self.card_pos(ui, w, top, i, j);
-                let h = if g.expanded { ch } else { self.group_h(ui, i) };
+                if let Some(slot) = c.action_slot_at(ui, cx, cy, x, y) {
+                    return Some(Hit::Action { group: i, id: c.id, slot });
+                }
+                let h = if g.expanded { c.height(ui) } else { self.group_h(ui, i) };
                 if inside((cx, cy, cw, h)) {
                     return Some(Hit::Card { group: i, id: c.id, app: c.app });
                 }
@@ -535,7 +559,7 @@ impl ListView {
                 }
                 if let Some(m) = &g.more {
                     let (_, last) = self.card_pos(ui, w, top, i, g.cards.len() - 1);
-                    let my = last + ch + ui.pt(MORE_PT) / 2.0;
+                    let my = last + g.cards.last().map_or(ch, |c| c.height(ui)) + ui.pt(MORE_PT) / 2.0;
                     s.blit(m, (x + ui.pt(PAD_PT)) as i32, (my - m.h as f32 / 2.0).round() as i32, 255, a);
                 }
             } else {
@@ -546,7 +570,7 @@ impl ListView {
                 }
                 g.cards[0].draw(s, ui, x, gy, a);
                 if let Some(c) = &g.caption {
-                    let cy = gy + ch + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + ui.pt(CAPTION_PT) / 2.0;
+                    let cy = gy + g.cards[0].height(ui) + (g.count - 1).min(MAX_PEEK) as f32 * ui.pt(PEEK_PT) + ui.pt(CAPTION_PT) / 2.0;
                     s.blit(c, (x + ui.pt(PAD_PT)) as i32, (cy - c.h as f32 / 2.0).round() as i32, 255, a);
                 }
             }
@@ -691,6 +715,20 @@ mod tests {
         let empty = ListView::new(&ui, Mode::Lock, &[], &icon, 0, NONE);
         assert_eq!(empty.footer_h(&ui), 0.0);
         assert_eq!(empty.hit(&ui, 1200, top, bx + bw / 2.0, top + ui.pt(GROUP_GAP_PT) + 5.0), None, "nothing to clear");
+    }
+
+    #[test]
+    fn a_card_with_actions_is_taller_and_its_buttons_route_as_hits() {
+        let ui = ui();
+        let mut l = ListView::new(&ui, Mode::Center, &groups(), &icon, 0, NONE);
+        let before = l.group_h(&ui, 1);
+        let acts = |id: u64| if id == 4 { vec![NotifAction::button("archive", "Archive"), NotifAction::button("delete", "Delete")] } else { vec![] };
+        l.set_actions(&ui, &acts, &|_| None);
+        assert_eq!(l.group_h(&ui, 1), before + ui.pt(ACTION_ROW_PT), "the Low Battery card gains its action row");
+        let (cx, cy) = l.card_pos(&ui, 1200, 0.0, 1, 0);
+        let [bx, by, _, _] = l.groups[1].cards[0].action_rects(&ui, cx, cy)[0];
+        assert_eq!(l.hit(&ui, 1200, 0.0, bx + 2.0, by + 2.0), Some(Hit::Action { group: 1, id: 4, slot: 0 }));
+        assert_eq!(l.hit(&ui, 1200, 0.0, cx + 2.0, cy + 2.0), Some(Hit::Card { group: 1, id: 4, app: AppId::Settings }));
     }
 
     #[test]

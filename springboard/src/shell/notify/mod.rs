@@ -685,7 +685,19 @@ impl Shell {
         let muted: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.notify.store.is_muted(a)).collect();
         let hidden: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.previews_hidden(a, mode)).collect();
         let opts = Opts { expanded: &self.notify.expanded, muted: &muted, hidden: &hidden, private };
-        ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts)
+        let mut list = ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts);
+        let usernotif = &self.usernotif;
+        list.set_actions(&self.ui, &|id| usernotif.actions(id), &|name| crate::first_frame_cache::cached_icon(name, 16));
+        list
+    }
+
+    /// The user chose button `slot` of notification `id` in a list: the app hears the action and the notification is
+    /// cleared, as a banner's button does.
+    fn list_action(&mut self, id: u64, slot: usize, t: f64) {
+        let Some(action) = self.usernotif.actions(id).get(slot).map(|a| a.id.clone()) else { return };
+        self.usernotif_respond(id, &action, "", t);
+        self.clear_notification(id);
+        self.dirty = true;
     }
 
     /// Where the lock screen's list starts, in px: under the widget strip,
@@ -1069,6 +1081,7 @@ impl Shell {
                 }
             }
             Aim::Button(Hit::ClearAll) => self.clear_all_notifications(),
+            Aim::Button(Hit::Action { id, slot, .. }) => self.list_action(id, slot, t),
             Aim::Button(Hit::Card { .. }) => {}
             Aim::Revealed(slot) => {
                 if let Some(Aim::Card { id, app, whole, group, .. }) = self.notify.revealed.take() {

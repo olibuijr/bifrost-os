@@ -20,6 +20,7 @@ use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
 use super::screentime::{self, config::Config as StConfig, page::{StEdit, View as StView}, usage as st_usage};
 use super::prefs::Prefs;
 use super::storage::Scanner;
+use super::pacman_update::Removal;
 use bifrost_ui::transition::{Ease, Subtype, Transition};
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
@@ -125,6 +126,15 @@ pub enum AlertHit {
 
 impl Alert {
     pub fn new(ui: &Ui, command: Command) -> Self {
+        // the removal's text comes from `Removal`, which refuses a package it cannot remove
+        if let Command::RemovePackage(name) = &command {
+            let (title, message, confirm) = match Removal::ask(name) {
+                Ok(r) => (r.title(), r.body(), r.confirm_label()),
+                Err(e) => ("Could Not Remove".to_string(), e, "OK"),
+            };
+            let buttons = vec![ui.text("Cancel", 17.0, Weight::Regular, BLUE), ui.text(confirm, 17.0, Weight::Semibold, RED)];
+            return Alert { card: AlertCard::new(ui, &title, &message, buttons), command, title: title.clone(), message: message.clone(), confirm: confirm.to_string() };
+        }
         let (title, message, confirm, destructive) = match &command {
             Command::ResetSettings => ("Reset All Settings?", "Every setting goes back to its default. Saved Wi-Fi networks are kept.".to_string(), "Reset", true),
             Command::Restart => ("Restart BifrOSt?", "The shell quits and starts again.".to_string(), "Restart", true),
@@ -156,6 +166,7 @@ impl Alert {
             Command::InstallUpdate => ("Restart to Install?", "BifrOSt restarts into the new version. If it fails within a minute, the previous version comes back.".to_string(), "Restart", false),
             Command::RollbackSystem => ("Roll Back to Previous System?", "The system returns to the version before the last update. Your data is kept. The shell restarts.".to_string(), "Roll Back", true),
             Command::Notice(reason) => ("Could Not Make the Change", reason.clone(), "OK", false),
+            Command::RemovePackage(_) => ("Remove Package?", String::new(), "Remove", true),
         };
         let buttons = vec![ui.text("Cancel", 17.0, Weight::Regular, BLUE), ui.text(confirm, 17.0, Weight::Semibold, if destructive { RED } else { BLUE })];
         Alert { card: AlertCard::new(ui, title, &message, buttons), command, title: title.to_string(), message: message.clone(), confirm: confirm.to_string() }
@@ -222,6 +233,8 @@ struct Loads {
     gpus: Loaded<Vec<super::gpu_page::Gpu>>,
     crashes: Loaded<Vec<super::diag::CrashEntry>>,
     latest_backup: Loaded<Option<u64>>,
+    /// the packages Storage may remove (`pacman_update::removable_packages`)
+    removable: Loaded<Vec<String>>,
     logins: Loaded<Vec<crate::credentials::Login>>,
     accounts: Loaded<(Vec<bifrost_ui::internet_accounts::Account>, bifrost_ui::account_store::Contents)>,
     users: Loaded<super::users_page::View>,
@@ -242,6 +255,7 @@ impl Loads {
         landed |= self.gpus.poll();
         landed |= self.crashes.poll();
         landed |= self.latest_backup.poll();
+        landed |= self.removable.poll();
         landed |= self.logins.poll();
         landed |= self.accounts.poll();
         landed |= self.users.poll();
@@ -346,6 +360,8 @@ pub struct Settings {
     scan: Scanner,
     /// the Back Up Now copy in flight; its result sets the backup note
     backup_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
+    /// a package removal running on a worker: its result
+    package_rx: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     /// the backup copied before Install Now restarts the system, while it runs (its file count, or why it failed)
     install_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
     /// the backup is in and the restart can go ahead (taken by the shell through `take_install_ready`)
@@ -561,6 +577,7 @@ impl Settings {
             data_dir: super::apphost::root(),
             scan: Scanner::default(),
             backup_rx: None,
+            package_rx: None,
             install_rx: None,
             install_ready: false,
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
@@ -666,7 +683,8 @@ impl Settings {
             }
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
-                storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
+                let removable = self.loads.removable.get().map_or(&[][..], |v| v.as_slice());
+                storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev, removable })
             }
             PageId::Passwords => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
@@ -930,6 +948,7 @@ impl Settings {
                 let root = backup::destination_root(&dir, &self.opts.backup_destination);
                 self.loads.latest_backup.start("backup-read", move || backup::latest(&root).map(|(_, t)| t))
             }
+            PageId::Storage => self.loads.removable.start("removable-read", super::pacman_update::removable_packages),
             PageId::Passwords => {
                 let root = super::apphost::root();
                 self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
@@ -1430,6 +1449,15 @@ impl Settings {
             self.rebuild(ui);
             frame = true;
         }
+        if let Some(res) = self.package_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.package_rx = None;
+            match res {
+                Ok(()) => self.loads.removable.start("removable-read", super::pacman_update::removable_packages),
+                Err(e) => self.alert = Some(Alert::new(ui, Command::Notice(e))),
+            }
+            self.rebuild(ui);
+            frame = true;
+        }
         if self.stale_depth > 0 && self.transition.is_none() && self.stack.len() < self.stale_depth {
             self.rebuild(ui);
             frame = true;
@@ -1486,7 +1514,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.backup_rx.is_some() || self.install_rx.is_some() || self.loads.busy() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.backup_rx.is_some() || self.package_rx.is_some() || self.install_rx.is_some() || self.loads.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -3100,6 +3128,11 @@ impl Settings {
                 vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true)]
             }
             Command::Notice(_) => vec![],
+            Command::RemovePackage(name) => {
+                let name = name.clone();
+                self.package_rx = Some(read_on_worker("package-remove", move || Removal::ask(&name).and_then(|r| r.run())));
+                vec![]
+            }
             Command::Restart => vec![Effect::Restart],
             Command::ShutDown => vec![Effect::Power(PowerAction::Off)],
             Command::Reboot => vec![Effect::Power(PowerAction::Restart)],
