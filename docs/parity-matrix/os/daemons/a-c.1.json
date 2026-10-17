@@ -697,7 +697,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/core_location.rs",
    "status": "partial",
-   "note": "The location model exists (sdk core_location.rs, tested). The shell has no location service that feeds it and no per-app authorisation prompt yet.",
+   "note": "The location model exists (sdk core_location.rs, tested). Built 2026-10-17: the per-app location question (ui permission_question.rs: PermissionQuestion::location, grants_location; tests permission_question::tests). Still missing: the shell has no location service that feeds the model, and it does not draw the prompt yet.",
    "rea": [],
    "method": "rule"
   },
@@ -1357,7 +1357,7 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
    "status": "partial",
-   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks; tests note_url::tests). No backlink indicator is drawn and no linked-notes panel exists yet.",
+   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks) and, built 2026-10-17, backlink_label for the panel line (tests note_url::tests). Still missing: no backlink indicator is drawn and no linked-notes panel exists yet.",
    "rea": [],
    "method": "audit"
   },
@@ -1695,7 +1695,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
    "status": "partial",
-   "note": "Colour profile and display models exist (icc.rs, displays.rs). No on-screen display for brightness or volume is drawn by the shell yet.",
+   "note": "Colour profile and display models exist (icc.rs, displays.rs). Built 2026-10-17: the on-screen display model for volume, brightness and keyboard brightness (ui osd.rs: hold, fade, bar segments; tests osd::tests). Still missing: no key press feeds it and the shell does not draw the display.",
    "rea": [],
    "method": "rule"
   },
@@ -2913,7 +2913,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
    "status": "partial",
-   "note": "Missing: per-app incoming connection decisions for the application firewall. Firewall rules are a Linux unit; the per-app prompt is not built.",
+   "note": "Built 2026-10-17: per-app incoming connection decisions (core app_firewall.rs: allow or deny per app, ask when none is remembered; tests app_firewall::tests). Still missing: the per-app prompt the shell shows, and the firewall rule that applies a decision. Firewall rules are a Linux unit.",
    "rea": [],
    "method": "rule"
   },
