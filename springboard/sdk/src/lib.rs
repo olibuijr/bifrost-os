@@ -61,6 +61,7 @@ pub mod kit {
 
 pub mod watchdog;
 pub mod widgets;
+pub mod today_widgets;
 pub mod widgets_timeline;
 pub mod glyphs;
 pub mod glyph_draw;
