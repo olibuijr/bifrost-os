@@ -60,9 +60,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gss.json",
-   "status": "partial",
-   "note": "from SDK matrix gss.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Services (Game Center) backend. BifrOSt has no Apple game service; its game data is local.",
    "rea": [],
    "method": "assessed"
   },
@@ -142,9 +142,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/gamesave.json",
-   "status": "partial",
-   "note": "from SDK matrix gamesave.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple game save sync over Apple's cloud. BifrOSt has no Apple cloud save service.",
    "rea": [],
    "method": "assessed"
   },
@@ -753,9 +753,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/itunes-library.json",
-   "status": "partial",
-   "note": "from SDK matrix itunes-library.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Reads the Apple Music and iTunes library database, a media store format BifrOSt does not carry.",
    "rea": [],
    "method": "assessed"
   },
@@ -1608,7 +1608,16 @@
    "status": "partial",
    "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready_note": "Game Mode policy (full-screen game detection, performance tuning) is covered by shell gamemode host tests. Indexing pause, Bluetooth sniff interval and an app-facing state API are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GamePolicyServices.framework",
@@ -1629,7 +1638,16 @@
    "status": "partial",
    "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready_note": "Game Mode enter, leave and tuning (performance profile, nice and uclamp, scheduler pause, menu item) is covered by shell gamemode host tests. Indexing pause, Bluetooth sniff interval and an app-facing state API are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameServices.framework",
@@ -4172,7 +4190,16 @@
    "status": "partial",
    "note": "Per-app searchable content index with a bounded on-disk store is in quicksearch.rs. Gap: no vector or hybrid index tables; the store holds keyword entries only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Per-app keyword index with a bounded on-disk store (sdk quicksearch) is covered by host tests. Keyword-only store: no vector or hybrid tables (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridDatabaseTokenizer.framework",
@@ -4193,7 +4220,16 @@
    "status": "partial",
    "note": "Partial: bifrost_ui::search_rank has the search tokenizer (word segmentation close to UAX 29, case and diacritic folding, CJK pairs, prefix terms for as-you-type). The Search panel uses it to rank the Documents section. Not done: stemming, language rules beyond CJK pairs and folding, the spotlight index still matches with the older fuzzy matcher (springboard/src/shell/spotindex.rs), and other apps still split words inline (the Mail search).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "Tokenizer (word segmentation, case and diacritic folding, CJK pairs, prefix terms) is covered by search_rank host tests. Stemming and the older spotindex matcher remain open (see the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridQueryProcessing.framework",
@@ -4214,7 +4250,16 @@
    "status": "partial",
    "note": "Mail search parses query words, quoted phrases and field limits such as from: and subject:, and requires every term to match. Gap: no query rewriting or semantic query planning, and the Search panel has no shared query parser.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Mail query parsing (words, quoted phrases, from: and subject: limits, all-terms match) is covered by host tests. No query rewriting or semantic planning (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearch.framework",
@@ -4235,7 +4280,21 @@
    "status": "partial",
    "note": "Keyword search over app content (quicksearch.rs) and over Mail messages (mail-desktop search.rs) works. Gap: the hybrid keyword plus semantic retrieval that the reference search engine runs is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Keyword search over app content and Mail messages is covered by host tests. Hybrid keyword plus semantic retrieval is not built (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchAdapter.framework",
@@ -4252,11 +4311,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs (indexed_groups, indexed_key); springboard/src/shell/spotindex.rs (Found.text, Found.modified)",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "Partial: each source of the Search panel is an adapter over its rows (springboard/src/shell/quicksearch.rs, build_tables and the Table source): apps, Settings pages, clock, Deildu titles, contacts, shortcuts, files and calendar events; indexed items reach the panel with their text, indexed time and open-count key. Not done: notes (no shell-side store), and per-app ranking inputs beyond text, time and opens.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Each Search panel source is an adapter over its rows, covered by shell quicksearch host tests. Notes as a source and per-app ranking inputs beyond text, time and opens are not done."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchResultRanker.framework",
@@ -4273,11 +4341,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/search_rank.rs (Bm25, rank, order, Usage, Kind, SemanticHook)",
+   "bifrost": "springboard/ui/src/search_rank.rs",
    "status": "partial",
    "note": "Partial: BM25 over weighted title and text fields with a coverage factor, plus title match, a kind prior for short queries (apps, settings, documents), recency of indexing, and local open counts on a log scale; the panel merges every source through it (springboard/ui/src/search_rank.rs, rank and Query::merge). The semantic term is a SemanticHook; the shell passes NoSemantic because no local text model is bundled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "BM25 ranking with title, kind, recency and open-count factors is covered by search_rank host tests. The semantic hook is passed NoSemantic because no local text model is bundled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HybridSearchRuntime.framework",
@@ -4294,11 +4371,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/search_rank.rs (Source, run, Merged, Section, Hit)",
+   "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "Partial: search_rank::Query runs each source on its own thread with a deadline, and the Search panel polls it every frame while a query is pending, so late sections stream in and the top hit and row order do not move once shown (springboard/src/shell/quicksearch.rs, start_run and groups_for). Not done: notes as a source, and a swappable on-device model behind the runtime.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Per-source threads with a deadline and streamed sections are covered by host tests. Notes as a source and a swappable on-device model are not built (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Hydra.framework",
@@ -4522,7 +4613,16 @@
    "status": "partial",
    "note": "The Mail app's IMAP wire parser and command builder (RFC 3501) are in imap.rs. Gap: literal responses are read by the connection layer, not by this module, and there is no system-wide IMAP account service for other apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::tests"
+    }
+   ],
+   "ready_note": "IMAP wire parser and command builder (RFC 3501) are covered by imap host tests. Literal reads happen in the connection layer and there is no system-wide IMAP account service (open gap in the note)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IMAVCore.framework",
@@ -7022,9 +7122,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7043,9 +7143,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7124,9 +7224,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7145,9 +7245,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7166,9 +7266,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7187,9 +7287,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7208,9 +7308,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7229,9 +7329,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7250,9 +7350,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7271,9 +7371,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7292,9 +7392,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7313,9 +7413,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -7460,9 +7560,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service. BifrOSt Cloud (bifrost-cloud) is its own service and is not a port of iCloud.",
    "rea": [],
    "method": "assessed"
   }
