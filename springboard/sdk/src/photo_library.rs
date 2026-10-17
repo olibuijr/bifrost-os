@@ -124,6 +124,8 @@ pub struct PHAsset {
     /// Seconds since the epoch. A content change gives a new value; the wire falls back to `creation_date`.
     pub modification_date: u64,
     pub is_favorite: bool,
+    /// `PHAssetMediaSubtype.photoLive`: a still whose movie the library pairs with it (the movie is not listed).
+    pub is_live_photo: bool,
 }
 
 impl PHAsset {
@@ -142,6 +144,7 @@ impl PHAsset {
             creation_date: record.get("created").and_then(Json::as_u64)?,
             modification_date: record.get("modified").and_then(Json::as_u64).or_else(|| record.get("created").and_then(Json::as_u64))?,
             is_favorite: matches!(record.get("favorite"), Some(Json::Bool(true))),
+            is_live_photo: matches!(record.get("live"), Some(Json::Bool(true))),
         })
     }
 }
@@ -183,6 +186,42 @@ impl PHPhotoLibrary {
     }
     pub fn decode_status(reply: &Json) -> Option<PHAuthorizationStatus> {
         status_from_name(reply.get("status")?.as_str()?)
+    }
+}
+
+/// The event the shell pushes to a change observer.
+pub const LIBRARY_DID_CHANGE: &str = "library_did_change";
+
+impl PHPhotoLibrary {
+    /// `register(_:)` of a library observer: the shell keeps the listing the app now sees and pushes
+    /// `library_did_change` when it changes. Decode each push with [`PHPhotoLibrary::decode_change`].
+    pub fn start_observing(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "observe", &Json::Null)
+    }
+
+    /// `unregisterChangeObserver`: the pushes stop.
+    pub fn stop_observing(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "unobserve", &Json::Null)
+    }
+
+    /// The change a pushed `ServiceEvent` carries, or None when it is not a library change. The indexes refer to the
+    /// listing the observer started from (the default fetch: oldest first, no predicate).
+    pub fn decode_change(service: &str, event: &str, body: &Json) -> Option<PHFetchResultChangeDetails> {
+        if service != SERVICE || event != LIBRARY_DID_CHANGE {
+            return None;
+        }
+        let indexes = |key: &str| -> Option<Vec<usize>> {
+            body.get(key)?.as_array()?.iter().map(|v| v.as_u64().map(|n| n as usize)).collect()
+        };
+        let d = PHFetchResultChangeDetails {
+            removed_indexes: indexes("removed")?,
+            inserted_indexes: indexes("inserted")?,
+            moved_indexes: indexes("moved")?,
+            changed_indexes: indexes("changed")?,
+            has_incremental_changes: false,
+        };
+        let has_incremental_changes = !(d.removed_indexes.is_empty() && d.inserted_indexes.is_empty() && d.moved_indexes.is_empty() && d.changed_indexes.is_empty());
+        Some(PHFetchResultChangeDetails { has_incremental_changes, ..d })
     }
 }
 
@@ -365,6 +404,32 @@ mod tests {
         let new = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![edited]))])).unwrap();
         assert_eq!(new.object_at(0).unwrap().modification_date, 5000);
         assert_eq!(PHChange::change_details(&old, &new).unwrap().changed_indexes, vec![0]);
+    }
+
+    #[test]
+    fn a_live_photo_flag_decodes_from_the_asset_record() {
+        let mut live = record("a", "image");
+        if let Json::Obj(f) = &mut live {
+            f.push(("live".into(), Json::Bool(true)));
+        }
+        assert!(PHAsset::decode(&live).unwrap().is_live_photo);
+        assert!(!PHAsset::decode(&record("b", "image")).unwrap().is_live_photo);
+    }
+
+    #[test]
+    fn a_pushed_library_change_decodes_into_indexes() {
+        let body = Json::Obj(vec![
+            ("removed".into(), Json::Arr(vec![Json::Num(0.0)])),
+            ("inserted".into(), Json::Arr(vec![Json::Num(3.0)])),
+            ("moved".into(), Json::Arr(vec![])),
+            ("changed".into(), Json::Arr(vec![])),
+        ]);
+        let d = PHPhotoLibrary::decode_change(SERVICE, LIBRARY_DID_CHANGE, &body).unwrap();
+        assert_eq!((d.removed_indexes.clone(), d.inserted_indexes.clone()), (vec![0], vec![3]));
+        assert!(d.has_incremental_changes);
+        assert!(PHPhotoLibrary::decode_change("power", LIBRARY_DID_CHANGE, &body).is_none());
+        assert!(PHPhotoLibrary::decode_change(SERVICE, "other", &body).is_none());
+        assert!(PHPhotoLibrary::decode_change(SERVICE, LIBRARY_DID_CHANGE, &Json::Null).is_none());
     }
 
     #[test]
