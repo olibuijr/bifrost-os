@@ -76,6 +76,29 @@ pub trait RecognitionBackend {
     fn finish(&mut self) -> Result<SFTranscription, String>;
     /// Transcribes a whole file in one go.
     fn transcribe_file(&mut self, path: &str) -> Result<SFTranscription, String>;
+    /// Receives the request's contextual strings (custom words to favour) before a task runs. Engines that
+    /// cannot bias their vocabulary keep the default, which ignores them.
+    fn set_contextual_strings(&mut self, _strings: &[String]) {}
+}
+
+/// The most contextual strings one request may carry; later ones are dropped.
+pub const MAX_CONTEXTUAL_STRINGS: usize = 100;
+
+/// Cleans `contextualStrings`: trims each value, drops empty ones and repeats (compared without case) and keeps
+/// the first `MAX_CONTEXTUAL_STRINGS` in the order given.
+pub fn clean_contextual_strings(strings: &[&str]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for s in strings {
+        let t = s.trim();
+        if t.is_empty() || out.iter().any(|k| k.eq_ignore_ascii_case(t)) {
+            continue;
+        }
+        if out.len() == MAX_CONTEXTUAL_STRINGS {
+            break;
+        }
+        out.push(t.to_string());
+    }
+    out
 }
 
 type Handler = Box<dyn FnMut(Option<&SFSpeechRecognitionResult>, Option<&SpeechError>)>;
@@ -91,12 +114,19 @@ struct Queue {
 pub struct SFSpeechAudioBufferRecognitionRequest {
     queue: Rc<RefCell<Queue>>,
     pub should_report_partial_results: bool,
+    /// `contextualStrings`, cleaned by `clean_contextual_strings`
+    pub contextual_strings: Vec<String>,
 }
 
 impl SFSpeechAudioBufferRecognitionRequest {
     /// A request that reports partial results, as the reference default does.
     pub fn new() -> Self {
-        Self { queue: Rc::default(), should_report_partial_results: true }
+        Self { queue: Rc::default(), should_report_partial_results: true, contextual_strings: Vec::new() }
+    }
+    /// Sets `contextualStrings` (cleaned, so empty and repeated values are dropped).
+    pub fn with_contextual_strings(mut self, strings: &[&str]) -> Self {
+        self.contextual_strings = clean_contextual_strings(strings);
+        self
     }
     pub fn append(&self, input: AnalyzerInput) {
         let mut q = self.queue.borrow_mut();
@@ -114,11 +144,18 @@ impl SFSpeechAudioBufferRecognitionRequest {
 pub struct SFSpeechURLRecognitionRequest {
     pub url: String,
     pub should_report_partial_results: bool,
+    /// `contextualStrings`, cleaned by `clean_contextual_strings`
+    pub contextual_strings: Vec<String>,
 }
 
 impl SFSpeechURLRecognitionRequest {
     pub fn new(url: &str) -> Self {
-        Self { url: url.to_string(), should_report_partial_results: false }
+        Self { url: url.to_string(), should_report_partial_results: false, contextual_strings: Vec::new() }
+    }
+    /// Sets `contextualStrings` (cleaned, so empty and repeated values are dropped).
+    pub fn with_contextual_strings(mut self, strings: &[&str]) -> Self {
+        self.contextual_strings = clean_contextual_strings(strings);
+        self
     }
 }
 
@@ -279,7 +316,9 @@ impl SFSpeechRecognizer {
         request: &SFSpeechAudioBufferRecognitionRequest,
         handler: Handler,
     ) -> Result<SFSpeechRecognitionTask, SpeechError> {
-        self.start(Source::Buffer(request.clone()), handler)
+        let task = self.start(Source::Buffer(request.clone()), handler)?;
+        self.backend.borrow_mut().set_contextual_strings(&request.contextual_strings);
+        Ok(task)
     }
 
     /// `recognitionTask(with:resultHandler:)` for a file.
@@ -288,7 +327,9 @@ impl SFSpeechRecognizer {
         request: &SFSpeechURLRecognitionRequest,
         handler: Handler,
     ) -> Result<SFSpeechRecognitionTask, SpeechError> {
-        self.start(Source::File(request.url.clone()), handler)
+        let task = self.start(Source::File(request.url.clone()), handler)?;
+        self.backend.borrow_mut().set_contextual_strings(&request.contextual_strings);
+        Ok(task)
     }
 }
 
@@ -430,5 +471,57 @@ mod tests {
         let log = log.borrow();
         assert_eq!(log[0].0.as_ref().unwrap().best_transcription.formatted_string(), "hello world");
         assert_eq!(log[1].1, Some(SpeechError::Backend("bad file".into())));
+    }
+
+    /// A backend that records the contextual strings it was given.
+    struct Hints {
+        seen: Rc<RefCell<Vec<String>>>,
+    }
+    impl RecognitionBackend for Hints {
+        fn is_available(&self, _: &str) -> bool {
+            true
+        }
+        fn accept(&mut self, _: &AnalyzerInput) -> Option<SFTranscription> {
+            None
+        }
+        fn finish(&mut self) -> Result<SFTranscription, String> {
+            Ok(SFTranscription::default())
+        }
+        fn transcribe_file(&mut self, _: &str) -> Result<SFTranscription, String> {
+            Ok(SFTranscription::default())
+        }
+        fn set_contextual_strings(&mut self, strings: &[String]) {
+            *self.seen.borrow_mut() = strings.to_vec();
+        }
+    }
+
+    fn nop() -> Handler {
+        Box::new(|_, _| {})
+    }
+
+    #[test]
+    fn contextual_strings_are_cleaned_and_reach_the_backend_when_a_task_starts() {
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let mut r = SFSpeechRecognizer::new("en-US", Box::new(Hints { seen: seen.clone() }));
+        let req = SFSpeechAudioBufferRecognitionRequest::new().with_contextual_strings(&["Bifrost", " bifrost ", "", "Midget"]);
+        assert_eq!(req.contextual_strings, vec!["Bifrost".to_string(), "Midget".to_string()]);
+        assert!(r.recognition_task(&req, nop()).is_err(), "no task before authorization");
+        assert!(seen.borrow().is_empty(), "a refused request hands the backend nothing");
+        r.request_authorization(true);
+        let _task = r.recognition_task(&req, nop()).unwrap();
+        assert_eq!(*seen.borrow(), vec!["Bifrost".to_string(), "Midget".to_string()]);
+        let url = SFSpeechURLRecognitionRequest::new("a.wav").with_contextual_strings(&["Hamr"]);
+        let _task = r.recognition_task_url(&url, nop()).unwrap();
+        assert_eq!(*seen.borrow(), vec!["Hamr".to_string()]);
+    }
+
+    #[test]
+    fn clean_contextual_strings_caps_the_list_and_keeps_the_first_spelling() {
+        let many: Vec<String> = (0..MAX_CONTEXTUAL_STRINGS + 20).map(|i| format!("w{i}")).collect();
+        let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+        let cleaned = clean_contextual_strings(&refs);
+        assert_eq!(cleaned.len(), MAX_CONTEXTUAL_STRINGS);
+        assert_eq!(cleaned[0], "w0");
+        assert_eq!(clean_contextual_strings(&["Ab", "aB", "  "]), vec!["Ab".to_string()]);
     }
 }
