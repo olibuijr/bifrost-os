@@ -110,6 +110,18 @@ pub fn decode_report(bytes: &[u8]) -> Result<Report, SealError> {
     })
 }
 
+/// A blob as one string, for the approval route: the base64 encapsulated key, a dot, then the base64 ciphertext. Base64
+/// never contains a dot, so the two halves split back apart with `unpack`.
+pub fn pack(blob: &Sealed) -> String {
+    format!("{}.{}", blob.enc, blob.sealed)
+}
+
+/// Splits a packed blob back into its two halves. `None` when there is no dot.
+pub fn unpack(text: &str) -> Option<Sealed> {
+    let (enc, sealed) = text.split_once('.')?;
+    Some(Sealed { sealed: sealed.to_string(), enc: enc.to_string() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

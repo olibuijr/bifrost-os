@@ -11,9 +11,11 @@
 //!
 //! The window and the app's entry point are in `src/window.rs` and `src/main.rs`.
 
+pub mod cloud;
 pub mod control;
 pub mod devices;
 pub mod friends;
+pub mod keys;
 pub mod links;
 pub mod pairing;
 pub mod panel;

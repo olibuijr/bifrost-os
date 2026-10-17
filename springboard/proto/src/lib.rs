@@ -659,6 +659,9 @@ pub enum ToShell {
     WantsKeyboard { on: bool },
     Haptic,
     OpenUrl { url: String },
+    /// Plays the built-in alert sound `name` (one of the shell's alert tones) once, on the sound-effects role. An
+    /// unknown name is dropped. Tag 0x1f4.
+    PlaySystemSound { name: String },
     Notify { title: String, body: String },
     Log { text: String },
     SetClipboard { text: String },
@@ -893,6 +896,7 @@ mod tag {
     pub const WANTS_KEYBOARD: u32 = 0x104;
     pub const HAPTIC: u32 = 0x105;
     pub const OPEN_URL: u32 = 0x106;
+    pub const PLAY_SYSTEM_SOUND: u32 = 0x1f4;
     pub const NOTIFY: u32 = 0x107;
     pub const LOG: u32 = 0x108;
     pub const SET_CLIPBOARD: u32 = 0x109;
@@ -1672,6 +1676,10 @@ impl ToShell {
                 u32_(&mut b, tag::OPEN_URL);
                 str_(&mut b, url);
             }
+            ToShell::PlaySystemSound { name } => {
+                u32_(&mut b, tag::PLAY_SYSTEM_SOUND);
+                str_(&mut b, name);
+            }
             ToShell::Notify { title, body } => {
                 u32_(&mut b, tag::NOTIFY);
                 str_(&mut b, title);
@@ -1860,6 +1868,7 @@ impl ToShell {
             tag::SET_BADGE => ToShell::SetBadge { label: r.str()? },
             tag::DOCUMENT_STATE => ToShell::DocumentState { title: r.str()?, edited: r.u8()? != 0, represented: r.str()? },
             tag::OPEN_URL => ToShell::OpenUrl { url: r.str()? },
+            tag::PLAY_SYSTEM_SOUND => ToShell::PlaySystemSound { name: r.str()? },
             tag::NOTIFY => ToShell::Notify { title: r.str()?, body: r.str()? },
             tag::LOG => ToShell::Log { text: r.str()? },
             tag::PASTEBOARD_SET => ToShell::PasteboardSet { items: r.items()? },
@@ -2259,6 +2268,7 @@ mod tests {
             ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
             ToShell::Materials(vec![]),
             ToShell::OpenUrl { url: "https://bifrost.olibuijr.com".into() },
+            ToShell::PlaySystemSound { name: "Bell".into() },
             ToShell::Notify { title: "T".into(), body: "B ü".into() },
             ToShell::Log { text: "hi".into() },
             ToShell::SetClipboard { text: "1,5".into() },

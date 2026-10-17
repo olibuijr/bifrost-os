@@ -1,11 +1,15 @@
 id = "is.olibuijr.locate.desktop"
 name = "Locate"
-version = "0.3.0"
+version = "0.4.0"
 exec = "bifrost-locate"
 min_shell = "0.4.84"
 summary = "Shows your BifrOSt devices on a map with their battery and last position, and lets you play a sound on or locate a device."
 category = "Utilities"
 kind = "system-app"
 architecture = "x86_64-linux"
-permissions = ["network"]
+permissions = ["network", "keychain", "notifications"]
+keychain_groups = ["is.bifrost.account"]
 window = "full-size"
+
+[privacy]
+location = "Locate sends this computer's position, encrypted so that only your own devices can read it, and only while Share My Location is on."

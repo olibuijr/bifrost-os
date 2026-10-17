@@ -6,7 +6,8 @@
     "ref27/System/Applications/FindMy.app/Contents/PlugIns/FindMyNotificationsService.appex (the only other file in the bundle; the UI is in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
     "No BifrOSt source: grep of springboard for the feature finds only springboard/docs/parity/windows-spaces.md (unrelated)",
     "Locate app (round 2): springboard/apps/locate-desktop/src/window.rs, panel.rs, control.rs, main.rs; SDK springboard/sdk/src/cloud_findmy.rs (cloud device list, command and report requests); cloud routes are specified for bifrost-cloud, not yet built",
-    "Locate 0.3.0: springboard/apps/locate-desktop/src/sealing.rs (HPKE report and account-key seal), pairing.rs (enrollment and approval list), reporting.rs (throttle, clear, live share copies); SDK springboard/sdk/src/cloud_findmy.rs (key, pending, sealed-location and share routes with tests). Headless only: nothing is wired to a window, keychain or poll thread, so no row moved."
+    "Locate 0.3.0: springboard/apps/locate-desktop/src/sealing.rs (HPKE report and account-key seal), pairing.rs (enrollment and approval list), reporting.rs (throttle, clear, live share copies); SDK springboard/sdk/src/cloud_findmy.rs (key, pending, sealed-location and share routes with tests). Headless only: nothing is wired to a window, keychain or poll thread, so no row moved.",
+    "Locate 0.4.0: springboard/apps/locate-desktop/src/cloud.rs (worker), keys.rs (keychain account key), sync.rs and surfaces.rs (window cloud side and controls), springboard/proto/src/lib.rs ToShell::PlaySystemSound with the shell queue in springboard/src/shell/apphost.rs. Nothing is in production until the account sign-in stores the session in the is.bifrost.account keychain group, so no row moved."
   ],
   "summary": {
     "features": 18,

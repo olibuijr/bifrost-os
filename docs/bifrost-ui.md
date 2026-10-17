@@ -4386,12 +4386,22 @@ app has three pure models, each tested headless:
   sharing is on), Clear (once, on the first step with sharing off, which also clears a previous run's data) or Nothing;
   `copy_targets` gives the share ids of live grants only, so a revoked or expired share gets no copy.
 
-**Not built:** the background poll thread and device self-registration at start, the keychain calls for the account key
-(the `bifrost_app::keychain` API is asynchronous and needs the app's `App::keychain` reply), the approval sheet and the
-enrollment button in the window, the Me switch hit test, the location service (`bifrost_app::core_location` exists but
-is not called, so the report carries battery only), play sound on the device (the SDK has `system_sound::SystemSounds`
-with `play` and `take_request`, but no app-to-shell message reaches the audio service: adding one is a proto change),
-notifications from events, and the shared-with-me list in the People tab.
+**Round 4 (wired, not yet end to end in production):** the cloud worker thread (`bifrost_locate::cloud`, the Link the
+window owns; events come back through a pipe that wakes `tick`), registration at start, the command long poll with
+acks, the device list with opened positions, pending devices, shared positions and the account feed as notifications.
+The account key is read from and written to the keychain (`bifrost_locate::keys`, asynchronous replies in
+`App::keychain`). Reports seal a `core_location` fix with the account key; the battery comes from
+`power_sources::battery`. The Me page draws the Share My Location switch and the join button; the approval sheet
+(Approve and Deny) and the People list are drawn in `surfaces.rs`, with the same rectangles used for hit-testing.
+Play sound uses the new shell message `ToShell::PlaySystemSound`: the SDK call `system_sound::play_named` sends it, the
+shell queues up to four sounds per frame and the audio worker plays them on the sound-effects role.
+
+**Not built, or blocked:**
+- The session: no app writes the BifrOSt Account session into the `is.bifrost.account` keychain group yet, so the worker
+  does not start until the account sign-in does. Until then the cloud is off, and the join button says so.
+- Contact copies: no contact share is created by the app, so a report goes only to the owner's own devices.
+- The join key pair is held in memory until approval. A restart during a wait begins the join again.
+- A sound's ack is sent when the worker takes the command, not when the tone has played.
 
 ### Location design (owner decision; models and routes built in round 3, wiring not built)
 
@@ -4418,7 +4428,7 @@ Location is end to end encrypted. The cloud never sees plaintext coordinates, an
 - **Tests required before this ships:** seal and open round trip; the approval state machine; a revoked share stops
   sealing; the cloud handlers store and return opaque blobs only.
 
-Until the wiring is built, the cloud accepts no location from this app, and the SDK report sends no position.
+Until the session exists, no position leaves this device.
 Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
 `{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
 `202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.

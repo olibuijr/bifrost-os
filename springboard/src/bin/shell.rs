@@ -915,6 +915,12 @@ fn run() -> std::io::Result<()> {
                 }
             }
         }
+        // sounds that apps asked for (`ToShell::PlaySystemSound`) play on the sound-effects role, as alerts do
+        for name in springboard::shell::apphost::take_system_sounds() {
+            if let Some(index) = springboard::shell::options::ALERT_SOUNDS.iter().position(|label| *label == name) {
+                let _ = audio_tx.send(AudioJob::Sound(Sound::Alert(index)));
+            }
+        }
         for fx in effects {
             match fx {
                 Effect::Brightness(f) => {
