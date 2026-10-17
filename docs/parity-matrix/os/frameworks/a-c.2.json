@@ -62,7 +62,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Gap: the app rating and review sheet with star rating, nickname and written review. Build it in the store sheet layer once the catalogue API has review endpoints; springboard/docs/apps.md lists none today.",
+   "note": "Gap: the app rating and review sheet with star rating, nickname and written review. Build it in the store sheet layer once the catalogue API has review endpoints; springboard/docs/apps.md lists none today. Built 2026-10-17: the review rules bifrost_core::app_review (star range, trimmed nickname and body limits, histogram and one-decimal average); tests app_review::tests. Not built: the rating sheet itself and the catalogue review endpoints.",
    "rea": [],
    "method": "assessed"
   },
@@ -1618,7 +1618,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Nothing sets an inbound policy per application: the sysinfo app only reads the nftables and iptables state. Build an application-level firewall: a settings page that writes nftables rules for each app's listening ports, applied by a service at boot.",
+   "note": "Nothing sets an inbound policy per application: the sysinfo app only reads the nftables and iptables state. Build an application-level firewall: a settings page that writes nftables rules for each app's listening ports, applied by a service at boot. Built 2026-10-17: the ruleset model bifrost_core::app_firewall (per-app allow or block by port, conflict refusal, nftables text with its own table); tests app_firewall::tests. Not built: the settings page that sets policies, and the boot service that applies the ruleset.",
    "rea": [],
    "method": "assessed"
   },

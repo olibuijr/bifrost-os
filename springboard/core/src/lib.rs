@@ -65,6 +65,8 @@ pub mod memory_pressure;
 pub mod pacman_progress;
 pub mod progress;
 pub mod notify_center;
+pub mod app_firewall;
+pub mod app_review;
 pub mod speech_engine;
 pub mod disk_events;
 pub mod disk_claim;
