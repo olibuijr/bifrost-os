@@ -13,6 +13,7 @@ pub mod leave;
 pub mod lastcomm;
 pub mod mdfind;
 pub mod mdutil;
+pub mod mtree;
 pub mod hdiutil;
 pub mod iconutil;
 pub mod open;
