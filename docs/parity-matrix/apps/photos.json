@@ -320,10 +320,10 @@
    "feature": "Video / Live Photo playback and poster frame",
    "area": "view",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Turn On Live Photo; Make Poster Frame; Save Video Frame as Photo",
-   "status": "gap",
-   "bifrost": "",
-   "note": "library scans stills only",
-   "wire": "Include video files in library.rs and play them through the shell media player in the viewer"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/video.rs (poster, open, is_playing); springboard/src/shell/photos/library.rs (is_video_name); springboard/src/shell/photos/mod.rs (follow_clip, draw_clip_controls, Target::ClipToggle, Target::ClipSeek)",
+   "note": "Movies (MP4, M4V, MOV) are in the library with poster frames from the media player; the viewer plays them with play/pause and a seek bar. Live Photo pairing and Make Poster Frame are not done. Not yet checked on Midget",
+   "wire": "Pair a Live Photo still with its movie and add Make Poster Frame; check playback and posters on Midget, then promote to parity"
   },
   {
    "feature": "Duplicates and bursts",
@@ -536,9 +536,9 @@
  "summary": {
   "features": 58,
   "parity": 16,
-  "partial": 34,
-  "gap": 3,
+  "partial": 35,
+  "gap": 2,
   "n/a": 5,
-  "coverage_pct": 62.3
+  "coverage_pct": 63.2
  }
 }

@@ -52,6 +52,12 @@ impl Photo {
     }
 }
 
+/// The movie files Photos shows beside the pictures: MP4 containers, QuickTime included.
+pub fn is_video_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.ends_with(".mp4") || name.ends_with(".m4v") || name.ends_with(".mov")
+}
+
 /// How much of a JPEG is read to find its capture time.
 const EXIF_HEAD: u64 = 64 * 1024;
 
@@ -109,7 +115,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Photo>, offset: i32) {
             if depth + 1 < MAX_DEPTH {
                 walk(&path, depth + 1, out, offset);
             }
-        } else if crate::cg::imageio::is_image_name(&name) {
+        } else if crate::cg::imageio::is_image_name(&name) || is_video_name(&name) {
             out.extend(Photo::from_path_at(path, offset));
         }
     }

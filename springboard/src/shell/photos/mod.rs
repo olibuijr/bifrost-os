@@ -31,6 +31,7 @@ pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
 pub mod undo;
+pub mod video;
 pub mod viewer;
 pub mod zoom;
 #[cfg(test)]
@@ -136,6 +137,10 @@ pub enum Target {
     Place(usize),
     /// the Places cluster's photos: back to the map
     PlacesBack,
+    /// the movie's play or pause control in the viewer
+    ClipToggle,
+    /// a point on the movie's progress bar, in thousandths of its length
+    ClipSeek(u16),
     /// the viewer's Album button: add to (or remove from) a user album
     AddToAlbum,
     AlbumCancel,
@@ -405,6 +410,13 @@ pub enum Album {
     Memory(u8),
 }
 
+/// The movie in the viewer: its path, its player (None when it would not open) and the frame on screen.
+struct Clip {
+    path: PathBuf,
+    player: Option<crate::media::player::Player>,
+    frame: Option<Image>,
+}
+
 /// At most this many user albums.
 const MAX_USER_ALBUMS: usize = 8;
 /// At most this many smart albums.
@@ -548,6 +560,8 @@ pub struct Photos {
     place_pick: Option<Vec<PathBuf>>,
     /// a worker is reading GPS positions; its result refreshes the map
     place_busy: bool,
+    /// the movie shown in the viewer, if the photo on screen is one
+    clip: Option<Clip>,
     /// the map tiles under the Places pins, loaded from the shared tile cache (created on first use)
     tiles: Option<crate::maptiles::loader::TileLoader>,
     /// what Undo and Redo step through
@@ -703,6 +717,7 @@ impl Photos {
             place_pick: None,
             place_busy: false,
             tiles: None,
+            clip: None,
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
@@ -1383,7 +1398,7 @@ impl Photos {
                         return Done::ThumbSkipped { key };
                     }
                     let image = disk.read(&key).or_else(|| {
-                        let img = decode_edited(&std::fs::read(&photo.path).ok()?, recipe)?;
+                        let img = if video::is_video(&photo.path) { video::poster(&photo.path)? } else { decode_edited(&std::fs::read(&photo.path).ok()?, recipe)? };
                         let thumb = if fit { imgdec::contain(&img, thumbs::SIZE, thumbs::SIZE) } else { imgdec::cover(&img, thumbs::SIZE, thumbs::SIZE) };
                         disk.write(&key, &thumb);
                         Some(thumb)
@@ -1405,7 +1420,8 @@ impl Photos {
         };
         for photo in around {
             let key = photo.key();
-            if self.full.contains(&key) || self.full_pending.contains(&key) {
+            // movies play through the media player (see `follow_clip`), not as a decoded still
+            if self.full.contains(&key) || self.full_pending.contains(&key) || video::is_video(&photo.path) {
                 continue;
             }
             self.full_pending.insert(key.clone());
@@ -1556,6 +1572,7 @@ impl Photos {
         if self.tiles.as_mut().is_some_and(|l| l.pump()) {
             self.dirty = true;
         }
+        self.follow_clip();
         if self.note.as_ref().is_some_and(|(_, until)| t >= *until) {
             self.note = None;
             self.dirty = true;
@@ -1790,6 +1807,11 @@ impl Photos {
                 (Sheet::Share, 6) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
+        }
+        if v.chrome && self.clip_shown() {
+            if let Some(t) = self.clip_hit(ui, x, y) {
+                return Some(t);
+            }
         }
         if v.chrome {
             if y < content_top(ui) {
@@ -2077,6 +2099,22 @@ impl Photos {
             Target::Slide(_) => {}
             Target::Album => {
                 self.album_menu = true;
+            }
+            Target::ClipToggle => {
+                if let Some(p) = self.clip.as_mut().and_then(|c| c.player.as_mut()) {
+                    if video::is_playing(p) {
+                        p.pause();
+                    } else {
+                        p.play();
+                    }
+                }
+            }
+            Target::ClipSeek(permille) => {
+                if let Some(p) = self.clip.as_mut().and_then(|c| c.player.as_mut()) {
+                    if let Some(d) = p.duration_ms() {
+                        p.seek_ms(d * f64::from(permille) / 1000.0);
+                    }
+                }
             }
             Target::PlacesBack => {
                 self.place_pick = None;
@@ -2638,6 +2676,78 @@ impl Photos {
         }
     }
 
+    /// Keeps the movie in the viewer in step with the photo on screen: a movie starts when it is shown, stops when
+    /// another photo or none is, and its newest frame is taken here.
+    fn follow_clip(&mut self) {
+        let want = self.viewing().filter(|p| video::is_video(&p.path)).map(|p| p.path.clone());
+        if self.clip.as_ref().map(|c| &c.path) != want.as_ref() {
+            self.clip = want.map(|path| {
+                let player = video::open(&path);
+                Clip { path, player, frame: None }
+            });
+        }
+        if let Some(c) = self.clip.as_mut() {
+            if let Some(img) = c.player.as_mut().and_then(|p| p.take_frame()) {
+                c.frame = Some(img);
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// True when the viewer shows a movie that opened.
+    fn clip_shown(&self) -> bool {
+        self.viewer.is_some() && self.clip.as_ref().is_some_and(|c| c.player.is_some())
+    }
+
+    /// The progress bar of the viewer's movie: its x range and its centre line.
+    fn clip_bar(&self, ui: &Ui) -> (f32, f32, f32) {
+        (ui.pt(MARGIN_PT), self.w as f32 - ui.pt(MARGIN_PT), self.bar_top(ui) - ui.pt(12.0))
+    }
+
+    /// The centre of the viewer's play/pause control.
+    fn clip_centre(&self, ui: &Ui) -> (f32, f32) {
+        (self.w as f32 / 2.0, (content_top(ui) + self.bar_top(ui)) / 2.0)
+    }
+
+    /// The movie's controls under a touch: the progress bar (seek) or the play/pause button.
+    fn clip_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        let (x0, x1, bar_y) = self.clip_bar(ui);
+        if x >= x0 && x <= x1 && (y - bar_y).abs() <= ui.pt(8.0) {
+            return Some(Target::ClipSeek(((x - x0) / (x1 - x0) * 1000.0).clamp(0.0, 1000.0) as u16));
+        }
+        let (cx, cy) = self.clip_centre(ui);
+        ((x - cx).hypot(y - cy) <= ui.pt(30.0)).then_some(Target::ClipToggle)
+    }
+
+    /// Draws the movie's play or pause button and its progress bar over the viewer.
+    fn draw_clip_controls(&mut self, s: &mut Surface, ui: &Ui) {
+        let (cx, cy) = self.clip_centre(ui);
+        let r = ui.pt(30.0);
+        let player = self.clip.as_ref().and_then(|c| c.player.as_ref());
+        let playing = player.is_some_and(video::is_playing);
+        let fraction = player.and_then(|p| p.duration_ms().map(|d| (p.position_ms() / d).clamp(0.0, 1.0) as f32)).unwrap_or(0.0);
+        s.fill_rrect(cx - r, cy - r, r * 2.0, r * 2.0, r, rgba(0, 0, 0, 120));
+        if playing {
+            let (bw, bh) = (ui.pt(7.0), ui.pt(22.0));
+            s.fill_rrect(cx - ui.pt(8.0), cy - bh / 2.0, bw, bh, ui.pt(1.0), WHITE);
+            s.fill_rrect(cx + ui.pt(1.0), cy - bh / 2.0, bw, bh, ui.pt(1.0), WHITE);
+        } else {
+            // a right-pointing triangle: each row is as wide as its distance from the top or bottom edge allows
+            let (half, width, x0) = (ui.pt(14.0), ui.pt(20.0), cx - ui.pt(6.0));
+            let n = (2.0 * half).max(1.0) as usize;
+            let top = (cy - half).max(0.0) as usize;
+            for i in 0..n {
+                let f = (i as f32 + 0.5) / n as f32;
+                let w = (width * (1.0 - (2.0 * f - 1.0).abs())).max(1.0) as usize;
+                s.fill_rect(x0.max(0.0) as usize, top + i, w, 1, WHITE);
+            }
+        }
+        let (x0, x1, bar_y) = self.clip_bar(ui);
+        let (h, radius) = (ui.pt(3.0), ui.pt(1.5));
+        s.fill_rrect(x0, bar_y, x1 - x0, h, radius, rgba(255, 255, 255, 70));
+        s.fill_rrect(x0, bar_y, (x1 - x0) * fraction, h, radius, WHITE);
+    }
+
     /// True while the grid shows the photos of one Places pin (the nav bar then offers the way back to the map).
     fn showing_pick(&self) -> bool {
         self.album == Album::Places && self.place_pick.is_some()
@@ -2972,7 +3082,8 @@ impl Photos {
         let Some(v) = &mut self.viewer else { return };
         for (page, p) in &around {
             let (page, key) = (*page, p.key());
-            let (img, fit) = match self.full.get(&key) {
+            let frame = self.clip.as_ref().filter(|c| c.path == p.path).and_then(|c| c.frame.as_ref());
+            let (img, fit) = match frame.or_else(|| self.full.get(&key)) {
                 Some(img) => {
                     let fit = imgdec::fit_size(img, w, h);
                     (img, fit)
@@ -2998,6 +3109,9 @@ impl Photos {
         }
         if !v.chrome {
             return;
+        }
+        if self.clip_shown() {
+            self.draw_clip_controls(s, ui);
         }
         let current = around.into_iter().find(|(i, _)| *i == index).map(|(_, p)| p);
         let top = content_top(ui);
