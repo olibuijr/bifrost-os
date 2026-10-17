@@ -1716,9 +1716,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_resolve.rs",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_resolve.rs, springboard/sdk/src/donations.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: cross-app donation index in springboard/sdk/src/donations.rs (SharedDonationIndex: donations from every app ranked together, forget_app; tests donations::shared_tests). Open: the shell suggestion list does not read it yet, and linkd does not keep it across restarts; the row stays partial.",
+   "note": "Built 2026-10-17: cross-app donation index in springboard/sdk/src/donations.rs (SharedDonationIndex: donations from every app ranked together, forget_app; tests donations::shared_tests). Built 2026-10-17: the index is saved and loaded (SharedDonationIndex::save, load, to_json, from_json; tests donations::shared_tests). Open: the shell suggestion list does not read it yet, so the row stays partial.",
    "rea": []
   },
   {
@@ -1776,9 +1776,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/locale.rs",
+   "bifrost": "springboard/sdk/src/locale.rs, springboard/core/src/language_generation.rs, springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: language generation file in springboard/sdk/src/locale.rs (announce_language_change, language_generation, LanguageWatch; tests locale::tests). Open: no switch service calls announce_language_change when the person changes language, so the row stays partial.",
+   "note": "Built 2026-10-17: language generation file in springboard/sdk/src/locale.rs (announce_language_change, language_generation, LanguageWatch; tests locale::tests). Built 2026-10-17: Language & Region calls announce_language_change when the language list changes (settings.rs change_region). The model moved to bifrost-core and the SDK re-exports it (tests in bifrost-core language_generation::tests). Open: apps do not yet reload their strings on LanguageWatch.changed, so the row stays partial.",
    "rea": []
   },
   {
