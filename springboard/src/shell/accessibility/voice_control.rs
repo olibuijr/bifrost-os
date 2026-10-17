@@ -11,10 +11,18 @@
 //! service while Voice Control is on (`Shell::voice_control_tick`): it starts when the setting is switched on, is polled for
 //! final transcripts, and ends when the setting is switched off. The service refuses without the person's consent and the
 //! installed model (Settings > Keyboard > Dictation); the refusal is announced once and Voice Control tries again later.
+//! the `voice_control` preference is `1` (Settings > Accessibility > Voice Control): it holds the session, and the effects a
+//! press returns go out with the next shell tick.
+//!
+//! "show numbers", "show names" and "show grid" label the front window (`voice_overlay`); "hide numbers" and kin remove the
+//! label. With numbers shown "press 3" presses the third label; with names shown (or numbers) "press Save" presses the
+//! visible element of that name; with the grid shown "press 5" narrows the grid to its fifth cell and "click here" clicks its
+//! centre.
 
 use crate::shell::{Effect, Shell};
 use bifrost_core::json::Json;
 use bifrost_proto::AnnouncePriority;
+use bifrost_ui::voice_commands::Overlay;
 use bifrost_ui::whisper::Transcript;
 
 /// The client name Voice Control's recognition runs under in the service. The service leaves a session of this prefix alone
@@ -58,6 +66,12 @@ pub enum Command {
     Press(String),
     /// Run the app shortcut whose title is `name` (lower-cased, without a leading "shortcut").
     Run(String),
+    /// Draw the labels or the grid over the front window.
+    Show(Overlay),
+    /// Remove that overlay.
+    Hide(Overlay),
+    /// Click the centre of the grid as it stands.
+    ClickHere,
 }
 
 /// Verbs that press an element, in the words the person may say.
@@ -75,6 +89,17 @@ pub fn parse(transcript: &Transcript) -> Option<Command> {
     let (verb, name) = words.split_once(char::is_whitespace)?;
     let verb = verb.to_lowercase();
     let name = name.trim();
+    if verb == "show" || verb == "hide" {
+        // the overlay vocabulary is the shared grammar's (`bifrost_ui::voice_commands`)
+        return match bifrost_ui::voice_commands::parse(words) {
+            bifrost_ui::voice_commands::Command::Show(o) => Some(Command::Show(o)),
+            bifrost_ui::voice_commands::Command::Hide(o) => Some(Command::Hide(o)),
+            _ => None,
+        };
+    }
+    if PRESS_VERBS[1..].contains(&verb.as_str()) && name.eq_ignore_ascii_case("here") {
+        return Some(Command::ClickHere);
+    }
     if PRESS_VERBS.contains(&verb.as_str()) {
         return (!name.is_empty()).then(|| Command::Press(name.to_lowercase()));
     }
@@ -187,8 +212,24 @@ impl Shell {
     /// answers it.
     pub(in crate::shell) fn voice_press(&mut self, transcript: &Transcript, t: f64) -> Option<Result<(String, Vec<Effect>), String>> {
         match parse(transcript)? {
-            Command::Press(name) => Some(self.ax_press(&name, t)),
+            Command::Press(name) => Some(self.voice_press_named(&name, t)),
             Command::Run(title) => Some(self.voice_run(&title, t)),
+            Command::Show(overlay) => Some(Ok((self.voice_show(overlay), Vec::new()))),
+            Command::Hide(overlay) => Some(self.voice_hide(overlay).map(|answer| (answer, Vec::new()))),
+            // "click here" is a click only while the grid is up; otherwise it names an element called Here
+            Command::ClickHere => self.voice_click_here().or_else(|| Some(self.voice_press_named("here", t))),
+        }
+    }
+
+    /// "press X": a number presses that label (or grid cell); a name presses the visible label of that name while numbers or
+    /// names are shown; anything else is looked up in the whole element map, as `ax press` does.
+    fn voice_press_named(&mut self, name: &str, t: f64) -> Result<(String, Vec<Effect>), String> {
+        if let Ok(n) = name.parse::<u32>() {
+            return self.voice_press_number(n, t);
+        }
+        match self.voice_press_label(name, t) {
+            Some(answer) => answer,
+            None => self.ax_press(name, t),
         }
     }
 

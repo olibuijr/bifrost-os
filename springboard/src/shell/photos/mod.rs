@@ -196,6 +196,8 @@ pub enum Target {
     SheetDuplicate,
     /// the Info sheet's Revert to Original row
     InfoRevert,
+    /// the Info sheet's Look Up in Visual Search row
+    InfoLookUp,
     Edit,
     EditCancel,
     EditSave,
@@ -631,6 +633,8 @@ pub struct Photos {
     effects: Vec<Effect>,
     /// a picture the user chose to send; the shell opens the share sheet
     share_req: Option<PathBuf>,
+    /// the picture the Info sheet's Look Up in Visual Search row chose; the shell takes it once and opens the panel
+    visual_search_req: Option<PathBuf>,
     camera_req: bool,
     /// the open photo a Print command handed over; the shell takes it once and opens the print sheet
     print_req: Option<Image>,
@@ -764,6 +768,7 @@ impl Photos {
             recent: vec![],
             effects: vec![],
             share_req: None,
+            visual_search_req: None,
             camera_req: false,
             print_req: None,
             dirty: true,
@@ -796,6 +801,11 @@ impl Photos {
     /// The picture to share, if Send Nearby was just chosen.
     pub fn take_share(&mut self) -> Option<PathBuf> {
         self.share_req.take()
+    }
+
+    /// The picture to look up in visual search, if the Info sheet's Look Up row was just chosen.
+    pub fn take_visual_search(&mut self) -> Option<PathBuf> {
+        self.visual_search_req.take()
     }
 
     /// True while the viewer hides its bars (no status bar or home indicator).
@@ -1782,13 +1792,15 @@ impl Photos {
                         return Some(Target::InfoDetails);
                     }
                 }
-                if self.info_revert {
-                    let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
-                    let row = ui.pt(INFO_ROW_PT);
-                    let details = usize::from(self.info_has_rating());
-                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated + details) as f32, sw, row)) {
-                        return Some(Target::InfoRevert);
-                    }
+                let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
+                let row = ui.pt(INFO_ROW_PT);
+                let details = usize::from(self.info_has_rating());
+                let look_up = self.info.len() + 1 + rated + details;
+                if within(x, y, (sx, sy + row * look_up as f32, sw, row)) {
+                    return Some(Target::InfoLookUp);
+                }
+                if self.info_revert && within(x, y, (sx, sy + row * (look_up + 1) as f32, sw, row)) {
+                    return Some(Target::InfoRevert);
                 }
                 return Some(Target::SheetCancel);
             }
@@ -1995,6 +2007,10 @@ impl Photos {
                 }
             }
             Target::InfoDetails => self.sheet = Some(Sheet::Details),
+            Target::InfoLookUp => {
+                self.sheet = None;
+                self.visual_search_req = self.viewing().map(|p| p.path.clone());
+            }
             Target::SheetExport => self.sheet = Some(Sheet::Export),
             Target::Export(row) => self.activate_export(row),
             Target::Detail(row) => self.activate_detail(ui, row, t),
@@ -2535,7 +2551,7 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        let rows = self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + revert;
+        let rows = self.info.len() + 1 + 3 * usize::from(self.info_has_rating()) + 1 + revert;
         (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * rows as f32)
     }
 
@@ -3206,8 +3222,14 @@ impl Photos {
             let color = if self.pressed == Some(Target::InfoDetails) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Edit Details", 15.0, Weight::Regular, color, x + w / 2.0, cy);
         }
-        if self.info_revert {
+        {
             let cy = y + row * (rows.len() + 1 + rated + usize::from(rated == 2)) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let color = if self.pressed == Some(Target::InfoLookUp) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, "Look Up in Visual Search", 15.0, Weight::Regular, color, x + w / 2.0, cy);
+        }
+        if self.info_revert {
+            let cy = y + row * (rows.len() + 2 + rated + usize::from(rated == 2)) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
@@ -3747,14 +3769,37 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
         assert_eq!(p.sheet, Some(Sheet::Info));
         assert!(p.info_revert, "an edited photo offers Revert to Original");
-        // the Revert row sits under the detail rows, the rating, Hide Photo and Edit Details rows
+        // the Revert row sits under the detail rows, the rating, Hide Photo, Edit Details and Look Up rows
         let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
         let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
+        let y = sy + row * (p.info.len() + 1 + 3 + 1) as f32 + row / 2.0;
         tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
         assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
         assert!(original.exists(), "the original is never changed");
         assert_eq!(p.photos().len(), 1, "nothing leaves the library");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once() {
+        let (mut p, dir, ui) = photos("lookup", 1);
+        p.open_viewer(0);
+        frame(&mut p, &ui);
+        let path = p.photos()[0].path.clone();
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        assert_eq!(p.sheet, Some(Sheet::Info));
+        assert!(!p.info_revert, "an unedited photo has no Revert row, so Look Up is the last row");
+        assert_eq!(p.take_visual_search(), None, "nothing is sent before the row is tapped");
+        // the Look Up row sits under the detail rows, the rating, Hide Photo and Edit Details rows
+        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Info);
+        let row = ui.pt(INFO_ROW_PT);
+        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
+        assert!(y < sy + sh, "the row is inside the sheet");
+        tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
+        assert_eq!(p.sheet, None, "the sheet closes");
+        assert_eq!(p.take_visual_search(), Some(path), "the shell is handed the open photo");
+        assert_eq!(p.take_visual_search(), None, "once");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

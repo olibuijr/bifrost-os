@@ -11,6 +11,8 @@ use bifrost_ui::Rect;
 
 /// The handle of a Settings row: the reader presses it with a tap at its centre.
 pub const SETTINGS: &str = "settings";
+/// The handle of a row of the Settings sidebar (the split layout): the reader presses it with a tap at its centre.
+pub const SETTINGS_SIDEBAR: &str = "settings-sidebar";
 /// The handle of a menu bar title: pressing it opens the menu.
 pub const BAR: &str = "bar";
 /// The handle of a row of the open menu: pressing it runs the row's action.

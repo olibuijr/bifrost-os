@@ -12,12 +12,12 @@
 //! Every move speaks the element as `kind, name, value` (`button, Close`) through the announcement queue, so the banner shows
 //! it and the AT-SPI bridge speaks it, and a focus ring is drawn around it. The model (`Reader`, `speech`, `page_elements`)
 //! is pure and tested on the host; the `Shell` methods at the bottom are the glue. Not walked: the Dock (its icons move with
-//! magnification and are not laid out as a list yet), a Settings sidebar in a split window, rows scrolled out of view, and
+//! magnification and are not laid out as a list yet), rows scrolled out of view, and
 //! the built-in apps. See docs/parity/wire6-a11y-roles.md.
 
 use super::earcons::{Earcon, ReaderEvent};
 use super::tree::{add_app_tree, AxState};
-use super::walk::{self, SETTINGS};
+use super::walk::{self, SETTINGS, SETTINGS_SIDEBAR};
 #[cfg(feature = "desktop-wayland")]
 use super::walk::{BAR, BAR_ROW};
 use super::AccessibilitySettings;
@@ -212,21 +212,53 @@ impl Shell {
 
     /// The rows of the front Settings page (window-local points) and the window-local origin of its content, when the front
     /// window is Settings.
+    /// The rows of the front Settings page (screen pixels, before the window origin is added) and the screen origin of the
+    /// page pane's content, when the front window is Settings. In the split layout the pane starts right of the sidebar, so a
+    /// row's window-local position is the origin plus its pane position.
     fn settings_page(&self) -> Option<(Vec<Element>, (f32, f32))> {
         let desk = self.desk.as_ref()?;
         let front = desk.front()?;
         if front.app != AppId::Settings {
             return None;
         }
-        let list = self.settings.as_ref()?.list()?;
+        let st = self.settings.as_ref()?;
+        let list = st.list()?;
         let ui = &self.ui;
         let title = if full_size(front.app) { 0 } else { self.desk_metrics().title };
-        let origin = (front.r.x as f32, (front.r.y + title) as f32);
+        let origin = (front.r.x as f32 + st.pane_x(), (front.r.y + title) as f32);
         let els = page_elements(list.spec(), &|g, i| {
             let (x, y, w, h) = list.row_rect(ui, g, i);
             Some(Rect { x, y, w, h })
         });
         Some((els, origin))
+    }
+
+    /// The window origin (screen pixels) Settings rows are placed from: the window's content, below a title bar that is not
+    /// full-size.
+    fn settings_origin(&self) -> Option<(f32, f32)> {
+        let front = self.desk.as_ref()?.front()?;
+        let title = if full_size(front.app) { 0 } else { self.desk_metrics().title };
+        Some((front.r.x as f32, (front.r.y + title) as f32))
+    }
+
+    /// The rows of the split layout's sidebar (screen pixels), when the front window is Settings. Their addresses sit under
+    /// `settings-sidebar/`, so a sidebar row and a page row of the same name stay apart.
+    fn settings_sidebar(&self) -> Vec<Element> {
+        let (Some((ox, oy)), Some(front)) = (self.settings_origin(), self.desk.as_ref().and_then(|d| d.front())) else { return Vec::new() };
+        if front.app != AppId::Settings {
+            return Vec::new();
+        }
+        let Some(list) = self.settings.as_ref().and_then(|st| st.sidebar_list()) else { return Vec::new() };
+        let ui = &self.ui;
+        let mut els = page_elements(list.spec(), &|g, i| {
+            let (x, y, w, h) = list.row_rect(ui, g, i);
+            Some(Rect { x: x + ox, y: y + oy, w, h })
+        });
+        for e in &mut els {
+            e.address = e.address.replacen("settings/", "settings-sidebar/", 1);
+            e.handle = SETTINGS_SIDEBAR.to_string();
+        }
+        els
     }
 
     /// The elements an app window declared, with bounds in screen pixels: `origin` is the window's body and a point is
@@ -289,6 +321,7 @@ impl Shell {
         if let Some(front) = desk.front() {
             match front.app {
                 AppId::Settings => {
+                    out.extend(self.settings_sidebar());
                     if let Some((els, (ox, oy))) = self.settings_page() {
                         for mut e in els {
                             e.bounds = e.bounds.map(|b| Rect { x: b.x + ox, y: b.y + oy, ..b });
@@ -353,8 +386,18 @@ impl Shell {
             self.announce.post(&walk::speech(&el), AnnouncePriority::High);
             return Vec::new();
         }
+        let fx = self.press_walked(&el, t);
+        self.reader.cue(ReaderEvent::Activated);
+        self.dirty = true;
+        fx
+    }
+
+    /// Presses one element of `reader_walk` the way a tap on it would: opens a menu title, runs a menu row, taps a Settings
+    /// row, or presses an app element through the app's own tap path. The screen reader's cursor and Voice Control's numbered
+    /// labels both press through here. A problem is spoken, not raised.
+    pub(in crate::shell) fn press_walked(&mut self, el: &Element, t: f64) -> Vec<Effect> {
         let centre = el.bounds.map(|b| (b.x + b.w / 2.0, b.y + b.h / 2.0));
-        let fx = match (el.handle.as_str(), centre) {
+        match (el.handle.as_str(), centre) {
             #[cfg(feature = "desktop-wayland")]
             (BAR, Some((x, y))) => self.desktop_bar_event(Event::Down(x, y), t).unwrap_or_default(),
             #[cfg(feature = "desktop-wayland")]
@@ -363,8 +406,21 @@ impl Shell {
                 fx.extend(self.desktop_bar_event(Event::Up(x, y), t + 0.04).unwrap_or_default());
                 fx
             }
+            (SETTINGS_SIDEBAR, Some((x, y))) => {
+                let (ox, oy) = self.settings_origin().unwrap_or((0.0, 0.0));
+                let ui = &self.ui;
+                match self.settings.as_mut() {
+                    Some(st) => {
+                        let mut fx = st.touch(ui, &mut self.prefs, Event::Down(x - ox, y - oy), t);
+                        fx.extend(st.touch(ui, &mut self.prefs, Event::Up(x - ox, y - oy), t + 0.01));
+                        fx
+                    }
+                    None => Vec::new(),
+                }
+            }
             (SETTINGS, Some((x, y))) => {
-                let (ox, oy) = self.settings_page().map_or((0.0, 0.0), |(_, o)| o);
+                // the touch is window-local, sidebar included: the page pane's own offset is the list's to remove
+                let (ox, oy) = self.settings_origin().unwrap_or((0.0, 0.0));
                 let ui = &self.ui;
                 match self.settings.as_mut() {
                     Some(st) => {
@@ -383,10 +439,7 @@ impl Shell {
                 }
             },
             _ => Vec::new(),
-        };
-        self.reader.cue(ReaderEvent::Activated);
-        self.dirty = true;
-        fx
+        }
     }
 
     /// Whether the frame must repaint everything under the focus ring.

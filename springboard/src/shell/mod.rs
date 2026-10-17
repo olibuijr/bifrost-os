@@ -56,6 +56,7 @@ pub mod cache;
 pub mod clipboard;
 mod services_route;
 mod look_up_popover;
+mod visual_search_panel;
 pub mod chord;
 pub mod clock;
 pub mod control_center;
@@ -801,6 +802,10 @@ pub struct Shell {
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
     look_up: Option<look_up_popover::Popover>,
+    /// the Look Up in Visual Search panel and the search it waits for (`visual_search_panel`)
+    visual_search: Option<visual_search_panel::Session>,
+    /// a photo being decoded for the panel, with the search to run on it (`visual_search_panel`)
+    visual_search_load: Option<visual_search_panel::Load>,
     /// transfer rows the progress card showed at the last poll
     share_rows: usize,
     /// the "Low Battery" alert on screen
@@ -848,6 +853,8 @@ pub struct Shell {
     speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
     reader: accessibility::reader::Reader,
+    /// the Voice Control label or grid overlay (`accessibility::voice_overlay`)
+    voice_overlay: accessibility::voice_overlay::VoiceOverlay,
     /// the line for a Braille display: what the screen reader last spoke, translated (`accessibility::braille_out`)
     braille: accessibility::braille_out::BrailleLine,
     /// the popup earcons (a desktop menu or the power menu opening or closing), queued while the reader is on (`earcon`)
@@ -1164,6 +1171,8 @@ impl Shell {
             share_svc: None,
             share_prompt: None,
             look_up: None,
+            visual_search: None,
+            visual_search_load: None,
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
@@ -1189,6 +1198,7 @@ impl Shell {
             guided: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
+            voice_overlay: Default::default(),
             braille: Default::default(),
             popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
@@ -2114,6 +2124,7 @@ impl Shell {
             due.add(Some(t + accessibility::motion_cues::POLL_MS));
         }
         if self.markup_load.is_some() {
+        if self.markup_load.is_some() || self.visual_search_pending() {
             due.add(Some(t + 50.0));
         }
         if self.screen_on {
@@ -3076,6 +3087,9 @@ impl Shell {
         if let Some(fx) = self.look_up_event(ev, t) {
             return fx;
         }
+        if let Some(fx) = self.visual_search_event(ev, t) {
+            return fx;
+        }
         if let Some(fx) = self.modal_event(ev) {
             return fx;
         }
@@ -3324,12 +3338,15 @@ impl Shell {
                 }
             }
             _ if app == AppId::Photos => {
-                let (shared, camera) = self.photos.as_mut().map_or((None, false), |p| {
+                let (shared, camera, lookup) = self.photos.as_mut().map_or((None, false, None), |p| {
                     p.touch(&self.ui, ev, t);
-                    (p.take_share(), p.take_camera_request())
+                    (p.take_share(), p.take_camera_request(), p.take_visual_search())
                 });
                 if camera {
                     self.open(AppId::Camera, t);
+                }
+                if let Some(path) = lookup {
+                    self.visual_search_photo(path);
                 }
                 if let Some(path) = shared {
                     let anchor = (self.w as f32 / 2.0, self.h as f32 / 3.0);
@@ -3564,6 +3581,7 @@ impl Shell {
         self.live_wallpaper_tick(t);
         let mut fx = self.tick_inner(t);
         fx.append(&mut self.voice_fx);
+        fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx
     }
@@ -3632,6 +3650,7 @@ impl Shell {
         self.guided_tick();
         self.split_tick();
         self.markup_tick();
+        self.visual_search_tick();
         self.ota_tick(t);
         self.folder_actions_tick();
         self.file_import_tick();
@@ -3995,7 +4014,7 @@ impl Shell {
         if self.notify_damage_all() {
             damage.all();
         }
-        if self.announce_damage() || self.reader_damage() {
+        if self.announce_damage() || self.reader_damage() || self.voice_overlay_damage() {
             damage.all();
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
@@ -4232,6 +4251,7 @@ impl Shell {
         self.draw_announce(s);
         self.draw_paste_progress(s, t);
         self.draw_reader(s);
+        self.draw_voice_overlay(s);
         if self.dnd.session.is_some() {
             damage.all();
             self.dnd_draw(s);
@@ -4267,7 +4287,7 @@ impl Shell {
             self.drawn = Drawn::Nothing;
             m.draw(s, &self.ui);
         }
-        if self.share.is_some() || self.share_prompt.is_some() || self.look_up.is_some() {
+        if self.share.is_some() || self.share_prompt.is_some() || self.look_up.is_some() || self.visual_search.is_some() {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
@@ -4349,6 +4369,7 @@ impl Shell {
         }
         self.draw_share(s);
         self.draw_look_up(s);
+        self.draw_visual_search(s);
         self.draw_assistive(s, t);
         self.damage = damage;
         self.rows = rows;
@@ -4365,7 +4386,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4386,7 +4407,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && !self.voice_overlay_damage() && self.visual_search.is_none() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -5583,6 +5604,13 @@ impl Shell {
                 }
             }
             Some(markup::Outcome::Cancel) => self.markup = None,
+            // Look Up in Visual Search: the picture as it is marked now goes to the apps that answer; the editor stays open
+            Some(markup::Outcome::LookUp) => {
+                let picture = self.markup.as_ref().map(|m| m.image().clone());
+                if let Some(img) = picture {
+                    self.visual_search_start(&img, bifrost_ui::visual_search::SceneKind::Screenshot);
+                }
+            }
             None => {}
         }
         true

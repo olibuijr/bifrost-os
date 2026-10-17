@@ -22,5 +22,5 @@ Code: `springboard/src/shell/services/speech.rs` (the `speech` service, text to 
 
 ## Who uses it
 
-- Dictation is the Settings page for the model. The voice-control parser (`accessibility/voice_control.rs`) reads final
-  transcripts, but no Voice Control session is started yet (see `docs/accessibility-input.md`).
+- Dictation is the Settings page for the model. Voice Control (Settings > Accessibility, `accessibility/voice_control.rs`)
+  holds a recognition of its own with that model and runs final transcripts as commands (see `docs/accessibility-input.md`).

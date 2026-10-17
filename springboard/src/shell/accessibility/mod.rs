@@ -28,6 +28,7 @@ pub mod switch_panels;
 pub mod switch_scan;
 pub mod tree;
 pub mod voice_control;
+pub mod voice_overlay;
 pub mod walk;
 pub mod zoom;
 
@@ -67,6 +68,9 @@ pub struct AccessibilitySettings {
     /// Switch Scanning: the screen reader's cursor steps through the screen on a timer (`SWITCH_SCAN_MS`) and Ctrl+Alt+Space
     /// presses the element it rests on, so one switch can drive the whole screen (`reader::Reader::scan_due`).
     pub switch_scan: bool,
+    /// Voice Control: the shell listens (on device, with the dictation model) and runs spoken commands (`voice_control`). Stored
+    /// under the key the recognizer service reads (`services::recognizer::VOICE_CONTROL_PREF`).
+    pub voice_control: bool,
     /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
     pub sticky_keys: bool,
     /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
@@ -119,6 +123,7 @@ impl AccessibilitySettings {
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
             switch_scan: flag("a11y_switch_scan", d.switch_scan),
+            voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
             dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
@@ -150,6 +155,7 @@ impl AccessibilitySettings {
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
             ("a11y_switch_scan", flag(self.switch_scan)),
+            (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_sticky_keys", flag(self.sticky_keys)),
             ("a11y_dwell", &self.dwell.to_string()),
             ("a11y_slow_keys", &self.slow.to_string()),
