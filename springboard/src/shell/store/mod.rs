@@ -740,6 +740,9 @@ impl AppStore {
                             }
                             Ok(app)
                         })();
+                        if let Err(e) = &result {
+                            crate::install_log::record(&crate::setup::shell_data_dir(), "app install", &format!("{}: {e}", a.id));
+                        }
                         Done::Installed { id: a.id, result }
                     });
                     return;

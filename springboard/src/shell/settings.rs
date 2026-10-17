@@ -232,6 +232,8 @@ struct Loads {
     fonts: Loaded<super::pages::FontsView>,
     gpus: Loaded<Vec<super::gpu_page::Gpu>>,
     crashes: Loaded<Vec<super::diag::CrashEntry>>,
+    /// failed app and system installs, newest first (`install_log::recent`)
+    install_failures: Loaded<Vec<crate::install_log::Failure>>,
     latest_backup: Loaded<Option<u64>>,
     /// the packages Storage may remove (`pacman_update::removable_packages`)
     removable: Loaded<Vec<String>>,
@@ -254,6 +256,7 @@ impl Loads {
         landed |= self.fonts.poll();
         landed |= self.gpus.poll();
         landed |= self.crashes.poll();
+        landed |= self.install_failures.poll();
         landed |= self.latest_backup.poll();
         landed |= self.removable.poll();
         landed |= self.logins.poll();
@@ -268,7 +271,7 @@ impl Loads {
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy()
     }
 }
 
@@ -700,7 +703,7 @@ impl Settings {
                 note: &self.account_note,
                 busy: self.loads.account_done.busy(),
             }),
-            PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
+            PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, installs: &self.loads.install_failures.value, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
@@ -948,7 +951,11 @@ impl Settings {
                 self.resolution = super::services::display_services::load_resolution(&dir);
             }
             PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
-            PageId::Diagnostics => self.loads.crashes.start("diag-read", move || diag::load(&dir)),
+            PageId::Diagnostics => {
+                let installs = dir.clone();
+                self.loads.crashes.start("diag-read", move || diag::load(&dir));
+                self.loads.install_failures.start("install-read", move || crate::install_log::recent(&installs, diagnostics_page::MAX_ROWS));
+            }
             PageId::Backup | PageId::SoftwareUpdate => {
                 let root = backup::destination_root(&dir, &self.opts.backup_destination);
                 self.loads.latest_backup.start("backup-read", move || backup::latest(&root).map(|(_, t)| t))

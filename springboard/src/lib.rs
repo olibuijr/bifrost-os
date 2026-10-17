@@ -30,6 +30,7 @@ pub mod pstore;
 pub mod privd;
 #[cfg(target_os = "linux")]
 pub mod privd_client;
+pub mod install_log;
 pub mod setup;
 pub mod scene;
 pub mod shell;

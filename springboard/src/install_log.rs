@@ -1,5 +1,5 @@
-//! Install failure log: one tab-separated line per failed system update, kept in the shell data
-//! directory so the diagnostics page can list it. The file rotates to `install-failures.log.1`
+//! Install failure log: one tab-separated line per failed install (a system update from `updated`, an app from the
+//! store), kept in the shell data directory so the diagnostics page can list it. The file rotates to `install-failures.log.1`
 //! once it passes `MAX_BYTES`, so it never grows without bound.
 
 use std::io::Write;
@@ -9,7 +9,6 @@ pub const FILE: &str = "install-failures.log";
 const MAX_BYTES: u64 = 256 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub struct Failure {
     pub unix: i64,
     /// what failed, such as "system update"
@@ -27,7 +26,6 @@ pub fn line(unix: i64, what: &str, message: &str) -> String {
     format!("{unix}\t{}\t{}\n", clean(what), clean(message))
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn parse(text: &str) -> Vec<Failure> {
     text.lines()
         .filter_map(|l| {
@@ -51,14 +49,19 @@ pub fn append(dir: &Path, unix: i64, what: &str, message: &str) -> std::io::Resu
     f.write_all(line(unix, what, message).as_bytes())
 }
 
+/// Logs a failure from a worker thread. Write errors are dropped: a failed install must not fail again because its
+/// log could not be written.
+pub fn record(dir: &Path, what: &str, message: &str) {
+    let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    let _ = append(dir, unix, what, message);
+}
+
 /// Every recorded failure, oldest first. A missing file is an empty log.
-#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn read(dir: &Path) -> Vec<Failure> {
     std::fs::read_to_string(path(dir)).map(|t| parse(&t)).unwrap_or_default()
 }
 
 /// The newest `max` failures, newest first, for the diagnostics page.
-#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn recent(dir: &Path, max: usize) -> Vec<Failure> {
     let mut all = read(dir);
     all.reverse();
