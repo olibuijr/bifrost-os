@@ -774,11 +774,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/oslog.json",
+   "bifrost": "springboard/sdk/src/log.rs (re-exports springboard/core/src/log.rs); bifrost-log CLI (springboard/sdk/src/bin/bifrost-log.rs); Console app (springboard/apps/console-desktop)",
    "status": "partial",
-   "note": "from SDK matrix oslog.json",
+   "note": "The read side (LogStore entries and the bifrost-log show command) and the write side (Logger levels, subsystem registry, per-subsystem private and level config) are built, with journald as the store. Entries, activities, signposts, boundaries, enumerator and position tokens, and format payloads are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::"
+    },
+    {
+     "kind": "cmd",
+     "run": "bifrost-log subsystems",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Logging is built: springboard/core/src/log.rs (LogStore read side, Logger write side, subsystem registry) behind bifrost_app::log, the bifrost-log CLI and the Console app. Journald is the store."
   },
   {
    "id": "path:/System/Library/Frameworks/OpenAL.framework",
@@ -1467,11 +1481,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "bifrost": "springboard/core/src/speech_engine.rs; springboard/src/shell/services/speech.rs; springboard/sdk/src/speech.rs; springboard/cmd/src/say.rs",
    "status": "partial",
-   "note": "Screen reader announcements are spoken through espeak-ng or espeak found on PATH, and stay silent without one. No speech engine is in packaging/arch/runtime-packages.txt and apps have no speech API in the SDK, so voices for apps are missing.",
+   "note": "Text to speech runs through the speech service: apps speak an utterance with a voice and rate, and the say tool and the screen reader use the same engine, espeak-ng, which is now in packaging/arch/runtime-packages.txt. Gap: no word or sentence events, no pitch or volume, and the reference voice catalogue is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "espeak-ng --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech::"
+    }
+   ],
+   "ready_note": "The speech stack is built: engine programs and voice parsing (springboard/core/src/speech_engine.rs), the speech service (springboard/src/shell/services/speech.rs), the SDK speech API (springboard/sdk/src/speech.rs) and the say tool (springboard/cmd/src/say.rs). espeak-ng is in runtime-packages.txt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacinTalkCore.framework",
@@ -1488,11 +1526,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "bifrost": "springboard/core/src/speech_engine.rs; springboard/src/shell/services/speech.rs; springboard/sdk/src/speech.rs; springboard/cmd/src/say.rs",
    "status": "partial",
-   "note": "Screen reader announcements are spoken through espeak-ng or espeak found on PATH, and stay silent without one. Not mirrored: the reference speech core, its voice catalogue and its synthesis for apps.",
+   "note": "The speech core (engine programs, voice and rate arguments, voice listing parser) is in springboard/core/src/speech_engine.rs and drives espeak-ng. Gap: the reference voice catalogue and its synthesis are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "espeak-ng --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech::"
+    }
+   ],
+   "ready_note": "The speech stack is built: engine programs and voice parsing (springboard/core/src/speech_engine.rs), the speech service (springboard/src/shell/services/speech.rs), the SDK speech API (springboard/sdk/src/speech.rs) and the say tool (springboard/cmd/src/say.rs). espeak-ng is in runtime-packages.txt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierServices.framework",
@@ -1702,7 +1764,16 @@
    "status": "partial",
    "note": "valgrind traces heap allocations and leaks for debugging, which covers the purpose on Linux. It has no switch like the reference allocation logging, and apps get no in-process allocation log.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "valgrind --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "valgrind is installed from runtime-packages.txt and traces heap allocations and leaks, which is the job of allocation logging on Linux."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedAppsCore.framework",
@@ -2244,11 +2315,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/math",
    "status": "partial",
    "note": "Math layout engine in springboard/render/src/math: LaTeX subset and linear input parsed to a tree (frac, sqrt, scripts, big operators with limits, left/right delimiters, matrices, text), laid out with TeX rules (styles, spacing table, fraction, radical, script shifts, stretched delimiters) using OpenType MATH constants when the font has them. Painter in math/paint.rs. Formulas use the installed Noto Sans Math (OFL, noto-fonts-extra) and its MATH table; TeX defaults when the file is missing. Notes renders $...$ inline and $$...$$ display math in markdown mode (shell/textarea.rs). Not done: the Calculator display, and a device check of Notes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "math::"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMath-Regular.ttf"
+    }
+   ],
+   "ready_note": "The math layout engine (parser, TeX-rule layout, painter) is in springboard/render/src/math and uses the installed Noto Sans Math font."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MatrixKit.framework",
@@ -2563,7 +2647,21 @@
    "status": "partial",
    "note": "The ffmpeg and imagemagick packages convert video and images on demand, which covers the conversion jobs. There is no Photos conversion service, and sharing does not transcode media.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ffmpeg -version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "magick -version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ffmpeg and imagemagick are installed from runtime-packages.txt and perform the conversion jobs on demand."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework",
