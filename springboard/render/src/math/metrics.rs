@@ -247,6 +247,43 @@ impl FontMetrics for EstimatedMetrics {
     }
 }
 
+/// Metrics of a registered font face (see `canvas::register_face`): advances from the font, heights from its
+/// x-height, cap-height and descent. Per-glyph outlines are not read, so heights are estimates. Falls back to
+/// `EstimatedMetrics` for a face that is not registered. The constants come from the caller.
+pub struct FaceMetrics {
+    pub face: u64,
+    pub constants: Option<MathConstants>,
+}
+
+/// Heights of one glyph from the face's line metrics (all em).
+fn heights(ch: char, x_height: f32, cap_height: f32, descent: f32) -> (f32, f32) {
+    match ch {
+        '∑' | '∏' => (0.75, 0.25),
+        '∫' => (0.8, 0.25),
+        _ if ch.is_ascii_lowercase() && !"bdfhklt".contains(ch) => (x_height, 0.0),
+        _ if "gjpqy".contains(ch) => (cap_height, descent),
+        _ if ch.is_whitespace() => (0.0, 0.0),
+        _ => (cap_height, 0.0),
+    }
+}
+
+impl FontMetrics for FaceMetrics {
+    fn glyph(&self, ch: char) -> GlyphMetrics {
+        let measured = crate::canvas::with_font(self.face, |f| {
+            let lm = f.line_metrics(1.0);
+            let mut buf = [0u8; 4];
+            let advance = f.measure_var(ch.encode_utf8(&mut buf), 1.0, &[]);
+            let (ascent, descent) = heights(ch, lm.x_height, lm.cap_height, lm.descent);
+            GlyphMetrics { ch, advance, ascent, descent }
+        });
+        measured.unwrap_or_else(|| EstimatedMetrics.glyph(ch))
+    }
+
+    fn constants(&self) -> Option<MathConstants> {
+        self.constants
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

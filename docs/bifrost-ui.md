@@ -4706,14 +4706,22 @@ Source: `springboard/render/src/math/`. Status in the parity matrix: `partial` (
 
 Decisions and gaps:
 
-* No math font is bundled, and none of the shipped fonts has a `MATH` table, so the TeX defaults are used. Bundling a
-  math font (for example one with a MATH table) is the next step; the reader is already in place.
+* The math font is Noto Sans Math (SIL OFL), which the `noto-fonts-extra` package in
+  `packaging/arch/runtime-packages.txt` installs at `/usr/share/fonts/noto/NotoSansMath-Regular.ttf`. `math::system`
+  loads it once, registers it as a face and reads its MATH table (`MathConstants::from_math_table`). Without the file,
+  layout uses estimated metrics and the TeX defaults, and the text area paints from the UI font.
+* Painting: `math::paint::paint(layout, canvas, origin, face, color)` draws glyphs as one-character text runs (baseline
+  placed with the run's pad and ascent) and rules as rectangles. Inline objects in the typesetter
+  (`ui::typeset::InlineObject`, `TextPainter::draw_inline`, `Typesetter::with_inline_objects`) reserve width and
+  height for attachments and math.
+* Notes (the markdown text area, `shell/textarea.rs`): `$x^2$` is typeset inline and takes its width in place of its
+  source; a `$$...$$` paragraph is a centred display line. The source stays in the note file. Multi-line `$$` blocks
+  are not supported, and an inline formula that wraps across lines is drawn on its first line only.
 * Ordinary letters are upright. TeX sets them italic; without an italic correction table the output is upright.
 * `\dfrac` and `\tfrac` are plain `\frac`; the style is not forced.
 * Linear input takes one atom as a denominator (`a/bc` is `(a/b)c`); write `a/(bc)` for more.
-* Not wired yet: no glyph painter for the app text stack, Notes `$...$` and `$$...$$` (the text layout in
-  `ui/src/typeset.rs` has no inline-object hook), and the Calculator display (its text is pre-rendered images from an
-  app cache, with no face access). These are the open items before the row can be `parity`.
+* Not wired yet: the Calculator display (its text is pre-rendered images from an app cache, with no face access). The
+  row stays `partial` until the Calculator, and a device check of Notes, are done.
 * Tests: parser trees, errors, fake-font fraction and script metrics, spacing between classes, delimiter sizing, matrix
   and radical geometry, and the `MATH` table reader on a synthetic table. Not run in the session that wrote them; run
   `cargo test -p <render crate> math::` before relying on them.

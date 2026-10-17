@@ -2246,7 +2246,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Math layout engine in springboard/render/src/math: LaTeX subset and linear input parsed to a tree (frac, sqrt, scripts, big operators with limits, left/right delimiters, matrices, text), laid out with TeX rules (styles, spacing table, fraction, radical, script shifts, stretched delimiters) using OpenType MATH constants when the font has them. Not done: no bundled math font (no MATH table yet, TeX defaults used), no glyph painter for the app text stack, Notes inline and display math and the Calculator display are not wired yet.",
+   "note": "Math layout engine in springboard/render/src/math: LaTeX subset and linear input parsed to a tree (frac, sqrt, scripts, big operators with limits, left/right delimiters, matrices, text), laid out with TeX rules (styles, spacing table, fraction, radical, script shifts, stretched delimiters) using OpenType MATH constants when the font has them. Painter in math/paint.rs. Formulas use the installed Noto Sans Math (OFL, noto-fonts-extra) and its MATH table; TeX defaults when the file is missing. Notes renders $...$ inline and $$...$$ display math in markdown mode (shell/textarea.rs). Not done: the Calculator display, and a device check of Notes.",
    "rea": [],
    "method": "assessed"
   },

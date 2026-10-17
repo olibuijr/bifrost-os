@@ -12,6 +12,8 @@ use crate::gfx::{pack, rgba, Image, Surface};
 use std::collections::HashMap;
 use std::ops::Range;
 use bifrost_ui::undo::UndoManager;
+use bifrost_render::font::Style as FontStyle;
+use bifrost_render::math::{self, layout::typeset_tex, Layout, Options as MathOptions};
 
 /// Caret on/off period in ms (bifrost blinks at roughly 1 Hz).
 const BLINK_MS: f64 = 500.0;
@@ -45,6 +47,45 @@ struct Line {
     para_start: usize,
     /// an attached image shown instead of the text
     image: Option<String>,
+    /// Inline math: each formula with the line-relative char where its `$...$` span starts. The span's
+    /// source chars take the formula's width, and the formula is drawn there instead of the source.
+    maths: Vec<(usize, Layout)>,
+    /// A `$$...$$` paragraph: the formula is centred on the line and the source is not drawn.
+    display: Option<Layout>,
+}
+
+/// The font size in px at which a line of `pt` points is set (the size `Ui::text` renders at).
+fn line_px(ui: &Ui, pt: f32) -> f32 {
+    ui.pt(pt * ui.text_scale)
+}
+
+/// Typesets the TeX source `src` at `px`, or `None` when it does not parse (the source is then shown as text).
+fn formula(ui: &Ui, src: &str, px: f32, display: bool) -> Option<Layout> {
+    let metrics = math::system::metrics();
+    let opts = if display { MathOptions::display(px) } else { MathOptions::text(px) };
+    typeset_tex(src, opts, &metrics).ok()
+}
+
+/// Draws a typeset formula with its baseline origin at (`x`, `baseline`). With the installed math font the glyphs
+/// are painted from that face; otherwise each symbol is an image of the UI font, placed by the same rule as the
+/// math painter (the image's baseline sits `pad + ascent` below its top).
+fn paint_formula(s: &mut Surface, ui: &Ui, lay: &Layout, x: f32, baseline: f32, color: u32) {
+    let ink = if color == super::ui::WHITE { super::ui::LABEL.now() } else { color };
+    if let Some(font) = math::system::math_font() {
+        math::paint::paint(lay, s, (x, baseline), font.face, ink);
+        return;
+    }
+    for g in &lay.glyphs {
+        let asc = ui.font.line_metrics(g.size).ascent;
+        let (gx, gy) = math::paint::run_origin(g, (x, baseline), asc);
+        let st = FontStyle { px: g.size, embolden: 0.0, color: bifrost_render::appearance::contrast(color), shadow: false };
+        let img = ui.font.render_var(&g.ch.to_string(), &st, &[]);
+        blit_text(s, &img, gx.round() as i32, gy.round() as i32, color);
+    }
+    let rule = if color == super::ui::WHITE { super::ui::LABEL.now() } else { color };
+    for r in &lay.rules {
+        s.fill_rrect(x + r.x, baseline + r.y, r.w, r.h, 0.0, rule);
+    }
 }
 
 /// A run of chars (line-relative) drawn in one weight and colour. `kind` 1
@@ -458,7 +499,7 @@ impl TextArea {
                 if let Some(name) = md::image_ref(para).filter(|n| self.images.contains_key(*n)) {
                     let h = if folded { 0.0 } else { self.images[name].h as f32 + ui.pt(12.0) };
                     let range = start..start + chars.len() + (pi != last) as usize;
-                    lines.push(Line { range, text: para.to_string(), adv: vec![0.0; chars.len()], y, h, pt: self.body_pt, weight: Weight::Regular, img: None, segs: vec![], simgs: vec![], block: Block::Body, prefix: 0, indent: 0, first: true, para_start: start, image: Some(name.to_string()) });
+                    lines.push(Line { range, text: para.to_string(), adv: vec![0.0; chars.len()], y, h, pt: self.body_pt, weight: Weight::Regular, img: None, segs: vec![], simgs: vec![], block: Block::Body, prefix: 0, indent: 0, first: true, para_start: start, image: Some(name.to_string()), maths: vec![], display: None });
                     y += h;
                     start += chars.len() + 1;
                     continue;
@@ -478,14 +519,53 @@ impl TextArea {
                 _ if pi == 0 => (self.title_pt, Weight::Bold, Block::Body, 0, 0),
                 _ => (self.body_pt, Weight::Regular, Block::Body, 0, 0),
             };
-            let h = if folded { 0.0 } else { self.line_h(ui, pt) };
-            let styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
-            let adv: Vec<f32> = if self.markdown {
+            // `$$...$$` paragraph: display math; `$...$` spans: inline math, typeset at the body size
+            let trimmed = para.trim();
+            let display = if self.markdown && trimmed.len() > 4 && trimmed.starts_with("$$") && trimmed.ends_with("$$") {
+                formula(ui, &trimmed[2..trimmed.len() - 2], line_px(ui, pt), true)
+            } else {
+                None
+            };
+            let h = if folded {
+                0.0
+            } else if let Some(d) = &display {
+                self.line_h(ui, pt).max(d.ascent + d.depth + ui.pt(12.0))
+            } else {
+                self.line_h(ui, pt)
+            };
+            let mut styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
+            let mut para_maths: Vec<(usize, usize, Layout)> = vec![];
+            if self.markdown && display.is_none() {
+                for sp in md::spans(para, prefix) {
+                    if sp.style != Style::Math || sp.marker {
+                        continue;
+                    }
+                    let src: String = chars[sp.range.clone()].iter().collect();
+                    if let Some(lay) = formula(ui, &src, line_px(ui, pt), false) {
+                        para_maths.push((sp.range.start, sp.range.end, lay));
+                    }
+                }
+                for (a, b, _) in &para_maths {
+                    for st in styles.iter_mut().take(*b).skip(*a) {
+                        st.2 = 7;
+                    }
+                }
+            }
+            let mut adv: Vec<f32> = if display.is_some() {
+                vec![0.0; chars.len()]
+            } else if self.markdown {
                 let mut buf = [0u8; 4];
                 chars.iter().zip(&styles).map(|(c, st)| ui.measure(c.encode_utf8(&mut buf), pt, st.0)).collect()
             } else {
                 advances(ui, para, pt, weight)
             };
+            // a formula takes its width on its first char; the rest of its source takes none
+            for (a, b, lay) in &para_maths {
+                adv[*a] = lay.width;
+                for d in adv.iter_mut().take(*b).skip(*a + 1) {
+                    *d = 0.0;
+                }
+            }
             let mut ls = 0;
             for end in wrap_breaks(&chars, &adv, self.w) {
                 let text: String = chars[ls..end].iter().collect();
@@ -501,7 +581,10 @@ impl TextArea {
                         }
                     }
                 }
-                let mut line = Line { text, adv: adv[ls..end].to_vec(), range, y, h, pt, weight, img: None, segs, simgs: vec![], block, prefix, indent, first: ls == 0, para_start: start, image: None };
+                let maths: Vec<(usize, Layout)> =
+                    para_maths.iter().filter(|(a, _, _)| *a >= ls && *a < end).map(|(a, _, lay)| (a - ls, lay.clone())).collect();
+                let line_display = if ls == 0 { display.clone() } else { None };
+                let mut line = Line { text, adv: adv[ls..end].to_vec(), range, y, h, pt, weight, img: None, segs, simgs: vec![], block, prefix, indent, first: ls == 0, para_start: start, image: None, maths, display: line_display };
                 if let Some((img, simgs)) = cache.remove(&line.key()) {
                     line.img = img;
                     line.simgs = simgs;
@@ -909,6 +992,12 @@ impl TextArea {
                 }
                 continue;
             }
+            if let Some(lay) = &l.display {
+                let baseline = ly + (l.h - lay.ascent - lay.depth) / 2.0 + lay.ascent;
+                let ox = x + (self.w - lay.width) / 2.0;
+                paint_formula(s, ui, lay, ox, baseline, self.color);
+                continue;
+            }
             if l.text.is_empty() {
                 continue;
             }
@@ -945,6 +1034,8 @@ impl TextArea {
                         }
                     }
                     6 => s.fill_rrect(x0 + ui.pt(1.0), ly, ui.pt(3.0), lh, ui.pt(1.5), SECONDARY),
+                    // inline math: the formula is drawn below, over its reserved width
+                    7 => {}
                     _ => {
                         if seg.kind == 5 {
                             s.fill_rrect(x0, ly, x1 - x0, lh, ui.pt(2.0), rgba(52, 199, 89, 100));
@@ -962,6 +1053,18 @@ impl TextArea {
                         }
                     }
                 }
+            }
+        }
+        // inline formulas: on the line's text baseline, at the place their source starts
+        for l in &self.lines {
+            if l.maths.is_empty() || l.h <= 0.0 {
+                continue;
+            }
+            let lm = ui.font.line_metrics(line_px(ui, l.pt));
+            let baseline = y + l.y + l.h / 2.0 + (lm.ascent - lm.descent) / 2.0;
+            for (a, lay) in &l.maths {
+                let x0 = x + l.x_at(l.range.start + a);
+                paint_formula(s, ui, lay, x0, baseline, self.color);
             }
         }
         if self.focused && self.caret_on(t) {
@@ -1320,6 +1423,21 @@ mod tests {
         plain.set_text(&ui, "T\n- milk");
         plain.edit(&ui, &Out::Enter, 0.0);
         assert_eq!(plain.text(), "T\n- milk\n");
+    }
+
+    #[test]
+    fn inline_and_display_math_reserve_their_width() {
+        let ui = ui();
+        let ta = md_area(&ui, "title\nsee $x^2$ now\n$$\\frac{a}{b}$$");
+        let inline = &ta.lines[1];
+        assert_eq!(inline.maths.len(), 1, "one inline formula on the line");
+        let (at, lay) = &inline.maths[0];
+        assert_eq!(*at, 4, "the formula starts at the dollar");
+        assert!((inline.adv[4] - lay.width).abs() < 0.01, "the dollar takes the formula width");
+        assert!(inline.adv[5..8].iter().all(|a| *a == 0.0), "the rest of its source takes no width");
+        let display = &ta.lines[2];
+        assert!(display.display.is_some(), "a $$ paragraph is display math");
+        assert!(display.h >= display.display.as_ref().map_or(0.0, |d| d.ascent + d.depth));
     }
 
     #[test]

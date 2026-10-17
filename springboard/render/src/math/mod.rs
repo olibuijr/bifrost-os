@@ -13,6 +13,8 @@
 pub mod layout;
 pub mod metrics;
 pub mod parse;
+pub mod paint;
+pub mod system;
 
 /// TeX atom classes, used for the spacing table between neighbouring atoms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
