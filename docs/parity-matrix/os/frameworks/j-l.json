@@ -1699,6 +1699,9 @@
    "bifrost": "springboard/sdk/src/log.rs",
    "status": "partial",
    "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine.",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-core", "filter": "log::tests"}, {"kind": "test", "crate": "bifrost-core", "filter": "log_format::"}],
+   "ready_note": "Unified logging for apps (the Logger API and the log store) is in bifrost_core::log, with per-argument privacy formatting in log_format.rs; both have unit tests. Journal integration with systemd is not part of this check.",
    "rea": [],
    "method": "assessed"
   },
