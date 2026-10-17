@@ -1,6 +1,7 @@
 //! Platform-independent BifrOSt infrastructure.
 pub mod json;
 pub mod container_layout;
+pub mod login_directories;
 pub mod plist;
 pub mod plist_binary;
 pub mod defaults_file;
