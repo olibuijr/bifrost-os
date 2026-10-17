@@ -270,6 +270,12 @@ pub mod actor;
 pub mod synchronization;
 pub mod fswatch;
 pub mod file_coordination;
+/// FUSE kernel protocol (7.31+) as pure encode and decode: requests, replies and READDIR packing.
+pub mod fuse;
+/// Mounts a FUSE volume through `fusermount3` and serves it; see docs/bifrost-ui.md "Unary file system module".
+pub mod fuse_mount;
+/// Unary file system module (`UnaryFileSystem`, `Dispatcher`): a read-only volume an app describes.
+pub mod fs_module;
 pub mod file_version;
 pub mod save_sync;
 pub mod file_provider;
