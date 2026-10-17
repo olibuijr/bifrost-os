@@ -264,7 +264,8 @@ impl Shell {
                 }
             }
         }
-        if self.captions.expire(t) {
+        // the fade needs a frame each tick; the one after it removes the plate
+        if self.captions.expire(t) || (self.captions.visible(t) && self.captions.alpha(t) < 1.0) {
             self.dirty = true;
         }
     }
@@ -375,7 +376,7 @@ mod tests {
         assert_eq!(y + h, 1920.0 - ui.pt(BOTTOM_PT), "above the dock");
         let mut buf = vec![0u32; 1200 * 1920];
         c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1200, 1920, 100.0);
-        let inside = buf[(y + h - 4.0) as usize * 1200 + (x + 4.0) as usize];
+        let inside = buf[(y + h - 4.0) as usize * 1200 + (x + w / 2.0) as usize];
         assert_ne!(inside, 0, "the plate is painted");
         let outside = buf[(y - 20.0) as usize * 1200 + (x + w / 2.0) as usize];
         assert_eq!(outside, 0, "nothing above the box");
@@ -409,8 +410,7 @@ mod tests {
             let d = r.sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1650.0).clone();
             assert!(!d.is_empty());
             let (x, y, w, h) = r.sh.captions.rect(&r.sh.ui, r.sh.w, r.sh.h);
-            assert!(buf[(y + h - 3.0) as usize * 1200 + (x + 3.0) as usize] != 0, "the plate is in the frame");
-            let _ = w;
+            assert_ne!(buf[(y + h - 3.0) as usize * 1200 + (x + w / 2.0) as usize], rgba(20, 20, 30, 255), "the plate is over the wallpaper");
         }
     }
 
