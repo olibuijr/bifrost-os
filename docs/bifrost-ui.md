@@ -4733,6 +4733,28 @@ Routes assumed where the contract left the answer shape open: `GET findmy/device
 `{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
 `202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.
 
+## Universal Clipboard (Continuity, `springboard::universal_clipboard`, `bifrost_app::cloud_clipboard`)
+
+Settings > Sharing > AirPlay & Handoff has "Share Clipboard Between Your Devices" (`Options::universal_clipboard`, off by
+default). When it is on, a local copy of text, a link or a PNG or JPEG image of at most 4 MiB goes to the account's other
+devices. The copy is sealed on this device with the account key (HPKE, AAD `bifrost.clipboard.v1`, `info` `clipboard`),
+and the cloud keeps only the sealed blob, for two minutes at most. A copy carrying a concealed or transient marker
+(`org.nspasteboard.*`, or a password manager's type) is never shared, and neither is a file copy.
+
+- **Shared key code.** The account key pair helpers and the HPKE seal and open live in `springboard/src/cloud_keys.rs`
+  (re-exported as `bifrost_app::cloud_keys`). Locate's `sealing` module now calls them with its own AAD; its API did not change.
+- **Policy.** `springboard/src/universal_clipboard.rs`: `shareable` (the filter), `encode`/`decode` and `seal`/`open` of the
+  payload, `live` (the cloud's expiry) and `offer` (a remote copy is offered on paste when it is at most 120 s old and newer
+  than the last local copy).
+- **Cloud.** `PUT /api/cloud/v1/clipboard` (`{sealed, enc}`, base64, at most 8 MiB) and
+  `GET /api/cloud/v1/clipboard?after=N&wait=S` (long-poll, at most 25 s; `{"item": null}` or the copy with `seq`,
+  `device_id`, `sealed`, `enc`, `expires_at`). The store is `clipboard_items`, one row per account (`payload_enc` holds
+  `enc.sealed`); see bifrost-cloud `CHANGELOG.md` "Unreleased". The table is excluded from the generated data API.
+- **Gap (not built).** The shell's watch of local copies, the upload and long-poll worker, and the paste offer are not
+  wired yet. The SDK request builders and the policy are tested; the worker runs on a background thread and needs the
+  Locate account key in a keychain group the shell can read (today it sits under `is.olibuijr.locate.desktop`, not
+  `is.bifrost.account`). Until that lands the toggle has no effect beyond storing the setting.
+
 ## Screen Time (`shell::screentime`, shell only, no SDK API)
 
 Owner decision (privacy first): usage data stays on the device and is never uploaded. Apps get no read access to it.

@@ -7,8 +7,7 @@ use bifrost_app::keychain::{self, Error, Reply};
 use bifrost_app::Ctx;
 
 /// The keychain service and account of the account private key.
-pub const SERVICE: &str = "is.olibuijr.locate.desktop";
-pub const ACCOUNT_KEY: &str = "findmy-account-key";
+pub use bifrost_app::cloud_keys::{KEY_ACCOUNT as ACCOUNT_KEY, KEY_SERVICE as SERVICE};
 
 /// What a keychain reply changed, for the window to act on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

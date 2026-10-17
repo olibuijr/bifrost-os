@@ -2865,6 +2865,7 @@ impl Settings {
                 self.opts.menu_extras & e.bit() != 0
             }
             Toggle::Handoff => flip(&mut self.opts.handoff),
+            Toggle::UniversalClipboard => flip(&mut self.opts.universal_clipboard),
             Toggle::PipAuto => flip(&mut self.opts.pip_auto),
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),

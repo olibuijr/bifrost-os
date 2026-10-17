@@ -207,6 +207,8 @@ pub enum Toggle {
     /// Developer: GPU frames flip straight to the display (next start)
     GpuScanout,
     Handoff,
+    /// Continuity: share copies between the account's devices (sealed; off by default)
+    UniversalClipboard,
     PipAuto,
     BgRefresh,
     FourFinger,
@@ -981,6 +983,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Automatically AirPlay to TVs").value("Never")]),
                 Group::new(vec![Item::new("Handoff").switch(o.handoff, Action::Toggle(Toggle::Handoff))])
                     .footer("Handoff lets you start something on one device and instantly pick it up on other devices nearby."),
+                Group::new(vec![Item::new("Share Clipboard Between Your Devices").switch(o.universal_clipboard, Action::Toggle(Toggle::UniversalClipboard))])
+                    .footer("Copies of text, links and images are encrypted on this device before they leave it, and are kept in the cloud for two minutes at most. Passwords from password managers are never shared."),
             ],
         ),
         PageId::DefaultApps => page(
