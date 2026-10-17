@@ -530,8 +530,8 @@
    "apple": "File > New Viewer Window/Tab",
    "status": "gap",
    "bifrost": "",
-   "note": "The SDK has no call for a second window yet (nothing like it in sdk/src), so a second MailWindow cannot be opened from the app.",
-   "wire": "Open a second MailWindow through SDK multi-window support"
+   "note": "The SDK window registry exists (bifrost_app::app_windows), so the app can open a second window id. Not done: the shell does not host a second window of an app yet, so a second MailWindow is not on screen.",
+   "wire": "Open a second MailWindow through the SDK multi-window API (bifrost_app::app_windows) once the shell hosts extra windows."
   }
  ],
  "summary": {

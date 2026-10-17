@@ -3973,3 +3973,28 @@ Apps can take full touch events instead of the single-pointer `Input::Touch` str
   `Suspend`.
 - Parity: touch objects and the touches-began / moved / ended / cancelled model of the reference toolkit. Not yet: coalesced and
   predicted touches, estimated (pencil) properties, azimuth and altitude, hover.
+
+## Several windows per app (`bifrost_app::app_windows`)
+
+An app can hold more than one window. `AppWindows` is the app's registry: the main window (`WindowId::MAIN`, always open,
+cannot be closed) and the windows the app opens, front to back, the first one focused.
+
+- `AppWindows::open(WindowSpec::new(title, width, height))` opens a window in front and returns its `WindowId`. Ids count up
+  from 1 and are never reused. `DEFAULT_LIMIT` (8) counts the main window too.
+- `focus(id)`, `close(id)` (returns the window; the main window gives `WindowError::MainWindow`), `set_frame(id, title,
+  width, height)`, `get(id)`, `list()`, `focused()`.
+- `route(id)` gives the window an event or a frame belongs to, or `None` once the window is closed. A late event for a closed
+  window is dropped, never sent to the main window.
+- `App` trait defaults (existing apps compile unchanged): `window_event(ctx, window, Input)` sends the main window to `event`
+  and other windows to nothing; `draw_window(ctx, window, surface, t)` sends the main window to `draw` and others to an empty
+  damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
+
+Status (2026-10-17): the registry, the trait hooks and the Contacts card model (`springboard/apps/contacts-desktop/src/card_windows.rs`,
+`CardWindows`: one card per window, a card already open is focused) are built and tested headless. Not done: the shell does not host a
+second window of an app. The runtime gives one surface and one toplevel per app process, and the shell's `scenes` service
+(`springboard/src/shell/services/scene_services.rs`) keeps scene window records but never draws them. So a window opened here is not on
+screen yet, and the runtime does not call `draw_window` for it. Until that lands, Contacts' Card > Open in Separate Window and the
+double-click are not wired; the Dictionary, Mail, Calendar and Maps rows stay gap and name this API in their `wire`.
+
+Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
+lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).

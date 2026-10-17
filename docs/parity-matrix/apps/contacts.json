@@ -203,9 +203,9 @@
    "area": "menu",
    "apple": "Card > Open in Separate Window; ABContactCardWindowController.nib",
    "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Open a second SDK window showing one card."
+   "bifrost": "springboard/sdk/src/app_windows.rs (AppWindows, WindowId, App::window_event, draw_window, window_closed); springboard/apps/contacts-desktop/src/card_windows.rs (CardWindows)",
+   "note": "SDK registry and Contacts card-window model exist (springboard/sdk/src/app_windows.rs, springboard/apps/contacts-desktop/src/card_windows.rs), but the SDK runtime and the shell host only one surface per app, so no second window can appear yet.",
+   "wire": "Once the runtime draws extra windows (App::draw_window via a second toplevel/shm slot), wire Card > Open in Separate Window and double-click to CardWindows::open."
   },
   {
    "feature": "Show / hide sidebar",

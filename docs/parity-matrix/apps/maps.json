@@ -255,8 +255,8 @@
    "apple": "Dock menu New Window, user activity for handoff",
    "status": "gap",
    "bifrost": "",
-   "note": "Not done: Dock New Window needs a second window instance and Handoff needs the user-activity service wired; the window state is one struct (state.rs) so a second window is possible later.",
-   "wire": "Add the New Window Dock action once the window exists; the window state lives in one struct so a second window is a second instance."
+   "note": "Not done: Dock New Window needs a second window instance and Handoff needs the user-activity service wired. The SDK window registry now exists (bifrost_app::app_windows), but the shell does not host a second window of an app yet.",
+   "wire": "Add the New Window Dock action through the SDK multi-window API (bifrost_app::app_windows) once the shell hosts extra windows; the window state lives in one struct, so a second window is a second instance."
   },
   {
    "feature": "Automation and widgets",

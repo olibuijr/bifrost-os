@@ -80,6 +80,7 @@ pub mod screen_time;
 pub mod screens;
 pub mod displays;
 pub mod windows;
+pub mod app_windows;
 pub mod input_events;
 pub mod touch_events;
 pub mod launch_services;
@@ -558,6 +559,21 @@ pub trait App {
     /// Draws into `surface` (premultiplied pixels, stride = width) and returns what changed.
     /// The first frame after a (re)allocation is always sent in full.
     fn draw(&mut self, ctx: &Ctx, surface: &mut Surface, t: f64) -> Damage;
+    /// An event for one of the app's windows (`app_windows`): the main window gets `event`. A window opened by the app
+    /// gets nothing unless the app overrides this. True when the app needs a new frame.
+    fn window_event(&mut self, ctx: &Ctx, window: app_windows::WindowId, ev: Input) -> bool {
+        if window.is_main() { self.event(ctx, ev) } else { false }
+    }
+    /// Draws one of the app's windows into `surface`. The main window gets `draw`; any other window draws nothing
+    /// until the app overrides this (the damage is empty, so nothing is sent).
+    fn draw_window(&mut self, ctx: &Ctx, window: app_windows::WindowId, surface: &mut Surface, t: f64) -> Damage {
+        if window.is_main() { self.draw(ctx, surface, t) } else { Damage::new(surface.w, surface.h) }
+    }
+    /// The shell closed or the app closed one of its windows; the app drops that window's state. The main window never
+    /// closes. True when the app needs a new frame.
+    fn window_closed(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
+        false
+    }
     /// Whether the app draws through `draw_canvas` (the GPU path, docs/graphics-architecture.md). Apps that return
     /// `true` are drawn with `draw_canvas` on the direct path and with `draw_canvas` on a CPU `Surface` (which
     /// implements `Canvas`) on the shared-memory path, so one drawing routine serves both. The default `false` keeps
