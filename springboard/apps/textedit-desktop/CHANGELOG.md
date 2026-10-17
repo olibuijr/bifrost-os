@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.11.0 — 2026-10-17
+
+- RTFD packages open from the open panel: a package folder of the RTFD type is one file to the panel, chosen whole and not
+  navigated into (the app declares `package_types = ["rtfd"]`).
+- Save As and Rename to a package name (`Notes.rtfd`) write the package folder, which replaces an existing package only on
+  commit; a package keeps its folder for the next save.
+- Shared text opened on the Dock icon or from the share sheet becomes an untitled document (Input::Open with a data: URL).
+
 ## 1.10.0 — 2026-10-17
 
 - Attachments are drawn inline: an attachment is as tall as its line and as wide as its picture, narrowed to the text
