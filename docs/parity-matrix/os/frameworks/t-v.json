@@ -694,7 +694,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/text_recognition.rs, springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs",
+   "bifrost": "springboard/sdk/src/image_text.rs, springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs",
    "status": "partial",
    "note": "Built 2026-10-17: sdk text_recognition reads the text in an image through the local tesseract engine (words and lines with pixel boxes and confidence, tap-to-select, find; the tesseract packages are in runtime-packages.txt). With subject lifting and Visual Look Up (image_analysis), QR and barcode scanning (data_scanner) and document page flattening (document_scan), apps get the ImageAnalyzer, DataScanner and document-scanner jobs. Not built: a Live Text overlay view for apps, languages beyond the packs installed (English ships), transit and other non-text data types.",
    "rea": [],
@@ -704,7 +704,7 @@
     {
      "kind": "test",
      "crate": "bifrost-app",
-     "filter": "text_recognition::tests"
+     "filter": "image_text::tests"
     },
     {
      "kind": "test",
