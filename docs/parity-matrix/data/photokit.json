@@ -135,12 +135,12 @@
   }
  ],
  "gaps": [
-  "The app-facing photo library covers fetch, authorization, thumbnails and change observation; there is no asset creation, no collections, and isFavorite is always false.",
+  "No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale.",
   "The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker.",
   "No Live Photo support in the library or the viewer (PHLivePhoto).",
   "Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets.",
   "The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension.",
-  "Change observation exists (observe pushes library_did_change every two seconds); there is no PHPhotoLibraryChangeObserver object, and no per-asset permission grants.",
+  "No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs).",
   "Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps."
  ]
 }

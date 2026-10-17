@@ -201,7 +201,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -222,7 +222,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -623,7 +623,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/replaykit.json",
    "status": "partial",
-   "note": "from SDK matrix replaykit.json",
+   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
    "rea": [],
    "method": "assessed"
   },
@@ -2040,7 +2040,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2061,7 +2061,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2103,7 +2103,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2124,7 +2124,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2166,7 +2166,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2187,7 +2187,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2250,7 +2250,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2271,7 +2271,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2292,7 +2292,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: still photos in the built-in Photos app (springboard/src/shell/photos/). Not covered: video and Live Photo playback (no video assets, no Live Photo support in photokit.json gaps). Built 2026-10-17: movie pixel size read from the first video track (photo_media::movie_pixel_size, used by the photos service); tests photo_media::tests. Still missing: video and Live Photo playback.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2313,7 +2313,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: thumbnail caching and request coalescing in springboard/ui/src/photo_caching.rs and photo_request.rs. Not covered: the reference full-size rendering of adjusted images beyond the edit.rs operations.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2397,7 +2397,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. The Photos app is drawn with the shell's own kit (springboard/src/shell/photos/), not SwiftUI. Not covered: the reference shared SwiftUI photo views.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2418,7 +2418,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: Notes has an app-local camera-roll picker (springboard/apps/notes-desktop/src/notes/picker.rs). Not covered: a shared system picker for apps (photokit.json gap).",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2439,7 +2439,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: the Photos app draws its library, albums and slideshow (springboard/src/shell/photos/). Not covered: the reference core selection and editing flows.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2460,7 +2460,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: built-in edit mode in springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness, contrast, colour filters) and adjustment records in springboard/ui/src/photo_adjustment.rs. Not covered: an extension point for third-party editors. Built 2026-10-17: EditorRegistry installs editors by format and starts a session only for an installed editor (tests photo_adjustment::tests). Still missing: the Photos app does not host or load any third-party editor.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2481,7 +2481,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: pure models springboard/ui/src/photo_media.rs, photo_changes.rs and photo_project.rs, not yet wired into the shell (photokit row notes). Not covered: the reference shared foundation types.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2502,7 +2502,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -6173,7 +6173,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/replaykit.json",
    "status": "partial",
-   "note": "private framework, owner ReplayKit; from SDK matrix replaykit.json",
+   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
    "rea": [],
    "method": "assessed"
   },

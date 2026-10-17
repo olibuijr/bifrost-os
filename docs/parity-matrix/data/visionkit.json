@@ -75,7 +75,7 @@
     "No text recognition (OCR) for camera frames or images, so Live Text, DataScanner text and ImageAnalyzer have no counterpart.",
     "Document scanning is an SDK model (sdk document_scan.rs: page corners to a flat page); the Camera app has no scanning mode.",
     "No subject lifting or background removal for images.",
-    "No Visual Look Up.",
+    "Visual Look Up models exist (springboard/ui/src/visual_lookup.rs, look_up.rs, visual_search.rs) but no image lookup UI or service is wired into the shell or apps.",
     "Barcode scanning is an SDK model (sdk data_scanner.rs), and the Camera app scans QR model 2 codes; no other barcode formats.",
     "Plain-text data detection (controls::detect) has no image counterpart and does not cover transit information."
   ]

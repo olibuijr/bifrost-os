@@ -155,7 +155,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/devicediscoveryextension.json",
    "status": "partial",
-   "note": "from SDK matrix devicediscoveryextension.json",
+   "note": "Remaining from data file devicediscoveryextension (refreshed 2026-10-17): No system device picker or route picker view that lists third-party media receivers; the SDK feed is not wired to a shell browse service. | No sandboxed extension process or transport that feeds the modeled discovery point. | AirPlay & Handoff exists only as a settings page (springboard/src/shell/pages.rs:598) with no receiver discovery behind it.",
    "rea": [],
    "method": "assessed"
   },

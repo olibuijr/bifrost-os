@@ -773,7 +773,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "note": "Remaining from data file core-wlan (refreshed 2026-10-17): Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs. | The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs. | The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI. | Link quality beyond RSSI (noise, transmit rate) is not reported.",
    "rea": [],
    "method": "assessed"
   },
@@ -794,7 +794,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "note": "Remaining from data file core-wlan (refreshed 2026-10-17): Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs. | The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs. | The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI. | Link quality beyond RSSI (noise, transmit rate) is not reported.",
    "rea": [],
    "method": "assessed"
   },
