@@ -742,7 +742,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/social.json",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json",
+   "note": "private framework, owner Social; from SDK matrix social.json. Not ready: the shell has no sign-in flow to add an account, and Compose Post does not send its draft through draft_request (social.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -805,7 +805,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/social.json",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json",
+   "note": "private framework, owner Social; from SDK matrix social.json. Not ready: the share sheet has no image property and performs only Copy; apps and Compose Post are reached through the menu (social.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -1290,7 +1290,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the main job, recognition, is partial (on-device through the whisper element, not verified on Midget); detector behaviour not audited in this round.",
    "rea": [],
    "method": "assessed"
   },
@@ -1332,7 +1332,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no SpeechAnalyzer engine surface; recognition runs through the whisper element, not verified on Midget (speech.json).",
    "rea": [],
    "method": "assessed"
   },
@@ -1353,7 +1353,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: recognition results are SFTranscription with segments and alternatives; no further object model is audited here (speech.json).",
    "rea": [],
    "method": "assessed"
   },
@@ -1374,7 +1374,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the Keyboard Mic key is inert and system dictation is missing (speech.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -1435,7 +1435,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the model install path (speech_assets) exists but is not verified on Midget (speech.json).",
    "rea": [],
    "method": "assessed"
   },
@@ -1456,7 +1456,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no app-facing microphone permission prompt; the audio service records only on explicit user action (speech.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -3730,7 +3730,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -3751,7 +3751,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -3991,7 +3991,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: the coordinator still lacks relinquish; the file-change feed has a callback through WatchStream::deliver (system.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -4012,7 +4012,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
    "rea": [],
    "method": "assessed"
   },
@@ -4133,7 +4133,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
    "rea": [],
    "method": "assessed"
   },
@@ -4154,7 +4154,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
    "rea": [],
    "method": "assessed"
   },
