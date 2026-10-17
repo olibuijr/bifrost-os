@@ -213,6 +213,38 @@ pub fn register_manifest(text: &str) -> Result<(), LoadError> {
     register(parse_manifest(text).map_err(LoadError::Manifest)?).map_err(LoadError::Decl)
 }
 
+/// Registers the declarations of every installed app at once, for the shell's app registry. `register` replaces the
+/// whole set, so one call per app would drop the others. The common case is one call for all of them. When that
+/// conflicts (two apps export one identifier, or a cycle), the apps are added one by one and each that conflicts
+/// with the ones before it is left out. Returns the apps that were left out, by their index in `texts`, with why.
+pub fn register_manifests(texts: &[&str]) -> Vec<(usize, LoadError)> {
+    let mut rejected = Vec::new();
+    let mut parsed: Vec<(usize, Vec<Declaration>)> = Vec::new();
+    for (i, text) in texts.iter().enumerate() {
+        match parse_manifest(text) {
+            Ok(decls) => parsed.push((i, decls)),
+            Err(e) => rejected.push((i, LoadError::Manifest(e))),
+        }
+    }
+    let all: Vec<Declaration> = parsed.iter().flat_map(|(_, d)| d.iter().cloned()).collect();
+    if register(all).is_ok() {
+        return rejected;
+    }
+    let mut kept: Vec<Declaration> = Vec::new();
+    for (i, decls) in parsed {
+        let mut next = kept.clone();
+        next.extend(decls);
+        match register(next.clone()) {
+            Ok(()) => kept = next,
+            Err(e) => rejected.push((i, LoadError::Decl(e))),
+        }
+    }
+    // the earlier registry must not survive a sync: put exactly the kept set in place (empty clears it)
+    let _ = register(kept);
+    rejected.sort_by_key(|(i, _)| *i);
+    rejected
+}
+
 /// Registers `UTExportedTypeDeclarations` and `UTImportedTypeDeclarations` entries, including tag classes
 /// other than extension and MIME type.
 pub fn register_plist(exported: &[PlistDeclaration], imported: &[PlistDeclaration]) -> Result<(), DeclError> {
@@ -447,6 +479,36 @@ extensions = ["shr"]
         let _g = lock();
         register_manifest("[[exported_types]]\nid = \"com.example.greedy\"\nextensions = [\"txt\"]\n").unwrap();
         assert_eq!(uttype::type_for_extension("a.txt"), Some("public.plain-text"));
+    }
+
+    #[test]
+    fn every_installed_app_registers_its_types_together() {
+        let _g = lock();
+        let a = "[[exported_types]]\nid = \"com.example.alpha\"\nextensions = [\"alp\"]\n";
+        let b = "[[exported_types]]\nid = \"com.example.beta\"\nextensions = [\"bet\"]\n";
+        assert!(register_manifests(&[a, b]).is_empty());
+        assert_eq!(uttype::type_for_extension("x.alp"), Some("com.example.alpha"));
+        assert_eq!(uttype::type_for_extension("x.bet"), Some("com.example.beta"));
+    }
+
+    #[test]
+    fn a_broken_or_conflicting_app_is_left_out_and_the_others_stay() {
+        let _g = lock();
+        let good = "[[exported_types]]\nid = \"com.example.good\"\nextensions = [\"gud\"]\n";
+        let broken = "[[exported_types]]\nid = \"com.example.broken\"\nbogus = \"x\"\n";
+        let twin = "[[exported_types]]\nid = \"com.example.good\"\nextensions = [\"twn\"]\n";
+        let rejected = register_manifests(&[good, broken, twin]);
+        assert_eq!(rejected.len(), 2);
+        assert_eq!(rejected[0].0, 1);
+        assert!(matches!(rejected[0].1, LoadError::Manifest(_)));
+        assert_eq!(rejected[1].0, 2);
+        assert_eq!(uttype::type_for_extension("x.gud"), Some("com.example.good"));
+        // the registry holds exactly the kept apps: nothing from the rejected ones
+        assert_eq!(uttype::type_for_extension("x.twn"), None);
+        assert_eq!(uttype::type_for_extension("x.bet"), None);
+        // no apps clears the registry
+        assert!(register_manifests(&[]).is_empty());
+        assert_eq!(uttype::type_for_extension("x.gud"), None);
     }
 
     #[test]
