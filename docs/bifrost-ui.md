@@ -3098,7 +3098,7 @@ New pure models in `springboard/ui/src/` (host unit tests only; not wired into t
   selectedRange, markedRange, attributes(forCharacterIndex:lineHeightRectangle:)) with `update_composition` and
   `apply(outcome, client)` so a text view only implements the trait; a mock client drives the controller tests.
 
-Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Tamil, Ainu, Transliteration or Dictation methods, the sources
+Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Transliteration or Dictation methods, the sources
 are not read from the shell yet (`shell/kb_layouts.rs` still has three layouts), no Wayland text-input provider.
 
 ## Text view and TextKit 2 layout (AppKit Text, `bifrost-ui`)

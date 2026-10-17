@@ -36,6 +36,11 @@ const SYLLABLES: &[(&str, &str)] = &[
     ("pya", "ぴゃ"), ("pyu", "ぴゅ"), ("pyo", "ぴょ"),
 ];
 
+/// The hiragana of one romaji syllable from the table (`ka` gives か), or None when the table has no such syllable.
+pub fn syllable_hiragana(romaji: &str) -> Option<&'static str> {
+    SYLLABLES.iter().find(|(k, _)| *k == romaji).map(|(_, kana)| *kana)
+}
+
 /// True for the Latin vowels.
 fn is_vowel(c: u8) -> bool {
     matches!(c, b'a' | b'i' | b'u' | b'e' | b'o')
