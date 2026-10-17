@@ -116,6 +116,7 @@ pub mod password_suggest;
 pub mod entropy;
 pub mod passkey;
 pub mod password_gen;
+pub mod totp;
 pub mod digest;
 pub mod crypto_key;
 pub mod kem;

@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "springboard/apps/passwords-desktop",
    "status": "partial",
-   "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations",
+   "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations; one-time codes (RFC 6238) are built in the SDK as sdk totp (totp::tests) but the app does not show them yet",
    "rea": [],
    "method": "assessed"
   },
@@ -64,7 +64,21 @@
    "status": "partial",
    "note": "Photo Booth app (main.rs about 680 lines) beside the shell Camera",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-photobooth",
+     "filter": "backdrop::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-photobooth",
+     "filter": "menu::tests"
+    }
+   ],
+   "ready_note": "Photo Booth app: backdrop and menu tests"
   },
   {
    "id": "path:/System/Applications/Photos.app",
@@ -85,7 +99,31 @@
    "status": "partial",
    "note": "Photos (bifrost.photos) in the shell",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::grid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::albums::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    }
+   ],
+   "ready_note": "shell Photos library: grid, albums, edit recipes and export tests"
   },
   {
    "id": "path:/System/Applications/Podcasts.app",
@@ -106,7 +144,26 @@
    "status": "partial",
    "note": "Podcasts app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-podcasts",
+     "filter": "info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-podcasts",
+     "filter": "media::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-podcasts",
+     "filter": "refresh::tests"
+    }
+   ],
+   "ready_note": "Podcasts app: feed refresh, episode info and playback tests"
   },
   {
    "id": "path:/System/Applications/Preview.app",
@@ -148,7 +205,16 @@
    "status": "partial",
    "note": "video playback in the shell",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::video::tests"
+    }
+   ],
+   "ready_note": "shell video playback: status and playback tests"
   },
   {
    "id": "path:/System/Applications/Reminders.app",
@@ -169,7 +235,26 @@
    "status": "partial",
    "note": "Reminders app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "repeat::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "scripting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Reminders app: repeat rules, search and scripting tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Print Center.app",
@@ -186,11 +271,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/printers-desktop",
+   "bifrost": "springboard/apps/printers-desktop, springboard/ui/src/cups.rs",
    "status": "partial",
    "note": "print queue app over the CUPS scheduler (printers and jobs), plus springboard/ui/src/cups.rs",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-printers",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-printers",
+     "filter": "discover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-printers",
+     "filter": "widget::tests"
+    }
+   ],
+   "ready_note": "Print Center app over the CUPS scheduler: printer and job model, discovery and widget tests"
   }
  ]
 }

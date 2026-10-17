@@ -767,7 +767,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/sips.rs",
    "status": "partial",
-   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Conversion to other formats and -s are still refused.",
+   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused.",
    "rea": [],
    "method": "assessed"
   },
