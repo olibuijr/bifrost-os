@@ -451,9 +451,9 @@ pub enum ToApp {
     /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x24e.
     WindowTitleDoubleClick { window: u32 },
     /// Several windows: window `window` gained (`focused`) or lost key focus. The main window is key when no extra
-    /// window is, and it is told as `WindowFocus { window: 0, .. }` when focus moves back to it. Tag 0x1cd.
+    /// window is, and it is told as `WindowFocus { window: 0, .. }` when focus moves back to it. Tag 0x24f.
     WindowFocus { window: u32, focused: bool },
-    /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x1cf.
+    /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x250.
     WindowInput { window: u32, input: WindowInput },
     Resume,
     Suspend,
@@ -961,9 +961,9 @@ mod tag {
     pub const WINDOW_TOUCH: u32 = 0x1ca;
     pub const WINDOW_RELEASE: u32 = 0x1cb;
     /// Shell -> app: window key focus changed (`ToApp::WindowFocus`).
-    pub const WINDOW_FOCUS: u32 = 0x1cd;
+    pub const WINDOW_FOCUS: u32 = 0x24f;
     /// Shell -> app: input for the key window (`ToApp::WindowInput`).
-    pub const WINDOW_INPUT: u32 = 0x1cf;
+    pub const WINDOW_INPUT: u32 = 0x250;
     pub const WINDOW_OPEN: u32 = 0x1c0;
     pub const WINDOW_CLOSE: u32 = 0x1c1;
     pub const WINDOW_TITLE: u32 = 0x1c2;
@@ -2993,15 +2993,15 @@ mod quick_action_tests {
 
     #[test]
     fn window_input_has_the_documented_layout() {
-        // tag 0x1cf, window 3, kind 0 (key), key kind 1 (code), code 30
+        // tag 0x250, window 3, kind 0 (key), key kind 1 (code), code 30
         let bytes = ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) }.encode();
-        assert_eq!(&bytes[..4], &0x1cfu32.to_le_bytes());
+        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
         assert_eq!(&bytes[4..8], &3u32.to_le_bytes());
         assert_eq!(&bytes[8..10], &[0, 1]);
         assert_eq!(&bytes[10..14], &30u32.to_le_bytes());
-        // tag 0x1cd, window 3, focused
+        // tag 0x24f, window 3, focused
         let focus = ToApp::WindowFocus { window: 3, focused: true }.encode();
-        assert_eq!(&focus[..4], &0x1cdu32.to_le_bytes());
+        assert_eq!(&focus[..4], &0x24fu32.to_le_bytes());
         assert_eq!(&focus[4..9], &[3, 0, 0, 0, 1]);
     }
 

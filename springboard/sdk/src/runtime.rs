@@ -184,6 +184,8 @@ pub struct Ctx {
     docs: std::rc::Rc<RefCell<DocState>>,
     /// the app's windows (`app_windows`), shared by every `Ctx` of this run like `docs`
     pub(crate) windows: std::rc::Rc<RefCell<crate::app_windows::AppWindows>>,
+    /// the key window's id (`ToApp::WindowFocus`), shared like `windows`; 0 is the main window
+    pub(crate) key_window_id: std::rc::Rc<std::cell::Cell<u32>>,
 }
 
 thread_local! {
@@ -195,7 +197,7 @@ impl Ctx {
     /// A context with no shell behind it, for tests (the `XCTest` host-less app): memory-only defaults, no data
     /// directory. What the app sends to the shell is collected; read it with `take_sent`.
     pub fn testing(ui: Ui, cfg: Configure) -> Self {
-        Ctx { ui, cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default() }
+        Ctx { ui, cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default(), key_window_id: Default::default() }
     }
     /// The messages queued for the shell since the last call, oldest first, and empties the queue.
     pub fn take_sent(&self) -> Vec<ToShell> {
@@ -337,6 +339,12 @@ impl Ctx {
     /// a fixed size does not go full screen. The shell answers with `ToApp::FullScreen`.
     pub fn set_full_screen(&self, on: bool) {
         self.send(ToShell::SetFullScreen { on });
+    }
+    /// The app's key window: the window that has keyboard focus, or the main window (`WindowId::MAIN`) when the shell has
+    /// not made an extra window key or that window is closed. Keys, commands and text edits go to it.
+    pub fn key_window(&self) -> crate::app_windows::WindowId {
+        let id = crate::app_windows::WindowId(self.key_window_id.get());
+        if self.windows.borrow().route(id).is_some() { id } else { crate::app_windows::WindowId::MAIN }
     }
     /// The app's windows: the main window and the ones it opened (`app_windows`). Do not hold the borrow across a call
     /// back into the app.
@@ -587,6 +595,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut control = control_endpoint(&app.id(), &data_dir);
     let docs = std::rc::Rc::new(RefCell::new(DocState::default()));
     let windows = std::rc::Rc::new(RefCell::new(crate::app_windows::AppWindows::default()));
+    let key_window_id: std::rc::Rc<std::cell::Cell<u32>> = Default::default();
 
     // Blocks for the first Configure; later ones arrive in the loop.
     while open {
@@ -683,7 +692,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                             ui.text_scale = cfg.text_scale;
                             ui.bold = kit::appearance::current().bold;
                             ui.symbols = symbols.take().unwrap_or_default();
-                            ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone(), windows: windows.clone() });
+                            ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone(), windows: windows.clone(), key_window_id: key_window_id.clone() });
                         }
                     }
                     crate::layout::set_from(&cfg);
@@ -763,7 +772,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 | ToApp::WindowConfigure { .. }
                 | ToApp::WindowTouch { .. }
                 | ToApp::WindowMoved { .. }
-                | ToApp::WindowTitleDoubleClick { .. }) => {
+                | ToApp::WindowTitleDoubleClick { .. }
+                | ToApp::WindowFocus { .. }
+                | ToApp::WindowInput { .. }) => {
+||||||| parent of 7c4df9ad3 (feat(sdk): key window routing for extra windows)
+                m @ (ToApp::WindowClosed { .. } | ToApp::WindowConfigure { .. } | ToApp::WindowTouch { .. }) => {
                     if let Some(c) = &ctx {
                         need_frame |= crate::app_windows::deliver_window(&mut app, c, &m, now_ms()).unwrap_or(false);
                     }
@@ -993,7 +1006,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let ax_meta=app.ax_meta(c);
         if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
         let commands=app.commands(c);
-        let menus=app.main_menu(c);
+        let menus=app.menus_for(c,c.key_window());
         if menus!=menus_seen {let _=chan.send(&ToShell::AppMenus(menus.clone()).encode(),&[]);menus_seen=menus;}
         if commands_seen != Some(commands) {commands_seen=Some(commands);let _=chan.send(&ToShell::Commands(commands).encode(),&[]);}
         let titles=app.undo_titles(c);
@@ -1467,7 +1480,7 @@ mod badge_tests {
         use crate::proto::{DocErrorCode, DocMode};
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
-        let ctx = Ctx { ui: Ui::new(Font::parse(data).unwrap(), 1.0), cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default() };
+        let ctx = Ctx { ui: Ui::new(Font::parse(data).unwrap(), 1.0), cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default(), key_window_id: Default::default() };
         let open = ctx.open_document(DocMode::Read, "Import", &["public.text"]);
         let save = ctx.save_document("a.md", &[]);
         assert_eq!((open, save), (1, 2));
