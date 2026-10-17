@@ -55,6 +55,8 @@ struct Cache {
     revision: u64,
     width: f32,
     zoom: f32,
+    /// the attachments' aspect ratios and decoded pictures, indexed like the attachments
+    art: view::Art,
     /// the document's cells at the zoom: sizes scaled, so the layout, the caret and the drawing agree
     cells: Vec<Cell>,
     layout: Layout,
@@ -344,12 +346,13 @@ impl TextEditApp {
             return;
         }
         let Some(doc) = self.docs.get(id) else { return };
-        let measure = |ch: char, style: &Style| view::char_width(ui, ch, style);
+        let art = view::art(doc.text.attachments());
+        let measure = view::measure_in(ui, &art.aspects, width);
         let cells = doc.text.cells();
         let scaled = zoomed(cells, zoom);
         let layout = layout::layout_tabs(&scaled, width, &measure, doc.text.tab_width() * zoom);
         let misspelled = if self.spelling.enabled { self.spelling.misspelled(cells) } else { Vec::new() };
-        self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, cells: scaled, layout, misspelled });
+        self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, art, cells: scaled, layout, misspelled });
     }
 
     /// Runs a text command on the active document. Returns whether the window needs a frame.
@@ -1309,7 +1312,8 @@ impl TextEditApp {
         let info = self.print_info.clone();
         let doc = active_doc(&self.docs)?;
         let (_, _, width, _) = info.imageable();
-        let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+        let aspects = view::aspects(doc.text.attachments());
+        let measure = view::measure_in(&ctx.ui, &aspects, width);
         let (cells, layout) = if self.opts.rewrap {
             // wrapped to the page: the lines break at the printable width
             let cells = doc.text.cells().to_vec();
@@ -1568,7 +1572,8 @@ impl TextEditApp {
     fn page_key(&mut self, ctx: &Ctx, code: u32) -> bool {
         let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
         self.ensure_layout(&ctx.ui, width);
-        let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+        let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+        let measure = view::measure_in(&ctx.ui, &aspects, fit);
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
         let head = doc.text.head();
         let target = match code {
@@ -1646,7 +1651,8 @@ impl TextEditApp {
                 self.focus = Focus::Body;
                 let width = geom.text_w;
                 self.ensure_layout(&ctx.ui, width);
-                let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+                let measure = view::measure_in(&ctx.ui, &aspects, fit);
                 let at = px - geom.text_x;
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -1671,7 +1677,8 @@ impl TextEditApp {
                 }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
                 self.ensure_layout(&ctx.ui, geom.text_w);
-                let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+                let measure = view::measure_in(&ctx.ui, &aspects, fit);
                 let at = px - geom.text_x;
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -2182,7 +2189,7 @@ impl App for TextEditApp {
             let sel = doc.text.selection();
             let head = doc.text.head();
             if self.follow {
-                let (_, top, height) = cache.layout.caret(&cache.cells, head, &|ch: char, st: &Style| view::char_width(ui, ch, st));
+                let (_, top, height) = cache.layout.caret(&cache.cells, head, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
                 if top < self.scroll {
                     self.scroll = top;
                 } else if top + height > self.scroll + view_h {
@@ -2198,6 +2205,7 @@ impl App for TextEditApp {
                 &geom,
                 &cache.layout,
                 &cache.cells,
+                &cache.art,
                 sel,
                 head,
                 self.scroll,
