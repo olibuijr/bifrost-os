@@ -428,6 +428,7 @@ pub mod wlan_keychain;
 pub mod wlan_service;
 pub mod wifi_status;
 pub mod container_migration;
+pub mod link_conditioner;
 pub mod system_prefs;
 pub mod wifi_secrets;
 pub mod net_totals;
