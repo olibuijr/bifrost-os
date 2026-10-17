@@ -75,7 +75,7 @@
    "apple": "CNContactVCardSerialization",
    "bifrost": "springboard/ui/src/contact_vcard.rs (serialize, contacts); tests: springboard/ui/tests/parity_sdk-tests-01b.rs; springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses); springboard/ui/src/contact_vcard.rs: serialize (3.0 and 4.0) and contacts(); folding, escaping, TYPE params, item-group custom labels, PHOTO base64, RFC 6350 fixture test. Host tests only; the Contacts app export still uses ui/src/vcard.rs.",
    "status": "partial",
-   "note": "Writing both versions and reading cards back are tested headless (headless_vcard_* in ui/tests). The Contacts app and Share export; there is no import UI. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Writing both versions and reading cards back are tested headless (headless_vcard_* in ui/tests). The Contacts app and Share export; there is no import UI. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: the SDK now exposes the vCard module (sdk/src/contacts.rs `vcard`: serialize, contacts, Version, Contact, labels, Error, size caps); tests sdk::contacts::tests::an_sdk_vcard_round_trips_a_contact_in_both_versions and oversized_vcard_text_is_refused."
   },
   {
    "feature": "Predefined display preferences",
@@ -118,7 +118,7 @@
   "No per-record change history.",
   "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
   "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
-  "No vCard in the SDK: apps cannot parse or build vCards. Import and export live in the Contacts app (springboard/apps/contacts-desktop/src/exchange.rs).",
+  "Apps can build and parse vCards through the SDK vcard module; the Contacts app's import and export still run on springboard/apps/contacts-desktop/src/exchange.rs, and no SDK import UI exists.",
   "Every fetch reads the whole store file (cap 10,000 contacts, 8 MiB file) before the service filters it."
  ]
 }
