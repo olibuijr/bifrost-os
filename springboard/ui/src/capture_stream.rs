@@ -75,8 +75,14 @@ impl ScreenStream {
     /// Advances the stream to `now`. `source_changed` says whether the screen differs from the last frame. Returns
     /// a frame when one is due, otherwise `None`. A late tick delivers one frame and moves the schedule to
     /// `now`, so the stream never sends a burst of catch-up frames.
+    /// Whether `tick(now, _)` would deliver a frame. The caller checks this first, so it draws the source only when
+    /// a frame will be sent.
+    pub fn is_due(&self, now: f64) -> bool {
+        self.running && now.is_finite() && now >= self.next_due
+    }
+
     pub fn tick(&mut self, now: f64, source_changed: bool) -> Option<Frame> {
-        if !self.running || !now.is_finite() || now < self.next_due {
+        if !self.is_due(now) {
             return None;
         }
         let kind = if source_changed || !self.first_frame_sent { FrameKind::Fresh } else { FrameKind::Repeated };
@@ -159,6 +165,18 @@ mod tests {
         assert!(s.tick(1.0, true).is_none());
         assert!(s.tick(1.05, true).is_none());
         assert!(s.tick(1.2, true).is_some());
+    }
+
+    #[test]
+    fn is_due_matches_what_tick_delivers() {
+        let mut s = ScreenStream::start(&allowed(), config(0.1), 0.0).unwrap();
+        assert!(s.is_due(0.0));
+        s.tick(0.0, true);
+        assert!(!s.is_due(0.05));
+        assert!(s.is_due(0.1));
+        assert!(!s.is_due(f64::NAN));
+        s.stop();
+        assert!(!s.is_due(5.0));
     }
 
     #[test]
