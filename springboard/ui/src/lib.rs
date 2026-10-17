@@ -680,6 +680,7 @@ pub mod quicksearch_query;
 pub mod pathbar;
 pub mod peripheral;
 pub mod constraint;
+pub mod phone_rules;
 pub mod table;
 pub mod panels;
 pub mod sheet;

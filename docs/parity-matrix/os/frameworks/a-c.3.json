@@ -4053,11 +4053,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/detect.rs",
+   "bifrost": "springboard/ui/src/detect.rs; springboard/ui/src/phone_rules.rs",
    "status": "partial",
-   "note": "Backs the Data Detection row. Phone numbers in text are found by pattern detection. The reference's per-region ruleset for parsing, validation and formatting is not implemented.",
+   "note": "Backs the Data Detection row. Phone numbers in text are found by pattern detection (detect.rs). phone_rules.rs ships the parsing, validation and E.164 rules for the 20 most common regions as data, scoped to that list. Not built: rules for other regions, the full numbering plans, and the link from the detector to to_e164.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "phone_rules::tests"
+    }
+   ],
+   "ready_note": "Rules for 20 common regions with E.164 normalisation and validation (phone_rules tests). Other regions and the detector link are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework",
