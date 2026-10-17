@@ -123,23 +123,9 @@
    "doc": "",
    "bifrost": "springboard/src/shortcuts/droplet.rs; springboard/src/shortcuts/flow.rs; springboard/src/shortcuts.rs",
    "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Not wired to a drop target on the icon yet: the shell must call droplet::run.",
+   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Not wired to a drop target on the icon yet: the shell must call droplet::run. Lead 2026-10-17: not ready: no drop target calls droplet::run yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shortcuts::droplet::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shortcuts::flow::tests"
-    }
-   ],
-   "ready_note": "droplet::tests cover path cleaning, the file limit, the first step's input, per-file repeat and the refusal of non-droplets and empty drops; flow::tests cover the runner."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ShortcutsAgent.framework",
@@ -158,28 +144,9 @@
    "doc": "",
    "bifrost": "springboard/src/shortcuts/describe.rs; springboard/apps/shortcuts-desktop/src/automation.rs; springboard/apps/shortcuts-desktop/src/runner.rs",
    "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Not wired to a button in the app yet.",
+   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Not wired to a button in the app yet. Lead 2026-10-17: not ready: no app control calls describe yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shortcuts::describe::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-shortcuts",
-     "filter": "automation::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-shortcuts",
-     "filter": "runner::tests"
-    }
-   ],
-   "ready_note": "describe::tests cover ordering, switch carry-over, limits, app versus folder, fixed choices, ignored clauses, naming, the step cap and storage; automation and runner tests cover the agent side."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ShortcutsLanguage.framework",

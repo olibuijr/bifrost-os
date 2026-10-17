@@ -2408,23 +2408,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/secure_channel.rs; springboard/ui/src/hpke.rs",
    "status": "os",
-   "note": "Built 2026-10-17: ui/src/secure_channel.rs, a two-way authenticated encrypted channel between peers that pinned each other's X25519 key. One ephemeral key each way; the traffic keys come from three Diffie-Hellman results plus a transcript hash through HKDF; each direction has its own ChaCha20-Poly1305 key with the message counter as nonce (replay, reorder and tamper are refused, 2^32 message cap). Not wired into the nearby transfer yet, which still uses a shared-secret MAC.",
+   "note": "Built 2026-10-17: ui/src/secure_channel.rs, a two-way authenticated encrypted channel between peers that pinned each other's X25519 key. One ephemeral key each way; the traffic keys come from three Diffie-Hellman results plus a transcript hash through HKDF; each direction has its own ChaCha20-Poly1305 key with the message counter as nonce (replay, reorder and tamper are refused, 2^32 message cap). Not wired into the nearby transfer yet, which still uses a shared-secret MAC. Lead 2026-10-17: not ready: no transport uses the channel yet (nearby transfer still uses a shared-secret MAC).",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "secure_channel::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "hpke::tests"
-    }
-   ],
-   "ready_note": "secure_channel::tests cover both directions, replay, out-of-order, tamper, a wrong static key, bad and low-order keys and the message cap; hpke::tests cover the one-way sealed-message building block. The job taken for this framework is the authenticated encrypted peer channel; Apple's account-bound device pairing is not mirrored."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureMessaging.framework",
@@ -2485,33 +2471,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/secure_session.rs; springboard/ui/src/secure_channel.rs; springboard/core/src/auth_session.rs; springboard/core/src/session_events.rs",
    "status": "os",
-   "note": "Built 2026-10-17: ui/src/secure_session.rs, the table of open secure channels one process holds. One live session per peer (a reconnect replaces it), a limit on sessions, an age limit and an idle limit enforced on use and by a sweep, failed messages do not count as use, and a closed session wipes its keys. Authentication-session lifecycle and login/su/sudo/ssh session events were already in core (auth_session.rs, session_events.rs).",
+   "note": "Built 2026-10-17: ui/src/secure_session.rs, the table of open secure channels one process holds. One live session per peer (a reconnect replaces it), a limit on sessions, an age limit and an idle limit enforced on use and by a sweep, failed messages do not count as use, and a closed session wipes its keys. Authentication-session lifecycle and login/su/sudo/ssh session events were already in core (auth_session.rs, session_events.rs). Lead 2026-10-17: not ready: no transport uses the channel yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "secure_session::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "secure_channel::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "auth_session::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "session_events::tests"
-    }
-   ],
-   "ready_note": "secure_session::tests cover adoption and replacement, the limit, idle and age expiry, garbage not keeping a session alive and close; auth_session and session_events tests cover the sign-in session model and the session event records."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureTransactionService.framework",
