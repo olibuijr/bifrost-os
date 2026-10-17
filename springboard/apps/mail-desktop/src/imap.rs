@@ -1,5 +1,5 @@
 //! IMAP (RFC 3501) on the wire: a parser for the server lines this app reads, and a builder for the commands it sends.
-//! Responses with literals (`{n}` followed by data) are not parsed here; the connection layer reads those itself.
+//! Literals (`{n}` followed by data): [`literal_size`] reads the announced count; the connection layer reads the bytes.
 
 use crate::flags::Flags;
 
@@ -39,6 +39,19 @@ pub fn parse_line(line: &str) -> Reply {
         _ => return Reply::Unknown(line.to_string()),
     };
     Reply::Tagged { tag: tag.to_string(), status, text: text.to_string() }
+}
+
+/// The byte count of the literal a server line announces: a line ending in `{n}` (or `{n+}`, LITERAL+) is followed by
+/// `n` bytes of data before the rest of the response. None for a line with no literal. The connection layer reads the
+/// bytes; this only says how many to read.
+pub fn literal_size(line: &str) -> Option<usize> {
+    let body = line.strip_suffix('}')?;
+    let open = body.rfind('{')?;
+    let digits = body[open + 1..].strip_suffix('+').unwrap_or(&body[open + 1..]);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// A parsed IMAP list value: an atom, a quoted string, `NIL`, or a parenthesised list.
@@ -278,6 +291,17 @@ pub const IDLE_DONE: &str = "DONE\r\n";
 mod tests {
     use super::*;
     use crate::flags::Flag;
+
+    #[test]
+    fn literal_size_reads_the_announced_count() {
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {342}"), Some(342));
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {7+}"), Some(7), "LITERAL+ uses the same count");
+        assert_eq!(literal_size("A001 OK done"), None);
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {x}"), None, "a brace that is not a count is not a literal");
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {})"), None);
+        assert_eq!(literal_size("{5}"), Some(5), "a bare literal line");
+        assert_eq!(literal_size("* 1 FETCH (BODY[] {5} trailing"), None, "a literal must end the line");
+    }
 
     #[test]
     fn classifies_server_lines() {
