@@ -1878,11 +1878,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/sdk/src/proxy_settings.rs, springboard/sdk/src/url.rs",
    "status": "partial",
    "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "proxy_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::tests"
+    }
+   ],
+   "ready_note": "ProxySettings (environment, bypass rules, proxy_for) used by URLSession for each request, with CONNECT tunnels for https."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkStatistics.framework",
