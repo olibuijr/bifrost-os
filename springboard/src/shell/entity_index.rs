@@ -27,6 +27,7 @@ pub fn suggested_request(ty: &str) -> String {
 
 /// The Search items of an `entity.query` reply for type `ty`: one per entity with an id and a title, identified as
 /// `<type>/<id>` (the same identifier the SDK's `IndexedEntity` uses). Titles and subtitles are cut to the wire caps.
+/// An entity the app marks `"hidden": true` (`IndexedEntity::hide_in_spotlight`) is left out.
 pub fn items_from_reply(ty: &str, reply: &str) -> Result<Vec<SearchableItem>, String> {
     let v = json::parse(reply.trim()).map_err(|e| format!("malformed reply: {e}"))?;
     if let Some(e) = v.get("error") {
@@ -36,6 +37,7 @@ pub fn items_from_reply(ty: &str, reply: &str) -> Result<Vec<SearchableItem>, St
     let domain = domain_of(ty);
     Ok(entities
         .iter()
+        .filter(|e| !matches!(e.get("hidden"), Some(Json::Bool(true))))
         .filter_map(|e| {
             let id = e.str_field("id").filter(|id| !id.is_empty())?;
             let title = e.str_field("title").filter(|t| !t.trim().is_empty())?;
@@ -102,6 +104,14 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].unique_id, "Note/b");
         assert_eq!(items[0].title.chars().count(), MAX_TITLE);
+    }
+
+    #[test]
+    fn an_entity_marked_hidden_is_not_indexed() {
+        let reply = r#"{"result":[{"id":"n1","title":"Visible"},{"id":"n2","title":"Private","hidden":true},{"id":"n3","title":"Also visible","hidden":false}]}"#;
+        let items = items_from_reply("Note", reply).unwrap();
+        let ids: Vec<&str> = items.iter().map(|i| i.unique_id.as_str()).collect();
+        assert_eq!(ids, vec!["Note/n1", "Note/n3"]);
     }
 
     #[test]
