@@ -120,6 +120,25 @@ pub fn decode_saved(reply: &Json) -> Option<Vec<u64>> {
 
 /// The records in a `fetch` reply. A contact without a value for a key has no field for it, so `get` is `None`. A
 /// reply of another shape, or one with a malformed record, is `None`.
+/// The contacts whose value under `key` contains `text`, ignoring case and surrounding spaces (ABSearchElement on one
+/// property). Text, list and labeled values are all searched; an empty `text` matches every contact that has a value
+/// under `key`. The records must have been fetched with `key`, or they have no value to match.
+pub fn matching<'a>(people: &'a [Record], key: Key, text: &str) -> Vec<&'a Record> {
+    let needle = text.trim().to_lowercase();
+    people
+        .iter()
+        .filter(|person| {
+            let contains = |value: &str| value.to_lowercase().contains(&needle);
+            match person.get(key) {
+                Some(Value::Text(value)) => contains(value),
+                Some(Value::List(items)) => items.iter().any(|item| contains(item)),
+                Some(Value::Labeled(items)) => items.iter().any(|item| contains(&item.value)),
+                _ => false,
+            }
+        })
+        .collect()
+}
+
 pub fn decode_contacts(reply: &Json) -> Option<Vec<Record>> {
     reply.get("contacts")?.as_array()?.iter().map(decode_record).collect()
 }
@@ -185,16 +204,36 @@ pub enum ContactsError {
     NothingPicked,
     /// The person already answered the access prompt.
     AlreadyDecided,
+    /// The save names no change: it needs at least one add, update or delete.
+    NothingToSave,
+    /// An update names no contact id.
+    MissingId,
+    /// A contact is not valid: it has no name, company, address, phone or email, or a field is out of its limits.
+    /// The message says which field.
+    InvalidContact(String),
+    /// The contacts file on disk is larger than the store reads.
+    FileTooLarge,
+    /// The contacts file is in a format this version does not read.
+    UnknownFormat,
     /// Any other failure, with the shell's message.
     Other(String),
 }
 
 impl ContactsError {
-    /// The variant for a shell error message.
+    /// The variant for a shell error message. Messages the shell does not name keep their text in `Other`.
     pub fn from_message(message: &str) -> Self {
         match message {
-            "contacts access is not granted" => ContactsError::NotGranted,
+            "contacts access is not granted" | "contacts write access is not granted" => ContactsError::NotGranted,
             "a limited contacts grant only reads; saving needs full access" => ContactsError::ReadOnly,
+            "save needs add, update or delete" => ContactsError::NothingToSave,
+            "update needs the id of a contact" => ContactsError::MissingId,
+            "Invalid contact" => ContactsError::InvalidContact(String::new()),
+            "Contacts file too large" => ContactsError::FileTooLarge,
+            "Unknown contacts format" => ContactsError::UnknownFormat,
+            other if other.starts_with("a contact needs a name") => ContactsError::InvalidContact(other.to_string()),
+            other if other.ends_with("is a list") || other.ends_with("cannot be saved yet") || other.contains("takes one value per contact") || other.ends_with("is text or a list of text") || other.starts_with("a contact is an object") => {
+                ContactsError::InvalidContact(other.to_string())
+            }
             other => ContactsError::Other(other.to_string()),
         }
     }
@@ -220,6 +259,44 @@ pub fn decode_error(reply: &Result<Json, String>) -> Option<ContactsError> {
 /// The access an app would hold after a choice, for a test or a preview of the sheet. The shell applies the same rules.
 pub fn preview(choice: Choice) -> Result<Status, Error> {
     Access::new().request(choice)
+}
+
+/// Groups of contacts (CNGroup): nested groups and membership, with a recursive member listing. The model lives in the
+/// app's own process; the shell's contact store keeps no groups yet.
+pub mod groups {
+    pub use bifrost_ui::contact_groups::{Error, Group, Groups};
+}
+
+/// Batched saves and change history for contacts (CNChangeHistoryFetchRequest). `Store::save` applies a batch of adds,
+/// updates and deletes all or nothing and numbers each change; `changes_since` returns the events after a token. Apps
+/// keep the store in process; the shell posts `system.contacts.change` when the contact file changes.
+pub mod history {
+    pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
+}
+
+/// Contact pictures (CNContact image and thumbnail data): PNG or JPEG only, detected from the first bytes, capped at
+/// `photos::MAX_BYTES`. `Photos::set` replaces a contact's picture and keeps the old one when the new data is refused;
+/// `fit_size` works out a thumbnail size inside a square. Notes are plain text on the contact record.
+pub mod photos {
+    pub use bifrost_ui::contact_photo::{fit_size, format_of, Error, Format, Photos, MAX_BYTES};
+}
+
+/// Contact display preferences (CNContactsUserDefaults and CNContactFormatter sort order): the sort order a list uses,
+/// the country code a phone number is written with, and the sort helpers. `ContactsDefaults` keeps the user's choice;
+/// `effective_sort_order` resolves "system default" against the system's order.
+pub mod display {
+    pub use bifrost_ui::contact_display::{
+        compare_names, normalize_country_code, sort_contacts, sort_key, ContactsDefaults, SortOrder,
+    };
+}
+
+/// The contact picker (ContactsUI, CNContactPicker and the people picker): the user chooses one whole contact, or one
+/// value of a contact such as a phone number. The app gets only the final [`picker::Choice`], so it needs no read
+/// access to the store. `Picker::new` takes the entries the shell shows, `select` picks or opens a contact, and
+/// `choose` picks one value of the open contact. The shell draws the list from `visible` and the detail from `detail`.
+pub mod picker {
+    pub use bifrost_ui::contact_card::{Entry, Field, Key};
+    pub use bifrost_ui::contact_picker::{Choice, Error, Mode, Picker};
 }
 
 /// vCard 3.0 and 4.0 for the full contact model (`bifrost_ui::contact_vcard`, the same code the Contacts app uses for
@@ -251,6 +328,97 @@ mod tests {
             assert!(text.starts_with("BEGIN:VCARD\r\n"), "{version:?}");
             assert_eq!(vcard::contacts(&text).unwrap(), vec![ada.clone()], "{version:?}");
         }
+    }
+
+    #[test]
+    fn groups_nest_and_list_members_recursively() {
+        let mut groups = groups::Groups::new();
+        let family = groups.add("Family", None).unwrap();
+        let kin = groups.add("Kin", Some(family)).unwrap();
+        assert!(groups.add_member(kin, 7).unwrap());
+        assert!(groups.members(family, true).unwrap().contains(&7));
+        assert!(!groups.members(family, false).unwrap().contains(&7));
+        assert_eq!(groups.move_to(family, Some(kin)), Err(groups::Error::WouldCycle));
+    }
+
+    #[test]
+    fn a_batch_of_contact_changes_is_recorded_and_fetched_by_token() {
+        let mut store: history::Store<String> = history::Store::new(16);
+        let ids = store.save(vec![history::Op::Add("ada".into())], |name| !name.is_empty()).unwrap();
+        assert_eq!(ids.len(), 1);
+        let token = store.token();
+        assert_eq!(store.changes_since(0).unwrap().len(), 1);
+        store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
+        assert_eq!(store.changes_since(token).unwrap().len(), 1);
+        assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
+    }
+
+    #[test]
+    fn a_search_matches_one_property_ignoring_case() {
+        let mut ada = Record::new(1);
+        ada.set(Key::GivenName, Value::Text("Ada".into()));
+        ada.set(Key::Emails, Value::List(vec!["ada@example.com".into()]));
+        let mut bob = Record::new(2);
+        bob.set(Key::GivenName, Value::Text("Bob".into()));
+        let people = vec![ada, bob];
+        let ids = |found: Vec<&Record>| found.iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(ids(matching(&people, Key::GivenName, " ADA ")), vec![1]);
+        assert_eq!(ids(matching(&people, Key::Emails, "example")), vec![1]);
+        assert_eq!(ids(matching(&people, Key::Emails, "")), vec![1]);
+    }
+
+    #[test]
+    fn a_refused_picture_keeps_the_contacts_old_picture() {
+        let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+        let mut photos = photos::Photos::new();
+        assert_eq!(photos.set(4, &png), Ok(photos::Format::Png));
+        assert_eq!(photos.set(4, b"not a picture"), Err(photos::Error::UnknownFormat));
+        assert_eq!(photos.data(4), Some(&png[..]));
+        assert_eq!(photos.format(4), Some(photos::Format::Png));
+        assert_eq!(photos::fit_size(400, 200, 100), (100, 50));
+    }
+
+    #[test]
+    fn display_preferences_sort_and_resolve_the_user_default() {
+        let mut people = vec![("Zoe", "Adams"), ("ada", "Lovelace")];
+        display::sort_contacts(&mut people, display::SortOrder::FamilyName, |p| (p.0, p.1));
+        assert_eq!(people[0], ("Zoe", "Adams"));
+        let defaults = display::ContactsDefaults::new();
+        assert_eq!(defaults.effective_sort_order(display::SortOrder::UserDefault), display::SortOrder::GivenName);
+        assert_eq!(display::normalize_country_code(" is "), Some("IS".to_string()));
+        assert_eq!(display::normalize_country_code("Iceland"), None);
+    }
+
+    #[test]
+    fn shell_messages_map_to_typed_errors() {
+        assert_eq!(ContactsError::from_message("contacts write access is not granted"), ContactsError::NotGranted);
+        assert_eq!(ContactsError::from_message("save needs add, update or delete"), ContactsError::NothingToSave);
+        assert_eq!(ContactsError::from_message("update needs the id of a contact"), ContactsError::MissingId);
+        assert_eq!(ContactsError::from_message("Contacts file too large"), ContactsError::FileTooLarge);
+        assert_eq!(ContactsError::from_message("Unknown contacts format"), ContactsError::UnknownFormat);
+        assert_eq!(ContactsError::from_message("Invalid contact"), ContactsError::InvalidContact(String::new()));
+        assert!(matches!(ContactsError::from_message("phone is a list"), ContactsError::InvalidContact(_)));
+        assert_eq!(ContactsError::from_message("disk on fire"), ContactsError::Other("disk on fire".into()));
+    }
+
+    #[test]
+    fn a_picker_returns_only_the_chosen_contact_or_value() {
+        let ada = picker::Entry {
+            id: 3,
+            name: "Ada".into(),
+            fields: vec![picker::Field { key: picker::Key::Phone, label: "mobile".into(), value: "555 1234".into() }],
+        };
+        let mut by_contact = picker::Picker::new(vec![ada.clone()], picker::Mode::Contact { need: None });
+        assert_eq!(by_contact.select(3), Ok(Some(picker::Choice::Contact(3))));
+        assert_eq!(by_contact.select(9), Err(picker::Error::UnknownContact));
+
+        let mut by_value = picker::Picker::new(vec![ada], picker::Mode::Property { keys: vec![picker::Key::Phone] });
+        assert_eq!(by_value.select(3), Ok(None));
+        assert_eq!(
+            by_value.choose(picker::Key::Phone, 0),
+            Ok(picker::Choice::Property { contact: 3, key: picker::Key::Phone, value: "555 1234".into() })
+        );
+        assert_eq!(by_value.choose(picker::Key::Phone, 0), Err(picker::Error::NoneOpen));
     }
 
     #[test]
