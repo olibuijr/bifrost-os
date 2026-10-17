@@ -49,6 +49,7 @@ pub mod colorlab;
 pub mod colormap;
 pub mod raw_params;
 pub mod demosaic;
+pub mod ink;
 pub mod upscale;
 pub mod temporal_upscale;
 pub mod frame_interp;
