@@ -117,6 +117,7 @@ pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
 pub mod background;
+pub mod package_install_sheet;
 pub mod contact_pick_sheet;
 mod auth_sheet;
 mod account_access_sheet;
