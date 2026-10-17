@@ -373,6 +373,14 @@ pub enum ToApp {
     /// The shell is done with buffer `buf` of the `Buffers` set numbered `generation`; an app ignores it when
     /// that is not its current set (a late release must not free a slot of the new set).
     Release { buf: u32, generation: u32 },
+    /// Several windows (`app_windows`): the shell closed window `id` from its own controls. The app drops its state for it.
+    WindowClosed { id: u32 },
+    /// Several windows: the shell resized window `id` to `w` x `h` points.
+    WindowConfigure { id: u32, w: f32, h: f32 },
+    /// Several windows: a touch on window `id`, with the same fields as `Touch` (`touch` is the touch id).
+    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32 },
+    /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
+    WindowRelease { id: u32, buf: u32, generation: u32 },
     Resume,
     Suspend,
     Quit,
@@ -615,6 +623,19 @@ pub enum ToShell {
     /// `generation` counts the sets the app has sent (wrapping, starting at 1).
     Buffers { w: u32, h: u32, generation: u32 },
     Frame { buf: u32, damage: Vec<Rect> },
+    /// Several windows: open window `id` (the app chose the id; the shell never invents one). The title is at most 512
+    /// bytes; the size is in points. The window has no pixels until `WindowBuffers` and `WindowFrame` arrive.
+    WindowOpen { id: u32, title: String, w: f32, h: f32 },
+    /// Several windows: close window `id`. The shell drops its frames.
+    WindowClose { id: u32 },
+    /// Several windows: the window's title.
+    WindowTitle { id: u32, title: String },
+    /// Several windows: the window's size in points, as the app asks for it.
+    WindowResize { id: u32, w: f32, h: f32 },
+    /// Several windows: two buffers of `w * h * 4` bytes for window `id`, as SCM_RIGHTS fds, like `Buffers`.
+    WindowBuffers { id: u32, w: u32, h: u32, generation: u32 },
+    /// Several windows: the newest frame of window `id` is in buffer `buf`, like `Frame`.
+    WindowFrame { id: u32, buf: u32, damage: Vec<Rect> },
     WantsKeyboard { on: bool },
     Haptic,
     OpenUrl { url: String },
@@ -832,6 +853,16 @@ mod tag {
     pub const INPUT_SOURCE: u32 = 0x162;
     pub const ACCENT_HOLD: u32 = 0x163;
     pub const QUICK_ACTION: u32 = 0x164;
+    pub const WINDOW_CLOSED: u32 = 0x1c8;
+    pub const WINDOW_CONFIGURE: u32 = 0x1c9;
+    pub const WINDOW_TOUCH: u32 = 0x1ca;
+    pub const WINDOW_RELEASE: u32 = 0x1cb;
+    pub const WINDOW_OPEN: u32 = 0x1c0;
+    pub const WINDOW_CLOSE: u32 = 0x1c1;
+    pub const WINDOW_TITLE: u32 = 0x1c2;
+    pub const WINDOW_RESIZE: u32 = 0x1c3;
+    pub const WINDOW_BUFFERS: u32 = 0x1c4;
+    pub const WINDOW_FRAME: u32 = 0x1c5;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -955,6 +986,23 @@ fn str_(b: &mut Vec<u8>, s: &str) {
     b.extend_from_slice(&s.as_bytes()[..n]);
 }
 
+/// The longest window title on the wire, in bytes.
+pub const MAX_WINDOW_TITLE: usize = 512;
+
+/// A window title cut to `MAX_WINDOW_TITLE` bytes on a character boundary (the encoder side).
+fn short_title(title: &str) -> String {
+    let mut end = title.len().min(MAX_WINDOW_TITLE);
+    while !title.is_char_boundary(end) {
+        end -= 1;
+    }
+    title[..end].to_string()
+}
+
+/// A decoded window title; a title over the limit is refused.
+fn checked_title(title: String) -> Result<String, DecodeError> {
+    if title.len() > MAX_WINDOW_TITLE { Err(DecodeError::BadValue) } else { Ok(title) }
+}
+
 struct Reader<'a>(&'a [u8]);
 
 impl<'a> Reader<'a> {
@@ -1073,6 +1121,36 @@ impl ToApp {
             }
             ToApp::Release { buf, generation } => {
                 u32_(&mut b, tag::RELEASE);
+                u32_(&mut b, *buf);
+                u32_(&mut b, *generation);
+            }
+            ToApp::WindowClosed { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSED);
+                u32_(&mut b, *id);
+            }
+            ToApp::WindowConfigure { id, w, h } => {
+                u32_(&mut b, tag::WINDOW_CONFIGURE);
+                u32_(&mut b, *id);
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToApp::WindowTouch { id, touch, kind, x, y, t_ms } => {
+                u32_(&mut b, tag::WINDOW_TOUCH);
+                u32_(&mut b, *id);
+                u32_(&mut b, *touch);
+                b.push(match kind {
+                    TouchKind::Down => 0,
+                    TouchKind::Move => 1,
+                    TouchKind::Up => 2,
+                    TouchKind::Cancel => 3,
+                });
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+                u32_(&mut b, *t_ms);
+            }
+            ToApp::WindowRelease { id, buf, generation } => {
+                u32_(&mut b, tag::WINDOW_RELEASE);
+                u32_(&mut b, *id);
                 u32_(&mut b, *buf);
                 u32_(&mut b, *generation);
             }
@@ -1206,6 +1284,31 @@ impl ToApp {
                 _ => return Err(DecodeError::BadValue),
             },
             tag::RELEASE => ToApp::Release { buf: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_CLOSED => ToApp::WindowClosed { id: r.u32()? },
+            tag::WINDOW_CONFIGURE => {
+                let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowConfigure { id, w, h }
+            }
+            tag::WINDOW_TOUCH => {
+                let id = r.u32()?;
+                let touch = r.u32()?;
+                let kind = match r.u8()? {
+                    0 => TouchKind::Down,
+                    1 => TouchKind::Move,
+                    2 => TouchKind::Up,
+                    3 => TouchKind::Cancel,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowTouch { id, touch, kind, x, y, t_ms: r.u32()? }
+            }
+            tag::WINDOW_RELEASE => ToApp::WindowRelease { id: r.u32()?, buf: r.u32()?, generation: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -1318,6 +1421,47 @@ impl ToShell {
                 u32_(&mut b, *w);
                 u32_(&mut b, *h);
                 u32_(&mut b, *generation);
+            }
+            ToShell::WindowOpen { id, title, w, h } => {
+                u32_(&mut b, tag::WINDOW_OPEN);
+                u32_(&mut b, *id);
+                str_(&mut b, &short_title(title));
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToShell::WindowClose { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSE);
+                u32_(&mut b, *id);
+            }
+            ToShell::WindowTitle { id, title } => {
+                u32_(&mut b, tag::WINDOW_TITLE);
+                u32_(&mut b, *id);
+                str_(&mut b, &short_title(title));
+            }
+            ToShell::WindowResize { id, w, h } => {
+                u32_(&mut b, tag::WINDOW_RESIZE);
+                u32_(&mut b, *id);
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToShell::WindowBuffers { id, w, h, generation } => {
+                u32_(&mut b, tag::WINDOW_BUFFERS);
+                u32_(&mut b, *id);
+                u32_(&mut b, *w);
+                u32_(&mut b, *h);
+                u32_(&mut b, *generation);
+            }
+            ToShell::WindowFrame { id, buf, damage } => {
+                u32_(&mut b, tag::WINDOW_FRAME);
+                u32_(&mut b, *id);
+                u32_(&mut b, *buf);
+                let n = damage.len().min((MAX_PACKET - 16) / 16);
+                u32_(&mut b, n as u32);
+                for r in &damage[..n] {
+                    for v in r {
+                        u32_(&mut b, *v);
+                    }
+                }
             }
             ToShell::Frame { buf, damage } => {
                 u32_(&mut b, tag::FRAME);
@@ -1626,6 +1770,41 @@ impl ToShell {
                     damage.push([r.u32()?, r.u32()?, r.u32()?, r.u32()?]);
                 }
                 ToShell::Frame { buf, damage }
+            }
+            tag::WINDOW_OPEN => {
+                let id = r.u32()?;
+                let title = checked_title(r.str()?)?;
+                let (w, h) = (r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::WindowOpen { id, title, w, h }
+            }
+            tag::WINDOW_CLOSE => ToShell::WindowClose { id: r.u32()? },
+            tag::WINDOW_TITLE => {
+                let id = r.u32()?;
+                ToShell::WindowTitle { id, title: checked_title(r.str()?)? }
+            }
+            tag::WINDOW_RESIZE => {
+                let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
+                if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::WindowResize { id, w, h }
+            }
+            tag::WINDOW_BUFFERS => ToShell::WindowBuffers { id: r.u32()?, w: r.u32()?, h: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_FRAME => {
+                let id = r.u32()?;
+                let buf = r.u32()?;
+                let n = r.u32()? as usize;
+                if n > MAX_PACKET / 16 {
+                    return Err(DecodeError::BadValue);
+                }
+                let mut damage = Vec::with_capacity(n);
+                for _ in 0..n {
+                    damage.push([r.u32()?, r.u32()?, r.u32()?, r.u32()?]);
+                }
+                ToShell::WindowFrame { id, buf, damage }
             }
             tag::WANTS_KEYBOARD => ToShell::WantsKeyboard { on: r.u8()? != 0 },
             tag::KEYBOARD_OUT => ToShell::KeyboardOut(match r.u8()? {
@@ -2435,5 +2614,54 @@ mod quick_action_tests {
         let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
         let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many }.encode();
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn window_messages_round_trip_through_the_codec() {
+        let shell = [
+            ToShell::WindowOpen { id: 3, title: "Ada Lovelace".into(), w: 480.0, h: 560.0 },
+            ToShell::WindowClose { id: 3 },
+            ToShell::WindowTitle { id: 3, title: "Grace".into() },
+            ToShell::WindowResize { id: 3, w: 320.0, h: 240.0 },
+            ToShell::WindowBuffers { id: 3, w: 4, h: 3, generation: 2 },
+            ToShell::WindowFrame { id: 3, buf: 1, damage: vec![[0, 0, 4, 3]] },
+            ToShell::WindowFrame { id: 3, buf: 0, damage: vec![] },
+        ];
+        for m in shell {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+        let app = [
+            ToApp::WindowClosed { id: 3 },
+            ToApp::WindowConfigure { id: 3, w: 320.0, h: 240.0 },
+            ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99 },
+            ToApp::WindowRelease { id: 3, buf: 1, generation: 5 },
+        ];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn window_open_has_the_documented_layout() {
+        let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0 }.encode();
+        // tag 0x1c0, id 2, title length 2 and "ab", then the two floats
+        assert_eq!(&bytes[..4], &0x1c0u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &2u32.to_le_bytes());
+        assert_eq!(&bytes[8..12], &2u32.to_le_bytes());
+        assert_eq!(&bytes[12..14], b"ab");
+    }
+
+    #[test]
+    fn an_overlong_or_non_finite_window_message_is_refused() {
+        let long = ToShell::WindowTitle { id: 1, title: "x".repeat(MAX_WINDOW_TITLE + 1) };
+        // the encoder cuts the title, so the decoder never sees an overlong one from this crate
+        let ToShell::WindowTitle { title, .. } = ToShell::decode(&long.encode()).unwrap() else { panic!() };
+        assert_eq!(title.len(), MAX_WINDOW_TITLE);
+        let mut bad = ToShell::WindowResize { id: 1, w: 1.0, h: 1.0 }.encode();
+        bad[8..12].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert!(ToShell::decode(&bad).is_err());
+        let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0 }.encode();
+        bad_touch[12] = 9;
+        assert!(ToApp::decode(&bad_touch).is_err());
     }
 }

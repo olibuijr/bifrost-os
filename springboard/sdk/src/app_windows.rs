@@ -162,6 +162,40 @@ impl AppWindows {
     }
 }
 
+/// Routes one window message from the shell (`ToApp::WindowClosed`, `WindowConfigure` or `WindowTouch`) to the registry
+/// and to the app's window callbacks. Returns `None` for any other message, otherwise whether the app needs a frame.
+/// The registry is never borrowed across a call into the app, so the app may open or close windows from a callback.
+/// A window that is closed (or never existed) gets no touch: the event is dropped, never sent to the main window.
+pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: &crate::proto::ToApp, now: f64) -> Option<bool> {
+    use crate::proto::ToApp;
+    Some(match msg {
+        ToApp::WindowClosed { id } => {
+            let window = WindowId(*id);
+            let closed = !window.is_main() && ctx.windows.borrow_mut().close(window).is_ok();
+            closed && app.window_closed(ctx, window)
+        }
+        ToApp::WindowConfigure { id, w, h } => {
+            let window = WindowId(*id);
+            let title = ctx.windows.borrow().get(window).map(|x| x.title.clone());
+            match title {
+                Some(title) => ctx.windows.borrow_mut().set_frame(window, &title, *w, *h).is_ok(),
+                None => false,
+            }
+        }
+        ToApp::WindowTouch { id, touch, kind, x, y, t_ms } => {
+            let routed = ctx.windows.borrow().route(WindowId(*id));
+            match routed {
+                Some(window) => {
+                    let t = crate::runtime::event_time(now, *t_ms);
+                    app.window_event(ctx, window, crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t })
+                }
+                None => false,
+            }
+        }
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,5 +301,111 @@ mod tests {
     fn a_window_error_names_the_problem() {
         assert_eq!(WindowError::Unknown(WindowId(3)).to_string(), "no window 3");
         assert_eq!(WindowError::TooMany(8).to_string(), "an app holds at most 8 windows");
+    }
+
+    use crate::proto::{ToApp, ToShell, TouchKind};
+
+    /// Records what the window callbacks receive.
+    #[derive(Default)]
+    struct Fake {
+        log: Vec<String>,
+    }
+
+    impl crate::App for Fake {
+        fn id(&self) -> &str {
+            "is.test.windows"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn window_event(&mut self, _: &crate::Ctx, window: WindowId, ev: crate::Input) -> bool {
+            if let crate::Input::Touch { id, .. } = ev {
+                self.log.push(format!("touch {id} on {}", window.0));
+            }
+            true
+        }
+        fn window_closed(&mut self, _: &crate::Ctx, window: WindowId) -> bool {
+            self.log.push(format!("closed {}", window.0));
+            true
+        }
+    }
+
+    fn touch_down(id: u32) -> ToApp {
+        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0 }
+    }
+
+    #[test]
+    fn the_open_window_sends_its_open_message_with_the_app_id() {
+        let ctx = crate::runtime::test_ctx();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        assert_eq!(id, WindowId(1));
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0 }]);
+    }
+
+    #[test]
+    fn a_touch_on_an_open_window_reaches_its_window_callback_with_the_window_id() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &touch_down(id.0), 0.0), Some(true));
+        assert_eq!(app.log, vec!["touch 7 on 1".to_string()]);
+    }
+
+    #[test]
+    fn a_touch_on_a_closed_or_unknown_window_is_dropped_not_sent_to_the_main_window() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        ctx.close_window(id).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &touch_down(id.0), 0.0), Some(false));
+        assert_eq!(deliver_window(&mut app, &ctx, &touch_down(42), 0.0), Some(false));
+        assert!(app.log.is_empty());
+    }
+
+    #[test]
+    fn a_window_the_shell_closes_is_removed_once_and_the_app_is_told() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowClosed { id: id.0 }, 0.0), Some(true));
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowClosed { id: id.0 }, 0.0), Some(false));
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowClosed { id: 0 }, 0.0), Some(false), "the main window never closes");
+        assert_eq!(app.log, vec!["closed 1".to_string()]);
+        assert!(ctx.windows().get(id).is_none());
+    }
+
+    #[test]
+    fn a_shell_resize_keeps_the_title_and_changes_the_size() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowConfigure { id: id.0, w: 300.0, h: 200.0 }, 0.0), Some(true));
+        let open = ctx.windows().get(id).cloned().unwrap();
+        assert_eq!((open.title.as_str(), open.width, open.height), ("Ada", 300.0, 200.0));
+    }
+
+    #[test]
+    fn the_app_changes_title_and_size_and_each_change_is_sent() {
+        let ctx = crate::runtime::test_ctx();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        ctx.take_sent();
+        ctx.set_window_title(id, "Grace").unwrap();
+        ctx.resize_window(id, 320.0, 240.0).unwrap();
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowTitle { id: 1, title: "Grace".into() }, ToShell::WindowResize { id: 1, w: 320.0, h: 240.0 }]
+        );
+        let open = ctx.windows().get(id).cloned().unwrap();
+        assert_eq!((open.title.as_str(), open.width, open.height), ("Grace", 320.0, 240.0));
+        assert_eq!(ctx.set_window_title(WindowId(9), "x"), Err(WindowError::Unknown(WindowId(9))));
+        assert!(ctx.take_sent().is_empty(), "a refused change sends nothing");
+    }
+
+    #[test]
+    fn messages_that_are_not_about_a_window_are_left_to_the_run_loop() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::Resume, 0.0), None);
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowRelease { id: 1, buf: 0, generation: 1 }, 0.0), None);
     }
 }

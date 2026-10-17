@@ -182,6 +182,8 @@ pub struct Ctx {
     defaults: RefCell<crate::defaults::UserDefaults>,
     /// shared by every `Ctx` of this run (a new one is made on each Configure)
     docs: std::rc::Rc<RefCell<DocState>>,
+    /// the app's windows (`app_windows`), shared by every `Ctx` of this run like `docs`
+    pub(crate) windows: std::rc::Rc<RefCell<crate::app_windows::AppWindows>>,
 }
 
 thread_local! {
@@ -193,7 +195,7 @@ impl Ctx {
     /// A context with no shell behind it, for tests (the `XCTest` host-less app): memory-only defaults, no data
     /// directory. What the app sends to the shell is collected; read it with `take_sent`.
     pub fn testing(ui: Ui, cfg: Configure) -> Self {
-        Ctx { ui, cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default() }
+        Ctx { ui, cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default() }
     }
     /// The messages queued for the shell since the last call, oldest first, and empties the queue.
     pub fn take_sent(&self) -> Vec<ToShell> {
@@ -330,6 +332,43 @@ impl Ctx {
     pub fn set_badge(&self, label: &str) {
         self.send(ToShell::SetBadge { label: label.into() });
     }
+    /// The app's windows: the main window and the ones it opened (`app_windows`). Do not hold the borrow across a call
+    /// back into the app.
+    pub fn windows(&self) -> std::cell::Ref<'_, crate::app_windows::AppWindows> {
+        self.windows.borrow()
+    }
+
+    /// Opens a window of the app's own (`AppWindows::open`) and asks the shell to show it. The id is the app's; the shell
+    /// draws the window under it.
+    pub fn open_window(&self, spec: crate::app_windows::WindowSpec) -> Result<crate::app_windows::WindowId, crate::app_windows::WindowError> {
+        let id = self.windows.borrow_mut().open(spec.clone())?;
+        self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height });
+        Ok(id)
+    }
+
+    /// Closes one of the app's windows and asks the shell to drop it. The main window cannot be closed.
+    pub fn close_window(&self, id: crate::app_windows::WindowId) -> Result<crate::app_windows::AppWindow, crate::app_windows::WindowError> {
+        let closed = self.windows.borrow_mut().close(id)?;
+        self.send(ToShell::WindowClose { id: id.0 });
+        Ok(closed)
+    }
+
+    /// Changes the title of one of the app's windows.
+    pub fn set_window_title(&self, id: crate::app_windows::WindowId, title: &str) -> Result<(), crate::app_windows::WindowError> {
+        let (w, h) = self.windows.borrow().get(id).map(|x| (x.width, x.height)).ok_or(crate::app_windows::WindowError::Unknown(id))?;
+        self.windows.borrow_mut().set_frame(id, title, w, h)?;
+        self.send(ToShell::WindowTitle { id: id.0, title: title.to_string() });
+        Ok(())
+    }
+
+    /// Changes the size, in points, of one of the app's windows.
+    pub fn resize_window(&self, id: crate::app_windows::WindowId, w: f32, h: f32) -> Result<(), crate::app_windows::WindowError> {
+        let title = self.windows.borrow().get(id).map(|x| x.title.clone()).ok_or(crate::app_windows::WindowError::Unknown(id))?;
+        self.windows.borrow_mut().set_frame(id, &title, w, h)?;
+        self.send(ToShell::WindowResize { id: id.0, w, h });
+        Ok(())
+    }
+
     pub fn log(&self, text: &str) {
         self.send(ToShell::Log { text: text.into() });
     }
@@ -522,6 +561,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut materials: Vec<crate::proto::Material> = Vec::new();
     let mut control = control_endpoint(&app.id(), &data_dir);
     let docs = std::rc::Rc::new(RefCell::new(DocState::default()));
+    let windows = std::rc::Rc::new(RefCell::new(crate::app_windows::AppWindows::default()));
 
     // Blocks for the first Configure; later ones arrive in the loop.
     while open {
@@ -618,7 +658,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                             ui.text_scale = cfg.text_scale;
                             ui.bold = kit::appearance::current().bold;
                             ui.symbols = symbols.take().unwrap_or_default();
-                            ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone() });
+                            ctx = Some(Ctx { ui, cfg, defaults: RefCell::new(crate::defaults::UserDefaults::open(&data_dir)), data_dir: data_dir.clone(), out: RefCell::new(Vec::new()), docs: docs.clone(), windows: windows.clone() });
                         }
                     }
                     crate::layout::set_from(&cfg);
@@ -692,6 +732,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         }
                     }
                 }
+                m @ (ToApp::WindowClosed { .. } | ToApp::WindowConfigure { .. } | ToApp::WindowTouch { .. }) => {
+                    if let Some(c) = &ctx {
+                        need_frame |= crate::app_windows::deliver_window(&mut app, c, &m, now_ms()).unwrap_or(false);
+                    }
+                }
+                // the shell is done with a buffer of a window; the per-window slot sets are not built yet (see app_windows)
+                ToApp::WindowRelease { .. } => {}
                 ToApp::Resume => {
                     active = true;
                     if let Some(c) = &ctx {
@@ -943,7 +990,7 @@ fn flush_restorable<A: App>(app: &A, ctx: &Ctx, force: bool) {
 /// When a touch happened, from the shell's stamp (the low 32 bits of the same monotonic ms clock).
 /// Moves arrive in batches, so stamping them with the time they are read would give several the
 /// same time and break scroll velocity; a stamp that is far off (another clock) falls back to `now`.
-fn event_time(now: f64, t_ms: u32) -> f64 {
+pub(crate) fn event_time(now: f64, t_ms: u32) -> f64 {
     let ago = (now as u64 as u32).wrapping_sub(t_ms) as f64;
     if ago < 1000.0 { now - ago } else { now }
 }
@@ -1257,7 +1304,7 @@ mod badge_tests {
         use crate::proto::{DocErrorCode, DocMode};
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
-        let ctx = Ctx { ui: Ui::new(Font::parse(data).unwrap(), 1.0), cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default() };
+        let ctx = Ctx { ui: Ui::new(Font::parse(data).unwrap(), 1.0), cfg, data_dir: PathBuf::new(), out: RefCell::new(Vec::new()), defaults: RefCell::new(crate::defaults::UserDefaults::memory()), docs: Default::default(), windows: Default::default() };
         let open = ctx.open_document(DocMode::Read, "Import", &["public.text"]);
         let save = ctx.save_document("a.md", &[]);
         assert_eq!((open, save), (1, 2));
