@@ -5,11 +5,12 @@
 //! same names as the framework: `AccessoryManager` (the shared manager), `Accessory` (the device object with its
 //! descriptors and strings), `MatchingCriteria` (what a listener selects), `Event` (attach and detach) and `Error`.
 //!
-//! The model is pure. The system layer reports attach and detach with the descriptors it read from the bus. The app
-//! sandbox does not bind USB device nodes yet (springboard/src/bare/app_policy.rs), so an app cannot reach a real
+//! The manager is pure. [`bus`] is the bus source that reads the kernel's USB device list and reports attach and
+//! detach to it (`bus::poll`). The app sandbox does not bind USB device nodes yet (springboard/src/bare/app_policy.rs), so an app cannot reach a real
 //! accessory through this module until that binding and a device transport exist.
 
 pub use bifrost_core::accessory_manager::{Accessory, AccessoryManager, Error, Event, Session};
+pub use bifrost_core::usb_bus_source as bus;
 pub use bifrost_core::usb_descriptors::{
     ConfigurationDescriptor, DeviceDescriptor, DeviceMatch, InterfaceDescriptor, InterfaceMatch, InterfaceMatchOption,
     MatchingCriteria,
