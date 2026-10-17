@@ -87,6 +87,24 @@ fn run() -> std::io::Result<()> {
         println!("{n} files");
         return Ok(());
     }
+    if args.get(1).map(String::as_str) == Some("--migrate") {
+        // offline migration: springboard --migrate DEST SOURCE [CATEGORY...]; with no category it lists them
+        use springboard::shell::{backup, migration};
+        let dest = std::path::Path::new(args.get(2).ok_or_else(|| std::io::Error::other("missing DEST"))?);
+        let source = std::path::Path::new(args.get(3).ok_or_else(|| std::io::Error::other("missing SOURCE"))?);
+        let key = || backup::backup_key(dest);
+        let entries = if source.is_dir() { migration::read_folder(source)? } else { migration::read_archive(source, &key)? };
+        let picked: Vec<&str> = args[4..].iter().map(String::as_str).collect();
+        if picked.is_empty() {
+            for c in migration::categories(&entries) {
+                println!("{}\t{} files\t{} bytes", c.key, c.files, c.bytes);
+            }
+        } else {
+            let n = migration::stage(dest, &entries, &picked, &key)?;
+            println!("{n} files staged; they are brought at the next start");
+        }
+        return Ok(());
+    }
     // `--boot DIR`: the data directory comes first, as for a plain start.
     let boot = args.get(1).is_some_and(|a| a == "--boot");
     let dir = args.get(1 + boot as usize).cloned().unwrap_or_else(|| {

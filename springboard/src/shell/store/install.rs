@@ -118,6 +118,10 @@ pub struct Manifest {
     /// Relative directory of the app's help book (`help = "help"`): Markdown pages with front matter, read by the
     /// shell's help index (`shell::helpbook`). Empty when the app ships no help.
     pub help: String,
+    /// `"still"` or `"day"`: the kind of wallpaper the app provides (`shell::wallpaper_types`); empty for none.
+    pub wallpaper_kind: String,
+    /// The app's wallpaper pictures, package-relative (`wallpapers = ["wallpapers/a.png"]`).
+    pub wallpapers: Vec<String>,
 }
 
 impl Manifest {
@@ -169,6 +173,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             match k {
                 "permissions" => m.permissions = items,
                 "provides" => m.provides = items,
+                "wallpapers" => m.wallpapers = items,
                 _ => {}
             }
             continue;
@@ -192,6 +197,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             "kind" => m.kind = s,
             "window" => m.window = s,
             "help" => m.help = s,
+            "wallpaper_kind" => m.wallpaper_kind = s,
             _ => {}
         }
     }
@@ -255,6 +261,11 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     }
     if !m.icon.is_empty() && !has(&m.icon) {
         return Err(format!("icon {:?} is not inside the package", m.icon));
+    }
+    if let Some(wallpaper) = crate::shell::wallpaper_types::from_manifest(&m.id, &m.wallpaper_kind, &m.wallpapers)? {
+        if let Some(missing) = wallpaper.images.iter().find(|p| !has(p)) {
+            return Err(format!("wallpaper {missing:?} is not inside the package"));
+        }
     }
     Ok(())
 }
@@ -771,6 +782,28 @@ pub mod tests {
         bad = m;
         bad.id = "nodots".into();
         assert!(validate(&bad, &files, "0.1.0").is_err());
+    }
+
+    #[test]
+    fn an_app_provides_its_wallpapers_through_the_manifest() {
+        let text = format!("{MANIFEST}wallpaper_kind = \"day\"\nwallpapers = [\"wallpapers/a.png\", \"wallpapers/b.png\"]\n");
+        let m = parse_manifest(&text).unwrap();
+        assert_eq!(m.wallpaper_kind, "day");
+        assert_eq!(m.wallpapers, vec!["wallpapers/a.png".to_string(), "wallpapers/b.png".to_string()]);
+        // the pictures must be in the package: without them the install is refused
+        let files = read_tar(&pkg(&text)).unwrap();
+        assert!(validate(&m, &files, "0.1.0").unwrap_err().contains("not inside the package"));
+        let with_pictures = read_tar(&tar(&[
+            ("manifest.toml", text.as_bytes(), 0o644),
+            ("bin/calc", b"ELF", 0o644),
+            ("icon.png", b"PNG", 0o644),
+            ("wallpapers/a.png", b"PNG", 0o644),
+            ("wallpapers/b.png", b"PNG", 0o644),
+        ]))
+        .unwrap();
+        assert!(validate(&m, &with_pictures, "0.1.0").is_ok());
+        // an app that declares no wallpaper is unaffected
+        assert!(parse_manifest(MANIFEST).unwrap().wallpapers.is_empty());
     }
 
     #[test]

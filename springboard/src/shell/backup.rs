@@ -112,7 +112,7 @@ pub fn decode(bytes: &[u8]) -> io::Result<Vec<(String, Vec<u8>)>> {
         if h.finish()[..] != *check {
             return Err(bad("entry checksum mismatch"));
         }
-        if !name_ok(&name) {
+        if !name_ok(&name) && !super::migration::app_data_name(&name) {
             return Err(bad("unsafe entry name"));
         }
         entries.push((name, data));
@@ -123,7 +123,7 @@ pub fn decode(bytes: &[u8]) -> io::Result<Vec<(String, Vec<u8>)>> {
     Ok(entries)
 }
 
-fn walk(base: &Path, rel: &str, out: &mut Vec<String>, depth: u32) {
+pub fn walk(base: &Path, rel: &str, out: &mut Vec<String>, depth: u32) {
     let path = base.join(rel);
     if path.is_file() {
         out.push(rel.to_string());
@@ -152,7 +152,7 @@ pub fn save_exclusions(dir: &Path, set: &bifrost_core::backup_exclusion::Exclusi
 
 /// Whether the file `rel` (relative to `dir`) is excluded: it or a folder above it is an excluded item. The model
 /// reports each item on its own, so the folders on the way down are checked here.
-fn excluded_under(set: &bifrost_core::backup_exclusion::ExclusionSet, dir: &Path, rel: &str) -> bool {
+pub fn excluded_under(set: &bifrost_core::backup_exclusion::ExclusionSet, dir: &Path, rel: &str) -> bool {
     let mut path = dir.to_path_buf();
     for part in rel.split('/') {
         path.push(part);
@@ -255,13 +255,21 @@ pub fn create(dir: &Path, out: &Path) -> io::Result<usize> {
     create_with(dir, out, &|| backup_key(dir))
 }
 
+/// Writes the entries that `pick` accepts under `dir`, each through a temporary name; returns how many were written.
+/// The picker is how a migration brings only some categories (see `shell::migration`).
+pub fn write_entries(dir: &Path, entries: &[(String, Vec<u8>)], pick: &dyn Fn(&str) -> bool) -> io::Result<usize> {
+    let mut n = 0;
+    for (name, data) in entries.iter().filter(|(name, _)| pick(name)) {
+        write_atomic(&dir.join(name), data)?;
+        n += 1;
+    }
+    Ok(n)
+}
+
 /// Verifies `archive`, then writes its files under `dir`; returns the file count.
 pub fn restore_with(dir: &Path, archive: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<usize> {
     let entries = decode(&open(&std::fs::read(archive)?, key)?)?;
-    for (name, data) in &entries {
-        write_atomic(&dir.join(name), data)?;
-    }
-    Ok(entries.len())
+    write_entries(dir, &entries, &|_| true)
 }
 
 /// Restores `archive` into `dir`, with the keychain's archive key for a version 2 archive.
@@ -399,6 +407,20 @@ mod tests {
             assert!(!name_ok(n), "{n}");
         }
         assert!(decode(&encode(&[("../evil".into(), vec![1])])).is_err());
+        // an app's own data folder is accepted by a migration, but only inside that folder
+        assert!(decode(&encode(&[("appdata/is.x/db".into(), vec![1])])).is_ok());
+        assert!(decode(&encode(&[("appdata/../x".into(), vec![1])])).is_err());
+    }
+
+    #[test]
+    fn write_entries_writes_only_what_the_picker_takes() {
+        let dir = scratch("picker");
+        let entries = vec![("Notes/a.md".to_string(), b"a".to_vec()), ("Contacts/b".to_string(), b"b".to_vec())];
+        let n = write_entries(&dir, &entries, &|name| name.starts_with("Notes/")).unwrap();
+        assert_eq!(n, 1);
+        assert!(dir.join("Notes/a.md").is_file());
+        assert!(!dir.join("Contacts/b").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
