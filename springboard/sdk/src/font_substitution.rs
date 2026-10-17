@@ -170,28 +170,16 @@ const FACES: &[(&str, &str)] = &[
     ("ヒラギノ丸ゴ pron w4", "Noto Sans CJK JP"), ("ヒラギノ明朝 pron", "Noto Serif CJK JP"),
     ("儷宋 pro", "Noto Serif CJK SC"), ("儷黑 pro", "Noto Sans CJK SC"), ("华文仿宋", "Noto Serif CJK SC"),
     ("华文细黑", "Noto Sans CJK SC"), ("华文黑体", "Noto Sans CJK SC"),
-];
-
-/// The open face named for `family` in FACES, if any (case and surrounding space ignored).
-pub fn face_of_family(family: &str) -> Option<&'static str> {
-    let key = family.trim().to_lowercase();
-    FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
-}
-
-/// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
-pub fn class_of_family(family: &str) -> Option<FamilyClass> {
-    let key = family.trim().to_lowercase();
-    TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
-}
-
-/// Reference family name (lowercase) to the open face that stands in for it, tried before the class list. Each face
-/// is packaged on Arch (`packaging/arch/runtime-packages.txt`) and is the family name fontconfig reports for it.
-const FACES: &[(&str, &str)] = &[
-    ("avenir", "Lato"), ("avenir next", "Lato"), ("avenir next condensed", "Lato"),
-    ("arial black", "Noto Sans"), ("arial unicode ms", "Noto Sans"),
+    ("avenir", "Lato"),
+    ("avenir next", "Lato"),
+    ("avenir next condensed", "Lato"),
+    ("arial black", "Noto Sans"),
+    ("arial unicode ms", "Noto Sans"),
     ("andale mono", "DejaVu Sans Mono"),
     ("athelas", "Liberation Serif"),
-    ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
+    ("baskerville", "Libertinus Serif"),
+    ("big caslon", "Libertinus Serif"),
+    ("cochin", "Libertinus Serif"),
     ("charter", "Charis SIL"),
     ("american typewriter", "IBM Plex Serif"),
     ("helvetica neue", "TeX Gyre Heros"),
@@ -214,11 +202,19 @@ const FACES: &[(&str, &str)] = &[
     ("kefa iii", "Noto Sans Ethiopic"),
 ];
 
-/// The open face mapped to `family` in `FACES`, if any.
+/// The open face named for `family` in FACES, if any (case and surrounding space ignored).
 pub fn face_of_family(family: &str) -> Option<&'static str> {
     let key = family.trim().to_lowercase();
     FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
 }
+
+/// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
+pub fn class_of_family(family: &str) -> Option<FamilyClass> {
+    let key = family.trim().to_lowercase();
+    TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
+}
+
+
 
 /// The open families for `family`: its own face first, then the equivalents of its class. Empty when neither is known.
 fn equivalents_of(family: &str) -> Vec<&'static str> {
