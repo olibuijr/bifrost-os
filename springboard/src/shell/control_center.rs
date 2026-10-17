@@ -1932,6 +1932,55 @@ pub fn tile_visible(slots: &[ModuleSlot], tile: Tile) -> bool {
     }
 }
 
+/// The prefs key that holds the modules that get their own menu bar item (comma-separated module keys, in the
+/// order they appear in the bar). Empty or absent means none.
+pub const MENU_BAR_PREF: &str = "control_center_menu_bar";
+
+/// The prefs key for the battery percentage beside the battery menu bar item: `"1"` shows it, anything else hides it.
+pub const BATTERY_PERCENT_PREF: &str = "battery_show_percent";
+
+/// Reads the menu bar pref: the modules with their own status item, in order. Unknown keys, media tiles and repeats
+/// are dropped.
+pub fn parse_menu_bar_items(text: &str) -> Vec<Tile> {
+    let mut out: Vec<Tile> = Vec::new();
+    for key in text.split(',').map(str::trim).filter(|k| !k.is_empty()) {
+        let Some(tile) = DEFAULT_MODULES.iter().copied().find(|&t| module_key(t) == Some(key)) else { continue };
+        if !out.contains(&tile) {
+            out.push(tile);
+        }
+    }
+    out
+}
+
+/// Writes the menu bar items back in the form `parse_menu_bar_items` reads.
+pub fn format_menu_bar_items(items: &[Tile]) -> String {
+    let mut keys: Vec<&str> = Vec::new();
+    for key in items.iter().filter_map(|&t| module_key(t)) {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.join(",")
+}
+
+/// Whether a module has its own menu bar item.
+pub fn has_menu_bar_item(items: &[Tile], tile: Tile) -> bool {
+    items.contains(&tile)
+}
+
+/// Turns a module's own menu bar item on or off, appending it at the end when turned on.
+pub fn set_menu_bar_item(items: &mut Vec<Tile>, tile: Tile, on: bool) {
+    items.retain(|&t| t != tile);
+    if on && module_key(tile).is_some() {
+        items.push(tile);
+    }
+}
+
+/// Whether the battery item shows its percentage, from the pref text.
+pub fn battery_percent_shown(pref: Option<&str>) -> bool {
+    pref.map(str::trim) == Some("1")
+}
+
 /// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
 pub fn move_slot(slots: &mut Vec<ModuleSlot>, from: usize, to: usize) {
     if from >= slots.len() || to >= slots.len() {
@@ -2007,5 +2056,35 @@ mod module_list_tests {
         assert_eq!(slots, before);
         move_slot(&mut slots, 0, 2);
         assert_eq!(slots[2].tile, Tile::Airplane);
+    }
+
+    #[test]
+    fn menu_bar_items_read_in_order_and_drop_unknowns() {
+        let items = parse_menu_bar_items("wifi,bogus,media,wifi,focus,");
+        assert_eq!(items, vec![Tile::Wifi, Tile::Focus]);
+        assert!(parse_menu_bar_items("").is_empty());
+    }
+
+    #[test]
+    fn menu_bar_items_round_trip_and_toggle() {
+        let mut items = parse_menu_bar_items("focus,wifi");
+        set_menu_bar_item(&mut items, Tile::Bluetooth, true);
+        assert!(has_menu_bar_item(&items, Tile::Bluetooth));
+        set_menu_bar_item(&mut items, Tile::Focus, false);
+        assert!(!has_menu_bar_item(&items, Tile::Focus));
+        let text = format_menu_bar_items(&items);
+        assert_eq!(text, "wifi,bluetooth");
+        assert_eq!(parse_menu_bar_items(&text), items);
+        // media tiles have no menu bar item of their own
+        set_menu_bar_item(&mut items, Tile::MediaPlay, true);
+        assert!(!has_menu_bar_item(&items, Tile::MediaPlay));
+    }
+
+    #[test]
+    fn battery_percent_pref_is_on_only_for_one() {
+        assert!(battery_percent_shown(Some("1")));
+        assert!(battery_percent_shown(Some(" 1 ")));
+        assert!(!battery_percent_shown(Some("0")));
+        assert!(!battery_percent_shown(None));
     }
 }

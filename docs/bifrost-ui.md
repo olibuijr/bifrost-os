@@ -4801,9 +4801,13 @@ A button press sends `intent.<id>` with no parameters. A toggle sends `intent.<i
 `on` set to `"true"` or `"false"`, the new state. Both travel over the app's control socket (`shell::intents`).
 
 Status: the model, parsing, registration and request mapping are in place with host tests
-(`shell/app_controls.rs`). Not done: the Control Center panel does not draw these controls yet, and the Edit
-Controls gallery (add, remove, reorder, menu-bar extras) does not list them. Apple parity gap: ControlWidgetButton,
-ControlWidgetToggle and ControlValueProvider on screen. Edit Controls also lacks a menu-bar pref for choosing
-which modules get their own status item; the module list (`control_center_modules`, `parse_slots`,
-`move_slot`, `tile_visible`) already persists order and visibility. Battery percentage and per-app energy are
-not in the Control Center model yet.
+(`shell/app_controls.rs`). The toggle parameter is `ui::control_widget::TOGGLE_PARAM` (`"on"`), read by apps with
+`toggle_param` (`bifrost_app::controls::toggle_param`). `AppControls` is the panel state: add, remove, press, with
+toggle values kept by the shell. Its keys persist in the `control_center_modules` pref as `app:<identifier>` items
+(`join_pref`, `pref_app_keys`). Menu bar items per module persist in `control_center_menu_bar`
+(`parse_menu_bar_items`, `set_menu_bar_item`), and `battery_show_percent` gates the battery percentage.
+Not done: the Control Center panel does not draw app-control tiles, the Edit Controls gallery is not drawn, the
+menu bar does not draw module items from the pref, and the battery item does not draw the percentage. Per-app
+energy is not built: `activity-desktop/src/sample.rs` has the `/proc` CPU-time sampler, but it lives in the app and
+is not shared with the shell. Apple parity gap: ControlWidgetButton, ControlWidgetToggle and ControlValueProvider
+on screen.
