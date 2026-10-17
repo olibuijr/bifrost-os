@@ -120,6 +120,25 @@ pub fn decode_saved(reply: &Json) -> Option<Vec<u64>> {
 
 /// The records in a `fetch` reply. A contact without a value for a key has no field for it, so `get` is `None`. A
 /// reply of another shape, or one with a malformed record, is `None`.
+/// The contacts whose value under `key` contains `text`, ignoring case and surrounding spaces (ABSearchElement on one
+/// property). Text, list and labeled values are all searched; an empty `text` matches every contact that has a value
+/// under `key`. The records must have been fetched with `key`, or they have no value to match.
+pub fn matching<'a>(people: &'a [Record], key: Key, text: &str) -> Vec<&'a Record> {
+    let needle = text.trim().to_lowercase();
+    people
+        .iter()
+        .filter(|person| {
+            let contains = |value: &str| value.to_lowercase().contains(&needle);
+            match person.get(key) {
+                Some(Value::Text(value)) => contains(value),
+                Some(Value::List(items)) => items.iter().any(|item| contains(item)),
+                Some(Value::Labeled(items)) => items.iter().any(|item| contains(&item.value)),
+                _ => false,
+            }
+        })
+        .collect()
+}
+
 pub fn decode_contacts(reply: &Json) -> Option<Vec<Record>> {
     reply.get("contacts")?.as_array()?.iter().map(decode_record).collect()
 }
@@ -325,6 +344,20 @@ mod tests {
         store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
         assert_eq!(store.changes_since(token).unwrap().len(), 1);
         assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
+    }
+
+    #[test]
+    fn a_search_matches_one_property_ignoring_case() {
+        let mut ada = Record::new(1);
+        ada.set(Key::GivenName, Value::Text("Ada".into()));
+        ada.set(Key::Emails, Value::List(vec!["ada@example.com".into()]));
+        let mut bob = Record::new(2);
+        bob.set(Key::GivenName, Value::Text("Bob".into()));
+        let people = vec![ada, bob];
+        let ids = |found: Vec<&Record>| found.iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(ids(matching(&people, Key::GivenName, " ADA ")), vec![1]);
+        assert_eq!(ids(matching(&people, Key::Emails, "example")), vec![1]);
+        assert_eq!(ids(matching(&people, Key::Emails, "")), vec![1]);
     }
 
     #[test]
