@@ -3710,11 +3710,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/sdk/src/accounts.rs, springboard/ui/src/account_store.rs, springboard/sdk/src/oauth_credential.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "oauth_credential::tests"
+    }
+   ],
+   "ready_note": "The account store (types, grants, accounts, renewal check) persists to accounts.ini; credentials go to the keychain."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountsUI.framework",
@@ -3731,11 +3750,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/src/shell/account_access_sheet.rs, springboard/src/shell/services/accounts_access.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::account_access_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accounts_access::tests"
+    }
+   ],
+   "ready_note": "The Allow / Don't Allow sheet for an app's account-type request; Allow writes the grant to the store."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountsUISettings.framework",
@@ -3752,11 +3785,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/src/shell/internet_accounts_page.rs, springboard/ui/src/internet_accounts.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    }
+   ],
+   "ready_note": "Settings > Internet Accounts: the saved accounts (read only, under their types) and the shared mail, calendar and contacts list."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountsUISupport.framework",
