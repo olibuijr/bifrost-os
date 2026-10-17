@@ -423,7 +423,16 @@
    "status": "partial",
    "note": "rule: autofill model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    }
+   ],
+   "ready_note": "The autofill model (sdk autofill.rs) covers the autofill panel's suggestions, with 3 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.BTServerAgent.le.plist",
@@ -675,7 +684,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    }
+   ],
+   "ready_note": "The search index model and its batch writer (ui searchindex.rs, sdk search_index_batch.rs) cover the local data source's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.DeviceConfigurationAgent.plist",
@@ -901,7 +924,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the feature access decisions, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FileProvider.plist",
@@ -1055,7 +1092,16 @@
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "The font descriptor model (sdk font_descriptor.rs) is the font lookup the worker serves, with 6 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GameController.gamecontrolleragentd.plist",
@@ -2605,7 +2651,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the accessory access prompts, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessorysensormgrd.plist",
@@ -3377,7 +3437,16 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    }
+   ],
+   "ready_note": "The background transfer model (sdk url_background.rs) covers the background task work the agent schedules, with 7 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.betaenrollmentagent.plist",
@@ -3503,7 +3572,16 @@
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready_note": "The Bluetooth service model (sdk bluetooth_service.rs) covers the user-level Bluetooth daemon's job, with 8 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.bookassetd.plist",
@@ -4044,7 +4122,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "The camera device model and the device browser (ui camera_device.rs, device_browser.rs) cover the camera extension agent's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.colorsync.useragent.plist",
