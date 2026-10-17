@@ -330,8 +330,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/folder_actions.rs",
    "status": "partial",
-   "note": "folder attachments and new-file runs; fswatch and intent wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "folder attachments and new-file runs; fswatch and intent wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget; Built 2026-10-17: Watcher rescans attached folders once a second from the shell tick and starts the attached intent for each new file (intent call on its own thread); attachments saved as text (folder-actions.tsv); tests shell::folder_actions::tests.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::folder_actions::tests"
+    }
+   ],
+   "ready_note": "shell folder_actions: attach or detach, first listing only records, new-file runs, saved text round trip, watcher rescan on a real temporary folder."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DDUIExtension.appex",

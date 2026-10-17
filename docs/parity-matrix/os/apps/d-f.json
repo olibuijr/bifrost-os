@@ -315,9 +315,9 @@
    "description": "",
    "role": "no folder action hooks. Build: attach a script or shortcut to a folder, fired when items are added; needs a folder watcher in the shell",
    "doc": "",
-   "bifrost": "springboard/sdk/src/fswatch.rs (WatchStream)",
+   "bifrost": "springboard/src/shell/folder_actions.rs",
    "status": "partial",
-   "note": "The folder watcher exists: recursive inotify with coalesced events in fswatch.rs. Gap: nothing attaches a script or shortcut to a folder, and the shell does not run one when items arrive.",
+   "note": "The folder action runtime exists: springboard/src/shell/folder_actions.rs keeps the attachments (saved as text under the shell data dir) and the shell tick starts the attached intent for each new file. Gap: there is no Folder Actions Setup app yet to attach or detach a folder, so nothing can be set up from the UI.",
    "rea": [],
    "method": "assessed"
   }
