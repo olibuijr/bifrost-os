@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-books"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-contacts"
-version = "1.10.1"
+version = "1.13.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.28.3"
+version = "1.28.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.1.0"
+version = "0.4.1"
 dependencies = [
  "bifrost-maps",
 ]
@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.5.4"
+version = "0.6.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.19.0"
+version = "1.21.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-sysinfo"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.11.5"
+version = "0.11.8"
 dependencies = [
  "bifrost-app",
  "springboard",
