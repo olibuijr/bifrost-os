@@ -28,9 +28,11 @@ use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
 use crate::shell::contactchanges;
 use crate::shell::contactgroups;
+use crate::shell::contactphotos;
 use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
 use bifrost_ui::contact_groups::Groups;
+use bifrost_ui::contact_vcard;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
 use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
 use std::cell::RefCell;
@@ -417,6 +419,13 @@ impl SystemService for Contacts {
                     let mut log = contactchanges::load(&log_path);
                     log.append(&changes);
                     contactchanges::save(&log_path, &log).map_err(|e| e.to_string())?;
+                    // A deleted contact takes its picture with it.
+                    let photos = contactphotos::dir_for(&path);
+                    for (kind, id) in &changes {
+                        if *kind == contactchanges::Kind::Deleted {
+                            let _ = contactphotos::remove(&photos, *id);
+                        }
+                    }
                 }
                 // A deleted contact leaves every group it was in.
                 let mut groups = contactgroups::load(&groups_path);
@@ -436,6 +445,40 @@ impl SystemService for Contacts {
             "fetch" if reads(app_id) => {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
+            }
+            "photo" => {
+                if !reads(app_id) {
+                    return Err("contacts access is not granted".into());
+                }
+                let id = params.get("id").and_then(Json::as_u64).ok_or_else(|| "photo needs id".to_string())?;
+                if !access_of(app_id).can_read(id) {
+                    return Err("no such contact".into());
+                }
+                match contactphotos::read(&contactphotos::dir_for(&path), id) {
+                    Some((format, bytes)) => Ok(Json::Obj(vec![
+                        ("format".into(), Json::Str(contactphotos::format_name(format).into())),
+                        ("data".into(), Json::Str(contact_vcard::base64_encode(&bytes))),
+                    ])),
+                    None => Ok(Json::Obj(vec![("format".into(), Json::Null)])),
+                }
+            }
+            "photo_set" | "photo_remove" => {
+                if access_of(app_id).check_write().is_err() {
+                    return Err("contacts write access is not granted".into());
+                }
+                let id = params.get("id").and_then(Json::as_u64).ok_or_else(|| "photo needs id".to_string())?;
+                if !load()?.iter().any(|c| c.id == id) {
+                    return Err("no such contact".into());
+                }
+                let dir = contactphotos::dir_for(&path);
+                if method == "photo_remove" {
+                    let removed = contactphotos::remove(&dir, id).map_err(|e| e.to_string())?;
+                    return Ok(Json::Obj(vec![("removed".into(), Json::Bool(removed))]));
+                }
+                let encoded = params.get("data").and_then(Json::as_str).ok_or_else(|| "photo_set needs data".to_string())?;
+                let bytes = contact_vcard::base64_decode(encoded).ok_or_else(|| "photo data is not base64".to_string())?;
+                let format = contactphotos::write(&dir, id, &bytes)?;
+                Ok(Json::Obj(vec![("format".into(), Json::Str(contactphotos::format_name(format).into()))]))
             }
             "changes" => {
                 if !reads(app_id) {
