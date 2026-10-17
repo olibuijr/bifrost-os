@@ -35,8 +35,11 @@
 //! | ScreenReaderUIServer | `accessibility/reader.rs` |
 //! | gamecontrolleragentd | `game_controllers_page.rs` |
 //!
-//! Voice assistant, family controls, cloud sync, search-party, Screen Time and the memory/expansion slot agents have no counterpart
-//! and stay gap rows.
+//! Cloud sync, search-party and the memory/expansion slot agents have no counterpart (n/a rows). The vendor voice assistant
+//! and family controls keep the status `gap` (the vendor services are not mirrored) and are `ready` through BifrOSt's own
+//! assistant (`assistant.rs`, `assistant_panel.rs`) and local Screen Time (`screentime/`). Smart card readers are served by
+//! `services/smartcards.rs` (the token daemon and token binding roles), the application firewall by
+//! `services/app_firewall.rs`, and an unreadable disk by `services/disks.rs`.
 use super::Shell;
 use bifrost_core::json::Json;
 
@@ -77,6 +80,8 @@ pub mod focus_filter;
 pub mod notify_bus;
 pub mod speech;
 pub mod recognizer;
+pub mod smartcards;
+pub mod app_firewall;
 pub mod screenshot;
 pub mod launch_services;
 pub mod mail_compose;
@@ -174,6 +179,8 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(notify_bus::NotifyBus::default()),
         Box::new(speech::Speech::default()),
         Box::new(recognizer::Recognizer::new(recognizer::user_data_dir())),
+        Box::new(smartcards::SmartCards::new(smartcards::data_dir())),
+        Box::new(app_firewall::AppFirewall::new(smartcards::data_dir())),
         Box::new(screenshot::ScreenshotService::default()),
         Box::new(launch_services::LaunchServices),
         Box::new(mail_compose::MailCompose),

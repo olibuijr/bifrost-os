@@ -45,6 +45,20 @@ pub fn draw_window(s: &mut Surface, ui: &Ui, r: Rect, frame: Option<&Image>) {
     s.stroke_rrect(r.x, r.y, r.w, r.h, radius, 1.0, rgba(255, 255, 255, 60));
 }
 
+/// The largest frame a player may send, in pixels (full HD).
+pub const MAX_FRAME_PIXELS: usize = 1920 * 1080;
+
+/// A frame from `w` by `h` pixels of 8-bit RGBA bytes (red first, alpha last, premultiplied; a video frame is
+/// opaque). Refuses an empty or oversized frame and a byte count that does not match.
+pub fn frame_from_rgba(w: usize, h: usize, bytes: &[u8]) -> Result<Image, String> {
+    let pixels = w.checked_mul(h).filter(|n| (1..=MAX_FRAME_PIXELS).contains(n)).ok_or_else(|| format!("pip: a {w}x{h} frame is empty or larger than {MAX_FRAME_PIXELS} pixels"))?;
+    if bytes.len() != pixels * 4 {
+        return Err(format!("pip: a {w}x{h} frame needs {} bytes, got {}", pixels * 4, bytes.len()));
+    }
+    let px = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    Ok(Image { w, h, px })
+}
+
 /// The Picture in Picture window the shell holds: the controller's life cycle, the corner it rests in and the
 /// video's aspect ratio (width over height; a bad value uses 16:9). `Shell::draw` paints it over the screen while it
 /// is starting or active.
@@ -53,6 +67,8 @@ pub struct Floating {
     pub controller: Controller,
     pub corner: Corner,
     pub aspect: f32,
+    /// The latest video frame the player sent (`pip` service, `frame`); `None` draws the placeholder.
+    pub frame: Option<Image>,
 }
 
 impl Floating {
@@ -75,7 +91,14 @@ impl Floating {
         let mut events = Vec::new();
         events.extend(self.controller.stop());
         events.extend(self.controller.finish_stop());
+        self.frame = None;
         events
+    }
+
+    /// Keeps `frame` as the picture the window shows, and sizes the window to its aspect ratio.
+    pub fn set_frame(&mut self, frame: Image) {
+        self.aspect = frame.w as f32 / frame.h.max(1) as f32;
+        self.frame = Some(frame);
     }
 
     /// The window's rectangle inside `usable` (the screen without the menu bar and the dock).
@@ -117,6 +140,27 @@ mod tests {
         assert!(r.y + r.h <= usable().y + usable().h, "clear of the dock at the bottom");
         let tl = window_rect(usable(), 16.0 / 9.0, Corner::TopLeft);
         assert_eq!(tl.x, usable().x + pip_window::EDGE_MARGIN);
+    }
+
+    #[test]
+    fn a_frame_decodes_from_rgba_bytes_and_bad_sizes_are_refused() {
+        let img = frame_from_rgba(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap();
+        assert_eq!((img.w, img.h), (2, 1));
+        assert_eq!(img.px[0], rgba(1, 2, 3, 255), "red is the low byte");
+        assert!(frame_from_rgba(2, 1, &[0; 7]).is_err(), "the byte count must match");
+        assert!(frame_from_rgba(0, 4, &[]).is_err(), "an empty frame");
+        assert!(frame_from_rgba(usize::MAX, 2, &[]).is_err(), "no overflow");
+        assert!(frame_from_rgba(4000, 4000, &[]).is_err(), "larger than the limit");
+    }
+
+    #[test]
+    fn a_frame_sets_the_window_aspect_and_stopping_drops_it() {
+        let mut f = Floating::default();
+        f.set_frame(frame_from_rgba(4, 2, &[0; 32]).unwrap());
+        assert_eq!(f.aspect, 2.0);
+        assert!(f.frame.is_some());
+        f.stop();
+        assert!(f.frame.is_none(), "the next window starts from the placeholder");
     }
 
     #[test]

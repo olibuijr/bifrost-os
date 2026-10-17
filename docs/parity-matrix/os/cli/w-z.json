@@ -292,9 +292,21 @@
    "doc": "",
    "bifrost": "/usr/bin/wish8.6",
    "status": "partial",
-   "note": "the tk package ships wish8.6 (Tcl/Tk 8.6), not wish8.5; the row maps to /usr/bin/wish8.6 by version only",
+   "note": "The Arch tk package (packaging/arch/runtime-packages.txt) ships the Tk windowing shell as wish8.6 with a wish symlink; the reference wish8.5 is the same tool one release older.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/wish8.6"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/wish"
+    }
+   ],
+   "ready_note": "Arch package tk ships wish8.6 and wish (packaging/arch/runtime-packages.txt); the row maps by tool, not by version number"
   },
   {
    "id": "path:/usr/bin/write",

@@ -102,7 +102,7 @@
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/imap.rs, springboard/apps/mail-desktop/src/smtp.rs, springboard/apps/mail-desktop/src/sync.rs",
    "status": "partial",
-   "note": "Mail account sync over IMAP and SMTP is built in the Mail app's modules. This row does not cover a system-wide mail daemon; that service is not built.",
+   "note": "Partial: mail sync over IMAP and SMTP, IDLE watchers and the outbox run while the Mail app is open. Missing: mail check while the app is closed. The shell background service can launch an app hidden for a task (manifest [background], sdk background_tasks), but Mail does not declare one and its passwords come from Passwords through window requests, so a headless refresh needs the account and credential path split out of MailWindow.",
    "rea": []
   },
   {
