@@ -213,17 +213,17 @@ pub fn session_send(req: &URLRequest) -> Result<Reply, String> {
     })
 }
 
-fn endpoint(base_url: &str, path: &str) -> Result<String, CloudError> {
+pub(crate) fn endpoint(base_url: &str, path: &str) -> Result<String, CloudError> {
     let base = base_url.trim_end_matches('/');
     let valid = base.strip_prefix("https://").is_some_and(|host| !host.is_empty() && !base.contains(char::is_whitespace) && !host.starts_with('/'));
     if valid { Ok(format!("{base}/{path}")) } else { Err(CloudError::BadBaseURL(base_url.to_string())) }
 }
 
-fn checked_token(token: &str) -> Result<&str, CloudError> {
+pub(crate) fn checked_token(token: &str) -> Result<&str, CloudError> {
     if !token.is_empty() && token.bytes().all(|b| b.is_ascii_alphanumeric()) { Ok(token) } else { Err(CloudError::InvalidSession) }
 }
 
-fn failure(status: u16, body: &str) -> CloudError {
+pub(crate) fn failure(status: u16, body: &str) -> CloudError {
     let code = json::parse(body).ok().and_then(|j| j.str_field("error")).unwrap_or_default();
     let known = match (status, code.as_str()) {
         (401, "bad_credentials") => Some(CloudError::BadCredentials),

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-10-17
+
+- New app window and manifest (`is.olibuijr.locate.desktop`, window full-size): a sidebar with People, Devices, Items and
+  Me; the Devices list shows this machine first, with its battery and whether a position is known; an empty Devices list
+  says why.
+- First-run sheet explains what is shared (position and battery level) and is dismissed with Return; the dismissal is
+  kept in the app's data folder.
+- Me page: the Share My Location state and the location state, which reads "Location services unavailable" until the
+  shell has a location service.
+- Control methods `locate.locate`, `locate.play_sound` and `locate.share` (`{"on": bool}`). Locate and play sound are
+  queued; the cloud client does not send them yet.
+- `panel` (window model) and `control` (method parsing) modules with tests.
+- SDK: `bifrost_app::cloud_findmy` builds and reads the device list, device command and device report requests of the
+  BifrOSt Cloud API (`/findmy/...`).
+
 ## 0.1.0 — 2026-10-14
 
 - New crate `bifrost-locate`: the model behind the device and people locator, with no window yet.

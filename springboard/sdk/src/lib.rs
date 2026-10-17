@@ -146,6 +146,7 @@ pub mod csv_writer;
 pub mod accounts;
 pub mod cloud_identity;
 pub mod cloud_account;
+pub mod cloud_findmy;
 pub mod buffer_share;
 pub mod testing;
 pub mod usernotif;
