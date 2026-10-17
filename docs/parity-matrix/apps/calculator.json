@@ -201,8 +201,8 @@
    "apple": "Localizable: Always on Top",
    "status": "partial",
    "bifrost": "springboard/apps/calculator-desktop/src/main.rs:150",
-   "note": "Window > Always on Top is a ticked item that calls bifrost_app::windows::set_level, which sends ToShell::WindowLevel (proto tag 0x165). The shell stores the level per app (apphost.rs window_level) and the window model (springboard/wm/src/wm.rs Level, set_level) keeps floating windows above normal ones. Not yet verified on Midget.",
-   "wire": "Route the app's stored window level to the window server's Wm::set_level for the app's toplevel, so the level reaches the compositor; then verify the item and the stacking on Midget."
+   "note": "Window > Always on Top is a ticked item. bifrost_app::windows::set_level sends ToShell::WindowLevel (proto tag 0x165); the app host keeps the level (apphost.rs window_level), the shell sets the desk order and the frames (desk.rs band_top, sync_levels, take_wayland_windows), and bare/wayland.rs sends bifrost_window_level_v1 set_level for the window surface. The window server (springboard/wm/src/window_level.rs, wm.rs Level) keeps floating windows above normal ones through map, raise and focus. Built and run only on the host by reading: not verified on Midget.",
+   "wire": "Build the workspace and check the item and the stacking on Midget: open Calculator, choose Window > Always on Top, raise another window over it."
   },
   {
    "feature": "Evaluate intent / Shortcuts",

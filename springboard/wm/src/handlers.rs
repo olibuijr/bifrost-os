@@ -112,6 +112,10 @@ impl WmState {
         self.pending.remove(i);
         let id = self.id_of(&window);
         let r = self.wm.map(id, size.w, size.h);
+        // the level the shell asked for this surface before it mapped (`bifrost_window_level_v1`)
+        if let Some(surface) = window.wl_surface() {
+            self.wm.set_level(id, crate::window_level::level(&surface));
+        }
         if (r.w, r.h) != (size.w, size.h) {
             toplevel.with_pending_state(|s| s.size = Some((r.w, r.h).into()));
         }

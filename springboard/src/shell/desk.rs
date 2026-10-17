@@ -177,8 +177,10 @@ const DOUBLE_CLICK_MS: f64 = 400.0;
 
 #[derive(Default)]
 pub struct Desk {
-    /// back to front
+    /// back to front; the floating windows (`floating`) are the last ones
     pub wins: Vec<Win>,
+    /// the apps whose windows float (their host asked for `ToShell::WindowLevel`), as of the last `sync_levels`
+    pub(super) floating: Vec<AppId>,
     pub(super) dock_preferences:super::desktop_dock::Preferences,
     pub(super) dock_visible:bool,
     /// the window whose traffic lights the pointer is over; its lights show their glyphs
@@ -450,8 +452,29 @@ impl Desk {
     pub fn raise(&mut self, i: usize) -> usize {
         let mut w = self.wins.remove(i);
         w.minimized = false;
-        self.wins.push(w);
-        self.wins.len() - 1
+        let at = self.band_top(w.app);
+        self.wins.insert(at, w);
+        at
+    }
+
+    /// Whether the windows of `app` float.
+    pub(super) fn is_floating(&self, app: AppId) -> bool {
+        self.floating.contains(&app)
+    }
+
+    /// The index a window of `app` takes on the top of its band: after every window at its level or below, so a normal
+    /// window goes in front of the floating ones and a floating one stays above them.
+    pub(super) fn band_top(&self, app: AppId) -> usize {
+        let floating = self.is_floating(app);
+        self.wins.iter().position(|o| self.is_floating(o.app) && !floating).unwrap_or(self.wins.len())
+    }
+
+    /// Sets the apps whose windows float and moves their windows after the normal ones; each band keeps its order.
+    pub(super) fn sync_levels(&mut self, floating: Vec<AppId>) {
+        self.floating = floating;
+        let list = std::mem::take(&mut self.floating);
+        self.wins.sort_by_key(|w| list.contains(&w.app));
+        self.floating = list;
     }
 
     /// The frontmost visible window hit at (x, y).
@@ -477,8 +500,9 @@ impl Desk {
         let x = (a.x + (a.w - w) / 2 + (n - 3) * step).clamp(a.x, (a.x + a.w - w).max(a.x));
         let y = (a.y + (a.h - h) / 3 + n * step / 2).clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
-        self.wins.push(Win { app, r, maximized: false, minimized: false, restore: r });
-        self.wins.len() - 1
+        let at = self.band_top(app);
+        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, restore: r });
+        at
     }
 
     /// Puts window `i` at `r` (a restored frame): the size is held inside the app's limits and the work area, the
@@ -660,7 +684,7 @@ impl Shell {
         for w in desk.wins.iter().filter(|w|!w.minimized) {
             let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -733,8 +757,22 @@ impl Shell {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn take_wayland_windows(&mut self) -> Vec<crate::bare::wayland::WindowFrame> {
+        // the apps whose hosts asked for a floating window (`ToShell::WindowLevel`)
+        let floating: Vec<AppId> = self
+            .ext
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| h.as_ref().is_some_and(|h| h.window_level == bifrost_proto::WindowLevel::Floating))
+            .map(|(slot, _)| AppId::External(slot as u8))
+            .collect();
         self.desk.as_mut().map(|d| {
-            let frames = std::mem::take(&mut d.frames);
+            d.sync_levels(floating);
+            let mut frames = std::mem::take(&mut d.frames);
+            // a floating window's frame goes last, so the window server stacks it above the normal ones
+            for f in frames.iter_mut() {
+                f.floating = apps().get((f.id as usize).wrapping_sub(1)).is_some_and(|a| d.is_floating(a.id));
+            }
+            frames.sort_by_key(|f| f.floating);
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
             if frames.is_empty() { d.window_cache.clear(); d.body_cache.clear(); }
@@ -1661,7 +1699,7 @@ impl Shell {
                         id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     continue;
                 }
@@ -1670,7 +1708,7 @@ impl Shell {
                         id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -1753,7 +1791,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                 });
                 continue;
             }
@@ -2336,6 +2374,34 @@ mod tests {
         d.open(&m, AppId::Settings, (5000, 5000));
         let a = Desk::area(&m);
         assert_eq!((d.wins[0].r.w, d.wins[0].r.h), (a.w, a.h));
+    }
+
+    #[test]
+    fn a_frame_id_names_the_app_whose_level_it_takes() {
+        // the wayland frame of an app is `win_id(app)`, and take_wayland_windows finds the app again from that id
+        for (i, a) in apps().iter().enumerate() {
+            assert_eq!(win_id(a.id), Some(i as u32 + 1));
+            assert_eq!(win_id(a.id).and_then(|id| apps().get(id as usize - 1)).map(|b| b.id), Some(a.id));
+        }
+    }
+
+    #[test]
+    fn a_floating_window_stays_above_the_normal_ones_when_raised_or_opened() {
+        let m = metrics();
+        let mut d = Desk::default();
+        d.open(&m, AppId::External(3), (400, 300));
+        d.open(&m, AppId::Files, (400, 300));
+        d.sync_levels(vec![AppId::External(3)]);
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::External(3)], "the floating window is last");
+        assert_eq!(d.raise(0), 0, "a normal window raised goes in front of the normal ones, under the floating one");
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::External(3)]);
+        d.open(&m, AppId::Settings, (400, 300));
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::Settings, AppId::External(3)], "a new normal window opens under the floating one");
+        let i = d.index_of(AppId::External(3)).unwrap();
+        d.raise(i);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(AppId::External(3)), "raising the floating window keeps it on top");
+        d.sync_levels(Vec::new());
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::Settings, AppId::External(3)], "dropping the level keeps the order");
     }
 
     #[test]

@@ -28,7 +28,7 @@ use smithay::{
     },
 };
 
-use crate::wm::{Rect, WindowId, Wm};
+use crate::wm::{Level, Rect, WindowId, Wm};
 
 /// Capture the Linux Unix-socket peer uid before registering the client with Wayland.
 /// Global visibility filters run inside Wayland backend dispatch and must not call back into its credential lock.
@@ -69,6 +69,8 @@ pub struct WmState {
     pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
     /// `bifrost_material_v1` (materials with a kind per region).
     pub bifrost_material: smithay::reexports::wayland_server::backend::GlobalId,
+    /// `bifrost_window_level_v1` (the shell puts a toplevel on the floating level).
+    pub bifrost_window_level: smithay::reexports::wayland_server::backend::GlobalId,
     /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
@@ -168,6 +170,7 @@ impl WmState {
             on_vblank: None,
             background_effect: crate::background_effect::init(&dh),
             bifrost_material: crate::bifrost_material::init(&dh),
+            bifrost_window_level: crate::window_level::init(&dh),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
             locked: false,
@@ -230,6 +233,15 @@ impl WmState {
         self.space.elements().find(|w| Self::known_id(w) == Some(id)).cloned()
     }
 
+    /// The shell set the level of `surface`: the window model moves its toplevel to that band, if it is mapped.
+    pub fn set_window_level(&mut self, surface: &WlSurface, level: Level) {
+        let Some(window) = self.window_for_surface(surface) else { return };
+        let Some(id) = Self::known_id(&window) else { return };
+        self.wm.set_level(id, level);
+        self.apply_frames();
+        self.dirty = true;
+    }
+
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
         self.space.elements().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)).cloned()
     }
@@ -261,10 +273,9 @@ impl WmState {
             return;
         }
         if let Some(id) = id {
+            // the window model raises within its band (a floating window stays above); the space follows its order
             self.wm.raise(id);
-            if let Some(w) = self.window(id) {
-                self.space.raise_element(&w, true);
-            }
+            self.apply_frames();
         }
         let focused = self.wm.focused();
         let windows: Vec<Window> = self.space.elements().cloned().collect();

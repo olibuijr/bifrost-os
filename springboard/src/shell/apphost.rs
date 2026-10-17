@@ -912,7 +912,12 @@ impl AppHost {
                 self.activity = options;
                 crate::bare::sleep::note_app_activity(&self.id, options);
             }
-            ToShell::WindowLevel(level) => self.window_level = level,
+            ToShell::WindowLevel(level) => {
+                if self.window_level != level {
+                    self.window_level = level;
+                    out.frame = true;
+                }
+            }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.frame=true;}},

@@ -18,7 +18,7 @@ mod tape;
 
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{clipboard, Damage, Event, Surface};
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, Input, TouchKind, KeyInput};
 use bifrost_app::windows::{self, Level};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
@@ -36,9 +36,6 @@ struct CalculatorApp {
 
 /// How many unanswered copies are kept; the oldest is dropped beyond this.
 const MAX_PENDING_COPIES: usize = 16;
-
-/// Window > Always on Top (a checked item; `windows::set_level`). Outside the calculator's own menu ids.
-const MENU_ALWAYS_ON_TOP: u32 = 300;
 
 impl CalculatorApp {
     /// Sends the calculator's pending Copy (if any) to the general board through the `pasteboard` service.
@@ -140,12 +137,12 @@ impl App for CalculatorApp {
     /// The calculator's menus, then the Window menu with Always on Top (a checked item).
     fn main_menu(&self, ctx: &Ctx) -> Vec<AppMenu> {
         let mut menus = self.calc.as_ref().map(|c| c.menus(&ctx.ui)).unwrap_or_default();
-        menus.push(AppMenu { title: "Window".into(), items: vec![AppMenuItem::new(MENU_ALWAYS_ON_TOP, "Always on Top").checked(self.floating)] });
+        menus.push(calc::window_menu(self.floating));
         menus
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        if id == MENU_ALWAYS_ON_TOP {
+        if id == calc::MENU_ALWAYS_ON_TOP {
             self.floating = !self.floating;
             windows::set_level(ctx, if self.floating { Level::Floating } else { Level::Normal });
             return true;

@@ -1065,15 +1065,23 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
 - SDK: `windows::set_level(ctx, Level::Floating)` (`Level` is `proto::WindowLevel`). It sends the message on every call;
   the app keeps its own checked state. There is no standard Window menu in the SDK yet, so an app builds its own
   item with `AppMenuItem::new(..).checked(on)` (Calculator and Stickies do).
-- Shell: `AppHost.window_level` keeps the level the app asked for while the app runs (`Normal` until it asks).
+- Shell: `AppHost.window_level` keeps the level the app asked for while the app runs (`Normal` until it asks). The app
+  host's window is the desk window `AppId::External(slot)`, drawn as the wayland toplevel whose frame id is
+  `win_id(app)` (`apps()` position plus one). `Desk.floating` lists the floating apps, refreshed by
+  `take_wayland_windows` (`sync_levels`); `Desk::band_top` puts a raised or opened window at the top of its band, and
+  the frames of floating windows go last.
+- Shell to window server: the private protocol `bifrost_window_level_v1` (`wm/protocol/bifrost-window-level-v1.xml`,
+  client `springboard/src/bare/window_level_client.rs`, server `springboard/wm/src/window_level.rs`). `set_level(surface,
+  level)` stores the level on the surface; the window server applies it at once to a mapped toplevel and at its map.
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
   (or the topmost shown window when it is minimized or closed). Menus, panels and the menu bar are above both bands
   and are not modelled here.
-- Not matched yet: the shell does not route an app's `window_level` to the window server's `Wm::set_level` for the
-  app's toplevel, so the level is stored but not yet shown on screen; no Midget run. Notes still share one window
-  (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
+- Focus and stacking: the window server's focus raises through the model and then restores the space order from
+  the model, so a floating window stays above the normal ones.
+- Not matched yet: built and reviewed by reading only (no build, no tests, no Midget run). Notes still share one
+  window (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
   `.statusBar`, `.modalPanel`) beyond these two are not exposed; the menu bar and panels keep their own layer.
 
 ## Web view (`WKWebView`, `WKProcessPool`, `WKNavigationDelegate`; Browser 0.3.0)

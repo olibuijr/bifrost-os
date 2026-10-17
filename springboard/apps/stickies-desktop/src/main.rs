@@ -1659,7 +1659,7 @@ mod tests {
         for id in [MENU_NEW, MENU_DELETE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54, MENU_OUTLINE, 80, 85, 88, MENU_SPELL_CORRECT] {
             assert!(undo_name(id).is_some(), "id {id}");
         }
-        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK] {
+        for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK, MENU_FLOAT_ON_TOP] {
             assert!(undo_name(id).is_none(), "id {id}");
         }
         assert_eq!(undo_name(MENU_ARRANGE_BASE), Some("Arrange"));
@@ -1941,7 +1941,7 @@ mod tests {
 
     #[test]
     fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
-        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_FLOAT_ON_TOP, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
         for (i, a) in ids.iter().enumerate() {
             assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
             assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));
