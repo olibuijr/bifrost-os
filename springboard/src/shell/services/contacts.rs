@@ -26,8 +26,10 @@
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
 use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
+use crate::shell::contactgroups;
 use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
+use bifrost_ui::contact_groups::Groups;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
 use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
 use std::cell::RefCell;
@@ -317,6 +319,81 @@ pub fn answer_with(app_id: &str, method: &str, params: &Json, contacts: &[Contac
     }
 }
 
+/// The group methods. Reads need a read grant, writes need full access, and a group holds only contacts the app can
+/// see. Returns the reply and whether the groups changed, so the caller saves the sidecar only then.
+pub fn groups_answer(
+    app_id: &str,
+    method: &str,
+    params: &Json,
+    contacts: &[Contact],
+    groups: &mut Groups,
+) -> Result<(Json, bool), String> {
+    let access = access_of(app_id);
+    let number = |key: &str| {
+        params.get(key).and_then(Json::as_u64).ok_or_else(|| format!("{method} needs {key}"))
+    };
+    let writable = || access.check_write().map_err(|_| "contacts write access is not granted".to_string());
+    let no_grant = || "contacts access is not granted".to_string();
+    match method {
+        "groups" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let rows: Vec<Json> = groups
+                .all()
+                .map(|g| {
+                    Json::Obj(vec![
+                        ("id".into(), Json::Num(g.id as f64)),
+                        ("name".into(), Json::Str(g.name.clone())),
+                        ("parent".into(), g.parent.map(|p| Json::Num(p as f64)).unwrap_or(Json::Null)),
+                    ])
+                })
+                .collect();
+            Ok((Json::Obj(vec![("groups".into(), Json::Arr(rows))]), false))
+        }
+        "group_members" => {
+            if !reads(app_id) {
+                return Err(no_grant());
+            }
+            let recursive = matches!(params.get("recursive"), Some(Json::Bool(true)));
+            let members = groups.members(number("group")?, recursive).map_err(|e| format!("{e:?}"))?;
+            let visible: Vec<Json> =
+                members.into_iter().filter(|m| access.can_read(*m)).map(|m| Json::Num(m as f64)).collect();
+            Ok((Json::Obj(vec![("contacts".into(), Json::Arr(visible))]), false))
+        }
+        "group_add" => {
+            writable()?;
+            let name = params.get("name").and_then(Json::as_str).ok_or_else(|| "group_add needs name".to_string())?;
+            let parent = match params.get("parent") {
+                None | Some(Json::Null) => None,
+                Some(_) => Some(number("parent")?),
+            };
+            let id = groups.add(name, parent).map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("id".into(), Json::Num(id as f64))]), true))
+        }
+        "group_remove" => {
+            writable()?;
+            let removed = groups.remove(number("group")?).map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("removed".into(), Json::Num(removed.len() as f64))]), true))
+        }
+        "group_add_member" | "group_remove_member" => {
+            writable()?;
+            let (group, contact) = (number("group")?, number("contact")?);
+            if !contacts.iter().any(|c| c.id == contact) || !access.can_read(contact) {
+                return Err("no such contact".into());
+            }
+            let changed = if method == "group_add_member" {
+                groups.add_member(group, contact)
+            } else {
+                groups.remove_member(group, contact)
+            }
+            .map_err(|e| format!("{e:?}"))?;
+            Ok((Json::Obj(vec![("changed".into(), Json::Bool(changed))]), changed))
+        }
+        _ => Err(format!("contacts has no method {method}")),
+    }
+}
+
 pub struct Contacts;
 
 impl SystemService for Contacts {
@@ -326,17 +403,40 @@ impl SystemService for Contacts {
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let path = contactstore::store_path(&shell.data_dir);
+        let groups_path = contactgroups::path_for(&path);
         let load = || contactstore::load_checked(&path).map_err(|e| e.to_string());
         match method {
             "save" => {
                 let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
                 let (reply, next) = apply_save(app_id, params, &book)?;
                 contactstore::save(&path, &next).map_err(|e| e.to_string())?;
+                // A deleted contact leaves every group it was in.
+                let mut groups = contactgroups::load(&groups_path);
+                let stale: Vec<u64> = groups
+                    .all()
+                    .flat_map(|g| groups.members(g.id, false).unwrap_or_default())
+                    .filter(|m| !next.iter().any(|c| c.id == *m))
+                    .collect();
+                if !stale.is_empty() {
+                    for m in stale {
+                        groups.forget_contact(m);
+                    }
+                    contactgroups::save(&groups_path, &groups).map_err(|e| e.to_string())?;
+                }
                 Ok(reply)
             }
             "fetch" if reads(app_id) => {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
+            }
+            "groups" | "group_members" | "group_add" | "group_remove" | "group_add_member" | "group_remove_member" => {
+                let mut groups: Groups = contactgroups::load(&groups_path);
+                let contacts = if access_of(app_id).check_write().is_ok() || reads(app_id) { load()? } else { Vec::new() };
+                let (reply, changed) = groups_answer(app_id, method, params, &contacts, &mut groups)?;
+                if changed {
+                    contactgroups::save(&groups_path, &groups).map_err(|e| e.to_string())?;
+                }
+                Ok(reply)
             }
             _ => answer_with(app_id, method, params, &[], &Book::new()),
         }
@@ -455,6 +555,31 @@ mod tests {
 
     fn ids_of(book: &[Contact]) -> Vec<u64> {
         book.iter().map(|c| c.id).collect()
+    }
+
+    #[test]
+    fn groups_hold_only_known_contacts_and_report_their_members() {
+        let id = "is.example.contacts-groups-full";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut groups = Groups::new();
+        let book = book();
+        let (reply, changed) = groups_answer(id, "group_add", &obj(&[("name", text("Family"))]), &book, &mut groups).unwrap();
+        assert!(changed);
+        let family = Json::Num(reply.get("id").and_then(Json::as_u64).unwrap() as f64);
+        let add = obj(&[("group", family.clone()), ("contact", Json::Num(1.0))]);
+        assert!(groups_answer(id, "group_add_member", &add, &book, &mut groups).unwrap().1);
+        let (listed, _) = groups_answer(id, "group_members", &obj(&[("group", family.clone())]), &book, &mut groups).unwrap();
+        assert_eq!(listed.get("contacts").and_then(Json::as_array).map(|a| a.len()), Some(1));
+        let unknown = obj(&[("group", family), ("contact", Json::Num(99.0))]);
+        assert!(groups_answer(id, "group_add_member", &unknown, &book, &mut groups).is_err());
+    }
+
+    #[test]
+    fn group_writes_are_refused_without_full_access() {
+        let id = "is.example.contacts-groups-undecided";
+        let mut groups = Groups::new();
+        assert!(groups_answer(id, "group_add", &obj(&[("name", text("Family"))]), &book(), &mut groups).is_err());
+        assert!(groups.is_empty());
     }
 
     #[test]

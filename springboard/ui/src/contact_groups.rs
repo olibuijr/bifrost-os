@@ -136,6 +136,38 @@ impl Groups {
         self.groups.values_mut().map(|g| usize::from(g.members.remove(&contact))).sum()
     }
 
+    /// Every group, in identifier order, for a store that persists the set.
+    pub fn all(&self) -> impl Iterator<Item = &Group> {
+        self.groups.values()
+    }
+
+    /// The last identifier handed out. A store keeps it so identifiers are never reused after a restart.
+    pub fn last_id(&self) -> u64 {
+        self.last_id
+    }
+
+    /// Rebuilds a set from stored groups: `(id, name, parent, members)` for each group, and the stored `last_id`.
+    /// Refused when a name is invalid, an identifier repeats or is past `last_id`, a parent is unknown, or a
+    /// Repeated members are kept once.
+    pub fn restore(last_id: u64, rows: Vec<(u64, String, Option<u64>, Vec<u64>)>) -> Result<Groups, Error> {
+        if rows.len() > MAX_GROUPS {
+            return Err(Error::TooManyGroups);
+        }
+        let mut groups = BTreeMap::new();
+        for (id, name, parent, members) in rows {
+            let name = checked_name(&name)?;
+            if id == 0 || id > last_id || groups.contains_key(&id) {
+                return Err(Error::UnknownGroup);
+            }
+            let members: BTreeSet<u64> = members.into_iter().collect();
+            groups.insert(id, Group { id, name, parent, members });
+        }
+        if groups.values().any(|g| g.parent.is_some_and(|p| !groups.contains_key(&p))) {
+            return Err(Error::UnknownGroup);
+        }
+        Ok(Groups { groups, last_id })
+    }
+
     /// The group, then its subgroups, then their subgroups (breadth first, each once).
     fn subtree(&self, root: u64) -> Vec<u64> {
         let mut out = vec![root];
