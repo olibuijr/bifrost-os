@@ -40,6 +40,8 @@ pub const M_BOOT_ATTEMPT: &str = "system.boot_attempt";
 pub const M_BACKUP_RESTORE_APPLY: &str = "backup.restore_apply";
 pub const M_STORAGE_POLICY_SET: &str = "storage.policy_set";
 pub const M_NETWORK_DNS_SET: &str = "network.dns_set";
+pub const M_STARTUP_DISK_LIST: &str = "startup_disk.list";
+pub const M_STARTUP_DISK_SET: &str = "startup_disk.set";
 
 /// Methods allowed before login.
 pub const UNAUTH_METHODS: &[&str] = &[

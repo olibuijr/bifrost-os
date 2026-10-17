@@ -49,6 +49,8 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             _ => Err(PErr::bad("empty_trash_after_30_days must be a boolean")),
         },
         "network.dns_set" => network_dns_set(p),
+        "startup_disk.list" => startup_disk_list(),
+        "startup_disk.set" => startup_disk_set(p),
         "locale.set" => set_locale(str_param(p, "lang")?, str_param(p, "region")?),
         "update.check" => update_check(),
         "update.apply" => {
@@ -252,6 +254,54 @@ pub fn dns_text(servers: &[String]) -> String {
 
 /// Writes the DNS servers (`network.dns_set`, a list of addresses; an empty list removes the drop-in) and has
 /// systemd-resolved reload them. Every address is checked before any file is touched.
+/// The firmware boot table, from `efibootmgr` (`startup_disk.list`): the entries in boot order with the current, next and
+/// default one marked.
+fn startup_disk_table() -> Result<bifrost_core::startup_disk::BootTable, PErr> {
+    let out = Command::new("efibootmgr").output().map_err(|e| PErr::internal(format!("efibootmgr: {e}")))?;
+    if !out.status.success() {
+        return Err(PErr::internal("efibootmgr failed (is this a UEFI boot?)"));
+    }
+    Ok(bifrost_core::startup_disk::BootTable::parse(&String::from_utf8_lossy(&out.stdout)))
+}
+
+fn startup_disk_list() -> Result<Json, PErr> {
+    let t = startup_disk_table()?;
+    let default = t.default_entry().map(|e| e.num);
+    let rows = t
+        .in_boot_order()
+        .into_iter()
+        .map(|e| {
+            obj(vec![
+                ("id", s(e.id())),
+                ("label", s(e.label.as_str())),
+                ("active", Json::Bool(e.active)),
+                ("current", Json::Bool(t.current == Some(e.num))),
+                ("next", Json::Bool(t.next == Some(e.num))),
+                ("default", Json::Bool(default == Some(e.num))),
+            ])
+        })
+        .collect();
+    Ok(obj(vec![("entries", Json::Arr(rows))]))
+}
+
+/// Makes a listed, active entry the default start, or the next start only with `once` (`startup_disk.set`).
+fn startup_disk_set(p: &Json) -> Result<Json, PErr> {
+    let id = str_param(p, "id")?;
+    let once = match p.get("once") {
+        None => false,
+        Some(Json::Bool(b)) => *b,
+        Some(_) => return Err(PErr::bad("once must be a boolean")),
+    };
+    if bifrost_core::startup_disk::BootTable::default().boot_once_argv(id) == Err(bifrost_core::startup_disk::ChooseError::BadNumber) {
+        return Err(PErr::bad("id must be four hex digits"));
+    }
+    let table = startup_disk_table()?;
+    let argv = if once { table.boot_once_argv(id) } else { table.set_default_argv(id) }.map_err(|e| PErr::bad(format!("{e:?}")))?;
+    let args: Vec<&str> = argv[1..].iter().map(String::as_str).collect();
+    run(&argv[0], &args)?;
+    Ok(obj(vec![("id", s(id.to_ascii_uppercase())), ("once", Json::Bool(once))]))
+}
+
 fn network_dns_set(p: &Json) -> Result<Json, PErr> {
     let items = p.get("servers").and_then(Json::as_array).ok_or_else(|| PErr::bad("servers must be a list"))?;
     let mut servers = Vec::with_capacity(items.len());
@@ -308,6 +358,16 @@ mod tests {
         assert_eq!(dns(Json::Arr((0..5).map(|_| s("1.1.1.1")).collect())).unwrap_err().code, "bad_params");
         assert_eq!(dns(s("1.1.1.1")).unwrap_err().code, "bad_params");
         assert_eq!(call("network.dns_set", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
+
+    #[test]
+    fn startup_disk_set_refuses_a_bad_id_before_any_command() {
+        let set = |id: Json| call("startup_disk.set", &obj(vec![("id", id)]));
+        assert_eq!(set(s("0003;reboot")).unwrap_err().code, "bad_params");
+        assert_eq!(set(s("3")).unwrap_err().code, "bad_params");
+        assert_eq!(set(Json::Bool(true)).unwrap_err().code, "bad_params");
+        assert_eq!(call("startup_disk.set", &obj(vec![])).unwrap_err().code, "bad_params");
+        assert_eq!(call("startup_disk.set", &obj(vec![("id", s("0003")), ("once", s("yes"))])).unwrap_err().code, "bad_params");
     }
 
     #[test]
