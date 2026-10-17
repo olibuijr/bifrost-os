@@ -110,6 +110,8 @@ pub enum Hit {
     Field(usize),
     /// A mailbox on the favourites bar, by its place in the saved list.
     Favorite(usize),
+    /// Load Remote Content, under the privacy note of the open message.
+    LoadRemote,
     /// The disclosure triangle of a conversation: folds or unfolds it. The UID is its first message's.
     Fold(u32),
     /// A file named in the open message, by its place in the message.
@@ -604,6 +606,9 @@ impl MailWindow {
                 return Hit::FindDone;
             }
         }
+        if self.remote_rect.is_some_and(|r| inside(r, x, y)) {
+            return Hit::LoadRemote;
+        }
         if let Some((_, index)) = self.attach_rects.iter().find(|(r, _)| inside(*r, x, y)) {
             return Hit::Attachment(*index);
         }
@@ -783,6 +788,7 @@ impl MailWindow {
         let area = (h - top).max(0.0);
         let text_w = (width - 2.0 * pad).max(0.0);
         self.attach_rects.clear();
+        self.remote_rect = None;
         self.find_hits = None;
         let Some(uid) = self.mail.open else {
             self.reader_scroll.set_max(0.0);
@@ -846,6 +852,23 @@ impl MailWindow {
         }
         if !names.is_empty() {
             y += ui.pt(SPACE_M);
+        }
+
+        // remote content stays blocked until the person loads it for this message or Mail Settings allows it
+        if loaded && self.remote_memo.map(|(m, _)| m) != Some(uid) {
+            let blocked = self.mail.bodies.get(&uid).map_or(0, |raw| crate::html::sanitize(raw, false).remote_images_blocked);
+            self.remote_memo = Some((uid, blocked));
+        }
+        let blocked = self.remote_memo.filter(|(m, _)| *m == uid).map_or(0, |(_, n)| n);
+        if blocked > 0 && !self.mail.remote_allowed(uid) {
+            let note = fit(ui, "Remote images are blocked to protect your privacy.", MAC_FOOTNOTE_PT, Weight::Regular, text_w);
+            put(s, &mut self.labels, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+            y += ui.pt(FOOT_LINE_PT);
+            let link = "Load Remote Content";
+            put(s, &mut self.labels, ui, link, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), x, y);
+            let wide = ui.measure(link, MAC_FOOTNOTE_PT, Weight::Regular);
+            self.remote_rect = Some([x, y, wide, ui.pt(FOOT_LINE_PT)]);
+            y += ui.pt(FOOT_LINE_PT) + ui.pt(SPACE_M);
         }
 
         if !loaded {

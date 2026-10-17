@@ -580,6 +580,8 @@ pub struct Mail {
     /// Set when a compose was made into the sheet slot (open_draft, a failed send, Undo Send). The app moves it into a
     /// compose window of its own (see `compose_windows`).
     pub fresh_compose: bool,
+    /// Messages whose remote content the person allowed with Load Remote Content, by UID. Not kept between runs.
+    pub remote_loaded: HashSet<u32>,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -639,6 +641,7 @@ impl Mail {
             baseline: HashMap::new(),
             sheet: None,
             fresh_compose: false,
+            remote_loaded: HashSet::new(),
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -1210,6 +1213,16 @@ impl Mail {
     }
 
     /// True when a new sheet may replace what is on screen: not while a message is being written.
+    /// True when remote content may load for message `uid`: Mail Settings allows it, or the person loaded it for this message.
+    pub fn remote_allowed(&self, uid: u32) -> bool {
+        self.prefs.remote_content || self.remote_loaded.contains(&uid)
+    }
+
+    /// Load Remote Content: the remote content of message `uid` may load.
+    pub fn allow_remote(&mut self, uid: u32) {
+        self.remote_loaded.insert(uid);
+    }
+
     /// True when the sheet slot can take a compose: it is empty, or it holds a compose (which keeps its own window).
     pub fn sheet_is_free_for_compose(&self) -> bool {
         matches!(self.sheet, None | Some(Sheet::Compose(_)))
@@ -1287,6 +1300,7 @@ impl Mail {
                 Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
                 Field::yes_no("Bold unread messages", self.prefs.bold_unread),
+                Field::yes_no("Load remote content", self.prefs.remote_content),
             ],
         );
         Ok(())
@@ -1395,6 +1409,9 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Bold unread messages") {
             self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
+        }
+        if form.fields.iter().any(|f| f.label == "Load remote content") {
+            self.prefs.remote_content = is_yes(form.value("Load remote content"));
         }
         Ok(())
     }

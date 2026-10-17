@@ -53,6 +53,9 @@ pub struct Prefs {
     pub all_headers: bool,
     /// Unread messages show their sender in bold, and read ones in regular type (Mail Settings).
     pub bold_unread: bool,
+    /// Remote content (images, tracking pixels included) may load in every message. Off: it loads only in the messages the
+    /// person allows with Load Remote Content.
+    pub remote_content: bool,
 }
 
 impl Default for Prefs {
@@ -72,6 +75,7 @@ impl Default for Prefs {
             plain_text: false,
             all_headers: false,
             bold_unread: true,
+            remote_content: false,
         }
     }
 }
@@ -173,6 +177,7 @@ impl Prefs {
             ("plain_text".into(), Json::Bool(self.plain_text)),
             ("all_headers".into(), Json::Bool(self.all_headers)),
             ("bold_unread".into(), Json::Bool(self.bold_unread)),
+            ("remote_content".into(), Json::Bool(self.remote_content)),
         ])
     }
 
@@ -189,6 +194,7 @@ impl Prefs {
             plain_text: flag_of(json, "plain_text", defaults.plain_text),
             all_headers: flag_of(json, "all_headers", defaults.all_headers),
             bold_unread: flag_of(json, "bold_unread", defaults.bold_unread),
+            remote_content: flag_of(json, "remote_content", defaults.remote_content),
             ..defaults
         };
         if let Some(Json::Obj(fields)) = json.get("signatures") {
@@ -323,6 +329,7 @@ mod tests {
         assert!(Prefs::from_json(&json::parse("{}").unwrap()).bold_unread, "a file from before the setting keeps bold");
         let off = Prefs::from_json(&json::parse(r#"{"bold_unread":false}"#).unwrap());
         assert!(!off.bold_unread);
+        assert!(!Prefs::default().remote_content, "remote content stays blocked by default");
         assert_eq!(Prefs::from_json(&off.to_json()), off);
     }
 
