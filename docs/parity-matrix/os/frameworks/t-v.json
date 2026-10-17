@@ -53,9 +53,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/tabular-data.json",
+   "bifrost": "springboard/sdk/src/tabular_summary.rs (summarize, ColumnSummary); springboard/core/src/csv.rs (parse_table, Table); springboard/sdk/src/csv_writer.rs (CsvWriter)",
    "status": "partial",
-   "note": "from SDK matrix tabular-data.json",
+   "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -408,9 +408,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/video-toolbox.json",
+   "bifrost": "springboard/sdk/src/pixel_transfer.rs (PixelTransfer); springboard/render/src/video_transfer.rs; springboard/sdk/src/video_decompression.rs",
    "status": "os",
-   "note": "from SDK matrix video-toolbox.json",
+   "note": "Built 2026-10-17: PixelTransfer session in the SDK for NV12 to RGBA conversion, RGBA scaling and quarter-turn rotation with mirrors, tests pixel_transfer::tests. Still missing: encoding, a shared app buffer type, HDR and RAW input, and frame processing (super resolution, interpolation, motion), so the row stays os.",
    "rea": [],
    "method": "assessed"
   },

@@ -3316,11 +3316,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/embedding.rs",
    "status": "gap",
-   "note": "On-device text embeddings and a reranker for system search are absent. Build a pure-Rust embedding runtime and an embedding index in the SDK search layer; nothing in the SDK or shell loads an embedding model today.",
+   "note": "Built 2026-10-17: hashed bag-of-words embeddings (256 dimensions, FNV-1a with a sign bit) and cosine ranking in the SDK (embedding::EmbeddingIndex), tests embedding::tests. Not a neural model: no learned weights, no synonyms, and no system search reranker is wired yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    }
+   ],
+   "ready_note": "The SDK embedding module (springboard/sdk/src/embedding.rs) builds a unit-length hashed bag-of-words vector per text and ranks documents by cosine similarity over the same word split as the search index. It is the on-device, non-neural stand-in for EmbeddingCore's text embeddings; a learned embedding model and the shell's system-search reranker are not built, so the row stays gap in status until verified."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmbeddingService.framework",
