@@ -15,6 +15,8 @@ use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
+use bifrost_app::controls::contact_book::Contact;
+use bifrost_app::controls::recipient_autocomplete::{Key as RecipientKey, RecipientField, Suggestion};
 use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -155,6 +157,31 @@ pub fn is_yes(value: &str) -> bool {
 
 /// Most matches Open Quickly lists under its field.
 pub const MAX_CHOICES: usize = 8;
+/// Most suggestions the compose sheet lists under a To, Cc or Bcc field.
+pub const MAX_SUGGESTIONS: usize = 5;
+
+/// True for the compose fields that hold a list of recipients and offer suggestions.
+pub fn is_recipient_field(label: &str) -> bool {
+    matches!(label, "To" | "Cc" | "Bcc")
+}
+
+/// Splits the value of a recipient field where the address being typed starts: the part before it (the finished
+/// recipients and their separator) and the typed text. A comma or semicolon inside quotes or angle brackets does not
+/// separate recipients.
+pub fn split_last_recipient(value: &str) -> (&str, &str) {
+    let (mut quoted, mut angle) = (false, false);
+    let mut cut = 0;
+    for (i, c) in value.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '<' if !quoted => angle = true,
+            '>' if !quoted => angle = false,
+            ',' | ';' if !quoted && !angle => cut = i + c.len_utf8(),
+            _ => {}
+        }
+    }
+    value.split_at(cut)
+}
 
 /// The fields of a sheet and the one that takes typed text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -652,6 +679,11 @@ pub struct Mail {
     /// The addresses Mail sent to, most recent first, offered again as suggestions when a recipient is typed. Kept for
     /// this run only.
     pub recipients: RecipientRecents,
+    /// The people of the address book, as far as recipient suggestions need them (names and email addresses). Filled
+    /// from the Contacts service once a compose sheet is open; empty when the person has not let Mail read Contacts.
+    pub address_book: Vec<Contact>,
+    /// The suggestions the focused To, Cc or Bcc field offers, with the one highlighted by the arrow keys.
+    pub recipient_field: RecipientField,
 }
 
 impl Mail {
@@ -695,6 +727,8 @@ impl Mail {
             arrived: Vec::new(),
             activity: Vec::new(),
             recipients: RecipientRecents::new(MAX_RECIPIENT_RECENTS),
+            address_book: Vec::new(),
+            recipient_field: RecipientField::new(),
         }
     }
 
@@ -1064,6 +1098,73 @@ impl Mail {
         let signature = self.prefs.signature(&account_id).to_string();
         self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
         self.fresh_compose = true;
+        self.sync_recipient_field();
+    }
+
+    /// Replaces the address book the recipient suggestions draw on.
+    pub fn set_address_book(&mut self, book: Vec<Contact>) {
+        self.address_book = book;
+        self.sync_recipient_field();
+    }
+
+    /// Rebuilds the suggestions for the focused field: nothing unless it is a To, Cc or Bcc field of a compose sheet.
+    /// The text after the last separator is what is being typed; the recipients before it are not offered again. An
+    /// untouched field offers the addresses used last; once a recipient is in, an empty tail offers nothing.
+    pub fn sync_recipient_field(&mut self) {
+        let field = match &self.sheet {
+            Some(Sheet::Compose(compose)) => compose.form.fields.get(compose.form.focus).filter(|f| is_recipient_field(f.label)).map(|f| {
+                let (head, typed) = split_last_recipient(&f.value);
+                let mut field = RecipientField::new();
+                field.recipients = message::split_addresses(head).iter().map(|a| message::address_of(a).to_lowercase()).collect();
+                field.set_text(typed.trim(), &self.address_book, &self.recipients, MAX_SUGGESTIONS);
+                if typed.trim().is_empty() && !f.value.trim().is_empty() {
+                    field.press(RecipientKey::Escape);
+                }
+                field
+            }),
+            _ => None,
+        };
+        self.recipient_field = field.unwrap_or_default();
+    }
+
+    /// The suggestions listed under the focused recipient field.
+    pub fn recipient_suggestions(&self) -> &[Suggestion] {
+        self.recipient_field.suggestions()
+    }
+
+    /// The arrow keys: moves the highlight in the suggestion list. False when no list is showing (the key is not ours).
+    pub fn move_recipient_highlight(&mut self, down: bool) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(if down { RecipientKey::Down } else { RecipientKey::Up });
+        true
+    }
+
+    /// Escape: closes the suggestion list. False when no list is showing (Escape belongs to the sheet).
+    pub fn close_recipient_list(&mut self) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(RecipientKey::Escape);
+        true
+    }
+
+    /// Return and Tab take the highlighted suggestion; a tap takes the one at `index`. The typed text is replaced by
+    /// `Name <address>` and a separator, ready for the next recipient. False when there is nothing to take.
+    pub fn accept_recipient(&mut self, index: Option<usize>) -> bool {
+        let Some(at) = index.or(self.recipient_field.highlighted()) else { return false };
+        let Some(suggestion) = self.recipient_field.suggestions().get(at).cloned() else { return false };
+        // a name with list punctuation would split the recipient: the bare address is safe
+        let token = if suggestion.name.contains([',', ';', '"', '<', '>']) { suggestion.address.clone() } else { suggestion.token() };
+        let Some(Sheet::Compose(compose)) = self.sheet.as_mut() else { return false };
+        let focus = compose.form.focus;
+        let Some(field) = compose.form.fields.get_mut(focus).filter(|f| is_recipient_field(f.label)) else { return false };
+        let (head, _) = split_last_recipient(&field.value);
+        let head = head.trim_end();
+        field.value = if head.is_empty() { format!("{token}, ") } else { format!("{head} {token}, ") };
+        self.sync_recipient_field();
+        true
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -2070,6 +2171,79 @@ mod tests {
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
         assert!(mail.draft_from(&Compose::new(empty, None, vec![], Priority::Normal, vec![], String::new())).is_err());
+    }
+
+    fn person(given: &str, family: &str, address: &str) -> Contact {
+        use bifrost_app::controls::contact_book::LabeledValue;
+        Contact { given_name: given.into(), family_name: family.into(), email_addresses: vec![LabeledValue::new(None, address.to_string())], ..Contact::default() }
+    }
+
+    fn type_in_focus(mail: &mut Mail, text: &str) {
+        mail.sheet.as_mut().unwrap().form_mut().type_text(text);
+        mail.sync_recipient_field();
+    }
+
+    #[test]
+    fn the_recipient_tail_is_what_is_being_typed() {
+        assert_eq!(split_last_recipient(""), ("", ""));
+        assert_eq!(split_last_recipient("an"), ("", "an"));
+        assert_eq!(split_last_recipient("ana@example.com, bo"), ("ana@example.com,", " bo"));
+        assert_eq!(split_last_recipient("Ana <ana@example.com>, "), ("Ana <ana@example.com>, ", ""));
+        assert_eq!(split_last_recipient("\"Smith, Ana\" <a@x.is>"), ("", "\"Smith, Ana\" <a@x.is>"), "a comma in quotes does not separate");
+    }
+
+    #[test]
+    fn typing_in_to_suggests_contacts_and_recents_and_a_choice_fills_the_field() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.recipients.record("bob@example.com", "Bob Recent");
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com"), person("Anders", "Holm", "anders@example.com")]);
+        mail.open_compose(None);
+        // an untouched To field offers the addresses used last
+        assert_eq!(mail.recipient_suggestions().iter().map(|s| s.address.as_str()).collect::<Vec<_>>(), ["bob@example.com"]);
+        type_in_focus(&mut mail, "an");
+        let got: Vec<String> = mail.recipient_suggestions().iter().map(|s| s.address.clone()).collect();
+        assert_eq!(got, ["anders@example.com", "ana@example.com"], "both contacts match at a word start, in name order");
+        assert!(mail.move_recipient_highlight(true) && mail.move_recipient_highlight(true));
+        assert_eq!(mail.recipient_field.highlighted(), Some(1));
+        assert!(mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, ");
+        assert!(mail.recipient_suggestions().is_empty(), "nothing is offered after a finished recipient");
+        // the recipient is split off for the draft as an address with its name
+        assert_eq!(message::split_addresses(compose_of(&mail).form.value("To")), ["Ana Lovelace <ana@example.com>"]);
+        // the next recipient does not offer the one already in the field
+        type_in_focus(&mut mail, "ana");
+        assert!(mail.recipient_suggestions().is_empty());
+        type_in_focus(&mut mail, "ders");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.accept_recipient(Some(0)));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, Anders Holm <anders@example.com>, ");
+    }
+
+    #[test]
+    fn the_message_field_and_a_closed_list_offer_nothing() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ana");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.close_recipient_list(), "Escape closes the list first");
+        assert!(mail.recipient_suggestions().is_empty());
+        assert!(!mail.close_recipient_list(), "with no list showing Escape belongs to the sheet");
+        assert!(!mail.accept_recipient(None), "nothing is highlighted");
+        let sheet = mail.sheet.as_mut().unwrap().form_mut();
+        sheet.focus_on(sheet.fields.len() - 1);
+        mail.sync_recipient_field();
+        assert!(mail.recipient_suggestions().is_empty(), "the message body has no suggestions");
+    }
+
+    #[test]
+    fn a_name_with_a_comma_is_kept_out_of_the_token() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Lovelace, Dr", "Ada", "ada@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ada");
+        assert!(mail.move_recipient_highlight(true) && mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "ada@example.com, ", "the bare address, so the list still splits cleanly");
     }
 
     fn compose_of(mail: &Mail) -> &Compose {

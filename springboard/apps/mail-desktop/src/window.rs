@@ -163,6 +163,8 @@ const KEY_ESCAPE: u32 = 1;
 const KEY_BACKSPACE: u32 = 8;
 const KEY_TAB: u32 = 9;
 const KEY_RETURN: u32 = 13;
+const KEY_UP: u32 = 38;
+const KEY_DOWN: u32 = 40;
 /// evdev V, for the paste chord.
 const KEY_V: u32 = 47;
 
@@ -177,6 +179,10 @@ enum Pending {
     /// Add Sender to Contacts: the address book is asked whether it has the address, and then given the person.
     ContactCheck(Person),
     ContactSave(Person),
+    /// Recipient suggestions: the answer to the question whether Mail may read the address book.
+    BookAccess,
+    /// Recipient suggestions: the names and email addresses of the address book.
+    BookFetch,
     /// A password item being deleted. Nothing follows its answer.
     Forget,
     /// A question to the spelling checker about `text`, the message as it was asked.
@@ -295,6 +301,8 @@ pub struct MailWindow {
     viewer_requests: Vec<u32>,
     /// The last message tapped and when, for the double-click that opens a viewer window.
     last_tap: Option<(u32, f64)>,
+    /// The address book was asked for while the compose sheet is open (asked again for the next compose sheet).
+    book_asked: bool,
     dirty: bool,
 }
 
@@ -584,6 +592,7 @@ impl MailWindow {
             laid: None,
             viewer_requests: Vec::new(),
             last_tap: None,
+            book_asked: false,
             dirty: true,
         };
         for account in &window.mail.accounts {
@@ -650,6 +659,7 @@ impl MailWindow {
             self.poll();
         }
         self.run_queue(ctx);
+        self.ensure_address_book(ctx);
         let scrolled = self.list_scroll.tick(t) | self.reader_scroll.tick(t);
         std::mem::take(&mut self.dirty) || scrolled
     }
@@ -709,6 +719,20 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = format!("Contacts: {e}"),
             },
+            Pending::BookAccess => {
+                // Mail reads the address book only when the person let it: an undecided Mail has the access sheet queued
+                // by the request, and the suggestions then come from the recent recipients alone
+                let reads = result.as_ref().ok().and_then(contacts::decode_status).is_some_and(|status| matches!(status, contacts::Status::Authorized | contacts::Status::Limited));
+                if reads {
+                    let request = contacts::fetch(ctx, &[ContactKey::GivenName, ContactKey::FamilyName, ContactKey::Organization, ContactKey::Emails], None);
+                    self.pending.insert(request, Pending::BookFetch);
+                }
+            }
+            Pending::BookFetch => {
+                if let Some(records) = result.as_ref().ok().and_then(contacts::decode_contacts) {
+                    self.mail.set_address_book(records.iter().map(people::book_entry).collect());
+                }
+            }
             Pending::ContactSave(person) => {
                 self.mail.status = match result {
                     Ok(_) => format!("Added {} to Contacts", person.address),
@@ -796,6 +820,25 @@ impl MailWindow {
         if self.mail.sheet.is_none() {
             return self.find_key(k);
         }
+        self.ensure_address_book(ctx);
+        // the suggestions under a recipient field: the arrows move through them, Return and Tab take the highlighted
+        // one, Escape closes the list
+        match &k {
+            KeyInput::Code(KEY_UP | KEY_DOWN) => {
+                let moved = self.mail.move_recipient_highlight(matches!(k, KeyInput::Code(KEY_DOWN)));
+                self.dirty |= moved;
+                return moved;
+            }
+            KeyInput::Code(KEY_RETURN | KEY_TAB) if self.mail.recipient_field.highlighted().is_some() && self.mail.accept_recipient(None) => {
+                self.dirty = true;
+                return true;
+            }
+            KeyInput::Code(KEY_ESCAPE) if self.mail.close_recipient_list() => {
+                self.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
         let multiline = self.focus_is_multiline();
         let picker = self.focus_is_picker();
         match k {
@@ -820,6 +863,7 @@ impl MailWindow {
             KeyInput::Code(KEY_ESCAPE) => self.cancel_sheet(),
             KeyInput::Code(_) => return false,
         }
+        self.mail.sync_recipient_field();
         self.dirty = true;
         true
     }
@@ -900,6 +944,7 @@ impl MailWindow {
             return false;
         }
         self.edit_form(|form| form.type_text(&text));
+        self.mail.sync_recipient_field();
         self.dirty = true;
         true
     }
@@ -2093,6 +2138,19 @@ impl MailWindow {
         self.change_message(0, Change::Replace { uid, raw: stripped.raw, flags });
     }
 
+    /// While a compose sheet is open, asks for the address book once so the To, Cc and Bcc fields can suggest people from
+    /// it. The sheet closing lets the next one ask again, which also refreshes the book.
+    fn ensure_address_book(&mut self, ctx: &Ctx) {
+        let composing = matches!(self.mail.sheet, Some(Sheet::Compose(_)));
+        if composing && !self.book_asked {
+            self.book_asked = true;
+            let request = contacts::request(ctx);
+            self.pending.insert(request, Pending::BookAccess);
+        } else if !composing {
+            self.book_asked = false;
+        }
+    }
+
     /// Message > Add Sender to Contacts: asks the address book whether it has the address, and saves the person if not.
     fn add_sender_to_contacts(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
@@ -2813,6 +2871,11 @@ impl MailWindow {
             crate::draw::Hit::FindPrevious => self.step_match(false),
             crate::draw::Hit::FindNext => self.step_match(true),
             crate::draw::Hit::FindDone => self.mail.find = None,
+            crate::draw::Hit::Choice(index) if matches!(self.mail.sheet, Some(Sheet::Compose(_))) => {
+                if !self.mail.accept_recipient(Some(index)) {
+                    return false;
+                }
+            }
             crate::draw::Hit::Choice(index) => {
                 let name = crate::draw::choices_of(&self.mail).get(index).cloned();
                 match name {
@@ -2831,6 +2894,7 @@ impl MailWindow {
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
                 }
+                self.mail.sync_recipient_field();
                 if choice {
                     // a yes or no field flips with each click
                     if let Some(field) = self.form_mut().and_then(|form| form.fields.get_mut(index)) {
