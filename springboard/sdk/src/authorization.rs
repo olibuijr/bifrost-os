@@ -16,8 +16,21 @@
 //! ```
 
 pub use bifrost_ui::access_control::{ObtainError, ObtainFlags, Presence, RightState};
+pub use bifrost_ui::auth_prompt::{AuthPrompt, PromptError, PromptPhase, DEFAULT_MAX_ATTEMPTS};
 
-use bifrost_ui::access_control::RightStore;
+use bifrost_ui::access_control::{Error as RightError, RightStore};
+
+/// Why a password prompt did not grant its rights.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PromptGrantError {
+    /// The request named no rights.
+    NoRights,
+    /// The prompt has not succeeded. Carries the phase it ended in (cancelled, locked out, fallback chosen, or still
+    /// prompting).
+    NotAuthorized(PromptPhase),
+    /// A right name is not valid, or the store is full. Nothing was granted.
+    Store(RightError),
+}
 
 /// The rights one app holds. Times are seconds since any fixed epoch the caller uses.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -41,6 +54,24 @@ impl Authorization {
         valid_for: Option<u64>,
     ) -> Result<Vec<String>, ObtainError> {
         self.store.obtain(rights, flags, now, presence, valid_for)
+    }
+
+    /// Grants the named rights after the user passed a device-owner prompt (see [`AuthPrompt`]). Only a prompt that
+    /// succeeded grants anything. The grant is all or nothing: every name is checked on a copy of the store, which
+    /// replaces this one only when every grant succeeds.
+    pub fn grant_after_prompt(&mut self, prompt: &AuthPrompt, rights: &[&str], now: u64, valid_for: Option<u64>) -> Result<Vec<String>, PromptGrantError> {
+        if rights.is_empty() {
+            return Err(PromptGrantError::NoRights);
+        }
+        if *prompt.phase() != PromptPhase::Succeeded {
+            return Err(PromptGrantError::NotAuthorized(prompt.phase().clone()));
+        }
+        let mut next = self.store.clone();
+        for right in rights {
+            next.grant(right, now, valid_for).map_err(PromptGrantError::Store)?;
+        }
+        self.store = next;
+        Ok(rights.iter().map(|r| r.to_string()).collect())
     }
 
     /// The state of one right at `now`.
@@ -105,5 +136,42 @@ mod tests {
         assert_eq!(auth.state("disk.format", 1), RightState::Unknown);
         let after = auth.obtain(&["disk.format"], ObtainFlags::default(), 1, None, None);
         assert_eq!(after, Err(ObtainError::NeedsInteraction("disk.format".to_string())));
+    }
+
+    fn passed_prompt() -> AuthPrompt {
+        let mut prompt = AuthPrompt::new("Install Calc", false, DEFAULT_MAX_ATTEMPTS).unwrap();
+        prompt.submit(true).unwrap();
+        prompt
+    }
+
+    #[test]
+    fn a_passed_prompt_grants_its_rights_for_their_lifetime() {
+        let mut auth = Authorization::new();
+        let got = auth.grant_after_prompt(&passed_prompt(), &["disk.format", "net.admin"], 100, Some(300));
+        assert_eq!(got, Ok(vec!["disk.format".to_string(), "net.admin".to_string()]));
+        assert_eq!(auth.state("net.admin", 399), RightState::Valid);
+        assert_eq!(auth.state("net.admin", 400), RightState::Expired);
+    }
+
+    #[test]
+    fn a_prompt_that_did_not_succeed_grants_nothing() {
+        let mut auth = Authorization::new();
+        let mut cancelled = AuthPrompt::new("Install Calc", true, DEFAULT_MAX_ATTEMPTS).unwrap();
+        cancelled.cancel().unwrap();
+        assert_eq!(auth.grant_after_prompt(&cancelled, &["disk.format"], 0, None), Err(PromptGrantError::NotAuthorized(PromptPhase::Cancelled)));
+
+        let mut locked = AuthPrompt::new("Install Calc", false, 1).unwrap();
+        locked.submit(false).unwrap();
+        assert_eq!(auth.grant_after_prompt(&locked, &["disk.format"], 0, None), Err(PromptGrantError::NotAuthorized(PromptPhase::LockedOut)));
+        assert_eq!(auth.state("disk.format", 0), RightState::Unknown);
+    }
+
+    #[test]
+    fn a_bad_right_name_grants_none_of_the_rights() {
+        let mut auth = Authorization::new();
+        let got = auth.grant_after_prompt(&passed_prompt(), &["disk.format", "Bad Name"], 0, None);
+        assert!(matches!(got, Err(PromptGrantError::Store(_))));
+        assert_eq!(auth.state("disk.format", 0), RightState::Unknown, "the valid name is not kept either");
+        assert_eq!(auth.grant_after_prompt(&passed_prompt(), &[], 0, None), Err(PromptGrantError::NoRights));
     }
 }
