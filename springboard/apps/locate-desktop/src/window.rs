@@ -12,6 +12,7 @@ use bifrost_app::widgets;
 use bifrost_core::json::Json;
 use bifrost_locate::control::{self, ParseError, Request};
 use bifrost_app::cloud_findmy::SharedLocation;
+use bifrost_app::core_location::LocationManager;
 use bifrost_locate::cloud::Link;
 use bifrost_locate::keys::{KeyEvent, Keys};
 use bifrost_locate::pairing::{Approvals, Enrollment};
@@ -63,12 +64,19 @@ pub struct LocateWindow {
     pub reporter: Reporter,
     pub locate_asked: bool,
     pub notice_seq: u32,
+    /// Location: the manager, the delegate its answers go to, the device id the cloud gave at registration, and
+    /// whether a fix is wanted for a report.
+    pub location: LocationManager,
+    pub fixes: crate::sync::Fixes,
+    pub device_id: Option<String>,
+    pub want_report: bool,
+    pub asked_location: bool,
     labels: TextCache,
 }
 
 impl LocateWindow {
     pub fn new(onboarded: bool) -> LocateWindow {
-        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), link: None, session_request: None, enrollment: Enrollment::Idle, device_key: None, approvals: Approvals::default(), shared: Vec::new(), reporter: Reporter::new(), locate_asked: false, notice_seq: 0, labels: TextCache::default() }
+        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), link: None, session_request: None, enrollment: Enrollment::Idle, device_key: None, approvals: Approvals::default(), shared: Vec::new(), reporter: Reporter::new(), locate_asked: false, notice_seq: 0, location: LocationManager::new(), fixes: Default::default(), device_id: None, want_report: false, asked_location: false, labels: TextCache::default() }
     }
 
     /// A keychain reply. A key that was just stored is the account key for this device. Returns whether a frame is needed.
@@ -86,7 +94,14 @@ impl LocateWindow {
     /// Makes sure this device holds an account key while Share My Location is on: the first device to turn it on
     /// creates the pair. Called after every change of the switch, with a context.
     pub fn ensure_key(&mut self, ctx: &bifrost_app::Ctx) {
-        if !self.panel.sharing() || self.keys.private().is_some() {
+        if !self.panel.sharing() {
+            return;
+        }
+        if !self.asked_location {
+            self.asked_location = true;
+            self.location.request_when_in_use_authorization(ctx);
+        }
+        if self.keys.private().is_some() {
             return;
         }
         if let Ok(random) = bifrost_app::entropy::bytes(32) {

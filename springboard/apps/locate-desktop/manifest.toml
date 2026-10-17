@@ -10,3 +10,6 @@ architecture = "x86_64-linux"
 permissions = ["network", "keychain", "notifications"]
 keychain_groups = ["is.bifrost.account"]
 window = "full-size"
+
+[privacy]
+location = "Locate sends this computer's position, encrypted so that only your own devices can read it, and only while Share My Location is on."

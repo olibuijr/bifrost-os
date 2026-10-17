@@ -6,6 +6,8 @@
 
 use crate::window::LocateWindow;
 use bifrost_app::cloud_findmy::{CloudFix, DeviceList};
+use bifrost_app::core_location::{AuthorizationStatus, Delegate, Location, LocationError};
+use bifrost_app::power_sources;
 use bifrost_app::controls::x25519::PrivateKey;
 use bifrost_app::keychain_groups;
 use bifrost_app::usernotif;
@@ -14,13 +16,37 @@ use bifrost_core::json::Json;
 use bifrost_locate::cloud::{Event, Job, Link};
 use bifrost_locate::pairing::PollAnswer;
 use bifrost_locate::reporting::Action;
-use bifrost_locate::sealing::{self, Sealed};
+use bifrost_locate::sealing::{self, Report, Sealed};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The keychain group and item the BifrOSt Account session is read from. The account sign-in stores it there.
 pub const SESSION_GROUP: &str = "is.bifrost.account";
 pub const SESSION_SERVICE: &str = "bc_session";
 pub const SESSION_ACCOUNT: &str = "session";
+
+/// The window's location delegate: the newest fix delivered, whether a request failed, and the authorization.
+#[derive(Default)]
+pub struct Fixes {
+    pub latest: Option<Location>,
+    pub failed: bool,
+    pub status: Option<AuthorizationStatus>,
+}
+
+impl Delegate for Fixes {
+    fn did_update_locations(&mut self, locations: &[Location]) {
+        if let Some(last) = locations.last() {
+            self.latest = Some(last.clone());
+        }
+    }
+
+    fn did_fail_with_error(&mut self, _error: LocationError) {
+        self.failed = true;
+    }
+
+    fn did_change_authorization(&mut self, status: AuthorizationStatus) {
+        self.status = Some(status);
+    }
+}
 
 /// How often a sharing device checks whether a report is due, in milliseconds.
 const REPORT_TICK_MS: f64 = 60_000.0;
@@ -44,21 +70,61 @@ impl LocateWindow {
         self.session_request = Some(keychain_groups::get(ctx, SESSION_GROUP, SESSION_SERVICE, SESSION_ACCOUNT));
     }
 
-    /// A service reply. A session that arrives starts the worker; nothing else is cloud-related. Returns whether it
-    /// was the session's reply.
+    /// A service reply: the session starts the worker, and a location reply goes to the location manager. Returns
+    /// whether the reply was one of ours.
     pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
-        if self.session_request != Some(request) {
-            return false;
+        if self.session_request == Some(request) {
+            self.session_request = None;
+            match keychain_groups::decode(result) {
+                Ok(bytes) => match String::from_utf8(bytes) {
+                    Ok(token) if !token.trim().is_empty() => self.connect(ctx, token.trim().to_string()),
+                    _ => ctx.log("locate: the account session is empty"),
+                },
+                Err(_) => ctx.log("locate: no BifrOSt Account session; the cloud is off"),
+            }
+            return true;
         }
-        self.session_request = None;
-        match keychain_groups::decode(result) {
-            Ok(bytes) => match String::from_utf8(bytes) {
-                Ok(token) if !token.trim().is_empty() => self.connect(ctx, token.trim().to_string()),
-                _ => ctx.log("locate: the account session is empty"),
-            },
-            Err(_) => ctx.log("locate: no BifrOSt Account session; the cloud is off"),
+        if self.location.handle_reply(result, &mut self.fixes) {
+            self.after_location(ctx);
+            return true;
         }
-        true
+        false
+    }
+
+    /// Acts on what the location manager delivered: a report waiting for a fix is sent, a failure is logged.
+    fn after_location(&mut self, ctx: &Ctx) {
+        if self.fixes.failed {
+            self.fixes.failed = false;
+            self.want_report = false;
+            ctx.log("locate: no location to report");
+        }
+        if let Some(fix) = self.fixes.latest.take() {
+            self.panel.location_status = Some(format!("Position known (within {} m)", fix.horizontal_accuracy.round() as i64));
+            if std::mem::take(&mut self.want_report) {
+                self.send_report(ctx, &fix);
+            }
+        }
+    }
+
+    /// Seals a report of this position to the account key and hands it to the worker. Needs the account key and the
+    /// device id the cloud gave at registration; without them nothing is sent.
+    fn send_report(&mut self, ctx: &Ctx, fix: &Location) {
+        let (Some(link), Some(public), Some(device)) = (self.link.as_ref(), self.keys.public(), self.device_id.clone()) else {
+            ctx.log("locate: report not sent (no account key or device id yet)");
+            return;
+        };
+        let Ok(random) = entropy::bytes(32) else { return };
+        let report = Report {
+            lat: fix.coordinate.latitude,
+            lon: fix.coordinate.longitude,
+            accuracy_m: Some(fix.horizontal_accuracy).filter(|a| *a >= 0.0),
+            at_unix: fix.timestamp as i64,
+            battery: power_sources::battery().and_then(|b| b.percent),
+        };
+        match sealing::seal_report(&public, &device, &report, &random) {
+            Ok(own) => link.send(Job::Report { own, copies: Vec::new() }),
+            Err(e) => ctx.log(&format!("locate: report not sealed: {e:?}")),
+        }
     }
 
     fn connect(&mut self, ctx: &Ctx, token: String) {
@@ -121,7 +187,10 @@ impl LocateWindow {
 
     fn handle(&mut self, ctx: &Ctx, event: Event) {
         match event {
-            Event::Registered => ctx.log("locate: device registered"),
+            Event::Registered(id) => {
+                self.device_id = Some(id);
+                ctx.log("locate: device registered");
+            }
             Event::Locate => self.locate_asked = true,
             Event::PlaySound => {}
             Event::Devices(mut list) => {
@@ -185,7 +254,7 @@ impl LocateWindow {
 
     /// Runs the reporter for this tick. The clear and the report go to the worker; the report itself is built in
     /// `report`, which reads the position.
-    fn step_report(&mut self, _ctx: &Ctx) -> bool {
+    fn step_report(&mut self, ctx: &Ctx) -> bool {
         if self.link.is_none() {
             return false;
         }
@@ -198,7 +267,11 @@ impl LocateWindow {
                 }
                 true
             }
-            Action::Report => false,
+            Action::Report => {
+                self.want_report = true;
+                self.location.request_location(ctx);
+                false
+            }
         }
     }
 }

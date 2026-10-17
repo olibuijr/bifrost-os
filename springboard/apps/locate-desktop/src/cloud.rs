@@ -46,8 +46,8 @@ pub enum Job {
 
 /// What the worker tells the window.
 pub enum Event {
-    /// The device is registered on the account.
-    Registered,
+    /// The device is registered on the account, under this device id.
+    Registered(String),
     /// The owner asked for a locate: report now.
     Locate,
     /// The owner asked for a sound on this device.
@@ -104,6 +104,13 @@ impl Link {
     }
 }
 
+/// The answer to the registration: the device id the cloud gave this device.
+fn register_id(status: u16, body: &str) -> Result<String, CloudError> {
+    fm::parse_report(status, body)?;
+    let parsed = bifrost_core::json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    parsed.get("device").and_then(|d| d.str_field("id")).filter(|s| !s.is_empty()).ok_or_else(|| CloudError::MalformedAnswer("no device id".into()))
+}
+
 /// The notification an account feed event shows, if the kind has one.
 pub fn notice(kind: &str) -> Option<(&'static str, &'static str)> {
     match kind {
@@ -127,8 +134,8 @@ struct Worker {
 fn run(token: &str, name: &str, jobs: Receiver<Job>, events: Sender<Event>, pipe: UnixStream) {
     let mut w = Worker { token: token.to_string(), events, pipe, watch: None, after: 0 };
     let register = fm::report_request(BASE_URL, token, Some(name), None, None);
-    if w.run_once("register", register, fm::parse_report).is_some() {
-        w.emit(Event::Registered);
+    if let Some(id) = w.run_once("register", register, register_id) {
+        w.emit(Event::Registered(id));
     }
     let mut last_sync: Option<Instant> = None;
     loop {
