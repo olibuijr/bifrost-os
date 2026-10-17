@@ -113,6 +113,12 @@ impl App for ClockApp {
             return clock::intent::perform_alarm(id, next);
         }
         let Some(c) = &mut self.clock else { return Err(intents::failed("Clock is not ready yet")) };
+        if id == clock::intent::SET_ALARM_INTENT {
+            let alarm = clock::intent::alarm_from_params(params)?;
+            let text = clock::intent::alarm_set_text(&alarm);
+            let id = c.add_alarm(alarm, t);
+            return Ok(IntentResult::value(Json::Num(id as f64)).with_dialog(&text));
+        }
         let (changed, done) = match id {
             "start-stopwatch" => (c.change_stopwatch(t, |s| s.start(t)), "Stopwatch started"),
             "stop-stopwatch" => (c.change_stopwatch(t, |s| s.stop(t)), "Stopwatch stopped"),
