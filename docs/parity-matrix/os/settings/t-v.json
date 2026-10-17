@@ -38,10 +38,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/timemachine.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/timemachine.rs",
    "status": "partial",
    "note": "has: Time Machine and Backup pages (timemachine.rs, backup_page.rs:34); missing: App Intents declarations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-backup intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TimerIntentsExtension.appex",
@@ -127,10 +141,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
    "status": "partial",
    "note": "has: Pointer settings page (mouse_page.rs); missing: the Trackpad pane intent and its App Intents",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-trackpad intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransparencySettingsIntents.appex",
@@ -196,10 +224,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/users_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
    "status": "partial",
    "note": "has: Users page; missing: App Intents declarations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-users-groups intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VpnSettingsIntents.appex",

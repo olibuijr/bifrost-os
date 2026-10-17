@@ -107,10 +107,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/game_controllers_page.rs",
    "status": "partial",
    "note": "has: game controller pages; missing: App Intents declarations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-game-controllers intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GeneralSettings.appex",

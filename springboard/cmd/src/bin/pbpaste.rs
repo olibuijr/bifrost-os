@@ -14,7 +14,7 @@ fn main() {
         println!("{PASTE_USAGE}");
         return;
     }
-    let data = match pasteboard::paste(parsed.prefer) {
+    let data = match pasteboard::paste_for(parsed.board.as_deref(), parsed.prefer) {
         Ok(data) => data,
         Err(e) => die("pbpaste", &e, 1),
     };

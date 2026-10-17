@@ -50,7 +50,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-keyboard pane intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-keyboard intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItems.appex",
@@ -99,7 +113,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-login-items intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-login-items intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Keyboard.prefPane",

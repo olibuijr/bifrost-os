@@ -67,10 +67,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
    "status": "partial",
    "note": "has: Mouse page; missing: App Intents declarations are not exposed",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-mouse intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NeptuneOneWallpaper.appex",
@@ -136,10 +150,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wifi_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/wifi_page.rs",
    "status": "partial",
    "note": "has: Wi-Fi and network pages; missing: App Intents declarations are not exposed",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-network intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettings.appex",
@@ -185,10 +213,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/notify_page.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/notify_page.rs",
    "status": "partial",
    "note": "has: Notifications page; missing: App Intents declarations are not exposed",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-notifications intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Mouse.prefPane",

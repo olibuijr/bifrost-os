@@ -41,7 +41,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-screen-time intent opens the Screen Time page (screentime/page.rs); missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-screen-time intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimePreferencesExtension.appex",
@@ -159,7 +173,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-privacy intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-privacy intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SettingsSystemExtensionController.appex",
@@ -228,7 +256,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-sharing intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-sharing intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriAttentionAndInvocationExtension.appex",
@@ -657,7 +699,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-software-update intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-software-update intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sound.appex",
@@ -706,7 +762,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-sound intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-sound intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightPreferenceExtension.appex",
@@ -835,7 +905,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-storage intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-storage intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/PreferencePanes/ScreenTime.prefPane",
@@ -997,10 +1081,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "bifrost": "springboard/src/shell/accessibility/speech.rs, springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "has: screen reader speech through espeak-ng at a fixed rate; missing: voice and rate settings page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_speech_voice_row"
+    }
+   ],
+   "ready_note": "covers: Screen Reader speech with the voice and rate page (pages.rs ScreenReaderSpeech, SPEECH_RATES, SPEECH_VOICES) and the speaker (speech.rs)."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Spotlight.prefPane",

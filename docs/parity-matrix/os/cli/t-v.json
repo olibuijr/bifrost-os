@@ -477,7 +477,16 @@
    "status": "partial",
    "note": "the time package is not in runtime-packages.txt or BASE_PACKAGES, so it is not guaranteed on the installed system",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "time --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "covers: GNU time from the time package, now listed in packaging/arch/runtime-packages.txt."
   },
   {
    "id": "path:/usr/bin/timer_analyser.d",

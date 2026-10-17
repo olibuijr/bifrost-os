@@ -1,5 +1,5 @@
-//! Binary property lists (`bplist00`), read side. The result is the same [`Plist`] value the XML and ASCII readers
-//! give, so every caller of [`crate::plist::parse_bytes`] gets binary files for free.
+//! Binary property lists (`bplist00`), both ways. [`parse`] reads a file into the same [`Plist`] value the XML and ASCII
+//! readers give, so every caller of [`crate::plist::parse_bytes`] gets binary files for free. [`write`] is the inverse.
 //!
 //! Mapping: a null object reads as an empty string (the XML writer does the same), dates are converted from seconds
 //! since 2001-01-01 to the UTC text form `YYYY-MM-DDTHH:MM:SSZ` (whole seconds), and UID values are refused because the
@@ -188,6 +188,183 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// Writes a whole binary property list (`bplist00`). Every value gets its own object (no sharing), so the output is
+/// larger than Apple's but reads back to the same value. Dates must be `YYYY-MM-DDTHH:MM:SSZ` (whole seconds, years from
+/// 0000), the form the reader gives; any other date text is refused rather than written wrong.
+pub fn write(root: &Plist) -> Result<Vec<u8>, String> {
+    let mut objects: Vec<Obj> = Vec::new();
+    let top = push(root, &mut objects)?;
+    let ref_size = width(objects.len().saturating_sub(1) as u64);
+    let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(objects.len());
+    for o in &objects {
+        let mut b = o.head.clone();
+        for r in &o.refs {
+            b.extend(be_bytes(*r as u64, ref_size));
+        }
+        bodies.push(b);
+    }
+    let total = MAGIC.len() + bodies.iter().map(Vec::len).sum::<usize>();
+    let offset_size = width(total as u64);
+    let mut out = MAGIC.to_vec();
+    let mut offsets = Vec::with_capacity(bodies.len());
+    for b in &bodies {
+        offsets.push(out.len() as u64);
+        out.extend_from_slice(b);
+    }
+    let table_at = out.len() as u64;
+    for off in offsets {
+        out.extend(be_bytes(off, offset_size));
+    }
+    out.extend([0u8; 6]);
+    out.push(offset_size as u8);
+    out.push(ref_size as u8);
+    out.extend((objects.len() as u64).to_be_bytes());
+    out.extend((top as u64).to_be_bytes());
+    out.extend(table_at.to_be_bytes());
+    Ok(out)
+}
+
+/// One object to write: its marker and scalar bytes, then the references it lists (written once the reference width is
+/// known).
+struct Obj {
+    head: Vec<u8>,
+    refs: Vec<usize>,
+}
+
+/// Adds `v` and everything under it to `objects`, children first, and returns the index of `v`.
+fn push(v: &Plist, objects: &mut Vec<Obj>) -> Result<usize, String> {
+    let (head, refs) = match v {
+        Plist::Bool(false) => (vec![0x08], Vec::new()),
+        Plist::Bool(true) => (vec![0x09], Vec::new()),
+        Plist::Int(n) => (int_body(*n), Vec::new()),
+        Plist::Real(f) => {
+            let mut h = vec![0x23];
+            h.extend(f.to_be_bytes());
+            (h, Vec::new())
+        }
+        Plist::Date(text) => {
+            let secs = parse_unix(text).ok_or_else(|| format!("date {text} is not in YYYY-MM-DDTHH:MM:SSZ form"))?;
+            let mut h = vec![0x33];
+            h.extend(((secs as f64) - DATE_EPOCH_OFFSET).to_be_bytes());
+            (h, Vec::new())
+        }
+        Plist::Data(d) => {
+            let mut h = marker(0x4, d.len());
+            h.extend_from_slice(d);
+            (h, Vec::new())
+        }
+        Plist::Str(s) if s.is_ascii() => {
+            let mut h = marker(0x5, s.len());
+            h.extend_from_slice(s.as_bytes());
+            (h, Vec::new())
+        }
+        Plist::Str(s) => {
+            let units: Vec<u16> = s.encode_utf16().collect();
+            let mut h = marker(0x6, units.len());
+            for u in units {
+                h.extend(u.to_be_bytes());
+            }
+            (h, Vec::new())
+        }
+        Plist::Array(items) => {
+            let mut refs = Vec::with_capacity(items.len());
+            for item in items {
+                refs.push(push(item, objects)?);
+            }
+            (marker(0xA, items.len()), refs)
+        }
+        Plist::Dict(pairs) => {
+            let mut refs = Vec::with_capacity(pairs.len() * 2);
+            for (k, _) in pairs {
+                refs.push(push(&Plist::Str(k.clone()), objects)?);
+            }
+            for (_, val) in pairs {
+                refs.push(push(val, objects)?);
+            }
+            (marker(0xD, pairs.len()), refs)
+        }
+    };
+    objects.push(Obj { head, refs });
+    Ok(objects.len() - 1)
+}
+
+/// The marker byte for a kind with its element count. Counts of 15 or more follow the marker as an integer object.
+fn marker(kind: u8, len: usize) -> Vec<u8> {
+    if len < 0x0F {
+        vec![(kind << 4) | len as u8]
+    } else {
+        let mut h = vec![(kind << 4) | 0x0F];
+        h.extend(int_body(len as i64));
+        h
+    }
+}
+
+/// An integer object: the smallest of 1, 2, 4 or 8 bytes that holds `n`. Negative values take the 8-byte form.
+fn int_body(n: i64) -> Vec<u8> {
+    match n {
+        0..=0xFF => vec![0x10, n as u8],
+        0..=0xFFFF => {
+            let mut h = vec![0x11];
+            h.extend((n as u16).to_be_bytes());
+            h
+        }
+        0..=0xFFFF_FFFF => {
+            let mut h = vec![0x12];
+            h.extend((n as u32).to_be_bytes());
+            h
+        }
+        _ => {
+            let mut h = vec![0x13];
+            h.extend(n.to_be_bytes());
+            h
+        }
+    }
+}
+
+/// The smallest width in bytes (1, 2, 4 or 8) that holds `max`.
+fn width(max: u64) -> usize {
+    match max {
+        0..=0xFF => 1,
+        0..=0xFFFF => 2,
+        0..=0xFFFF_FFFF => 4,
+        _ => 8,
+    }
+}
+
+/// The low `n` bytes of `v`, big-endian.
+fn be_bytes(v: u64, n: usize) -> Vec<u8> {
+    v.to_be_bytes()[8 - n..].to_vec()
+}
+
+/// Seconds since the Unix epoch for a `YYYY-MM-DDTHH:MM:SSZ` text (the inverse of [`format_unix`] on whole seconds).
+pub fn parse_unix(text: &str) -> Option<i64> {
+    let body = text.strip_suffix('Z')?;
+    let (date, time) = body.split_once('T')?;
+    let mut dp = date.splitn(3, '-');
+    let y: i64 = dp.next()?.parse().ok()?;
+    let m: i64 = dp.next()?.parse().ok()?;
+    let d: i64 = dp.next()?.parse().ok()?;
+    let mut tp = time.splitn(3, ':');
+    let h: i64 = tp.next()?.parse().ok()?;
+    let mi: i64 = tp.next()?.parse().ok()?;
+    let s: i64 = tp.next()?.parse().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || !(0..=23).contains(&h) || !(0..=59).contains(&mi) || !(0..=60).contains(&s) {
+        return None;
+    }
+    Some(days_from_civil(y, m, d) * 86_400 + h * 3600 + mi * 60 + s)
+}
+
+/// Day count from 1970-01-01 for a Gregorian date (proleptic calendar); the inverse of `civil_from_days`.
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = if m > 2 { m - 3 } else { m + 9 };
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 /// `YYYY-MM-DDTHH:MM:SSZ` for seconds since the Unix epoch (UTC, whole seconds).
 pub fn format_unix(secs: f64) -> String {
     let s = secs.floor() as i64;
@@ -304,5 +481,42 @@ mod tests {
         b.extend(0u64.to_be_bytes());
         b.extend(10u64.to_be_bytes());
         assert!(parse(&b).is_err());
+    }
+
+    #[test]
+    fn written_lists_read_back_to_the_same_value() {
+        let v = Plist::Dict(vec![
+            ("flag".into(), Plist::Bool(true)),
+            ("off".into(), Plist::Bool(false)),
+            ("small".into(), Plist::Int(7)),
+            ("mid".into(), Plist::Int(70_000)),
+            ("neg".into(), Plist::Int(-7)),
+            ("big".into(), Plist::Int(1 << 40)),
+            ("ratio".into(), Plist::Real(0.25)),
+            ("when".into(), Plist::Date("2026-10-13T08:00:00Z".into())),
+            ("blob".into(), Plist::Data(vec![0, 1, 2, 255])),
+            ("name".into(), Plist::Str("Hello".into())),
+            ("long".into(), Plist::Str("a string of more than fifteen bytes".into())),
+            ("uni".into(), Plist::Str("\u{c5}rsl\u{f3}\u{f0}".into())),
+            ("list".into(), Plist::Array(vec![Plist::Int(1), Plist::Array(Vec::new()), Plist::Dict(Vec::new())])),
+        ]);
+        let bytes = write(&v).unwrap();
+        assert!(bytes.starts_with(MAGIC));
+        assert_eq!(parse(&bytes), Ok(v));
+    }
+
+    #[test]
+    fn refuses_dates_it_cannot_write_exactly() {
+        assert!(write(&Plist::Date("yesterday".into())).is_err());
+        assert!(write(&Plist::Date("2026-10-13T08:00:00.5Z".into())).is_err());
+        assert!(write(&Plist::Date("2026-13-01T00:00:00Z".into())).is_err());
+    }
+
+    #[test]
+    fn date_text_converts_to_and_from_unix_seconds() {
+        assert_eq!(parse_unix("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_unix("2001-01-01T00:00:00Z"), Some(DATE_EPOCH_OFFSET as i64));
+        assert_eq!(parse_unix("2025-10-13T08:00:00Z"), Some(1_760_342_400));
+        assert_eq!(parse_unix("2024-02-29T23:59:59Z").map(|s| format_unix(s as f64)), Some("2024-02-29T23:59:59Z".to_string()));
     }
 }

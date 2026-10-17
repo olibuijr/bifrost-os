@@ -5,7 +5,8 @@
 //! - Dictionaries keep their key order as read. Only the human-readable and JSON pretty forms sort keys.
 //! - A key path is dot-separated. A component names a dictionary key, or a whole number that indexes an array.
 //! - Dates are kept as their text (for example `2026-10-13T08:00:00Z`) and are not checked as calendar values.
-//! - Binary property lists are read by [`crate::plist_binary`] through [`parse_bytes`]. They are not written yet.
+//! - Binary property lists are read by [`crate::plist_binary`] through [`parse_bytes`] and written by
+//!   [`crate::plist_binary::write`].
 
 use std::fmt::Write as _;
 

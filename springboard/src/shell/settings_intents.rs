@@ -43,6 +43,12 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-keyboard", title: "Open Keyboard", description: "Show the keyboard settings", page: PageId::Keyboard },
     SettingsIntent { id: "open-keyboard-shortcuts", title: "Open Keyboard Shortcuts", description: "Show the keyboard shortcuts the shell answers to", page: PageId::Shortcuts },
     SettingsIntent { id: "open-login-items", title: "Open Login Items", description: "Show the apps that start at login and the app extensions", page: PageId::LoginItems },
+    SettingsIntent { id: "open-network", title: "Open Network", description: "Show the network interfaces and their settings", page: PageId::Network },
+    SettingsIntent { id: "open-notifications", title: "Open Notifications", description: "Show the notification settings for each app", page: PageId::Notifications },
+    SettingsIntent { id: "open-mouse", title: "Open Mouse", description: "Show the pointer and mouse settings", page: PageId::Mouse },
+    SettingsIntent { id: "open-trackpad", title: "Open Trackpad", description: "Show the trackpad gesture and pointer settings", page: PageId::Trackpad },
+    SettingsIntent { id: "open-game-controllers", title: "Open Game Controllers", description: "Show the connected game controllers", page: PageId::GameControllers },
+    SettingsIntent { id: "open-backup", title: "Open Backup", description: "Show the backups of this computer's data", page: PageId::Backup },
 ];
 
 /// The intent with this id, if the catalogue has one.
@@ -97,6 +103,9 @@ mod tests {
     fn find_and_page_for_resolve_catalogue_entries() {
         assert_eq!(page_for("open-keyboard"), Some(PageId::Keyboard));
         assert_eq!(page_for("open-login-items"), Some(PageId::LoginItems));
+        assert_eq!(page_for("open-network"), Some(PageId::Network));
+        assert_eq!(page_for("open-trackpad"), Some(PageId::Trackpad));
+        assert_eq!(page_for("open-backup"), Some(PageId::Backup));
         assert_eq!(find("open-displays").map(|i| i.title), Some("Open Displays"));
         assert_eq!(page_for("missing"), None);
         assert_eq!(find(""), None);
