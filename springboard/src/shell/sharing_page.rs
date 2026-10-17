@@ -6,7 +6,7 @@
 use super::forms::{Prompt, Purpose};
 use super::list::{Group, Item};
 use super::pages::Action;
-use crate::privd::accounts;
+use crate::privd::{accounts, screen_sharing};
 
 /// The sharing services the page switches, as (privd id, row label), in the order they are listed.
 pub const SERVICES: [(&str, &str); 4] = [("remote_login", "Remote Login"), ("file_sharing", "File Sharing"), ("screen_sharing", "Screen Sharing"), ("printer_sharing", "Printer Sharing")];
@@ -18,6 +18,8 @@ pub enum Edit {
     ComputerName,
     /// starts (`on`) or stops one service by its privd id
     Service { id: &'static str, on: bool },
+    /// opens the prompt for the account that may sign in to Screen Sharing
+    ScreenSharingAccount,
 }
 
 /// The computer name and the service states as the system has them now.
@@ -25,6 +27,8 @@ pub enum Edit {
 pub struct View {
     pub computer: String,
     pub services: Vec<(&'static str, bool)>,
+    /// the account Screen Sharing lets in (the allow list privd keeps), None until one is chosen
+    pub screen_user: Option<String>,
 }
 
 /// The pretty host name in `/etc/machine-info` (`PRETTY_HOSTNAME=`), quotes removed; `None` when it is absent or empty.
@@ -45,14 +49,16 @@ impl View {
     pub fn load() -> View {
         let machine = std::fs::read_to_string("/etc/machine-info").unwrap_or_default();
         let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
-        View::from_text(&machine, &host, systemctl_enabled)
+        let mut v = View::from_text(&machine, &host, systemctl_enabled);
+        v.screen_user = std::fs::read_to_string(screen_sharing::USERS).ok().and_then(|t| screen_sharing::user_from(&t));
+        v
     }
 
     /// The view built from the files' text and a `unit -> enabled` answer.
     pub fn from_text(machine_info: &str, hostname: &str, enabled: impl Fn(&str) -> bool) -> View {
         let computer = pretty_name(machine_info).unwrap_or_else(|| hostname.trim().to_string());
         let services: Vec<(&'static str, bool)> = SERVICES.iter().map(|&(id, _)| (id, accounts::service_unit(id).is_some_and(|unit| enabled(unit)))).collect();
-        View { computer, services }
+        View { computer, services, screen_user: None }
     }
 
     pub fn is_on(&self, id: &str) -> bool {
@@ -81,14 +87,19 @@ pub fn groups(v: &View) -> Vec<Group> {
         })
         .collect();
     let services = Group::new(items).footer("A service that is on starts now and whenever the computer starts. Turning it off stops it.");
-    vec![name, services]
+    let account = Group::new(vec![Item::new("Screen Sharing Account").value(v.screen_user.as_deref().unwrap_or("Not Set")).action(Action::Sharing(Edit::ScreenSharingAccount))])
+        .footer("Screen Sharing needs this account's name and password to connect, and the connection is encrypted. It is reachable only on the local network.");
+    vec![name, services, account]
 }
 
 /// Applies a Sharing edit: the name opens its prompt (`Some`), a service switch runs now (`None`).
 pub fn apply(edit: &Edit, v: &View) -> Result<Option<Prompt>, String> {
     match edit {
         Edit::ComputerName => Ok(Some(Prompt::computer_name(&v.computer))),
+        // Screen Sharing never starts without an account that may sign in: the switch asks for it first
+        Edit::Service { id: "screen_sharing", on: true } if v.screen_user.is_none() => Ok(Some(Prompt::screen_sharing_account("", true))),
         Edit::Service { id, on } => crate::privd_client::connect().set_service(id, *on).map(|_| None).map_err(|e| e.message),
+        Edit::ScreenSharingAccount => Ok(Some(Prompt::screen_sharing_account(v.screen_user.as_deref().unwrap_or(""), false))),
     }
 }
 
@@ -98,6 +109,13 @@ pub fn finish(purpose: &Purpose, text: &str) -> Result<(), String> {
     match purpose {
         Purpose::ComputerName => c.set_names(Some(text.trim()), None).map_err(|e| e.message),
         Purpose::LocalHostname => c.set_names(None, Some(text)).map_err(|e| e.message),
+        Purpose::ScreenSharingAccount { start } => {
+            c.screen_sharing_configure(text.trim()).map_err(|e| e.message)?;
+            if *start {
+                c.set_service("screen_sharing", true).map_err(|e| e.message)?;
+            }
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -299,6 +317,38 @@ mod tests {
         assert!(!v.is_on("remote_login"));
         v.set_service("screen_sharing", false);
         assert!(!v.is_on("screen_sharing"));
+    }
+
+    #[test]
+    fn screen_sharing_cannot_be_switched_on_before_an_account_is_chosen() {
+        let v = View::from_text("", "", off);
+        assert_eq!(v.screen_user, None);
+        let p = apply(&Edit::Service { id: "screen_sharing", on: true }, &v).expect("no privd call").expect("the account prompt");
+        assert_eq!(p.purpose, Purpose::ScreenSharingAccount { start: true });
+        assert_eq!(p.ok, "Turn On");
+        assert_eq!(p.initial, "");
+    }
+
+    #[test]
+    fn the_account_row_shows_the_account_and_edits_it() {
+        let mut v = View::from_text("", "", off);
+        assert_eq!(groups(&v)[2].items[0].value, "Not Set");
+        v.screen_user = Some("olof".into());
+        let g = groups(&v);
+        assert_eq!(g[2].items[0].label, "Screen Sharing Account");
+        assert_eq!(g[2].items[0].value, "olof");
+        assert_eq!(g[2].items[0].action, Action::Sharing(Edit::ScreenSharingAccount));
+        let p = apply(&Edit::ScreenSharingAccount, &v).expect("no privd call").expect("a prompt");
+        assert_eq!(p.purpose, Purpose::ScreenSharingAccount { start: false });
+        assert_eq!(p.initial, "olof");
+        assert!(super::super::forms::acceptable(&p.purpose, "olof") && !super::super::forms::acceptable(&p.purpose, "Olof Dev"));
+    }
+
+    #[test]
+    fn the_screen_sharing_switch_is_the_packaged_unit() {
+        let v = View::from_text("", "", |unit| unit == "bifrost-wayvnc.service");
+        assert!(v.is_on("screen_sharing"));
+        assert!(!v.is_on("remote_login"));
     }
 
     #[test]

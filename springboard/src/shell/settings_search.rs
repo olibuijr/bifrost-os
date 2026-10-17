@@ -226,6 +226,7 @@ fn walked(id: PageId) -> bool {
             | PageId::GameControllers
             | PageId::FontPick(_)
             | PageId::Graphics
+            | PageId::StartupDisk
     )
 }
 

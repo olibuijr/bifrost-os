@@ -37,6 +37,13 @@ Entitlements are separate from permissions and first-party only (`is.olibuijr.*`
 `system-app` mounts the system journal read-only so `LogStore::local()` works (the Console app); it is set by
 `Policy::with_entitlements`, never from `permissions`.
 
+`entitlements = ["endpoint-security"]` on a first-party `system-app` lets the app subscribe to file open, exec, modify and
+close events of the whole computer, and to allow or deny an open or exec before it happens (the `endpoint-security`
+shell service, `bifrost_app::endpoint_security`). The sandbox gets nothing extra: the root half (`bifrost-privd`, fanotify,
+`privd/endpoint_security.rs`) serves only the shell, and the shell service checks the manifest (`services::app_has_entitlement`)
+on every call, so an app without the entitlement cannot subscribe and an app that stops running loses its subscription.
+Only the path and process id of an event are passed on; an authorization nobody answers within two seconds is allowed.
+
 The `camera` and `screen` capabilities are restricted to the Photo Booth and Color Meter package identities respectively; another package declaring either is rejected at launch. A `camera` declaration only exposes the host's enumerated V4L2 streaming-capture nodes matching supported formats, one node per bind. The `screen` declaration does not itself grant capture: `screen_sample` and window-image services require both this manifest capability and the person's authorized screen-recording status. A missing declaration or denied/not-yet-authorized consent fails closed.
 
 Unsupported permissions fail launch. Storage currently grants the full home,

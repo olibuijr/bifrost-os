@@ -233,6 +233,8 @@ impl PageView<'_> {
 struct Loads {
     fonts: Loaded<super::pages::FontsView>,
     gpus: Loaded<Vec<super::gpu_page::Gpu>>,
+    /// General > Startup Disk: the firmware boot table (`startup_disk_page::View::load`)
+    startup: Loaded<super::startup_disk_page::View>,
     crashes: Loaded<Vec<super::diag::CrashEntry>>,
     /// failed app and system installs, newest first (`install_log::recent`)
     install_failures: Loaded<Vec<crate::install_log::Failure>>,
@@ -259,6 +261,7 @@ impl Loads {
         let mut landed = false;
         landed |= self.fonts.poll();
         landed |= self.gpus.poll();
+        landed |= self.startup.poll();
         landed |= self.crashes.poll();
         landed |= self.install_failures.poll();
         landed |= self.latest_backup.poll();
@@ -276,7 +279,7 @@ impl Loads {
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy() || self.startup.busy()
     }
 }
 
@@ -399,6 +402,8 @@ pub struct Settings {
     diag_note: String,
     /// the upload's answer, while one runs
     diag_rx: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
+    /// Startup Disk: the entry whose change waits for the administrator approval on the password sheet
+    startup_pending: Option<String>,
     /// a crash log the user tapped, for the shell to show (see `take_view_request`)
     view_request: Option<PathBuf>,
     /// Settings > Screen Saver > Preview was tapped; the shell starts the saver (see `take_screensaver_preview`)
@@ -617,6 +622,7 @@ impl Settings {
             backup_note: String::new(),
             diag_note: String::new(),
             diag_rx: None,
+            startup_pending: None,
             view_request: None,
             screensaver_preview: false,
             update_pct: 0,
@@ -738,6 +744,7 @@ impl Settings {
                 s
             }
             PageId::Graphics => super::gpu_page::spec(self.loads.gpus.get().map(Vec::as_slice)),
+            PageId::StartupDisk => super::startup_disk_page::spec(self.loads.startup.get(), self.startup_pending.as_deref()),
             PageId::Sharing => super::pages::sharing_spec(&self.opts, self.loads.sharing.get()),
             PageId::PrintScan => super::print_scan_page::spec(self.loads.printers.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
@@ -1017,6 +1024,7 @@ impl Settings {
                 self.resolution = super::services::display_services::load_resolution(&dir);
             }
             PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
+            PageId::StartupDisk => self.loads.startup.start("startup-disk-read", super::startup_disk_page::View::load),
             PageId::Diagnostics => {
                 let installs = dir.clone();
                 self.loads.crashes.start("diag-read", move || diag::load(&dir));
@@ -1609,6 +1617,9 @@ impl Settings {
             }
             frame = true;
         }
+        if self.startup_disk_poll(ui) {
+            frame = true;
+        }
         if let Some(res) = self.diag_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.diag_rx = None;
             self.diag_note = match res {
@@ -2068,7 +2079,7 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname | super::forms::Purpose::ScreenSharingAccount { .. } => {
                     let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
                     self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
                     r
@@ -2186,6 +2197,51 @@ impl Settings {
         self.loads.users.start("users-read", super::users_page::View::load);
         self.rebuild_visible(ui);
         vec![]
+    }
+
+    /// A Startup Disk row was tapped: the change waits for an administrator's approval on the shell's password sheet
+    /// (`local_auth::queue`), and `startup_disk_poll` finishes it when the sheet answers.
+    fn startup_disk_act(&mut self, ui: &Ui, edit: super::startup_disk_page::Edit) -> Vec<Effect> {
+        use super::services::local_auth;
+        use super::startup_disk_page as page;
+        let picked = match self.loads.startup.get() {
+            Some(v) => page::choose(v, &edit).map(|d| (d.id.clone(), page::reason(d))),
+            None => Err("The list of systems has not been read yet.".to_string()),
+        };
+        match picked {
+            Ok((id, reason)) if self.startup_pending.is_none() => {
+                // an answer left from an earlier sheet must not approve this change
+                let _ = local_auth::take_result(page::APP);
+                if local_auth::is_waiting(page::APP) || !local_auth::queue(page::APP, &reason) {
+                    self.alert = Some(Alert::new(ui, Command::Notice("An approval is already waiting. Finish it first.".into())));
+                } else {
+                    self.startup_pending = Some(id);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => self.alert = Some(Alert::new(ui, Command::Notice(e))),
+        }
+        self.rebuild_visible(ui);
+        vec![]
+    }
+
+    /// Takes the password sheet's answer for a waiting Startup Disk change: an approval sets the entry through privd,
+    /// a cancel does nothing, anything else says why nothing changed. True when the page changed.
+    fn startup_disk_poll(&mut self, ui: &Ui) -> bool {
+        use super::startup_disk_page as page;
+        let Some(id) = self.startup_pending.clone() else { return false };
+        let Some(answer) = super::services::local_auth::take_result(page::APP) else { return false };
+        self.startup_pending = None;
+        match page::outcome(answer) {
+            page::Outcome::Approved => match page::apply(&id) {
+                Ok(()) => self.loads.startup.start("startup-disk-read", page::View::load),
+                Err(e) => self.alert = Some(Alert::new(ui, Command::Notice(e))),
+            },
+            page::Outcome::Cancelled => {}
+            page::Outcome::Refused(why) => self.alert = Some(Alert::new(ui, Command::Notice(why))),
+        }
+        self.rebuild_visible(ui);
+        true
     }
 
     /// Shows what a page edit asked for: the next prompt on a sheet, the page rebuilt, or an alert with the reason
@@ -2985,6 +3041,7 @@ impl Settings {
                 self.edit_result(ui, t, r);
                 vec![]
             }
+            Action::StartupDisk(edit) => self.startup_disk_act(ui, edit),
             Action::PrintScan(edit) => {
                 let r = super::print_scan_page::apply(&edit);
                 self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
@@ -3795,6 +3852,75 @@ mod tests {
         st.open_page(&ui, "Print & Scan", 0.0);
         assert_eq!(st.page(), PageId::PrintScan);
         assert!(st.open_page(&ui, "No Such Pane", 0.0).is_empty());
+    }
+
+    /// Opens General > Startup Disk with a boot table of two usable systems landed.
+    fn startup_page(ui: &Ui) -> (Settings, Prefs) {
+        use super::super::startup_disk_page::{Disk, View};
+        let (mut st, mut prefs) = settings(ui, &wifi_info());
+        tap_row(&mut st, ui, &mut prefs, "General");
+        tap_row(&mut st, ui, &mut prefs, "Startup Disk");
+        assert_eq!(st.page(), PageId::StartupDisk);
+        let disk = |id: &str, label: &str, default: bool| Disk { id: id.into(), label: label.into(), active: true, current: default, next: false, default };
+        st.loads.startup.set(View { disks: vec![disk("0001", "BifrOSt", true), disk("0003", "Rescue", false)], error: None });
+        st.rebuild_visible(ui);
+        (st, prefs)
+    }
+
+    #[test]
+    fn the_screen_sharing_switch_asks_for_an_account_before_anything_starts() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &wifi_info());
+        tap_row(&mut st, &ui, &mut prefs, "Sharing");
+        assert_eq!(st.page(), PageId::Sharing);
+        st.loads.sharing.set(super::super::sharing_page::View { computer: "Midget".into(), services: vec![("screen_sharing", false)], screen_user: None });
+        st.rebuild_visible(&ui);
+        tap_row(&mut st, &ui, &mut prefs, "Screen Sharing");
+        assert!(st.sheet.is_some(), "the account prompt is up");
+        assert!(st.alert().is_none(), "nothing was sent to privd");
+    }
+
+    #[test]
+    fn startup_disk_is_a_general_row_that_lists_the_systems() {
+        let ui = super::super::tests::ui();
+        let (st, _prefs) = startup_page(&ui);
+        let spec = st.spec_for(PageId::StartupDisk);
+        let labels: Vec<&str> = spec.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["BifrOSt", "Rescue"]);
+        assert_eq!(spec.groups[0].items[1].action, Action::StartupDisk(super::super::startup_disk_page::Edit::Choose("0003".into())));
+    }
+
+    #[test]
+    fn choosing_a_system_waits_for_the_password_sheet_and_a_cancel_changes_nothing() {
+        use super::super::services::local_auth::{self, Failure};
+        use super::super::startup_disk_page::APP;
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = startup_page(&ui);
+        tap_row(&mut st, &ui, &mut prefs, "Rescue");
+        assert_eq!(st.startup_pending.as_deref(), Some("0003"));
+        let request = local_auth::take_request().expect("the sheet is queued");
+        assert_eq!(request.app, APP);
+        assert!(request.reason.contains("Rescue"));
+        // while the sheet is up a second tap does not queue another
+        assert!(local_auth::take_request().is_none());
+        local_auth::finish(APP, Err(Failure::UserCancel));
+        st.tick(&ui, 2e9);
+        assert_eq!(st.startup_pending, None);
+        assert!(st.alert().is_none(), "a cancel says nothing");
+    }
+
+    #[test]
+    fn a_wrong_password_is_reported_and_sets_nothing() {
+        use super::super::services::local_auth::{self, Failure};
+        use super::super::startup_disk_page::APP;
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = startup_page(&ui);
+        tap_row(&mut st, &ui, &mut prefs, "Rescue");
+        assert!(local_auth::take_request().is_some());
+        local_auth::finish(APP, Err(Failure::AuthenticationFailed));
+        st.tick(&ui, 2e9);
+        assert_eq!(st.startup_pending, None);
+        assert!(st.alert().is_some(), "the person is told the change did not happen");
     }
 
     #[test]

@@ -15,11 +15,13 @@ use std::io::{self, Read, Write};
 pub mod accounts;
 pub mod auth;
 pub mod disk;
+pub mod endpoint_security;
 pub mod gate;
 pub mod loopdev;
 pub mod methods;
 pub mod pam;
 pub mod proto;
+pub mod screen_sharing;
 pub mod server;
 
 pub const SOCK: &str = "/run/bifrost/privd.sock";

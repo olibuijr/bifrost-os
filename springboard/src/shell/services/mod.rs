@@ -110,6 +110,7 @@ pub mod domains;
 pub mod peer_hub;
 pub mod running_board;
 pub mod system_intents;
+pub mod endpoint_security;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -126,6 +127,18 @@ pub trait SystemService {
 /// Whether the installed app `app_id` lists `permission` in its manifest.
 pub fn app_has_permission(app_id: &str, permission: &str) -> bool {
     super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == permission))
+}
+
+/// Whether an app of this `kind` with these manifest `declared` entitlements holds `entitlement`. An entitlement is
+/// honoured only when the manifest declares it, only for a first-party app (`is.olibuijr.*`) and only for a system app,
+/// the same rule as `app_policy::Policy::with_entitlements`: a store package cannot grant itself one.
+pub fn entitlement_held(app_id: &str, kind: &str, declared: &[String], entitlement: &str) -> bool {
+    app_id.starts_with("is.olibuijr.") && kind == super::kinds::SYSTEM_APP && declared.iter().any(|e| e == entitlement)
+}
+
+/// Whether the installed app `app_id` holds `entitlement` (see [`entitlement_held`]).
+pub fn app_has_entitlement(app_id: &str, entitlement: &str) -> bool {
+    super::apphost::installed().iter().find(|a| a.manifest.id == app_id).is_some_and(|a| entitlement_held(app_id, &a.manifest.kind, &a.manifest.entitlements, entitlement))
 }
 
 /// The process id of the running installed app `app_id`, when it runs as a child of the shell.
@@ -211,6 +224,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(peer_hub::PeerHub::new()),
         Box::new(running_board::RunningBoard),
         Box::new(system_intents::SystemIntents),
+        Box::new(endpoint_security::EndpointSecurity::default()),
     ]
 }
 

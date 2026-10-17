@@ -138,6 +138,8 @@ pub enum PageId {
     Overview,
     /// Sharing (desktop): the computer name, the sharing services, Nearby Share and AirPlay & Handoff
     Sharing,
+    /// General > Startup Disk (desktop): the systems the firmware can start and the one it starts (see `startup_disk_page`)
+    StartupDisk,
     /// Print & Scan (desktop): the printers the printing service knows, the default one, and adding one (`print_scan_page`)
     PrintScan,
     /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
@@ -503,6 +505,8 @@ pub enum Action {
     Users(super::users_page::Edit),
     /// Sharing: change the computer name or switch a sharing service (see `sharing_page`)
     Sharing(super::sharing_page::Edit),
+    /// Startup Disk: choose the system to start from, after an administrator approves (see `startup_disk_page`)
+    StartupDisk(super::startup_disk_page::Edit),
     /// Print & Scan: make a printer the default, or add one (see `print_scan_page`)
     PrintScan(super::print_scan_page::Edit),
     /// Location Services: the switches, the place and the apps' access (see `location_page::Edit`)
@@ -1024,7 +1028,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(GAME_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.game_mode, Action::Pick(Pick::GameMode(i)))).collect())
                         .header("GAME MODE")
                         .footer("Automatic gives a full-screen game the whole processor while it is in front, and lets go a few seconds after the game leaves the front."),
-                    Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
+                    Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Startup Disk").glyph(Glyph::Storage).link(PageId::StartupDisk), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
                     Group::new(vec![
                         Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
                         Item::new("Keyboard").glyph(Glyph::Keyboard).link(PageId::Keyboard),
@@ -1547,7 +1551,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
-        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        PageId::Storage | PageId::Graphics | PageId::StartupDisk | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift | PageId::WakeSchedule => page("Notifications", false, vec![]),
         PageId::Spotlight => {
@@ -2458,14 +2462,14 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
-        let view = super::super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
+        let view = super::super::sharing_page::View { computer: "Midget".into(), services: Vec::new(), screen_user: None };
         let sharing = sharing_spec(&opts, Some(&view));
         assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
-        assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
-        assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
-        assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
+        assert_eq!(sharing.groups[3].items[0].action, Action::Push(PageId::Nearby));
+        assert_eq!(sharing.groups[3].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
+        assert_eq!(sharing.groups[3].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
         opts.handoff = true;
-        assert_eq!(sharing_spec(&opts, Some(&view)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, Some(&view)).groups[3].items[1].value, "Handoff On");
         assert_eq!(sharing_spec(&opts, None).groups[0].items[0].value, "Loading…", "the page shows a placeholder until the read lands");
 
         let lock = spec(PageId::LockScreen, &model(&info, &opts));

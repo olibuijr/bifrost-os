@@ -173,6 +173,7 @@ pub mod dispatch_time;
 pub mod timer_source;
 pub mod background_tasks;
 pub mod running_board;
+pub mod endpoint_security;
 pub mod keyed_archive;
 pub mod value_types;
 pub mod colorsync;

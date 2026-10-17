@@ -9,6 +9,9 @@ use bifrost_ui::internet_accounts::{self as shared, Kind};
 pub enum Purpose {
     ComputerName,
     LocalHostname,
+    /// Sharing > Screen Sharing: the account whose name and password a viewer signs in with. `start` turns Screen
+    /// Sharing on once the account is set (the switch was flipped before any account was chosen).
+    ScreenSharingAccount { start: bool },
     /// step 1 of a new account: the full name
     NewUserFull { admin: bool },
     /// step 2: the account name
@@ -79,6 +82,20 @@ impl Prompt {
 
     pub fn local_hostname(current: &str) -> Prompt {
         Prompt { max: 63, initial: current.into(), ..Prompt::new(Purpose::LocalHostname, "Local Hostname", "Other computers on the network reach this one as this name followed by .local. Letters, digits and hyphens.", "Hostname", "Done") }
+    }
+
+    pub fn screen_sharing_account(current: &str, start: bool) -> Prompt {
+        Prompt {
+            max: 32,
+            initial: current.into(),
+            ..Prompt::new(
+                Purpose::ScreenSharingAccount { start },
+                "Screen Sharing Account",
+                "Enter the account name of the person who may connect. They sign in with that account's name and password, and the connection is encrypted.",
+                "Account Name",
+                if start { "Turn On" } else { "Done" },
+            )
+        }
     }
 
     pub fn new_user(admin: bool) -> Prompt {
@@ -226,7 +243,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::ComputerName => accounts::valid_computer_name(text),
         Purpose::LocalHostname => accounts::valid_hostname(text),
         Purpose::NewUserFull { .. } => accounts::valid_full_name(text),
-        Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
+        Purpose::NewUserName { .. } | Purpose::NewGroup | Purpose::ScreenSharingAccount { .. } => accounts::valid_user(text),
         Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
         Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } | Purpose::ConfirmPassword { .. } => accounts::valid_password(text),
         Purpose::NewAccountAddress { kind: Kind::Mail } => shared::valid_address(text.trim()),

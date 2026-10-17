@@ -92,6 +92,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Err(e)) => Err(PErr::internal(e.to_string())),
         },
         m if super::disk::handles(m) => super::disk::call(m, p),
+        m if super::endpoint_security::handles(m) => super::endpoint_security::call(m, p),
         _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
     }
 }

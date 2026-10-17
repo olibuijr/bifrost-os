@@ -4414,9 +4414,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/remote, springboard/src/privd/accounts.rs",
+   "bifrost": "springboard/apps/remote, springboard/src/privd/accounts.rs, springboard/src/privd/screen_sharing.rs, packaging/arch/bifrost-wayvnc.service",
    "status": "partial",
-   "note": "Screen sharing server launch: the Remote app starts wayvnc on a private socket behind a password. The Settings > Sharing switch maps to wayvnc.service, which has no unit in the packaging yet.",
+   "note": "Screen sharing server launch: the Remote app starts wayvnc on a private socket behind a password, and the Settings > Sharing > Screen Sharing switch starts the packaged bifrost-wayvnc.service (authenticated, encrypted, local network only).",
    "rea": [],
    "method": "heuristic",
    "ready": true,
@@ -4426,17 +4426,40 @@
      "path": "/usr/bin/wayvnc"
     },
     {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-wayvnc.service"
+    },
+    {
+     "kind": "file",
+     "path": "/etc/pam.d/wayvnc"
+    },
+    {
      "kind": "test",
-     "crate": "bifrost-remote",
-     "filter": "services::tests"
+     "crate": "springboard",
+     "filter": "privd::screen_sharing::tests"
     },
     {
      "kind": "test",
      "crate": "springboard",
      "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::the_screen_sharing_switch"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-remote",
+     "filter": "services::tests"
     }
    ],
-   "ready_note": "Sharing this desktop is the Remote app: it supervises wayvnc on a private Unix socket and serves it to a browser behind a generated password (Remote > Start Sharing); wayvnc is a runtime package. Settings > Sharing > Screen Sharing maps to wayvnc.service in privd. Open: no wayvnc.service unit is packaged, so that Settings switch has nothing to start; the Remote app is the working path."
+   "ready_note": "Two launch paths, both behind a login: the Remote app (wayvnc on a private Unix socket served to a browser behind a generated password) and the Settings switch (bifrost-wayvnc.service, see com.apple.screensharing). The unit exists in packaging and package-files.sh installs it, so the switch has something to start. Unverified until a Midget run."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.scrod.plist",
