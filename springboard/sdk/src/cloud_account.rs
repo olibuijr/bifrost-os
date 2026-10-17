@@ -7,10 +7,15 @@
 //! transport as a closure, so the walk is tested with canned answers; [`session_send`] is the URL session transport.
 //! Each call blocks: run it on a background thread.
 
+use crate::keychain_groups;
 use crate::url::{URLError, URLRequest, URLSession};
+use crate::Ctx;
 use bifrost_core::json::{self, Json};
 use std::fmt;
 use std::sync::atomic::AtomicBool;
+
+pub use springboard::cloud_session::Session;
+use springboard::cloud_session::{ACCOUNT, GROUP, SERVICE};
 
 /// The cookie the cloud service sets for a web session.
 pub const SESSION_COOKIE: &str = "bc_session";
@@ -211,6 +216,96 @@ pub fn session_send(req: &URLRequest) -> Result<Reply, String> {
         set_cookie: head.value("Set-Cookie").map(str::to_string),
         body: String::from_utf8_lossy(&body).into_owned(),
     })
+}
+
+/// Why the BifrOSt Account session could not be read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionError {
+    /// No session on this device: the user is signed out, or the stored value does not decode.
+    SignedOut,
+    /// The keychain refused the read (for example, this app is not granted the account group).
+    Keychain(keychain_groups::Error),
+}
+
+impl fmt::Display for SessionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SessionError::SignedOut => f.write_str("Sign in to BifrOSt Account in Settings"),
+            SessionError::Keychain(e) => write!(f, "The BifrOSt Account session could not be read: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {}
+
+/// Asks the keychain for this device's BifrOSt Account session (the `is.bifrost.account` group). Answer:
+/// [`decode_session`]. Only first-party apps that list the group in their manifest are granted it.
+pub fn session(ctx: &Ctx) -> u32 {
+    keychain_groups::get(ctx, GROUP, SERVICE, ACCOUNT)
+}
+
+/// Decodes the answer to [`session`]: the session, [`SessionError::SignedOut`] when there is no item, or the keychain's
+/// refusal. The token is in the returned [`Session`] only; it is never printed.
+pub fn decode_session(result: &Result<Json, String>) -> Result<Session, SessionError> {
+    match keychain_groups::decode(result) {
+        Ok(bytes) => Session::decode(&bytes).ok_or(SessionError::SignedOut),
+        Err(keychain_groups::Error::ItemNotFound) => Err(SessionError::SignedOut),
+        Err(e) => Err(SessionError::Keychain(e)),
+    }
+}
+
+/// The lifetime of a `Set-Cookie` header as Unix seconds: `now` plus its `Max-Age`. `None` when the header has no
+/// `Max-Age` or it is not a whole number of seconds.
+pub fn cookie_expiry(set_cookie: &str, now: i64) -> Option<i64> {
+    let secs: i64 = set_cookie.split(';').skip(1).map(str::trim).find_map(|attr| attr.strip_prefix("Max-Age=").or_else(|| attr.strip_prefix("max-age=")))?.parse::<i64>().ok()?;
+    Some(now.saturating_add(secs))
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::*;
+
+    fn answer(status: f64, hex_value: &str) -> Result<Json, String> {
+        Ok(Json::Obj(vec![("status".into(), Json::Num(status)), ("value".into(), Json::Str(hex_value.into()))]))
+    }
+
+    fn hex_of(bytes: &[u8]) -> String {
+        springboard::keychain::hex(bytes)
+    }
+
+    #[test]
+    fn the_stored_session_decodes_from_the_group_answer() {
+        let stored = Session::new("tok42", "acc9", "https://bifrost.olibuijr.com/api/cloud", Some(1_900_000_000)).unwrap();
+        let got = decode_session(&answer(0.0, &hex_of(&stored.encode())));
+        assert_eq!(got, Ok(stored));
+    }
+
+    #[test]
+    fn no_item_is_signed_out_and_a_bad_value_is_signed_out() {
+        assert_eq!(decode_session(&answer(-25300.0, "")), Err(SessionError::SignedOut));
+        assert_eq!(decode_session(&answer(0.0, &hex_of(b"token=old"))), Err(SessionError::SignedOut));
+    }
+
+    #[test]
+    fn a_refused_read_is_a_keychain_error_not_signed_out() {
+        assert_eq!(decode_session(&answer(-25291.0, "")), Err(SessionError::Keychain(keychain_groups::Error::NotPermitted)));
+        assert_eq!(decode_session(&Err("no service".into())), Err(SessionError::Keychain(keychain_groups::Error::Param)));
+    }
+
+    #[test]
+    fn the_error_text_never_contains_a_token() {
+        let stored = Session::new("secretvalue", "", "https://bifrost.olibuijr.com/api/cloud", None).unwrap();
+        let shown = format!("{:?} {}", decode_session(&answer(0.0, &hex_of(&stored.encode()))), SessionError::SignedOut);
+        assert!(!shown.contains("secretvalue"));
+    }
+
+    #[test]
+    fn the_cookie_lifetime_is_read_from_max_age() {
+        let header = "bc_session=abc123; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax";
+        assert_eq!(cookie_expiry(header, 1_000), Some(1_000 + 2_592_000));
+        assert_eq!(cookie_expiry("bc_session=abc123; Path=/", 1_000), None);
+        assert_eq!(cookie_expiry("bc_session=abc123; Max-Age=soon", 1_000), None);
+    }
 }
 
 pub(crate) fn endpoint(base_url: &str, path: &str) -> Result<String, CloudError> {
