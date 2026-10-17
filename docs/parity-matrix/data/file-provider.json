@@ -75,7 +75,7 @@
       "apple": "FSEventStream as used by providers to detect changes",
       "bifrost": "springboard/sdk/src/fswatch.rs (inotify WatchStream, FSEvent flags, EventJournal)",
       "status": "partial",
-      "note": "The event journal that numbers changes and replays them after an id is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: changes are reported for local folders only, nothing connects the feed to a remote provider, and the journal is lost on restart."
+      "note": "The event journal that numbers changes and replays them after an id is tested headless in springboard/sdk/tests/parity_sdk-os-10.rs. Gap: changes are reported for local folders only, nothing connects the feed to a remote provider, and the journal is lost on restart. Built 2026-10-17: EventJournal::to_text and from_text save the kept events and the next id across a restart (springboard/sdk/src/fswatch.rs, journal_text_tests); a corrupt file is ignored. Still not wired into the shell: the watch stream does not write the journal to disk yet."
     },
     {
       "feature": "Metrics data export",

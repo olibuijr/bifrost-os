@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 type Callback<T> = Box<dyn FnMut(&T)>;
 
@@ -508,6 +509,133 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
         });
         (out, sub)
     }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `flatMap` for inner publishers that answer later: each value is turned into a [`Future`], and its success
+    /// value is sent when that future resolves. A failed future sends nothing. Results arrive in the order the
+    /// futures resolve, which need not be the order the values were sent.
+    pub fn flat_map_future<U, E>(
+        &self,
+        f: impl Fn(&T) -> Future<U, E> + 'static,
+    ) -> (PassthroughSubject<U>, Subscription)
+    where
+        U: Clone + 'static,
+        E: Clone + 'static,
+    {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            let o2 = o.clone();
+            f(v).subscribe(move |result| {
+                if let Ok(u) = result {
+                    o2.send(u.clone());
+                }
+            });
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `debounce(for:scheduler:)`: sends a value only once `interval` has passed with no newer value. Each value
+    /// restarts the wait, and the last one is the one sent. Timing comes from `run_loop`, which the app's tick
+    /// advances. The returned `Subscription` detaches this subject from `self`; a wait already running still ends
+    /// quietly, and sends nothing if a newer value has arrived.
+    pub fn debounce<S: crate::run_loop::LocalScheduler + Clone + 'static>(
+        &self,
+        interval: Duration,
+        run_loop: &S,
+    ) -> (PassthroughSubject<T>, Subscription) {
+        let out = PassthroughSubject::new();
+        // Generation of the newest value, and that value until it is sent.
+        let state: Rc<RefCell<(u64, Option<T>)>> = Rc::new(RefCell::new((0, None)));
+        let (o, s, rl) = (out.clone(), state.clone(), run_loop.clone());
+        let sub = self.sink(move |v| {
+            let generation = {
+                let mut st = s.borrow_mut();
+                st.0 += 1;
+                st.1 = Some(v.clone());
+                st.0
+            };
+            let (o2, s2) = (o.clone(), s.clone());
+            rl.schedule_local_after(interval, move || {
+                let value = {
+                    let mut st = s2.borrow_mut();
+                    if st.0 != generation {
+                        return;
+                    }
+                    st.1.take()
+                };
+                if let Some(v) = value {
+                    o2.send(v);
+                }
+            });
+        });
+        (out, sub)
+    }
+
+    /// `throttle(for:scheduler:latest:)`: sends the first value at once, then holds back the rest for `interval`.
+    /// With `latest` set, the newest value held back is sent when the interval ends, and a new interval starts with
+    /// it; without it, values that arrive during an interval are dropped. Timing comes from `run_loop`.
+    pub fn throttle<S: crate::run_loop::LocalScheduler + Clone + 'static>(
+        &self,
+        interval: Duration,
+        run_loop: &S,
+        latest: bool,
+    ) -> (PassthroughSubject<T>, Subscription) {
+        let out = PassthroughSubject::new();
+        let state: Rc<RefCell<ThrottleState<T>>> =
+            Rc::new(RefCell::new(ThrottleState { window_open: false, held: None }));
+        let (o, s, rl) = (out.clone(), state.clone(), run_loop.clone());
+        let sub = self.sink(move |v| {
+            let open = s.borrow().window_open;
+            if open {
+                if latest {
+                    s.borrow_mut().held = Some(v.clone());
+                }
+            } else {
+                throttle_open_window(s.clone(), o.clone(), rl.clone(), interval, latest);
+                o.send(v.clone());
+            }
+        });
+        (out, sub)
+    }
+}
+
+/// State of one [`PassthroughSubject::throttle`] subscription.
+struct ThrottleState<T> {
+    window_open: bool,
+    held: Option<T>,
+}
+
+/// Starts an interval: schedules its end, which sends the held value (if `latest`) and starts the next interval.
+fn throttle_open_window<T: Clone + 'static, S: crate::run_loop::LocalScheduler + Clone + 'static>(
+    state: Rc<RefCell<ThrottleState<T>>>,
+    out: PassthroughSubject<T>,
+    run_loop: S,
+    interval: Duration,
+    latest: bool,
+) {
+    state.borrow_mut().window_open = true;
+    let (s, o, rl) = (state.clone(), out.clone(), run_loop.clone());
+    run_loop.schedule_local_after(interval, move || {
+        let held = {
+            let mut st = s.borrow_mut();
+            if latest {
+                st.held.take()
+            } else {
+                None
+            }
+        };
+        match held {
+            Some(v) => {
+                o.send(v);
+                throttle_open_window(s, o, rl, interval, latest);
+            }
+            None => s.borrow_mut().window_open = false,
+        }
+    });
 }
 
 /// `Subscribers.Completion`: how a publisher stopped producing values.
@@ -1188,5 +1316,120 @@ mod merge_flat_map_tests {
         sub.cancel();
         src.send(2);
         assert_eq!(*log.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn debounce_sends_the_last_value_once_the_interval_is_quiet() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.debounce(Duration::from_millis(100), &rl);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        rl.advance(Duration::from_millis(50));
+        src.send(2);
+        rl.advance(Duration::from_millis(120));
+        assert!(log.borrow().is_empty());
+        rl.advance(Duration::from_millis(149));
+        assert!(log.borrow().is_empty());
+        rl.advance(Duration::from_millis(150));
+        assert_eq!(*log.borrow(), vec![2]);
+    }
+
+    #[test]
+    fn debounce_sends_each_value_that_stays_quiet() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.debounce(Duration::from_millis(100), &rl);
+        let (log, _log_sub) = log_of(&out);
+        src.send(7);
+        rl.advance(Duration::from_millis(100));
+        src.send(8);
+        rl.advance(Duration::from_millis(199));
+        assert_eq!(*log.borrow(), vec![7]);
+        rl.advance(Duration::from_millis(200));
+        assert_eq!(*log.borrow(), vec![7, 8]);
+    }
+
+    #[test]
+    fn throttle_with_latest_sends_the_first_value_then_the_newest_held_one_per_interval() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.throttle(Duration::from_millis(100), &rl, true);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        assert_eq!(*log.borrow(), vec![1]);
+        rl.advance(Duration::from_millis(10));
+        src.send(2);
+        src.send(3);
+        rl.advance(Duration::from_millis(99));
+        assert_eq!(*log.borrow(), vec![1]);
+        rl.advance(Duration::from_millis(100));
+        assert_eq!(*log.borrow(), vec![1, 3]);
+        src.send(4);
+        rl.advance(Duration::from_millis(200));
+        assert_eq!(*log.borrow(), vec![1, 3, 4]);
+        rl.advance(Duration::from_millis(300));
+        src.send(5);
+        assert_eq!(*log.borrow(), vec![1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn throttle_without_latest_drops_values_inside_the_interval() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let rl = crate::run_loop::RunLoop::new();
+        let (out, _sub) = src.throttle(Duration::from_millis(100), &rl, false);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        src.send(3);
+        rl.advance(Duration::from_millis(100));
+        src.send(4);
+        assert_eq!(*log.borrow(), vec![1, 4]);
+    }
+}
+
+#[cfg(test)]
+mod flat_map_future_tests {
+    use super::*;
+
+    #[test]
+    fn each_value_is_sent_when_its_future_resolves_in_resolution_order() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        src.send(2);
+        assert!(log.borrow().is_empty(), "nothing is sent before the futures resolve");
+        let second = promises.borrow_mut().remove(1);
+        second.resolve(Ok(20));
+        assert_eq!(*log.borrow(), vec![20]);
+        let first = promises.borrow_mut().remove(0);
+        first.resolve(Ok(10));
+        assert_eq!(*log.borrow(), vec![20, 10]);
+    }
+
+    #[test]
+    fn a_failed_future_sends_nothing() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        let p = promises.borrow_mut().remove(0);
+        p.resolve(Err("offline".to_string()));
+        assert!(log.borrow().is_empty());
     }
 }

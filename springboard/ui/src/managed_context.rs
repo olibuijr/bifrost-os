@@ -8,7 +8,7 @@
 //! that differs from its saved copy is `Updated`, and one that was saved and is no longer present is `Deleted`. An
 //! object inserted and deleted before a save never shows up as a change.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::fetch::{fetch_indices, FetchRequest, Record};
 
@@ -33,14 +33,18 @@ pub enum ContextError {
 /// A working copy of records and the last saved copy they are compared with.
 #[derive(Clone, Debug)]
 pub struct ManagedContext<R> {
+    /// The saved state: the store that faulted objects are read from.
     saved: BTreeMap<ObjectId, R>,
+    /// Resident working copies. An object is in exactly one of `working` or `faults`, unless it was deleted.
     working: BTreeMap<ObjectId, R>,
+    /// Saved objects whose values are not in memory (faults). Each is also in `saved` and never in `working`.
+    faults: BTreeSet<ObjectId>,
     next_id: ObjectId,
 }
 
 impl<R> Default for ManagedContext<R> {
     fn default() -> Self {
-        ManagedContext { saved: BTreeMap::new(), working: BTreeMap::new(), next_id: 1 }
+        ManagedContext { saved: BTreeMap::new(), working: BTreeMap::new(), faults: BTreeSet::new(), next_id: 1 }
     }
 }
 
@@ -58,13 +62,47 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
         id
     }
 
-    /// The working copy of the object with this identity.
+    /// The resident working copy of the object with this identity. A fault has no resident copy, so this is `None`
+    /// for it; [`ManagedContext::fault_in`] loads it.
     pub fn get(&self, id: ObjectId) -> Option<&R> {
         self.working.get(&id)
     }
 
-    /// Edits the working copy of an object in place.
+    /// Whether the object is a fault: it exists, but its values are not in memory.
+    pub fn is_fault(&self, id: ObjectId) -> bool {
+        self.faults.contains(&id)
+    }
+
+    /// Loads a fault from the saved state (`NSManagedObject` faulting in). An object that is resident already is
+    /// returned as it is.
+    pub fn fault_in(&mut self, id: ObjectId) -> Result<&R, ContextError> {
+        if self.faults.remove(&id) {
+            let record = self.saved.get(&id).cloned().ok_or(ContextError::NotFound(id))?;
+            self.working.insert(id, record);
+        }
+        self.working.get(&id).ok_or(ContextError::NotFound(id))
+    }
+
+    /// Releases the values of a saved object that has no unsaved change, leaving a fault. Returns false, and keeps
+    /// the object resident, when it has changed since the last save or is not a saved object.
+    pub fn fault_out(&mut self, id: ObjectId) -> bool {
+        if self.faults.contains(&id) {
+            return true;
+        }
+        let unchanged = match (self.working.get(&id), self.saved.get(&id)) {
+            (Some(working), Some(saved)) => working == saved,
+            _ => false,
+        };
+        if unchanged {
+            self.working.remove(&id);
+            self.faults.insert(id);
+        }
+        unchanged
+    }
+
+    /// Edits an object in place. A fault is loaded first.
     pub fn update(&mut self, id: ObjectId, edit: impl FnOnce(&mut R)) -> Result<(), ContextError> {
+        self.fault_in(id)?;
         match self.working.get_mut(&id) {
             Some(record) => {
                 edit(record);
@@ -74,8 +112,11 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
         }
     }
 
-    /// Removes an object from the working copy.
+    /// Removes an object from the context. A fault is removed without being loaded, and its saved copy is returned.
     pub fn delete(&mut self, id: ObjectId) -> Result<R, ContextError> {
+        if self.faults.remove(&id) {
+            return self.saved.get(&id).cloned().ok_or(ContextError::NotFound(id));
+        }
         self.working.remove(&id).ok_or(ContextError::NotFound(id))
     }
 
@@ -95,7 +136,7 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
             }
         }
         for id in self.saved.keys() {
-            if !self.working.contains_key(id) {
+            if !self.working.contains_key(id) && !self.faults.contains(id) {
                 out.push((*id, Change::Deleted));
             }
         }
@@ -106,19 +147,34 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
     /// Makes the working copy the saved state and returns the changes that were saved.
     pub fn save(&mut self) -> Vec<(ObjectId, Change)> {
         let changes = self.changes();
-        self.saved = self.working.clone();
+        // Faults keep their saved values, so they stay in the saved state.
+        let mut next = self.working.clone();
+        for id in &self.faults {
+            if let Some(record) = self.saved.get(id) {
+                next.insert(*id, record.clone());
+            }
+        }
+        self.saved = next;
         changes
     }
 
     /// Discards the working changes: the working copy becomes the saved state again.
     pub fn rollback(&mut self) {
         self.working = self.saved.clone();
+        self.faults.clear();
     }
 
     /// The working objects that match `request`, in the request's order, with their identities.
     pub fn fetch(&self, request: &FetchRequest) -> Vec<(ObjectId, R)> {
-        let ids: Vec<ObjectId> = self.working.keys().copied().collect();
-        let records: Vec<R> = ids.iter().map(|id| self.working[id].clone()).collect();
+        // Faults are read from the saved state, so a fetch sees every object without loading it.
+        let mut all = self.working.clone();
+        for id in &self.faults {
+            if let Some(record) = self.saved.get(id) {
+                all.insert(*id, record.clone());
+            }
+        }
+        let ids: Vec<ObjectId> = all.keys().copied().collect();
+        let records: Vec<R> = ids.iter().map(|id| all[id].clone()).collect();
         fetch_indices(&records, request).into_iter().map(|i| (ids[i], records[i].clone())).collect()
     }
 }
@@ -237,5 +293,76 @@ mod tests {
             .sorted_by("pages", false);
         let found: Vec<ObjectId> = c.fetch(&request).into_iter().map(|(id, _)| id).collect();
         assert_eq!(found, vec![d, 2]);
+    }
+
+    #[test]
+    fn a_saved_unchanged_object_can_be_faulted_out_and_loaded_again() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        c.save();
+        assert!(c.fault_out(a));
+        assert!(c.is_fault(a));
+        assert_eq!(c.get(a), None, "a fault has no resident copy");
+        assert!(!c.has_changes(), "a fault is not a change");
+        assert_eq!(c.fault_in(a).unwrap(), &note("alpha", 10));
+        assert!(!c.is_fault(a));
+    }
+
+    #[test]
+    fn a_changed_object_is_not_faulted_out() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        c.save();
+        c.update(a, |n| n.pages = 11).unwrap();
+        assert!(!c.fault_out(a));
+        assert!(!c.is_fault(a));
+        assert_eq!(c.get(a), Some(&note("alpha", 11)));
+    }
+
+    #[test]
+    fn faults_are_saved_and_fetched_without_loading() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        let b = c.insert(note("beta", 2));
+        c.save();
+        assert!(c.fault_out(a));
+        c.save();
+        assert!(c.is_fault(a), "saving keeps a fault a fault");
+        let request = FetchRequest::new().sorted_by("pages", true);
+        let found: Vec<(ObjectId, Note)> = c.fetch(&request);
+        assert_eq!(found, vec![(b, note("beta", 2)), (a, note("alpha", 10))]);
+        assert!(c.is_fault(a), "a fetch does not load faults");
+    }
+
+    #[test]
+    fn updating_a_fault_loads_it_and_records_an_update() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        c.save();
+        c.fault_out(a);
+        c.update(a, |n| n.pages = 12).unwrap();
+        assert!(!c.is_fault(a));
+        assert_eq!(c.changes(), vec![(a, Change::Updated)]);
+    }
+
+    #[test]
+    fn deleting_a_fault_is_a_delete_change_and_returns_the_saved_copy() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        c.save();
+        c.fault_out(a);
+        assert_eq!(c.delete(a), Ok(note("alpha", 10)));
+        assert_eq!(c.changes(), vec![(a, Change::Deleted)]);
+    }
+
+    #[test]
+    fn rollback_loads_every_fault_back_to_the_saved_state() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("alpha", 10));
+        c.save();
+        c.fault_out(a);
+        c.rollback();
+        assert!(!c.is_fault(a));
+        assert_eq!(c.get(a), Some(&note("alpha", 10)));
     }
 }

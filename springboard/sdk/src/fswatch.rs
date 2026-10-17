@@ -326,6 +326,57 @@ impl EventJournal {
     }
 }
 
+/// The header line of a saved journal. A file with another header is not a journal.
+const JOURNAL_HEADER: &str = "fsjournal-v1";
+
+impl EventJournal {
+    /// The journal as text, so it can outlive a restart: a header with the next id, then one line per kept event,
+    /// `id flags hex-path`. The path is hex-encoded, so any byte sequence in a file name survives the round trip.
+    pub fn to_text(&self) -> String {
+        let mut out = format!("{JOURNAL_HEADER} {}\n", self.next_id);
+        for (id, event) in &self.entries {
+            let hex: String = event.path.as_os_str().as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+            out.push_str(&format!("{id} {} {hex}\n", event.flags.0));
+        }
+        out
+    }
+
+    /// Reads a journal saved by [`EventJournal::to_text`], keeping the newest `capacity` events. Returns `None` for
+    /// text that is not a journal, or that has a bad line, an id out of order, or a next id that is not past the
+    /// last event: a corrupt journal is ignored, so replay starts again rather than reporting false history.
+    pub fn from_text(text: &str, capacity: usize) -> Option<Self> {
+        let mut lines = text.lines();
+        let next_id: u64 = lines.next()?.strip_prefix(JOURNAL_HEADER)?.trim().parse().ok()?;
+        let mut entries: VecDeque<(u64, WatchEvent)> = VecDeque::new();
+        for line in lines {
+            let mut parts = line.splitn(3, ' ');
+            let id: u64 = parts.next()?.parse().ok()?;
+            let flags: u32 = parts.next()?.parse().ok()?;
+            let hex = parts.next()?;
+            if hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            if entries.back().map_or(false, |(last, _)| id <= *last) {
+                return None;
+            }
+            let bytes: Vec<u8> = (0..hex.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+                .collect::<Option<Vec<u8>>>()?;
+            let path = PathBuf::from(std::ffi::OsStr::from_bytes(&bytes));
+            entries.push_back((id, WatchEvent { path, flags: WatchEventFlags(flags) }));
+        }
+        if entries.back().map_or(false, |(last, _)| next_id <= *last) {
+            return None;
+        }
+        let capacity = capacity.max(1);
+        while entries.len() > capacity {
+            entries.pop_front();
+        }
+        Some(Self { capacity, next_id, entries })
+    }
+}
+
 #[cfg(test)]
 mod journal_tests {
     use super::*;
@@ -462,5 +513,55 @@ mod tests {
 
         s.stop();
         assert!(s.fd().is_none());
+    }
+}
+
+#[cfg(test)]
+mod journal_text_tests {
+    use super::*;
+
+    fn created(path: &str) -> WatchEvent {
+        WatchEvent { path: PathBuf::from(path), flags: WatchEventFlags::CREATED }
+    }
+
+    #[test]
+    fn a_journal_survives_the_text_round_trip_with_its_ids() {
+        let mut j = EventJournal::new(10);
+        j.record(created("/home/a"));
+        j.record(WatchEvent { path: PathBuf::from("/home/odd name\nnew"), flags: WatchEventFlags::MODIFIED });
+        let text = j.to_text();
+        let back = EventJournal::from_text(&text, 10).expect("a saved journal reads back");
+        assert_eq!(back.latest_id(), 2);
+        assert_eq!(back.replay_since(0), j.replay_since(0));
+        assert_eq!(back.to_text(), text);
+    }
+
+    #[test]
+    fn a_restored_journal_keeps_counting_from_where_it_left_off() {
+        let mut j = EventJournal::new(10);
+        j.record(created("a"));
+        j.record(created("b"));
+        let mut back = EventJournal::from_text(&j.to_text(), 10).unwrap();
+        assert_eq!(back.record(created("c")), 3);
+    }
+
+    #[test]
+    fn a_restored_journal_keeps_only_the_newest_events_it_is_given_room_for() {
+        let mut j = EventJournal::new(10);
+        for name in ["a", "b", "c", "d"] {
+            j.record(created(name));
+        }
+        let back = EventJournal::from_text(&j.to_text(), 2).unwrap();
+        assert_eq!(back.oldest_id(), Some(3));
+        assert!(!back.replay_since(1).complete, "events 2 and before were dropped");
+    }
+
+    #[test]
+    fn foreign_or_corrupt_text_is_not_a_journal() {
+        assert!(EventJournal::from_text("", 5).is_none());
+        assert!(EventJournal::from_text("some other file\n", 5).is_none());
+        assert!(EventJournal::from_text("fsjournal-v1 3\n1 1 zz\n", 5).is_none(), "bad hex");
+        assert!(EventJournal::from_text("fsjournal-v1 3\n2 1 61\n1 1 61\n", 5).is_none(), "ids out of order");
+        assert!(EventJournal::from_text("fsjournal-v1 2\n5 1 61\n", 5).is_none(), "next id not past the last event");
     }
 }
