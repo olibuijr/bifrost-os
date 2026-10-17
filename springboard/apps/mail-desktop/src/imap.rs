@@ -115,6 +115,16 @@ impl Mailbox {
     pub fn selectable(&self) -> bool {
         !self.attributes.iter().any(|a| a.eq_ignore_ascii_case("\\Noselect"))
     }
+
+    /// True for the server's Drafts mailbox by RFC 6154 special use (`\Drafts`), whatever it is called.
+    pub fn is_drafts(&self) -> bool {
+        self.attributes.iter().any(|a| a.eq_ignore_ascii_case("\\Drafts"))
+    }
+}
+
+/// The name of the Drafts mailbox in a listing: the one flagged `\Drafts`, or `None` when the server flags none.
+pub fn drafts_name(mailboxes: &[Mailbox]) -> Option<&str> {
+    mailboxes.iter().find(|m| m.is_drafts()).map(|m| m.name.as_str())
 }
 
 /// Parses the untagged text of a `LIST` response: `LIST (\HasNoChildren) "/" "INBOX"`.
@@ -291,6 +301,18 @@ mod tests {
         assert_eq!(folder.delimiter, None);
         assert_eq!(folder.name, "Archive \"old\"");
         assert!(!folder.selectable());
+    }
+
+    #[test]
+    fn finds_the_special_use_drafts_mailbox() {
+        let list = [
+            parse_list("LIST (\\HasNoChildren) \"/\" \"INBOX\"").unwrap(),
+            parse_list("LIST (\\HasNoChildren \\Drafts) \"/\" \"Kladdur\"").unwrap(),
+        ];
+        assert!(list[1].is_drafts());
+        assert!(!list[0].is_drafts());
+        assert_eq!(drafts_name(&list), Some("Kladdur"));
+        assert_eq!(drafts_name(&list[..1]), None);
     }
 
     #[test]
