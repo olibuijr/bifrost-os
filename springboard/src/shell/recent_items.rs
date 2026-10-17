@@ -26,6 +26,27 @@ pub fn note(list: &mut SharedList, app: AppId) {
     list.add(&key(app), &title);
 }
 
+/// Marks or unmarks `app` as a favourite. An app not yet in the list is recorded first. False only when the list
+/// refuses the key.
+#[cfg(any(feature = "desktop-wayland", test))]
+pub fn set_favourite(list: &mut SharedList, app: AppId, on: bool) -> bool {
+    let k = key(app);
+    if !list.contains(&k) {
+        note(list, app);
+    }
+    list.set_favourite(&k, on)
+}
+
+/// The favourite apps in list order. Favourites are not capped, so this can be longer than `CAPACITY`.
+#[cfg(any(feature = "desktop-wayland", test))]
+pub fn favourite_apps(list: &SharedList) -> Vec<AppId> {
+    list.entries()
+        .into_iter()
+        .filter(|item| item.favourite)
+        .filter_map(|item| apps().iter().find(|a| key(a.id) == item.key).map(|a| a.id))
+        .collect()
+}
+
 /// The app behind the `n`-th entry, newest first. None past the end or when the app is no longer in the catalogue.
 #[cfg(any(feature = "desktop-wayland", test))]
 pub fn app_at(list: &SharedList, n: usize) -> Option<AppId> {
@@ -93,6 +114,30 @@ mod tests {
         list.clear_recents();
         assert!(list.is_empty());
         assert_eq!(app_at(&list, 0), None);
+    }
+
+    #[test]
+    fn favourites_are_marked_listed_in_order_and_unmarked() {
+        let mut list = new();
+        assert!(set_favourite(&mut list, AppId::Terminal, true));
+        assert!(set_favourite(&mut list, AppId::Settings, true));
+        assert_eq!(favourite_apps(&list), vec![AppId::Settings, AppId::Terminal]);
+        assert!(set_favourite(&mut list, AppId::Terminal, false));
+        assert_eq!(favourite_apps(&list), vec![AppId::Settings]);
+    }
+
+    #[test]
+    fn a_favourite_is_kept_when_recents_are_capped() {
+        let mut list = new();
+        set_favourite(&mut list, AppId::Terminal, true);
+        // More distinct recents than CAPACITY, so the cap drops the oldest recents.
+        for n in 0..(CAPACITY as u8 + 3) {
+            note(&mut list, AppId::External(n));
+        }
+        assert_eq!(list.len(), CAPACITY + 1, "the favourite does not count against the cap");
+        assert_eq!(favourite_apps(&list), vec![AppId::Terminal]);
+        assert!(list.contains(&key(AppId::Terminal)));
+        assert!(!list.contains(&key(AppId::External(0))), "the oldest recent is dropped");
     }
 
     #[test]
