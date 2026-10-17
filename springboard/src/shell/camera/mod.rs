@@ -979,7 +979,9 @@ impl Camera {
 fn save_capture(frame: &Frame, dir: &std::path::Path, name: String, aspect: Aspect, zoom: usize, thumb_n: usize, unix: i64, exif: &jpeg::Exif) -> Saved {
     let failed = |name: String| Saved { path: None, name, thumb: None };
     let Some(px) = v4l2::to_pixels(frame, frame.width, frame.height) else { return failed(name) };
-    let full = Image { w: frame.width, h: frame.height, px };
+    let mut full = Image { w: frame.width, h: frame.height, px };
+    // gray-world white balance: a photo keeps its neutrals neutral (the preview is left as the sensor delivers it)
+    crate::media::convert::white_balance(&mut full);
     let (x, y, w, h) = zoomed(aspect.crop(full.w, full.h), zoom);
     let img = full.crop(x, y, w, h);
     let bytes = jpeg::encode_pixels(img.w, img.h, &img.px, JPEG_QUALITY, Some(exif));
