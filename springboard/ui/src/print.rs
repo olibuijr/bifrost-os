@@ -45,6 +45,12 @@ impl PaperSize {
             PaperSize::Legal => "Legal",
         }
     }
+    /// Every paper size, in the order the print sheet lists them.
+    pub const ALL: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::A3, PaperSize::A5, PaperSize::Legal];
+    /// The paper whose [`PaperSize::media`] name this is (case-insensitive), for reading a saved preset.
+    pub fn from_media(name: &str) -> Option<PaperSize> {
+        PaperSize::ALL.into_iter().find(|p| p.media().eq_ignore_ascii_case(name.trim()))
+    }
     /// The PWG media keyword the scheduler takes as the `media` job-template attribute.
     pub fn pwg(self) -> &'static str {
         match self {
@@ -85,6 +91,44 @@ pub enum JobDisposition {
     Preview,
 }
 
+/// Two-sided printing (`sides`). The default is one-sided, which is not sent with the job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Sides {
+    #[default]
+    OneSided,
+    TwoSidedLongEdge,
+    TwoSidedShortEdge,
+}
+
+impl Sides {
+    /// The IPP keyword for `sides`.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Sides::OneSided => "one-sided",
+            Sides::TwoSidedLongEdge => "two-sided-long-edge",
+            Sides::TwoSidedShortEdge => "two-sided-short-edge",
+        }
+    }
+}
+
+/// Colour or black and white (`print-color-mode`). The default is colour, which is not sent with the job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ColorMode {
+    #[default]
+    Color,
+    Monochrome,
+}
+
+impl ColorMode {
+    /// The IPP keyword for `print-color-mode`.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            ColorMode::Color => "color",
+            ColorMode::Monochrome => "monochrome",
+        }
+    }
+}
+
 /// The smallest and largest scaling factors (10% and 1000%).
 pub const SCALING_RANGE: (f32, f32) = (0.1, 10.0);
 
@@ -103,6 +147,10 @@ pub struct PrintInfo {
     pub job_disposition: JobDisposition,
     /// Where [`JobDisposition::Save`] writes the PDF.
     pub saving_path: Option<PathBuf>,
+    /// Two-sided printing; sent as the `sides` job-template attribute when it is not one-sided.
+    pub sides: Sides,
+    /// Colour or monochrome; sent as `print-color-mode` when it is monochrome.
+    pub color: ColorMode,
 }
 
 impl Default for PrintInfo {
@@ -116,6 +164,8 @@ impl Default for PrintInfo {
             scaling_factor: 1.0,
             job_disposition: JobDisposition::Spool,
             saving_path: None,
+            sides: Sides::OneSided,
+            color: ColorMode::Color,
         }
     }
 }
@@ -149,6 +199,12 @@ impl PrintInfo {
             let mut bytes = (first as i32).to_be_bytes().to_vec();
             bytes.extend((last as i32).to_be_bytes());
             a.push(("page-ranges".to_string(), Value::Other { tag: tag::RANGE_OF_INTEGER, bytes }));
+        }
+        if self.sides != Sides::OneSided {
+            a.push(("sides".to_string(), Value::keyword(self.sides.keyword())));
+        }
+        if self.color == ColorMode::Monochrome {
+            a.push(("print-color-mode".to_string(), Value::keyword(self.color.keyword())));
         }
         a
     }
@@ -313,10 +369,13 @@ impl PrintOperation {
         }
     }
     /// `printOperation(with:printInfo:)`: a job that prints `view`, paginated and drawn for `info` now.
+    ///
+    /// The page range in `info` cuts the view before it is drawn, so the document already holds only those pages. The
+    /// operation's info therefore drops the range: a `page-ranges` job attribute would cut the pages a second time.
     pub fn print_operation(job_name: impl Into<String>, view: &dyn PrintableView, info: PrintInfo) -> Self {
         let pages = print_pages::render_pages(view, &info);
         let mut op = PrintOperation::pages(job_name, pages, vec!["Helvetica"]);
-        op.info = info;
+        op.info = PrintInfo { pages: None, ..info };
         op
     }
     /// `pdfOperation(with:inside:to:)`: a job that writes the part of `view` inside `rect` as a one-page PDF at `to`.
@@ -476,6 +535,46 @@ mod tests {
         assert_eq!(a[3], ("page-ranges".to_string(), Value::Other { tag: tag::RANGE_OF_INTEGER, bytes: range }));
         assert!(a.iter().all(|(name, _)| !name.starts_with("page-top") && !name.starts_with("page-left")));
         assert_eq!(PrintInfo { copies: 0, ..Default::default() }.attributes()[0].1, Value::Integer(1));
+    }
+
+    #[test]
+    fn sides_and_colour_are_sent_only_when_they_differ_from_the_default() {
+        let plain = PrintInfo::default().attributes();
+        assert_eq!(plain.len(), 3, "copies, media and orientation only");
+        let duplex = PrintInfo { sides: Sides::TwoSidedShortEdge, color: ColorMode::Monochrome, pages: Some((1, 2)), ..Default::default() }.attributes();
+        let names: Vec<&str> = duplex.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["copies", "media", "orientation-requested", "page-ranges", "sides", "print-color-mode"]);
+        assert_eq!(duplex[4].1, Value::keyword("two-sided-short-edge"));
+        assert_eq!(duplex[5].1, Value::keyword("monochrome"));
+        assert_eq!(Sides::TwoSidedLongEdge.keyword(), "two-sided-long-edge");
+    }
+
+    #[test]
+    fn paper_names_read_back_from_media() {
+        assert_eq!(PaperSize::from_media(" letter "), Some(PaperSize::Letter));
+        assert_eq!(PaperSize::from_media("A3"), Some(PaperSize::A3));
+        assert_eq!(PaperSize::from_media("Tabloid"), None);
+        for p in PaperSize::ALL {
+            assert_eq!(PaperSize::from_media(p.media()), Some(p));
+        }
+    }
+
+    #[test]
+    fn a_view_job_is_cut_by_the_page_range_once() {
+        struct Three;
+        impl PrintableView for Three {
+            fn bounds(&self) -> Rect {
+                (0.0, 0.0, 100.0, 2000.0)
+            }
+            fn draw(&self, _rect: Rect, out: &mut dyn print_pages::DrawOps) {
+                out.fill_rect((0.0, 0.0, 10.0, 10.0));
+            }
+        }
+        let info = PrintInfo { margins: [0.0; 4], pages: Some((2, 3)), ..Default::default() };
+        let op = PrintOperation::print_operation("Three", &Three, info);
+        assert_eq!(op.info.pages, None, "the document is already cut");
+        let (_, bytes) = op.document().unwrap();
+        assert!(String::from_utf8_lossy(&bytes).contains("/Count 2"));
     }
 
     #[test]

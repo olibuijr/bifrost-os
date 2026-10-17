@@ -2069,11 +2069,28 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
   (`representation(using:properties:)`); `compression_factor` applies to JPEG.
 - Not done: the shell-drawn print and page layout sheets, text styles other than Helvetica, clip and transform calls on `DrawOps`.
 
+**Print settings, ranges and presets** (this round, host tests only, not yet checked on Midget):
+- `PrintInfo` has `sides` (`Sides`: one-sided, two-sided long or short edge) and `color` (`ColorMode`). Non-default values go
+  into the job template as `sides` and `print-color-mode`; the defaults send nothing extra.
+- `PaperSize::from_media(name)` reads a paper back from its saved name (`PaperSize::ALL` is the sheet's list).
+- `render_pages` draws only the pages of `PrintInfo::pages`, so a view job's PDF holds the range (one page per number,
+  none past the last page). `print_operation` then drops the range from the operation's info so CUPS does not cut it again.
+- `print_ranges::parse_page_ranges(text, total)`: "1-3, 5, 7-", "-4", "all" or empty. Sorted, merged, last page cut to the
+  document, first page past the end refused. `PageSelection::apply_to` writes one range to `PrintInfo::pages`; several
+  ranges are refused with `Multiple` because the job's `page-ranges` attribute carries one range here.
+- `print_presets::PresetStore`: named `Preset`s (paper, orientation, margins, copies, scale, sides, colour). The page range,
+  printer and save path stay with the job. `to_text`/`from_text` is the storage form; reading skips bad names and repeated
+  sections, ignores unknown keys and keeps defaults for values that do not parse. An app keeps the text in its defaults.
+- Not done in this round: the shell print sheet does not yet show the two-sided, colour, presets, PDF popup (Save as PDF,
+  Open in Preview, Mail PDF) or Page Setup sheet rows, and TextEdit, Notes and Preview still use their own print calls.
+  Mail PDF needs `mail_compose` with the PDF as a grant. These are the next steps before the rows can move.
+
 Decisions and gaps:
 - No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay reserved for
   it). Apps choose printer and options with their own controls and call `run`.
 - Print Center's Add Printer reads the clipboard, because the SDK has no text prompt sheet yet.
-- The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set.
+- The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set. The range
+  parser (`print_ranges`) is ready for the sheet's Pages field.
 - View printing is limited to Helvetica text, fills, paths and pictures (see below). Pages are drawn when the operation is made.
 - Without a scheduler, `available()` is false and `run` returns `PrintError::NoCups`. Whether the Midget image ships CUPS is unchecked.
 - Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and pdfcraft are

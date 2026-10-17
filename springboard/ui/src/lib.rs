@@ -1225,6 +1225,8 @@ pub mod pdf_access;
 pub mod media_trim;
 pub mod print;
 pub mod print_pages;
+pub mod print_ranges;
+pub mod print_presets;
 pub mod ipp;
 pub mod cups;
 pub mod printer_caps;

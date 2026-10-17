@@ -216,11 +216,16 @@ pub fn paginate(view: &dyn PrintableView, info: &PrintInfo) -> Vec<Rect> {
     rects
 }
 
-/// Draws every page of `view` for `info` and returns the PDF pages.
+/// Draws the pages of `view` for `info` and returns the PDF pages. When `info` has a page range, only those 1-based pages
+/// are drawn, in order, so the PDF has one page per number in the range (and none past the last page of the view).
 pub fn render_pages(view: &dyn PrintableView, info: &PrintInfo) -> Vec<Page> {
     let paper = info.paper_size();
     let mut ctx = PdfContext::new();
-    for rect in paginate(view, info) {
+    let keep = |n: usize| info.pages.map_or(true, |(first, last)| (first as usize..=last as usize).contains(&n));
+    for (index, rect) in paginate(view, info).into_iter().enumerate() {
+        if !keep(index + 1) {
+            continue;
+        }
         ctx.begin_view_page(paper, info.imageable(), rect, info.scaling());
         view.draw(rect, &mut ctx);
         ctx.end_pdf_page();
@@ -384,5 +389,19 @@ mod tests {
         let page = render_region(&view, (50.0, 60.0, 120.0, 80.0));
         assert_eq!((page.width, page.height), (120.0, 80.0));
         assert!(text(&page).starts_with("q 0 0 120 80 re W n\n1 0 0 -1 -50 140 cm\n"));
+    }
+
+    #[test]
+    fn a_page_range_draws_only_those_pages_of_the_view() {
+        let view = Sheet { bounds: (0.0, 0.0, 200.0, 350.0), pages: None };
+        let info = PrintInfo { margins: [0.0; 4], ..PrintInfo::default() };
+        assert_eq!(render_pages(&view, &info).len(), 1, "a short view is one page");
+        let tall = Sheet { bounds: (0.0, 0.0, 200.0, 2000.0), pages: None };
+        assert_eq!(render_pages(&tall, &info).len(), 3);
+        let cut = PrintInfo { pages: Some((2, 3)), ..info.clone() };
+        let pages = render_pages(&tall, &cut);
+        assert_eq!(pages.len(), 2);
+        assert_eq!((pages[0].width, pages[0].height), (595.0, 842.0));
+        assert!(render_pages(&tall, &PrintInfo { pages: Some((9, 10)), ..info }).is_empty());
     }
 }

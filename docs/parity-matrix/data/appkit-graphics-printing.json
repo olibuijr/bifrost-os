@@ -96,14 +96,14 @@
    "apple": "NSPrintInfo, NSPrintOperation",
    "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (Job, Layout, paper and scale) over springboard/ui/src/print.rs, springboard/ui/src/print_pages.rs (PdfContext, PrintableView, paginate)",
    "status": "partial",
-   "note": "paper, orientation, margins, copies, page range, scaling_factor and job_disposition (spool, save, preview); PrintOperation::print_operation(view) paginates a PrintableView (knows_page_range, rect_for_page, or tiles) and draws it into a PDF through PdfContext (fills, paths, text, images); pdf_operation(view, rect, path); run_modal with shows_print_panel and did_run; submits via IPP or saves the PDF. Host tests only: pages are drawn when the operation is made, no rich text or font embedding (Helvetica only), no clipping or transforms beyond the page tile; verify on Midget for parity."
+   "note": "paper, orientation, margins, copies, page range, scaling_factor and job_disposition (spool, save, preview); PrintOperation::print_operation(view) paginates a PrintableView (knows_page_range, rect_for_page, or tiles) and draws it into a PDF through PdfContext (fills, paths, text, images); pdf_operation(view, rect, path); run_modal with shows_print_panel and did_run; submits via IPP or saves the PDF. Host tests only: pages are drawn when the operation is made, no rich text or font embedding (Helvetica only), no clipping or transforms beyond the page tile; verify on Midget for parity. Sides and colour are in PrintInfo and sent as job attributes (non-default only); a page range cuts the view's pages once (render_pages); print_ranges parses typed page lists. Still no shell sheet rows for them."
   },
   {
    "feature": "Printing: print panel, page layout, accessory views",
    "apple": "NSPrintPanel, NSPageLayout, accessory view controllers",
    "bifrost": "springboard/sdk/src/print_panel.rs; wired: springboard/src/shell/print_sheet.rs (sheet rows: printer, paper, orientation, scale, copies); accessory views not done, springboard/ui/src/print_pages.rs",
    "status": "partial",
-   "note": "print_panel.rs adds PanelOptions (showsCopies, page range, paper size, orientation, scaling, preview, print selection) whose apply() writes a PanelRequest into the print info and refuses hidden controls, and PageSetup (paper, orientation, margins, scale) that round-trips with the print info; plug-in panels (accessory controllers) are keyed models. The shell sheet builds its PrintInfo through the defaults; the scale row and a shell-drawn page layout panel are not wired; verify on Midget for parity."
+   "note": "print_panel.rs adds PanelOptions (showsCopies, page range, paper size, orientation, scaling, preview, print selection) whose apply() writes a PanelRequest into the print info and refuses hidden controls, and PageSetup (paper, orientation, margins, scale) that round-trips with the print info; plug-in panels (accessory controllers) are keyed models. The shell sheet builds its PrintInfo through the defaults; the scale row and a shell-drawn page layout panel are not wired; verify on Midget for parity. print_presets (PresetStore) keeps named page setups with a text form; the shell sheet does not show presets, the PDF popup or Page Setup yet."
   },
   {
    "feature": "Printing: printer discovery",
