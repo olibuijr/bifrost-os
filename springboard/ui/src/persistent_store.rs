@@ -1,7 +1,8 @@
 //! A file-backed store for a [`ManagedContext`] (`NSPersistentStore` over one file). The file holds the saved state
 //! only: working changes are never written, so a context is saved first and then written. The file is one header
 //! line, a `next <id>` line with the identity counter, and one `<id><TAB><record>` line per saved object. A record
-//! comes from its [`Codec`] and must not contain a line break or a tab.
+//! comes from its [`Codec`] and must not contain a line break. Tabs are allowed: the line is split at its first tab, so a
+//! record may use tabs as its own field separators.
 //!
 //! [`write`] writes a temporary file and renames it over the store, so a crash leaves either the old file or the new
 //! one. A damaged line is an error on read: a store never loads with objects silently missing.
@@ -14,7 +15,7 @@ const HEADER: &str = "# bifrost managed store 1";
 
 /// How a record is written into the store file, as one line of text.
 pub trait Codec: Sized {
-    /// The line form of the record. It must not contain `\n`, `\r` or `\t`.
+    /// The line form of the record. It must not contain `\n` or `\r`; tabs are fine, the id is split off at the first one.
     fn encode(&self) -> String;
     /// Reads a record written by [`Codec::encode`]. `None` marks the line as damaged.
     fn decode(text: &str) -> Option<Self>;
@@ -65,8 +66,8 @@ where
     let mut out = format!("{HEADER}\nnext {}\n", context.next_id());
     for (id, record) in context.saved_state() {
         let body = record.encode();
-        if body.contains(['\n', '\r', '\t']) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "record encoding holds a line break or a tab"));
+        if body.contains(['\n', '\r']) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "record encoding holds a line break"));
         }
         out.push_str(&format!("{id}\t{body}\n"));
     }
