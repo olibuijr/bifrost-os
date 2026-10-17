@@ -713,7 +713,7 @@ Gaps (not matched yet): action buttons, the destructive colour and the reply fie
 `NOTIF_DISMISS_ACTION` is defined but never sent (`customDismissAction`); a tap answers for the app's newest notification, not the one
 tapped (the banner and center rows do not carry the request id); delivered requests and categories are not persisted across a shell
 restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, location triggers, the `usernotif` (`after_ms`) path's repeating triggers (use `notification_schedule`),
-`willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
+(`willPresent` and `requestAuthorization` are wired now; see "Notifications: authorization and presentation (update)" under the SDK modules of 2026-10-17.)
 
 ### Notification stacks, persistence and Show Previews (parity round)
 
@@ -785,8 +785,8 @@ restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels,
 - **Sound and attachments**: `Sound::{Default, DefaultCritical, DefaultCriticalVolume, Named}` (critical needs the critical-alert grant);
   `Attachment::new(id, file name, size)` accepts image, audio and video types within 10, 5 and 50 MB.
 
-Gaps: none of this is on the wire yet (`NotifRequest` has no sound, attachments or calendar fields, and there is no delegate round trip
-or authorization prompt UI); remote push and service extensions are not built. Midget check pending.
+Gaps: none of this is on the wire yet (`NotifRequest` has no sound, attachments or calendar fields); the delegate round trip and the
+authorization prompt are wired since 2026-10-17. Remote push and service extensions are not built. Midget check pending.
 
 ## Share sheet (`NSSharingServicePicker`, roadmap item 5b)
 
@@ -5062,3 +5062,251 @@ Decisions and limits:
   PDF `ICCBased` path (`cg/pdf/image.rs` still takes the component count only), and the `ColorSync` SDK call (no app
   calls `icc_transform` yet; the `bifrost_app::colorsync` surface still exposes only the named-space converter).
 - Verified on the host only by unit tests (`cargo test -p bifrost-render icc`, `colorspace`, `edid`). Not verified on Midget.
+
+## SDK modules added 2026-10-17 (parity waves 1 to 8)
+
+The modules below were added to `springboard/sdk/src` and `springboard/ui/src` in the parity waves of 2026-10-17. Each
+entry says what the module does, its main items, and what is not wired. "No caller found" means a search of
+`springboard/src`, `springboard/apps` and `springboard/core` by module name found no use outside the module and `lib.rs`:
+the model is host-tested, but no shell or app drives it yet. Every row stays partial until a Midget check.
+
+### Cryptography and credentials
+
+- **CryptoKit (`bifrost_app::crypto_kit`, `springboard/sdk/src/crypto_kit.rs`)**: digests `sha256`, `sha384`, `sha512`;
+  `hkdf_sha256` (RFC 5869); `AesGcmKey` (`generate`, `from_bytes`, `seal`, `open`; a sealed box is nonce, ciphertext, tag);
+  `KeyAgreementKey` (X25519: `generate`, `public_key`, `agree`); `SigningKey` and `verify_signature` (Ed25519). Random keys
+  and nonces come from the shell's entropy pool. ChaCha20-Poly1305 is in `chacha_poly`. Caller: `springboard/src/shell/services/trust_eval.rs`.
+  Parity row: `docs/parity-matrix/data/apple-cryptokit.json`.
+- **OAuth 2 tokens (`bifrost_app::social_oauth2`)**: `OAuth2Token::from_response` reads a token endpoint's JSON answer
+  (RFC 6749 5.1) against the caller's clock; `needs_refresh` uses a 60 second margin (`REFRESH_MARGIN_SECS`);
+  `refresh_request` builds the renewal; `sign` sets `Authorization: Bearer`. The network is the caller's. No caller found.
+  Parity row: `social.json`.
+- **OAuth credential (`bifrost_app::oauth_credential`)**: `OAuthCredential` holds access token, refresh token, expiry and scope
+  (the OAuth form of `ACAccountCredential`). `encode` and `decode` store it as one opaque keychain secret (header
+  `bifrost-oauth-v1`), so the keychain never sees the fields. `is_expired`, `needs_renewal`, `can_renew`, `renewed`. No caller found.
+- **Credential binding (`bifrost_ui::credential_acl`)**: `Binding::new(owner, service, account, presence)`; `grant(by, app)`
+  lets another app read the item; `presence` can require a passcode or biometry. No caller found.
+- **Recovery key (`bifrost_ui::recovery_key`)**: `from_entropy` makes a 16-character key from a 32-character alphabet without
+  look-alikes, shown in four groups; `normalise` cleans typed input; `Record::enrol` stores only a salted hash and `matches`
+  checks a typed key. No caller found: forgotten-password reset is not wired.
+
+### Kerberos, LDAP and directories
+
+- **kpasswd framing (`bifrost_app::kpasswd`)**: RFC 3244 request and reply frames for the Kerberos password service
+  (`encode_request`, `decode_request`, `encode_reply`, `decode_reply`; versions `0x0001` change and `0xff80` set).
+  Framing only: the AP-REQ and KRB-PRIV come from the caller. No caller found.
+- **Kerberos client (`bifrost_app::krb5_client`)**: runs the MIT tools `kinit` and `klist` (the `krb5` package) with
+  `std::process::Command`, never a shell. A password goes to `kinit` on standard input. `klist`, `kinit`, `copy_ccache`
+  and `parse_klist`; the cache is the `CacheName` of `gss_krb5`. No caller found.
+- **LDAP (`bifrost_app::ldap_directory`)**: `Server::new(uri, base)` and `with_bind(dn, password)`; `search` runs `ldapsearch`
+  (the `openldap` package) and parses LDIF into `DirRecord`s; `load` fills a `Session` node for the directory query model.
+  The bind password goes through a private file, not the command line. No caller found.
+- **Local directory (`bifrost_ui::directory_local`)**: `parse_passwd` and `parse_group` turn `/etc/passwd` and `/etc/group`
+  into `users` and `groups` records with POSIX attribute names; `fill_node` loads a node. Caller: `springboard/src/shell/services/directory.rs`.
+
+### Network
+
+- **Multicast group (`bifrost_app::network_group`)**: `ConnectionGroup::new(port)` binds a UDP socket; `join` and `leave`
+  change membership (rules from `bifrost_ui::multicast`); `send`, `receive`, `set_time_to_live`, `set_loopback`. IPv4 only.
+  No caller found. Parity row: `network.json`.
+- **TLS options (`bifrost_app::tls_client`)**: `client_config(TlsOptions)` builds the rustls client configuration; `connect`
+  wraps a `TcpStream`. No caller found.
+- **Link conditioner (`bifrost_app::link_conditioner`)**: four built-in `PROFILES` (`profile(name)`), `Profile::validate`,
+  `netem_options`, `tc_args(iface)` and `clear_args(iface)`. Only egress is shaped. The caller runs `tc`. No caller found.
+- **Proxy settings (`bifrost_app::proxy_settings`)**: `ProxySettings::from_env` reads `http_proxy`, `https_proxy`, `no_proxy`
+  (and upper-case forms); `proxy_for(scheme, host)` and `bypasses(host)`. No caller found. Parity row: `cfnetwork.json`.
+- **Bonjour advertising (`springboard/sdk/src/avahi_publish.rs`)**: `Publication::start(service, port)` runs
+  `avahi-publish-service`; dropping the value withdraws the record. `publish_args` is pure. No caller found.
+- **Wi-Fi (`bifrost_app::wlan_service`)**: request functions for the `wifi` service (`request_interfaces`, `request_networks`,
+  `request_power`, `request_scan`, `request_join`, `request_forget`, `request_host`); `decode_*` read the replies. The shell
+  serves them in `springboard/src/shell/services/wifi.rs`. Parity row: `core-wlan.json`.
+
+### Cloud records and accounts
+
+- **Cloud record zone (`bifrost_app::cloud_records`)**: `CloudZone` implements `record_sync::Remote` over the cloud's `records`
+  table. A zone opens only with `Consent::given(true)`, and field values travel only sealed through a `Sealer`.
+  Not wired: no app has an account key to seal with, so no app can sync yet.
+- **Account suggestions (`bifrost_ui::account_suggestions`)**: `for_address` picks the account type and mail servers for an
+  address from a built-in provider table or the address's domain. Nothing goes over the network. Caller: `springboard/src/shell/forms.rs`.
+- **Account store (`bifrost_ui::account_store`)**: the shared `accounts.ini` reader and writer, used by the Internet Accounts page,
+  the access sheet and Settings. The SDK side is described in "Accounts" above.
+
+### Speech, language and search
+
+- **Live recognition (`bifrost_app::speech_whisper`)**: `start`, `poll`, `stop`, `model`, `set_consent`, `download` over the
+  `speech_recognizer` service; `poll_from_reply` decodes the transcripts; `WhisperBackend` plugs them into `SFSpeechRecognizer`.
+  Audio stays on the machine. Gaps (from the module): no per-word timing or confidence, English only, no file recognition, and
+  the element's reply format is checked on the lab machine only. Callers: `springboard/src/shell/services/recognizer.rs` and the keyboard app.
+- **On-device language model (`bifrost_app::language_model`)**: re-exports the session, tool, schema and budget models;
+  `run_turn(session, provider)` runs one turn. The SDK ships no provider. `on_device_availability()` always returns
+  `Unavailable(NoOnDeviceModel)`, because BifrOSt has no on-device model yet. Caller: the assistant app's `connect.rs`.
+- **Core ML (`bifrost_app::core_ml`)**: `model_device(policy)` returns CPU only (`MODEL_DEVICES` is `[Cpu]`), and `top_index`
+  reads the best label of a tensor. Models come from `bifrost_ui::ml_model`; the work runs on the CPU evaluator. Parity row: `core-ml.json`.
+  No caller found.
+- **Embeddings (`bifrost_app::embedding`)**: `embed(text)` is a hashed bag-of-words vector of `DIMENSIONS` (256) buckets, unit
+  length; `cosine`; `EmbeddingIndex` with `insert`, `remove` and `nearest`. This is not a neural model. No caller found.
+- **Search kit (`bifrost_app::search_kit`)**: `SearchIndex` over an app's own text: `add_document`, `remove_document`,
+  `find_matches` (type-ahead words, every query word needed), `summary`, `to_text` and `from_text`. In memory. No caller found.
+  Parity row: `core-spotlight.json`.
+- **Search cards (`bifrost_app::search_card_provider`)**: `CardProviders::set_cards(app, cards)` replaces one app's cards;
+  `results(query, limit)` ranks title matches above subtitle matches; `remove_app`. No caller found.
+- **Document links (`bifrost_app::document_links`)**: `index_wiki_links` reads `[[Target]]` links into a
+  `bifrost_core::link_index::LinkIndex`; `backlinks_of` lists the documents that link to a target. No caller found.
+- **Link metadata (`bifrost_app::link_metadata`)**: `checked_url` (http and https only), `resolve`, `parse` (title, Open Graph and
+  Twitter card image, icon links) and `LinkFetch::start` with a timeout between 1 and 60 seconds. No caller found.
+  Parity row: `link-presentation.json`.
+- **Link card view (`bifrost_ui::link_card`)**: `draw` paints the card (icon or initial tile, title, site name). Callers: the news
+  app's `news.rs` and `wire.rs`.
+- **Tab selection (`bifrost_ui::tab_selection`)**: `TabSelection` holds the ordered tab identifiers and the selected one; removing
+  the selected tab selects its neighbour. No caller found.
+
+### Screen, capture and images
+
+- **Screen stream (`bifrost_app::screen_stream`)**: `start` (size, minimum frame interval, filter, optional record path), `stop`,
+  `frame_from_event` (`Fresh` or `Repeated` frames). The shell side is `springboard/src/shell/services/mod.rs`, with pacing in
+  `bifrost_ui::capture_stream` (`ScreenStream::start` refuses without screen capture access). Parity row: `screencapturekit.json`.
+- **Capture session (`bifrost_app::av_capture_session`)**: `CaptureSession::new(w, h)`, `set_input(VideoDevice)`, and `start`
+  returns a `StreamPlan` naming the V4L2 node. It opens no device itself. No caller found.
+- **Document scan (`bifrost_app::document_scan`)**: `DocumentScan` keeps the pages; `flatten(frame, w, h, page)` warps RGBA pixels
+  onto a flat page by nearest-pixel inverse mapping. Finding the page corners is the camera's job and is not done here. No caller found.
+- **Pixel transfer (`bifrost_app::pixel_transfer`)**: `PixelTransfer::new(w, h)` converts NV12 to RGBA (BT.709 at 720 lines and up,
+  BT.601 below, or a colorimetry set with `with_colorimetry`); `rotated` and `rotated_by` turn pictures. No caller found.
+- **Image render (`bifrost_app::image_render`)**: `perspective_correct`, `render_to_destination` and `VideoFilter` (`process`,
+  `with_feedback`, `reset`) for per-frame filter chains. No caller found.
+- **Screen usage (`bifrost_app::screen_usage`)**: `own_seconds(dir, day, app_key)` reads only the app's own foreground seconds from
+  the per-day file under `screentime/`. No other app's data is visible. No caller found. Parity row: `screen-time.json`.
+- **Web usage and history (`bifrost_app::web_usage`, `bifrost_app::web_history`)**: `WebUsage` records seconds per host (video and
+  picture-in-picture counted apart) and a block list that matches subdomains; `WebHistory` holds visits filtered by bundle, profile
+  and time range. History is used by `springboard/apps/browser/src/store.rs`; web usage has no caller found. Parity rows:
+  `safari-services.json` (history) and `screen-time.json` (usage).
+
+### Photos, media and maps
+
+- **Photo editing (`bifrost_app::photo_editing`)**: `PHContentEditingSession::begin`, `input_adjustment`, `finish` with a
+  `PHContentEditingOutput`, and `revert`. Adjustments are stored as records (`bifrost_ui::photo_adjustment`), so the original is
+  never rewritten. Not wired: there is no extension host, so no third-party editor loads.
+- **Photo picker (`bifrost_app::photo_picker`)**: `PHPickerConfiguration` (filters, selection limit, `to_params`), `PHPickerResult`,
+  `PHPickerViewController::present`, `decode_reply` and `check_limit`. Not wired: the shell does not answer the `picker` call yet, so
+  the reply is an error and an app must fall back.
+- **Media format (`bifrost_app::media_format`)**: `FormatDescription::video(codec, w, h)` and `sound(codec, SoundFormat)`. The codec is
+  a four-character code (space-padded when short); sides are at most `MAX_SIDE` (16384). Pure data, no decoder. No caller found.
+  Parity row: `core-media.json`.
+- **Media library and picker (`bifrost_app::media_library`, `bifrost_app::media_picker_view`)**: `media_library::run(library, query)`
+  returns positions and sections over the app's own index; `media_picker_view` shapes the picker rows (`rows`, `footer`, `tap`).
+  Caller: `springboard/src/shell/pickers.rs`.
+- **CoreMedia time (`bifrost_app::core_media_time`)**: `MediaTime` (a rational value over a timescale, with invalid, indefinite and
+  infinite states) and `CMTimeRange`, the type the media pipeline also uses. No caller found. Parity row: `core-media.json`.
+- **Picture in Picture (`bifrost_app::picture_in_picture`)**: `Pip::new(aspect)` wraps `bifrost_ui::pip_window::Controller` and gives
+  the window rectangle and corner. `set_possible`, `start` and `stop` send to the shell's service, answered in
+  `springboard/src/shell/services/mod.rs`. Nothing is drawn here. Parity row: `avkit.json`.
+- **Route picker (`bifrost_app::route_picker`)**: `sections` splits local outputs and nearby receivers; `tap` activates a route
+  (`bifrost_ui::route_auth` decides). The shell makes the connection. Callers: `springboard/src/shell/control_center.rs`,
+  `pickers.rs` and `services/audio_devices.rs`. Parity row: `avrouting.json`.
+- **Positional audio (`bifrost_app::positional_audio`)**: `Listener` and `Source`, with OpenAL-style inverse-distance gain clamped to
+  the reference and maximum distance, and an equal-power pan. The model returns gains; the audio service applies them. No caller
+  found. Parity row: `avfaudio.json`.
+- **Maps (`bifrost_app::maps`)**: makes the MapKit models in `bifrost_ui` reachable from the SDK (coordinates, regions, camera,
+  controls, user location, places). `Snapshotter::render` draws a tile picture, `fix_from_location` and `feed_user_location` take a
+  Core Location fix, and `search_places` runs the geocoder over a `Net` trait. Parity row: `mapkit.json`.
+
+### Now Playing, remote commands and feedback
+
+- **Up Next queue (`bifrost_app::now_playing`: `QueueEntry`, `publish_with_queue`, `queue_pick`)**: `publish_with_queue` sends the
+  app's `QueueEntry` list (`title`, optional `artist`, `playable`). When the person picks an entry in Control Center, the shell sends
+  a `queue_select` event with the index, and `queue_pick` decodes it. A non-playable entry is listed but cannot be picked. The shell
+  side is `springboard/src/shell/services/now_playing.rs`. Parity row: `now-playing.json`.
+- **Feedback (`bifrost_app::now_playing_feedback`)**: `feedback_body` publishes the like, dislike and bookmark toggles and an optional
+  rating scale; `feedback_from_event` and `rate_from_event` decode the person's choice. The app applies the change to its own state
+  before it republishes, so a refused command is not shown as done. The shell reads the `feedback` field of the publish body.
+- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. Not wired: artwork does not reach the shell yet.
+- **Remote routing (`bifrost_app::remote_routing`)**: `action_for(command)` maps a shell command to a `RemoteAction` (skips map to none,
+  since they use `SkipIntervalCommand`), `media_key(name)` maps hardware media keys, and `route(center, command)` passes the command to
+  the app's `CommandCenter`. A switched-off or unhandled action is refused. No caller found.
+
+### Notifications: authorization and presentation (update)
+
+The gap sentence at the end of "User notifications" is out of date. The shell now answers both calls:
+
+- `request_authorization` (`ToShell::NotifyAuthorize`) returns the stored answer, or holds the request and shows the first-time
+  alert, then answers with `Event::Authorization`. A provisional request is granted without a prompt
+  (`springboard/src/shell/usernotif.rs`, `usernotif_authorize`).
+- `set_presentation_delegate` and `will_present` (`NotifyPresentDelegate`, `NotifyPresentReply`) are wired: an app that opted in is
+  asked about each notification that arrives while it is in front, and the answer is cut to the grant.
+
+Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, interruption levels and location triggers.
+
+### Runtime, scheduling and diagnostics
+
+- **Run loop (`bifrost_app::run_loop`)**: `RunLoop::schedule_after(delay, work)` and `advance(now)` run due work on the thread that
+  owns the publishers (the `Rc`-based observables). It has no thread of its own. No caller found.
+- **Operation queue (`bifrost_app::operation_queue`)**: `OperationQueue` runs closures on background threads, at most
+  `max_concurrent_operation_count` at a time (0 means one per CPU core), with `set_suspended`, `cancel_all_operations` and
+  `wait_until_all_operations_are_finished`. Dependencies and quality-of-service classes are not modelled; use `dispatch` for those.
+  No caller found. Parity row: `dispatch.json`.
+- **Performance counters (`bifrost_app::perf_counters`)**: `measure(events, program, args)` runs `perf stat` and parses its CSV. A
+  counter the machine does not offer is `None`, not zero. No caller found.
+- **Session assertions (`bifrost_app::session_assertion`)**: `PowerAssertion::new(hold, reason, who)` builds the
+  `systemd-inhibit --what=... --mode=block` arguments; the caller runs the command, and ending that process ends the hold.
+  The shell's `springboard/src/bare/sleep.rs` uses the same mechanism.
+- **Watchdog (`bifrost_app::watchdog`)**: `interval()` reads `WATCHDOG_USEC` and gives half of it; `ping()` sends `WATCHDOG=1` to
+  `NOTIFY_SOCKET`. Callers: `springboard/src/shell/diag.rs`, `springboard/src/bare/crashlog.rs`.
+- **Container migration (`bifrost_app::container_migration`)**: a `.container-version` file in the app's data directory and ordered
+  `Step`s; `migrate(dir, steps, target)` runs them in order and writes the version after each one, so a failed step resumes next time.
+  A container newer than the target is refused. No caller found.
+- **System configuration store (`bifrost_app::system_config_store`)**: a keyed `State:/...` and `Setup:/...` table (the
+  `SCDynamicStore` shape) with `set`, `get`, `remove`, `keys(prefix)` and a `revision` counter. No caller found.
+  Parity row: `system-configuration.json`.
+- **Settings panes (`bifrost_app::settings_panes`)**: `[[settings_pane]]` entries in `manifest.toml`. The shell sends
+  `ae.settings.openPane` with the pane id, and `install_open_handler` answers it. Callers: `springboard/src/shell/apphost.rs`,
+  `pages.rs` and `mod.rs`.
+- **Tips and tooltips (`bifrost_app::tips`, `bifrost_app::tooltips`)**: `tips::present_first` picks the first tip whose rules allow it
+  and records the display; `tip_popover_frame` places the 260 by 96 point popover with a 9 point gap. `TooltipHost` tracks the
+  controls' regions and delays, and `draw` paints the ToolTip material. Not wired: the shell does not pass hover positions to apps,
+  so a real mouse shows no tooltip in an app yet; touch moves are the only pointer input the app sees.
+- **Translation popover (`bifrost_app::translation_popover`)**: `TranslationPresenter::present` runs the translation through the app's
+  `Translator` and places a 280 by 120 point popover; `replacement` returns the text, and the app writes it into its document.
+  No caller found. Parity row: `translation.json`.
+- **Accessibility audit (`bifrost_app::accessibility_audit`)**: `Audit::new(window).run(&elements)` returns findings for unnamed
+  controls, empty or clipped elements, small targets, duplicate names and low text contrast. The model is `bifrost_ui::ax_audit`.
+  No caller found.
+- **Workflow (`bifrost_app::workflow`)**: `WorkflowRun` runs an ordered list of closure steps that pass output along, with `Variables`,
+  one step at a time, and pause, stop and reset. It models the Automator workflow engine. Callers: `springboard/apps/automator-desktop`
+  and `springboard/apps/shortcuts-desktop`.
+- **Mail compose (`bifrost_app::mail_compose`)**: `compose(ctx, draft, files)` opens a new message in the `mailto:` handler with
+  recipients, subject, body and attached grants. Callers: `springboard/src/shell/sharing.rs` and the contacts app.
+
+### Input, geometry and game models
+
+- **GameplayKit (`bifrost_app::gameplay_kit`)**: re-exports the game-logic models (entities and components, state machines, grid
+  pathfinding, agents, noise, decision trees, rule systems, strategist, quadtree). Deterministic; random values come from
+  `crate::random`, seeded by `testing::seed()`. Parity row: `gameplaykit.json`.
+- **Linear algebra (`bifrost_app::linear_algebra`)**: re-exports `bifrost_ui::linalg` (GLKit vector, matrix and quaternion types).
+  No GPU upload; that is a separate API. Parity row: `glkit.json`.
+- **FFT (`bifrost_app::fft`)**: in-place radix-2 complex FFT and inverse over `Complex` (`fft`, `ifft`); lengths must be a power of
+  two. Caller: the DAW app's `springboard/apps/daw/src/conv.rs`. Parity row: `accelerate.json`.
+- **HID reports (`bifrost_app::hid_reports`)**: finds `/dev/hidrawN` nodes (`devices_in`), reads one report per call (`read_report`),
+  and keeps a bounded `ReportQueue` that counts dropped reports (`take_dropped`). It does not decode reports. No caller found.
+  Parity row: `core-hid.json`.
+- **Icon images (`bifrost_app::icon_images`)**: `IconImages` maps content type identifiers to bitmap sets (the nearest registered
+  ancestor wins) and a folder icon (`FOLDER`). No caller found.
+- **Raster 3D (`bifrost_ui::raster3d`)**: a CPU triangle rasteriser with a depth buffer; each triangle is lit once at its centroid.
+  A triangle with a vertex at or behind the eye is skipped, not clipped. A stand-in for a GPU rasteriser. No caller found.
+
+### Contacts and phone numbers
+
+- **Phone numbers (`bifrost_ui::phone_number`, `bifrost_ui::phone_rules`)**: `parse(input, region)` normalises to E.164 and formats
+  nationally or internationally. `phone_rules` holds lengths and trunk prefixes for 20 common regions. This is not the full numbering
+  plan: a number of an unusual length is refused. Callers: the calendar and contacts apps (`phone_number`).
+- **Recipient recents (`bifrost_ui::recipient_recents`)**: the most recent addresses, favourites first and capped; an address is
+  compared without case. No caller found.
+
+### Storage, managed objects and previews
+
+- **Managed context (`bifrost_ui::managed_context`)**: `ManagedContext<R>` keeps inserted, edited and deleted objects in a working
+  copy; `save` makes the working copy the saved state and `rollback` discards it. Caller: the reminders app's `archive.rs`.
+- **Persistent store (`bifrost_ui::persistent_store`)**: one file for a `ManagedContext`, with a `Codec` for each record. Only the saved
+  state is written. Callers: the reminders app's `archive.rs` and `store.rs`.
+- **Preview view (`bifrost_ui::preview_view`)**: `view_frame` lays out an embedded preview's title row, body and counter. The shell's
+  `springboard/src/shell/preview_panel.rs` uses the same helpers, so both show the same words in the same places.
+- **Local authentication view (`bifrost_app::view::local_auth_view`)**: `LocalAuthenticationView` shows the biometric state as a disc and
+  sends its action when tapped; the state changes only through `send`. No caller found. Parity row: `local-authentication-embedded-ui.json`.
