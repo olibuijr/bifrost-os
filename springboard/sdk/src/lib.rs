@@ -414,6 +414,7 @@ pub mod host_addressing;
 pub mod ftp;
 pub mod dns_service;
 pub mod net_diagnostic;
+pub mod net_probe;
 pub mod stream;
 pub mod websocket;
 pub mod url_cache;
