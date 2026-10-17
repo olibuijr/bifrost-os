@@ -379,6 +379,8 @@ pub mod file_manager;
 pub mod file_manager_sync;
 /// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
 pub mod local_model;
+/// On-demand resources: tagged payloads fetched when asked for, pinned while used, purged under a disk budget.
+pub mod on_demand_resources;
 pub mod url;
 pub mod url_background;
 pub mod multipart;
