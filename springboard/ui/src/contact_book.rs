@@ -430,6 +430,25 @@ pub fn format_name(contact: &FetchedContact, order: NameOrder) -> Result<String,
     Ok([nick.trim(), org.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string())
 }
 
+/// The address as lines in CNPostalAddressFormatter's default order: street, sub-locality, the city with the state and
+/// postal code after a comma, the sub-administrative area and the country. Empty parts are left out, and the lines are
+/// joined with newlines.
+pub fn format_postal_address(address: &PostalAddress) -> String {
+    let part = |s: &str| s.trim().to_string();
+    let (city, state, postal) = (part(&address.city), part(&address.state), part(&address.postal_code));
+    let region = [state, postal].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ");
+    let locality = match (city.is_empty(), region.is_empty()) {
+        (false, false) => format!("{city}, {region}"),
+        (false, true) => city,
+        _ => region,
+    };
+    [part(&address.street), part(&address.sub_locality), locality, part(&address.sub_administrative_area), part(&address.country)]
+        .into_iter()
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A batch of changes applied together (CNSaveRequest): all of them or none.
 #[derive(Clone, Debug, Default)]
 pub struct SaveRequest {
@@ -818,6 +837,26 @@ fn sort_name(c: &Contact) -> String {
 mod tests {
     use super::*;
     use ContactKey::*;
+
+    #[test]
+    fn a_postal_address_formats_in_envelope_order_and_skips_empty_parts() {
+        let full = PostalAddress {
+            street: " 1 Main St ".into(),
+            sub_locality: "Soho".into(),
+            city: "London".into(),
+            state: "LDN".into(),
+            postal_code: "N1".into(),
+            sub_administrative_area: "Greater London".into(),
+            country: "UK".into(),
+            ..PostalAddress::default()
+        };
+        assert_eq!(format_postal_address(&full), "1 Main St\nSoho\nLondon, LDN N1\nGreater London\nUK");
+        let street_only = PostalAddress { street: "1 Main St".into(), ..PostalAddress::default() };
+        assert_eq!(format_postal_address(&street_only), "1 Main St");
+        let no_city = PostalAddress { postal_code: "N1".into(), country: "UK".into(), ..PostalAddress::default() };
+        assert_eq!(format_postal_address(&no_city), "N1\nUK");
+        assert_eq!(format_postal_address(&PostalAddress::default()), "");
+    }
 
     fn ada() -> Contact {
         Contact {
