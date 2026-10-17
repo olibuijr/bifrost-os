@@ -1916,7 +1916,7 @@ impl Shell {
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
-        if self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
+        if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {
             // the CPU/RAM read joins a wake-up that is already planned inside its tolerance window
             let menu = self.metrics_menu_open();
