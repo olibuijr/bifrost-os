@@ -190,7 +190,15 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bifrost-wm"
+    }
+   ],
+   "ready_note": "bifrost-wm is the window server and the only compositor (docs/window-server.md); the private SkyLight API itself is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Sleep.framework",
@@ -568,7 +576,21 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "softwareupdate --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "softwareupdate"
+    }
+   ],
+   "ready_note": "softwareupdate CLI (springboard/cmd/src/softwareupdate.rs) talks to the update agent (springboard/updated); the Settings page and background schedule are in shell/ota.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework",
@@ -589,7 +611,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota"
+    }
+   ],
+   "ready_note": "Update check, schedule and notices are in springboard/src/shell/ota.rs, with the update agent springboard/updated doing the install work."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SoftwareUpdateCoreConnect.framework",
@@ -817,8 +848,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: visionOS spatial computing, no such hardware on BifrOSt",
    "rea": [],
    "method": "assessed"
   },
@@ -838,8 +869,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: visionOS spatial computing, no such hardware on BifrOSt",
    "rea": [],
    "method": "assessed"
   },
@@ -859,8 +890,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: visionOS spatial computing, no such hardware on BifrOSt",
    "rea": [],
    "method": "assessed"
   },
@@ -922,8 +953,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: visionOS spatial computing, no such hardware on BifrOSt",
    "rea": [],
    "method": "assessed"
   },
@@ -1174,8 +1205,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Sports service data and feed, not mirrored",
    "rea": [],
    "method": "assessed"
   },
@@ -1615,8 +1646,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, owner StickerFoundation, which no SDK file assesses yet",
+   "status": "n/a",
+   "note": "n/a: Messages sticker packs, an Apple messaging service BifrOSt does not mirror",
    "rea": [],
    "method": "assessed"
   },
@@ -1636,8 +1667,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, owner StickerKit, which no SDK file assesses yet",
+   "status": "n/a",
+   "note": "n/a: Messages sticker packs, an Apple messaging service BifrOSt does not mirror",
    "rea": [],
    "method": "assessed"
   },
@@ -1657,8 +1688,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Messages sticker packs, an Apple messaging service BifrOSt does not mirror",
    "rea": [],
    "method": "assessed"
   },
@@ -1765,7 +1796,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration"
+    }
+   ],
+   "ready_note": "SDK disk arbitration layer (springboard/sdk/src/disk_arbitration.rs): disk events, claims and mounts."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/StorageManagement.framework",
@@ -1786,7 +1826,21 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "diskutil --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_commands"
+    }
+   ],
+   "ready_note": "diskutil CLI (springboard/cmd/src/diskutil.rs) and the disk command layer (springboard/core/src/disk_commands.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/StorageManagementService.framework",
@@ -2017,7 +2071,21 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "unzip -v",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ditto"
+    }
+   ],
+   "ready_note": "zip and unzip (runtime packages) plus the ditto CLI (springboard/cmd/src/ditto.rs) create and extract archives. Streaming extraction is not a separate framework here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/StrokeAnimation.framework",
@@ -2353,7 +2421,21 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "gdb --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report"
+    }
+   ],
+   "ready_note": "gdb (packaging/arch/runtime-packages.txt) symbolicates core dumps; the SDK reads crash reports and symbolicates frames in springboard/sdk/src/crash_report.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SymptomDiagnosticReporter.framework",
@@ -3001,8 +3083,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: dyld shared-cache page prewarming; BifrOSt loads ELF binaries without a shared cache",
    "rea": [],
    "method": "assessed"
   }
