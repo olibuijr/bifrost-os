@@ -1639,7 +1639,8 @@ impl Shell {
         }
         // the package install sheet takes every touch while it is up
         if self.package_showing() {
-            self.package_touch(x, y, matches!(ev, Event::Up(..)));
+            let t = self.auth_clock;
+            self.package_touch(x, y, matches!(ev, Event::Up(..)), t);
             return Some(vec![]);
         }
         // the network login sheet takes every touch while it is up
@@ -4276,7 +4277,7 @@ impl Shell {
                 self.net_auth_draw(s, t);
             }
             if self.package_showing() {
-                self.package_draw(s);
+                self.package_draw(s, t);
             }
             if let Some(a) = &self.crash_alert {
                 a.draw(s, &self.ui, self.w, self.h);

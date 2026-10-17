@@ -661,7 +661,7 @@ impl Shell {
         }
         // the package install sheet takes the typing (Escape closes it) and never installs on Return
         if self.package_showing() {
-            self.package_type(out);
+            self.package_type(out, t);
             return vec![];
         }
         // the network login sheet takes the typing for its fields

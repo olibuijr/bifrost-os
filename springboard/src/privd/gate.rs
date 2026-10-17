@@ -2,7 +2,7 @@
 //! about two seconds on a wrong password), so `session.lock`, `login.account` and `power.*` stay responsive
 //! while a login is being verified. Overlapping checks are refused by `Auth`'s `verifying` flag instead.
 
-use super::auth::{AccountInfo, Auth, AuthError, Begin, PwPlan};
+use super::auth::{AccountInfo, Auth, AuthError, Begin, ElevatePlan, PwPlan};
 use super::pam::Verify;
 use super::{obj, s, Gate, PErr, Peer};
 use bifrost_core::json::Json;
@@ -109,5 +109,24 @@ impl Gate for AuthGate {
             }
         };
         self.lock_auth().run_chpasswd(&user, new).map_err(perr)
+    }
+
+    fn elevate(&self, token: &str, scope: &str, password: &str) -> Result<String, PErr> {
+        let at = now();
+        let (plan, verifier) = {
+            let mut a = self.lock_auth();
+            (a.plan_elevate(Some(token), scope, password, at).map_err(perr)?, a.verifier())
+        };
+        match plan {
+            ElevatePlan::Done(grant) => Ok(grant),
+            ElevatePlan::Verify(user) => {
+                let r = self.verify(verifier, &user, password);
+                self.lock_auth().finish_elevate(r, scope, at).map_err(perr)
+            }
+        }
+    }
+
+    fn consume_grant(&self, token: &str, scope: &str, grant: Option<&str>) -> Result<(), PErr> {
+        self.lock_auth().consume_grant(Some(token), scope, grant, now()).map_err(perr)
     }
 }

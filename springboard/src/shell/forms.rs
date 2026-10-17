@@ -50,6 +50,9 @@ pub enum Purpose {
     /// the user name (`password` false) or the password (true) a share or an 802.1X network asked for through the
     /// `network_auth` service (the sheet is `network_auth_sheet.rs`); the answer goes to the service and is saved only if asked
     NetworkLogin { password: bool },
+    /// the administrator's password for installing software (the sheet is `package_install_sheet.rs`); it goes to
+    /// privd's `auth.elevate` and is never kept
+    InstallAuthentication,
 }
 
 /// What the sheet shows.
@@ -233,7 +236,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
         Purpose::AccountEmail => crate::cloud_account::normalize_email(text).is_ok(),
         Purpose::AccountPassword { .. } => !text.is_empty(),
-        Purpose::AppAuthentication { .. } | Purpose::VolumeUnlock { .. } => !text.is_empty(),
+        Purpose::AppAuthentication { .. } | Purpose::VolumeUnlock { .. } | Purpose::InstallAuthentication => !text.is_empty(),
         Purpose::NetworkLogin { .. } => crate::net_auth::valid_field(text),
         Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
         Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),

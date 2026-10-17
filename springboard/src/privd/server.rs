@@ -128,6 +128,17 @@ pub fn dispatch(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, method: &str, para
         _ => {}
     }
     let token = params.get("t").and_then(Json::as_str);
+    if method == "auth.elevate" {
+        // a fresh password check by a session that is already unlocked; the reply is a single-use grant. The root
+        // socket's peers are root and need none.
+        if peer.root_socket {
+            return Err(PErr::bad("the root socket needs no elevation"));
+        }
+        let token = token.ok_or_else(|| PErr::new("unauthorized", "missing token"))?;
+        let scope = params.get("scope").and_then(Json::as_str).ok_or_else(|| PErr::bad("scope"))?;
+        let pw = params.get("password").and_then(Json::as_str).ok_or_else(|| PErr::bad("password"))?;
+        return gate.elevate(token, scope, pw).map(|g| obj(vec![("grant", s(g))]));
+    }
     if method == "account.set_password" {
         // before the token check: the first password of a fresh account needs no token (the gate decides
         // from the hash and the peer, and only an empty hash from the console shell qualifies)
@@ -140,6 +151,12 @@ pub fn dispatch(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, method: &str, para
     let stable = method == "system.boot_attempt" && params.get("event").and_then(Json::as_str) == Some("stable");
     if (!is_unauth(method) || stable) && !peer.root_socket {
         gate.require_unlocked(token.ok_or_else(|| PErr::new("unauthorized", "missing token"))?)?;
+    }
+    // installing software needs the administrator's password again, not only the session token: the call spends the
+    // grant `auth.elevate` issued, so a shell that holds the token cannot install on its own
+    if let (Some(scope), false) = (super::elevation_scope(method), peer.root_socket) {
+        let token = token.ok_or_else(|| PErr::new("unauthorized", "missing token"))?;
+        gate.consume_grant(token, scope, params.get("grant").and_then(Json::as_str))?;
     }
     exec.call(method, params)
 }
@@ -289,8 +306,34 @@ mod tests {
 
     struct TestGate {
         unlocked: Mutex<bool>,
+        grant: Mutex<Option<String>>,
+    }
+    impl TestGate {
+        fn new() -> TestGate {
+            TestGate { unlocked: Mutex::new(false), grant: Mutex::new(None) }
+        }
     }
     impl Gate for TestGate {
+        fn elevate(&self, t: &str, scope: &str, pw: &str) -> Result<String, PErr> {
+            self.require_unlocked(t)?;
+            if scope != super::super::SCOPE_PACKAGE_INSTALL {
+                return Err(PErr::bad("scope"));
+            }
+            if pw != "good" {
+                return Err(PErr::new("wrong_password", "no"));
+            }
+            *self.grant.lock().unwrap() = Some("grant-1".into());
+            Ok("grant-1".into())
+        }
+        fn consume_grant(&self, t: &str, _: &str, grant: Option<&str>) -> Result<(), PErr> {
+            self.require_unlocked(t)?;
+            let held = self.grant.lock().unwrap().take();
+            if held.is_some() && held.as_deref() == grant {
+                Ok(())
+            } else {
+                Err(PErr::new("elevation_required", "authenticate again"))
+            }
+        }
         fn account(&self) -> Result<Json, PErr> {
             Ok(obj(vec![("username", s("olli"))]))
         }
@@ -322,6 +365,7 @@ mod tests {
         fn call(&self, method: &str, params: &Json) -> Result<Json, PErr> {
             match method {
                 "time.set_ntp" => params.get("on").map(|_| obj(vec![])).ok_or_else(|| PErr::bad("on")),
+                "package.install_repo" | "package.install_file" => Ok(obj(vec![])),
                 _ => Err(PErr::bad(format!("unknown method {method}"))),
             }
         }
@@ -333,7 +377,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let sock = dir.join("p.sock");
         let cfg = Config { sock: sock.clone(), root_sock: None, group_gid: None, allowed_uid: Some(euid()), check_exe: false, exes: vec![] };
-        serve(cfg, Arc::new(TestGate { unlocked: Mutex::new(false) }), Arc::new(FakeExec)).unwrap();
+        serve(cfg, Arc::new(TestGate::new()), Arc::new(FakeExec)).unwrap();
         sock
     }
 
@@ -399,7 +443,7 @@ mod tests {
 
     #[test]
     fn the_audit_line_of_a_handled_request_never_shows_the_password() {
-        let g = TestGate { unlocked: Mutex::new(false) };
+        let g = TestGate::new();
         let req = json::parse(r#"{"id":1,"method":"login.authenticate","params":{"password":"hunter2-secret"}}"#).unwrap();
         let outcome = dispatch(&g, &FakeExec, Peer::default(), "login.authenticate", req.get("params").unwrap());
         assert_eq!(outcome.as_ref().unwrap_err().code, "wrong_password");
@@ -410,19 +454,60 @@ mod tests {
 
     #[test]
     fn root_socket_needs_no_token() {
-        let r = handle_request(&TestGate { unlocked: Mutex::new(false) }, &FakeExec, Peer { root_socket: true, console_shell: false }, r#"{"id":1,"method":"time.set_ntp","params":{"on":true}}"#);
+        let r = handle_request(&TestGate::new(), &FakeExec, Peer { root_socket: true, console_shell: false }, r#"{"id":1,"method":"time.set_ntp","params":{"on":true}}"#);
         assert!(r.contains("\"ok\":true"));
     }
 
     #[test]
     fn stable_latch_reset_needs_the_token_but_begin_does_not() {
-        let g = TestGate { unlocked: Mutex::new(false) };
+        let g = TestGate::new();
         let peer = Peer::default();
         let stable = r#"{"id":1,"method":"system.boot_attempt","params":{"event":"stable"}}"#;
         assert!(handle_request(&g, &FakeExec, peer, stable).contains("unauthorized"));
         // begin gets past the token check (the fake exec then rejects the method)
         let begin = r#"{"id":2,"method":"system.boot_attempt","params":{"event":"begin"}}"#;
         assert!(handle_request(&g, &FakeExec, peer, begin).contains("bad_params"));
+    }
+
+    #[test]
+    fn installing_software_spends_a_fresh_elevation_grant() {
+        let g = TestGate::new();
+        let peer = Peer { root_socket: false, console_shell: true };
+        let run = |body: &str| json::parse(&handle_request(&g, &FakeExec, peer, body)).unwrap();
+        let install = r#"{"id":1,"method":"package.install_repo","params":{"names":["htop"],"t":"tok"}}"#;
+        // locked: nothing, with or without a grant
+        assert_eq!(code(&run(install)), "locked");
+        run(r#"{"id":2,"method":"login.authenticate","params":{"password":"good"}}"#);
+        // the session token alone is not enough: the shell cannot install without a fresh authentication
+        assert_eq!(code(&run(install)), "elevation_required");
+        let file = r#"{"id":3,"method":"package.install_file","params":{"path":"/x/a-1-1-any.pkg.tar.zst","t":"tok"}}"#;
+        assert_eq!(code(&run(file)), "elevation_required");
+        // a wrong password issues no grant
+        let bad = r#"{"id":4,"method":"auth.elevate","params":{"password":"nope","scope":"package.install","t":"tok"}}"#;
+        assert_eq!(code(&run(bad)), "wrong_password");
+        assert_eq!(code(&run(install)), "elevation_required");
+        // elevate needs the token
+        assert_eq!(code(&run(r#"{"id":5,"method":"auth.elevate","params":{"password":"good","scope":"package.install"}}"#)), "unauthorized");
+        // a right password issues one grant, and one install spends it
+        let ok = run(r#"{"id":6,"method":"auth.elevate","params":{"password":"good","scope":"package.install","t":"tok"}}"#);
+        assert_eq!(ok.get("result").and_then(|r| r.str_field("grant")).as_deref(), Some("grant-1"));
+        let with = r#"{"id":7,"method":"package.install_repo","params":{"names":["htop"],"t":"tok","grant":"grant-1"}}"#;
+        assert_eq!(run(with).get("ok"), Some(&Json::Bool(true)));
+        assert_eq!(code(&run(with)), "elevation_required", "a grant is good for one install");
+        // a different grant string does not pass either
+        run(r#"{"id":8,"method":"auth.elevate","params":{"password":"good","scope":"package.install","t":"tok"}}"#);
+        let forged = r#"{"id":9,"method":"package.install_repo","params":{"names":["htop"],"t":"tok","grant":"other"}}"#;
+        assert_eq!(code(&run(forged)), "elevation_required");
+    }
+
+    #[test]
+    fn the_root_socket_installs_without_a_grant() {
+        let g = TestGate::new();
+        let root = Peer { root_socket: true, console_shell: false };
+        let r = handle_request(&g, &FakeExec, root, r#"{"id":1,"method":"package.install_repo","params":{"names":["htop"]}}"#);
+        assert!(r.contains("\"ok\":true"));
+        let r = handle_request(&g, &FakeExec, root, r#"{"id":2,"method":"auth.elevate","params":{"password":"good","scope":"package.install"}}"#);
+        assert!(r.contains("bad_params"), "root has nothing to elevate");
     }
 
     #[test]
@@ -439,6 +524,12 @@ mod tests {
                 Err(PErr::new("locked", "x"))
             }
             fn lock(&self) {}
+            fn elevate(&self, _: &str, _: &str, _: &str) -> Result<String, PErr> {
+                Err(PErr::new("locked", "x"))
+            }
+            fn consume_grant(&self, _: &str, _: &str, _: Option<&str>) -> Result<(), PErr> {
+                Err(PErr::new("locked", "x"))
+            }
             fn set_password(&self, t: Option<&str>, p: Peer, _: &str, _: &str) -> Result<(), PErr> {
                 self.0.lock().unwrap().push((t.is_some(), p.console_shell));
                 Err(PErr::new("unauthorized", "x"))

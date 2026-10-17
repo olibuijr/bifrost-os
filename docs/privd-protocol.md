@@ -47,11 +47,12 @@ UNAUTH = allowed on the lock screen. AUTH = needs Unlocked and the session token
 | `power.shutdown` `power.restart` `power.sleep` | no | - | `{}` |
 | `session.lock` / `session.logout` | token | `t` | clears Unlocked, invalidates token |
 | `account.set_password` | token, except a first password | `{old,new,t}` | runs `chpasswd` as root. A usable hash needs the token and re-verifies `old` (a wrong `old` counts toward the lockout). An EMPTY hash may be given its first password without a token, only by the console shell (peer exe `/usr/bin/springboard`, installed uid). A locked hash (`!`, `*`, `passwd -l`) is never changed here. `new` is at least 8 bytes, no `:`, newline or NUL |
+| `auth.elevate {password, scope}` | token | `t` | re-checks the logged-in administrator's password through PAM (the same `bifrost-login` service, lockout and `verifying` rules as `login.authenticate`) and returns `{grant}`, a 128-bit random single-use proof for `scope`. The only scope is `package.install`. The session token does not change. Refused on the root socket (`bad_params`: root has nothing to elevate), for an unknown scope (`bad_params`), without the token, and with `wrong_password` / `locked_out` / `no_password` like a login |
 | `update.check` `update.apply {kind:"os"\|"shell"}` `update.status` | yes | | apply writes the same recovery state, then the shell exits 3 |
 | `store.install {id}` `store.uninstall {id}` | yes | | `store.install` takes only the app id: privd fetches the catalogue and the package itself and checks the catalogue hash. No user-staged path or client hash is ever opened by root |
 | `usb.authorize {port, allow}` | yes | | writes a USB device's `authorized` attribute for the accessory approval sheet (`shell/usb_sheet.rs`). `port` is a bus-port name (`1-2`, `1-2.4`); a root hub (`usbN`), an interface and anything with a path separator are `bad_params` (`usb_approval::authorized_path`) |
-| `package.install_file {path}` | yes | | `pacman -U` for a package archive the person confirmed on the install sheet. `path` is absolute, without `..`, named `name-version-release-arch.pkg.tar.zst` or `.xz` (`pacman_update::package_file_name`); privd opens it without following a final link and copies it (4 GiB at most) into `STATE_DIR/staging` (root only, mode 0700), installs the copy and deletes it. pacman checks the signature when the package has one |
-| `package.install_repo {names:[...]}` | yes | | `pacman -S --needed` for 1 to 16 plain package names (`pacman_update::install_repo_args`); a name that reads as a flag is `bad_params` |
+| `package.install_file {path, grant}` | token + grant | | `pacman -U` for a package archive the person confirmed on the install sheet. `path` is absolute, without `..`, named `name-version-release-arch.pkg.tar.zst` or `.xz` (`pacman_update::package_file_name`); privd opens it without following a final link and copies it (4 GiB at most) into `STATE_DIR/staging` (root only, mode 0700), installs the copy and deletes it. pacman checks the signature when the package has one. Needs a fresh elevation `grant` (see "Elevation" below); without one the call is `elevation_required` |
+| `package.install_repo {names:[...], grant}` | token + grant | | `pacman -S --needed` for 1 to 16 plain package names (`pacman_update::install_repo_args`); a name that reads as a flag is `bad_params`. Needs a fresh elevation `grant` like `package.install_file` |
 | `update.rollback` | yes | - | restores the previous shell package generation locally (`pacman_update::rollback_local`) |
 | `time.set_timezone {name}` `time.set_ntp {on}` | yes | | |
 | `locale.set {lang,region}` | yes | | `localectl set-locale`: `lang` for LANG, `region` for the formats (time, numbers, money, paper, measures) |
@@ -69,7 +70,27 @@ UNAUTH = allowed on the lock screen. AUTH = needs Unlocked and the session token
 Rules: validate all params; ids and paths canonicalised against allow-listed roots; fixed argv, no shell strings; every
 call logged to the journal; passwords never logged.
 
-Error codes: `unauthorized`, `locked`, `bad_params`, `wrong_password`, `locked_out`, `no_password`, `internal`.
+Error codes: `unauthorized`, `locked`, `bad_params`, `wrong_password`, `locked_out`, `no_password`, `elevation_required`, `internal`.
+
+## Elevation (installing software)
+
+The session token proves the person is logged in; installing software also needs the administrator's password again, as
+on the reference system. `auth.elevate` re-verifies the password and issues one grant; `package.install_file` and
+`package.install_repo` spend it (`privd::elevation_scope`, checked in `server::dispatch` after the token check and before
+the method runs):
+
+- one grant is held at a time (a new `auth.elevate` replaces the old one), valid 60 s (`auth::GRANT_SECS`), bound to its
+  scope, and compared in constant time;
+- any install call, right or wrong or without a grant, empties the slot, so a grant is good for exactly one call and a
+  guess burns it. A call that fails validation after the grant check still spends it, so the shell re-authenticates;
+- `session.lock` / `session.logout` and a new login drop it;
+- a wrong password counts toward the same persistent lockout as a wrong login (`faillock` plus the in-daemon curve);
+- peers on the root socket are root and need no grant. The in-process client (a root shell with no daemon: the installer,
+  host tests) never goes through the dispatch, so it neither needs nor can obtain one.
+
+The shell (`shell/package_install_sheet.rs`) shows the package name, version and, for a package file, that it is
+unsigned; Install then opens the password sheet; only a grant from `auth.elevate` lets it send the install request. Cancel,
+Escape, or three wrong passwords end the sheet with no install request sent.
 
 ## Authentication (inside privd)
 
