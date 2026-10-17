@@ -65,6 +65,7 @@ class CheckSchema(unittest.TestCase):
                     "pacman -S x", "ssh host x"]:
             self.assertTrue(ov.check_problems({"kind": "cmd", "run": bad}), bad)
         self.assertEqual(ov.check_problems({"kind": "cmd", "run": "foo --version 2>&1"}), [])
+        self.assertEqual(ov.check_problems({"kind": "cmd", "run": "foo -V >/dev/null 2>&1"}), [])
 
     def test_unit_state_and_user_flag(self):
         self.assertTrue(ov.check_problems({"kind": "unit", "name": "x.service", "state": "running"}))

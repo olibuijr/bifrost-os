@@ -38,7 +38,7 @@ CMD_TIMEOUT = 10  # seconds, per cmd check
 # A cmd check must be harmless and read-only: no privilege, network, removal, power or service control.
 FORBIDDEN_CMD = re.compile(
     r"(^|[\s;&|(])(sudo|su|doas|curl|wget|rm|mv|dd|chmod|chown|shutdown|reboot|poweroff|systemctl|pacman|ssh|nc)(?=\s|$)"
-    r"|(?<![\d&])>")
+    r"|(?<![\d&])>(?!\s*/dev/null)")  # output may go to /dev/null or to the fd 2>&1 dup; no file writes
 LIBTEST_RE = re.compile(r"^test (\S+) \.\.\. (ok|FAILED|ignored)\b", re.M)
 NOTE_TEXT = "Verified on the {target} with BifrOSt {version} (os_verify)."
 
