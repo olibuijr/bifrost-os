@@ -4136,3 +4136,45 @@ lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for 
 - LZ4 has no incremental codec here: its streams and filters buffer the input and run the one-shot `lz4` codec when they end.
 - Parity: the four `compression` rows (multiple-step streams, input and output filters, DEFLATE encoding, error reporting) stay `partial` until the tests run on Midget. Not yet: a flush call, and dynamic-table reuse across blocks.
 - Tests: `springboard/sdk/tests/parity_sdk-tests-20.rs` (compression section), plus inline tests in `compression.rs`, `compression/dynamic.rs` and `compression/inflate_stream.rs`. Not yet compiled or run in this round.
+
+## Locate: device locator, end-to-end location (`bifrost-locate`, `bifrost_app::cloud_findmy`)
+
+Locate (`springboard/apps/locate-desktop`, id `is.olibuijr.locate.desktop`) is the BifrOSt answer to Find My. It shows
+the account's devices, can play a sound on one or locate it, and shares location with a contact's account. The cloud
+side is `bifrost-cloud` under `/api/cloud/v1/findmy`.
+
+**Built (round 2):** the window (People, Devices, Items, Me), the device list from the model, the first-run sheet, the
+control methods `locate.locate`, `locate.play_sound`, `locate.share`; the SDK client `bifrost_app::cloud_findmy` (device
+list, device report, command request, device poll with ack, share-free event feed); the cloud routes for devices, battery,
+commands, acks, shares and the event feed (branch `feat/findmy-devices`, see the report for its sha).
+
+**Not built:** the background poll thread, device self-registration at start, play sound on the device (no app-to-shell
+sound path exists: `system_sound::SystemSounds` is drained only by the audio service), notifications from events, a
+clickable Me switch, and every item in the location design below.
+
+### Location design (decided by the owner, not yet implemented)
+
+Location is end to end encrypted. The cloud never sees plaintext coordinates, and the columns it keeps are opaque blobs.
+
+- **Account key.** Each BifrOSt Account has a Find My key pair (X25519, HPKE via `bifrost_ui::hpke::{seal_base, open_base}`
+  and `bifrost_ui::x25519`). The private key lives only on the owner's devices, in the BifrOSt keychain. The cloud keeps
+  the public key only: `PUT /findmy/keys` (the owner sets it), `GET /findmy/keys/{account}`.
+- **First device.** The first device that enables Locate generates the account key pair.
+- **Later devices.** A new device makes its own device key pair and posts the public key as a pending device,
+  `POST /findmy/devices/pending`. Existing devices list the pending ones (`GET /findmy/devices/pending`) and show "Approve
+  this Mac on another of your devices" with the device name in a confirmation sheet. Nothing is approved automatically.
+  On approval the approving device seals the account private key to the new device's public key and uploads that blob,
+  `POST /findmy/devices/{id}/key`. The new device fetches it, opens it with its device private key, and deletes it from
+  the cloud.
+- **Device reports.** A device seals `{lat, lon, accuracy, timestamp, battery}` with HPKE base mode to the account public
+  key, with the device id as `info`, and uploads one `location_sealed` blob (a new column in the next migration). Owner
+  devices open it locally. Reports go out at most every 15 minutes, and also when a locate request arrives.
+- **Sharing.** While a share grant is active, the owner's device also seals a separate copy of each report to the
+  contact's account public key. Revoking the share stops new copies and deletes the stored ones.
+- **Consent and clearing.** Location reporting is off until the person turns it on in the Me tab. The onboarding sheet
+  says exactly what is uploaded and that it is encrypted end to end. Turning reporting off, or clearing it, deletes this
+  device's cloud rows.
+- **Tests required before this ships:** seal and open round trip; the approval state machine; a revoked share stops
+  sealing; the cloud handlers store and return opaque blobs only.
+
+Until this design is built, the cloud accepts no location at all, and the SDK report sends no position.

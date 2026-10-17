@@ -32,7 +32,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/panel.rs:120 (Panel::rows, this device first); springboard/apps/locate-desktop/src/panel.rs:104 (apply_list); springboard/apps/locate-desktop/src/window.rs:116 (body, Devices lines and empty state)",
       "note": "The Devices section lists the devices the cloud returned, this machine first, with battery and whether a position is known. No map and no live fetch: the list is empty until the cloud client runs.",
-      "wire": "Poll GET {base}/findmy/devices every 60 s from a background thread and feed Panel::apply_list. Device reports go to PUT {base}/findmy/devices/self/report (cloud_findmy::report_request, springboard/sdk/src/cloud_findmy.rs:166). Routes are not built yet: bifrost-cloud feat/findmy-devices."
+      "wire": "Poll GET {base}/findmy/devices every 60 s from a background thread and feed Panel::apply_list (cloud_findmy::devices_request, parse_devices). Route built in bifrost-cloud feat/findmy-devices (no position in the answer yet). Location is end to end encrypted (decided by the owner): the device seals {lat, lon, accuracy, timestamp, battery} with HPKE base mode to the account's Find My public key (bifrost_ui::hpke::seal_base, device id as info) and uploads one opaque location_sealed blob (migration 0006, not written yet); the cloud keeps only the public key (PUT /api/cloud/v1/findmy/keys, GET /findmy/keys/{account}). See docs/bifrost-ui.md 'Locate'."
     },
     {
       "feature": "Play a sound on a device",
@@ -77,7 +77,7 @@
       "status": "gap",
       "bifrost": "",
       "note": "No notification pipeline from the cloud.",
-      "wire": "Add long polling: GET {base}/findmy/events?after=N&wait=25 in bifrost-cloud (not built), and post a shell notification from the app's background helper when a found or left event arrives."
+      "wire": "Long poll GET {base}/findmy/events?after=N&wait=25 is built in bifrost-cloud. The app's background thread must post a shell notification for command_done and share_received events (not built)."
     },
     {
       "feature": "People tab: share location",
@@ -86,7 +86,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/panel.rs:92 (Panel::set_sharing); springboard/apps/locate-desktop/src/window.rs:73 (rpc locate.share)",
       "note": "The Share My Location switch is a state with a control method. It does not grant sharing to any contact yet, and the switch on the Me page cannot be clicked.",
-      "wire": "Share grants: POST {base}/findmy/shares with contact_id and until (not built in bifrost-cloud), a Share My Location sheet that picks contacts by BifrOSt Account address, and a clickable switch on the Me page (window.rs draw and a hit test)."
+      "wire": "Share grants are built in bifrost-cloud: POST {base}/findmy/shares (contact's email, until or null) and DELETE /findmy/shares/{id}. Sealed copies: while a grant is active the owner's device also seals each report to the contact's account public key; revoking stops new copies and deletes stored ones (not built). Still to do: a Share My Location sheet that picks contacts, and the clickable switch."
     },
     {
       "feature": "People tab: follow friends",
@@ -131,7 +131,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/window.rs:116 (body, Me lines); springboard/apps/locate-desktop/src/panel.rs:99 (location_text, LOCATION_UNAVAILABLE)",
       "note": "The Me page shows the sharing state and the location state. Location reads 'Location services unavailable' because the SDK has no location authorization service to read. The switch cannot be clicked yet, and this device's name is not read from the BifrOSt Account.",
-      "wire": "Make the switch clickable. Read this device's name from the cloud (GET {base}/findmy/devices, this_device). When the SDK gains a location service, set Panel.location_status from its authorization state."
+      "wire": "Make the Share My Location switch clickable (hit test in window.rs; the switch is not drawn yet). Location reporting is off until the person turns it on here; turning it off or clearing deletes this device's cloud rows (DELETE sealed location, not built). Read this device's name from the cloud (GET /findmy/devices, this_device). When the SDK gains a location service, set Panel.location_status from its authorization state."
     },
     {
       "feature": "Contacts access",
@@ -176,7 +176,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/locate-desktop/src/panel.rs:32 (ONBOARDING_LINES); springboard/apps/locate-desktop/src/window.rs:137 (draw_onboarding); springboard/apps/locate-desktop/src/main.rs:40 (Return dismisses, marker file in the data folder)",
       "note": "A first-run sheet explains what is uploaded (position and battery level) and is shown once per data folder. It has no button and does not link the BifrOSt Account privacy page.",
-      "wire": "Add a Continue button to the sheet and link the BifrOSt Account privacy page from the sheet."
+      "wire": "The first-run sheet must say exactly what is uploaded (position, accuracy, time and battery level), that it is encrypted end to end, and that reporting is off until the person turns it on in Me. Add a Continue button and link the BifrOSt Account privacy page."
     }
   ]
 }
