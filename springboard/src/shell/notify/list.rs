@@ -7,6 +7,7 @@
 
 use super::super::ui::{Ui, Weight, GRAY_DIM, SYSTEM_BLUE, SYSTEM_RED, WHITE};
 use super::super::notify_page::AppNotif;
+use bifrost_proto::NotifAction;
 use super::super::AppId;
 use super::store::{age_text, Group, Notification};
 use crate::gfx::{pack, scale, Image, Surface};
@@ -101,6 +102,41 @@ pub struct Card {
     thumb: Option<Image>,
     /// drawn with the app's name and "Notification" instead of its text (Show Previews)
     pub private: bool,
+    /// the category's action buttons, drawn in a row under the text (empty for none)
+    actions: Vec<ActionButton>,
+}
+
+/// One action button under a card: its identifier (sent back as the action), its title and an optional icon.
+struct ActionButton {
+    id: String,
+    label: Image,
+    icon: Option<Image>,
+    destructive: bool,
+}
+
+/// Button height and spacing, in points.
+const ACTION_H_PT: f32 = 26.0;
+const ACTION_ROW_PT: f32 = 36.0;
+const ACTION_PAD_PT: f32 = 12.0;
+const ACTION_ICON_PT: f32 = 16.0;
+const ACTION_GAP_PT: f32 = 8.0;
+
+/// The buttons' rectangles (x, y, w, h) laid out left to right from `x`, `h` tall, `gap` apart.
+pub fn lay_out_actions(widths: &[f32], x: f32, y: f32, h: f32, gap: f32) -> Vec<[f32; 4]> {
+    let mut left = x;
+    widths
+        .iter()
+        .map(|&w| {
+            let r = [left, y, w, h];
+            left += w + gap;
+            r
+        })
+        .collect()
+}
+
+/// The index of the button whose rectangle holds the point (px, py), if any.
+pub fn action_index_at(rects: &[[f32; 4]], px: f32, py: f32) -> Option<usize> {
+    rects.iter().position(|r| px >= r[0] && px < r[0] + r[2] && py >= r[1] && py < r[1] + r[3])
 }
 
 impl Card {
@@ -125,13 +161,62 @@ impl Card {
             name,
             thumb,
             private,
+            actions: Vec::new(),
         }
+    }
+
+    /// Gives the card its category's action buttons. `icon` looks up an icon by its name (None when it is not
+    /// available, and the button is drawn without one).
+    pub fn set_actions(&mut self, ui: &Ui, actions: &[NotifAction], icon: &dyn Fn(&str) -> Option<Image>) {
+        let d = ui.pt(ACTION_ICON_PT).round() as usize;
+        self.actions = actions
+            .iter()
+            .map(|a| ActionButton {
+                id: a.id.clone(),
+                label: ui.text(&a.title, 13.0, Weight::Semibold, WHITE),
+                icon: if a.icon.is_empty() { None } else { icon(&a.icon).map(|i| i.resized(d, d)) },
+                destructive: a.destructive,
+            })
+            .collect();
+    }
+
+    /// The card's height: the base card, plus the action row when it has buttons.
+    pub fn height(&self, ui: &Ui) -> f32 {
+        ui.pt(CARD_H_PT) + if self.actions.is_empty() { 0.0 } else { ui.pt(ACTION_ROW_PT) }
+    }
+
+    /// Each button's width in px: its title, its icon when it has one, and the padding either side.
+    fn action_widths(&self, ui: &Ui) -> Vec<f32> {
+        let pad = ui.pt(ACTION_PAD_PT);
+        self.actions.iter().map(|a| a.label.w as f32 + a.icon.as_ref().map_or(0.0, |i| i.w as f32 + ui.pt(ACTION_GAP_PT) / 2.0) + 2.0 * pad).collect()
+    }
+
+    /// The button rectangles for a card with its top-left at (x, y), in the order of its actions.
+    fn action_rects(&self, ui: &Ui, x: f32, y: f32) -> Vec<[f32; 4]> {
+        let row_y = y + ui.pt(CARD_H_PT) + (ui.pt(ACTION_ROW_PT) - ui.pt(ACTION_H_PT)) / 2.0;
+        lay_out_actions(&self.action_widths(ui), x + ui.pt(TEXT_X_PT), row_y, ui.pt(ACTION_H_PT), ui.pt(ACTION_GAP_PT))
+    }
+
+    /// The identifier of the action whose button holds (px, py), for a card with its top-left at (x, y).
+    pub fn action_at(&self, ui: &Ui, x: f32, y: f32, px: f32, py: f32) -> Option<&str> {
+        let rects = self.action_rects(ui, x, y);
+        action_index_at(&rects, px, py).map(|i| self.actions[i].id.as_str())
     }
 
     /// Draws the card with its top-left at (x, y), faded by `alpha` / 255.
     pub fn draw(&self, s: &mut Surface, ui: &Ui, x: f32, y: f32, alpha: u32) {
         let (w, h) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
-        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), scale(CARD, alpha));
+        s.fill_rrect(x, y, w, self.height(ui), ui.pt(RADIUS_PT), scale(CARD, alpha));
+        for (a, r) in self.actions.iter().zip(self.action_rects(ui, x, y)) {
+            let fill = if a.destructive { SYSTEM_RED } else { SYSTEM_BLUE };
+            s.fill_rrect(r[0], r[1], r[2], r[3], r[3] / 2.0, scale(fill, alpha));
+            let mut lx = r[0] + ui.pt(ACTION_PAD_PT);
+            if let Some(icon) = &a.icon {
+                s.blit(icon, lx as i32, (r[1] + (r[3] - icon.h as f32) / 2.0).round() as i32, 255, alpha);
+                lx += icon.w as f32 + ui.pt(ACTION_GAP_PT) / 2.0;
+            }
+            s.blit(&a.label, lx as i32, (r[1] + (r[3] - a.label.h as f32) / 2.0).round() as i32, 255, alpha);
+        }
         let head_mid = y + ui.pt(20.0);
         s.blit(&self.icon, (x + ui.pt(PAD_PT)) as i32, (head_mid - self.icon.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.name, (x + ui.pt(PAD_PT + ICON_PT + 8.0)) as i32, (head_mid - self.name.h as f32 / 2.0).round() as i32, 255, alpha);
@@ -145,6 +230,29 @@ impl Card {
         if let Some(t) = &self.thumb {
             s.blit(t, (x + w - ui.pt(PAD_PT) - t.w as f32) as i32, (y + (h - t.h as f32) / 2.0).round() as i32, 255, alpha);
         }
+    }
+}
+
+#[cfg(test)]
+mod action_tests {
+    use super::*;
+
+    #[test]
+    fn buttons_sit_left_to_right_with_the_gap_between_them() {
+        let r = lay_out_actions(&[60.0, 80.0], 10.0, 5.0, 26.0, 8.0);
+        assert_eq!(r, vec![[10.0, 5.0, 60.0, 26.0], [78.0, 5.0, 80.0, 26.0]]);
+        assert!(lay_out_actions(&[], 10.0, 5.0, 26.0, 8.0).is_empty());
+    }
+
+    #[test]
+    fn a_tap_inside_a_button_names_it_and_a_tap_outside_names_none() {
+        let r = lay_out_actions(&[60.0, 80.0], 10.0, 5.0, 26.0, 8.0);
+        assert_eq!(action_index_at(&r, 12.0, 6.0), Some(0));
+        assert_eq!(action_index_at(&r, 150.0, 30.0), Some(1));
+        assert_eq!(action_index_at(&r, 75.0, 6.0), None, "the gap between buttons is not a button");
+        assert_eq!(action_index_at(&r, 70.0, 31.0), None, "below the row");
+        assert_eq!(action_index_at(&r, 10.0, 5.0), Some(0), "the top-left corner is inside");
+        assert_eq!(action_index_at(&r, 70.0, 5.0), None, "the right edge is exclusive");
     }
 }
 

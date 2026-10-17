@@ -97,6 +97,7 @@ ruby
 ruby-rake
 samba
 screen
+sane
 sharutils
 s-nail
 smbclient

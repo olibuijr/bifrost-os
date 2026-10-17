@@ -60,6 +60,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Ok(obj(vec![("status", s(String::from_utf8_lossy(&out.stdout).trim()))]))
         }
         "store.install" => store_install(p),
+        "package.remove" => package_remove(str_param(p, "name")?),
         "store.uninstall" => {
             let id = str_param(p, "id")?;
             if !install::valid_id(id) {
@@ -81,6 +82,14 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         m if super::disk::handles(m) => super::disk::call(m, p),
         _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
     }
+}
+
+/// Removes one package with pacman. The shell confirms the removal with the user first; privd checks the name and
+/// refuses the shell and the base system (`pacman_update::remove_args`) before pacman runs.
+fn package_remove(name: &str) -> Result<Json, PErr> {
+    let args = pacman_update::remove_args(name).map_err(PErr::bad)?;
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    run("pacman", &args).map(|_| obj(vec![]))
 }
 
 fn power(verb: &str) -> Result<Json, PErr> {
@@ -253,6 +262,8 @@ mod tests {
         assert_eq!(call("time.set_ntp", &none).unwrap_err().code, "bad_params");
         assert_eq!(call("time.set_timezone", &obj(vec![("name", s("../x"))])).unwrap_err().code, "bad_params");
         assert_eq!(call("store.uninstall", &obj(vec![("id", s("../x"))])).unwrap_err().code, "bad_params");
+        assert_eq!(call("package.remove", &obj(vec![("name", s("base"))])).unwrap_err().code, "bad_params");
+        assert_eq!(call("package.remove", &obj(vec![("name", s("--root=/"))])).unwrap_err().code, "bad_params");
         assert_eq!(call("system.boot_attempt", &obj(vec![("event", s("x"))])).unwrap_err().code, "bad_params");
         assert_eq!(call("store.install", &obj(vec![("path", s("/etc/passwd")), ("sha256", s("00"))])).unwrap_err().code, "bad_params");
         assert_eq!(call("store.install", &obj(vec![("id", s("../x"))])).unwrap_err().code, "bad_params");

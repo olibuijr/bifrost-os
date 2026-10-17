@@ -134,6 +134,56 @@ pub fn remove_args(package: &str) -> Result<Vec<String>, String> {
     Ok(vec!["-R".into(), "--noconfirm".into(), package.into()])
 }
 
+/// A package removal the user is asked to confirm. The shell shows `title()`, `body()` and `confirm_label()` in a sheet;
+/// only `run()` removes anything, and only after the user chose the confirm button. `ask` refuses a package that
+/// `remove_args` would refuse, so the sheet never offers a removal that cannot run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Removal {
+    package: String,
+}
+
+impl Removal {
+    /// The removal of `package`, offered to the user, or the reason it cannot be offered.
+    pub fn ask(package: &str) -> Result<Removal, String> {
+        remove_args(package)?;
+        Ok(Removal { package: package.to_string() })
+    }
+
+    /// The package being removed.
+    pub fn package(&self) -> &str {
+        &self.package
+    }
+
+    /// The sheet's title.
+    pub fn title(&self) -> String {
+        format!("Remove {}?", self.package)
+    }
+
+    /// The sheet's explanation: what leaves the computer and what stays.
+    pub fn body(&self) -> String {
+        format!("{} and its program files are removed from this computer. Files in your home folder are kept.", self.package)
+    }
+
+    /// The label of the button that runs the removal.
+    pub fn confirm_label(&self) -> &'static str {
+        "Remove"
+    }
+
+    /// Runs the removal: through privd for a user session, in this process for the root shell and host tests.
+    pub fn run(self) -> Result<(), String> {
+        let c = crate::privd_client::connect();
+        if !c.is_local() {
+            return c.package_remove(&self.package).map_err(|e| e.to_string());
+        }
+        let args = remove_args(&self.package)?;
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        match run("pacman", &args)? {
+            (0, _) => Ok(()),
+            (code, out) => Err(format!("pacman exited with {code}: {}", last_line(&out))),
+        }
+    }
+}
+
 /// The last non-empty line of pacman's output, as the failure text.
 fn last_line(s: &str) -> String {
     s.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("pacman failed").trim().to_string()
@@ -208,6 +258,18 @@ mod tests {
         assert!(remove_args("Firefox").is_err(), "package names are lower case");
         assert!(remove_args("foo bar").is_err());
         assert!(remove_args("foo;rm").is_err());
+    }
+
+    #[test]
+    fn a_removal_is_only_offered_for_a_package_that_can_run() {
+        let r = Removal::ask("firefox").unwrap();
+        assert_eq!(r.package(), "firefox");
+        assert_eq!(r.title(), "Remove firefox?");
+        assert!(r.body().contains("firefox"));
+        assert!(r.body().contains("home folder are kept"));
+        assert_eq!(r.confirm_label(), "Remove");
+        assert!(Removal::ask("linux").is_err(), "the base system is never offered");
+        assert!(Removal::ask("-Syu").is_err());
     }
 
     #[test]
