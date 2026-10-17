@@ -235,6 +235,15 @@ pub mod history {
     pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
 }
 
+/// The contact picker (ContactsUI, CNContactPicker and the people picker): the user chooses one whole contact, or one
+/// value of a contact such as a phone number. The app gets only the final [`picker::Choice`], so it needs no read
+/// access to the store. `Picker::new` takes the entries the shell shows, `select` picks or opens a contact, and
+/// `choose` picks one value of the open contact. The shell draws the list from `visible` and the detail from `detail`.
+pub mod picker {
+    pub use bifrost_ui::contact_card::{Entry, Field, Key};
+    pub use bifrost_ui::contact_picker::{Choice, Error, Mode, Picker};
+}
+
 /// vCard 3.0 and 4.0 for the full contact model (`bifrost_ui::contact_vcard`, the same code the Contacts app uses for
 /// its import and export). `vcard::serialize` writes contacts as CRLF-terminated cards, and `vcard::contacts` reads
 /// every card back, skipping properties the model has no field for. Text over `vcard::MAX_BYTES` is refused, and
@@ -287,6 +296,26 @@ mod tests {
         store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
         assert_eq!(store.changes_since(token).unwrap().len(), 1);
         assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
+    }
+
+    #[test]
+    fn a_picker_returns_only_the_chosen_contact_or_value() {
+        let ada = picker::Entry {
+            id: 3,
+            name: "Ada".into(),
+            fields: vec![picker::Field { key: picker::Key::Phone, label: "mobile".into(), value: "555 1234".into() }],
+        };
+        let mut by_contact = picker::Picker::new(vec![ada.clone()], picker::Mode::Contact { need: None });
+        assert_eq!(by_contact.select(3), Ok(Some(picker::Choice::Contact(3))));
+        assert_eq!(by_contact.select(9), Err(picker::Error::UnknownContact));
+
+        let mut by_value = picker::Picker::new(vec![ada], picker::Mode::Property { keys: vec![picker::Key::Phone] });
+        assert_eq!(by_value.select(3), Ok(None));
+        assert_eq!(
+            by_value.choose(picker::Key::Phone, 0),
+            Ok(picker::Choice::Property { contact: 3, key: picker::Key::Phone, value: "555 1234".into() })
+        );
+        assert_eq!(by_value.choose(picker::Key::Phone, 0), Err(picker::Error::NoneOpen));
     }
 
     #[test]
