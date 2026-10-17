@@ -2,6 +2,9 @@
 //! answers Allow or Don't Allow on a sheet the shell draws (`shell/account_access_sheet.rs`). The answer is written to
 //! the accounts store file (`bifrost_ui::account_store::set_access`), where the SDK's `AccountStore` reads it.
 //!
+//! An app may ask only when its manifest lists the `accounts` permission (`permissions = ["accounts"]`). Without it the
+//! answer is `permission_denied` and no sheet is shown.
+//!
 //! Methods (params are a JSON object):
 //! - `request_access {type}` answers `{ok: true, granted}` when the person already allowed the type, or the answer
 //!   the sheet recorded (once). While the sheet is up it answers `{ok: false, error: "pending", pending: true}`: the app
@@ -107,26 +110,61 @@ fn store_file() -> Result<std::path::PathBuf, String> {
     account_store::store_path().ok_or_else(|| "accounts: the store has no home folder".to_string())
 }
 
+/// What a request for an account type gets from the store: the type is unknown, already granted, refused before, or
+/// it needs the sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gate {
+    Invalid,
+    Granted,
+    Refused,
+    Ask,
+}
+
+/// The gate for one app's request, decided from the store's contents alone.
+pub fn gate(contents: &account_store::Contents, app: &str, account_type: &str) -> Gate {
+    match contents.account_type(account_type) {
+        None => Gate::Invalid,
+        Some(t) if t.access_granted => Gate::Granted,
+        Some(_) if contents.refused(app, account_type) => Gate::Refused,
+        Some(_) => Gate::Ask,
+    }
+}
+
+/// The denial for an app whose manifest does not list the `accounts` permission, or `None` when it does.
+pub fn permission_denial(has_permission: bool) -> Option<Json> {
+    if has_permission {
+        None
+    } else {
+        Some(Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("permission_denied".into()))]))
+    }
+}
+
 fn request_access(app_id: &str, params: &Json) -> Result<Json, String> {
+    if let Some(denial) = permission_denial(super::app_has_permission(app_id, "accounts")) {
+        return Ok(denial);
+    }
     let account_type = params.get("type").and_then(Json::as_str).ok_or("accounts: request_access needs a type")?.to_string();
     if let Some(granted) = take_answer(app_id, &account_type) {
         return Ok(granted_reply(granted));
     }
     let contents = account_store::read(&store_file()?).map_err(|e| format!("accounts: the store could not be read: {e}"))?;
-    let Some(t) = contents.account_type(&account_type) else {
-        return Ok(Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))]));
-    };
-    if t.access_granted {
-        return Ok(granted_reply(true));
-    }
-    if !is_waiting(app_id, &account_type) {
-        let app_name = crate::shell::apphost::installed().iter().find(|a| a.manifest.id == app_id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| app_id.to_string());
-        let request = Request { app: app_id.into(), app_name, account_type: account_type.clone(), type_description: t.description.clone() };
-        if !queue(request) {
-            return Ok(granted_reply(false));
+    match gate(&contents, app_id, &account_type) {
+        Gate::Invalid => Ok(Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))])),
+        Gate::Granted => Ok(granted_reply(true)),
+        // a refusal stands until the person clears it in Settings > Internet Accounts
+        Gate::Refused => Ok(granted_reply(false)),
+        Gate::Ask => {
+            if !is_waiting(app_id, &account_type) {
+                let app_name = crate::shell::apphost::installed().iter().find(|a| a.manifest.id == app_id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| app_id.to_string());
+                let type_description = contents.type_description(&account_type).to_string();
+                let request = Request { app: app_id.into(), app_name, account_type: account_type.clone(), type_description };
+                if !queue(request) {
+                    return Ok(granted_reply(false));
+                }
+            }
+            Ok(pending_reply())
         }
     }
-    Ok(pending_reply())
 }
 
 fn answer(params: &Json) -> Result<Json, String> {
@@ -135,6 +173,8 @@ fn answer(params: &Json) -> Result<Json, String> {
     let granted = matches!(params.get("granted"), Some(Json::Bool(true)));
     if granted {
         account_store::set_access(&store_file()?, account_type, true).map_err(|e| format!("accounts: the grant could not be saved: {e}"))?;
+    } else {
+        account_store::add_refusal(&store_file()?, app, account_type).map_err(|e| format!("accounts: the refusal could not be saved: {e}"))?;
     }
     finish(app, account_type, granted);
     Ok(Json::Obj(vec![("ok".into(), Json::Bool(true))]))
@@ -193,6 +233,32 @@ mod tests {
             assert!(queue(request(&format!("app.many.{n}"), "bifrost.mail")));
         }
         assert!(!queue(request("app.many.over", "bifrost.mail")));
+    }
+
+    #[test]
+    fn the_gate_grants_refuses_and_asks_from_the_store_alone() {
+        use bifrost_ui::account_store::{Contents, RefusalEntry, TypeEntry};
+        let mut c = Contents {
+            types: vec![
+                TypeEntry { identifier: "bifrost.mail".into(), description: "Mail".into(), access_granted: false },
+                TypeEntry { identifier: "bifrost.cloud".into(), description: "BifrOSt Account".into(), access_granted: true },
+            ],
+            ..Contents::default()
+        };
+        assert_eq!(gate(&c, "app.notes", "bifrost.unknown"), Gate::Invalid);
+        assert_eq!(gate(&c, "app.notes", "bifrost.cloud"), Gate::Granted);
+        assert_eq!(gate(&c, "app.notes", "bifrost.mail"), Gate::Ask);
+        c.refusals.push(RefusalEntry { app: "app.notes".into(), account_type: "bifrost.mail".into() });
+        assert_eq!(gate(&c, "app.notes", "bifrost.mail"), Gate::Refused, "a refusal stands for that app");
+        assert_eq!(gate(&c, "app.other", "bifrost.mail"), Gate::Ask, "another app is asked");
+    }
+
+    #[test]
+    fn a_request_needs_the_accounts_permission_in_the_manifest() {
+        assert_eq!(permission_denial(true), None);
+        let denied = permission_denial(false).expect("a denial");
+        assert_eq!(denied.get("error").and_then(Json::as_str), Some("permission_denied"));
+        assert_eq!(denied.get("ok"), Some(&Json::Bool(false)));
     }
 
     #[test]

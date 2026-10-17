@@ -149,6 +149,28 @@ fn reply(r: Result<(), Failure>) -> Json {
     }
 }
 
+/// Wrong passwords one sheet allows before the app gets `authentication_failed`.
+pub const SHEET_ATTEMPTS: u32 = 3;
+
+/// What the sheet does after one answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// A wrong password with tries left: the sheet stays open for another try.
+    Retry { attempts_left: u32 },
+    /// The answer is final: the app gets it (success, cancel, lockout or the last wrong password).
+    Done,
+}
+
+/// Decides the step after an answer. `failure` is `None` for the right password, and `attempt` counts the wrong
+/// passwords this sheet already had (0 on the first answer). Only a wrong password retries; a lockout or a
+/// cancel ends the sheet at once.
+pub fn next_step(failure: Option<Failure>, attempt: u32) -> Step {
+    match failure {
+        Some(Failure::AuthenticationFailed) if attempt + 1 < SHEET_ATTEMPTS => Step::Retry { attempts_left: SHEET_ATTEMPTS - attempt - 1 },
+        _ => Step::Done,
+    }
+}
+
 /// The reply while the sheet is up: the app calls again.
 fn pending_reply() -> Json {
     Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("pending".into())), ("pending".into(), Json::Bool(true))])
@@ -269,6 +291,10 @@ impl SystemService for LocalAuth {
                     return Err("local_auth: answer is the shell's".into());
                 }
                 let app = params.get("app").and_then(Json::as_str).unwrap_or("").to_string();
+                let attempt = match params.get("attempt") {
+                    Some(Json::Num(n)) if *n >= 0.0 => *n as u32,
+                    _ => 0,
+                };
                 let answer = if matches!(params.get("cancel"), Some(Json::Bool(true))) {
                     Err(Failure::UserCancel)
                 } else {
@@ -284,8 +310,20 @@ impl SystemService for LocalAuth {
                         },
                     })
                 };
-                finish(&app, answer);
-                Ok(Json::Obj(vec![("ok".into(), Json::Bool(true))]))
+                // a locked app ends the sheet at once: another try would not reach the backend
+                let locked = self.fails.get(&app).is_some_and(|(n, until)| *n >= MAX_FAILURES && t < *until);
+                let step = if locked { Step::Done } else { next_step(answer.err(), attempt) };
+                match step {
+                    Step::Retry { attempts_left } => Ok(Json::Obj(vec![
+                        ("ok".into(), Json::Bool(false)),
+                        ("retry".into(), Json::Bool(true)),
+                        ("attempts_left".into(), Json::Num(f64::from(attempts_left))),
+                    ])),
+                    Step::Done => {
+                        finish(&app, answer);
+                        Ok(Json::Obj(vec![("ok".into(), Json::Bool(true)), ("retry".into(), Json::Bool(false))]))
+                    }
+                }
             }
             "device_state" => Ok(device_state_reply(shell.login_backend.is_some())),
             other => Err(format!("local_auth: unknown method {other}")),
@@ -320,6 +358,21 @@ mod tests {
         assert!(!is_waiting("app.sheet"));
         assert_eq!(take_result("app.sheet"), Some(Err(Failure::UserCancel)));
         assert_eq!(take_result("app.sheet"), None);
+    }
+
+    #[test]
+    fn a_wrong_password_retries_until_the_last_try() {
+        assert_eq!(next_step(Some(Failure::AuthenticationFailed), 0), Step::Retry { attempts_left: 2 });
+        assert_eq!(next_step(Some(Failure::AuthenticationFailed), 1), Step::Retry { attempts_left: 1 });
+        assert_eq!(next_step(Some(Failure::AuthenticationFailed), 2), Step::Done, "the third wrong password ends the sheet");
+        assert_eq!(SHEET_ATTEMPTS, 3);
+    }
+
+    #[test]
+    fn a_right_password_a_cancel_or_a_lockout_never_retries() {
+        assert_eq!(next_step(None, 0), Step::Done);
+        assert_eq!(next_step(Some(Failure::UserCancel), 0), Step::Done);
+        assert_eq!(next_step(Some(Failure::SystemCancel), 0), Step::Done);
     }
 
     #[test]

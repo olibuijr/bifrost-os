@@ -4181,11 +4181,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/src/shell/account_access_sheet.rs, springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::account_access_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    }
+   ],
+   "ready_note": "The support pieces of the accounts UI: the access sheet card and the Internet Accounts rows (saved accounts, declined requests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountsUISupportShared.framework",
@@ -4202,11 +4216,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/ui/src/account_store.rs, springboard/ui/src/internet_accounts.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    }
+   ],
+   "ready_note": "The shared accounts file reader and writer (accounts.ini) that the SDK store and the shell both use."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AcousticMaterials.framework",

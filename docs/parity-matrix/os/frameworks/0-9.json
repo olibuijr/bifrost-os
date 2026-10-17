@@ -467,11 +467,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/services/local_auth.rs",
    "status": "partial",
    "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The authentication prompt the overlay stands for: the shell's password sheet (reason, secure field, three tries) for an app's evaluate call."
   },
   {
    "id": "path:/System/Library/Frameworks/_LocationEssentials.framework",

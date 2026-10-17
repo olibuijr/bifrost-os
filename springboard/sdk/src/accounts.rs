@@ -14,7 +14,7 @@ use crate::keychain::{self, Reply};
 use crate::Ctx;
 use bifrost_core::fsutil;
 use bifrost_core::json::Json;
-use bifrost_ui::account_store::{self, AccountEntry, Contents, TypeEntry};
+use bifrost_ui::account_store::{self, AccountEntry, Contents, RefusalEntry, TypeEntry};
 use std::ffi::OsString;
 use std::fmt;
 use std::io;
@@ -275,6 +275,8 @@ pub struct AccountStore {
 struct Data {
     types: Vec<AccountType>,
     accounts: Vec<Account>,
+    /// refusals as the file holds them: the SDK writes them back unchanged, the shell decides on them
+    refusals: Vec<RefusalEntry>,
     next_id: u64,
 }
 
@@ -510,7 +512,8 @@ impl fmt::Debug for AccountStore {
 }
 
 /// Asks the person for access to accounts of one type (`requestAccessToAccounts`). The shell draws the Allow / Don't
-/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up.
+/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up. The app's manifest
+/// must list the `accounts` permission (`permissions = ["accounts"]`), or the shell answers `permission_denied`.
 pub fn request_access(ctx: &Ctx, account_type: &str) -> u32 {
     let params = Json::Obj(vec![("type".into(), Json::Str(account_type.into()))]);
     crate::service::call(ctx, "accounts", "request_access", &params)
@@ -584,6 +587,7 @@ fn encode(data: &Data) -> String {
 
 fn to_contents(data: &Data) -> Contents {
     Contents {
+        refusals: data.refusals.clone(),
         next_id: data.next_id,
         types: data
             .types
@@ -620,6 +624,7 @@ fn from_contents(c: Contents) -> Data {
                 credential: None,
             })
             .collect(),
+        refusals: c.refusals,
         next_id: c.next_id,
     }
 }
@@ -679,6 +684,8 @@ mod tests {
         assert_eq!(access_answer(&granted), Some(Ok(true)));
         let refused = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(false))]);
         assert_eq!(access_answer(&refused), Some(Ok(false)));
+        let denied = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("permission_denied".into()))]);
+        assert_eq!(access_answer(&denied), Some(Ok(false)), "a denial reads as a refusal, never as access");
         let invalid = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))]);
         assert_eq!(access_answer(&invalid), Some(Err(AccountError::AccountTypeInvalid)));
     }
