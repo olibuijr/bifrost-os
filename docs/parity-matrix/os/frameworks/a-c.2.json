@@ -5039,11 +5039,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/spotindex.rs",
    "status": "gap",
    "note": "Its service encrypts the search metadata kept in extended attributes; nothing in BifrOSt encrypts the search index, so build that inside the index (springboard/sdk/src/quicksearch.rs) or document that full-disk encryption covers it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    }
+   ],
+   "ready_note": "The Core Search index is sealed at rest under a keychain key (spotindex.rs: index_files_are_sealed_and_bound_to_their_app, a_plain_index_from_an_older_shell_loads_and_is_sealed_on_save)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CTBlastDoorSupport.framework",

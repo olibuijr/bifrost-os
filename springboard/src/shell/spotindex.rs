@@ -37,13 +37,91 @@ use bifrost_ui::searchquery::{Query, Record};
 use bifrost_ui::searchstore::{self, IndexStore, StoreSet, StoredItem};
 use bifrost_ui::uttype;
 use std::cell::RefCell;
+use crate::keychain::Store;
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use std::collections::BTreeMap;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MAX_PER_APP: usize = 1000;
 pub const MAX_APPS: usize = 64;
+
+/// The header of an index file sealed at rest: this magic, a 24-byte nonce, then the XChaCha20-Poly1305 box of the
+/// JSON. The file's stem (`<app>` or `<app>@<index>`) is bound as associated data, so a file renamed to another app
+/// fails to open. A file without the magic is the plain JSON of an older shell; it is read once and sealed on its next
+/// save.
+const SEALED_MAGIC: &[u8] = b"SQIX2\n";
+const NONCE_LEN: usize = 24;
+/// The keychain entry that holds the key of the index files (`<root>/keychain/bifrost.quicksearch.kc`).
+const KEY_APP: &str = "bifrost.quicksearch";
+const KEY_ACCOUNT: &str = "index-key";
+
+/// The index key: read from the keychain, or created on first use from `/dev/urandom`.
+fn index_key(root: &Path) -> io::Result<[u8; 32]> {
+    let store = Store::open(root, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
+    match store.get(KEY_APP, KEY_ACCOUNT) {
+        Ok(bytes) => bytes.as_slice().try_into().map_err(|_| io::Error::other("the index key has the wrong length")),
+        Err(crate::keychain::Error::ItemNotFound) => {
+            let key: [u8; 32] = random_bytes()?;
+            store.add(KEY_APP, KEY_ACCOUNT, &key).map_err(|e| io::Error::other(e.to_string()))?;
+            Ok(key)
+        }
+        Err(e) => Err(io::Error::other(e.to_string())),
+    }
+}
+
+fn random_bytes<const N: usize>() -> io::Result<[u8; N]> {
+    use std::io::Read;
+    let mut buf = [0u8; N];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf))?;
+    Ok(buf)
+}
+
+/// The key of this shell's index files, read once. None when the keychain cannot be opened: the index then stays in
+/// memory and is not written, rather than written in plain text.
+static DISK_KEY: Mutex<Option<[u8; 32]>> = Mutex::new(None);
+
+fn disk_key() -> Option<[u8; 32]> {
+    let mut slot = DISK_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if slot.is_none() {
+        *slot = index_key(&super::apphost::root()).ok();
+    }
+    *slot
+}
+
+fn seal_file(key: &[u8; 32], stem: &str, json: &[u8]) -> io::Result<Vec<u8>> {
+    let nonce: [u8; NONCE_LEN] = random_bytes()?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let aad = [SEALED_MAGIC, stem.as_bytes()].concat();
+    let ct = cipher
+        .encrypt(XNonce::from_slice(&nonce), Payload { msg: json, aad: &aad })
+        .map_err(|_| io::Error::other("index encryption failed"))?;
+    let mut out = Vec::with_capacity(SEALED_MAGIC.len() + NONCE_LEN + ct.len());
+    out.extend_from_slice(SEALED_MAGIC);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// Reads an index file: a sealed file needs `key`; a file without the magic is taken as plain JSON.
+fn read_file(path: &Path, stem: &str, key: Option<&[u8; 32]>) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    if !bytes.starts_with(SEALED_MAGIC) {
+        return String::from_utf8(bytes).ok();
+    }
+    let sealed = &bytes[SEALED_MAGIC.len()..];
+    if sealed.len() < NONCE_LEN {
+        return None;
+    }
+    let (nonce, ct) = sealed.split_at(NONCE_LEN);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key?));
+    let aad = [SEALED_MAGIC, stem.as_bytes()].concat();
+    let plain = cipher.decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad: &aad }).ok()?;
+    String::from_utf8(plain).ok()
+}
 
 /// An indexed item with its folded search text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -373,8 +451,13 @@ impl Index {
             .collect()
     }
 
-    /// Reads every `<app id>.json` under `dir`.
+    /// Reads every `<app id>.json` under `dir`, with the key of this shell's index files.
     pub fn load(dir: &Path) -> Index {
+        Index::load_keyed(dir, disk_key().as_ref())
+    }
+
+    /// Reads every `<app id>.json` under `dir`. A sealed file needs `key`; without it only plain files load.
+    pub fn load_keyed(dir: &Path, key: Option<&[u8; 32]>) -> Index {
         let mut ix = Index::default();
         let Ok(rd) = std::fs::read_dir(dir) else { return ix };
         for ent in rd.flatten() {
@@ -383,7 +466,7 @@ impl Index {
             if let Some((app, index)) = name.strip_suffix(".json").and_then(|s| s.split_once('@')) {
                 // a named index, `<app>@<name>.json`, which the default-index loader below skips
                 if safe_name(app) && validate_name(index).is_ok() {
-                    if let Some(store) = named_from_json(&std::fs::read_to_string(ent.path()).unwrap_or_default()) {
+                    if let Some(store) = read_file(&ent.path(), &format!("{app}@{index}"), key).and_then(|t| named_from_json(&t)) {
                         ix.named.put(app, Some(index), store);
                     }
                 }
@@ -392,7 +475,7 @@ impl Index {
             if ix.apps.len() >= MAX_APPS {
                 break;
             }
-            let list = Index::from_json(&std::fs::read_to_string(ent.path()).unwrap_or_default());
+            let list = Index::from_json(&read_file(&ent.path(), app, key).unwrap_or_default());
             if !list.is_empty() {
                 ix.apps.insert(app.to_string(), list);
             }
@@ -415,24 +498,32 @@ impl Index {
     /// Writes the apps that changed since the last call (and removes the file of an emptied app), then the named
     /// indexes that changed.
     pub fn save(&mut self, dir: &Path) {
+        self.save_keyed(dir, disk_key().as_ref());
+    }
+
+    /// `save` with the key given: each changed file is sealed under it.
+    pub fn save_keyed(&mut self, dir: &Path, key: Option<&[u8; 32]>) {
         for (app, text) in self.take_writes() {
-            write_app(dir, &app, text);
+            write_app(dir, &app, text, key);
         }
         for stem in std::mem::take(&mut self.named_dirty) {
             let text = stem.split_once('@').and_then(|(app, index)| self.named.get(app, Some(index))).map(named_to_json);
-            write_app(dir, &stem, text);
+            write_app(dir, &stem, text, key);
         }
     }
 }
 
-/// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None.
-fn write_app(dir: &Path, app: &str, text: Option<String>) {
+/// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None. The text is
+/// sealed under `key`; without a key nothing is written.
+fn write_app(dir: &Path, app: &str, text: Option<String>, key: Option<&[u8; 32]>) {
     let path = dir.join(format!("{app}.json"));
     match text {
         Some(text) => {
+            let Some(key) = key else { return };
+            let Ok(sealed) = seal_file(key, app, text.as_bytes()) else { return };
             let _ = std::fs::create_dir_all(dir);
             let tmp = dir.join(format!("{app}.json.tmp"));
-            if std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
+            if std::fs::write(&tmp, sealed).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
                 let _ = std::fs::remove_file(&tmp);
             }
         }
@@ -442,8 +533,8 @@ fn write_app(dir: &Path, app: &str, text: Option<String>) {
     }
 }
 
-/// The writer thread's queue: (index dir, writes), in the order they were taken.
-type SaveJob = (PathBuf, Vec<(String, Option<String>)>);
+/// The writer thread's queue: (index dir, key, writes), in the order they were taken.
+type SaveJob = (PathBuf, Option<[u8; 32]>, Vec<(String, Option<String>)>);
 static SAVER: Mutex<Option<std::sync::mpsc::Sender<SaveJob>>> = Mutex::new(None);
 
 impl Index {
@@ -969,7 +1060,7 @@ pub fn flush() {
     if writes.is_empty() {
         return;
     }
-    let mut job: SaveJob = (dir(), writes);
+    let mut job: SaveJob = (dir(), disk_key(), writes);
     let mut saver = SAVER.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(tx) = saver.as_ref() {
         match tx.send(job) {
@@ -979,9 +1070,9 @@ pub fn flush() {
     }
     let (tx, rx) = std::sync::mpsc::channel::<SaveJob>();
     crate::bare::sys::spawn_named("quicksearch-save", move || {
-        for (dir, writes) in rx {
+        for (dir, key, writes) in rx {
             for (app, text) in writes {
-                write_app(&dir, &app, text);
+                write_app(&dir, &app, text, key.as_ref());
             }
         }
     });
@@ -1109,14 +1200,55 @@ mod tests {
         item.content_url = "file:///x".into();
         ix.index_at("is.example.notes", vec![item.clone()], 1_700_000_000);
         ix.index("../evil", vec![it("1", "", "x", "", &[])]);
-        ix.save(&dir);
+        ix.save_keyed(&dir, Some(&KEY));
         assert!(!dir.join("../evil.json").exists());
-        let back = Index::load(&dir);
+        let back = Index::load_keyed(&dir, Some(&KEY));
         assert_eq!(back.apps["is.example.notes"], vec![Entry::new(item, 1_700_000_000)]);
         let mut back = back;
         back.delete("is.example.notes", DELETE_ALL, &[]);
-        back.save(&dir);
+        back.save_keyed(&dir, Some(&KEY));
         assert!(!dir.join("is.example.notes.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const KEY: [u8; 32] = [7; 32];
+
+    #[test]
+    fn index_files_are_sealed_and_bound_to_their_app() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spotseal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut ix = Index::default();
+        ix.index("is.example.notes", vec![it("1", "", "Secret milk", "", &[])]);
+        ix.save_keyed(&dir, Some(&KEY));
+        let raw = std::fs::read(dir.join("is.example.notes.json")).unwrap();
+        assert!(raw.starts_with(SEALED_MAGIC));
+        assert!(!raw.windows(6).any(|w| w == b"Secret"), "the title is not stored in plain text");
+        assert!(Index::load_keyed(&dir, None).apps.is_empty(), "a sealed index needs the key");
+        assert!(Index::load_keyed(&dir, Some(&[8; 32])).apps.is_empty(), "a wrong key reads nothing");
+        // renamed to another app, the file no longer opens: the app id is bound as associated data
+        std::fs::rename(dir.join("is.example.notes.json"), dir.join("is.example.mail.json")).unwrap();
+        assert!(Index::load_keyed(&dir, Some(&KEY)).apps.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_plain_index_from_an_older_shell_loads_and_is_sealed_on_save() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spotplain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut ix = Index::default();
+        ix.index("is.example.notes", vec![it("1", "", "Milk", "", &[])]);
+        ix.save_keyed(&dir, None);
+        assert!(!dir.join("is.example.notes.json").exists(), "without a key nothing is written");
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = Index::to_json(&ix.apps["is.example.notes"]);
+        std::fs::write(dir.join("is.example.notes.json"), plain).unwrap();
+        let mut back = Index::load_keyed(&dir, None);
+        assert_eq!(back.apps["is.example.notes"].len(), 1);
+        back.index("is.example.notes", vec![it("2", "", "Eggs", "", &[])]);
+        back.save_keyed(&dir, Some(&KEY));
+        let raw = std::fs::read(dir.join("is.example.notes.json")).unwrap();
+        assert!(raw.starts_with(SEALED_MAGIC));
+        assert_eq!(Index::load_keyed(&dir, Some(&KEY)).apps["is.example.notes"].len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
