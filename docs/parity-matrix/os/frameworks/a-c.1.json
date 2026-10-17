@@ -687,7 +687,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/audio-unit.json",
    "status": "partial",
-   "note": "from SDK matrix audio-unit.json",
+   "note": "from SDK matrix audio-unit.json Refreshed 2026-10-17: not ready, remaining: No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app. | No app-facing audio unit or render API; the DAW's rendering and devices are internal. | No MIDI input or MIDI event API. | The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs), but no app uses it yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -785,7 +785,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/background-assets.json",
    "status": "partial",
-   "note": "from SDK matrix background-assets.json",
+   "note": "from SDK matrix background-assets.json Refreshed 2026-10-17: not ready, remaining: No app-facing asset-pack API (list, download on demand, status, remove, manifest) | No download scheduling that continues or starts while the app is closed, including before first launch",
    "rea": [],
    "method": "assessed"
   },
@@ -1730,11 +1730,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-image.json",
+   "bifrost": "springboard/render/src/lazy_image.rs, springboard/render/src/effect_chain.rs, springboard/render/src/blur_filters.rs, springboard/render/src/colorfx.rs, springboard/render/src/colormap.rs, springboard/render/src/tile_shapes.rs, springboard/render/src/generators.rs, springboard/sdk/src/image_filter.rs",
    "status": "partial",
    "note": "from SDK matrix core-image.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blur_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "tile_shapes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colormap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "generators::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorfx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "effect_chain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "lazy_image::tests"
+    }
+   ],
+   "ready_note": "Host unit tests for the CPU filter models (blur, colour, colour maps, tiles, generators, filter chain, lazy image) over the render crate. Not verified on Midget; no GPU path, no lazy filter graph, no RAW or HEIF input, no kernel language. Those gaps remain in docs/parity-matrix/data/core-image.json."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreLocation.framework",
@@ -1774,7 +1813,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-midi.json",
    "status": "partial",
-   "note": "from SDK matrix core-midi.json",
+   "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1795,7 +1834,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-midi.json",
    "status": "partial",
-   "note": "from SDK matrix core-midi.json",
+   "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs.",
    "rea": [],
    "method": "assessed"
   },

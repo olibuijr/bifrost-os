@@ -448,7 +448,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/fskit.json",
    "status": "partial",
-   "note": "from SDK matrix fskit.json",
+   "note": "from SDK matrix fskit.json Refreshed 2026-10-17: not ready, remaining: No shell mount service or grant check for a user-space file system module (the read-only SDK module and FUSE session exist; write operations do not) | No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps | No probe, mount or maintenance request path for apps or daemons (FSClient equivalent) | No FSTask-style channel from a file system module to the shell for log and completion events | Mounted volumes are missing from the file panel sidebar (docs/bifrost-ui.md, file panel section)",
    "rea": [],
    "method": "assessed"
   },
