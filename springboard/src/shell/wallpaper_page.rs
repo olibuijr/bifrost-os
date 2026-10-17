@@ -5,7 +5,8 @@
 
 use super::list::{nav_bottom, GROUP_GAP_PT, MARGIN_PT};
 use super::controls::{draw_switch, SWITCH_H_PT, SWITCH_W_PT};
-use super::ui::{centred, home_zone, Ui, Weight, CARD_RADIUS_PT, CARD_BG, CELL_RADIUS_PT, FIELD_BG, LABEL, ROW_PRESSED, SECONDARY};
+use super::live_wallpaper::Look;
+use super::ui::{centred, home_zone, Ui, Weight, CARD_RADIUS_PT, CARD_BG, CELL_RADIUS_PT, FIELD_BG, LABEL, ROW_PRESSED, SECONDARY, WHITE};
 use super::wifi_page::BLUE;
 use crate::gfx::{rrect_mask, Image, Surface, View};
 
@@ -80,9 +81,27 @@ fn dynamic_row_top(ui: &Ui) -> f32 {
     nav_bottom(ui) + ui.pt(GROUP_GAP_PT)
 }
 
-/// The grid starts under the Dynamic Wallpaper switch row.
-pub fn grid_top(ui: &Ui) -> f32 {
+/// Top of the Live Look row, under the Dynamic Wallpaper switch.
+fn look_row_top(ui: &Ui) -> f32 {
     dynamic_row_top(ui) + ui.pt(ROW_PT) + ui.pt(GROUP_GAP_PT)
+}
+
+/// The grid starts under the Live Look row.
+pub fn grid_top(ui: &Ui) -> f32 {
+    look_row_top(ui) + ui.pt(ROW_PT) + ui.pt(GROUP_GAP_PT)
+}
+
+/// The Live Look row (x, y, w, h): one segment per `Look`, still photo first.
+pub fn look_row(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
+    (ui.pt(MARGIN_PT), look_row_top(ui), w as f32 - 2.0 * ui.pt(MARGIN_PT), ui.pt(ROW_PT))
+}
+
+/// Segment `i` of the Live Look row (x, y, w, h), inset so the selected plate sits inside the card.
+pub fn look_segment(ui: &Ui, w: i32, i: usize) -> (f32, f32, f32, f32) {
+    let (x, y, rw, rh) = look_row(ui, w);
+    let inset = ui.pt(SEGMENT_INSET_PT);
+    let sw = (rw - 2.0 * inset) / Look::ALL.len() as f32;
+    (x + inset + i as f32 * sw, y + inset, sw, rh - 2.0 * inset)
 }
 
 /// The Dynamic Wallpaper switch row (x, y, w, h): a day of stills follows the time of day.
@@ -120,9 +139,13 @@ pub enum Tap {
     Dim,
     /// the Dynamic Wallpaper switch above the grid
     Dynamic,
+    /// a segment of the Live Look row: still photo, or an animated or time-of-day wallpaper
+    Look(Look),
 }
 
 const ROW_PT: f32 = 44.0;
+/// Space around the selected plate of the Live Look row.
+const SEGMENT_INSET_PT: f32 = 4.0;
 const BUTTON_PT: f32 = 50.0;
 const BUTTON_GAP_PT: f32 = 12.0;
 const BUTTONS: [(&str, Option<Target>); 4] = [("Set Lock Screen", Some(Target::Lock)), ("Set Home Screen", Some(Target::Home)), ("Set Both", Some(Target::Both)), ("Cancel", None)];
@@ -144,6 +167,10 @@ pub struct WallpaperPage {
     dim: bool,
     /// Dynamic Wallpaper: the shell changes the still with the time of day
     dynamic: bool,
+    /// the desktop wallpaper look (`wallpaper_look`)
+    look: Look,
+    /// each look's name, in the label colour and in white for the selected plate
+    look_labels: Vec<(Image, Image)>,
     /// screen height / width: the cells and the preview are this shape
     aspect: f32,
     /// unmasked thumbnails, enlarged for the preview
@@ -163,7 +190,7 @@ impl WallpaperPage {
                 (wp.id.clone(), thumb, label)
             })
             .collect();
-        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect() }
+        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, look: Look::Still, look_labels: Look::ALL.iter().map(|l| (ui.text(l.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(l.label(), LABEL_PT, Weight::Semibold, WHITE))).collect(), aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect() }
     }
 
     pub fn len(&self) -> usize {
@@ -205,6 +232,14 @@ impl WallpaperPage {
 
     pub fn set_dynamic(&mut self, on: bool) {
         self.dynamic = on;
+    }
+
+    pub fn look(&self) -> Look {
+        self.look
+    }
+
+    pub fn set_look(&mut self, look: Look) {
+        self.look = look;
     }
 
     pub fn previewing(&self) -> bool {
@@ -253,6 +288,9 @@ impl WallpaperPage {
             if inside(dynamic_row(ui, w)) {
                 return Some(Tap::Dynamic);
             }
+            if let Some(l) = Look::ALL.iter().enumerate().find(|&(i, _)| inside(look_segment(ui, w, i))).map(|(_, &l)| l) {
+                return Some(Tap::Look(l));
+            }
             return self.hit(ui, w, h, x, y).map(Tap::Thumb);
         };
         if inside(self.dim_row(ui, w, h)) {
@@ -298,6 +336,17 @@ impl WallpaperPage {
         s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
         s.blit(&self.dynamic_label, (x + ui.pt(16.0)) as i32, (y + (rh - self.dynamic_label.h as f32) / 2.0) as i32, 255, 255);
         draw_switch(s, ui, x + rw - ui.pt(16.0) - ui.pt(SWITCH_W_PT), y + (rh - ui.pt(SWITCH_H_PT)) / 2.0, if self.dynamic { 1.0 } else { 0.0 });
+        let (x, y, rw, rh) = look_row(ui, w);
+        s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
+        for (i, (look, (plain, white))) in Look::ALL.iter().zip(&self.look_labels).enumerate() {
+            let (sx, sy, sw, sh) = look_segment(ui, w, i);
+            let on = *look == self.look;
+            if on {
+                s.fill_rrect(sx, sy, sw, sh, ui.pt(CELL_RADIUS_PT) - ui.pt(SEGMENT_INSET_PT) / 2.0, BLUE);
+            }
+            let label = if on { white } else { plain };
+            centred(s, label, (sx + sw / 2.0) as i32, (sy + (sh - label.h as f32) / 2.0) as i32);
+        }
         if self.items.is_empty() {
             s.blit(&self.empty, (m + ui.pt(16.0)) as i32, grid_top(ui) as i32, 255, 255);
             return;
@@ -322,6 +371,30 @@ mod tests {
 
     fn ui() -> Ui {
         super::super::tests::ui()
+    }
+
+    #[test]
+    fn the_live_look_row_sits_between_the_dynamic_switch_and_the_grid_and_its_segments_are_tappable() {
+        let ui = ui();
+        let (_, dy, _, dh) = dynamic_row(&ui, 1200);
+        let (_, ly, lw, lh) = look_row(&ui, 1200);
+        assert!(ly >= dy + dh && grid_top(&ui) >= ly + lh, "dynamic row, then the look row, then the grid");
+        let mut page = WallpaperPage::new(&ui, 1200, 9.0 / 16.0, &wallpapers(3), "wp0", true);
+        assert_eq!(page.look(), Look::Still);
+        let mut seen = Vec::new();
+        for i in 0..Look::ALL.len() {
+            let (x, y, w, h) = look_segment(&ui, 1200, i);
+            assert!(x >= 0.0 && x + w <= lw + look_row(&ui, 1200).0 && h <= lh);
+            seen.push(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0));
+        }
+        assert_eq!(seen, Look::ALL.iter().map(|&l| Some(Tap::Look(l))).collect::<Vec<_>>());
+        page.set_look(Look::Waves);
+        assert_eq!(page.look(), Look::Waves);
+        let mut buf = vec![0u32; 1200 * 1920];
+        let mut s = Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 };
+        page.draw(&mut s, &ui, 1200, 1920, None);
+        let (x, y, w, _h) = look_segment(&ui, 1200, 2);
+        assert_eq!(buf[(y + 2.0) as usize * 1200 + (x + w / 2.0) as usize], BLUE, "the selected plate is filled with the tint");
     }
 
     #[test]

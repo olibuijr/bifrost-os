@@ -698,7 +698,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("display & brightness", "screen monitor brightness resolution scale night shift text size"),
     ("displays", "screen monitor brightness resolution scale appearance"),
     ("appearance", "dark light mode theme accent color"),
-    ("wallpaper", "background desktop picture image"),
+    ("wallpaper", "background desktop picture image animated live dynamic time of day drift waves dither"),
     ("screen saver", "idle screen saver slideshow"),
     ("sounds", "sound volume alert audio output input speaker microphone"),
     ("sound", "volume alert audio output input speaker microphone"),
