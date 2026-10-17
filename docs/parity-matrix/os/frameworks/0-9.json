@@ -555,7 +555,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
    "status": "partial",
-   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json Glue missing: no map View in the declarative tree; ui/src/mapview.rs is a model with no renderer or tile source (mapkit.json gaps).",
+   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json Glue missing: no map View in the declarative tree; ui/src/mapview.rs is a model with no renderer or tile source (mapkit.json gaps). Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests); the map view itself is still not drawn.",
    "rea": [],
    "method": "assessed"
   },
@@ -1698,7 +1698,7 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs",
    "status": "partial",
-   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built.",
+   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built. Built 2026-10-17: picker search model (notes picker::matching, tests notes picker::tests: file-name match, ignoring case, blank query); the search field is not drawn and the source tabs are still missing.",
    "rea": [],
    "method": "assessed"
   },
