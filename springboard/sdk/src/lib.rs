@@ -894,6 +894,20 @@ pub mod image_capture;
 pub mod network_stream;
 pub mod link_fetch;
 pub mod map_snapshotter;
+
+/// The Metal-shaped GPU API (`bifrost_gpu`): device, textures, buffers, command queues and buffers, render and compute
+/// encoders, pipelines, shared events. Apps that draw on the GPU use it directly; `gpu_pass` checks the passes first.
+pub use bifrost_gpu as gpu;
+/// Core models and transports the system frameworks hand to apps as they are (`bifrost_core`): Bluetooth RFCOMM, SDP
+/// and OBEX, USB descriptors, pipes, claims and the usbfs transport, PTP cameras, shared surfaces, serial lines, Matter,
+/// GeoJSON, code requirements, media extension manifests, image metadata, per-app metrics and diagnostics, and the
+/// network extension models (relay, content filter, DNS settings and proxy, local push, provider host).
+pub use bifrost_core::{
+    app_disk_writes, app_metrics, auth_context, auth_session, bt_address, bt_service_browser, codereq, content_filter,
+    dns_proxy, dns_settings, frame_metrics, geojson, imgmeta, local_push, matter, matter_cluster, matter_fabric,
+    matter_interaction, mediaext, obex_packet, provider_host, ptp, relay, resource_exception, rfcomm_frame, sdp_element,
+    serial_line, surface_registry, usb_claim, usb_descriptors, usb_host, usb_pipe,
+};
 pub mod avahi_browse;
 pub mod drawable_pool;
 pub mod gpu_pass;
