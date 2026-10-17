@@ -189,7 +189,10 @@ pub fn rename(memo: &Memo, title: &str) -> std::io::Result<PathBuf> {
 
 /// The hidden files kept next to a recording, by the suffix after `.<stem>.`: its notes, the favourite mark and (in
 /// Recently Deleted) the deletion record.
-const SIDECARS: [&str; 3] = ["notes.txt", "favorite", "trashed"];
+const SIDECARS: [&str; 4] = ["notes.txt", "favorite", "trashed", "rate"];
+
+/// The playback speeds the Speed control steps through (1 is normal).
+pub const SPEEDS: [f32; 4] = [0.5, 1.0, 1.5, 2.0];
 
 /// A hidden file next to a recording: `.<stem>.<kind>` (the folder scan skips hidden files).
 pub fn sidecar_path(recording: &Path, kind: &str) -> PathBuf {
@@ -228,6 +231,38 @@ pub fn set_favorite(recording: &Path, on: bool) -> std::io::Result<()> {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
         _ => Ok(()),
     }
+}
+
+/// The playback speed a recording was last played at (a hidden `.<stem>.rate` file). Normal speed when it has none,
+/// or when the file does not name one of `SPEEDS`.
+pub fn read_rate(recording: &Path) -> f32 {
+    std::fs::read_to_string(sidecar_path(recording, "rate"))
+        .ok()
+        .and_then(|text| text.trim().parse::<f32>().ok())
+        .filter(|rate| SPEEDS.contains(rate))
+        .unwrap_or(1.0)
+}
+
+/// Saves the playback speed of a recording. Normal speed removes the sidecar.
+pub fn write_rate(recording: &Path, rate: f32) -> std::io::Result<()> {
+    let path = sidecar_path(recording, "rate");
+    if rate == 1.0 {
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+    }
+    springboard::shell::fsutil::write_atomic(&path, format!("{rate}").as_bytes())
+}
+
+/// The next speed up or down the Speed control steps to from `current`, within `SPEEDS` (it stays at the ends).
+pub fn step_speed(current: f32, up: bool) -> f32 {
+    let at = SPEEDS.iter().position(|&s| s == current).unwrap_or_else(|| {
+        // a value that is not a step (never saved, but kept safe): start from the nearest step
+        SPEEDS.iter().enumerate().min_by(|a, b| (*a.1 - current).abs().total_cmp(&(*b.1 - current).abs())).map(|(i, _)| i).unwrap_or(1)
+    });
+    let next = if up { (at + 1).min(SPEEDS.len() - 1) } else { at.saturating_sub(1) };
+    SPEEDS[next]
 }
 
 /// Moves a recording to Recently Deleted, with its sidecars, and notes when and from which folder so a recover can put
@@ -568,6 +603,35 @@ mod tests {
         assert!(!notes_path(&moved).exists(), "empty notes remove the sidecar");
         assert!(write_notes(&moved, "").is_ok(), "removing missing notes is not an error");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_playback_speed_is_kept_per_recording_and_follows_the_rename() {
+        let dir = temp("rate");
+        let path = tone(&dir, "20261016-090000", 800, 1_000);
+        assert_eq!(read_rate(&path), 1.0, "normal speed until one is saved");
+        write_rate(&path, 1.5).unwrap();
+        assert_eq!(read_rate(&path), 1.5);
+        assert_eq!(sidecar_path(&path, "rate").file_name().unwrap(), ".Voice Memo 20261016-090000.rate");
+        assert_eq!(scan(&dir).len(), 1, "the sidecar is hidden");
+        let moved = rename(&scan(&dir)[0], "Standup").unwrap();
+        assert_eq!(read_rate(&moved), 1.5, "the speed follows the recording");
+        write_rate(&moved, 1.0).unwrap();
+        assert!(!sidecar_path(&moved, "rate").exists(), "normal speed removes the sidecar");
+        assert!(write_rate(&moved, 1.0).is_ok(), "removing a missing sidecar is not an error");
+        std::fs::write(sidecar_path(&moved, "rate"), "3.0").unwrap();
+        assert_eq!(read_rate(&moved), 1.0, "a speed that is not a step is ignored");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_speed_steps_through_the_four_speeds_and_stops_at_the_ends() {
+        assert_eq!(step_speed(1.0, true), 1.5);
+        assert_eq!(step_speed(1.5, true), 2.0);
+        assert_eq!(step_speed(2.0, true), 2.0, "stays at the fastest");
+        assert_eq!(step_speed(1.0, false), 0.5);
+        assert_eq!(step_speed(0.5, false), 0.5, "stays at the slowest");
+        assert_eq!(step_speed(1.2, true), 1.5, "a value between steps starts from the nearest one");
     }
 
     fn tone(dir: &Path, stamp: &str, samples: usize, unix: i64) -> PathBuf {

@@ -10,6 +10,7 @@
 //! its own.
 
 use super::aac::{Resampler, OUT_RATE};
+use super::timestretch::{self, Stretcher};
 use super::speaker::SpeakerOut;
 use super::audio_out::AudioOut;
 #[cfg(test)]
@@ -67,6 +68,8 @@ pub struct Snapshot {
     pub repeat: Repeat,
     pub queue_len: usize,
     pub volume: f32,
+    /// the playback rate (0.5 to 2.0); positions are song time, whatever the rate
+    pub rate: f32,
     pub error: Option<String>,
     /// the state of the stream while a live track is current
     pub live: Option<LiveStatus>,
@@ -81,6 +84,8 @@ struct Shared {
     /// where to start the reopened song, in ms
     start_ms: f64,
     volume: f32,
+    /// the playback rate asked for; the thread applies it at its next turn
+    rate: f32,
     muted: bool,
     // -- reported by the thread --
     /// the song the device is playing: (index into the queue, track)
@@ -134,6 +139,7 @@ impl AudioPlayer {
             generation: 0,
             start_ms: 0.0,
             volume: 0.6,
+            rate: 1.0,
             muted: true,
             position_ms: 0.0,
             duration_ms: None,
@@ -179,6 +185,7 @@ impl AudioPlayer {
             repeat: s.queue.repeat(),
             queue_len: s.queue.len(),
             volume: s.volume,
+            rate: s.rate,
             error: s.error.clone(),
             live: s.live.as_ref().map(LiveHandle::status),
         }
@@ -280,6 +287,12 @@ impl AudioPlayer {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.set_repeat(r);
     }
 
+    /// Playback speed, 0.5 to 2.0 (NaN is normal speed). The pitch is kept: the audio is time-stretched, not resampled.
+    /// The rate stays set across songs until it is changed again.
+    pub fn set_rate(&mut self, rate: f32) {
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).rate = timestretch::clamp_rate(rate);
+    }
+
     /// Software gain 0..=1, applied before the device.
     pub fn set_volume(&mut self, v: f32) {
         self.shared.lock().unwrap_or_else(|p| p.into_inner()).volume = v.clamp(0.0, 1.0);
@@ -325,6 +338,11 @@ impl Drop for AudioPlayer {
     }
 }
 
+/// Song milliseconds for `frames` device frames played at `rate`: a faster rate covers more of the song in each frame.
+fn song_ms(frames: u64, rate: f32) -> f64 {
+    frames as f64 * 1000.0 / OUT_RATE as f64 * rate as f64
+}
+
 /// The audio thread's state.
 struct Engine {
     shared: Arc<Mutex<Shared>>,
@@ -336,6 +354,12 @@ struct Engine {
     generation: u64,
     decoder: Option<Box<dyn AudioDecoder>>,
     resampler: Resampler,
+    /// the time-stretch for rates other than 1; fed only while `applied_rate` is not 1
+    stretch: Stretcher,
+    /// the rate the device output is at (the stretcher's rate), which may lag the request by one turn
+    applied_rate: f32,
+    /// the stretched block being written (reused between blocks)
+    stretched: Vec<i16>,
     /// frames written to the device since its last discard
     written: u64,
     /// `written` when the song now playing started, and its start time
@@ -370,7 +394,7 @@ fn fade_in(pcm: &mut [i16], frames: usize) {
 
 impl Engine {
     fn new(shared: Arc<Mutex<Shared>>, waker: Waker, out: Box<dyn AudioOut>, transport: Option<Arc<dyn Transport>>, tuning: Tuning) -> Self {
-        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
+        Engine { shared, waker, out, transport, tuning, generation: 0, decoder: None, resampler: Resampler::new(OUT_RATE, 2), stretch: Stretcher::new(1.0), applied_rate: 1.0, stretched: Vec::new(), written: 0, song_start: (0, 0.0), pending: Default::default(), paused: false, played_at_pause: 0, fade_in: true, drained: false, samples: Vec::new(), pcm: Vec::new(), traced: std::time::Instant::now() }
     }
 
     /// Opens the current song at `start_ms`; None (with the error noted)
@@ -415,6 +439,7 @@ impl Engine {
         self.written = 0;
         self.pending.clear();
         self.drained = false;
+        self.stretch.reset();
         self.decoder = self.open_current(start_ms);
         self.song_start = (0, start_ms);
         let duration = self.decoder.as_ref().and_then(|d| d.duration_ms());
@@ -427,6 +452,21 @@ impl Engine {
         }
         drop(s);
         self.waker.wake();
+    }
+
+    /// Applies a rate the player was asked for. The position mapping is re-anchored at the device's current frame, so
+    /// the reported song position stays continuous across the change.
+    fn sync_rate(&mut self, want: f32) {
+        let played = self.out.played();
+        let (first, start) = self.song_start;
+        let pos = start + song_ms(played.saturating_sub(first), self.applied_rate);
+        self.song_start = (played, pos);
+        self.applied_rate = want;
+        self.stretch.set_rate(want);
+        if want == 1.0 {
+            // the stretcher is bypassed at 1: drop what it still holds so a later stretch starts clean
+            self.stretch.reset();
+        }
     }
 
     /// Updates the reported position; switches the reported song when the
@@ -448,7 +488,7 @@ impl Engine {
             // a pause landed while a write was in flight: the position stays put
             return;
         }
-        let pos = start + played.saturating_sub(first) as f64 * 1000.0 / OUT_RATE as f64;
+        let pos = start + song_ms(played.saturating_sub(first), self.applied_rate);
         s.position_ms = match s.duration_ms {
             Some(d) => pos.min(d),
             None => pos,
@@ -460,12 +500,15 @@ impl Engine {
         // no deep C-state exit while a song plays (see bare::pmqos); dropped on pause, stop and quit
         let mut latency: Option<crate::bare::pmqos::CpuDmaLatency> = None;
         loop {
-            let (quit, generation, playing, start_ms) = {
+            let (quit, generation, playing, start_ms, rate) = {
                 let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-                (s.quit, s.generation, s.playing, s.start_ms)
+                (s.quit, s.generation, s.playing, s.start_ms, s.rate)
             };
             if quit {
                 return;
+            }
+            if rate != self.applied_rate {
+                self.sync_rate(rate);
             }
             if playing && !self.paused {
                 if latency.is_none() {
@@ -560,6 +603,8 @@ impl Engine {
             }
         };
         self.decoder = None;
+        // the held-back tail of the song that ended is not the next song's start
+        self.stretch.reset();
         if let Some((index, track)) = next {
             self.decoder = self.open_current(0.0);
             let duration = self.decoder.as_ref().and_then(|d| d.duration_ms());
@@ -582,6 +627,15 @@ impl Engine {
         self.resampler.retune(d.rate(), d.channels());
         self.pcm.clear();
         self.resampler.convert(&self.samples, &mut self.pcm);
+        if self.applied_rate != 1.0 {
+            self.stretched.clear();
+            self.stretch.push(&self.pcm, &mut self.stretched);
+            std::mem::swap(&mut self.pcm, &mut self.stretched);
+            if self.pcm.is_empty() {
+                // the stretcher is still filling its first window
+                return;
+            }
+        }
         if self.traced.elapsed() >= Duration::from_secs(1) {
             self.traced = std::time::Instant::now();
             let peak = |v: &[i16]| v.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
@@ -628,6 +682,28 @@ mod tests {
         super::super::volume::scale(&mut pcm, g);
         assert!((pcm[0] as f32 - 10000.0 * g).abs() <= 1.0 && pcm[0] == -pcm[1]);
         assert!(g > 0.0 && g < 1.0);
+    }
+
+    #[test]
+    fn set_rate_clamps_and_the_snapshot_reports_it() {
+        let mut p = AudioPlayer::new(Box::new(NullOut::new())).unwrap();
+        assert_eq!(p.snapshot().rate, 1.0, "normal speed until asked");
+        p.set_rate(4.0);
+        assert_eq!(p.snapshot().rate, 2.0);
+        p.set_rate(0.25);
+        assert_eq!(p.snapshot().rate, 0.5);
+        p.set_rate(f32::NAN);
+        assert_eq!(p.snapshot().rate, 1.0);
+        p.set_rate(1.5);
+        assert_eq!(p.snapshot().rate, 1.5);
+    }
+
+    #[test]
+    fn song_time_runs_faster_than_the_device_at_a_higher_rate() {
+        // a second of device time is two seconds of song at 2x and half a second at 0.5x
+        assert_eq!(song_ms(OUT_RATE as u64, 1.0), 1000.0);
+        assert_eq!(song_ms(OUT_RATE as u64, 2.0), 2000.0);
+        assert_eq!(song_ms(OUT_RATE as u64 * 2, 0.5), 1000.0);
     }
 
     #[test]

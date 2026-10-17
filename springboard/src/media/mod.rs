@@ -60,6 +60,7 @@ pub mod v4l2;
 #[cfg(target_os = "linux")]
 pub mod speaker;
 pub mod audioplayer;
+pub mod timestretch;
 pub mod queue;
 #[cfg(target_os = "linux")]
 pub mod player;

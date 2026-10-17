@@ -25,6 +25,7 @@ fn headless_each_transport_command_round_trips_through_its_wire_form() {
         Cmd::SetShuffle { on: true, seed: 9 },
         Cmd::SetRepeat(Repeat::One),
         Cmd::SetVolume(0.25),
+        Cmd::SetRate(0.5),
         Cmd::SetMuted(true),
         Cmd::Stop,
     ];
@@ -101,6 +102,7 @@ fn headless_the_state_event_carries_the_playback_fields() {
         muted: false,
         error: None,
         live: None,
+        rate: 2.0,
     });
     assert_eq!(Evt::decode(&state.encode()), Ok(state.clone()));
 }

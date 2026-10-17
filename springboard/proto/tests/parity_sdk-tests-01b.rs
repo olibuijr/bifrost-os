@@ -19,6 +19,7 @@ fn snapshot() -> Snapshot {
         muted: false,
         error: None,
         live: None,
+        rate: 1.0,
     }
 }
 

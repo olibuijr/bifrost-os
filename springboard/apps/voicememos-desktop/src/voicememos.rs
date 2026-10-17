@@ -42,6 +42,11 @@ const BLUE: u32 = TINT;
 /// Round button plates (transport, editor buttons) and their pressed state, in the current appearance.
 fn plate() -> u32 { FIELD_BG.now() }
 fn plate_down() -> u32 { CONTROL_PRESSED.now() }
+
+/// The playback speed as the readout shows it: "1x", "1.5x", "0.5x".
+pub fn speed_label(rate: f32) -> String {
+    if rate.fract() == 0.0 { format!("{rate:.0}x") } else { format!("{rate:.1}x") }
+}
 /// A rectangle in points from a pixel rectangle.
 fn pts(ui: &Ui, (x, y, w, h): (f32, f32, f32, f32)) -> bifrost_app::controls::Rect {
     let k = ui.pt(1.0);
@@ -141,6 +146,8 @@ const CTL_DONE: u64 = 15;
 const CTL_VOLUME: u64 = 17;
 const CTL_SEARCH: u64 = 18;
 const CTL_PAUSE: u64 = 19;
+const CTL_SPEED_DOWN: u64 = 20;
+const CTL_SPEED_UP: u64 = 21;
 /// The input meter's scale in dB: silence at the floor, full scale at 0 dB.
 const METER_FLOOR_DB: f32 = -60.0;
 /// The input meter's bar height and the gap from the timer to the bar (points).
@@ -151,6 +158,9 @@ const VOLUME_W_PT: f32 = 220.0;
 const VOLUME_H_PT: f32 = 24.0;
 const VOLUME_TRACK_PT: f32 = 4.0;
 const VOLUME_KNOB_PT: f32 = 16.0;
+/// The Speed control under the volume slider: the minus and plus buttons and the readout between them (points).
+const SPEED_PT: f32 = 28.0;
+const SPEED_LABEL_PT: f32 = 64.0;
 /// The recordings sidebar as a list (rows are published by the kit's source list when there are any).
 const CTL_SIDEBAR: u64 = 16;
 /// Frame poll period while recording or playing (ms).
@@ -180,6 +190,9 @@ enum Target {
     Notes,
     /// the playback volume slider under the transport (a press or drag sets the output level)
     Volume,
+    /// the Speed control's minus and plus buttons
+    SpeedDown,
+    SpeedUp,
     /// the notes text card (a press places the caret, a drag selects)
     NotesText,
     Cancel,
@@ -345,6 +358,9 @@ pub struct VoiceMemos {
     volume: f32,
     /// a press on the volume slider is dragging it
     volume_drag: bool,
+    /// the playback speed of the selected recording, and the recording it was read for (see `rate_now`)
+    rate: f32,
+    rate_of: Option<PathBuf>,
     /// playback jumps over silence (the Recording menu's Skip Silence)
     skip_silence: bool,
     /// the speech spans of the playing memo, in milliseconds, sorted (empty when not skipping)
@@ -411,6 +427,8 @@ impl VoiceMemos {
             input_level: 0.0,
             volume: 1.0,
             volume_drag: false,
+            rate: 1.0,
+            rate_of: None,
             skip_silence: false,
             spans: Vec::new(),
             skip_guard: 0.0,
@@ -848,6 +866,9 @@ impl VoiceMemos {
             self.error = "Cannot play: the audio service is not running".into();
             return;
         }
+        // the speed is the recording's own; the service keeps it for the take it plays
+        let rate = self.rate_now();
+        self.audio.set_rate(rate);
         self.playing = Some(memo.path.clone());
         self.load_spans();
         self.skip_guard = 0.0;
@@ -1608,6 +1629,57 @@ impl VoiceMemos {
         self.dirty = true;
     }
 
+    /// The playback speed of the selected recording. It is read from the recording's sidecar when the selection
+    /// changes, so the transport does not touch the disk each frame.
+    fn rate_now(&mut self) -> f32 {
+        let path = self.selected.and_then(|i| self.memos.get(i)).map(|m| m.path.clone());
+        if path != self.rate_of {
+            self.rate = path.as_deref().map(store::read_rate).unwrap_or(1.0);
+            self.rate_of = path;
+        }
+        self.rate
+    }
+
+    /// Sets the speed of the selected recording: saved beside it, and sent to the service at once (a take that plays
+    /// now changes speed without a restart).
+    fn set_speed(&mut self, rate: f32) {
+        let Some(path) = self.selected.and_then(|i| self.memos.get(i)).map(|m| m.path.clone()) else { return };
+        self.rate = rate;
+        self.rate_of = Some(path.clone());
+        if let Err(e) = store::write_rate(&path, rate) {
+            self.error = format!("Cannot save the speed: {e}");
+        }
+        self.audio.set_rate(rate);
+        self.dirty = true;
+    }
+
+    /// One step faster (`up`) or slower from the selected recording's speed.
+    fn nudge_speed(&mut self, up: bool) {
+        let current = self.rate_now();
+        self.set_speed(store::step_speed(current, up));
+    }
+
+    /// The Speed control's row under the volume slider: the minus button, the readout and the plus button (pixels).
+    fn speed_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, w) = self.pane(ui);
+        let (size, label) = (ui.pt(SPEED_PT), ui.pt(SPEED_LABEL_PT));
+        let volume = self.volume_rect(ui);
+        (x + (w - 2.0 * size - label) / 2.0, volume.1 + volume.3 + ui.pt(SPACE_L), size, label)
+    }
+
+    /// The Speed control's minus (0) or plus (2) button, in pixels.
+    fn speed_rect(&self, ui: &Ui, n: usize) -> (f32, f32, f32, f32) {
+        let (left, y, size, label) = self.speed_row(ui);
+        let x = if n == 0 { left } else { left + size + label };
+        (x, y, size, size)
+    }
+
+    /// The Speed control's readout between the two buttons, in pixels.
+    fn speed_readout_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (left, y, size, label) = self.speed_row(ui);
+        (left + size, y, label, size)
+    }
+
     /// The detail pane's unified toolbar: Trim, Notes, Rename, Favourite and Delete (Confirm Delete while asking); in
     /// Recently Deleted, Recover and Delete Forever.
     fn bar(&self) -> Toolbar {
@@ -1687,6 +1759,8 @@ impl VoiceMemos {
             nodes.push(button(CTL_FORWARD, "Skip Forward 15 Seconds", self.transport_rect(ui, 2), true));
             let percent = (self.volume * 100.0).round() as u32;
             nodes.push(Node { id: CTL_VOLUME, role: Role::Slider, label: "Volume".into(), value: format!("{percent} percent"), bounds: pts(ui, self.volume_rect(ui)), enabled: true });
+            nodes.push(button(CTL_SPEED_DOWN, "Slower", self.speed_rect(ui, 0), true));
+            nodes.push(button(CTL_SPEED_UP, "Faster", self.speed_rect(ui, 2), true));
         }
         nodes
     }
@@ -1767,6 +1841,8 @@ impl VoiceMemos {
                 (Target::Play, self.transport_rect(ui, 1)),
                 (Target::Forward, self.transport_rect(ui, 2)),
                 (Target::Volume, self.volume_rect(ui)),
+                (Target::SpeedDown, self.speed_rect(ui, 0)),
+                (Target::SpeedUp, self.speed_rect(ui, 2)),
             ] {
                 if Self::inside(r, x, y) {
                     return Some(target);
@@ -1867,6 +1943,8 @@ impl VoiceMemos {
             Target::Back => self.skip(-15_000.0),
             Target::Forward => self.skip(15_000.0),
             Target::Scrub | Target::Volume => {}
+            Target::SpeedDown => self.nudge_speed(false),
+            Target::SpeedUp => self.nudge_speed(true),
             Target::Trim => self.begin_trim(),
             Target::Notes => self.begin_notes(ui),
             Target::NotesText => {}
@@ -2164,6 +2242,7 @@ impl VoiceMemos {
                 }
             }
             self.draw_volume(s, ui);
+            self.draw_speed(s, ui);
         } else {
             self.centred(s, ui, "No Recording Selected", MAC_TITLE3_PT, LABEL_2.now(), (px, wave.1, pw, wave.3));
         }
@@ -2271,6 +2350,19 @@ impl VoiceMemos {
         s.fill_rrect(kx, ky, knob, knob, knob / 2.0, SEPARATOR_C.now());
         let inner = ui.pt(1.0);
         s.fill_rrect(kx + inner, ky + inner, knob - 2.0 * inner, knob - 2.0 * inner, (knob - 2.0 * inner) / 2.0, CARD_BG.now());
+    }
+
+    /// The Speed control: minus and plus plates with the speed between them, as the transport draws its buttons.
+    fn draw_speed(&mut self, s: &mut Surface, ui: &Ui) {
+        let rate = self.rate_now();
+        for (target, n, glyph) in [(Target::SpeedDown, 0, "-"), (Target::SpeedUp, 2, "+")] {
+            let r = self.speed_rect(ui, n);
+            let fill = if self.pressed == Some(target) { plate_down() } else { plate() };
+            s.fill_rrect(r.0, r.1, r.2, r.3, r.2 / 2.0, fill);
+            self.centred(s, ui, glyph, MAC_BODY_PT, LABEL.now(), r);
+        }
+        let readout = self.speed_readout_rect(ui);
+        self.centred(s, ui, &speed_label(rate), MAC_BODY_PT, LABEL.now(), readout);
     }
 
     /// Trim mode: the waveform with the start and end handles, and the kept length. Cancel and Done sit where the
@@ -2636,6 +2728,29 @@ mod tests {
         // power 1e-7 is amplitude 3.2e-4, about -70 dB: below the floor, so the bar is empty and it reads Silent
         assert_eq!(meter_fraction(1e-7), 0.0);
         assert_eq!(meter_title(1e-7), "Silent");
+    }
+
+    #[test]
+    fn the_speed_control_steps_and_is_kept_with_the_recording() {
+        let (mut app, ui) = app("speed");
+        app.selected = Some(0);
+        assert_eq!(app.rate_now(), 1.0, "normal speed until one is chosen");
+        app.activate(&ui, Target::SpeedUp);
+        assert_eq!(app.rate_now(), 1.5);
+        app.activate(&ui, Target::SpeedUp);
+        app.activate(&ui, Target::SpeedUp);
+        assert_eq!(app.rate_now(), 2.0, "stops at the fastest");
+        let path = app.memos[0].path.clone();
+        assert_eq!(store::read_rate(&path), 2.0, "saved beside the recording");
+        // a fresh read of the selection gets the saved speed back
+        app.rate_of = None;
+        app.rate = 1.0;
+        assert_eq!(app.rate_now(), 2.0);
+        app.activate(&ui, Target::SpeedDown);
+        assert_eq!(store::read_rate(&path), 1.5);
+        assert_eq!(speed_label(app.rate_now()), "1.5x");
+        assert_eq!(speed_label(1.0), "1x");
+        assert_eq!(speed_label(0.5), "0.5x");
     }
 
     #[test]

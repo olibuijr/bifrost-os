@@ -2583,9 +2583,19 @@ Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `
 - `audio/engine` (`bifrost-audio-engine`, `Engine`) is the node graph: players, mixer, units, connections, detach and
   taps (`attach_tap`), offline and device rendering. The SDK now re-exports it as `bifrost_app::audio_engine`. The older
   pure model in `ui/src/audio_engine.rs` is superseded by it; the shell may use either until it is removed.
-- Not done here: the player is not yet connected to the audio service (`audiod`), so pan, rate and fade do not reach the
-  speaker; apps still play through `bifrost_app::audio` (queue, volume, mute). Session categories, interruptions and
-  speech stay gaps. Verify the audio path on Midget before any row is `parity`.
+- Playback rate reaches the audio service (protocol change, Voice Memos 1.10.0). `Cmd::SetRate(f32)` (wire tag 18,
+  0.5 to 2.0, clamped, NaN is 1) is in `springboard/proto/src/svc.rs`; `audiod` applies it to its one player
+  (`springboard/src/media/audioplayer.rs`, `set_rate`). The rate is time-stretched, not resampled: `springboard/src/media/timestretch.rs`
+  is a WSOLA stretcher (1024-frame Hann windows, 512-frame hop, a search of 256 frames), so the pitch stays put and
+  the output is `input / rate` long. The stretcher holds back about 27 ms and drops that tail on a song change and a seek.
+  The rate stays set across songs. The `State` event gained a trailing `rate: f32` (both ends ship together). The SDK
+  sends it through `bifrost_app::audio::Command::rate` (`springboard/sdk/src/system_audio.rs`) and the shell client
+  `springboard/src/svc.rs` `Client::set_rate`. Voice Memos stores the speed per recording (`.<stem>.rate` sidecar) and
+  shows a Slower/Faster stepper at 0.5, 1, 1.5 and 2. Tested headless (encode/decode, length, dominant frequency by a
+  small DFT); not verified on Midget.
+- Not done here: the player is not yet connected to the audio service (`audiod`) for pan and fade, so they do not reach
+  the speaker (rate does, see above); apps still play through `bifrost_app::audio` (queue, volume, mute). Session
+  categories, interruptions and speech stay gaps. Verify the audio path on Midget before any row is `parity`.
 
 Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
 
