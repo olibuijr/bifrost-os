@@ -10,6 +10,8 @@
 //! `docs/parity/accounts.md`). The framework is deprecated by its vendor, so this exists for apps that still read it.
 
 use crate::error::ErrorCode;
+use crate::keychain::{self, Reply};
+use crate::Ctx;
 use bifrost_core::fsutil;
 use std::ffi::OsString;
 use std::fmt;
@@ -66,6 +68,15 @@ impl Credential {
     /// True once `now` has reached the OAuth 2 expiry date. An OAuth 1 credential never expires.
     pub fn is_expired(&self, now: SystemTime) -> bool {
         self.expiry_date().is_some_and(|expiry| now >= expiry)
+    }
+
+    /// Whether an OAuth 2 credential expires within `margin` of `now`, or has expired, so the app renews it before a
+    /// request fails. An OAuth 1 credential never needs renewal.
+    pub fn needs_renewal(&self, now: SystemTime, margin: Duration) -> bool {
+        match self.expiry_date() {
+            Some(expiry) => now.checked_add(margin).map_or(true, |horizon| horizon >= expiry),
+            None => false,
+        }
     }
 
     /// The credential as bytes for a keychain item: a tag, then each string as a u32 big-endian length and its bytes,
@@ -198,6 +209,15 @@ impl ErrorCode for AccountError {
         }
     }
 }
+
+/// The account types the system defines: identifier and description. They match the kinds of the Internet Accounts
+/// page (mail, CalDAV calendars and reminders, CardDAV contacts) and the BifrOSt account, so an app can name them.
+pub const BUILTIN_TYPES: [(&str, &str); 4] = [
+    ("bifrost.mail", "Mail"),
+    ("bifrost.caldav", "Calendars and Reminders"),
+    ("bifrost.carddav", "Contacts"),
+    ("bifrost.cloud", "BifrOSt Account"),
+];
 
 /// An account type (`ACAccountType`): all accounts of one kind, and whether the app may use them.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -335,6 +355,21 @@ impl AccountStore {
         })
     }
 
+    /// Registers the account types the system defines ([`BUILTIN_TYPES`]) that the store does not hold yet, and returns
+    /// how many it added. Existing types keep their description and grant, so calling it at every start is harmless.
+    pub fn register_builtin_types(&mut self) -> Result<usize, AccountError> {
+        self.mutate(|d| {
+            let mut added = 0;
+            for (identifier, description) in BUILTIN_TYPES {
+                if d.account_type(identifier).is_none() {
+                    d.types.push(AccountType { identifier: identifier.into(), description: description.into(), access_granted: false });
+                    added += 1;
+                }
+            }
+            Ok(added)
+        })
+    }
+
     /// Records the user's answer to the access request for a type (`accessGranted`). An unknown type is `AccountTypeInvalid`.
     pub fn set_access(&mut self, identifier: &str, granted: bool) -> Result<(), AccountError> {
         self.mutate(|d| d.set_access(identifier, granted))
@@ -392,6 +427,12 @@ impl AccountStore {
     pub fn credential(&self, identifier: &str) -> Result<&Credential, AccountError> {
         let account = self.account(identifier).ok_or(AccountError::NotFound)?;
         account.credential.as_ref().ok_or(AccountError::CredentialNotFound)
+    }
+
+    /// Whether a saved account's credential needs renewal within `margin` of `now` (see [`Credential::needs_renewal`]).
+    /// Checks the account (`NotFound`) and its credential (`CredentialNotFound`) first.
+    pub fn renewal_due(&self, identifier: &str, now: SystemTime, margin: Duration) -> Result<bool, AccountError> {
+        Ok(self.credential(identifier)?.needs_renewal(now, margin))
     }
 
     /// `renewCredentials(for:completion:)`: applies the service's answer to a saved account's credential. `Renewed`
@@ -464,6 +505,39 @@ impl AccountStore {
 impl fmt::Debug for AccountStore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AccountStore").field("types", &self.data.types).field("accounts", &self.data.accounts).field("path", &self.path).finish()
+    }
+}
+
+/// The keychain service every saved account credential is stored under.
+pub const CREDENTIAL_SERVICE: &str = "bifrost.accounts";
+
+/// The keychain account name of one saved account's credential: `credential:<identifier>`.
+pub fn credential_account(identifier: &str) -> String {
+    format!("credential:{identifier}")
+}
+
+/// Replaces the keychain secret of an account's credential with `credential`. The reply is `ItemNotFound` when the
+/// account has no item yet; the app then calls [`save_credential_add`] with the same arguments.
+pub fn save_credential(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::update(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Adds the keychain item of an account's credential. The reply is `DuplicateItem` when the item exists.
+pub fn save_credential_add(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::add(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Reads an account's credential back from the keychain. Its reply goes through [`credential_from_reply`].
+pub fn read_credential(ctx: &Ctx, identifier: &str) -> u32 {
+    keychain::get(ctx, CREDENTIAL_SERVICE, &credential_account(identifier))
+}
+
+/// The credential a keychain reply to [`read_credential`] carries. A reply that is not a success, or whose secret is
+/// not a credential, is `CredentialNotFound`, so the app signs the user in again.
+pub fn credential_from_reply(reply: &Reply) -> Result<Credential, AccountError> {
+    match &reply.result {
+        Ok(bytes) => Credential::decode(bytes).map_err(|_| AccountError::CredentialNotFound),
+        Err(_) => Err(AccountError::CredentialNotFound),
     }
 }
 
@@ -655,6 +729,53 @@ mod tests {
         let mut store = AccountStore::new();
         store.register_type("mail.example", "Mail").unwrap();
         store
+    }
+
+    #[test]
+    fn a_keychain_reply_carries_the_credential_back() {
+        let c = Credential::oauth2("tok", "ref", at(1_000));
+        let ok = Reply { request: 1, result: Ok(c.encode()) };
+        assert_eq!(credential_from_reply(&ok), Ok(c));
+        let missing = Reply { request: 2, result: Err(keychain::Error::ItemNotFound) };
+        assert_eq!(credential_from_reply(&missing), Err(AccountError::CredentialNotFound));
+        let junk = Reply { request: 3, result: Ok(b"not a credential".to_vec()) };
+        assert_eq!(credential_from_reply(&junk), Err(AccountError::CredentialNotFound));
+    }
+
+    #[test]
+    fn every_internet_accounts_kind_is_a_builtin_type() {
+        for kind in bifrost_ui::internet_accounts::Kind::ALL {
+            assert!(BUILTIN_TYPES.iter().any(|(id, _)| *id == kind.account_type()), "{kind:?} has no builtin type");
+        }
+    }
+
+    #[test]
+    fn credential_items_are_named_per_account() {
+        assert_eq!(CREDENTIAL_SERVICE, "bifrost.accounts");
+        assert_eq!(credential_account("mail-1"), "credential:mail-1");
+        assert_ne!(credential_account("a"), credential_account("b"));
+    }
+
+    #[test]
+    fn builtin_types_are_registered_once_and_keep_their_grant() {
+        let mut store = AccountStore::new();
+        assert_eq!(store.register_builtin_types(), Ok(BUILTIN_TYPES.len()));
+        assert_eq!(store.register_builtin_types(), Ok(0), "a second start adds nothing");
+        assert_eq!(store.account_type("bifrost.mail").map(|t| t.description.as_str()), Some("Mail"));
+        assert!(store.account_type("bifrost.cloud").is_some_and(|t| !t.access_granted), "built-in types start ungranted");
+        store.set_access("bifrost.mail", true).unwrap();
+        store.register_builtin_types().unwrap();
+        assert!(store.account_type("bifrost.mail").is_some_and(|t| t.access_granted));
+    }
+
+    #[test]
+    fn builtin_types_survive_a_reopen() {
+        let path = scratch("builtin-types");
+        let mut store = AccountStore::open(&path).unwrap();
+        store.register_builtin_types().unwrap();
+        let reopened = AccountStore::open(&path).unwrap();
+        assert!(reopened.account_type("bifrost.carddav").is_some());
+        assert_eq!(AccountStore::open(&path).unwrap().register_builtin_types(), Ok(0));
     }
 
     /// A file path under the temp directory, unique per test name and process, with no file yet.
@@ -988,6 +1109,23 @@ mod tests {
         account.credential = Some(Credential::oauth2("old", "r1", at(1_000)));
         let id = store.save(account).unwrap();
         (store, id)
+    }
+
+    #[test]
+    fn an_oauth2_credential_needs_renewal_inside_the_margin() {
+        let c = Credential::oauth2("t", "r", at(1_000));
+        assert!(c.needs_renewal(at(900), Duration::from_secs(100)));
+        assert!(!c.needs_renewal(at(899), Duration::from_secs(100)));
+        assert!(c.needs_renewal(at(1_500), Duration::ZERO), "an expired credential needs renewal");
+        assert!(!Credential::oauth("t", "s").needs_renewal(at(u64::MAX / 4), Duration::from_secs(1)), "OAuth 1 never expires");
+    }
+
+    #[test]
+    fn renewal_due_checks_the_saved_credential() {
+        let (store, id) = renewal_store();
+        assert_eq!(store.renewal_due(&id, at(950), Duration::from_secs(100)), Ok(true));
+        assert_eq!(store.renewal_due(&id, at(800), Duration::from_secs(100)), Ok(false));
+        assert_eq!(store.renewal_due("missing", at(0), Duration::ZERO), Err(AccountError::NotFound));
     }
 
     #[test]

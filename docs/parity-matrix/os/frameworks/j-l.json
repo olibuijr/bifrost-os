@@ -288,7 +288,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "from SDK matrix local-authentication.json",
+   "note": "from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
@@ -1394,7 +1394,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
@@ -1415,7 +1415,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
@@ -1436,7 +1436,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
@@ -1457,7 +1457,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
@@ -1478,7 +1478,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication.json",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
    "method": "assessed"
   },
