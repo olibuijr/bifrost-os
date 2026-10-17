@@ -15,6 +15,37 @@ struct PlacedGlyph {
     dy: f32,
 }
 
+/// Draws the colour glyphs of a run over `img`. `advances` and `offs` are the run's glyph advances and offsets in px;
+/// the pen starts at `pad` and each glyph's image sits with its baseline row on `baseline`. The pixels keep their own
+/// colours (the text colour does not tint them). A slot of `None` draws nothing.
+fn paint_color_glyphs(img: &mut Image, glyphs: &[Option<crate::svg_table::ColorGlyph>], advances: &[f32], offs: &[(f32, f32)], pad: f32, baseline: f32) {
+    let mut pen = pad;
+    for (n, adv) in advances.iter().enumerate() {
+        if let Some(Some(g)) = glyphs.get(n) {
+            let (ox, oy) = offs.get(n).copied().unwrap_or((0.0, 0.0));
+            let x0 = (pen + ox).round() as i32;
+            let y0 = (baseline - oy).round() as i32 - g.baseline as i32;
+            for row in 0..g.image.height as i32 {
+                for col in 0..g.image.width as i32 {
+                    let (x, y) = (x0 + col, y0 + row);
+                    if x < 0 || y < 0 || x as usize >= img.w || y as usize >= img.h {
+                        continue;
+                    }
+                    let p = g.image.pixels[(row as u32 * g.image.width + col as u32) as usize];
+                    if p >> 24 == 0 {
+                        continue;
+                    }
+                    // SVG pixels are straight 0xAARRGGBB; the image holds premultiplied RGBA
+                    let src = crate::gfx::rgba((p >> 16) as u8, (p >> 8) as u8, p as u8, (p >> 24) as u8);
+                    let d = &mut img.px[y as usize * img.w + x as usize];
+                    *d = crate::gfx::over(*d, src);
+                }
+            }
+        }
+        pen += adv;
+    }
+}
+
 /// A variation setting: axis tag and value in user units, e.g. (b"wght", 590).
 pub type Var = ([u8; 4], f32);
 
@@ -46,6 +77,8 @@ pub struct Font<'a> {
     /// shaped runs by (text, variation coordinates, features): measuring and drawing a string shape it once
     runs: RunCache,
     ot: std::sync::OnceLock<crate::shape_ot::OtLayout<'a>>,
+    /// the OpenType `SVG ` table index, for fonts whose glyphs are drawn in colour from SVG documents
+    svg: Option<crate::svg_table::SvgTable<'a>>,
 }
 
 /// Vertical metrics of a font at one size, in px (`NativeFontMetrics`). Descent is positive, as the platform
@@ -189,6 +222,7 @@ impl<'a> Font<'a> {
             cache: GlyphCache::new(0, CACHE_BYTES),
             runs: RunCache::new(RUN_CAPACITY, 0),
             ot: std::sync::OnceLock::new(),
+            svg: table(b"SVG ").and_then(crate::svg_table::SvgTable::parse),
         })
     }
 
@@ -954,10 +988,27 @@ impl Font<'_> {
         self.render_placed(&placed, st, norm, cached)
     }
 
+    /// Colour glyphs from the `SVG ` table (OpenType-SVG), one slot per placed glyph: `Some` for a glyph the table
+    /// draws, `None` for one it does not cover or whose document cannot be drawn (that glyph keeps its outline).
+    /// Empty for a font without the table, so ordinary text does no extra work.
+    fn svg_glyphs(&self, placed: &[PlacedGlyph], px: f32) -> Vec<Option<crate::svg_table::ColorGlyph>> {
+        let Some(table) = &self.svg else { return Vec::new() };
+        let units = |v: f32| v.round().clamp(0.0, 65535.0) as u16;
+        placed
+            .iter()
+            .map(|g| {
+                let m = crate::svg_table::GlyphMetrics { units_per_em: units(self.upem).max(1), ascent: units(self.ascent), descent: units(-self.descent), advance: units(g.advance) };
+                table.rasterize_glyph(g.gid, m, px)
+            })
+            .collect()
+    }
+
     fn render_placed(&self, placed: &[PlacedGlyph], st: &Style, norm: &[f32], cached: bool) -> Image {
         let k = st.px / self.upem;
         let pad = 2 + st.embolden.ceil() as usize + if st.shadow { (st.px / 8.0).ceil() as usize } else { 0 };
-        let gids: Vec<u16> = placed.iter().map(|g| g.gid).collect();
+        let colour = self.svg_glyphs(placed, st.px);
+        // a glyph drawn in colour has no outline in the coverage pass: an id past the font's glyphs draws nothing
+        let gids: Vec<u16> = placed.iter().enumerate().map(|(n, g)| if colour.get(n).is_some_and(Option::is_some) { u16::MAX } else { g.gid }).collect();
         let gids = &gids[..];
         let advances: Vec<f32> = placed.iter().map(|g| g.advance * k).collect();
         let offs: Vec<(f32, f32)> = placed.iter().map(|g| (g.dx * k, g.dy * k)).collect();
@@ -991,6 +1042,7 @@ impl Font<'_> {
         for (p, &c) in img.px.iter_mut().zip(&cov) {
             *p = crate::gfx::over(*p, scale(st.color, c as u32));
         }
+        paint_color_glyphs(&mut img, &colour, &advances, &offs, pad as f32, baseline);
         img
     }
 
@@ -1307,5 +1359,82 @@ mod run_cache_tests {
         let w = f.measure_var("Settings", 20.0, &vars);
         assert_eq!(f.measure_var("Settings", 20.0, &vars), w);
         assert!(w > 0.0);
+    }
+
+    /// `font` with an `SVG ` table appended: the directory grows by one record, so every table moves by 16 bytes.
+    fn with_svg_table(font: &[u8], table: &[u8]) -> Vec<u8> {
+        let n = u16::from_be_bytes([font[4], font[5]]) as usize;
+        let old_dir = 12 + 16 * n;
+        let mut out = font[..12].to_vec();
+        out[4..6].copy_from_slice(&((n + 1) as u16).to_be_bytes());
+        for i in 0..n {
+            let mut rec = font[12 + 16 * i..28 + 16 * i].to_vec();
+            let off = u32::from_be_bytes(rec[8..12].try_into().unwrap()) + 16;
+            rec[8..12].copy_from_slice(&off.to_be_bytes());
+            out.extend_from_slice(&rec);
+        }
+        let data_end = font.len() as u32 + 16;
+        let padded = (data_end + 3) & !3;
+        out.extend_from_slice(b"SVG ");
+        out.extend_from_slice(&[0; 4]);
+        out.extend_from_slice(&padded.to_be_bytes());
+        out.extend_from_slice(&(table.len() as u32).to_be_bytes());
+        out.extend_from_slice(&font[old_dir..]);
+        out.resize(padded as usize, 0);
+        out.extend_from_slice(table);
+        out
+    }
+
+    /// An `SVG ` table with one document for glyphs `gid..=gid`.
+    fn svg_table_for(gid: u16, doc: &str) -> Vec<u8> {
+        let mut t = vec![0, 0, 0, 0, 0, 10, 0, 0, 0, 0];
+        t.extend_from_slice(&1u16.to_be_bytes());
+        t.extend_from_slice(&gid.to_be_bytes());
+        t.extend_from_slice(&gid.to_be_bytes());
+        t.extend_from_slice(&14u32.to_be_bytes());
+        t.extend_from_slice(&(doc.len() as u32).to_be_bytes());
+        t.extend_from_slice(doc.as_bytes());
+        t
+    }
+
+    /// Pixels that are strongly red (premultiplied RGBA, red in the low byte).
+    fn red_pixels(img: &Image) -> usize {
+        img.px.iter().filter(|&&p| (p >> 24) > 200 && (p & 255) > 200 && ((p >> 8) & 255) < 60 && ((p >> 16) & 255) < 60).count()
+    }
+
+    #[test]
+    fn a_glyph_the_svg_table_covers_is_drawn_in_colour_by_the_text_renderer() {
+        let data = sf();
+        let plain = Font::parse(&data).unwrap();
+        let gid = plain.glyph('A');
+        assert!(gid != 0);
+        let doc = r##"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="-500" width="400" height="500" fill="#ff0000"/></svg>"##;
+        let coloured_data = with_svg_table(&data, &svg_table_for(gid, doc));
+        let coloured = Font::parse(&coloured_data).unwrap();
+        assert!(coloured.svg.is_some(), "the table is read");
+        let st = Style { px: 40.0, embolden: 0.0, color: crate::gfx::rgba(255, 255, 255, 255), shadow: false };
+        let before = plain.render("A", &st);
+        let after = coloured.render("A", &st);
+        assert_eq!(red_pixels(&before), 0, "white text has no red");
+        assert!(red_pixels(&after) > 100, "the SVG rectangle is drawn in its own colour: {}", red_pixels(&after));
+        assert_eq!((before.w, before.h), (after.w, after.h), "the colour glyph keeps the advance");
+        // the outline is not drawn under it: no white coverage where the rectangle is red
+        let whites = after.px.iter().filter(|&&p| (p >> 24) > 200 && (p & 255) > 200 && ((p >> 8) & 255) > 200 && ((p >> 16) & 255) > 200).count();
+        assert_eq!(whites, 0, "the outline of a colour glyph is left out");
+        // other letters still draw as outlines
+        let b = coloured.render("B", &st);
+        assert_eq!(red_pixels(&b), 0);
+        assert!(b.px.iter().any(|&p| (p >> 24) > 200));
+    }
+
+    #[test]
+    fn a_glyph_whose_document_cannot_be_drawn_keeps_its_outline() {
+        let data = sf();
+        let plain = Font::parse(&data).unwrap();
+        let gid = plain.glyph('A');
+        let broken = with_svg_table(&data, &svg_table_for(gid, "not an svg document"));
+        let font = Font::parse(&broken).unwrap();
+        let st = Style { px: 40.0, embolden: 0.0, color: crate::gfx::rgba(255, 255, 255, 255), shadow: false };
+        assert_eq!(font.render("A", &st), plain.render("A", &st));
     }
 }
