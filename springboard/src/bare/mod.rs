@@ -37,6 +37,7 @@ pub mod window_level_client;
 pub mod desktop_input;
 
 pub mod account;
+pub mod account_policy;
 
 #[cfg(feature="desktop-wayland")]
 pub mod app_policy;
