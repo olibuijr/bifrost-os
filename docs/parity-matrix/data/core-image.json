@@ -129,9 +129,9 @@
     {
       "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile)",
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile); springboard/render/src/tile_shapes.rs (triangle, parallelogram, perspective tiles)",
       "status": "partial",
-      "note": "CPU kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
+      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
