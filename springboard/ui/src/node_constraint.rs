@@ -4,7 +4,7 @@
 //!
 //! Pure: a constraint maps a (position, rotation) pair to a new pair. Rotation is in radians, counter-clockwise, Y up,
 //! like the physics world. A list is applied in order, each constraint to the result of the one before it. Only one
-//! node's position and rotation are constrained: there is no reach or inverse-kinematics solver.
+//! node's position and rotation are constrained; a reach for a chain of joints is in `inverse_kinematics`.
 //!
 //! Limits are inclusive. Pass the infinities for a side with no limit.
 
