@@ -53,9 +53,54 @@ impl Scan {
     }
 }
 
+/// One press of a switch: "next" moves the highlight, "select" answers it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Switch {
+    Next,
+    Select,
+}
+
+/// The switch press a hardware event names: `next` or `switch_next` for [`Switch::Next`], `select` or `switch_select` for
+/// [`Switch::Select`]. Any other name is not a switch press.
+pub fn switch_from_event(name: &str) -> Option<Switch> {
+    match name {
+        "next" | "switch_next" => Some(Switch::Next),
+        "select" | "switch_select" => Some(Switch::Select),
+        _ => None,
+    }
+}
+
+impl Scan {
+    /// Applies one switch press. A "next" press returns the new highlight, a "select" press the item to act on.
+    pub fn press(&mut self, switch: Switch) -> Option<usize> {
+        match switch {
+            Switch::Next => self.next(),
+            Switch::Select => self.select(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn switch_events_map_to_the_two_switch_presses_only() {
+        assert_eq!(switch_from_event("next"), Some(Switch::Next));
+        assert_eq!(switch_from_event("switch_select"), Some(Switch::Select));
+        assert_eq!(switch_from_event("Next"), None, "event names are exact");
+        assert_eq!(switch_from_event("scroll"), None);
+    }
+
+    #[test]
+    fn a_press_moves_the_scan_or_answers_it() {
+        let mut s = Scan::new(2);
+        assert_eq!(s.press(Switch::Select), None, "nothing is highlighted yet");
+        assert_eq!(s.press(Switch::Next), Some(0));
+        assert_eq!(s.press(Switch::Next), Some(1));
+        assert_eq!(s.press(Switch::Select), Some(1));
+        assert_eq!(s.press(Switch::Next), Some(0), "the next press still wraps");
+    }
 
     #[test]
     fn the_first_step_highlights_the_first_item_and_steps_wrap() {
