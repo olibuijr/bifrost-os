@@ -1917,21 +1917,20 @@ mod tests {
         let s = spec(PageId::Root, &model(&info, &opts));
         assert!(s.large);
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
-        assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
-        assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[0], "BifrOSt Account");
+        assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
+        assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
         assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
-        assert_eq!(s.groups[2].items[13].value, "Lake Day");
-        assert_eq!(s.groups[2].items[14].value, "Never", "the screen saver is off by default");
-        assert_eq!(s.groups[2].items[15].value, "63%");
-        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
-        assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
+        assert_eq!(s.groups[3].items[14].value, "Lake Day");
+        assert_eq!(s.groups[3].items[15].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[3].items[16].value, "63%");
+        assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(false));
+        assert_eq!(s.groups[2].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
         let s = spec(PageId::Root, &off);
-        assert_eq!(s.groups[0].items[1].value, "Off");
-        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
+        assert_eq!(s.groups[1].items[1].value, "Off");
+        assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(true));
     }
 
     #[test]
@@ -2013,7 +2012,7 @@ mod tests {
         let opts = Options::default();
         let s = desktop_display(&model(&info, &opts));
         assert_eq!(s.title, "Displays");
-        assert_eq!(s.groups[0].items[0].value, "2048 × 1152");
+        assert_eq!(s.groups[0].items[0].value, "Native", "the Resolution row shows the choice, Native by default");
         assert_eq!(s.groups[0].items[1].value, "Highest Available", "the row shows the choice, Highest Available by default");
         assert_eq!(s.groups[0].items[1].action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].items.iter().any(|i| i.label == "Graphics" && i.action == Action::Push(PageId::Graphics)), "the Graphics page is reachable");
@@ -2205,7 +2204,7 @@ mod tests {
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::BluetoothDetail));
         assert_eq!(s.groups[2].items[0].action, Action::Bluetooth(Cmd::Pair("B".into())));
         let root = spec(PageId::Root, &model(&info, &opts));
-        assert_eq!(root.groups[0].items[2].value, "Connected");
+        assert_eq!(root.groups[1].items[2].value, "Connected");
         info.bt.state = State::Off;
         assert_eq!(spec(PageId::Bluetooth, &model(&info, &opts)).groups.len(), 1, "off: just the switch");
         info.bt.state = State::Unavailable;
