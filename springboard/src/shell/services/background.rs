@@ -396,18 +396,20 @@ pub struct BackgroundService {
     apps: BTreeMap<String, AppTasks>,
     loaded: bool,
     next_tick: u64,
+    /// background agents this service started (and so stops when their switch goes off)
+    agents: std::collections::BTreeSet<String>,
 }
 
 impl BackgroundService {
     /// A service that saves its queue to `path`.
     pub fn at(path: PathBuf) -> Self {
-        BackgroundService { path: Some(path), apps: BTreeMap::new(), loaded: false, next_tick: 0 }
+        BackgroundService { path: Some(path), apps: BTreeMap::new(), loaded: false, next_tick: 0, agents: Default::default() }
     }
 
     /// A service that keeps everything in memory (for the tests).
     #[cfg(test)]
     pub fn in_memory() -> Self {
-        BackgroundService { path: None, apps: BTreeMap::new(), loaded: true, next_tick: 0 }
+        BackgroundService { path: None, apps: BTreeMap::new(), loaded: true, next_tick: 0, agents: Default::default() }
     }
 
     fn ensure_loaded(&mut self) {
@@ -472,6 +474,26 @@ impl BackgroundService {
         self.apps.get(app).map(|t| t.scheduler.pending().iter().map(|r| r.identifier.clone()).collect()).unwrap_or_default()
     }
 
+    /// The background-agent launcher: starts the agents whose "Allow in the background" switch is on, and stops the
+    /// ones the user switched off. A refused launch is logged and not repeated until the switch is cycled.
+    fn run_agents(&mut self, shell: &mut Shell) {
+        use crate::shell::login_items_page as items;
+        let agents = shell.login_ext_cache.get().background;
+        let off = items::background_off_from_pref(shell.prefs.get(items::BACKGROUND_OFF_KEY));
+        let plan = plan_agents(&agents, &off, &self.agents);
+        for app in plan.stop {
+            stop_app(shell, &app, true);
+            self.agents.remove(&app);
+        }
+        for app in plan.start {
+            // an agent is tried once while it is allowed, so a refused launch does not repeat every look
+            if let Err(e) = start_app(shell, &app) {
+                eprintln!("springboard: background agent {app}: {e}");
+            }
+            self.agents.insert(app);
+        }
+    }
+
     /// Carries out planned effects on the shell and returns the events for the apps.
     fn execute(&mut self, shell: &mut Shell, effects: Vec<Effect>, now: u64) -> Vec<Event> {
         let mut events = Vec::new();
@@ -502,6 +524,27 @@ impl BackgroundService {
             }
         }
         events
+    }
+}
+
+/// What the background-agent launcher does on one look.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct AgentPlan {
+    /// agents to start: allowed by their switch and not started yet
+    pub start: Vec<String>,
+    /// agents this launcher started that must now stop: their switch went off, or the app is gone
+    pub stop: Vec<String>,
+}
+
+/// Plans the `[[background-agent]]` launches. `agents` are the apps that declare an agent, `off` the app ids whose
+/// "Allow in the background" switch is off (`login.background.off`), `started` the agents already started. An agent
+/// is started once while it is allowed; turning its switch off stops it, and turning it on again starts it again.
+pub fn plan_agents(agents: &[crate::shell::login_items_page::BackgroundAgent], off: &[String], started: &std::collections::BTreeSet<String>) -> AgentPlan {
+    use crate::shell::login_items_page::runnable_background_agents;
+    let runnable: Vec<&str> = runnable_background_agents(agents, off).iter().map(|a| a.app_id.as_str()).collect();
+    AgentPlan {
+        start: runnable.iter().filter(|id| !started.contains(**id)).map(|id| id.to_string()).collect(),
+        stop: started.iter().filter(|id| !runnable.contains(&id.as_str())).cloned().collect(),
     }
 }
 
@@ -578,6 +621,7 @@ impl SystemService for BackgroundService {
             return Vec::new();
         }
         self.next_tick = now + TICK_SECS;
+        self.run_agents(shell);
         if self.apps.is_empty() {
             return Vec::new();
         }
@@ -598,6 +642,44 @@ impl SystemService for BackgroundService {
         let events = self.execute(shell, effects, now);
         self.save();
         events
+    }
+}
+
+#[cfg(test)]
+mod agent_tests {
+    use super::*;
+    use crate::shell::login_items_page::BackgroundAgent;
+
+    fn agents(ids: &[&str]) -> Vec<BackgroundAgent> {
+        ids.iter().map(|id| BackgroundAgent { app_id: id.to_string(), app_name: id.to_string() }).collect()
+    }
+
+    fn set(ids: &[&str]) -> std::collections::BTreeSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn allowed_agents_start_once_and_switched_off_ones_do_not() {
+        let off = vec!["is.b".to_string()];
+        let plan = plan_agents(&agents(&["is.a", "is.b"]), &off, &set(&[]));
+        assert_eq!(plan, AgentPlan { start: vec!["is.a".into()], stop: vec![] });
+        let again = plan_agents(&agents(&["is.a", "is.b"]), &off, &set(&["is.a"]));
+        assert_eq!(again, AgentPlan::default());
+    }
+
+    #[test]
+    fn turning_the_switch_off_stops_the_agent_and_turning_it_on_starts_it_again() {
+        let off = vec!["is.a".to_string()];
+        let plan = plan_agents(&agents(&["is.a"]), &off, &set(&["is.a"]));
+        assert_eq!(plan, AgentPlan { start: vec![], stop: vec!["is.a".into()] });
+        let back = plan_agents(&agents(&["is.a"]), &[], &set(&[]));
+        assert_eq!(back.start, ["is.a"]);
+    }
+
+    #[test]
+    fn an_uninstalled_agent_is_stopped() {
+        let plan = plan_agents(&agents(&[]), &[], &set(&["is.gone"]));
+        assert_eq!(plan.stop, ["is.gone"]);
     }
 }
 
