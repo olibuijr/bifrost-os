@@ -183,6 +183,9 @@ pub enum Hit {
     SettingsIntent { id: &'static str, title: &'static str },
     /// a shell action intent (`settings_actions`) with its parameters already set: runs the same effect the Settings pane does
     SettingsAction { intent: super::settings_actions::SettingsIntent, title: String },
+    /// a transport command of the Now Playing session (`media_intents::TRANSPORT`): play or pause, next, previous.
+    /// Sent to the session's owner; no window opens.
+    MediaTransport { command: bifrost_ui::media_session::RemoteCommand, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
@@ -274,6 +277,18 @@ fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
         rows.push(table_row(hits, format!("settings-action:wallpaper:{id}"), &title, "Use this picture as the desktop wallpaper".to_string(), search_rank::Kind::Settings, hit, folded));
     }
     rows
+}
+
+/// The Now Playing transport commands as Search rows: play or pause, next and previous. Each sends its command to the
+/// session's owner, which decides whether it applies (`services::now_playing::send`).
+fn media_transport_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    super::media_intents::TRANSPORT
+        .iter()
+        .map(|&(id, title, command)| {
+            let hit = Hit::MediaTransport { command, title: title.to_string() };
+            table_row(hits, format!("media-transport:{id}"), title, "Control the playing media".to_string(), search_rank::Kind::Settings, hit, fuzzy::fold(title))
+        })
+        .collect()
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
@@ -445,6 +460,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
     shortcut_rows.extend(settings_intent_rows(&mut hits));
     shortcut_rows.extend(settings_action_rows(&mut hits));
+    shortcut_rows.extend(media_transport_rows(&mut hits));
     let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
     let event_rows = c
         .events
@@ -522,7 +538,7 @@ fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<
     use super::spotlight_scope::Category as C;
     match hit {
         Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
-        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => (Some(C::Settings), None),
+        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => (Some(C::Settings), None),
         Hit::Contact { .. } => (Some(C::Contacts), None),
         Hit::Event { .. } => (Some(C::CalendarEvents), None),
         Hit::File { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
@@ -1397,7 +1413,7 @@ impl QuickSearch {
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
-                    Hit::SettingsAction { title, .. } => title.clone(),
+                    Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -1765,7 +1781,7 @@ impl QuickSearch {
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
-                        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => None,
+                        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
                     let thumb_img = match hit {
@@ -1974,6 +1990,10 @@ impl Shell {
                 // locking changes the lock state too, so it goes through the same path as the menu item
                 return self.lock_screen();
             }
+            Hit::MediaTransport { command, .. } => {
+                // the Now Playing owner decides whether the command applies; no window opens
+                super::services::now_playing::send(command);
+            }
             Hit::SettingsAction { intent, .. } => {
                 // the same effect the Settings pane and the agent socket apply; no window opens
                 return vec![intent.into_effect()];
@@ -2158,6 +2178,8 @@ mod tests {
         set_wallpaper_catalogue(Vec::new());
         let lock = Hit::SettingsAction { intent: SettingsIntent::LockScreen, title: "Lock Screen".into() };
         assert!(results("lock screen", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == lock));
+        let next = Hit::MediaTransport { command: bifrost_ui::media_session::RemoteCommand::Next, title: "Next Track".into() };
+        assert!(results("next track", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == next));
     }
 
     #[test]

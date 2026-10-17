@@ -182,7 +182,7 @@ fn title_of(hit: &Hit) -> Option<String> {
         Hit::Contact { name, .. } | Hit::File { name, .. } => name.clone(),
         Hit::Shortcut { title, .. } | Hit::Indexed { title, .. } | Hit::Event { title } => title.clone(),
         Hit::SettingsIntent { title, .. } => title.to_string(),
-        Hit::SettingsAction { title, .. } => title.clone(),
+        Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
         Hit::Terminal(_) | Hit::Reveal { .. } => return None,
     })
 }
