@@ -79,6 +79,7 @@ pub mod idle_watch;
 pub mod screen_time;
 pub mod web_usage;
 pub mod web_history;
+pub mod screen_usage;
 pub mod screens;
 pub mod displays;
 pub mod windows;
