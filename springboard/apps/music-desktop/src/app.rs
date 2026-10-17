@@ -9,6 +9,8 @@ use crate::music::system;
 use bifrost_app::app_windows::{is_close_window_key, WindowId, WindowSpec};
 use bifrost_app::audio::Client;
 use bifrost_app::audio_devices::{self, Change};
+use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::controls::nav::ToolbarLayout;
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
@@ -399,6 +401,21 @@ impl MusicApp {
     }
 }
 
+/// App Intents that drive playback (the audio intents of the desktop's Shortcuts and Search).
+const AUDIO_PLAY_PAUSE: &str = "play-pause";
+const AUDIO_NEXT: &str = "next-track";
+const AUDIO_PREVIOUS: &str = "previous-track";
+
+/// The transport control an audio intent id runs, with the dialog it answers with. `None` for any other id.
+fn audio_transport(id: &str) -> Option<(Transport, &'static str)> {
+    match id {
+        AUDIO_PLAY_PAUSE => Some((Transport::Play, "Playback toggled")),
+        AUDIO_NEXT => Some((Transport::Next, "Skipped to the next track")),
+        AUDIO_PREVIOUS => Some((Transport::Prev, "Went back to the previous track")),
+        _ => None,
+    }
+}
+
 impl App for MusicApp {
     fn id(&self) -> &str {
         "is.olibuijr.music.desktop"
@@ -445,6 +462,21 @@ impl App for MusicApp {
             self.output = listing.output;
         }
         true
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        vec![
+            Intent::new(AUDIO_PLAY_PAUSE, "Play or Pause", "Starts or pauses playback in Music.").shortcut(),
+            Intent::new(AUDIO_NEXT, "Next Track", "Skips to the next track in the queue.").shortcut(),
+            Intent::new(AUDIO_PREVIOUS, "Previous Track", "Goes back to the previous track in the queue.").shortcut(),
+        ]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, _data_dir: &Path, id: &str, _params: &Json) -> Result<IntentResult, RpcError> {
+        let Some((target, done)) = audio_transport(id) else { return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}"))) };
+        let Some(m) = self.app.as_mut() else { return Err(intents::failed("Music is not running yet")) };
+        m.control(target);
+        Ok(IntentResult::dialog(done))
     }
 
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
@@ -784,5 +816,13 @@ mod tests {
         assert!(!app.service_event(&ctx, now_playing::SERVICE, "command", &pause));
         assert!(!app.service_event(&ctx, "some-other-service", "command", &pause));
         assert!(calls(&ctx).is_empty());
+    }
+
+    #[test]
+    fn audio_intents_map_to_the_transport_controls() {
+        assert_eq!(audio_transport(AUDIO_PLAY_PAUSE), Some((Transport::Play, "Playback toggled")));
+        assert_eq!(audio_transport(AUDIO_NEXT), Some((Transport::Next, "Skipped to the next track")));
+        assert_eq!(audio_transport(AUDIO_PREVIOUS), Some((Transport::Prev, "Went back to the previous track")));
+        assert!(audio_transport("shuffle").is_none());
     }
 }
