@@ -1972,7 +1972,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/ndarray.rs; springboard/sdk/src/inference.rs; springboard/ui/src/nn.rs",
    "status": "partial",
-   "note": "Partial: float32 tensors (sdk ndarray), typed inference signatures that check inputs before a call (sdk inference), and a CPU dense layer with softmax and argmax (ui nn.rs). Not built: model loading, compute-unit selection, training, and a runtime an app can call to run a model.",
+   "note": "Partial: float32 tensors (sdk ndarray), typed inference signatures that check inputs before a call (sdk inference), and a CPU dense layer with softmax and argmax (ui nn.rs). Built 2026-10-17: compute unit choice (sdk inference::ComputeUnits, CPU always usable, GPU when present) and float32 weight loading from little-endian bytes (sdk ndarray::NDArray::from_le_bytes; tests). Not built: a model file format, training, and a runtime an app can call to run a model.",
    "rea": [],
    "method": "assessed"
   },
@@ -2128,7 +2128,7 @@
    "doc": "",
    "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs; springboard/apps/news-desktop/src/feed_refresh.rs",
    "status": "partial",
-   "note": "Feeds are cached and revalidated inside the News app over HTTP. The refresh schedule is built in apps/news-desktop/src/feed_refresh.rs (which feeds are due, how long to sleep; feed_refresh::tests); the News loop that runs it is not wired yet.",
+   "note": "Feeds are cached and revalidated inside the News app over HTTP. The refresh schedule is built in apps/news-desktop/src/feed_refresh.rs (which feeds are due, how long to sleep; feed_refresh::tests); news.rs maintain and next_wake already run the refresh with their own retry and refresh intervals; feed_refresh.rs is not used by that loop yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -2814,7 +2814,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/accounts.rs; springboard/sdk/src/accounts.rs (oauth2_refresh_body, renewal_from_token_response)",
    "status": "partial",
-   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing. Built 2026-10-17: the authorization URL with optional PKCE challenge and the code exchange body (sdk accounts::tests). The redirect capture that receives the code, and the parse of the first tokens, are still missing.",
+   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing. Built 2026-10-17: the authorization URL with optional PKCE challenge and the code exchange body (sdk accounts::tests). Built 2026-10-17: the first-token parse (credential_from_token_response) and the redirect check that trusts a code only for the sent state (oauth2_redirect; sdk accounts::tests). Still missing: the browser or loopback capture that hands the redirect URL to that check, and the app-facing sign-in call.",
    "rea": [],
    "method": "assessed"
   },
