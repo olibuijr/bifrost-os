@@ -113,6 +113,40 @@ pub fn exchange(app_id: &str, line: &str, wait: Duration) -> Result<String, Stri
     exchange_at(&socket_path(app_id), line, wait)
 }
 
+/// The installed apps that answer visual searches: those that declare `[[intent]] id = "visual-search"` in their
+/// manifest (`bifrost_ui::visual_search_wire::PROVIDER_INTENT`). Reads only what the manifests say.
+pub fn visual_search_apps(apps: &[super::apphost::Installed]) -> Vec<String> {
+    apps.iter()
+        .filter(|a| a.manifest.intents.iter().any(|i| i.id == bifrost_ui::visual_search_wire::PROVIDER_INTENT))
+        .map(|a| a.manifest.id.clone())
+        .collect()
+}
+
+/// Asks the app listening at `path` which of its content matches `scene` (`visual_search.search`, see
+/// `bifrost_ui::visual_search_wire`). Every match is stamped with `app_id`, whatever the app wrote, so an app cannot
+/// answer for another one. An app that cannot be reached within `wait`, refuses, or answers badly gives no matches.
+/// Blocking: run it off the UI thread.
+pub fn visual_search_at(path: &std::path::Path, app_id: &str, scene: &bifrost_ui::visual_search::Scene, wait: Duration) -> Vec<bifrost_ui::visual_search::Match> {
+    let line = bifrost_ui::visual_search_wire::request_line(scene, 1);
+    let Ok(reply) = exchange_at(path, &line, wait) else { return Vec::new() };
+    let mut found = bifrost_ui::visual_search_wire::matches_from_reply(&reply).unwrap_or_default();
+    for m in &mut found {
+        m.app = app_id.to_string();
+    }
+    found
+}
+
+/// Delivers `scene` to every running app that answers visual searches and returns the merged matches, best first, at
+/// most `MAX_MATCHES`. An app that is not running is not started and is skipped. Blocking (each answering app may take
+/// a few seconds): run it off the UI thread.
+pub fn visual_search(apps: &[super::apphost::Installed], scene: &bifrost_ui::visual_search::Scene) -> Vec<bifrost_ui::visual_search::Match> {
+    let mut all = Vec::new();
+    for id in visual_search_apps(apps) {
+        all.extend(visual_search_at(&socket_path(&id), &id, scene, Duration::ZERO));
+    }
+    bifrost_ui::visual_search::merge(all, bifrost_ui::visual_search::MAX_MATCHES)
+}
+
 fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<String>, String> {
     parse_reply(&exchange_at(path, line, wait)?)
 }
@@ -207,6 +241,48 @@ mod tests {
         });
         assert_eq!(run_at(&sock, &request_line("go"), Duration::from_secs(1)), Ok(Some("Went".into())));
         h.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn only_apps_that_declare_the_visual_search_intent_are_asked() {
+        use super::super::apphost::{Installed, Manifest};
+        let apps = [
+            Installed {
+                manifest: Manifest::parse("id = \"a.plants\"\nname = \"Plants\"\nexec = \"x\"\n\n[[intent]]\nid = \"visual-search\"\ntitle = \"Visual Search\"\nshortcut = false\nparams = []\n").unwrap(),
+                dir: std::path::PathBuf::new(),
+            },
+            Installed {
+                manifest: Manifest::parse("id = \"a.notes\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n").unwrap(),
+                dir: std::path::PathBuf::new(),
+            },
+        ];
+        assert_eq!(visual_search_apps(&apps), vec!["a.plants".to_string()]);
+        assert!(visual_search_apps(&[]).is_empty());
+        let scene = bifrost_ui::visual_search::Scene::new(bifrost_ui::visual_search::SceneKind::Screenshot, 1, 1, vec![0, 0, 0, 255]).unwrap();
+        assert!(visual_search(&apps, &scene).is_empty(), "an app that is not running is skipped, not started");
+    }
+
+    #[test]
+    fn a_visual_search_goes_to_the_app_socket_and_the_matches_are_stamped_with_that_app() {
+        use bifrost_ui::visual_search::{Scene, SceneKind};
+        let dir = std::env::temp_dir().join(format!("bifrost-visual-search-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("p.sock");
+        let _ = std::fs::remove_file(&sock);
+        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let h = std::thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            let mut req = String::new();
+            std::io::BufRead::read_line(&mut std::io::BufReader::new(&s), &mut req).unwrap();
+            assert!(req.contains("\"visual_search.search\""));
+            s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[{\"intent\":\"open\",\"title\":\"Fern\",\"score\":70}]}\n").unwrap();
+        });
+        let scene = Scene::new(SceneKind::Screenshot, 2, 1, vec![1, 2, 3, 255, 4, 5, 6, 255]).unwrap().with_labels(&["plant"]);
+        let found = visual_search_at(&sock, "is.x.plants", &scene, Duration::from_secs(1));
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].app.as_str(), found[0].title.as_str(), found[0].score), ("is.x.plants", "Fern", 70));
+        h.join().unwrap();
+        assert!(visual_search_at(&dir.join("none.sock"), "is.x.gone", &scene, Duration::ZERO).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

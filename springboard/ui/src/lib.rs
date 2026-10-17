@@ -592,6 +592,7 @@ pub mod diff;
 pub mod cache;
 pub mod fuzzy;
 pub mod visual_search;
+pub mod visual_search_wire;
 pub mod regex;
 pub mod format;
 pub mod region;
