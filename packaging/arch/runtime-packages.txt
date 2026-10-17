@@ -123,8 +123,6 @@ rdma-core
 espeak-ng
 bluez
 bluez-utils
-udisks2
-krb5
 colord
 wpa_supplicant
 iw
