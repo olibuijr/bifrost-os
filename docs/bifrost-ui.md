@@ -4155,13 +4155,24 @@ window's buffers (`window_buffers`, the main window's size and seal checks). `wi
 send `WindowClosed`, `WindowConfigure` and `WindowTouch`. The table drops a window the app's exit closes. Tests:
 `window_table_tests` in `apphost.rs`, `window_pixel_tests` in `runtime.rs`.
 
-Not done, so no extra window is on screen yet: the desk (`src/shell/desk.rs`) does not draw the windows. Its `Win` records are
-keyed by `AppId` throughout (about a hundred call sites: hit tests, stacking, raise, close, the Dock and the Cmd+Tab list), so a
-window needs a key of (app, window id) first. Until the desk calls `window_blitted`, an extra window's frames stall after two
-frames, because nothing gives the replaced buffer back. The Window menu (`desktop_bar.rs`) and the Dock do not list the windows.
-The direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false). Contacts' Card > Open in Separate Window and its
-double-click are not wired: its card view is drawn by the whole Contacts model at the main window's size, so a card window needs
-a card-only draw first. The Contacts row stays gap. Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
+Desk (`springboard/src/shell/desk.rs`): an extra window is `AppId::ExternalWindow(slot, id)`, a window of its own in the desk's
+`Win` list (its parent app is `AppId::parent()`). `desk_sync_extra_windows` runs from the app host tick and opens or closes
+desk windows with `WindowTable::desk_changes`. The window blits its mapped frame (`ext_window_blit`, `AppHost::blit_window`,
+which gives the frame back through `window_blitted`). Its traffic light closes it through the app host (`WindowClosed`) and the
+app keeps running. A resize sends `WindowConfigure` in points (`ext_window_resize`); a touch on its body sends `WindowTouch` in
+points (`ext_window_touch`). The Window menu and the Dock's app menu list the windows (`window_menu_name`, `menu_items`) and
+focus one with `desk_focus_extra_window`. Tests: `app_window_table` (`desk_changes`, `menu_items`), `apps` (`AppId` helpers).
+
+Not done: the window-server path (`SPRINGBOARD_WAYLAND` frames and `take_wayland_windows`) has no window ids, so extra windows
+are drawn by the software path only; the Cmd+Tab list does not list them; the accessibility tree and the drop targets of the
+parent app do not cover the windows. The direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false). Tests of
+the desk lifecycle itself are not written yet (the table diff is tested).
+
+Contacts (`springboard/apps/contacts-desktop`, 1.12.0): Card > Open in Separate Window and a double-click on a list row open the
+contact's card in a window (`card_windows.rs`, `main.rs` `open_card_window`), and the window draws the card at its own size
+(`Contacts::draw_card`, `draw_window`); the window's close unbinds it (`window_closed`). Touches in a card window are not routed
+yet (`window_event` is the default), so the card is read-only. The Contacts row stays gap until touches are routed.
+Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
 
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
 lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).

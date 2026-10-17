@@ -4,7 +4,8 @@
 //! only records the contact behind each id, so a card that is already open is found rather than opened twice, and the
 //! window is forgotten when the shell or the app closes it.
 //!
-//! Not wired to a menu item or a double-click yet: the shell does not draw a card window (see `app_windows`).
+//! Card > Open in Separate Window and a double-click on a row open a card here (`main.rs`, `open_card_window`), and the
+//! window draws the card (`draw_window`, `Contacts::draw_card`). Touches in a card window are not routed yet.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use bifrost_app::app_windows::{WindowId, WindowSpec};

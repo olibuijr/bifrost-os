@@ -38,6 +38,8 @@ struct ContactsApp {
     copies: BTreeMap<u32, String>,
     /// Internet Accounts: the CardDAV address books switched on for Contacts are read in the background.
     dav: bifrost_app::dav_sync::Sync,
+    /// The card windows: which contact each extra window shows (`card_windows`).
+    cards: card_windows::CardWindows,
 }
 
 impl ContactsApp {
@@ -52,6 +54,26 @@ impl ContactsApp {
         }
         if let Some(all) = c.all_contacts() {
             self.index.sync(ctx, all);
+        }
+        // after the last use of `c`: a card window needs all of `self`
+        if let Some((id, name)) = self.app.as_mut().and_then(|c| c.take_card_request()) {
+            self.open_card_window(ctx, id, &name);
+        }
+    }
+
+    /// Opens a contact's card in a window of its own (`Ctx::open_window`). A card that is already open is not opened
+    /// twice; a window the shell refuses leaves the card in the main window and says so.
+    fn open_card_window(&mut self, ctx: &Ctx, contact: u64, name: &str) {
+        if self.cards.window_of(contact).is_some() {
+            return;
+        }
+        match ctx.open_window(card_windows::card_spec(name)) {
+            Ok(window) => self.cards.bind(window, contact),
+            Err(_) => {
+                if let Some(c) = &mut self.app {
+                    c.show_status("The card could not be opened in a window.".into());
+                }
+            }
         }
     }
 
@@ -254,6 +276,21 @@ impl App for ContactsApp {
         d.all();
         d
     }
+
+    /// A card window draws its contact's card at the window's size; any other extra window draws nothing.
+    fn draw_window(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, s: &mut Surface, _t: f64) -> Damage {
+        if let (Some(c), Some(contact)) = (&mut self.app, self.cards.card_of(window)) {
+            c.draw_card(s, &ctx.ui, contact);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+
+    /// The shell closed a card window (or the app did): its contact is no longer shown in a window.
+    fn window_closed(&mut self, _ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
+        self.cards.unbind(window).is_some()
+    }
 }
 
 fn main() {
@@ -263,5 +300,6 @@ fn main() {
         index: Default::default(),
         copies: BTreeMap::new(),
         dav: bifrost_app::dav_sync::Sync::new(Service::Contacts),
+        cards: card_windows::CardWindows::new(),
     });
 }

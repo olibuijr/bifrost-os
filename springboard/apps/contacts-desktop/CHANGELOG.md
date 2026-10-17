@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.0 — 2026-10-17
+
+- Card windows draw: Card > Open in Separate Window and a double-click on a list row open the contact's card in its own window (`Ctx::open_window`, `CardWindows`). The window draws the card at its size (`Contacts::draw_card`, `draw_window`) and its close unbinds the card (`window_closed`). Touches in a card window are not routed yet, so the card is read-only.
+
 ## 1.11.1 — 2026-10-17
 
 - Card windows now bind to the SDK window ids (`card_windows.rs`, `CardWindows::bind`), so the app keeps one window registry. Nothing is opened from the UI yet.
