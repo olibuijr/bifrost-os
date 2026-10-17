@@ -1767,9 +1767,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login)",
    "status": "gap",
-   "note": "Build a network authentication agent that prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs); the reference's network-auth agent app has no BifrOSt counterpart yet.",
+   "note": "Build a network authentication agent that prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs); the reference's network-auth agent app has no BifrOSt counterpart yet. Built 2026-10-17: the keychain store for SMB share logins (springboard/src/keychain.rs save_share_login and share_login, tests keychain::tests); the prompt that asks for a login and the 802.1X path are not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -1788,9 +1788,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sharing_page.rs; packaging/arch/runtime-packages.txt (samba, nfs-utils)",
+   "bifrost": "springboard/src/shell/sharing_page.rs; packaging/arch/runtime-packages.txt (samba, nfs-utils); springboard/src/shell/sharing_page.rs (share_section, shares_in_conf)",
    "status": "partial",
-   "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing.",
+   "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing. Built 2026-10-17: the folder share model (springboard/src/shell/sharing_page.rs share_section and shares_in_conf, tests sharing_page::tests); the page does not list or edit folders yet.",
    "rea": [],
    "method": "assessed"
   },
