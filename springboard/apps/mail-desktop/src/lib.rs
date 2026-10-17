@@ -15,6 +15,7 @@ pub mod people;
 pub mod prefs;
 pub mod findbar;
 pub mod flags;
+pub mod found;
 pub mod html;
 pub mod imap;
 pub mod layout;

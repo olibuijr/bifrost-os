@@ -14,6 +14,7 @@ mod names;
 mod printing;
 mod services;
 mod smart;
+mod suggested;
 mod tabular;
 mod textimport;
 mod widget;
@@ -44,7 +45,16 @@ struct ContactsApp {
     /// The Birthdays widget timeline last sent to the shell, and when it was last checked (monotonic ms).
     widget: widget::Widget,
     widget_checked: f64,
+    /// The suggested contacts the shell holds (people other apps donated) are asked for now and then; this is the
+    /// request in flight and when one was last made (monotonic ms).
+    suggest_req: Option<u32>,
+    suggest_asked: f64,
+    /// Accept and dismiss answers on their way to the shell, by request id.
+    answer_reqs: std::collections::BTreeSet<u32>,
 }
+
+/// How often Contacts asks the shell for the suggested contacts (ms).
+const SUGGEST_EVERY_MS: f64 = 30_000.0;
 
 impl ContactsApp {
     /// Sends the Birthdays widget timeline when it changed (a card changed or the local day rolled over).
@@ -70,6 +80,7 @@ impl ContactsApp {
             self.index.sync(ctx, all);
         }
         self.sync_widget(ctx, 0.0);
+        self.send_answers(ctx);
         // after the last use of `c`: a card window needs all of `self`
         if let Some(c) = self.app.as_mut() {
             if let Some(id) = c.take_card_edit() {
@@ -78,6 +89,15 @@ impl ContactsApp {
         }
         if let Some((id, name)) = self.app.as_mut().and_then(|c| c.take_card_request()) {
             self.open_card_window(ctx, id, &name);
+        }
+    }
+
+    /// Sends the answers the person gave to suggested contacts (Add and Dismiss) to the shell, which remembers them so a
+    /// dismissed address is never offered again.
+    fn send_answers(&mut self, ctx: &Ctx) {
+        let Some(answers) = self.app.as_mut().map(|c| c.take_suggestion_answers()) else { return };
+        for (key, answer) in answers {
+            self.answer_reqs.insert(bifrost_app::contacts::suggested::answer(ctx, &key, answer));
         }
     }
 
@@ -259,6 +279,11 @@ impl App for ContactsApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.sync_termination(ctx);
+        if self.suggest_req.is_none() && t - self.suggest_asked >= SUGGEST_EVERY_MS {
+            self.suggest_asked = t;
+            self.suggest_req = Some(bifrost_app::contacts::suggested::list(ctx, suggested::MAX_ASKED));
+        }
+        self.send_answers(ctx);
         // Internet Accounts: a finished CardDAV sync merges its cards into the contacts.
         let objects = |app: &Option<contacts::Contacts>| app.as_ref().map(|c| c.sync_objects()).unwrap_or_default();
         if let Some(done) = self.dav.poll_local(ctx, t, bifrost_app::dav_sync::unix_now(), &mut || objects(&self.app)) {
@@ -284,8 +309,19 @@ impl App for ContactsApp {
         }
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
         if self.dav.reply(request, result) {
+            return true;
+        }
+        if self.suggest_req == Some(request) {
+            self.suggest_req = None;
+            let list = result.as_ref().ok().and_then(bifrost_app::contacts::suggested::decode_list);
+            if let (Some(list), Some(c)) = (list, self.app.as_mut()) {
+                c.set_suggestions(&ctx.ui, list);
+            }
+            return true;
+        }
+        if self.answer_reqs.remove(&request) {
             return true;
         }
         let Some(label) = self.copies.remove(&request) else { return false };
@@ -359,5 +395,8 @@ fn main() {
         cards: card_windows::CardWindows::new(),
         widget: Default::default(),
         widget_checked: f64::NEG_INFINITY,
+        suggest_req: None,
+        suggest_asked: f64::NEG_INFINITY,
+        answer_reqs: Default::default(),
     });
 }

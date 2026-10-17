@@ -25,6 +25,7 @@ use crate::spelling;
 use crate::state::{is_multiline, is_yes, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
+use bifrost_app::calendar;
 use bifrost_app::contacts::{self, Key as ContactKey, SaveRequest};
 use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
@@ -163,6 +164,8 @@ const KEY_ESCAPE: u32 = 1;
 const KEY_BACKSPACE: u32 = 8;
 const KEY_TAB: u32 = 9;
 const KEY_RETURN: u32 = 13;
+const KEY_UP: u32 = 38;
+const KEY_DOWN: u32 = 40;
 /// evdev V, for the paste chord.
 const KEY_V: u32 = 47;
 
@@ -177,6 +180,16 @@ enum Pending {
     /// Add Sender to Contacts: the address book is asked whether it has the address, and then given the person.
     ContactCheck(Person),
     ContactSave(Person),
+    /// A person donated to Contacts. Nothing follows its answer.
+    Donated,
+    /// "Add to Calendar" from the banner: the event being saved.
+    EventSave,
+    /// "Add to Contacts" from the banner for a phone number: the contact being saved.
+    PhoneSave(String),
+    /// Recipient suggestions: the answer to the question whether Mail may read the address book.
+    BookAccess,
+    /// Recipient suggestions: the names and email addresses of the address book.
+    BookFetch,
     /// A password item being deleted. Nothing follows its answer.
     Forget,
     /// A question to the spelling checker about `text`, the message as it was asked.
@@ -277,6 +290,8 @@ pub struct MailWindow {
     pub attach_rects: Vec<(Rect, usize)>,
     /// The Load Remote Content link of the open message, where it was drawn last frame.
     pub remote_rect: Option<Rect>,
+    /// The links of the "Found in Mail" banner, where they were drawn last frame.
+    pub found_rects: Vec<(Rect, crate::found::FoundHit)>,
     /// How many remote images the open message has, as counted for it (message UID, count).
     pub remote_memo: Option<(u32, usize)>,
     /// An immediate send is on its way from the compose window it was sent from: that window stays the active one until
@@ -295,6 +310,8 @@ pub struct MailWindow {
     viewer_requests: Vec<u32>,
     /// The last message tapped and when, for the double-click that opens a viewer window.
     last_tap: Option<(u32, f64)>,
+    /// The address book was asked for while the compose sheet is open (asked again for the next compose sheet).
+    book_asked: bool,
     dirty: bool,
 }
 
@@ -575,6 +592,7 @@ impl MailWindow {
             in_flight: HashMap::new(),
             attach_rects: Vec::new(),
             remote_rect: None,
+            found_rects: Vec::new(),
             remote_memo: None,
             sending: false,
             find_hits: None,
@@ -584,6 +602,7 @@ impl MailWindow {
             laid: None,
             viewer_requests: Vec::new(),
             last_tap: None,
+            book_asked: false,
             dirty: true,
         };
         for account in &window.mail.accounts {
@@ -650,6 +669,8 @@ impl MailWindow {
             self.poll();
         }
         self.run_queue(ctx);
+        self.ensure_address_book(ctx);
+        self.read_open_message(ctx);
         let scrolled = self.list_scroll.tick(t) | self.reader_scroll.tick(t);
         std::mem::take(&mut self.dirty) || scrolled
     }
@@ -709,6 +730,34 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = format!("Contacts: {e}"),
             },
+            Pending::Donated => {}
+            Pending::EventSave => {
+                self.mail.status = match result {
+                    Ok(body) if calendar::decode_saved_id(body).is_some() => "Added to Calendar".to_string(),
+                    Ok(_) => "The event could not be saved".to_string(),
+                    Err(e) => format!("The event could not be saved: {e}"),
+                };
+            }
+            Pending::PhoneSave(phone) => {
+                self.mail.status = match result {
+                    Ok(_) => format!("Added {phone} to Contacts"),
+                    Err(e) => format!("The contact could not be saved: {e}"),
+                };
+            }
+            Pending::BookAccess => {
+                // Mail reads the address book only when the person let it: an undecided Mail has the access sheet queued
+                // by the request, and the suggestions then come from the recent recipients alone
+                let reads = result.as_ref().ok().and_then(contacts::decode_status).is_some_and(|status| matches!(status, contacts::Status::Authorized | contacts::Status::Limited));
+                if reads {
+                    let request = contacts::fetch(ctx, &[ContactKey::GivenName, ContactKey::FamilyName, ContactKey::Organization, ContactKey::Emails], None);
+                    self.pending.insert(request, Pending::BookFetch);
+                }
+            }
+            Pending::BookFetch => {
+                if let Some(records) = result.as_ref().ok().and_then(contacts::decode_contacts) {
+                    self.mail.set_address_book(records.iter().map(people::book_entry).collect());
+                }
+            }
             Pending::ContactSave(person) => {
                 self.mail.status = match result {
                     Ok(_) => format!("Added {} to Contacts", person.address),
@@ -796,6 +845,25 @@ impl MailWindow {
         if self.mail.sheet.is_none() {
             return self.find_key(k);
         }
+        self.ensure_address_book(ctx);
+        // the suggestions under a recipient field: the arrows move through them, Return and Tab take the highlighted
+        // one, Escape closes the list
+        match &k {
+            KeyInput::Code(KEY_UP | KEY_DOWN) => {
+                let moved = self.mail.move_recipient_highlight(matches!(k, KeyInput::Code(KEY_DOWN)));
+                self.dirty |= moved;
+                return moved;
+            }
+            KeyInput::Code(KEY_RETURN | KEY_TAB) if self.mail.recipient_field.highlighted().is_some() && self.mail.accept_recipient(None) => {
+                self.dirty = true;
+                return true;
+            }
+            KeyInput::Code(KEY_ESCAPE) if self.mail.close_recipient_list() => {
+                self.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
         let multiline = self.focus_is_multiline();
         let picker = self.focus_is_picker();
         match k {
@@ -820,6 +888,7 @@ impl MailWindow {
             KeyInput::Code(KEY_ESCAPE) => self.cancel_sheet(),
             KeyInput::Code(_) => return false,
         }
+        self.mail.sync_recipient_field();
         self.dirty = true;
         true
     }
@@ -900,6 +969,7 @@ impl MailWindow {
             return false;
         }
         self.edit_form(|form| form.type_text(&text));
+        self.mail.sync_recipient_field();
         self.dirty = true;
         true
     }
@@ -2093,6 +2163,84 @@ impl MailWindow {
         self.change_message(0, Change::Replace { uid, raw: stripped.raw, flags });
     }
 
+    /// Once the text of the open message is here: its people go to Contacts as suggestions (unless Mail Settings turned
+    /// that off), and the banner reads it for events, flights, contacts and addresses to offer.
+    fn read_open_message(&mut self, ctx: &Ctx) {
+        for seen in self.mail.people_to_donate() {
+            let request = contacts::suggested::donate(ctx, &seen.name, contacts::suggested::Handle::Email, &seen.address);
+            self.pending.insert(request, Pending::Donated);
+        }
+        let shown = self.mail.found_pager.as_ref().map(|(uid, _)| *uid);
+        let ready = self.mail.open.filter(|uid| self.mail.bodies.contains_key(uid));
+        if shown != ready {
+            let region = bifrost_app::locale::Locale::current().region_code().unwrap_or("IS").to_string();
+            self.mail.refresh_found_in(&region);
+            self.dirty = true;
+        }
+    }
+
+    /// A tap on a link of the banner: page, turn the suggestion down, or take it. Taking it runs its action with the
+    /// app that owns it: Calendar for an event, Contacts for an email address or phone number, Maps for an address.
+    fn found_link(&mut self, ctx: &Ctx, link: crate::found::FoundHit) {
+        use crate::found::FoundHit;
+        use bifrost_app::controls::found_in::Action;
+        match link {
+            FoundHit::Next => {
+                self.mail.found_step(true);
+            }
+            FoundHit::Previous => {
+                self.mail.found_step(false);
+            }
+            FoundHit::Dismiss => {
+                self.mail.found_dismiss();
+            }
+            FoundHit::Add => {
+                let subject = self.mail.found_current().map(|f| f.source.title.trim().to_string()).unwrap_or_default();
+                let Some(action) = self.mail.found_accept() else { return };
+                match action {
+                    Action::AddEvent(event) => {
+                        let now = now_unix();
+                        let offset = i64::from(bifrost_app::time_zone::TimeZone::current().seconds_from_gmt(bifrost_app::coding::Date(now as f64)));
+                        let (start, end) = crate::found::event_times(&event, now, offset);
+                        let title = if subject.is_empty() { "Event from Mail" } else { subject.as_str() };
+                        let request = calendar::save_event(ctx, title, &start, &end, false, "");
+                        self.pending.insert(request, Pending::EventSave);
+                        self.mail.status = "Adding to Calendar".into();
+                    }
+                    Action::AddContact { email: Some(address), .. } => {
+                        if let Some(person) = people::person_from(&address) {
+                            let request = contacts::fetch(ctx, &[ContactKey::Emails], Some(person.address.as_str()));
+                            self.pending.insert(request, Pending::ContactCheck(person));
+                            self.mail.status = "Checking Contacts".into();
+                        }
+                    }
+                    Action::AddContact { phone: Some(phone), .. } => {
+                        let mut record = contacts::Record::new(0);
+                        record.set(ContactKey::Phones, contacts::Value::List(vec![phone.clone()]));
+                        let request = contacts::save(ctx, &SaveRequest { add: vec![record], ..SaveRequest::default() });
+                        self.pending.insert(request, Pending::PhoneSave(phone));
+                        self.mail.status = "Adding to Contacts".into();
+                    }
+                    Action::AddContact { .. } | Action::ShowFlight { .. } => {}
+                    Action::OpenInMaps(address) => ctx.open_url(&crate::found::maps_link(&address)),
+                }
+            }
+        }
+    }
+
+    /// While a compose sheet is open, asks for the address book once so the To, Cc and Bcc fields can suggest people from
+    /// it. The sheet closing lets the next one ask again, which also refreshes the book.
+    fn ensure_address_book(&mut self, ctx: &Ctx) {
+        let composing = matches!(self.mail.sheet, Some(Sheet::Compose(_)));
+        if composing && !self.book_asked {
+            self.book_asked = true;
+            let request = contacts::request(ctx);
+            self.pending.insert(request, Pending::BookAccess);
+        } else if !composing {
+            self.book_asked = false;
+        }
+    }
+
     /// Message > Add Sender to Contacts: asks the address book whether it has the address, and saves the person if not.
     fn add_sender_to_contacts(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
@@ -2800,6 +2948,7 @@ impl MailWindow {
             crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
             crate::draw::Hit::LoadRemote => self.load_remote(),
+            crate::draw::Hit::Found(link) => self.found_link(ctx, link),
             crate::draw::Hit::Attach if matches!(self.mail.sheet, Some(Sheet::Rules(..))) => self.mail.open_rule(),
             crate::draw::Hit::Attach => self.pick_files(ctx),
             crate::draw::Hit::EditRule(index) => self.mail.open_rule_editor(index),
@@ -2813,6 +2962,11 @@ impl MailWindow {
             crate::draw::Hit::FindPrevious => self.step_match(false),
             crate::draw::Hit::FindNext => self.step_match(true),
             crate::draw::Hit::FindDone => self.mail.find = None,
+            crate::draw::Hit::Choice(index) if matches!(self.mail.sheet, Some(Sheet::Compose(_))) => {
+                if !self.mail.accept_recipient(Some(index)) {
+                    return false;
+                }
+            }
             crate::draw::Hit::Choice(index) => {
                 let name = crate::draw::choices_of(&self.mail).get(index).cloned();
                 match name {
@@ -2831,6 +2985,7 @@ impl MailWindow {
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
                 }
+                self.mail.sync_recipient_field();
                 if choice {
                     // a yes or no field flips with each click
                     if let Some(field) = self.form_mut().and_then(|form| form.fields.get_mut(index)) {

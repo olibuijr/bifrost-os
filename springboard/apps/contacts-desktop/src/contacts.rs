@@ -37,6 +37,8 @@ use crate::exchange;
 use crate::extras::{self, Extra, Extras, ValueKind};
 use crate::printing;
 use crate::smart::{self, Condition, Rule, RuleField, UserList};
+use crate::suggested::{self, Suggestions};
+use bifrost_app::contacts::suggested::{Feedback, Suggested};
 use crate::textimport;
 use crate::group_file;
 use crate::history::History;
@@ -114,6 +116,8 @@ const LIST_FAVORITES: u32 = 101;
 const LIST_RECENT: u32 = 102;
 const LIST_DUPLICATES: u32 = 103;
 const LIST_LAST_IMPORT: u32 = 104;
+/// The suggested contacts (people other apps saw that are not in the book): a screen of their own, not a filter.
+const LIST_SUGGESTIONS: u32 = 105;
 /// Smart group `n` (its offset in `smart::Smart::ALL`) is the sidebar row `LIST_SMART + n`.
 const LIST_SMART: u32 = 110;
 const LIST_SMART_LAST: u32 = LIST_SMART + crate::smart::Smart::ALL.len() as u32 - 1;
@@ -234,6 +238,10 @@ const NODE_SMART_FIELD: u64 = 510;
 const NODE_SMART_CONDITION: u64 = 520;
 const NODE_SMART_VALUE: u64 = 530;
 const NODE_SMART_REMOVE: u64 = 540;
+/// The Add and Dismiss buttons of the suggested contacts, by row.
+const NODE_SUGGEST_ADD: u64 = 600;
+const NODE_SUGGEST_DISMISS: u64 = 700;
+const MAX_SUGGEST_NODES: u64 = 100;
 const ROW_NODE: u64 = 10_000;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
@@ -269,6 +277,8 @@ enum Screen {
     Settings,
     /// The smart list editor, in the detail pane: the list being edited, or `None` for a new one.
     SmartEditor(Option<usize>),
+    /// The suggested contacts, in the detail pane: Add makes one a contact, Dismiss never offers it again.
+    Suggestions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -304,6 +314,9 @@ enum Target {
     SmartRemove(usize),
     SmartAdd,
     SmartDelete,
+    /// The Add and Dismiss buttons of a suggested contact, by row.
+    SuggestAdd(usize),
+    SuggestDismiss(usize),
     List,
     Content,
 }
@@ -671,7 +684,27 @@ pub struct Contacts {
     dirty: bool,
     /// Whether names show given name first or family name first (View menu). Saved with the display settings.
     name_order: names::NameOrder,
+    /// The people other apps donated that are not in the book, and the answers waiting to go back to the shell.
+    suggestions: Suggestions,
 }
+
+/// The Suggestions screen: its rows with their Add and Dismiss buttons, in window points.
+struct SuggestLayout {
+    title_y: f32,
+    note_y: f32,
+    rows: Vec<SuggestRow>,
+    height: f32,
+}
+
+struct SuggestRow {
+    row: Rect,
+    add: Rect,
+    dismiss: Rect,
+}
+
+/// The widths of the Add and Dismiss buttons of a suggestion, in points.
+const SUGGEST_ADD_W: f32 = 48.0;
+const SUGGEST_DISMISS_W: f32 = 72.0;
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
     Rect { x, y, w, h }
@@ -787,6 +820,7 @@ impl Contacts {
             labels: TextCache::default(),
             dirty: true,
             name_order,
+            suggestions: Suggestions::default(),
         };
         app.rebuild(ui);
         app
@@ -875,6 +909,7 @@ impl Contacts {
             Screen::Editor(id) => format!("editor:{}", id.map_or_else(|| "new".into(), |id| id.to_string())),
             Screen::Settings => "settings".into(),
             Screen::SmartEditor(n) => format!("smart-editor:{}", n.map_or_else(|| "new".into(), |n| n.to_string())),
+            Screen::Suggestions => "suggestions".into(),
         };
         format!(
             "contacts_screen={screen}\ncontacts_count={}\ncontacts_shown={}\ncontacts_sidebar={}\ncontacts_confirm_delete={}\ncontacts_error={}\n",
@@ -1095,7 +1130,7 @@ impl Contacts {
                 items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
                 items.push(ToolbarItem::button(BAR_DONE, "Done"));
             }
-            Screen::Settings => items.push(ToolbarItem::button(BAR_DONE, "Done")),
+            Screen::Settings | Screen::Suggestions => items.push(ToolbarItem::button(BAR_DONE, "Done")),
         }
         Toolbar::new(items)
     }
@@ -1129,6 +1164,9 @@ impl Contacts {
         if !self.last_import_ids().is_empty() {
             rows.push((LIST_LAST_IMPORT, "Last Import".to_string(), "arrow.down.circle"));
         }
+        if !self.suggestions.is_empty() {
+            rows.push((LIST_SUGGESTIONS, "Suggested Contacts".to_string(), "person.crop.circle"));
+        }
         rows.push((0, "Smart Groups".to_string(), ""));
         for s in crate::smart::Smart::ALL {
             rows.push((LIST_SMART + s.index() as u32, s.title().to_string(), s.symbol()));
@@ -1157,7 +1195,7 @@ impl Contacts {
             })
             .collect();
         let mut list = SourceList::new(items, m::SIDEBAR_ROW_PITCH, m::SIDEBAR_ROW_H);
-        list.set_selected(Some(self.filter.sidebar_id()));
+        list.set_selected(Some(if self.screen == Screen::Suggestions { LIST_SUGGESTIONS } else { self.filter.sidebar_id() }));
         list
     }
     fn sidebar_bounds(&self) -> Rect {
@@ -1271,6 +1309,7 @@ impl Contacts {
             Screen::Editor(_) => self.edit_layout(ui).height,
             Screen::Settings => self.settings_layout().height,
             Screen::SmartEditor(_) => self.smart_layout().height,
+            Screen::Suggestions => self.suggest_layout().height,
         };
         self.scroll.set_max(height - self.h);
     }
@@ -1295,6 +1334,102 @@ impl Contacts {
             y += ROW + SPACE_XS;
         }
         SettingsLayout { title_y, sort, switches, heading_y, height: y + off + SPACE_XL }
+    }
+
+    /// The Suggestions screen, scroll applied, in window points. Each row is a card with the person at the left and the
+    /// Add and Dismiss buttons at the right.
+    fn suggest_layout(&self) -> SuggestLayout {
+        let (x, cw) = self.column();
+        let off = self.scroll.offset();
+        let title_y = UNIFIED_BAR_PT + SPACE_XL - off;
+        let note_y = UNIFIED_BAR_PT + 3.0 * SPACE_XL - off;
+        let mut y = UNIFIED_BAR_PT + 4.0 * SPACE_XL - off;
+        let mut rows = Vec::new();
+        for _ in 0..self.suggestions.len() {
+            let row = rect(x, y, cw, ROW + SPACE_XL);
+            let dismiss = rect(row.x + row.w - SPACE_L - SUGGEST_DISMISS_W, row.y, SUGGEST_DISMISS_W, row.h);
+            let add = rect(dismiss.x - SPACE_S - SUGGEST_ADD_W, row.y, SUGGEST_ADD_W, row.h);
+            rows.push(SuggestRow { row, add, dismiss });
+            y += row.h + SPACE_XS;
+        }
+        SuggestLayout { title_y, note_y, rows, height: y + off + SPACE_XL }
+    }
+
+    /// The handles (normalised emails and phone numbers) the address book holds, for leaving known people out of the
+    /// suggestions.
+    fn known_handles(&self) -> BTreeSet<String> {
+        use bifrost_app::contacts::suggested::Handle;
+        let mut known = BTreeSet::new();
+        for c in &self.contacts {
+            known.extend(suggested::handle_key(Handle::Email, &c.email));
+            known.extend(suggested::handle_key(Handle::Phone, &c.phone));
+            for extra in self.extras.get(c.id) {
+                match extra.kind {
+                    ValueKind::Email => known.extend(suggested::handle_key(Handle::Email, &extra.value)),
+                    ValueKind::Phone => known.extend(suggested::handle_key(Handle::Phone, &extra.value)),
+                    ValueKind::Address => {}
+                }
+            }
+        }
+        known
+    }
+
+    /// The shell sent the people other apps donated: the list the Suggestions screen shows. When none is left the screen
+    /// closes and the sidebar row goes.
+    pub fn set_suggestions(&mut self, ui: &Ui, items: Vec<Suggested>) {
+        let known = self.known_handles();
+        self.suggestions.set(items, &known);
+        if self.suggestions.is_empty() && self.screen == Screen::Suggestions {
+            self.screen = Screen::List;
+        }
+        self.fit_scroll(ui);
+        self.dirty = true;
+    }
+
+    /// The Accept and Dismiss answers to send to the shell, once.
+    pub fn take_suggestion_answers(&mut self) -> Vec<(String, Feedback)> {
+        self.suggestions.take_answers()
+    }
+
+    /// The sidebar row Suggested Contacts: the screen opens in the detail pane.
+    fn open_suggestions(&mut self, ui: &Ui) {
+        if self.editing() || self.suggestions.is_empty() {
+            return;
+        }
+        self.screen = Screen::Suggestions;
+        self.focus = None;
+        self.status = None;
+        self.scroll.jump_top();
+        self.fit_scroll(ui);
+    }
+
+    /// Add: the person becomes a contact and leaves the list. A person who is already in the book only leaves it; one
+    /// the book refuses (a twin by name, a full book) stays, with the reason in the status line.
+    fn accept_suggestion(&mut self, ui: &Ui, index: usize) {
+        let Some(s) = self.suggestions.items().get(index).cloned() else { return };
+        let title = suggested::title_of(&s);
+        if !self.known_handles().contains(&s.key) {
+            let (name, phone, email) = suggested::contact_fields(&s);
+            if let Err(e) = self.add_contact(&name, &phone, &email, "") {
+                self.status = Some(e);
+                return;
+            }
+        }
+        self.suggestions.answer(index, Feedback::Accepted);
+        self.status = Some(format!("Added {title}"));
+        if self.suggestions.is_empty() {
+            self.screen = Screen::List;
+        }
+        self.rebuild(ui);
+        self.fit_scroll(ui);
+    }
+
+    /// Dismiss: the person is never suggested again.
+    fn dismiss_suggestion(&mut self, ui: &Ui, index: usize) {
+        if self.suggestions.answer(index, Feedback::Dismissed).is_some() && self.suggestions.is_empty() {
+            self.screen = Screen::List;
+        }
+        self.fit_scroll(ui);
     }
 
     /// Whether a switch row of the Settings screen is on.
@@ -2811,6 +2946,13 @@ impl Contacts {
     /// The `create-contact` intent: adds a contact and opens its card. A name or a company, a phone number or an email is
     /// needed, and a contact that duplicates one in the list is refused.
     pub fn create_contact(&mut self, ui: &Ui, name: &str, phone: &str, email: &str, company: &str) -> Result<u64, String> {
+        let id = self.add_contact(name, phone, email, company)?;
+        self.show_card(ui, id);
+        Ok(id)
+    }
+
+    /// Adds a contact to the book and saves it, without opening its card.
+    fn add_contact(&mut self, name: &str, phone: &str, email: &str, company: &str) -> Result<u64, String> {
         if self.load_failed {
             return Err("The contacts could not be read".into());
         }
@@ -2838,7 +2980,6 @@ impl Contacts {
         let before = std::mem::replace(&mut self.contacts, updated);
         self.record(&before);
         self.error = None;
-        self.show_card(ui, id);
         Ok(id)
     }
 
@@ -2945,6 +3086,17 @@ impl Contacts {
                     return Some(Target::Field(i));
                 }
             }
+            Screen::Suggestions => {
+                let l = self.suggest_layout();
+                for (i, row) in l.rows.iter().enumerate() {
+                    if row.add.contains(x, y) {
+                        return Some(Target::SuggestAdd(i));
+                    }
+                    if row.dismiss.contains(x, y) {
+                        return Some(Target::SuggestDismiss(i));
+                    }
+                }
+            }
             Screen::Settings => {
                 let l = self.settings_layout();
                 if l.sort.contains(x, y) {
@@ -3034,7 +3186,7 @@ impl Contacts {
             }
             BAR_CANCEL => self.cancel_editor(ui),
             BAR_DONE => {
-                if self.screen == Screen::Settings {
+                if matches!(self.screen, Screen::Settings | Screen::Suggestions) {
                     self.screen = Screen::List;
                     self.fit_scroll(ui);
                 } else if matches!(self.screen, Screen::SmartEditor(_)) {
@@ -3073,6 +3225,8 @@ impl Contacts {
             NODE_SMART_ANY => Target::SmartAny,
             NODE_SMART_ADD => Target::SmartAdd,
             NODE_SMART_DELETE => Target::SmartDelete,
+            _ if (NODE_SUGGEST_ADD..NODE_SUGGEST_ADD + MAX_SUGGEST_NODES).contains(&id) => Target::SuggestAdd((id - NODE_SUGGEST_ADD) as usize),
+            _ if (NODE_SUGGEST_DISMISS..NODE_SUGGEST_DISMISS + MAX_SUGGEST_NODES).contains(&id) => Target::SuggestDismiss((id - NODE_SUGGEST_DISMISS) as usize),
             _ if (NODE_SMART_FIELD..NODE_SMART_FIELD + smart::MAX_RULES as u64).contains(&id) => Target::SmartField((id - NODE_SMART_FIELD) as usize),
             _ if (NODE_SMART_CONDITION..NODE_SMART_CONDITION + smart::MAX_RULES as u64).contains(&id) => {
                 Target::SmartCondition((id - NODE_SMART_CONDITION) as usize)
@@ -3109,9 +3263,16 @@ impl Contacts {
         }
         match target {
             Target::Bar(id) => self.bar(ui, id),
+            Target::SuggestAdd(i) => self.accept_suggestion(ui, i),
+            Target::SuggestDismiss(i) => self.dismiss_suggestion(ui, i),
+            Target::Sidebar(LIST_SUGGESTIONS) => self.open_suggestions(ui),
             Target::Sidebar(id) => {
                 if self.picking.is_some() {
                     self.finish_picking(ui);
+                }
+                if self.screen == Screen::Suggestions {
+                    self.screen = Screen::List;
+                    self.fit_scroll(ui);
                 }
                 self.filter = Filter::from_sidebar_id(id);
                 self.status = None;
@@ -3270,7 +3431,7 @@ impl Contacts {
         let Some(i) = self.focus else {
             if matches!(out, Out::Hide | Out::Named("Escape")) && self.editing() {
                 self.cancel_editor(ui);
-            } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.screen == Screen::Settings {
+            } else if matches!(out, Out::Hide | Out::Named("Escape")) && matches!(self.screen, Screen::Settings | Screen::Suggestions) {
                 self.screen = Screen::List;
                 self.fit_scroll(ui);
             } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.selecting {
@@ -3488,6 +3649,14 @@ impl Contacts {
                 }
                 if let Some(c) = l.cancel {
                     nodes.push(button(NODE_CANCEL, "Cancel", c));
+                }
+            }
+            Screen::Suggestions => {
+                let l = self.suggest_layout();
+                for (i, (s, row)) in self.suggestions.items().iter().zip(&l.rows).enumerate() {
+                    let who = suggested::title_of(s);
+                    nodes.push(Node { id: NODE_SUGGEST_ADD + i as u64, role: Role::Button, label: format!("Add {who}"), value: String::new(), bounds: row.add, enabled: !self.load_failed });
+                    nodes.push(Node { id: NODE_SUGGEST_DISMISS + i as u64, role: Role::Button, label: format!("Dismiss {who}"), value: String::new(), bounds: row.dismiss, enabled: true });
                 }
             }
             Screen::Settings => {
@@ -3730,6 +3899,29 @@ impl Contacts {
         }
     }
 
+    /// The Suggested Contacts screen: each person other apps saw, with Add and Dismiss.
+    fn draw_suggestions(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, cw) = self.column();
+        let l = self.suggest_layout();
+        self.centre_text(s, ui, "Suggested Contacts", MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x + cw / 2.0, l.title_y);
+        let note = ui.fit("People your apps saw who are not in your contacts. Nothing leaves this computer.", MAC_FOOTNOTE_PT, ui.pt(cw));
+        self.centre_text(s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + cw / 2.0, l.note_y);
+        let items: Vec<Suggested> = self.suggestions.items().to_vec();
+        for (item, row) in items.iter().zip(&l.rows) {
+            let r = row.row;
+            Self::fill(s, ui, r, m::CARD_RADIUS, CARD_BG.now());
+            let room = ui.pt(row.add.x - r.x - SPACE_L - SPACE_S);
+            let title = ui.fit(&suggested::title_of(item), MAC_BODY_PT, room);
+            self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.x + SPACE_L, r.y + r.h * 0.34);
+            let detail = ui.fit(&suggested::detail_of(item), MAC_FOOTNOTE_PT, room);
+            self.text(s, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), r.x + SPACE_L, r.y + r.h * 0.68);
+            for (rect_of, label) in [(row.add, "Add"), (row.dismiss, "Dismiss")] {
+                let width = ui.measure(label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
+                self.text(s, ui, label, MAC_BODY_PT, Weight::Regular, LINK, rect_of.x + rect_of.w - width, r.y + r.h / 2.0);
+            }
+        }
+    }
+
     /// The smart list editor: the name, the match mode, one row per rule, and Add Rule.
     fn draw_smart_editor(&mut self, s: &mut Surface, ui: &Ui) {
         let (x, cw) = self.column();
@@ -3898,6 +4090,7 @@ impl Contacts {
             Screen::Editor(_) => self.draw_editor(s, ui, t),
             Screen::Settings => self.draw_settings(s, ui),
             Screen::SmartEditor(_) => self.draw_smart_editor(s, ui),
+            Screen::Suggestions => self.draw_suggestions(s, ui),
         }
         // the list column and the sidebar are opaque columns left of the detail pane
         s.fill_rect(0, 0, dx as usize, s.h, CONTENT_BG.now());
@@ -3962,6 +4155,51 @@ mod tests {
 
     fn contact(id: u64, name: &str) -> Contact {
         Contact { id, name: name.into(), ..Default::default() }
+    }
+
+    fn donated(key: &str, name: &str, sources: u32) -> Suggested {
+        Suggested { key: key.into(), handle: bifrost_app::contacts::suggested::Handle::Email, value: key.into(), name: name.into(), sources }
+    }
+
+    #[test]
+    fn donated_people_are_offered_in_the_sidebar_accept_adds_a_contact_and_dismiss_blocks_it() {
+        let mut anna = contact(1, "Anna As");
+        anna.email = "Anna@Work.is".into();
+        let path = file_with("suggestions", &[anna]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(!app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS), "nothing donated yet");
+        // Anna is in the book already (by email, in any case) and is left out
+        app.set_suggestions(&ui, vec![donated("anna@work.is", "Anna", 1), donated("ada@example.com", "Ada Lovelace", 2), donated("bob@example.com", "", 1)]);
+        assert!(app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS && row.1 == "Suggested Contacts"));
+        assert_eq!(app.suggestions.len(), 2);
+
+        app.activate(&ui, Target::Sidebar(LIST_SUGGESTIONS), 0.0, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::Suggestions);
+        assert!(app.describe().contains("contacts_screen=suggestions"));
+        let l = app.suggest_layout();
+        assert_eq!(l.rows.len(), 2);
+        let (add, dismiss) = (l.rows[0].add, l.rows[1].dismiss);
+        assert_eq!(app.hit(&ui, add.x + add.w / 2.0, add.y + add.h / 2.0), Some(Target::SuggestAdd(0)));
+        assert_eq!(app.hit(&ui, dismiss.x + dismiss.w / 2.0, dismiss.y + dismiss.h / 2.0), Some(Target::SuggestDismiss(1)));
+        assert!(app.controls(&ui).iter().any(|n| n.id == NODE_SUGGEST_ADD && n.label == "Add Ada Lovelace"));
+
+        // Add: the person is a contact now, saved to the file, and leaves the list
+        app.activate(&ui, Target::SuggestAdd(0), 0.0, 0.0, 0.0);
+        assert!(app.listed().iter().any(|c| c.name == "Ada Lovelace" && c.email == "ada@example.com"));
+        assert_eq!(app.status.as_deref(), Some("Added Ada Lovelace"));
+        assert_eq!(app.suggestions.len(), 1);
+        assert_eq!(app.screen, Screen::Suggestions, "the screen stays while people are left");
+        assert!(Contacts::new(&ui, 1200, 780, path.clone()).listed().iter().any(|c| c.email == "ada@example.com"), "saved");
+
+        // Dismiss the last one: the screen closes and the sidebar row goes
+        app.activate(&ui, Target::SuggestDismiss(0), 0.0, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::List);
+        assert!(!app.sidebar_rows().iter().any(|row| row.0 == LIST_SUGGESTIONS));
+        let answers: Vec<(String, Feedback)> = app.take_suggestion_answers();
+        assert_eq!(answers, vec![("ada@example.com".to_string(), Feedback::Accepted), ("bob@example.com".to_string(), Feedback::Dismissed)]);
+        assert!(app.take_suggestion_answers().is_empty(), "answers go to the shell once");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]

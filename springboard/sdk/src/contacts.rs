@@ -466,6 +466,151 @@ pub mod vcard {
     pub use bifrost_ui::vcard::{Error, MAX_BYTES, MAX_CARDS};
 }
 
+/// People apps saw and donated, and the person's answers (`bifrost_ui::contact_donation`). An app that sees someone who
+/// is not in the book, such as the sender of a message, calls [`suggested::donate`] with the name and one email address
+/// or phone number. The shell keeps the donations on the machine and offers them back to the Contacts app only, as
+/// suggested contacts: [`suggested::list`] reads them, [`suggested::answer`] records accept or dismiss. A dismissed
+/// address is never offered again, even if an app donates it again. Donating needs no contacts access: it gives the
+/// book nothing and reads nothing.
+pub mod suggested {
+    use super::SERVICE;
+    pub use crate::controls::contact_donation::{Feedback, Handle};
+    use crate::runtime::Ctx;
+    use crate::service;
+    use bifrost_core::json::Json;
+
+    /// Donates a person the app saw. `name` may be empty. The reply decodes with [`decode_donated`].
+    pub fn donate(ctx: &Ctx, name: &str, handle: Handle, value: &str) -> u32 {
+        service::call(ctx, SERVICE, "donate", &donate_params(name, handle, value))
+    }
+
+    /// The parameters of a `donate` call.
+    pub fn donate_params(name: &str, handle: Handle, value: &str) -> Json {
+        Json::Obj(vec![
+            ("name".into(), Json::Str(name.into())),
+            ("handle".into(), Json::Str(if handle == Handle::Email { "email" } else { "phone" }.into())),
+            ("value".into(), Json::Str(value.into())),
+        ])
+    }
+
+    /// Whether the shell kept a `donate` (false for an address the person dismissed before), or `None` for a reply of
+    /// another shape.
+    pub fn decode_donated(reply: &Json) -> Option<bool> {
+        match reply.get("donated")? {
+            Json::Bool(kept) => Some(*kept),
+            _ => None,
+        }
+    }
+
+    /// One suggested person, as the Contacts app lists them.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Suggested {
+        /// The handle in its normalised form; the key `answer` takes.
+        pub key: String,
+        pub handle: Handle,
+        /// The email address or phone number as first donated.
+        pub value: String,
+        /// The latest name donated; empty when none came with it.
+        pub name: String,
+        /// How many apps donated the person.
+        pub sources: u32,
+    }
+
+    /// Asks for up to `limit` suggested people, best first. Only the Contacts app may. The reply decodes with
+    /// [`decode_list`].
+    pub fn list(ctx: &Ctx, limit: u32) -> u32 {
+        service::call(ctx, SERVICE, "suggestions", &Json::Obj(vec![("limit".into(), Json::Num(f64::from(limit)))]))
+    }
+
+    /// The people in a `suggestions` reply, or `None` for a reply of another shape.
+    pub fn decode_list(reply: &Json) -> Option<Vec<Suggested>> {
+        reply
+            .get("suggestions")?
+            .as_array()?
+            .iter()
+            .map(|row| {
+                Some(Suggested {
+                    key: row.get("key")?.as_str()?.to_string(),
+                    handle: if row.get("handle")?.as_str()? == "email" { Handle::Email } else { Handle::Phone },
+                    value: row.get("value")?.as_str()?.to_string(),
+                    name: row.get("name").and_then(Json::as_str).unwrap_or("").to_string(),
+                    sources: row.get("sources").and_then(Json::as_u64).unwrap_or(1) as u32,
+                })
+            })
+            .collect()
+    }
+
+    /// The person's answer to the suggestion with `key`. Only the Contacts app may. Accepting replies with the contact
+    /// to save ([`decode_accepted`]); dismissing blocks the address.
+    pub fn answer(ctx: &Ctx, key: &str, answer: Feedback) -> u32 {
+        let name = if answer == Feedback::Accepted { "accepted" } else { "dismissed" };
+        service::call(ctx, SERVICE, "feedback", &Json::Obj(vec![("key".into(), Json::Str(key.into())), ("answer".into(), Json::Str(name.into()))]))
+    }
+
+    /// The contact an accepted suggestion becomes: its names and the email address or phone number.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Accepted {
+        pub given_name: String,
+        pub family_name: String,
+        pub email: Option<String>,
+        pub phone: Option<String>,
+    }
+
+    /// The contact in an accepted `feedback` reply, or `None` for any other reply.
+    pub fn decode_accepted(reply: &Json) -> Option<Accepted> {
+        let c = reply.get("contact")?;
+        Some(Accepted {
+            given_name: c.get("given_name").and_then(Json::as_str).unwrap_or("").to_string(),
+            family_name: c.get("family_name").and_then(Json::as_str).unwrap_or("").to_string(),
+            email: c.get("email").and_then(Json::as_str).map(str::to_string),
+            phone: c.get("phone").and_then(Json::as_str).map(str::to_string),
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn row(key: &str, name: &str) -> Json {
+            Json::Obj(vec![
+                ("key".into(), Json::Str(key.into())),
+                ("handle".into(), Json::Str("email".into())),
+                ("value".into(), Json::Str(key.into())),
+                ("name".into(), Json::Str(name.into())),
+                ("sources".into(), Json::Num(2.0)),
+            ])
+        }
+
+        #[test]
+        fn a_donation_names_its_handle_and_a_suggestion_list_decodes() {
+            let params = donate_params("Ada", Handle::Phone, "+354 555 0100");
+            assert_eq!(params.get("handle").and_then(Json::as_str), Some("phone"));
+            assert_eq!(decode_donated(&Json::Obj(vec![("donated".into(), Json::Bool(false))])), Some(false));
+            let reply = Json::Obj(vec![("suggestions".into(), Json::Arr(vec![row("ada@example.com", "Ada"), row("x@example.com", "")]))]);
+            let list = decode_list(&reply).unwrap();
+            assert_eq!((list.len(), list[0].key.as_str(), list[0].name.as_str(), list[0].sources), (2, "ada@example.com", "Ada", 2));
+            assert_eq!(list[1].name, "");
+            assert!(decode_list(&Json::Null).is_none());
+        }
+
+        #[test]
+        fn an_accepted_reply_decodes_to_the_contact_and_a_dismissal_to_none() {
+            let reply = Json::Obj(vec![(
+                "contact".into(),
+                Json::Obj(vec![
+                    ("given_name".into(), Json::Str("Ada".into())),
+                    ("family_name".into(), Json::Str("Lovelace".into())),
+                    ("email".into(), Json::Str("ada@example.com".into())),
+                    ("phone".into(), Json::Null),
+                ]),
+            )]);
+            let accepted = decode_accepted(&reply).unwrap();
+            assert_eq!((accepted.family_name.as_str(), accepted.email.as_deref(), accepted.phone), ("Lovelace", Some("ada@example.com"), None));
+            assert!(decode_accepted(&Json::Obj(Vec::new())).is_none());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

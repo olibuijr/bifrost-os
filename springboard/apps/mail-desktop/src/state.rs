@@ -15,6 +15,9 @@ use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
+use bifrost_app::controls::contact_book::Contact;
+use bifrost_app::controls::found_in::{self, Action, Dismissed, Found, Pager};
+use bifrost_app::controls::recipient_autocomplete::{Key as RecipientKey, RecipientField, Suggestion};
 use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -155,6 +158,31 @@ pub fn is_yes(value: &str) -> bool {
 
 /// Most matches Open Quickly lists under its field.
 pub const MAX_CHOICES: usize = 8;
+/// Most suggestions the compose sheet lists under a To, Cc or Bcc field.
+pub const MAX_SUGGESTIONS: usize = 5;
+
+/// True for the compose fields that hold a list of recipients and offer suggestions.
+pub fn is_recipient_field(label: &str) -> bool {
+    matches!(label, "To" | "Cc" | "Bcc")
+}
+
+/// Splits the value of a recipient field where the address being typed starts: the part before it (the finished
+/// recipients and their separator) and the typed text. A comma or semicolon inside quotes or angle brackets does not
+/// separate recipients.
+pub fn split_last_recipient(value: &str) -> (&str, &str) {
+    let (mut quoted, mut angle) = (false, false);
+    let mut cut = 0;
+    for (i, c) in value.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '<' if !quoted => angle = true,
+            '>' if !quoted => angle = false,
+            ',' | ';' if !quoted && !angle => cut = i + c.len_utf8(),
+            _ => {}
+        }
+    }
+    value.split_at(cut)
+}
 
 /// The fields of a sheet and the one that takes typed text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -652,6 +680,18 @@ pub struct Mail {
     /// The addresses Mail sent to, most recent first, offered again as suggestions when a recipient is typed. Kept for
     /// this run only.
     pub recipients: RecipientRecents,
+    /// The people of the address book, as far as recipient suggestions need them (names and email addresses). Filled
+    /// from the Contacts service once a compose sheet is open; empty when the person has not let Mail read Contacts.
+    pub address_book: Vec<Contact>,
+    /// The suggestions the focused To, Cc or Bcc field offers, with the one highlighted by the arrow keys.
+    pub recipient_field: RecipientField,
+    /// The messages whose people were donated to Contacts already (account, mailbox, UID): a message is donated once.
+    pub donated: HashSet<(String, String, u32)>,
+    /// The suggestions found in the open message (events, flights, contacts, addresses), paged one at a time, and the
+    /// message they belong to. Filled once the message text is here.
+    pub found_pager: Option<(u32, Pager)>,
+    /// The suggestions the person turned down or took, for this run: they are not offered again from the same message.
+    pub found_dismissed: Dismissed,
 }
 
 impl Mail {
@@ -695,6 +735,11 @@ impl Mail {
             arrived: Vec::new(),
             activity: Vec::new(),
             recipients: RecipientRecents::new(MAX_RECIPIENT_RECENTS),
+            address_book: Vec::new(),
+            recipient_field: RecipientField::new(),
+            donated: HashSet::new(),
+            found_pager: None,
+            found_dismissed: Dismissed::default(),
         }
     }
 
@@ -1064,6 +1109,148 @@ impl Mail {
         let signature = self.prefs.signature(&account_id).to_string();
         self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
         self.fresh_compose = true;
+        self.sync_recipient_field();
+    }
+
+    /// Replaces the address book the recipient suggestions draw on.
+    pub fn set_address_book(&mut self, book: Vec<Contact>) {
+        self.address_book = book;
+        self.sync_recipient_field();
+    }
+
+    /// Rebuilds the suggestions for the focused field: nothing unless it is a To, Cc or Bcc field of a compose sheet.
+    /// The text after the last separator is what is being typed; the recipients before it are not offered again. An
+    /// untouched field offers the addresses used last; once a recipient is in, an empty tail offers nothing.
+    pub fn sync_recipient_field(&mut self) {
+        let field = match &self.sheet {
+            Some(Sheet::Compose(compose)) => compose.form.fields.get(compose.form.focus).filter(|f| is_recipient_field(f.label)).map(|f| {
+                let (head, typed) = split_last_recipient(&f.value);
+                let mut field = RecipientField::new();
+                field.recipients = message::split_addresses(head).iter().map(|a| message::address_of(a).to_lowercase()).collect();
+                field.set_text(typed.trim(), &self.address_book, &self.recipients, MAX_SUGGESTIONS);
+                if typed.trim().is_empty() && !f.value.trim().is_empty() {
+                    field.press(RecipientKey::Escape);
+                }
+                field
+            }),
+            _ => None,
+        };
+        self.recipient_field = field.unwrap_or_default();
+    }
+
+    /// The suggestions listed under the focused recipient field.
+    pub fn recipient_suggestions(&self) -> &[Suggestion] {
+        self.recipient_field.suggestions()
+    }
+
+    /// The arrow keys: moves the highlight in the suggestion list. False when no list is showing (the key is not ours).
+    pub fn move_recipient_highlight(&mut self, down: bool) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(if down { RecipientKey::Down } else { RecipientKey::Up });
+        true
+    }
+
+    /// Escape: closes the suggestion list. False when no list is showing (Escape belongs to the sheet).
+    pub fn close_recipient_list(&mut self) -> bool {
+        if self.recipient_field.suggestions().is_empty() {
+            return false;
+        }
+        self.recipient_field.press(RecipientKey::Escape);
+        true
+    }
+
+    /// Return and Tab take the highlighted suggestion; a tap takes the one at `index`. The typed text is replaced by
+    /// `Name <address>` and a separator, ready for the next recipient. False when there is nothing to take.
+    pub fn accept_recipient(&mut self, index: Option<usize>) -> bool {
+        let Some(at) = index.or(self.recipient_field.highlighted()) else { return false };
+        let Some(suggestion) = self.recipient_field.suggestions().get(at).cloned() else { return false };
+        // a name with list punctuation would split the recipient: the bare address is safe
+        let token = if suggestion.name.contains([',', ';', '"', '<', '>']) { suggestion.address.clone() } else { suggestion.token() };
+        let Some(Sheet::Compose(compose)) = self.sheet.as_mut() else { return false };
+        let focus = compose.form.focus;
+        let Some(field) = compose.form.fields.get_mut(focus).filter(|f| is_recipient_field(f.label)) else { return false };
+        let (head, _) = split_last_recipient(&field.value);
+        let head = head.trim_end();
+        field.value = if head.is_empty() { format!("{token}, ") } else { format!("{head} {token}, ") };
+        self.sync_recipient_field();
+        true
+    }
+
+    /// The people of the open message to donate to Contacts, once per message and only when its text is here: the
+    /// sender and the other recipients (see [`crate::people::seen_in`]). Nobody when Mail Settings turned donating off.
+    pub fn people_to_donate(&mut self) -> Vec<crate::people::Seen> {
+        if !self.prefs.donate_people {
+            return Vec::new();
+        }
+        let Some(uid) = self.open.filter(|uid| self.bodies.contains_key(uid)) else { return Vec::new() };
+        let Some(account) = self.current().map(|a| a.id.clone()) else { return Vec::new() };
+        if !self.donated.insert((account, self.mailbox.clone(), uid)) {
+            return Vec::new();
+        }
+        let Some(summary) = self.row(uid).map(|r| r.summary.clone()) else { return Vec::new() };
+        crate::people::seen_in(&summary.from, &summary.to, &summary.cc, crate::people::is_bulk(&summary), &self.from_choices())
+    }
+
+    /// Reads the open message for things to offer (an event, a flight, an email address or phone number, a street
+    /// address) once its text is here, minus the ones turned down. `region` is the region code whose phone rules turn a
+    /// number into international form. Another message, or none, clears the banner.
+    pub fn refresh_found_in(&mut self, region: &str) {
+        let Some(uid) = self.open else {
+            self.found_pager = None;
+            return;
+        };
+        if self.found_pager.as_ref().is_some_and(|(shown, _)| *shown == uid) {
+            return;
+        }
+        self.found_pager = None;
+        let Some(raw) = self.bodies.get(&uid) else { return };
+        let title = self.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
+        let source = found_in::Source { app: "Mail".into(), title };
+        let items = self.found_dismissed.filter(found_in::extract(&source, &crate::body::readable(raw), region));
+        self.found_pager = Some((uid, Pager::new(items)));
+    }
+
+    /// The suggestion the banner shows, when the open message has any left.
+    pub fn found_current(&self) -> Option<&Found> {
+        let (uid, pager) = self.found_pager.as_ref()?;
+        if Some(*uid) != self.open {
+            return None;
+        }
+        pager.current()
+    }
+
+    /// "1 of 3" when the banner has more than one suggestion.
+    pub fn found_label(&self) -> Option<String> {
+        self.found_current()?;
+        self.found_pager.as_ref()?.1.label()
+    }
+
+    /// Next and previous page of the banner. False at either end.
+    pub fn found_step(&mut self, forward: bool) -> bool {
+        match self.found_pager.as_mut() {
+            Some((_, pager)) if forward => pager.next_page(),
+            Some((_, pager)) => pager.previous_page(),
+            None => false,
+        }
+    }
+
+    /// Dismiss: the suggestion on show is turned down and not offered again from this message.
+    pub fn found_dismiss(&mut self) -> bool {
+        let Some(found) = self.found_pager.as_mut().and_then(|(_, pager)| pager.dismiss()) else { return false };
+        self.found_dismissed.add(&found);
+        true
+    }
+
+    /// Add: the suggestion on show leaves the banner (and is not offered again) and its action is returned for the
+    /// window to run.
+    pub fn found_accept(&mut self) -> Option<Action> {
+        let (_, pager) = self.found_pager.as_mut()?;
+        let found = pager.current().cloned()?;
+        let action = pager.accept()?;
+        self.found_dismissed.add(&found);
+        Some(action)
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -1348,6 +1535,7 @@ impl Mail {
                 Field::yes_no("Load remote content", self.prefs.remote_content),
                 Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
                 Field::yes_no("Show in Search", self.prefs.show_in_search),
+                Field::yes_no("Suggest people to Contacts", self.prefs.donate_people),
             ],
         );
         Ok(())
@@ -1502,6 +1690,7 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Show in Search") {
             self.prefs.show_in_search = is_yes(form.value("Show in Search"));
+            self.prefs.donate_people = is_yes(form.value("Suggest people to Contacts"));
         }
         Ok(())
     }
@@ -2070,6 +2259,140 @@ mod tests {
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
         assert!(mail.draft_from(&Compose::new(empty, None, vec![], Priority::Normal, vec![], String::new())).is_err());
+    }
+
+    fn person(given: &str, family: &str, address: &str) -> Contact {
+        use bifrost_app::controls::contact_book::LabeledValue;
+        Contact { given_name: given.into(), family_name: family.into(), email_addresses: vec![LabeledValue::new(None, address.to_string())], ..Contact::default() }
+    }
+
+    fn type_in_focus(mail: &mut Mail, text: &str) {
+        mail.sheet.as_mut().unwrap().form_mut().type_text(text);
+        mail.sync_recipient_field();
+    }
+
+    #[test]
+    fn the_recipient_tail_is_what_is_being_typed() {
+        assert_eq!(split_last_recipient(""), ("", ""));
+        assert_eq!(split_last_recipient("an"), ("", "an"));
+        assert_eq!(split_last_recipient("ana@example.com, bo"), ("ana@example.com,", " bo"));
+        assert_eq!(split_last_recipient("Ana <ana@example.com>, "), ("Ana <ana@example.com>,", " "));
+        assert_eq!(split_last_recipient("\"Smith, Ana\" <a@x.is>"), ("", "\"Smith, Ana\" <a@x.is>"), "a comma in quotes does not separate");
+    }
+
+    #[test]
+    fn typing_in_to_suggests_contacts_and_recents_and_a_choice_fills_the_field() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.recipients.record("bob@example.com", "Bob Recent");
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com"), person("Anders", "Holm", "anders@example.com")]);
+        mail.open_compose(None);
+        // an untouched To field offers the addresses used last
+        assert_eq!(mail.recipient_suggestions().iter().map(|s| s.address.as_str()).collect::<Vec<_>>(), ["bob@example.com"]);
+        type_in_focus(&mut mail, "an");
+        let got: Vec<String> = mail.recipient_suggestions().iter().map(|s| s.address.clone()).collect();
+        assert_eq!(got, ["anders@example.com", "ana@example.com"], "both contacts match at a word start, in name order");
+        assert!(mail.move_recipient_highlight(true) && mail.move_recipient_highlight(true));
+        assert_eq!(mail.recipient_field.highlighted(), Some(1));
+        assert!(mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, ");
+        assert!(mail.recipient_suggestions().is_empty(), "nothing is offered after a finished recipient");
+        // the recipient is split off for the draft as an address with its name
+        assert_eq!(message::split_addresses(compose_of(&mail).form.value("To")), ["Ana Lovelace <ana@example.com>"]);
+        // the next recipient does not offer the one already in the field
+        type_in_focus(&mut mail, "ana");
+        assert!(mail.recipient_suggestions().is_empty());
+        type_in_focus(&mut mail, "ders");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.accept_recipient(Some(0)));
+        assert_eq!(compose_of(&mail).form.value("To"), "Ana Lovelace <ana@example.com>, Anders Holm <anders@example.com>, ");
+    }
+
+    #[test]
+    fn the_message_field_and_a_closed_list_offer_nothing() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Ana", "Lovelace", "ana@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ana");
+        assert_eq!(mail.recipient_suggestions().len(), 1);
+        assert!(mail.close_recipient_list(), "Escape closes the list first");
+        assert!(mail.recipient_suggestions().is_empty());
+        assert!(!mail.close_recipient_list(), "with no list showing Escape belongs to the sheet");
+        assert!(!mail.accept_recipient(None), "nothing is highlighted");
+        let sheet = mail.sheet.as_mut().unwrap().form_mut();
+        sheet.focus_on(sheet.fields.len() - 1);
+        mail.sync_recipient_field();
+        assert!(mail.recipient_suggestions().is_empty(), "the message body has no suggestions");
+    }
+
+    #[test]
+    fn a_name_with_a_comma_is_kept_out_of_the_token() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.set_address_book(vec![person("Lovelace, Dr", "Ada", "ada@example.com")]);
+        mail.open_compose(None);
+        type_in_focus(&mut mail, "ada");
+        assert!(mail.move_recipient_highlight(true) && mail.accept_recipient(None));
+        assert_eq!(compose_of(&mail).form.value("To"), "ada@example.com, ", "the bare address, so the list still splits cleanly");
+    }
+
+    fn read_message(mail: &mut Mail, uid: u32, from: &str, to: &str, body: &str) {
+        let summary = Summary { subject: "Plans".into(), from: from.into(), to: to.into(), ..Summary::default() };
+        mail.rows.push(Row { uid, flags: Flags::default(), summary });
+        mail.open = Some(uid);
+        mail.bodies.insert(uid, format!("From: {from}\r\nSubject: Plans\r\n\r\n{body}\r\n"));
+    }
+
+    #[test]
+    fn a_read_message_donates_its_people_once_unless_the_setting_is_off() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 4, flags: Flags::default(), summary: Summary { from: "Bo <bo@example.com>".into(), to: "olibuijr@example.com, Cy <cy@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(4);
+        assert!(mail.people_to_donate().is_empty(), "the text has not arrived");
+        mail.bodies.insert(4, "Subject: x\r\n\r\nHi\r\n".into());
+        let seen = mail.people_to_donate();
+        let got: Vec<(&str, &str)> = seen.iter().map(|s| (s.name.as_str(), s.address.as_str())).collect();
+        assert_eq!(got, [("Bo", "bo@example.com"), ("Cy", "cy@example.com")], "the person's own address is left out");
+        assert!(mail.people_to_donate().is_empty(), "a message is donated once");
+        mail.prefs.donate_people = false;
+        mail.rows.push(Row { uid: 5, flags: Flags::default(), summary: Summary { from: "Di <di@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(5);
+        mail.bodies.insert(5, "Subject: y\r\n\r\nHi\r\n".into());
+        assert!(mail.people_to_donate().is_empty(), "donating is off");
+    }
+
+    #[test]
+    fn the_open_message_offers_what_it_mentions_and_a_turned_down_one_stays_down() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 9, flags: Flags::default(), summary: Summary { subject: "Plans".into(), ..Summary::default() } });
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none(), "no text, no banner");
+        mail.bodies.insert(9, "Subject: Plans\r\n\r\nLunch tomorrow at 1pm\r\nWrite to ana@example.com\r\n".into());
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.kind), Some(found_in::SuggestionKind::Event));
+        assert_eq!(mail.found_current().map(|f| f.found_in()).as_deref(), Some("Found in Mail"));
+        assert_eq!(mail.found_label().as_deref(), Some("1 of 2"));
+        assert!(mail.found_step(true) && !mail.found_step(true), "the second page is the last");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.com"));
+        assert!(mail.found_step(false));
+        assert!(mail.found_dismiss(), "the event is turned down");
+        assert_eq!(mail.found_label(), None, "one left needs no pager");
+        match mail.found_accept() {
+            Some(Action::AddContact { email, phone }) => assert_eq!((email.as_deref(), phone), (Some("ana@example.com"), None)),
+            other => panic!("{other:?}"),
+        }
+        assert!(mail.found_current().is_none());
+        // the same message again: nothing that was answered comes back
+        mail.open = None;
+        mail.refresh_found_in("IS");
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none());
+        // another message clears the banner of the first
+        read_message(&mut mail, 10, "a@example.com", "", "Call me on ana@example.org");
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.org"));
+        mail.open = Some(9);
+        assert!(mail.found_current().is_none(), "a banner belongs to its message");
     }
 
     fn compose_of(mail: &Mail) -> &Compose {

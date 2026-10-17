@@ -45,6 +45,7 @@ pub mod magnifier;
 pub mod calendar;
 pub mod contactextras;
 pub mod contactchanges;
+pub mod contactdonations;
 pub mod contactpick;
 pub mod contactphotos;
 pub mod contactgroups;
