@@ -86,8 +86,8 @@
     }
   ],
   "gaps": [
-    "No SDK API for peers: an app cannot browse or advertise its own service type, and cannot list nearby peers (springboard/sdk/src/share.rs exposes only show_picker and is_inbound).",
-    "No session model: no invitation flow, no connected and disconnected state, no multi-peer session object.",
+    "Peer sessions exist in the SDK (sdk peer_session.rs, named listeners and endpoints), but an app cannot browse or advertise its own service type or list nearby peers (springboard/sdk/src/share.rs exposes only show_picker and is_inbound).",
+    "No invitation flow and no multi-peer session object; the connection model is in peer_session.rs (Hub connect and accept, SessionId).",
     "No app-facing message or resource send, and no streaming, so apps cannot exchange data with nearby peers.",
     "No encryption in transit (body plaintext, HMAC over the header only) and a constant default secret \"nearby\".",
     "No stable peer identity (MCPeerID); peers are a name and an address that changes.",

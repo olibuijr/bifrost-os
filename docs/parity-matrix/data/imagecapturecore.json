@@ -102,7 +102,7 @@
   "gaps": [
     "No device browser: no API or system service that enumerates PTP cameras and scanners and reports hotplug events (ICDeviceBrowser).",
     "No PTP or MTP transport, so no camera file listing, download, delete or tethered capture (ICCameraDevice, ICCameraFile).",
-    "No scanner transport (SANE or similar) and no scan job API (ICScannerDevice).",
+    "No scanner transport (SANE or similar), so the scan session model (sdk scan_session.rs) has no device behind it (ICScannerDevice).",
     "No per-app USB device grant to match com.apple.security.device.usb in springboard/src/bare/app_policy.rs.",
     "Camera permission model: no usage-description string or prompt for camera access, unlike NSCameraUsageDescription.",
     "Photos import from a device is absent; springboard/apps/photocraft-desktop has no import code in this checkout."

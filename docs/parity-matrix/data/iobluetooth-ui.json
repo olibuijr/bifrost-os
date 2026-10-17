@@ -58,7 +58,7 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK API for Bluetooth pairing, device choice or status: the pairing and device list live only in the Settings Bluetooth page (springboard/src/shell/pages.rs).",
+    "Apps list devices and read a pending pairing code through the SDK (bluetooth_service.rs), but pairing itself lives only in the Settings Bluetooth page (springboard/src/shell/pages.rs).",
     "No reusable device selector sheet or panel (IOBluetoothDeviceSelectorController).",
     "No passkey or numeric comparison pairing: pairing is hardwired to NoInputNoOutput (springboard/src/bare/bluetooth.rs:68-69), so devices that need a PIN or passkey cannot pair.",
     "No SDP service browser: no service list or UUID-filtered selection (IOBluetoothServiceBrowserController).",

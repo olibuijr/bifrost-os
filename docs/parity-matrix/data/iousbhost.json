@@ -81,7 +81,7 @@
   "gaps": [
     "No app-facing transport: the claim plan (springboard/sdk/src/usb_device.rs) is not sent and no control, bulk, interrupt or isochronous request reaches a device (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
     "The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.",
-    "No scanner API and no USB transport for printers (springboard/ui/src/print.rs).",
+    "No USB transport for printers (springboard/ui/src/print.rs); scanner sessions are an SDK model (sdk scan_session.rs) with no transport.",
     "Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap."
   ]
 }

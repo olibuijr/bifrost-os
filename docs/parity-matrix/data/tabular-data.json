@@ -95,7 +95,7 @@
   "gaps": [
     "No DataFrame or typed column container in the SDK or ui crates",
     "No statistical summaries (numeric or categorical)",
-    "No general CSV reader or writer; only the weather widget parser at springboard/src/shell/weather/data.rs",
+    "CSV reading and writing exist in the SDK (csv::parse_table, sdk csv_writer.rs); there is no spreadsheet file reader or writer",
     "No column-aware JSON import or export"
   ]
 }

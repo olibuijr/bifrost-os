@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs",
-  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. Apple's execution model (foreground/background modes, authentication policy, snippets, enum and common data types, donations, Focus filters, widgets and controls) is not covered; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
+  "summary": "BifrOSt has a typed intent layer over the app control socket: declared intents with typed parameters, entity queries, IntentResult values with dialog text, and manifest-declared Spotlight shortcuts for parameterless intents. The SDK models execution modes, authentication policy, snippets, enum and common data types, donations, follow-on results and Focus filter declarations; widgets and controls are not wired; schema domains and presentations are modelled in springboard/sdk/src/intent_presentation.rs, and Siri and Apple Intelligence have no counterpart.",
   "rea_evidence": "ev_d0e83cf707606d76adf0707300c745b42e7847dacf037c0925b97338090514ee",
   "features": [
     {
@@ -135,13 +135,13 @@
     }
   ],
   "gaps": [
-    "Foreground and background execution modes, and authentication policy on AppIntent",
-    "App enums (AppEnum) for predefined parameter values",
-    "Parameter types for Double, Files, Currencies, People, Placemarks and Measurements",
-    "Snippets and result views, and follow-on intents (OpensAppIntent)",
-    "Parameter prompts in Search (needsValueError, requestDisambiguation, requestConfirmation): Search runs parameterless intents only",
-    "IndexedEntity: hideInSpotlight per entity (the shell indexes what an app's entity.query suggests)",
-    "Intent donations and relevance (IntentDonationManager, RelevantIntentManager)",
+    "Execution modes and authentication policy are pure models (IntentMode, Authentication); the shell runs every intent in the app process",
+    "Enum parameters exist (ParamType::Enum); the AppEnum declaration type is not built",
+    "Parameter type for People (Double, File, Currency, Placemark and Measurement exist)",
+    "Interactive result views: snippets exist as data (IntentResult::with_snippet), but the shell draws no interactive result view",
+    "Parameter prompts in Search (needsValueError, requestDisambiguation, requestConfirmation): Search runs parameterless intents only; the assistant asks for missing parameters",
+    "IndexedEntity::hide_in_spotlight is modelled in the SDK, but the shell's entity index (shell::entity_index) does not read it",
+    "Intent donation and relevance models exist in the SDK (donation.rs, donations.rs); no shell path uses them yet",
     "Focus filters (SetFocusFilterIntent): manifest [[focus_filter]] declarations are read, but Settings does not yet set the values per Focus mode",
     "Widgets, controls and Live Activities driven by intents"
   ]

@@ -79,11 +79,9 @@
   }
  ],
  "gaps": [
-  "No biometric authentication (Touch ID, Face ID, fingerprint). Nothing in the shell or SDK; fprint, fprintd and howdy are absent.",
-  "No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).",
-  "Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
+  "No biometric authentication (Touch ID, Face ID, fingerprint). The SDK BiometryType always reports none; fprint, fprintd and howdy are absent.",
+  "Keychain items have no access control enforced: the protection class model (sdk keychain_protection.rs) is not applied at rest or in queries, so any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
   "No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).",
-  "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants).",
-  "Reusable authentication sheet drawn by the shell (state model in springboard/ui/src/auth_prompt.rs)"
+  "There is no LADomainState: the device facts are the password_set flag and BiometryType, which is always none (sdk local_auth.rs)."
  ]
 }

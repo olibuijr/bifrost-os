@@ -125,7 +125,7 @@
   "Shell chrome is in the AT-SPI tree but read-only (press is not routed back) and Spotlight has no live text.",
   "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping.",
   "Spoken Content: Speak Items Under the Pointer is not built (the shell has no pointer-hover text source). Speak Selection (Option+Escape) is built.",
-  "Custom actions: an element's named custom actions are not exported on the AT-SPI Action interface and cannot be run from there (no producer, no named-action dispatch to the app).",
+  "Custom actions: an element's named custom actions are not exported on the AT-SPI Action interface ; they are listed and run through the shell's ax control command (src/shell/axmap.rs).",
   "Braille: the reader's line is kept ready as cells, but no Braille display driver exists, so nothing reaches a device.",
   "Audio graphs: a graph can be rendered and played, but no SDK call or shell path requests one."
  ]

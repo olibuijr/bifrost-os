@@ -93,7 +93,7 @@
     }
   ],
   "gaps": [
-    "No app-facing DNS-SD API: apps cannot browse, resolve or advertise arbitrary service types (for example _ipp._tcp or _airplay._tcp).",
+    "DNS-SD names and TXT records are an SDK model (sdk dns_service.rs); apps cannot browse, resolve or advertise arbitrary service types (for example _ipp._tcp or _airplay._tcp).",
     "No mDNS on port 5353 and no DNS-SD PTR/SRV/TXT records, so ordinary LAN devices cannot find BifrOSt and BifrOSt cannot find them.",
     "No TXT record encoding or parsing.",
     "No DNSServiceRef-style connection to a discovery daemon, and no dispatch-queue integration for discovery callbacks.",

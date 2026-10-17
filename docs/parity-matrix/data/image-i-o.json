@@ -132,7 +132,7 @@
     "HEIC, TGA and RAW are not recognised by the codecs; WebP is read only.",
     "The Photos and camera code still use their own encoders (springboard/src/pngenc.rs writes uncompressed PNG) and are not moved onto picture_writer.",
     "APNG frame access is not verified.",
-    "No colour profile (ICC) or HDR gain map handling; images are treated as sRGB.",
+    "No HDR gain map handling; ICC profiles are applied only on image decode (icc_transform), and images are otherwise treated as sRGB.",
     "No tiled or streaming image provider for very large pictures.",
     "Not yet verified on Midget: every row built on parity/team-n-image-i-o."
   ]

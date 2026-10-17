@@ -94,7 +94,6 @@
   ],
   "gaps": [
     "No on-device model runtime (load, specialize, run) for apps in the SDK or the system layer.",
-    "No tensor type (NDArray) or inference function signature API.",
     "No compute stream API for apps, so GPU or CPU inference cannot be offloaded from an app.",
     "No model cache or ahead-of-time compile step.",
     "No inference-level profiling or tracing in the debug tools.",

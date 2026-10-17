@@ -111,7 +111,7 @@
     "No service discovery (NWBrowser, mDNS or DNS-SD); the shell's UDP beacon is private",
     "No QUIC, WebSocket or custom protocol framer",
     "No path monitor for app reachability or interface changes (NWPathMonitor)",
-    "No TLS handshake options, client identities or TLS metadata for apps",
+    "TLS handshake options apply to a client connection (sdk tls_client.rs); no client identities or TLS metadata for apps",
     "No packet trace or network inspector for apps"
   ]
 }

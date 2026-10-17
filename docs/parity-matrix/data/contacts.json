@@ -4,7 +4,7 @@
  "macos_since": "10.11",
  "status": "partial",
  "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/src/shell/services/contacts.rs (contacts service: access, fetch, save), springboard/sdk/src/contacts.rs (SDK), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export)",
- "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers or change history exists. Apps with a contacts read grant get system.contacts.change when the store file changes.",
+ "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. Groups (nested) and a polled change history exist; containers do not. Apps with a contacts read grant get system.contacts.change when the store file changes.",
  "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
  "features": [
   {
@@ -114,10 +114,9 @@
   }
  ],
  "gaps": [
-  "No groups, containers or subgroups.",
-  "No per-record change history.",
-  "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
-  "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
+  "No containers (CNContainer). Groups and subgroups exist in the SDK (contacts::groups).",
+  "The Contacts app edits one phone, one email and one address; the SDK and the contacts service carry labeled phones, emails and URLs, a birthday and dates. No relations, social profiles, instant messages or nicknames.",
+  "The access sheet and a Contacts Settings group exist (services/privacy_permissions.rs); the shell sets grants, and they reset on restart.",
   "Apps can build and parse vCards through the SDK vcard module; the Contacts app's import and export still run on springboard/apps/contacts-desktop/src/exchange.rs, and no SDK import UI exists.",
   "Every fetch reads the whole store file (cap 10,000 contacts, 8 MiB file) before the service filters it."
  ]

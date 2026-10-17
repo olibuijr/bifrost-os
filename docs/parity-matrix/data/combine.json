@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "bifrost_app::observable, bifrost_ui::observe",
-  "summary": "A single-threaded Observable<T> with sink, map, remove_duplicates and cancel-on-drop subscriptions covers the CurrentValueSubject and @Published cases. Operators, schedulers, publishers, back pressure and threading are missing.",
+  "summary": "A single-threaded Observable<T> with sink, map, remove_duplicates and cancel-on-drop subscriptions covers the CurrentValueSubject and @Published cases. PassthroughSubject has filter, map, merge, flat_map, debounce and throttle, and combine_latest is a free function. receive(on:), back pressure and threading are missing.",
   "rea_evidence": "ev_0b035d0628a1f6916e5d04d51a3633c387bc1193a863233411039893aa6a8710",
   "features": [
     {
@@ -12,7 +12,7 @@
       "apple": "Publisher, Publishers (map, filter, merge, combineLatest, debounce...)",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. only map and remove_duplicates; no filter, merge, combineLatest, debounce, flatMap Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. flatMap with Future inners is built (flat_map_future, resolution order). LocalScheduler (run_loop.rs) is the main-thread scheduler; debounce and throttle take it. Not done: receive(on:) and subscribe(on:), since publishers are single-threaded by design."
+      "note": "verified on Midget 0.7.25 by 23 tests. map and remove_duplicates on Observable; filter, merge, flat_map, debounce and throttle on PassthroughSubject; combine_latest as a free function Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. flatMap with Future inners is built (flat_map_future, resolution order). LocalScheduler (run_loop.rs) is the main-thread scheduler; debounce and throttle take it. Not done: receive(on:) and subscribe(on:), since publishers are single-threaded by design."
     },
     {
       "feature": "Type-erased publishers",
@@ -33,28 +33,28 @@
       "apple": "Future, Just, Deferred, Empty, Fail, Record",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. none; Observable::new is the nearest to Just"
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Finite::just, Finite::empty, Finite::fail, Finite::record, Future and Deferred exist; Observable::new is the current-value form"
     },
     {
       "feature": "Connectable publishers",
       "apple": "ConnectablePublisher, share, multicast",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no connect/autoconnect"
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. connect and autoconnect exist (Connectable, Autoconnect)"
     },
     {
       "feature": "Subscribers and demand",
       "apple": "Subscriber, Subscribers, AnySubscriber, Subscription, Subscriptions, back pressure",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. sink/subscribe closures only; no Demand, no completion, no failure type"
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. sink/subscribe closures; completion reaches Finite and Future subscribers; no Demand"
     },
     {
       "feature": "Subjects",
       "apple": "Subject, CurrentValueSubject, PassthroughSubject",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. CurrentValueSubject via Observable; no PassthroughSubject, no send(completion:)"
+      "note": "verified on Midget 0.7.25 by 23 tests. CurrentValueSubject via Observable; PassthroughSubject with send; no send(completion:)"
     },
     {
       "feature": "Schedulers",
@@ -107,13 +107,11 @@
     }
   ],
   "gaps": [
-    "combineLatest, merge, filter, flatMap and other operators",
-    "Debounce, throttle and schedulers (receive(on:))",
-    "Completion and failure types, Demand/back pressure",
-    "PassthroughSubject and Future/Just/Empty publishers",
-    "ObservableObject objectWillChange aggregate",
+    "Operators beyond map, filter, merge, flatMap, debounce, throttle and combineLatest (for example scan, compactMap, zip)",
+    "receive(on:) and subscribe(on:); schedulers are a main-thread RunLoop and DispatchQueue, and no operator moves a publisher between them",
+    "Demand and back pressure (Subscribers.Demand); completions and failures exist only on Finite and Future",
+    "ObservableObject objectWillChange is partial: the aggregate publisher emits after the value has changed (observable_object.rs)",
     "Thread-safe publishers (Send)",
-    "Notification, Timer, URLSession publishers",
-    "AsyncPublisher bridge"
+    "Notification, Timer, URLSession publishers"
   ]
 }
