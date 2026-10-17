@@ -5215,9 +5215,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Help book format and help index built (springboard/src/shell/helpbook.rs): an app ships a help/ directory (manifest help = \"help\", Markdown pages with title, keywords and {#anchor} headings), Files, TextEdit and Settings ship books, and the index rebuilds on start and after every install change. Still missing and so the row stays gap: no Help menu search field and no Help viewer window, so help is not reachable from the UI yet.",
+   "bifrost": "springboard/src/shell/helpbook.rs; springboard/src/shell/help_viewer.rs; springboard/src/shell/desktop_bar.rs (Help menu search)",
+   "status": "partial",
+   "note": "Help books ship in app packages (manifest `help`), the shell indexes them at start and after installs (helpbook.rs), every Help menu has a search field listing menu items and help topics, and the help viewer window shows a book with contents, search, back and forward and help:// links (help_viewer.rs). Not verified on Midget yet; built-in SDK apps without a native window get no \"<App> Help\" row.",
    "rea": []
   },
   {

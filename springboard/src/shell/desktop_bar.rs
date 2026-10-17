@@ -50,7 +50,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,HelpItem(Menu,usize),HelpTopic(String,Option<String>)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -411,7 +411,7 @@ impl Shell {
             // Undo and Redo first, as in every Golden Gate Edit menu. Native Linux apps get the shortcut (Ctrl+key); Redo has no
             // single key, so it stays a disabled label for them.
             Menu::Edit=>{let mut v:Vec<Row>=[("Undo",Some(44),bifrost_proto::Command::Undo),("Redo",None,bifrost_proto::Command::Redo),("Cut",Some(45),bifrost_proto::Command::Cut),("Copy",Some(46),bifrost_proto::Command::Copy),("Paste",Some(47),bifrost_proto::Command::Paste),("Select All",Some(30),bifrost_proto::Command::SelectAll)].into_iter().map(|(label,key,command)|if let Some(commands)=self.sdk_commands(){if commands.supports(command){Row::action(label,Action::Command(command))}else{Row::label(label)}}else if let (Some(key),true)=(key,self.foreign_active().is_some()||self.screen==Screen::App(AppId::Terminal)){Row::action(label,Action::Shortcut(key))}else{Row::label(label)}).collect();for r in &mut v{if let Some((_,k))=MENU_KEYS.iter().find(|(l,_)|*l==r.text){*r=std::mem::replace(r,Row::separator()).key(k);}}v.insert(2,Row::separator());if let Some(t)=self.sdk_undo_titles(){for r in &mut v{if r.action.is_some(){let t=match r.text.as_str(){"Undo"=>&t.0,"Redo"=>&t.1,_=>continue};if !t.is_empty(){r.text=t.clone();}}}}if self.term_front(){v.extend([Row::separator(),Row::action("Find…",Action::Term(TermKey::Find)).key("cmd+f"),Row::action("Find Next",Action::Term(TermKey::FindNext)).key("cmd+g"),Row::action("Find Previous",Action::Term(TermKey::FindPrev)).key("cmd+shift+g"),Row::separator(),Row::action("Clear Scrollback",Action::Term(TermKey::ClearScrollback)).key("cmd+k")]);v.extend([Row::separator(),Row::label("Copy Special"),Row::action("Plain Text",Action::Term(TermKey::Copy)).indented(),Row::action("Text with Colors",Action::Term(TermKey::CopyStyled)).indented(),Row::action("Without Background Colour",Action::Term(TermKey::CopyStyledPlain)).indented()]);}v.extend([Row::separator(),Row::action("Emoji & Symbols",Action::CharacterViewer)]);v},
-            Menu::Help=>vec![Row::action("BifrOSt Information",Action::Settings("About")),Row::separator(),Row::label("Search").key("cmd+space"),Row::label("Input Source").key("ctrl+space"),Row::label("App Switcher").key("cmd+tab"),Row::label("Back").key("escape"),Row::label("Home: Cmd (Meta) alone")],
+            Menu::Help=>{let mut r:Vec<Row>=self.help_book().map(|(id,name)|vec![Row::action(format!("{name} Help"),Action::Help(id)),Row::separator()]).unwrap_or_default();r.extend(vec![Row::action("BifrOSt Information",Action::Settings("About")),Row::separator(),Row::label("Search").key("cmd+space"),Row::label("Input Source").key("ctrl+space"),Row::label("App Switcher").key("cmd+tab"),Row::label("Back").key("escape"),Row::label("Home: Cmd (Meta) alone")]);r},
             Menu::Network=>{
                 let mut rows=Vec::new();if let Some(n)=&self.info.desktop_network {
                     for i in n.interfaces.iter().filter(|i|i.kind=="ethernet") {rows.push(Row::label(format!("{}: {}",i.name,if i.connected(){"Connected"}else{"Disconnected"})));for ip in &i.ipv4 {rows.push(Row::label(ip.clone()));}}
@@ -631,6 +631,7 @@ impl Shell {
                     Action::Print=>self.print_sheet_open(t),
                     Action::Service(i)=>{if let Some(service)=bifrost_ui::services_menu::Service::ALL.get(i as usize).copied(){effects.extend(self.run_service(service,t));}else{self.run_app_service(i as usize,t);}},
                     Action::CharacterViewer=>self.char_viewer_open(),
+                    Action::Help(id)=>self.open_help(&id,None),
                     Action::KeyboardViewer=>self.keyboard_viewer_open(),
                     Action::Recent(n)=>{if let Some(app)=self.recent_app_at(n as usize){self.desk_open(app,t);}},
                     Action::ClearRecent=>self.recent_clear(),
@@ -657,7 +658,7 @@ impl Shell {
                     Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
                     Action::PhotoEditWith(key)=>self.photo_edit_with_viewed(&key,t),
                     Action::HelpItem(menu,i)=>{if let Some(a)=self.plain_rows(menu).get(i).and_then(|r|r.action.clone()) {effects.extend(self.run_menu_action(a,t));}},
-                    Action::HelpTopic(app,anchor)=>super::helpbook::open_help(&app,anchor.as_deref()),
+                    Action::HelpTopic(app,anchor)=>self.open_help(&app,anchor.as_deref()),
                 }effects
     }
     /// Runs a Photos command from a menu row or a key equivalent, and opens the print sheet when it asked for one.

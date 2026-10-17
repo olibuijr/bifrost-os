@@ -249,11 +249,6 @@ fn score_page(page: &Page, terms: &[String]) -> Option<(u32, Option<String>)> {
 /// The app id of the system help book (the shell's own Settings book), searched by every Help menu.
 pub const SYSTEM_BOOK: &str = "is.olibuijr.settings";
 
-/// Opens the help viewer at a book's page or anchor. Stub until the viewer window is wired in: it logs the request.
-pub fn open_help(app_id: &str, anchor: Option<&str>) {
-    eprintln!("springboard: help: open {app_id} {}", anchor.unwrap_or(""));
-}
-
 /// The built-in help books the shell itself ships (Settings is a shell page, not an installed app).
 /// Each entry is `(app id, app name, pages)`.
 pub fn builtin_books() -> Vec<(String, String, Vec<Page>)> {
@@ -286,6 +281,11 @@ impl HelpIndex {
 
     pub fn app_name(&self, app: &str) -> Option<&str> {
         self.apps.get(app).map(String::as_str)
+    }
+
+    /// The installed books as (app id, app name), in app id order (the Help viewer's book popup).
+    pub fn books(&self) -> Vec<(&str, &str)> {
+        self.apps.iter().map(|(a, n)| (a.as_str(), n.as_str())).collect()
     }
 
     /// The pages of one app's book, in file order (the table of contents).
