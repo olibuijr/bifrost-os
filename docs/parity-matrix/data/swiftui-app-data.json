@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "springboard/sdk/src/view/app.rs, springboard/sdk/src/document.rs, springboard/sdk/src/observable.rs, springboard/sdk/src/defaults.rs, springboard/sdk/src/restoration.rs, springboard/ui/src/nav.rs",
-  "summary": "Apps are written in an imperative Rust App trait with retained views, not a declarative View/Scene/App protocol tree. Most App-structure and Data-and-storage topics have a feature-level counterpart (documents, sheets, toolbars, search field, observable values, defaults, state restoration); SwiftData-style model persistence, the Environment, preferences keys and app extensions in the SwiftUI sense have none.",
+  "summary": "Apps are written in an imperative Rust App trait with retained views, not a declarative View/Scene/App protocol tree. Most App-structure and Data-and-storage topics have a feature-level counterpart (documents, sheets, toolbars, search field, observable values, defaults, state restoration); SwiftData-style model persistence, app extensions in the SwiftUI sense have none, and the Environment and preference keys exist only as models.",
   "rea_evidence": "ev_c9694d28e5b52b454b4265832cf0a84e86b67ecf4344b4a586154c5c4e2f2e39",
   "features": [
     {
@@ -19,7 +19,7 @@
       "apple": "App protocol, @main entry point, app lifecycle",
       "bifrost": "springboard/sdk/src/view/app.rs",
       "status": "partial",
-      "note": "App trait with hooks and a manifest; imperative, not a declarative App body"
+      "note": "App trait with hooks and a manifest; imperative, not a declarative App body Refreshed 2026-10-17: value-based NavigationPath destinations exist in springboard/ui/src/nav.rs (NavigationPath<D>, apply_path; tests nav::tests)."
     },
     {
       "feature": "Scenes",
@@ -33,7 +33,7 @@
       "apple": "Window, WindowGroup, openWindow, window styles and sizing",
       "bifrost": "springboard/sdk/src/layout.rs, springboard/src/shell/desk.rs, springboard/sdk/src/scene_session.rs (SceneSessions), springboard/src/shell/services/scene_services.rs",
       "status": "partial",
-      "note": "Several windows of one app work: SceneSessions opens (request), focuses, lists and closes each window with its own state, user info and a limit, and the shell serves those calls (sdk/tests/parity_sdk-complete-31.rs). Gap: a restored window's frame after a relaunch is checked only on Midget."
+      "note": "Several windows of one app work: SceneSessions opens (request), focuses, lists and closes each window with its own state, user info and a limit, and the shell serves those calls (sdk/tests/parity_sdk-complete-31.rs). Gap: a restored window's frame after a relaunch is checked only on Midget. Refreshed 2026-10-17: openWindow is SceneSessions.request in springboard/sdk/src/scene_session.rs, so one app can open, focus and close several windows."
     },
     {
       "feature": "Immersive spaces",
@@ -115,10 +115,8 @@
   ],
   "gaps": [
     "No declarative App/Scene/View protocol tree",
-    "No multi-window openWindow API for one app",
-    "No environment values or preference keys propagated through a view hierarchy",
+    "No view tree reads environment values or preference keys. The models exist: springboard/ui/src/environment.rs (Environment, scoped, with_value; tests) and springboard/ui/src/preferences.rs (PreferenceKey, Preferences; tests), but no view binds them.",
     "No SwiftData/Core Data style model store",
-    "No desktop widgets or app extension points",
-    "No value-based NavigationPath destinations"
+    "No desktop widgets or app extension points"
   ]
 }
