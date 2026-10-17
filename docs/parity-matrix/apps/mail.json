@@ -215,8 +215,8 @@
    "apple": "Message > Remove Attachments",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/mime.rs (strip_attachments, removed_note); springboard/apps/mail-desktop/src/window.rs:1854 (remove_attachments)",
-   "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget.",
-   "wire": "Replace the file with a short note in the text, and check it against more servers"
+   "note": "Message > Remove Attachments cuts the file parts out (mime.rs strip_attachments), appends the result under the same flags and deletes the original over IMAP (session.rs append and remove). Built on parity/team-d-mail; not yet verified on Midget. The text keeps a line \"[Attachment removed: name]\" where each file was.",
+   "wire": "Built; check it on Midget and promote the row to parity once it works there."
   },
   {
    "feature": "Add sender to contacts",
@@ -528,18 +528,27 @@
    "feature": "More than one viewer window or tab",
    "area": "menu",
    "apple": "File > New Viewer Window/Tab",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The SDK window registry exists (bifrost_app::app_windows), so the app can open a second window id. Not done: the shell does not host a second window of an app yet, so a second MailWindow is not on screen.",
-   "wire": "Open a second MailWindow through the SDK multi-window API (bifrost_app::app_windows) once the shell hosts extra windows."
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/viewer.rs; springboard/apps/mail-desktop/src/window.rs (MENU_NEW_VIEWER, double-tap in tap, take_viewers, viewer_snapshot); springboard/apps/mail-desktop/src/main.rs (open_viewers, window_event, draw_window, window_closed)",
+   "note": "Double-click on a message row, or File > New Viewer Window, opens the message in its own SDK window (bifrost_app::app_windows). The viewer is read-only: it shows the header, the files and the body of a copy the main window already fetched, and scrolls with a touch. Built on this branch; not yet verified on Midget.",
+   "wire": "Compose in its own window (the compose sheet is still in the main window), and let the viewer load a body that is not fetched yet; check the viewer windows on Midget."
+  },
+  {
+   "feature": "Open mailto links (system compose)",
+   "area": "integration",
+   "apple": "mailto URL handling; Mail as the default mail app",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/manifest.toml (schemes = [\"mailto\"]); springboard/apps/mail-desktop/src/main.rs (Input::Open, pending_url); springboard/apps/mail-desktop/src/window.rs (open_handoff); springboard/sdk/src/mail_compose.rs (compose)",
+   "note": "A mailto: link opened anywhere reaches Mail through the shell URL routing and opens a new message with its To, Cc, Bcc, Subject and Body filled in. bifrost_app::mail_compose::compose hands a draft to the default mail app as a mailto URL. Attachments are refused by the SDK call: a URL cannot carry them and the file grants are not wired. Built on this branch; not yet verified on Midget.",
+   "wire": "Wire file grants into mail_compose::compose so drafts can carry attachments; check a mailto link from another app on Midget."
   }
  ],
  "summary": {
-  "features": 58,
+  "features": 59,
   "parity": 13,
-  "partial": 40,
-  "gap": 1,
+  "partial": 42,
+  "gap": 0,
   "n/a": 4,
-  "coverage_pct": 61.1
+  "coverage_pct": 61.8
  }
 }
