@@ -1820,6 +1820,7 @@ impl Shell {
 
     /// Starts the pull: icons and cached titles are refreshed first.
     fn quicksearch_open(&mut self, y0: f32, y: f32, t: f64, range: f32) {
+        self.request_index_extensions();
         self.quicksearch.set_mac(&self.ui, self.desk_active());
         if !self.quicksearch.has_icons() {
             let icons = apps().iter().enumerate().map(|(i, a)| (a.id, if i < super::IN_DOCK { &self.dock[i].icon } else { &self.grid[i - super::IN_DOCK].icon })).collect();

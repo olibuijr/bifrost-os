@@ -709,6 +709,12 @@ pub trait App {
     }
     /// The user opened an indexed item from Search (`NativeUserActivity` continuation, `CSSearchableItemActionType`). Show the
     /// item named by `activity.unique_identifier`. Return true when a frame is needed.
+    /// The shell asks the app to index its content again (the app declares `index_extension = true`). Answer with
+    /// [`quicksearch::IndexExtensionRequests`]. Returns true when the app should redraw.
+    fn index_request(&mut self, _ctx: &Ctx, _request: quicksearch::IndexRequest) -> bool {
+        false
+    }
+
     fn continue_activity(&mut self, _ctx: &Ctx, _activity: quicksearch::UserActivity) -> bool {
         false
     }

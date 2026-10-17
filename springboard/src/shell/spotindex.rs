@@ -32,6 +32,9 @@ use bifrost_proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DEL
 use bifrost_ui::language::{dominant_language, Language};
 use bifrost_ui::lexical_tags;
 use bifrost_ui::metaquery::{self, Predicate};
+use bifrost_ui::searchindex::{validate_name, IndexDescription, NameError, ProtectionClass};
+use bifrost_ui::searchquery::{Query, Record};
+use bifrost_ui::searchstore::{self, IndexStore, StoreSet, StoredItem};
 use bifrost_ui::uttype;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -139,6 +142,10 @@ pub struct Index {
     /// no item expires before this (Unix seconds), so `prune` returns early until then; 0 when not known
     next_expiry: u64,
     narrow: RefCell<Option<Narrow>>,
+    /// the named indexes (`CSSearchableIndex(name:protectionClass:)`), per app, kept apart from the default ones
+    named: StoreSet,
+    /// named indexes changed since the last save, as `<app>@<name>` file stems
+    named_dirty: Vec<String>,
 }
 
 /// True when every word of `new` extends the word of `old` at its place (the last word of `old` may be shorter). Then
@@ -373,6 +380,15 @@ impl Index {
         for ent in rd.flatten() {
             let name = ent.file_name().to_string_lossy().to_string();
             let Some(app) = name.strip_suffix(".json").filter(|a| safe_name(a)) else { continue };
+            if let Some((app, index)) = name.strip_suffix(".json").and_then(|s| s.split_once('@')) {
+                // a named index, `<app>@<name>.json`, which the default-index loader below skips
+                if safe_name(app) && validate_name(index).is_ok() {
+                    if let Some(store) = named_from_json(&std::fs::read_to_string(ent.path()).unwrap_or_default()) {
+                        ix.named.put(app, Some(index), store);
+                    }
+                }
+                continue;
+            }
             if ix.apps.len() >= MAX_APPS {
                 break;
             }
@@ -396,10 +412,15 @@ impl Index {
             .collect()
     }
 
-    /// Writes the apps that changed since the last call (and removes the file of an emptied app).
+    /// Writes the apps that changed since the last call (and removes the file of an emptied app), then the named
+    /// indexes that changed.
     pub fn save(&mut self, dir: &Path) {
         for (app, text) in self.take_writes() {
             write_app(dir, &app, text);
+        }
+        for stem in std::mem::take(&mut self.named_dirty) {
+            let text = stem.split_once('@').and_then(|(app, index)| self.named.get(app, Some(index))).map(named_to_json);
+            write_app(dir, &stem, text);
         }
     }
 }
@@ -432,6 +453,11 @@ impl Index {
         if self.apps.remove(app_id).is_some() {
             self.mark(app_id);
         }
+        let named: Vec<String> = self.named.keys().into_iter().filter(|(a, _)| *a == app_id).filter_map(|(_, n)| n.map(str::to_string)).collect();
+        for index in named {
+            self.named.delete_named_index(app_id, &index);
+            self.mark_named(app_id, &index);
+        }
     }
 
     /// Drops the items of every app not in `installed`; returns how many apps went.
@@ -442,6 +468,118 @@ impl Index {
         }
         gone.len()
     }
+}
+
+impl Index {
+    fn mark_named(&mut self, app_id: &str, index: &str) {
+        let stem = format!("{app_id}@{index}");
+        if !self.named_dirty.contains(&stem) {
+            self.named_dirty.push(stem);
+        }
+    }
+
+    /// `indexSearchableItems` on the named index `desc` of `app_id`: items with a known identifier replace the old
+    /// one. A new index is refused once the shell holds [`MAX_APPS`] named indexes.
+    pub fn index_named(&mut self, app_id: &str, desc: &IndexDescription, items: Vec<StoredItem>) -> Result<(), NameError> {
+        let known = self.named.get(app_id, Some(&desc.name)).is_some();
+        if !known && self.named.keys().len() >= MAX_APPS {
+            return Ok(());
+        }
+        self.named.named_index(app_id, desc)?.index(items);
+        self.mark_named(app_id, &desc.name);
+        Ok(())
+    }
+
+    /// `deleteSearchableItems(withIdentifiers:)` on a named index.
+    pub fn delete_named_identifiers(&mut self, app_id: &str, index: &str, ids: &[&str]) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_identifiers(ids);
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// `deleteSearchableItems(withDomainIdentifiers:)` on a named index.
+    pub fn delete_named_domains(&mut self, app_id: &str, index: &str, domains: &[&str]) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_domains(domains);
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// `deleteAllSearchableItems` on a named index; the index itself stays.
+    pub fn delete_named_all(&mut self, app_id: &str, index: &str) {
+        if let Some(store) = self.named.get_mut(app_id, Some(index)) {
+            store.delete_all();
+            self.mark_named(app_id, index);
+        }
+    }
+
+    /// Deletes a named index and its items (`CSSearchableIndex.deleteIndex`). False when it did not exist.
+    pub fn delete_named_index(&mut self, app_id: &str, index: &str) -> bool {
+        let gone = self.named.delete_named_index(app_id, index);
+        if gone {
+            self.mark_named(app_id, index);
+        }
+        gone
+    }
+
+    /// Runs `query` over the named index `index` of `owner` as `requester`: the owner sees its live items, another app
+    /// only the public ones. At most `limit` hits, best first. A missing index gives none.
+    pub fn search_named(&self, requester: &str, owner: &str, index: &str, query: &str, limit: usize, now: i64) -> Result<Vec<searchstore::Found>, bifrost_ui::searchquery::Error> {
+        let mut hits = self.named.search(requester, owner, Some(index), &Query::new(query), now)?;
+        hits.truncate(limit);
+        Ok(hits)
+    }
+}
+
+/// The saved form of a named index: its protection class and its items, with the expiry and the public flag.
+fn named_to_json(store: &IndexStore) -> String {
+    let q = json::quote;
+    let items: Vec<String> = store
+        .items()
+        .iter()
+        .map(|i| {
+            let kw: Vec<String> = i.record.keywords.iter().map(|k| q(k)).collect();
+            let expires = i.expiration.map(|t| format!(",\"expires\":{t}")).unwrap_or_default();
+            format!(
+                "{{\"id\":{},\"domain\":{},\"title\":{},\"desc\":{},\"keywords\":[{}],\"public\":{}{}}}",
+                q(&i.unique_identifier),
+                q(&i.domain_identifier),
+                q(&i.record.title),
+                q(&i.record.description),
+                kw.join(","),
+                i.public,
+                expires
+            )
+        })
+        .collect();
+    let protection = store.protection().map_or("null".to_string(), |p| q(p.raw()));
+    format!("{{\"protection\":{protection},\"items\":[{}]}}\n", items.join(",\n"))
+}
+
+/// Reads a saved named index. None when the text is not one.
+fn named_from_json(text: &str) -> Option<IndexStore> {
+    let v = json::parse(text).ok()?;
+    let protection = v.get("protection").and_then(Json::as_str).and_then(ProtectionClass::from_raw);
+    let items = parse_named_items(v.get("items").and_then(Json::array)?);
+    Some(IndexStore::from_items(items, protection))
+}
+
+/// Items of a named index, from a list of objects with `id`, `domain`, `title`, `desc`, `keywords` (strings),
+/// `public` (bool) and `expires` (Unix seconds). An object without an `id` is skipped; at most `MAX_ITEMS`.
+pub fn parse_named_items(list: &[Json]) -> Vec<StoredItem> {
+    list.iter()
+        .filter_map(|o| {
+            let id = o.str_field("id").filter(|s| !s.is_empty())?;
+            let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let record = Record { title: o.str_field("title").unwrap_or_default(), description: o.str_field("desc").unwrap_or_default(), keywords };
+            let mut item = StoredItem::new(&id, &o.str_field("domain").unwrap_or_default(), record);
+            item.expiration = o.get("expires").and_then(Json::as_u64).map(|t| t as i64);
+            item.public = matches!(o.get("public"), Some(Json::Bool(true)));
+            Some(item)
+        })
+        .take(searchstore::MAX_ITEMS)
+        .collect()
 }
 
 // ---- filters: file types and time phrases -------------------------------------------------------------------------
@@ -725,14 +863,80 @@ pub fn expire_due() -> usize {
     with(|ix| ix.prune(now))
 }
 
+/// Items of the default index from the `search-index` service's `index` objects: `id`, `domain`, `title`, `desc`,
+/// `keywords` (strings), `thumb`, `url` and `expires` (Unix seconds). An object without an `id` is skipped. Returns each
+/// item with its expiry, if it has one.
+pub fn parse_items(list: &[Json]) -> Vec<(SearchableItem, Option<u64>)> {
+    list.iter()
+        .filter_map(|o| {
+            let unique_id = o.str_field("id").filter(|s| !s.is_empty())?;
+            let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let item = SearchableItem {
+                unique_id,
+                domain: o.str_field("domain").unwrap_or_default(),
+                title: o.str_field("title").unwrap_or_default(),
+                description: o.str_field("desc").unwrap_or_default(),
+                keywords,
+                thumbnail: o.str_field("thumb").unwrap_or_default(),
+                content_url: o.str_field("url").unwrap_or_default(),
+            };
+            Some((item, o.get("expires").and_then(Json::as_u64)))
+        })
+        .take(MAX_PER_APP)
+        .collect()
+}
+
+/// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
+pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
+    with(|ix| {
+        let expiries: Vec<(String, u64)> = items.iter().filter_map(|(i, at)| at.map(|t| (i.unique_id.clone(), t))).collect();
+        ix.index(app_id, items.into_iter().map(|(i, _)| i).collect());
+        for (id, at) in expiries {
+            ix.set_expiry(app_id, &id, Some(at));
+        }
+    })
+}
+
 /// Sets (or clears, with `None`) the expiry of an item of `app_id`; false when there is no such item.
 pub fn set_expiry(app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
     with(|ix| ix.set_expiry(app_id, unique_id, at))
 }
 
+/// `indexSearchableItems` on the named index `desc` of `app_id`.
+pub fn index_named(app_id: &str, desc: &IndexDescription, items: Vec<StoredItem>) -> Result<(), NameError> {
+    with(|ix| ix.index_named(app_id, desc, items))
+}
+
+/// Deletes items of the named index `index` of `app_id`: `kind` is a `DELETE_*` and `values` are identifiers or
+/// domains (ignored for `DELETE_ALL`).
+pub fn delete_named(app_id: &str, index: &str, kind: u8, values: &[&str]) {
+    with(|ix| match kind {
+        DELETE_IDS => ix.delete_named_identifiers(app_id, index, values),
+        DELETE_DOMAINS => ix.delete_named_domains(app_id, index, values),
+        DELETE_ALL => ix.delete_named_all(app_id, index),
+        _ => {}
+    })
+}
+
+/// Deletes the named index `index` of `app_id` and its items; false when it did not exist.
+pub fn delete_named_index(app_id: &str, index: &str) -> bool {
+    with(|ix| ix.delete_named_index(app_id, index))
+}
+
+/// The items of the named index `index` of `app_id` matching `query`, at most `limit`. Expired items are not returned.
+pub fn search_named(app_id: &str, index: &str, query: &str, limit: usize) -> Result<Vec<searchstore::Found>, bifrost_ui::searchquery::Error> {
+    let now = now_secs() as i64;
+    with(|ix| ix.search_named(app_id, app_id, index, query, limit, now))
+}
+
 /// Drops the items of apps that are no longer installed (an uninstalled app's items go with it); returns how many apps.
 pub fn forget_missing(installed: &[&str]) -> usize {
     with(|ix| ix.forget_missing(installed))
+}
+
+/// True when the default index holds items of `app_id`.
+pub fn has_items(app_id: &str) -> bool {
+    with(|ix| ix.apps.get(app_id).is_some_and(|list| !list.is_empty()))
 }
 
 /// Items of `app_id` matching `query`, at most `limit`. Expired items are not returned.
@@ -1120,5 +1324,67 @@ mod tests {
         let writes = ix.take_writes();
         assert_eq!(writes.len(), 1);
         assert_eq!(writes[0], ("b".to_string(), None));
+    }
+
+    fn named_item(id: &str, title: &str) -> StoredItem {
+        StoredItem::new(id, "notes", Record { title: title.into(), description: "d".into(), keywords: vec!["shop".into()] })
+    }
+
+    #[test]
+    fn named_indexes_keep_their_items_apart_and_only_public_items_reach_other_apps() {
+        let mut ix = Index::default();
+        let desc = IndexDescription::new("archive").unwrap().protection(ProtectionClass::Complete);
+        ix.index_named("notes", &desc, vec![named_item("a", "Milk"), named_item("b", "Tea").public()]).unwrap();
+        // the owner sees both, another app only the public one
+        assert_eq!(ix.search_named("notes", "notes", "archive", "milk", 5, 0).unwrap().len(), 1);
+        assert_eq!(ix.search_named("notes", "notes", "archive", "shop", 5, 0).unwrap().len(), 2);
+        assert_eq!(ix.search_named("mail", "notes", "archive", "shop", 5, 0).unwrap().iter().map(|f| f.unique_identifier.as_str()).collect::<Vec<_>>(), ["b"]);
+        // the default index is a different index
+        assert!(ix.search_named("notes", "notes", "missing", "milk", 5, 0).unwrap().is_empty());
+        assert_eq!(ix.search_named("notes", "notes", "archive", "shop", 1, 0).unwrap().len(), 1, "limit caps the hits");
+        // a bad name is refused
+        assert_eq!(ix.index_named("notes", &IndexDescription { name: "a/b".into(), protection_class: None }, vec![]), Err(NameError::BadCharacter('/')));
+    }
+
+    #[test]
+    fn named_index_deletes_and_forgetting_an_app_mark_the_files() {
+        let mut ix = Index::default();
+        let desc = IndexDescription::new("archive").unwrap();
+        ix.index_named("notes", &desc, vec![named_item("a", "Milk"), named_item("b", "Tea")]).unwrap();
+        ix.named_dirty.clear();
+        ix.delete_named_identifiers("notes", "archive", &["a"]);
+        assert_eq!(ix.named_dirty, ["notes@archive"]);
+        assert!(ix.search_named("notes", "notes", "archive", "milk", 5, 0).unwrap().is_empty());
+        ix.named_dirty.clear();
+        ix.forget_app("notes");
+        assert_eq!(ix.named_dirty, ["notes@archive"]);
+        assert!(ix.search_named("notes", "notes", "archive", "tea", 5, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parsed_items_keep_their_expiry_and_the_index_call_sets_it() {
+        let list = bifrost_core::json::parse(r#"[{"id":"a","domain":"notes","title":"Milk","keywords":["shop"],"url":"file:///a.pdf","expires":500},{"title":"no id"}]"#).unwrap();
+        let parsed = parse_items(list.as_array().unwrap());
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].0.title, "Milk");
+        assert_eq!(parsed[0].0.content_url, "file:///a.pdf");
+        assert_eq!(parsed[0].1, Some(500));
+        let mut ix = Index::default();
+        ix.index_at("notes", vec![parsed[0].0.clone()], 1);
+        assert!(ix.set_expiry("notes", "a", parsed[0].1));
+        assert_eq!(ix.prune(500), 1);
+    }
+
+    #[test]
+    fn a_named_index_round_trips_through_its_saved_form() {
+        let desc = IndexDescription::new("archive").unwrap().protection(ProtectionClass::CompleteUnlessOpen);
+        let mut store = IndexStore::from_items(vec![], Some(desc.protection_class.unwrap()));
+        let mut expiring = named_item("a", "Milk \"fresh\"");
+        expiring.expiration = Some(1_800_000_000);
+        store.index(vec![expiring, named_item("b", "Tea").public()]);
+        let back = named_from_json(&named_to_json(&store)).unwrap();
+        assert_eq!(back.protection(), Some(ProtectionClass::CompleteUnlessOpen));
+        assert_eq!(back.items(), store.items());
+        assert!(named_from_json("not json").is_none());
     }
 }

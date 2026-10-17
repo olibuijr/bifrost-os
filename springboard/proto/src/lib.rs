@@ -512,6 +512,11 @@ pub enum ToApp {
     NotificationAction { id: String, action: String, text: String, thread: String, category: String },
     /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
     ContinueActivity { activity_type: String, unique_id: String, domain: String },
+    /// The shell asks an app that declares `index_extension = true` to index all its content again (the
+    /// `CSIndexExtensionRequestHandler` reindex-all request). 0x1c3.
+    ReindexAll,
+    /// The shell asks an app to index again the items of `identifiers` (the reindex-identifiers request). 0x1c4.
+    ReindexIdentifiers { identifiers: Vec<String> },
     /// The answer to `ToShell::WorkspaceRequest`. Tag 100.
     WorkspaceReply { request: u32, status: WorkspaceStatus, items: Vec<String> },
     /// A workspace notification the app subscribed to (`ToShell::WorkspaceSubscribe`). `app_id` and `name` are empty for sleep and wake. Tag 101.
@@ -1450,7 +1455,7 @@ impl ToApp {
                 u32_(&mut b, *count);
             }
             m @ (ToApp::LoginItemStatus { .. } | ToApp::StatusItemAction { .. }) => extras::encode_app(m, &mut b),
-            m @ ToApp::ContinueActivity { .. } => quicksearch::encode_app(m, &mut b),
+            m @ (ToApp::ContinueActivity { .. } | ToApp::ReindexAll | ToApp::ReindexIdentifiers { .. }) => quicksearch::encode_app(m, &mut b),
             m @ (ToApp::GuidedAccessState { .. } | ToApp::GuidedRestriction { .. }) => guided::encode_app(m, &mut b),
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),

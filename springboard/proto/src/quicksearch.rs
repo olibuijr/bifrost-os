@@ -136,17 +136,36 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
 }
 
 pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
-    if let ToApp::ContinueActivity { activity_type, unique_id, domain } = m {
-        u32_(b, 0x1c2);
-        put(b, activity_type, MAX_ID);
-        put(b, unique_id, MAX_ID);
-        put(b, domain, MAX_DOMAIN);
+    match m {
+        ToApp::ContinueActivity { activity_type, unique_id, domain } => {
+            u32_(b, 0x1c2);
+            put(b, activity_type, MAX_ID);
+            put(b, unique_id, MAX_ID);
+            put(b, domain, MAX_DOMAIN);
+        }
+        ToApp::ReindexAll => u32_(b, 0x1c3),
+        ToApp::ReindexIdentifiers { identifiers } => {
+            u32_(b, 0x1c4);
+            u32_(b, identifiers.len() as u32);
+            for id in identifiers {
+                put(b, id, MAX_ID);
+            }
+        }
+        _ => {}
     }
 }
 
 pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
     match t {
         0x1c2 => Ok(ToApp::ContinueActivity { activity_type: get(r, MAX_ID)?, unique_id: get(r, MAX_ID)?, domain: get(r, MAX_DOMAIN)? }),
+        0x1c3 => Ok(ToApp::ReindexAll),
+        0x1c4 => {
+            let n = r.u32()? as usize;
+            if n > MAX_ITEMS {
+                return Err(DecodeError::BadValue);
+            }
+            Ok(ToApp::ReindexIdentifiers { identifiers: (0..n).map(|_| get(r, MAX_ID)).collect::<Result<_, _>>()? })
+        }
         t => Err(DecodeError::UnknownTag(t)),
     }
 }
@@ -154,6 +173,13 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reindex_requests_round_trip() {
+        for m in [ToApp::ReindexAll, ToApp::ReindexIdentifiers { identifiers: vec!["id1".into(), "id2".into()] }, ToApp::ReindexIdentifiers { identifiers: vec![] }] {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()));
+        }
+    }
 
     fn item(n: usize) -> SearchableItem {
         SearchableItem { unique_id: format!("id{n}"), domain: "notes".into(), title: "Milk".into(), description: "Buy oat milk".into(), keywords: vec!["shop".into(), "ü".into()], thumbnail: "t.png".into(), content_url: "file:///a".into() }

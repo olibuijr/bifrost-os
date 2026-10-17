@@ -43,6 +43,9 @@ pub struct Manifest {
     /// Files and the file panels treat a folder with a known extension as one document; declaring it here is what
     /// lets the app open one.
     pub package_types: Vec<String>,
+    /// `index_extension = true`: the app answers the shell's reindex requests (`CSIndexExtensionRequestHandler`). The
+    /// shell asks once per run, when the app has no items in the Search index (see `request_index_extensions`).
+    pub index_extension: bool,
     /// `"native"`: a native Wayland app owns its GPU surfaces instead of using SDK frames. `"full-size"`: an SDK app
     /// with a full-size-content window (no title row; the traffic lights sit over its sidebar).
     pub window: String,
@@ -176,6 +179,7 @@ impl Manifest {
                 "summary" => m.summary = unquote(v),
                 "category" => m.category = unquote(v),
                 "game" => m.game = unquote(v) == "true",
+                "index_extension" => m.index_extension = unquote(v) == "true",
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
@@ -359,6 +363,9 @@ pub fn root() -> PathBuf {
 }
 
 static INCOMPATIBLE: std::sync::Mutex<Vec<(String, PathBuf)>> = std::sync::Mutex::new(Vec::new());
+
+/// The apps asked for a reindex this run (see `request_index_extensions`).
+static REINDEX_ASKED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
 /// Records that the binary at `exec` for app `id` speaks another SDK protocol.
 fn remember_incompatible(id: &str, exec: &Path) {
@@ -1654,6 +1661,25 @@ impl Shell {
     pub(super) fn ext_send(&mut self, slot: usize, m: &bifrost_proto::ToApp) {
         if let Some(h) = self.ext.get_mut(slot).and_then(Option::as_mut) {
             h.send(m);
+        }
+    }
+
+    /// Asks each running app that declares `index_extension` and has no items in the Search index to index again. Each
+    /// app is asked once per run, so an app that indexes nothing is not asked on every open of the Search panel.
+    pub(super) fn request_index_extensions(&mut self) {
+        let apps = installed();
+        for (slot, a) in apps.iter().enumerate() {
+            let running = self.ext.get(slot).and_then(Option::as_ref).is_some();
+            if !running || !a.manifest.index_extension || super::spotindex::has_items(&a.manifest.id) {
+                continue;
+            }
+            let Ok(mut asked) = REINDEX_ASKED.lock() else { return };
+            if asked.iter().any(|id| *id == a.manifest.id) {
+                continue;
+            }
+            asked.push(a.manifest.id.clone());
+            drop(asked);
+            self.ext_send(slot, &bifrost_proto::ToApp::ReindexAll);
         }
     }
 
