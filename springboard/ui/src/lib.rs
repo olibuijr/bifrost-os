@@ -1053,6 +1053,7 @@ pub mod weather_stats;
 pub mod hid_report;
 pub mod hid_match;
 pub mod linkmeta;
+pub mod link_card;
 pub mod captions;
 pub mod sample_attachments;
 pub mod text_markup;
