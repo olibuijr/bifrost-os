@@ -47,6 +47,89 @@ pub fn first_account(all: &[Account], service: Service) -> Option<Account> {
     shared::serving(all, service).into_iter().find(|a| a.kind == wanted).cloned()
 }
 
+/// One local edit that waits to reach the server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Write {
+    /// Create (`etag` is `None`) or replace the calendar object or card at `url`. `etag` is the version the edit was
+    /// made on, so a replace only lands when the server still has that version.
+    Put { url: String, body: String, etag: Option<String> },
+    /// Delete the item at `url`, only when it still has `etag`.
+    Delete { url: String, etag: Option<String> },
+}
+
+/// The local edits not yet on the server, sent in the order they were made.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Outbox {
+    queue: std::collections::VecDeque<Write>,
+}
+
+/// What a [`Outbox::flush`] did. Writes that landed leave the outbox; a write the server refused is dropped and listed
+/// so the app can re-sync that item; a conflict (the server has a newer version) is dropped and listed too, because
+/// the server's version must be read before the edit is made again. A transport failure keeps the rest queued.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Flush {
+    pub written: usize,
+    /// URLs of writes that hit a conflict (412), in order.
+    pub conflicts: Vec<String>,
+    /// URLs and status codes of writes the server refused.
+    pub refused: Vec<(String, u16)>,
+    /// The transport error that stopped the flush, when one did. The writes after it stay queued.
+    pub stopped: Option<String>,
+}
+
+impl Outbox {
+    pub fn new() -> Outbox {
+        Outbox::default()
+    }
+
+    /// Queues an edit at the end.
+    pub fn push(&mut self, write: Write) {
+        self.queue.push_back(write);
+    }
+
+    /// The number of edits still waiting.
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    /// Sends the queued edits in order with the DAV write calls. `auth` is the Basic authorisation header value and
+    /// `kind` picks the content type of a PUT.
+    pub fn flush(&mut self, send: &mut dav_client::SendEtag<'_>, auth: &str, kind: &Kind) -> Flush {
+        use crate::dav_client::{Precondition, WriteError};
+        let mut out = Flush::default();
+        while let Some(write) = self.queue.front().cloned() {
+            let (url, result) = match &write {
+                Write::Put { url, body, etag } => {
+                    let precondition = match etag {
+                        Some(tag) => Precondition::Match(tag.as_str()),
+                        None => Precondition::Create,
+                    };
+                    (url, dav_client::put_resource(send, url, auth, kind, body, precondition).map(|_| ()))
+                }
+                Write::Delete { url, etag } => (url, dav_client::delete_resource(send, url, auth, etag.as_deref())),
+            };
+            let url = url.clone();
+            self.queue.pop_front();
+            match result {
+                Ok(()) => out.written += 1,
+                Err(WriteError::Conflict) => out.conflicts.push(url),
+                Err(WriteError::Refused(status)) => out.refused.push((url, status)),
+                Err(WriteError::Transport(e)) => {
+                    // the failed write stays queued at the front, so the next flush retries it
+                    self.queue.push_front(write);
+                    out.stopped = Some(e);
+                    break;
+                }
+            }
+        }
+        out
+    }
+}
+
 /// The sync state of one app for one service.
 pub struct Sync {
     service: Service,
@@ -194,5 +277,61 @@ mod tests {
     #[test]
     fn the_unix_clock_is_after_2020() {
         assert!(unix_now() > 1_577_836_800);
+    }
+
+    fn put(url: &str, etag: Option<&str>) -> Write {
+        Write::Put { url: url.into(), body: "BEGIN:VCARD\r\nEND:VCARD".into(), etag: etag.map(str::to_string) }
+    }
+
+    #[test]
+    fn a_flush_sends_the_edits_in_order_and_empties_the_outbox() {
+        let mut ob = Outbox::new();
+        ob.push(put("https://dav.example.com/a.vcf", None));
+        ob.push(put("https://dav.example.com/b.vcf", Some("\"v1\"")));
+        ob.push(Write::Delete { url: "https://dav.example.com/c.vcf".into(), etag: Some("\"v2\"".into()) });
+        let mut seen: Vec<(String, String, Option<String>)> = Vec::new();
+        let mut send = |req: &URLRequest| -> Result<(u16, Option<String>), String> {
+            seen.push((req.method.clone(), req.url.clone(), req.headers.iter().find(|h| h.0 == "If-Match" || h.0 == "If-None-Match").map(|h| h.1.clone())));
+            Ok((200, None))
+        };
+        let out = ob.flush(&mut send, "Basic x", &Kind::CardDav);
+        assert_eq!(out, Flush { written: 3, ..Flush::default() });
+        assert!(ob.is_empty());
+        assert_eq!(
+            seen,
+            vec![
+                ("PUT".to_string(), "https://dav.example.com/a.vcf".to_string(), Some("*".to_string())),
+                ("PUT".to_string(), "https://dav.example.com/b.vcf".to_string(), Some("\"v1\"".to_string())),
+                ("DELETE".to_string(), "https://dav.example.com/c.vcf".to_string(), Some("\"v2\"".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_conflict_or_refusal_is_listed_and_the_rest_still_goes() {
+        let mut ob = Outbox::new();
+        ob.push(put("https://dav.example.com/a.vcf", Some("\"old\"")));
+        ob.push(put("https://dav.example.com/b.vcf", None));
+        ob.push(Write::Delete { url: "https://dav.example.com/c.vcf".into(), etag: None });
+        let mut answers = vec![412u16, 403, 204].into_iter();
+        let mut send = |_: &URLRequest| -> Result<(u16, Option<String>), String> { Ok((answers.next().unwrap(), None)) };
+        let out = ob.flush(&mut send, "Basic x", &Kind::CardDav);
+        assert_eq!(out.written, 1);
+        assert_eq!(out.conflicts, vec!["https://dav.example.com/a.vcf".to_string()]);
+        assert_eq!(out.refused, vec![("https://dav.example.com/b.vcf".to_string(), 403)]);
+        assert!(out.stopped.is_none());
+        assert!(ob.is_empty());
+    }
+
+    #[test]
+    fn a_transport_failure_keeps_the_failed_write_and_the_rest_queued() {
+        let mut ob = Outbox::new();
+        ob.push(put("https://dav.example.com/a.vcf", None));
+        ob.push(put("https://dav.example.com/b.vcf", None));
+        let mut send = |_: &URLRequest| Err::<(u16, Option<String>), String>("offline".into());
+        let out = ob.flush(&mut send, "Basic x", &Kind::CardDav);
+        assert_eq!(out, Flush { stopped: Some("offline".into()), ..Flush::default() });
+        assert_eq!(ob.len(), 2, "nothing was sent, so both edits wait for the next flush");
+        assert_eq!(ob.queue.front(), Some(&put("https://dav.example.com/a.vcf", None)));
     }
 }
