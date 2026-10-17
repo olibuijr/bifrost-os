@@ -200,6 +200,8 @@ pub enum Toggle {
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
+    /// Accessibility > Switch Control: the switch keys scan a panel of controls (`a11y.switch_control`)
+    SwitchControl,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1411,6 +1413,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("TOUCH")
                     .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
+                    Group::new(vec![Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl))])
+                        .header("SWITCH CONTROL")
+                        .footer("Press Space to move through a panel of controls and Enter to choose the highlighted one. Escape closes the panel."),
                 ],
             )
         }

@@ -931,6 +931,11 @@ fn run() -> std::io::Result<()> {
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
+                    // Switch Control: while it is on, the switch keys step the panel and are used up here; any other key goes on
+                    if let Some(fx) = shell.switch_control_key(code, down, t) {
+                        effects.extend(fx);
+                        continue;
+                    }
                     // session event taps see the key first and may drop or replace it
                     let Some(code) = shell.tap_key(code, down) else { continue };
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
