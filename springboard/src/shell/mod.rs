@@ -138,6 +138,7 @@ pub mod game_priority;
 pub mod pageedit;
 pub mod pages;
 mod login_items_page;
+pub mod extension_host;
 pub mod axmap;
 pub mod power_menu;
 #[cfg(feature = "desktop-wayland")]

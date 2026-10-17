@@ -10,6 +10,9 @@ impl Files {
         if let Some(i) = smart::folder_index(&self.path) {
             return vec![(self.smart.get(i).map_or("Smart Folder", |f| f.name.as_str()).into(), "magnifyingglass", self.path.clone())];
         }
+        if provider::is_path(&self.path) {
+            return provider::shared().path_items(&self.path);
+        }
         if self.in_recents() {
             return vec![("Recents".into(), "clock", self.path.clone())];
         }

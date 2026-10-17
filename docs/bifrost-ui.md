@@ -5400,3 +5400,28 @@ Four small engines that private reference frameworks stand for, built clean-room
 - **Command-line tools**: `ifconfig` lists IPv4 addresses, `ipconfig`, `leaks`, `smbutil`, `tiffutil`, `security` and `automator` are new
   (`springboard/cmd`), `pmset` gains `-g batt` and `lowpowermode`, `mdutil -i` hides a volume from Search, and `textutil` reads and writes
   docx and odt.
+
+
+### App extension host and file providers (2026-10-17)
+
+An installed app can provide an extension and another can use it. Wired path, first user: file providers in Files.
+
+- **Declare.** A package's `manifest.toml` carries `[[extension_point]]` (a point its app hosts, under the app's own id) and
+  `[[extension]] point = "..."` (an extension it provides; `bundle_id` defaults to the app id and must sit under it). The system
+  declares `is.bifrost.file-provider` (`bifrost_ui::extension_manifest::FILE_PROVIDER_POINT`). `extension_manifest::scan`
+  builds the `extension::Registry` from every installed manifest; Settings > Login Items & Extensions lists a provider
+  under FILE PROVIDER and its switch (`login.extensions.off`) hides it from the host.
+- **Host.** `springboard::shell::extension_host::Host` (shell crate, used by the shell process and by Files) launches the package's
+  own binary on the first call with `--extension <point>`, `BIFROST_EXTENSION_POINT` and `BIFROST_CONTROL=<socket>`, waits for
+  `extension.ping`, calls it with one JSON-RPC request per connection, and `reap` stops it after 30 s with no call in
+  flight (`extension.shutdown`, then kill). `bifrost_core::extension_process::ProcessTable` tracks the process and the calls in flight.
+- **Extension side.** In `main`, `if bifrost_app::extension_service::requested().is_some() { serve(&mut service) } else { run(app) }`.
+  `FileProviderService(provider)` answers `provider.enumerate` and `provider.fetch` for a `Provider` (`bifrost_ui::file_provider_wire`
+  has the wire format).
+- **Files.** Each enabled provider is a row under Locations (`apps/files/src/provider.rs`). Its items live at stand-in paths
+  `/.provider/<domain>/<names>`; a listing calls `provider.enumerate`, opening a file calls `provider.fetch` into
+  `~/.cache/bifrost/providers/...` (placeholders are downloaded on open) and then opens the local copy.
+- **Gaps.** No sandbox for the extension process (the sandbox does not bind the socket directory); no scene presentation
+  (`remote_view` and `ExtensionKit` host views); provider folders are read-only in Files and do not refresh on
+  `signalEnumerator`; no cloud mark on placeholders; the domain list is read once per Files launch; no provider app ships yet;
+  FileProviderUI actions are not hosted. Host tests only, not run on Midget.

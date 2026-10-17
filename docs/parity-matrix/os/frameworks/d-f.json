@@ -519,11 +519,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/extensionfoundation.json",
+   "bifrost": "springboard/ui/src/extension_manifest.rs, springboard/src/shell/extension_host.rs, springboard/sdk/src/extension_service.rs",
    "status": "partial",
-   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no shell wiring, no package loading, no XPC transport, no host-initiated extension launch, no share-sheet extensions; discovery is a registry over enabled extensions only. Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view).",
+   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no XPC transport (calls are JSON-RPC lines on the extension control socket), no sandbox for the extension process, no share-sheet extensions, no availability update stream.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "extension_manifest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::extension_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "extension_service::tests"
+    }
+   ],
+   "ready_note": "The shell crate reads the [[extension_point]] and [[extension]] tables of installed manifests into the registry (Host::installed, extension_manifest::scan, which also refuses a package that claims another namespace), launches the package binary in extension mode on the first call (--extension, BIFROST_EXTENSION_POINT, BIFROST_CONTROL), marks the process running in the ProcessTable after extension.ping, calls it over the control socket and stops it after 30 s idle. Files is the first caller (file providers). The extension runs unsandboxed and no scene is presented, so the row stays partial."
   },
   {
    "id": "path:/System/Library/Frameworks/ExtensionKit.framework",
@@ -542,7 +561,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/extensionkit.json",
    "status": "partial",
-   "note": "from SDK matrix extensionkit.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). ExtensionKit additionally needs the host view (EXHostViewController equivalent) to draw the remote scene inside the host window.",
+   "note": "from SDK matrix extensionkit.json Wave 14 (2026-10-17), not ready: the extension host now exists (shell::extension_host starts an extension in extension mode and calls it over its control socket), but it makes data calls only. ExtensionKit still needs the host view (EXHostViewController equivalent): the extension has no window in extension mode, and nothing presents its scene through remote_view inside the host window.",
    "rea": [],
    "method": "manual"
   },
@@ -653,11 +672,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/file-provider.json",
+   "bifrost": "springboard/ui/src/file_provider_wire.rs, springboard/apps/files/src/provider.rs, springboard/ui/src/extension_manifest.rs, springboard/src/shell/extension_host.rs, springboard/sdk/src/extension_service.rs",
    "status": "partial",
-   "note": "from SDK matrix file-provider.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). FileProvider additionally needs placeholder (dataless) files with on-demand hydration in Files and the document panel, which docs/file-portal-design.md does not plan yet.",
+   "note": "from SDK matrix file-provider.json Remaining: provider folders are read-only in Files, a change signal does not refresh the listing, placeholders carry no cloud mark, the domain list is read once per Files launch, and no provider app ships yet.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "extension_manifest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::extension_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "extension_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "file_provider_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "provider::tests"
+    }
+   ],
+   "ready_note": "Files lists each enabled file provider extension as a row under Locations, browses its items through provider.enumerate (the extension is started on demand by the extension host and stopped when idle) and, on open, downloads a placeholder with provider.fetch into ~/.cache/bifrost/providers and opens the local copy. Tests drive a real SDK provider service over a real socket (apps/files provider::tests). Writes, change signals and a shipped provider app are missing, so the row stays partial."
   },
   {
    "id": "path:/System/Library/Frameworks/FileProviderUI.framework",
@@ -676,7 +724,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/file-provider-ui.json",
    "status": "partial",
-   "note": "from SDK matrix file-provider-ui.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). FileProviderUI additionally needs the Files context menu (springboard/src/files/mod.rs) to list actions declared by providers and to show the action view over the browser.",
+   "note": "from SDK matrix file-provider-ui.json Wave 14 (2026-10-17), not ready: Files now hosts file providers (apps/files/src/provider.rs) but only lists and downloads. FileProviderUI additionally needs the Files context menu (springboard/apps/files/src/menus.rs) to list actions declared by providers and to show the action view over the browser.",
    "rea": [],
    "method": "manual"
   },

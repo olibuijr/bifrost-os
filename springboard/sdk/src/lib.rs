@@ -254,6 +254,7 @@ pub mod intent_resolve;
 pub mod donation;
 pub mod donations;
 pub mod extension;
+pub mod extension_service;
 pub mod quicksearch;
 pub mod indexed_entity;
 pub mod search_terms;

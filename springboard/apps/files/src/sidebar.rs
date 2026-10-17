@@ -68,7 +68,9 @@ impl Files {
         ];
         // removable volumes mounted now follow Trash, each with an Eject text
         let volumes = springboard::files::volumes::mounted().into_iter().map(|v| Place { label: v.name, symbol: "externaldrive", dot: None, path: v.mount, eject: Some(v.device) });
-        let locations: Vec<Place> = locations.into_iter().chain(volumes).collect();
+        // file provider domains (installed apps that serve one) follow the volumes
+        let providers = provider::shared().rows().into_iter().map(|(label, path)| Place { label, symbol: "externaldrive", dot: None, path, eject: None });
+        let locations: Vec<Place> = locations.into_iter().chain(volumes).chain(providers).collect();
         let tags = Tag::ALL.into_iter().map(|t| Place { label: t.label().into(), symbol: "tag", dot: Some(tag_colour(t)), path: tag_path(t), eject: None }).collect();
         vec![
             (None, vec![place("Recents", "clock", PathBuf::from(fs::RECENTS))]),

@@ -119,10 +119,17 @@ pub struct ManifestTables {
     pub extensions: Vec<(ExtensionKind, String)>,
 }
 
+/// The kind Settings groups an extension point under, for an `[[extension]]` table that names a `point` and no `kind`
+/// (the registry tables of `bifrost_ui::extension_manifest`).
+pub fn kind_for_point(point: &str) -> Option<ExtensionKind> {
+    (point == bifrost_ui::extension_manifest::FILE_PROVIDER_POINT).then_some(ExtensionKind::FileProvider)
+}
+
 #[derive(Default)]
 struct Table {
     header: String,
     kind: String,
+    point: String,
     name: String,
 }
 
@@ -131,7 +138,7 @@ impl Table {
     fn finish(self, out: &mut ManifestTables) {
         match self.header.as_str() {
             "[[extension]]" => {
-                if let Some(kind) = ExtensionKind::parse(&self.kind) {
+                if let Some(kind) = ExtensionKind::parse(&self.kind).or_else(|| kind_for_point(&self.point)) {
                     out.extensions.push((kind, self.name));
                 }
             }
@@ -156,6 +163,7 @@ pub fn parse_tables(text: &str) -> ManifestTables {
         let value = value.trim().trim_matches('"').to_string();
         match key.trim() {
             "kind" => table.kind = value,
+            "point" => table.point = value,
             "name" => table.name = value,
             _ => {}
         }
@@ -360,6 +368,14 @@ mod tests {
     fn an_extension_without_a_name_takes_its_kind_label() {
         let ext = from_manifests([("a.b", "Alpha", "[[extension]]\nkind = \"file-provider\"\n")]);
         assert_eq!(ext.extensions[0].name, "FILE PROVIDER");
+    }
+
+    #[test]
+    fn a_registry_table_with_a_known_point_is_listed_under_its_kind() {
+        let text = "[[extension]]\npoint = \"is.bifrost.file-provider\"\nname = \"Example Drive\"\n\n[[extension]]\npoint = \"com.example.other\"\n";
+        let ext = from_manifests([("com.example.drive", "Drive", text)]);
+        assert_eq!(ext.extensions.len(), 1, "an unknown point has no Settings group");
+        assert_eq!((ext.extensions[0].kind, ext.extensions[0].name.as_str()), (ExtensionKind::FileProvider, "Example Drive"));
     }
 
     #[test]
