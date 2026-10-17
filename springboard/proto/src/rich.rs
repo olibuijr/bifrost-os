@@ -123,6 +123,18 @@ pub const NOTIF_AUTH_CRITICAL: u8 = 16;
 /// `UNAuthorizationOptions.provisional`: granted at once, delivered quietly, no prompt
 pub const NOTIF_AUTH_PROVISIONAL: u8 = 64;
 
+/// `UNNotificationPresentationOptions` bits a `willPresent` answer may carry: badge 1, sound 2, list 8, banner 16.
+/// Other bits make the message invalid.
+pub const NOTIF_PRESENT_MASK: u8 = NOTIF_PRESENT_BADGE | NOTIF_PRESENT_SOUND | NOTIF_PRESENT_LIST | NOTIF_PRESENT_BANNER;
+/// `UNNotificationPresentationOptions.badge`
+pub const NOTIF_PRESENT_BADGE: u8 = 1;
+/// `UNNotificationPresentationOptions.sound`
+pub const NOTIF_PRESENT_SOUND: u8 = 2;
+/// `UNNotificationPresentationOptions.list` (Notification Center)
+pub const NOTIF_PRESENT_LIST: u8 = 8;
+/// `UNNotificationPresentationOptions.banner`
+pub const NOTIF_PRESENT_BANNER: u8 = 16;
+
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NotifSettings {
@@ -273,6 +285,25 @@ fn fit_body<'a>(body: &'a str, instead: &'a str) -> &'a str {
 }
 pub const MAX_DIST_INFO: usize = 32;
 pub const MAX_DIST_VALUE: usize = 1024;
+
+/// The `userInfo` pairs of a request, bounded like the request's own (`put_request`).
+fn put_user_info(b: &mut Vec<u8>, info: &[(String, String)]) {
+    let n = info.len().min(MAX_NOTIF_USER_INFO);
+    u32_(b, n as u32);
+    for (k, v) in &info[..n] {
+        put(b, k, MAX_NOTIF_ID);
+        put(b, v, MAX_NOTIF_USER_INFO_VALUE);
+    }
+}
+
+fn get_user_info(r: &mut Reader) -> Result<Vec<(String, String)>, DecodeError> {
+    let n = count(r, MAX_NOTIF_USER_INFO)?;
+    let mut info = Vec::with_capacity(n);
+    for _ in 0..n {
+        info.push((get(r, MAX_NOTIF_ID)?, get(r, MAX_NOTIF_USER_INFO_VALUE)?));
+    }
+    Ok(info)
+}
 
 fn put_dist(b: &mut Vec<u8>, name: &str, info: &[(String, String)]) {
     put(b, name, MAX_NOTIF_ID);
@@ -517,6 +548,7 @@ pub(crate) mod tag {
     pub const NOTIFICATION_LIST: u32 = 52;
     pub const NOTIFICATION_SETTINGS: u32 = 56;
     pub const NOTIFICATION_AUTHORIZED: u32 = 57;
+    pub const NOTIFICATION_WILL_PRESENT: u32 = 58;
     pub const SHARE_DONE: u32 = 53;
     pub const DRAG_DEST: u32 = 54;
     pub const DRAG_ENDED: u32 = 55;
@@ -527,6 +559,8 @@ pub(crate) mod tag {
     pub const NOTIFY_QUERY: u32 = 0x143;
     pub const NOTIFY_SETTINGS: u32 = 0x14a;
     pub const NOTIFY_AUTHORIZE: u32 = 0x14b;
+    pub const NOTIFY_PRESENT_REPLY: u32 = 0x14c;
+    pub const NOTIFY_PRESENT_DELEGATE: u32 = 0x14d;
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -543,13 +577,14 @@ pub(crate) mod tag {
 /// Encodes the variants of `ToApp` that belong to this module (anything else writes nothing).
 pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
     match m {
-        ToApp::NotificationAction { id, action, text, thread, category } => {
+        ToApp::NotificationAction { id, action, text, thread, category, user_info } => {
             u32_(b, tag::NOTIFICATION_ACTION);
             put(b, id, MAX_NOTIF_ID);
             put(b, action, MAX_NOTIF_ID);
             put(b, text, MAX_NOTIF_TEXT * 4);
             put(b, thread, MAX_NOTIF_ID);
             put(b, category, MAX_NOTIF_ID);
+            put_user_info(b, user_info);
         }
         ToApp::NotificationStatus { request, status } => {
             u32_(b, tag::NOTIFICATION_STATUS);
@@ -576,6 +611,15 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             u32_(b, tag::SHARE_DONE);
             u32_(b, *request);
             put(b, target, MAX_NOTIF_ID);
+        }
+        ToApp::NotificationWillPresent { token, id, thread, category, title, body } => {
+            u32_(b, tag::NOTIFICATION_WILL_PRESENT);
+            u32_(b, *token);
+            put(b, id, MAX_NOTIF_ID);
+            put(b, thread, MAX_NOTIF_ID);
+            put(b, category, MAX_NOTIF_ID);
+            put(b, title, MAX_NOTIF_TEXT);
+            put(b, body, MAX_NOTIF_TEXT);
         }
         ToApp::DistNotify { name, user_info } => {
             u32_(b, tag::DIST_NOTIFY);
@@ -620,11 +664,20 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             text: get(r, MAX_NOTIF_TEXT * 4)?,
             thread: get(r, MAX_NOTIF_ID)?,
             category: get(r, MAX_NOTIF_ID)?,
+            user_info: get_user_info(r)?,
         },
         tag::NOTIFICATION_STATUS => ToApp::NotificationStatus { request: r.u32()?, status: NotifStatus::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_LIST => ToApp::NotificationList { request: r.u32()?, delivered: flag(r)?, ids: get_ids(r)? },
         tag::NOTIFICATION_SETTINGS => ToApp::NotificationSettings { request: r.u32()?, settings: NotifSettings::from_bits(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_AUTHORIZED => ToApp::NotificationAuthorized { request: r.u32()?, granted: flag(r)? },
+        tag::NOTIFICATION_WILL_PRESENT => ToApp::NotificationWillPresent {
+            token: r.u32()?,
+            id: get(r, MAX_NOTIF_ID)?,
+            thread: get(r, MAX_NOTIF_ID)?,
+            category: get(r, MAX_NOTIF_ID)?,
+            title: get(r, MAX_NOTIF_TEXT)?,
+            body: get(r, MAX_NOTIF_TEXT)?,
+        },
         tag::DIST_NOTIFY => {
             let (name, user_info) = get_dist(r)?;
             ToApp::DistNotify { name, user_info }
@@ -687,6 +740,15 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
         ToShell::NotifyAuthorize { request, options } => {
             u32_(b, tag::NOTIFY_AUTHORIZE);
             u32_(b, *request);
+            b.push(*options);
+        }
+        ToShell::NotifyPresentDelegate { enabled } => {
+            u32_(b, tag::NOTIFY_PRESENT_DELEGATE);
+            b.push(*enabled as u8);
+        }
+        ToShell::NotifyPresentReply { token, options } => {
+            u32_(b, tag::NOTIFY_PRESENT_REPLY);
+            u32_(b, *token);
             b.push(*options);
         }
         ToShell::DistPost { name, user_info } => {
@@ -754,6 +816,14 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
                 return Err(DecodeError::BadValue);
             }
             ToShell::NotifyAuthorize { request, options }
+        }
+        tag::NOTIFY_PRESENT_DELEGATE => ToShell::NotifyPresentDelegate { enabled: flag(r)? },
+        tag::NOTIFY_PRESENT_REPLY => {
+            let (token, options) = (r.u32()?, r.u8()?);
+            if options & !NOTIF_PRESENT_MASK != 0 {
+                return Err(DecodeError::BadValue);
+            }
+            ToShell::NotifyPresentReply { token, options }
         }
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
@@ -833,7 +903,8 @@ mod tests {
         shell_rt(ToShell::NotifyRemove { delivered: true, ids: vec!["a".into(), "b".into()] });
         shell_rt(ToShell::NotifyRemove { delivered: false, ids: vec![] });
         shell_rt(ToShell::NotifyQuery { request: 9, delivered: true });
-        app_rt(ToApp::NotificationAction { id: "n1".into(), action: "reply".into(), text: "ok".into(), thread: "t".into(), category: "MESSAGE".into() });
+        app_rt(ToApp::NotificationAction { id: "n1".into(), action: "reply".into(), text: "ok".into(), thread: "t".into(), category: "MESSAGE".into(), user_info: vec![("room".into(), "7 ü".into())] });
+        app_rt(ToApp::NotificationAction { id: "n2".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] });
         app_rt(ToApp::NotificationStatus { request: 4, status: NotifStatus::Param });
         app_rt(ToApp::NotificationList { request: 9, delivered: false, ids: vec!["x".into()] });
     }
@@ -858,6 +929,37 @@ mod tests {
         let last = bytes.len() - 1;
         bytes[last] = 0x20;
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_will_present_round_trips() {
+        app_rt(ToApp::NotificationWillPresent {
+            token: 7,
+            id: "note-1".into(),
+            thread: "t".into(),
+            category: "chat".into(),
+            title: "Hi".into(),
+            body: "There".into(),
+        });
+        app_rt(ToApp::NotificationWillPresent { token: 0, id: String::new(), thread: String::new(), category: String::new(), title: String::new(), body: String::new() });
+        shell_rt(ToShell::NotifyPresentDelegate { enabled: true });
+        shell_rt(ToShell::NotifyPresentDelegate { enabled: false });
+        for options in [0u8, 1, 2, 8, 16, NOTIF_PRESENT_MASK] {
+            shell_rt(ToShell::NotifyPresentReply { token: 9, options });
+        }
+    }
+
+    #[test]
+    fn notification_will_present_rejects_unknown_option_bits() {
+        let mut bytes = ToShell::NotifyPresentReply { token: 1, options: 0 }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 0x20;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        let mut bytes = ToShell::NotifyPresentDelegate { enabled: true }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 2;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        assert_eq!(NOTIF_PRESENT_MASK, 27);
     }
 
     #[test]

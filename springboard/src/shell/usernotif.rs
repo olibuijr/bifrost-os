@@ -5,14 +5,50 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
 use std::path::PathBuf;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Pending requests one app may hold (`UNUserNotificationCenter` allows 64 local notifications).
 pub const MAX_PENDING: usize = 64;
 /// Answers kept for an app that is not running.
 const MAX_QUEUED: usize = 32;
+/// How long a frontmost app has to answer `willPresent` (shell clock, ms). No answer hides the notification, which is
+/// what an app without the delegate gets.
+pub const PRESENT_TIMEOUT_MS: f64 = 1000.0;
+
+/// A notification waiting for the `willPresent` answer of the frontmost app that it arrived for.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Presenting {
+    pub token: u32,
+    pub app: String,
+    pub slot: u8,
+    pub req: NotifRequest,
+    /// store entries of an earlier delivery with the same identifier, replaced once this one shows
+    pub replaced: Vec<u64>,
+    /// shell clock (ms) at which the answer is given up on
+    pub deadline: f64,
+}
+
+/// The `UNNotificationPresentationOptions` an app gets while it is in front: what it asked for, cut to what the grant
+/// and the mute state allow (`foreground_presentation` in the SDK model). `grant` None means the app was never decided.
+pub fn presentation_plan(asked: u8, grant: Option<u8>, muted: bool) -> u8 {
+    if grant == Some(0) || muted {
+        return 0;
+    }
+    let bits = grant.unwrap_or(NOTIF_AUTH_ALERT | NOTIF_AUTH_SOUND | NOTIF_AUTH_BADGE);
+    let mut out = 0;
+    if bits & NOTIF_AUTH_ALERT != 0 {
+        out |= asked & (NOTIF_PRESENT_BANNER | NOTIF_PRESENT_LIST);
+    }
+    if bits & NOTIF_AUTH_SOUND != 0 {
+        out |= asked & NOTIF_PRESENT_SOUND;
+    }
+    if bits & NOTIF_AUTH_BADGE != 0 {
+        out |= asked & NOTIF_PRESENT_BADGE;
+    }
+    out
+}
 
 #[derive(Clone, Debug, PartialEq)]
 struct Pending {
@@ -53,6 +89,11 @@ pub struct Registry {
     /// What each app was granted, as `NOTIF_AUTH_*` bits (provisional included); 0 is a denial. Saved to `granted_path`.
     granted: HashMap<String, u8>,
     granted_path: Option<PathBuf>,
+    /// apps that opted in to `willPresent` (`NotifyPresentDelegate`)
+    presenters: HashSet<String>,
+    /// notifications that wait for their app's `willPresent` answer
+    presenting: Vec<Presenting>,
+    next_token: u32,
 }
 
 impl Registry {
@@ -208,7 +249,7 @@ impl Registry {
                 String::new()
             }
         };
-        Some((d.app.clone(), ToApp::NotificationAction { id: d.req.id.clone(), action: action.to_string(), text, thread: d.req.thread.clone(), category: d.req.category.clone() }))
+        Some((d.app.clone(), ToApp::NotificationAction { id: d.req.id.clone(), action: action.to_string(), text, thread: d.req.thread.clone(), category: d.req.category.clone(), user_info: d.req.user_info.clone() }))
     }
 
     /// A request waits until the person answers the first-time alert of its app (`take_held` returns it then).
@@ -237,6 +278,38 @@ impl Registry {
     /// What the app was granted (`NOTIF_AUTH_*` bits), or None when it was never decided by `requestAuthorization`.
     pub fn granted(&self, app: &str) -> Option<u8> {
         self.granted.get(app).copied()
+    }
+
+    /// `NotifyPresentDelegate`: the app is asked (or not) how to present a notification that arrives while it is in front.
+    pub fn set_presenter(&mut self, app: &str, on: bool) {
+        if on {
+            self.presenters.insert(app.to_string());
+        } else {
+            self.presenters.remove(app);
+        }
+    }
+
+    pub fn presents(&self, app: &str) -> bool {
+        self.presenters.contains(app)
+    }
+
+    /// Holds a notification until its app answers `willPresent`; returns the token the app must answer with.
+    pub fn hold_presentation(&mut self, app: &str, slot: u8, req: NotifRequest, replaced: Vec<u64>, deadline: f64) -> u32 {
+        self.next_token = self.next_token.wrapping_add(1).max(1);
+        let token = self.next_token;
+        self.presenting.push(Presenting { token, app: app.to_string(), slot, req, replaced, deadline });
+        token
+    }
+
+    /// The held notification of `token`, once; None for an unknown or expired token.
+    pub fn take_presentation(&mut self, token: u32) -> Option<Presenting> {
+        let at = self.presenting.iter().position(|p| p.token == token)?;
+        Some(self.presenting.remove(at))
+    }
+
+    /// Drops the held notifications whose app did not answer in time: they are not shown.
+    pub fn expire_presentations(&mut self, now: f64) {
+        self.presenting.retain(|p| p.deadline > now);
     }
 
     /// Records what the app was granted and saves it.
@@ -358,6 +431,8 @@ impl super::Shell {
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
             }
             ToShell::NotifyAuthorize { request, options } => self.usernotif_authorize(slot, &app, &name, request, options, permitted),
+            ToShell::NotifyPresentDelegate { enabled } => self.usernotif.set_presenter(&app, enabled),
+            ToShell::NotifyPresentReply { token, options } => self.usernotif_presented(token, options, t),
             ToShell::NotifySettings { request } => {
                 let muted = self.notify.store().is_muted(super::AppId::External(slot));
                 let mut settings = settings_for(permitted, muted, self.dnd());
@@ -487,20 +562,52 @@ impl super::Shell {
         }
     }
 
+    /// Delivers a request. An app in front that asked for `willPresent` is asked first; the notification shows when it
+    /// answers (`usernotif_presented`), or never when it does not answer in time.
     fn usernotif_deliver(&mut self, slot: u8, app: &str, req: NotifRequest, replaced: Vec<u64>, t: f64) {
+        let in_front = self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app.parent()) == Some(super::AppId::External(slot));
+        if in_front && self.usernotif.presents(app) {
+            let (title, body) = display(&req);
+            let (id, thread, category) = (req.id.clone(), req.thread.clone(), req.category.clone());
+            let token = self.usernotif.hold_presentation(app, slot, req, replaced, t + PRESENT_TIMEOUT_MS);
+            self.ext_send(slot as usize, &ToApp::NotificationWillPresent { token, id, thread, category, title, body });
+            return;
+        }
+        self.usernotif_show(slot, app, req, replaced, t, None);
+    }
+
+    /// The app in front answered `willPresent` with `options`: shows the notification as it asked, cut to the grant.
+    fn usernotif_presented(&mut self, token: u32, options: u8, t: f64) {
+        let Some(p) = self.usernotif.take_presentation(token) else { return };
+        let muted = self.notify.store().is_muted(super::AppId::External(p.slot));
+        let plan = presentation_plan(options, self.usernotif.granted(&p.app), muted);
+        if plan != 0 {
+            self.usernotif_show(p.slot, &p.app, p.req, p.replaced, t, Some(plan));
+        }
+    }
+
+    /// Shows a delivered request. `presented` is the `willPresent` plan of a request that arrived in front; None applies
+    /// the grant and mute state alone.
+    fn usernotif_show(&mut self, slot: u8, app: &str, req: NotifRequest, replaced: Vec<u64>, t: f64, presented: Option<u8>) {
         for id in replaced {
             self.notify_remove(id);
         }
         let (title, body) = display(&req);
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
-        let (banner, sound) = delivery_plan(self.usernotif.granted(app), self.notify.store().is_muted(super::AppId::External(slot)), req.sound_kind);
+        let (banner, sound, badge_allowed) = match presented {
+            None => {
+                let (banner, sound) = delivery_plan(self.usernotif.granted(app), self.notify.store().is_muted(super::AppId::External(slot)), req.sound_kind);
+                (banner, sound, self.usernotif.granted(app).is_none_or(|bits| bits & NOTIF_AUTH_BADGE != 0))
+            }
+            Some(plan) => (plan & NOTIF_PRESENT_BANNER != 0, plan & NOTIF_PRESENT_SOUND != 0 && req.sound_kind != 0, plan & NOTIF_PRESENT_BADGE != 0),
+        };
         let id = self.notify_id_banner(n, banner);
         if sound {
             let name = if req.sound_kind == 2 { req.sound_name.as_str() } else { super::options::ALERT_SOUNDS[0] };
             super::apphost::queue_request_sound(name);
         }
-        if let Some(count) = req.badge.filter(|_| self.usernotif.granted(app).is_none_or(|bits| bits & NOTIF_AUTH_BADGE != 0)) {
+        if let Some(count) = req.badge.filter(|_| badge_allowed) {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
                 h.badge = if count == 0 { String::new() } else { super::apphost::clean_badge(&count.to_string()) };
                 self.dirty = true;
@@ -511,6 +618,7 @@ impl super::Shell {
 
     /// Delivers the requests whose trigger fired; called every tick.
     pub(super) fn usernotif_tick(&mut self, t: f64) {
+        self.usernotif.expire_presentations(t);
         if self.usernotif.next_due().is_some_and(|due| due <= t) {
             for (app, req) in self.usernotif.due(t) {
                 self.usernotif_fire(&app, req, t);
@@ -785,7 +893,11 @@ mod tests {
         assert_eq!(r.actions(5).iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["archive", "reply", "delete"]);
         let (app, msg) = r.respond(5, "reply", "on my way").unwrap();
         assert_eq!(app, APP);
-        assert_eq!(msg, ToApp::NotificationAction { id: "m1".into(), action: "reply".into(), text: "on my way".into(), thread: "room".into(), category: "MSG".into() });
+        assert_eq!(msg, ToApp::NotificationAction { id: "m1".into(), action: "reply".into(), text: "on my way".into(), thread: "room".into(), category: "MSG".into(), user_info: vec![] });
+        // the request's userInfo comes back with the response
+        r.record_delivery(APP, NotifRequest { category: "MSG".into(), user_info: vec![("room".into(), "7".into())], ..req("m2") }, 6);
+        let ToApp::NotificationAction { user_info, .. } = r.respond(6, "archive", "").unwrap().1 else { panic!() };
+        assert_eq!(user_info, vec![("room".to_string(), "7".to_string())]);
         // text is only passed to a text-input action
         let ToApp::NotificationAction { text, .. } = r.respond(5, "archive", "ignored").unwrap().1 else { panic!() };
         assert_eq!(text, "");
@@ -837,6 +949,36 @@ mod tests {
         r.hold(APP, 2, 1, req("gone"));
         r.forget_app(APP);
         assert!(r.take_held(APP).is_empty());
+    }
+
+    #[test]
+    fn presentation_is_cut_to_what_the_grant_and_mute_allow() {
+        use bifrost_proto::{NOTIF_PRESENT_BADGE as BADGE, NOTIF_PRESENT_BANNER as BANNER, NOTIF_PRESENT_LIST as LIST, NOTIF_PRESENT_SOUND as SOUND};
+        let all = BANNER | LIST | SOUND | BADGE;
+        assert_eq!(presentation_plan(all, Some(NOTIF_AUTH_ALERT | NOTIF_AUTH_SOUND | NOTIF_AUTH_BADGE), false), all);
+        assert_eq!(presentation_plan(all, Some(NOTIF_AUTH_SOUND | NOTIF_AUTH_BADGE), false), SOUND | BADGE, "no alert grant, no banner or list");
+        assert_eq!(presentation_plan(all, Some(0), false), 0, "a denied app shows nothing");
+        assert_eq!(presentation_plan(all, Some(NOTIF_AUTH_ALERT), true), 0, "a muted app shows nothing");
+        assert_eq!(presentation_plan(0, Some(NOTIF_AUTH_ALERT), false), 0, "an empty answer hides it");
+        assert_eq!(presentation_plan(BANNER, None, false), BANNER, "a never-decided app is not cut");
+    }
+
+    #[test]
+    fn a_held_presentation_is_taken_once_and_expires_unanswered() {
+        let mut r = Registry::default();
+        assert!(!r.presents("chat"));
+        r.set_presenter("chat", true);
+        assert!(r.presents("chat"));
+        let a = r.hold_presentation("chat", 2, req("a"), vec![5], 1500.0);
+        let b = r.hold_presentation("chat", 2, req("b"), vec![], 1800.0);
+        assert_ne!(a, b, "each hold gets its own token");
+        let got = r.take_presentation(a).expect("the held notification");
+        assert_eq!((got.app.as_str(), got.slot, got.req.id.as_str(), got.replaced.clone()), ("chat", 2, "a", vec![5]));
+        assert!(r.take_presentation(a).is_none(), "an answer is taken once");
+        r.expire_presentations(1900.0);
+        assert!(r.take_presentation(b).is_none(), "no answer in time hides it");
+        r.set_presenter("chat", false);
+        assert!(!r.presents("chat"));
     }
 
     #[test]

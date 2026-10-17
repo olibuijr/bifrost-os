@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -32,6 +32,8 @@ pub struct Response {
     pub text: String,
     pub thread: String,
     pub category: String,
+    /// the request's `userInfo` (`UNNotificationContent.userInfo`), as the app set it
+    pub user_info: Vec<(String, String)>,
 }
 
 /// What `App::notification` is called with.
@@ -39,6 +41,10 @@ pub struct Response {
 pub enum Event {
     /// the user acted on a notification (`userNotificationCenter(_:didReceive:)`)
     Response(Response),
+    /// a notification of this app arrives while the app is in front, and the app opted in with
+    /// [`set_presentation_delegate`]. Answer with [`will_present`] using this `token`; without an answer in time the
+    /// notification is not shown.
+    WillPresent { token: u32, id: String, thread: String, category: String, title: String, body: String },
     /// the result of an [`add`]
     Status { request: u32, status: NotifStatus },
     /// the answer to [`delivered`] or [`pending`]
@@ -130,8 +136,8 @@ impl Request {
 }
 
 impl Event {
-    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String) -> Event {
-        Event::Response(Response { id, action, text, thread, category })
+    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)>) -> Event {
+        Event::Response(Response { id, action, text, thread, category, user_info })
     }
 }
 
@@ -188,6 +194,18 @@ pub fn request_authorization(ctx: &Ctx, options: AuthorizationOptions) -> u32 {
     let request = ctx.next_request();
     ctx.send_to_shell(ToShell::NotifyAuthorize { request, options: options.0 & NOTIF_AUTH_MASK });
     request
+}
+
+/// `UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:)`: opts the app in (`true`) or out. Only
+/// an app that opted in is asked, and only for notifications that arrive while it is in front.
+pub fn set_presentation_delegate(ctx: &Ctx, enabled: bool) {
+    ctx.send_to_shell(ToShell::NotifyPresentDelegate { enabled });
+}
+
+/// The completion handler of `willPresent`: `options` says how the notification shows while the app is in front.
+/// [`PresentationOptions::NONE`] hides it. Bits the shell does not know are dropped.
+pub fn will_present(ctx: &Ctx, token: u32, options: PresentationOptions) {
+    ctx.send_to_shell(ToShell::NotifyPresentReply { token, options: options.0 & NOTIF_PRESENT_MASK });
 }
 
 #[cfg(test)]
@@ -280,10 +298,11 @@ mod tests {
 
     #[test]
     fn response_event_carries_every_field() {
-        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into());
+        let info = vec![("room".to_string(), "7".to_string())];
+        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into(), info.clone());
         assert_eq!(
             e,
-            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into() })
+            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into(), user_info: info })
         );
         assert_ne!(NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION);
     }

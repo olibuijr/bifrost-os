@@ -25,7 +25,7 @@ pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePrio
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
-pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_MASK, NOTIF_PRESENT_SOUND};
 
 pub const MAX_PACKET: usize = 16 * 1024;
 /// The most user info pairs a quick action may carry on the wire.
@@ -509,7 +509,8 @@ pub enum ToApp {
     /// The user acted on a notification the app posted (`userNotificationCenter(_:didReceive:)`). `action` is the action
     /// identifier, `NOTIF_DEFAULT_ACTION` for opening it or `NOTIF_DISMISS_ACTION`; `text` is the reply of a text-input
     /// action. Delivered on start if the app was not running.
-    NotificationAction { id: String, action: String, text: String, thread: String, category: String },
+    /// `userInfo` of the request is returned with the response, as `UNNotificationResponse.notification.request.content`.
+    NotificationAction { id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)> },
     /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
     ContinueActivity { activity_type: String, unique_id: String, domain: String },
     /// The shell asks an app that declares `index_extension = true` to index all its content again (the
@@ -529,6 +530,10 @@ pub enum ToApp {
     NotificationSettings { request: u32, settings: NotifSettings },
     /// The answer to `ToShell::NotifyAuthorize` (`requestAuthorization(options:)`'s `granted`). Tag 57.
     NotificationAuthorized { request: u32, granted: bool },
+    /// A notification of this app arrives while the app is frontmost and the app opted in with
+    /// `ToShell::NotifyPresentDelegate`. The app answers `ToShell::NotifyPresentReply { token, .. }`; with no answer
+    /// within the shell's timeout the notification is not shown (`willPresent` not implemented). Tag 58.
+    NotificationWillPresent { token: u32, id: String, thread: String, category: String, title: String, body: String },
     /// The user picked a target of `ToShell::Share`; `target` is the app id, "copy" for Copy, empty when dismissed.
     ShareDone { request: u32, target: String },
     /// The answer to `ToShell::LoginItem` (`SMAppService.status`). Tag 0x1b0.
@@ -848,6 +853,11 @@ pub enum ToShell {
     /// `UNUserNotificationCenter.requestAuthorization(options:)`: `options` is the `NOTIF_AUTH_*` bit set. Answered with
     /// `NotificationAuthorized`: at once when the app was asked before, otherwise after the first-time alert. Tag 0x14b.
     NotifyAuthorize { request: u32, options: u8 },
+    /// Opts the app in to `ToApp::NotificationWillPresent` (`enabled`) or out (`false`). Tag 0x14d.
+    NotifyPresentDelegate { enabled: bool },
+    /// The answer to `ToApp::NotificationWillPresent`: `options` is the `NOTIF_PRESENT_*` bit set, empty to hide it.
+    /// Tag 0x14c.
+    NotifyPresentReply { token: u32, options: u8 },
     /// `NativeSharingServicePicker.show(relativeTo:)`: `anchor` is in window points. Answered with `ShareDone`.
     Share { request: u32, items: Vec<Payload>, anchor: UiRect },
     /// `SMAppService.mainApp` register, unregister or status; always answered with `LoginItemStatus`. Tag 0x1b0.
@@ -1459,7 +1469,7 @@ impl ToApp {
             m @ (ToApp::GuidedAccessState { .. } | ToApp::GuidedRestriction { .. }) => guided::encode_app(m, &mut b),
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -1820,7 +1830,7 @@ impl ToShell {
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);
