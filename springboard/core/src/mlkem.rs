@@ -348,7 +348,7 @@ fn decompress(y: u16, d: usize) -> u16 {
 }
 
 /// FIPS 203 section 7.2 modulus check: every 12-bit coefficient of the encapsulation key must be below q.
-fn check_encapsulation_key(p: Params, ek: &[u8]) -> Result<(), Error> {
+pub fn check_encapsulation_key(p: Params, ek: &[u8]) -> Result<(), Error> {
     if ek.len() != p.encapsulation_key_len() {
         return Err(Error::EncapsulationKeyLength);
     }
