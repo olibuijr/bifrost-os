@@ -411,6 +411,7 @@ pub mod http_auth;
 pub mod http_digest;
 pub mod dav_client;
 pub mod dav_sync;
+pub mod exchange_notes;
 pub mod host_addressing;
 pub mod ftp;
 pub mod dns_service;
