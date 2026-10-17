@@ -45,6 +45,7 @@ pub mod keychain_groups;
 pub mod search_ranking;
 pub mod local_auth;
 pub mod permission_kit;
+pub mod picture_in_picture;
 pub mod accounts_access;
 pub mod privacy_permissions;
 pub mod contacts;
@@ -141,6 +142,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(search_ranking::SearchRanking::default()),
         Box::new(privacy_permissions::PrivacyPermissions),
         Box::new(permission_kit::PermissionKit),
+        Box::new(picture_in_picture::PictureInPicture::default()),
         Box::new(local_auth::LocalAuth::default()),
         Box::new(accounts_access::AccountsAccess::default()),
         Box::new(contacts::Contacts),

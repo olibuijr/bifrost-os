@@ -226,6 +226,7 @@ pub enum Toggle {
     UniversalClipboard,
     PipAuto,
     BgRefresh,
+    SuspendBackground,
     FourFinger,
     CornerSwipe,
     /// Settings > Spotlight: a kind of result Search lists, switched on or off
@@ -1091,6 +1092,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             {
                 let mut groups = vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
                     .footer("Allow apps to refresh their content in the background. Turning off apps may help preserve battery life. Refresh is paused in Low Power Mode.")];
+                groups.push(Group::new(vec![Item::new("Suspend Background Apps").switch(o.suspend_background, Action::Toggle(Toggle::SuspendBackground))])
+                    .footer("Stop apps that nothing shows after a short wait, and resume them when you return to them. A stopped app does no work, so it also stops playing audio in the background."));
                 groups.extend(super::login_items_page::refresh_group(m.ext));
                 groups
             },

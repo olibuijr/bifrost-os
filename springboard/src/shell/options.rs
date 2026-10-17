@@ -198,15 +198,17 @@ pub struct Options {
     pub spotlight: super::spotlight_scope::Scope,
     /// Settings > Backup: the disk backups go to (its mount point); empty keeps them in the data folder
     pub backup_destination: String,
+    /// Suspend Background Apps: stop an app nothing shows (SIGSTOP) after the grace period, resume it when seen again
+    pub suspend_background: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false, spotlight: Default::default(), backup_destination: String::new() }
+        Options {auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false, spotlight: Default::default(), backup_destination: String::new(), suspend_background: false}
     }
 }
 
-const KEYS: [&str; 59] =["auto_lock_ms","system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "universal_clipboard", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds", "game_mode", "game_mode_notice_shown", "backup_destination"];
+const KEYS: [&str; 60] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "universal_clipboard", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds", "game_mode", "game_mode_notice_shown", "backup_destination", "suspend_background"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -279,6 +281,7 @@ impl Options {
                 super::spotlight_scope::install(scope.clone());
                 scope
             },
+            suspend_background: flag("suspend_background", d.suspend_background),
             lock_grace_s: p.get_parsed("lock_grace_seconds").filter(|s: &u32| REQUIRE_AFTER.iter().any(|(_, v)| v == s)).unwrap_or(d.lock_grace_s),
         }
     }
@@ -346,6 +349,7 @@ impl Options {
             self.game_mode.key().into(),
             flag(self.game_notice_shown).into(),
             self.backup_destination.clone(),
+            flag(self.suspend_background).into(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -427,7 +431,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, clock_date: false, clock_day: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, universal_clipboard: true, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, double_click_ms: 700, mouse_accel: false, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101, lock_grace_s: 300, game_mode: GamePref::Off, game_notice_shown: true };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, clock_date: false, clock_day: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, universal_clipboard: true, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, double_click_ms: 700, mouse_accel: false, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101, lock_grace_s: 300, game_mode: GamePref::Off, game_notice_shown: true, suspend_background: true };
         o.save(&mut p);
         assert_eq!(p.get("key_repeat_delay_ms"), Some("1200"));
         assert_eq!(p.get("key_repeat_rate"), Some("5"));

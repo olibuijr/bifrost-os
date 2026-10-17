@@ -2967,6 +2967,7 @@ impl Settings {
             Toggle::UniversalClipboard => flip(&mut self.opts.universal_clipboard),
             Toggle::PipAuto => flip(&mut self.opts.pip_auto),
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
+            Toggle::SuspendBackground => flip(&mut self.opts.suspend_background),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),
             Toggle::CornerSwipe => flip(&mut self.opts.corner_swipe),
             Toggle::Permission(media, index) => match super::apphost::installed().get(index) {
