@@ -4,14 +4,13 @@
 
 use bifrost_proto::svc;
 use bifrost_proto::svc::update::{Cmd, Evt, Offer, Phase, State};
+use springboard::install_log;
 use springboard::shell::ota::{self, Ota};
 use springboard::shell::update::{self, State as UpdState};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-mod install_log;
 
 const ID: &str = "is.olibuijr.update";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
