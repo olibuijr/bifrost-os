@@ -255,6 +255,31 @@ pub fn accordion_fold(from: &Image, to: &Image, time: f32, folds: u32) -> Option
     }))
 }
 
+/// A fixed threshold in 0..1 for the pixel (x, y), drawn from a hash of its position and `seed`.
+fn pixel_threshold(x: usize, y: usize, seed: u32) -> f32 {
+    let mut h = seed ^ (x as u32).wrapping_mul(0x27d4_eb2d) ^ (y as u32).wrapping_mul(0x1656_67b1);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7feb_352d);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x846c_a68b);
+    h ^= h >> 16;
+    h as f32 / 4_294_967_296.0
+}
+
+/// `CIDisintegrateWithMaskTransition`: the picture breaks into pieces that vanish at random. Each
+/// pixel has a fixed threshold in 0..1 and shows `to` once `time` passes it. The reference reads the
+/// threshold from a mask image; this model draws it from a hash of the pixel position and `seed`, so
+/// the same seed always gives the same pattern. Time 0 is `from` and time 1 is `to`. `None` when the
+/// sizes differ.
+pub fn disintegrate(from: &Image, to: &Image, time: f32, seed: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    let t = time_of(time);
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        if t >= 1.0 || (t > 0.0 && pixel_threshold(x, y, seed) < t) { b } else { a }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,6 +358,17 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn disintegrate_is_seeded_and_breaks_up_at_mid_time() {
+        let (a, b) = (flat(16, 16, BLACK), flat(16, 16, GREY));
+        assert_eq!(disintegrate(&a, &b, 0.0, 9).unwrap(), a);
+        assert_eq!(disintegrate(&a, &b, 1.0, 9).unwrap(), b);
+        let mid = disintegrate(&a, &b, 0.5, 9).unwrap();
+        assert_eq!(mid, disintegrate(&a, &b, 0.5, 9).unwrap(), "the same seed gives the same pattern");
+        let shown = mid.px.iter().filter(|&&p| p == GREY).count();
+        assert!(shown > 0 && shown < 256, "some pieces show to and some do not, got {shown}");
     }
 
     #[test]
