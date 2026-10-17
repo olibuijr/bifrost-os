@@ -606,6 +606,13 @@ mod tests {
     }
 
     #[test]
+    fn manifest_help_key_names_the_book_directory() {
+        let m = parse_manifest("id = \"is.olibuijr.x.desktop\"\nname = \"X\"\nhelp = \"help\"\n").unwrap();
+        assert_eq!(m.help, "help");
+        assert_eq!(parse_manifest("id = \"is.olibuijr.x.desktop\"\n").unwrap().help, "");
+    }
+
+    #[test]
     fn read_book_reads_pages_in_name_order_and_refuses_broken_ones() {
         let dir = std::env::temp_dir().join(format!("bifrost-helpbook-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
