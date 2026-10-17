@@ -127,7 +127,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi-binaryarchive.metallib",
