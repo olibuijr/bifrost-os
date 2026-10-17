@@ -3796,7 +3796,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: the Switch Control and Voice Control interfaces are not built (their models are pure).",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Built 2026-10-17: Voice Control press commands (shell::accessibility::voice_control: a final transcript \"press|click|tap <name>\" runs through Shell::voice_press as ax press; tests voice_control::tests and shell::tests::voice_control_presses_the_named_element_only_for_a_final_command) and the Switch Control scan model (shell::accessibility::switch_scan: next, select, wrap, resize; tests switch_scan::tests). Not covered yet: no recognizer session starts for Voice Control, no switch input drives the scan, and no Switch Control or Voice Control UI.",
    "rea": [],
    "method": "assessed"
   },
