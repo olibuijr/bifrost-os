@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; it is foundation code of the store, whose install path is partly covered by springboard/src/shell/store/install.rs, so it is left unassessed.",
+   "status": "n/a",
+   "note": "n/a: the foundation of the Mac App Store, an Apple store service. BifrOSt's store is its own catalogue (springboard/src/shell/store/mod.rs), so there is no Apple store to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1468,8 +1468,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The name suggests detection of RDMA-capable Thunderbolt links between machines, but the reference image holds only the framework directory skeleton, so the purpose is unconfirmed and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: Apple-only Thunderbolt RDMA link detection between Macs (name-based; the reference binary is not in the extract). Apple hardware with no PC counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -4709,8 +4709,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries and a generative-function metadata folder are in the reference index; the binary is not extracted, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: generative-function metadata for Apple's on-device generative models (name and metadata folder only; the binary is not in the extract). Apple ML model packs have no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -4956,8 +4956,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; the binary is not extracted, so the purpose is not confirmed and no BifrOSt code maps to it.",
+   "status": "n/a",
+   "note": "n/a: an Apple analytics telemetry client (name-based; the reference binary is not in the extract). Apple-only service with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
