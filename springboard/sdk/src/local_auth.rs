@@ -12,6 +12,8 @@
 //! ctx.evaluate_policy(LAPolicy::DeviceOwnerAuthentication, "Reveal password", now, |reason| shell_ask(reason))?;
 //! ```
 
+use crate::service;
+use crate::Ctx;
 use bifrost_core::json::Json;
 
 /// `LAPolicy`.
@@ -177,6 +179,92 @@ pub fn decode_evaluation(reply: &Json) -> Option<Result<(), LAError>> {
     }
 }
 
+/// How often an unanswered evaluation asks the shell again, in seconds.
+pub const POLL_SECS: f64 = 0.25;
+
+/// What one shell reply means for an [`Evaluation`]: wait and ask again, or the final answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    Wait,
+    Done(Result<(), LAError>),
+}
+
+/// The one event an [`Evaluation`] delivers, from [`Evaluation::tick`], when the person has answered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Event {
+    Finished(Result<(), LAError>),
+}
+
+/// An asynchronous `evaluatePolicy`. The shell draws the password sheet while the person answers it, so the first
+/// answer is a pending reply. Call [`Evaluation::tick`] from the app's loop with the clock in seconds: it sends the
+/// request, asks again every [`POLL_SECS`] while the sheet is up, and returns [`Event::Finished`] once, when the answer
+/// is in. Replies arrive through [`service::take_reply`], so an app whose `App::service_reply` hook takes the replies
+/// first must hand them to [`Evaluation::on_reply`] itself.
+#[derive(Debug)]
+pub struct Evaluation {
+    policy: LAPolicy,
+    reason: String,
+    request: Option<u32>,
+    resend_at: f64,
+    done: bool,
+}
+
+impl Evaluation {
+    /// A new evaluation. Nothing is sent until the first [`Evaluation::tick`].
+    pub fn new(policy: LAPolicy, reason: &str) -> Evaluation {
+        Evaluation { policy, reason: reason.to_string(), request: None, resend_at: 0.0, done: false }
+    }
+
+    /// The params of the `evaluate` call.
+    pub fn params(&self) -> Json {
+        Json::Obj(vec![("policy".into(), Json::Str(self.policy.wire().into())), ("reason".into(), Json::Str(self.reason.clone()))])
+    }
+
+    /// Whether the event has been delivered.
+    pub fn is_done(&self) -> bool {
+        self.done
+    }
+
+    /// Reads one reply to the request this evaluation sent. A pending reply schedules the next ask at `now` plus
+    /// [`POLL_SECS`]; any other reply is the answer.
+    pub fn on_reply(&mut self, reply: &Json, now: f64) -> Action {
+        self.request = None;
+        if is_pending(reply) {
+            self.resend_at = now + POLL_SECS;
+            return Action::Wait;
+        }
+        Action::Done(decode_reply(reply))
+    }
+
+    /// Polls the request, asks again when it is due, and returns the event once the answer is in.
+    pub fn tick(&mut self, ctx: &Ctx, now: f64) -> Option<Event> {
+        if self.done {
+            return None;
+        }
+        if let Some(request) = self.request {
+            return match service::take_reply(request) {
+                None => None,
+                Some(Ok(reply)) => match self.on_reply(&reply, now) {
+                    Action::Done(answer) => Some(self.finish(answer)),
+                    Action::Wait => None,
+                },
+                // the call itself failed: the shell cannot answer, so the evaluation is cancelled by the system
+                Some(Err(_)) => Some(self.finish(Err(LAError::SystemCancel))),
+            };
+        }
+        if now >= self.resend_at {
+            self.request = Some(service::call(ctx, "local_auth", "evaluate", &self.params()));
+        }
+        None
+    }
+
+    fn finish(&mut self, answer: Result<(), LAError>) -> Event {
+        self.done = true;
+        self.request = None;
+        Event::Finished(answer)
+    }
+}
+
 /// `LAContext`. Times are seconds since any fixed epoch the caller uses.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LAContext {
@@ -274,6 +362,24 @@ mod tests {
         for t in [BiometryType::None, BiometryType::TouchID, BiometryType::FaceID, BiometryType::OpticID] {
             assert_eq!(BiometryType::from_wire(t.wire()), t);
         }
+    }
+
+    #[test]
+    fn an_evaluation_waits_while_the_sheet_is_up_then_finishes_once() {
+        let mut e = Evaluation::new(LAPolicy::DeviceOwnerAuthentication, "Reveal the note");
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("pending".into(), Json::Bool(true))]);
+        assert_eq!(e.on_reply(&pending, 10.0), Action::Wait);
+        assert_eq!(e.resend_at, 10.0 + POLL_SECS, "the next ask waits one poll interval");
+        assert_eq!(e.on_reply(&ok(), 11.0), Action::Done(Ok(())));
+        assert_eq!(e.finish(Err(LAError::UserCancel)), Event::Finished(Err(LAError::UserCancel)));
+        assert!(e.is_done());
+    }
+
+    #[test]
+    fn the_evaluate_params_name_the_policy_and_the_reason() {
+        let e = Evaluation::new(LAPolicy::DeviceOwnerAuthentication, "Reveal the note");
+        assert_eq!(e.params().get("policy").and_then(Json::as_str), Some("device_owner_authentication"));
+        assert_eq!(e.params().get("reason").and_then(Json::as_str), Some("Reveal the note"));
     }
 
     #[test]
