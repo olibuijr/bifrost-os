@@ -571,6 +571,51 @@ pub fn oauth2_refresh_body(refresh_token: &str, client_id: &str) -> String {
     format!("grant_type=refresh_token&refresh_token={}&client_id={}", form_encode(refresh_token), form_encode(client_id))
 }
 
+/// The URL an app opens in the browser to start an OAuth 2 sign-in with the authorization code grant (RFC 6749,
+/// section 4.1.1). `scope` and `state` are optional; `code_challenge` is the PKCE challenge (RFC 7636) when the
+/// provider needs one. Every value is percent-encoded and the parameters keep this order. The app receives the
+/// `code` and `state` on `redirect_uri`, checks `state`, and passes the code to [`oauth2_code_body`].
+pub fn oauth2_authorize_url(
+    endpoint: &str,
+    client_id: &str,
+    redirect_uri: &str,
+    scope: Option<&str>,
+    state: &str,
+    code_challenge: Option<&str>,
+) -> String {
+    let mut query = format!(
+        "response_type=code&client_id={}&redirect_uri={}&state={}",
+        form_encode(client_id),
+        form_encode(redirect_uri),
+        form_encode(state)
+    );
+    if let Some(scope) = scope.filter(|s| !s.is_empty()) {
+        query.push_str(&format!("&scope={}", form_encode(scope)));
+    }
+    if let Some(challenge) = code_challenge.filter(|c| !c.is_empty()) {
+        query.push_str(&format!("&code_challenge={}&code_challenge_method=S256", form_encode(challenge)));
+    }
+    let separator = if endpoint.contains('?') { '&' } else { '?' };
+    format!("{endpoint}{separator}{query}")
+}
+
+/// The form body an app posts to the token endpoint to trade the authorization `code` for the first tokens (RFC 6749,
+/// section 4.1.3): `grant_type=authorization_code`, the code, the redirect URI and the client identifier, plus the PKCE
+/// `code_verifier` when the sign-in used a challenge. The answer is read like a refresh answer, with a
+/// [`renewal_from_token_response`]-style parse.
+pub fn oauth2_code_body(code: &str, redirect_uri: &str, client_id: &str, code_verifier: Option<&str>) -> String {
+    let mut body = format!(
+        "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}",
+        form_encode(code),
+        form_encode(redirect_uri),
+        form_encode(client_id)
+    );
+    if let Some(verifier) = code_verifier.filter(|v| !v.is_empty()) {
+        body.push_str(&format!("&code_verifier={}", form_encode(verifier)));
+    }
+    body
+}
+
 /// Percent-encodes one form value: unreserved characters stay, every other byte becomes `%XX`.
 fn form_encode(value: &str) -> String {
     let mut out = String::new();
@@ -1144,6 +1189,39 @@ mod tests {
         assert_eq!(
             oauth2_refresh_body("r 1&x", "app.example"),
             "grant_type=refresh_token&refresh_token=r%201%26x&client_id=app.example"
+        );
+    }
+
+    #[test]
+    fn the_authorize_url_carries_the_code_grant_parameters_in_order() {
+        assert_eq!(
+            oauth2_authorize_url("https://id.example/auth", "app.example", "https://app.example/cb", None, "s1", None),
+            "https://id.example/auth?response_type=code&client_id=app.example&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&state=s1"
+        );
+    }
+
+    #[test]
+    fn the_authorize_url_adds_scope_and_pkce_and_keeps_an_existing_query() {
+        let url = oauth2_authorize_url("https://id.example/auth?tenant=a", "app", "cb", Some("mail read"), "s", Some("ch"));
+        assert_eq!(
+            url,
+            "https://id.example/auth?tenant=a&response_type=code&client_id=app&redirect_uri=cb&state=s&scope=mail%20read&code_challenge=ch&code_challenge_method=S256"
+        );
+        assert_eq!(
+            oauth2_authorize_url("https://id.example/auth", "app", "cb", Some(""), "s", Some("")),
+            "https://id.example/auth?response_type=code&client_id=app&redirect_uri=cb&state=s"
+        );
+    }
+
+    #[test]
+    fn the_code_body_is_a_form_with_the_grant_and_optional_verifier() {
+        assert_eq!(
+            oauth2_code_body("c/1", "https://app.example/cb", "app.example", None),
+            "grant_type=authorization_code&code=c%2F1&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&client_id=app.example"
+        );
+        assert_eq!(
+            oauth2_code_body("c", "cb", "app", Some("v e")),
+            "grant_type=authorization_code&code=c&redirect_uri=cb&client_id=app&code_verifier=v%20e"
         );
     }
 
