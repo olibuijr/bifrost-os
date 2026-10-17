@@ -1618,7 +1618,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Nothing sets an inbound policy per application: the sysinfo app only reads the nftables and iptables state. Build an application-level firewall: a settings page that writes nftables rules for each app's listening ports, applied by a service at boot.",
+   "note": "Nothing sets an inbound policy per application: the sysinfo app only reads the nftables and iptables state. Build an application-level firewall: a settings page that writes nftables rules for each app's listening ports, applied by a service at boot. Built 2026-10-17: the ruleset model bifrost_core::app_firewall (per-app allow or block by port, conflict refusal, nftables text with its own table); tests app_firewall::tests. Not built: the settings page that sets policies, and the boot service that applies the ruleset.",
    "rea": [],
    "method": "assessed"
   },
