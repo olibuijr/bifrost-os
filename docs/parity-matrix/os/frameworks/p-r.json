@@ -2273,7 +2273,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: still photos in the built-in Photos app (springboard/src/shell/photos/). Not covered: video and Live Photo playback (no video assets, no Live Photo support in photokit.json gaps).",
+   "note": "Partial. Covered: still photos in the built-in Photos app (springboard/src/shell/photos/). Not covered: video and Live Photo playback (no video assets, no Live Photo support in photokit.json gaps). Built 2026-10-17: movie pixel size read from the first video track (photo_media::movie_pixel_size, used by the photos service); tests photo_media::tests. Still missing: video and Live Photo playback.",
    "rea": [],
    "method": "assessed"
   },
@@ -2441,7 +2441,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Partial. Covered: built-in edit mode in springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness, contrast, colour filters) and adjustment records in springboard/ui/src/photo_adjustment.rs. Not covered: an extension point for third-party editors.",
+   "note": "Partial. Covered: built-in edit mode in springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness, contrast, colour filters) and adjustment records in springboard/ui/src/photo_adjustment.rs. Not covered: an extension point for third-party editors. Built 2026-10-17: EditorRegistry installs editors by format and starts a session only for an installed editor (tests photo_adjustment::tests). Still missing: the Photos app does not host or load any third-party editor.",
    "rea": [],
    "method": "assessed"
   },
@@ -6448,7 +6448,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/occlusion.rs; springboard/core/src/memory_pressure.rs; springboard/src/shell/background.rs; springboard/src/shell/mod.rs; springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Built 2026-10-17: the shell feeds occlusion facts for each external app (background.rs Suspender: focus and whether a window is shown) and sends SIGSTOP after the grace period and SIGCONT on focus, only while the Suspend Background Apps switch (suspend_background, off by default) is on; turning it off resumes the stopped apps (tests shell::background::tests). Not built: covering is not known yet (a shown app is never stopped), audio playing in the background is not exempt, and apps are not told about memory pressure, which needs a protocol message.",
+   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Built 2026-10-17: the shell feeds occlusion facts for each external app (background.rs Suspender: focus and whether a window is shown) and sends SIGSTOP after the grace period and SIGCONT on focus, only while the Suspend Background Apps switch (suspend_background, off by default) is on; turning it off resumes the stopped apps (tests shell::background::tests). Not built: covering is not known yet (a shown app is never stopped), audio playing in the background is not exempt, and apps are not told about memory pressure, which needs a protocol message. Built 2026-10-17: window covering is computed by is_covered (cuts the visible part of a window by each window above it; tests occlusion::tests); process assertions keep an app running (Event::Assertion). Still missing: the shell does not yet feed covering or assertions to the model, and memory-pressure events need a protocol message.",
    "rea": [],
    "method": "assessed"
   },
@@ -6469,7 +6469,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/occlusion.rs",
    "status": "partial",
-   "note": "The same occlusion model supplies the app run state that this service reports. Process assertions and the service's launch-time limits are not provided, and the reference index holds only the sandbox profile (framework.sb) for it.",
+   "note": "The same occlusion model supplies the app run state that this service reports. Process assertions and the service's launch-time limits are not provided, and the reference index holds only the sandbox profile (framework.sb) for it. Built 2026-10-17: process assertions in the occlusion model (Event::Assertion, is_asserted; tests occlusion::tests). Still missing: no app can take an assertion over the protocol yet, and the launch-time limits are not provided.",
    "rea": [],
    "method": "assessed"
   },
