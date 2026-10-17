@@ -22,11 +22,26 @@ pub fn path_of(shell_dir: &str, family: &str) -> Option<PathBuf> {
     UserFonts::choices(shell_dir).into_iter().find(|f| f.family == family).map(|f| PathBuf::from(f.path))
 }
 
+/// The bytes of the font file at `path`, read once and kept for the life of the process.
+fn font_bytes(path: &PathBuf) -> Option<&'static [u8]> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static LOADED: OnceLock<Mutex<HashMap<PathBuf, &'static [u8]>>> = OnceLock::new();
+    let mut loaded = LOADED.get_or_init(Default::default).lock().ok()?;
+    if let Some(data) = loaded.get(path) {
+        return Some(data);
+    }
+    let data: &'static [u8] = Box::leak(std::fs::read(path).ok()?.into_boxed_slice());
+    loaded.insert(path.clone(), data);
+    Some(data)
+}
+
 /// A UI that draws with the font file at `path`, at the point size, text scale and bold setting of `base`. None when
 /// the file cannot be read or is not a font the renderer can draw. The font bytes are kept for the life of the
-/// process, once per call, so callers build one face per family choice and keep it.
+/// process, once per font file: later calls for the same path reuse them, so stepping through families and sizes
+/// does not grow memory.
 pub fn ui_for(base: &Ui, path: &PathBuf) -> Option<Ui> {
-    let data: &'static [u8] = Box::leak(std::fs::read(path).ok()?.into_boxed_slice());
+    let data = font_bytes(path)?;
     let font: Font<'static> = Font::parse(data)?;
     let mut ui = Ui::new(font, base.s);
     ui.text_scale = base.text_scale;
