@@ -986,6 +986,7 @@ impl MailWindow {
         let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
         let first = lines.len().saturating_sub(room);
         let current = compose.misspelled.get(compose.misspelled_at);
+        let (suggested, suggested_at) = compose.proofread_marks();
         let mut end_x = tx;
         for (k, line) in lines[first..].iter().enumerate() {
             let y = value_y + k as f32 * line_h;
@@ -1010,6 +1011,16 @@ impl MailWindow {
                         let word: String = chars[a - run.start..b - run.start].iter().collect();
                         let thick = if current == Some(mark) { 2 * rule } else { rule };
                         s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
+                    }
+                }
+                // the writing assistant's suggestions: a blue line, thicker under the one in view
+                for (k, mark) in suggested.iter().enumerate() {
+                    let (a, b) = (mark.start.max(run.start), mark.end.min(run.start + chars.len()));
+                    if a < b {
+                        let before: String = chars[..a - run.start].iter().collect();
+                        let word: String = chars[a - run.start..b - run.start].iter().collect();
+                        let thick = if k == suggested_at { 2 * rule } else { rule };
+                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(SPACE_XXS)), px(measure(&word, run.style)), thick, colors::SYSTEM_BLUE.now());
                     }
                 }
                 x += wide;

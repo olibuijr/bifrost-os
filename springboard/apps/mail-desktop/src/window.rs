@@ -88,6 +88,10 @@ pub const MENU_FORWARD_ATTACHMENT: u32 = 42;
 pub const MENU_REDIRECT: u32 = 43;
 /// Message > Edit Draft: the open message of the Drafts mailbox opens in a compose sheet.
 pub const MENU_EDIT_DRAFT: u32 = 81;
+pub const MENU_PROOFREAD: u32 = 82;
+pub const MENU_ACCEPT_SUGGESTION: u32 = 83;
+pub const MENU_SKIP_SUGGESTION: u32 = 84;
+pub const MENU_ACCEPT_ALL_SUGGESTIONS: u32 = 85;
 pub const MENU_SEND_LATER: u32 = 44;
 pub const MENU_UNDO_SEND: u32 = 45;
 pub const MENU_REMIND: u32 = 46;
@@ -495,6 +499,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_CLEAR_FORMATTING, "Clear Formatting").enabled(compose_open),
     ]);
     let marked = compose.is_some_and(|c| !c.misspelled.is_empty());
+    let proofing = compose.is_some_and(|c| c.proofread.is_some());
     let edit = vec![
         AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
         AppMenuItem::new(MENU_PASTE_MATCH, "Paste and Match Style").enabled(compose_open),
@@ -502,6 +507,11 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_CHECK_SPELLING, "Check Spelling").enabled(compose_open),
         AppMenuItem::new(MENU_NEXT_MISSPELLING, "Next Misspelling").enabled(marked),
         AppMenuItem::new(MENU_CORRECT_SPELLING, "Correct Spelling").enabled(marked),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_PROOFREAD, "Proofread").enabled(compose_open),
+        AppMenuItem::new(MENU_ACCEPT_SUGGESTION, "Accept Suggestion").enabled(proofing),
+        AppMenuItem::new(MENU_SKIP_SUGGESTION, "Skip Suggestion").enabled(proofing),
+        AppMenuItem::new(MENU_ACCEPT_ALL_SUGGESTIONS, "Accept All Suggestions").enabled(proofing),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_FIND_IN_MESSAGE, "Find in Message...").key("cmd+alt+f").enabled(open),
         AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(mail.find.is_some()),
@@ -943,6 +953,44 @@ impl MailWindow {
         self.mail.status = "Checking spelling".into();
     }
 
+    /// Writing > Proofread: the writing assistant reads the message on the device and marks what it would change. The status
+    /// line says what the suggestion in view does; Accept Suggestion makes the change, Skip Suggestion leaves it.
+    fn proofread_message(&mut self) {
+        let mut found = None;
+        self.format(|compose| found = Some(compose.start_proofread()));
+        match found {
+            None => self.mail.status = "Start a message first".into(),
+            Some(0) => self.mail.status = "No suggestions".into(),
+            Some(_) => self.proofread_status(),
+        }
+    }
+
+    /// Writing > Accept Suggestion and Accept All Suggestions.
+    fn accept_suggestion(&mut self, all: bool) {
+        let mut made = 0;
+        self.format(|compose| made = compose.accept_suggestion(all));
+        if made == 0 {
+            self.mail.status = "No suggestion to accept".into();
+        } else if self.proofread_left() {
+            self.proofread_status();
+        } else {
+            self.mail.status = format!("{made} change{} made", if made == 1 { "" } else { "s" });
+        }
+    }
+
+    fn proofread_left(&self) -> bool {
+        matches!(&self.mail.sheet, Some(Sheet::Compose(compose)) if compose.proofread.is_some())
+    }
+
+    /// The status line for the suggestion in view, or the end of the list.
+    fn proofread_status(&mut self) {
+        let line = match &self.mail.sheet {
+            Some(Sheet::Compose(compose)) => compose.proofread_line(),
+            _ => None,
+        };
+        self.mail.status = line.unwrap_or_else(|| "No more suggestions".into());
+    }
+
     /// Asks the checker for suggestions for the misspelled word in view, to show them in the status line.
     fn ask_suggestions(&mut self, ctx: &Ctx) {
         let Some((text, word, bytes)) = self.misspelling_in_view() else { return };
@@ -1369,6 +1417,13 @@ impl MailWindow {
                 self.ask_suggestions(ctx);
             }
             MENU_CORRECT_SPELLING => self.correct_spelling(ctx),
+            MENU_PROOFREAD => self.proofread_message(),
+            MENU_ACCEPT_SUGGESTION => self.accept_suggestion(false),
+            MENU_ACCEPT_ALL_SUGGESTIONS => self.accept_suggestion(true),
+            MENU_SKIP_SUGGESTION => {
+                self.format(Compose::skip_suggestion);
+                self.proofread_status();
+            }
             _ => {
                 if let Some(i) = menu_index(id, MENU_MOVE_BASE) {
                     let target = self.mail.move_targets().get(i).cloned();
@@ -3006,6 +3061,24 @@ mod tests {
         let idle = menus(&idle, false);
         assert!(!item(&idle, MENU_REMOVE_ATTACHMENTS).enabled && !item(&idle, MENU_REMIND).enabled && !item(&idle, MENU_FIND_NEXT).enabled);
         assert!(!item(&idle, MENU_DELETE_SMART).enabled);
+    }
+
+    #[test]
+    fn the_writing_menu_offers_proofread_while_writing_and_the_answers_while_suggestions_wait() {
+        let item = |menus: &[AppMenu], id: u32| menus.iter().flat_map(|m| &m.items).find(|i| i.id == id).cloned().expect("item");
+        let mut mail = busy_mail(true);
+        let menus_now = menus(&mail, false);
+        assert!(item(&menus_now, MENU_PROOFREAD).enabled);
+        assert!(!item(&menus_now, MENU_ACCEPT_SUGGESTION).enabled && !item(&menus_now, MENU_SKIP_SUGGESTION).enabled && !item(&menus_now, MENU_ACCEPT_ALL_SUGGESTIONS).enabled);
+        if let Some(Sheet::Compose(compose)) = mail.sheet.as_mut() {
+            if let Some(field) = compose.form.fields.iter_mut().find(|f| f.label == "Message") {
+                field.value = "Say it it again".into();
+            }
+            assert_eq!(compose.start_proofread(), 1);
+        }
+        let menus_now = menus(&mail, false);
+        assert!(item(&menus_now, MENU_ACCEPT_SUGGESTION).enabled && item(&menus_now, MENU_SKIP_SUGGESTION).enabled && item(&menus_now, MENU_ACCEPT_ALL_SUGGESTIONS).enabled);
+        assert!(!item(&menus(&busy_mail(false), false), MENU_PROOFREAD).enabled, "nothing to proofread outside a message");
     }
 
     #[test]
