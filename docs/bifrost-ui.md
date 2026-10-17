@@ -867,13 +867,14 @@ package document type, here `public.rtfd` for RTFD). Code: `springboard/sdk/src/
 | read | `read_package_dir(dir)`: regular files at the top level, sorted by name; subfolders and links skipped; refused past `MAX_PACKAGE_BYTES` (64 MiB) |
 | write | `write_package_dir(dir, files)`: files written into a temporary sibling folder, then the package is renamed into place; the old package is moved aside and removed only after the new one is in place, and restored if that rename fails. Names with a separator or `..` are refused before anything is written |
 
-The controller (`DocumentController`) still reads and writes one byte stream per document, so a package is not yet opened or
-saved through the panels: that needs the shell's open and save panels to hand back a directory grant, and Files to show a
-package as one item. Until then an app opens and saves a package with `open_package` and `save_package` on its own document
-type (TextEdit: `TextDocument::open_package`, `save_package`).
+The document controller opens a package folder that a grant hands over: `Document::read_package(files, uttype)` reads
+the files, and the entry remembers the folder (read from `/proc/self/fd`). A save in place of such a document writes the
+package folder with `document_package::write_package_dir` (`Document::package_files` gives the files) and discards the
+temporary file the shell made for the save. Save As and Rename of a package, and a package chosen in the open panel, are
+not wired: the panel offers files only (`OpenOptions::directories` is not set for packages).
 
-Gaps: no package-aware Files row or icon, no open-panel directory selection for packages, no grant for a directory (the
-broker grants files), no package in Recents.
+Gaps: no package-aware icon, no open-panel folder choice for packages, no Save As to a package folder, no package in Recents
+until a package is opened, and an app that opens a package from a path (Files) has no controller entry for it yet.
 
 ## On-screen keyboard API (`UIKeyInput`, `UIReturnKeyType`, 0.4.77)
 The keyboard becomes a system app (`docs/keyboard-system-app.md`). The SDK API exists first: `App::keyboard_config`,

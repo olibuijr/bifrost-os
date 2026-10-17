@@ -2,9 +2,9 @@
 //! panels and Files treat as one file. The package holds a main document file (for RTFD, `TXT.rtf`) and the files it
 //! refers to (attachments such as images), all at the top level of the directory.
 //!
-//! Which directories are packages is decided by the extension alone (`is_package_name`), so Files and the panels can
-//! tell a package from a folder without opening it. An app declares the package types it reads and writes with the
-//! manifest key `package_types = ["rtfd"]`.
+//! Which directories are packages is decided by the extension alone (`is_package_name`, the types are
+//! `bifrost_ui::uttype::PACKAGE_TYPES`), so Files and the panels can tell a package from a folder without opening it.
+//! An app declares the package types it reads and writes with the manifest key `package_types = ["rtfd"]`.
 //!
 //! Saving is atomic: the new contents are written to a sibling temporary directory, which then replaces the package by
 //! renaming. A save that fails part way leaves the old package in place.
@@ -14,20 +14,16 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The package types the system knows: a lower-case extension and the uniform type identifier of the package.
-pub const PACKAGE_TYPES: &[(&str, &str)] = &[("rtfd", "public.rtfd")];
-
 /// The largest total size of a package read (all its files together), so a corrupt or hostile folder cannot exhaust memory.
 pub const MAX_PACKAGE_BYTES: u64 = 64 * 1024 * 1024;
 
 /// The uniform type identifier of the package type a name carries, if its extension is a package extension.
 pub fn package_type_for_name(name: &str) -> Option<&'static str> {
-    let (_, ext) = name.rsplit_once('.')?;
-    if ext.is_empty() {
+    let (stem, ext) = name.rsplit_once('.')?;
+    if stem.is_empty() || ext.is_empty() {
         return None;
     }
-    let ext = ext.to_ascii_lowercase();
-    PACKAGE_TYPES.iter().find(|(e, _)| *e == ext).map(|(_, uti)| *uti)
+    bifrost_ui::uttype::type_for_extension(name).filter(|id| bifrost_ui::uttype::is_package(id))
 }
 
 /// Whether a file name (or a folder name) is a package of a known type.
@@ -139,6 +135,7 @@ mod tests {
         assert_eq!(package_type_for_name("NOTES.RTFD"), Some("public.rtfd"));
         assert_eq!(package_type_for_name("notes.rtf"), None);
         assert_eq!(package_type_for_name("rtfd"), None, "a name with no dot has no extension");
+        assert_eq!(package_type_for_name(".rtfd"), None, "a name with no stem is not a package");
         assert_eq!(package_type_for_name("Folder."), None);
         assert!(is_package_name("a.b.rtfd"));
     }

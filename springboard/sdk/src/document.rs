@@ -21,6 +21,7 @@
 use crate::proto::{AppMenu, AppMenuItem, DocErrorCode, DocMode, GrantId};
 use crate::{DocumentEvent, OpenOptions};
 use bifrost_ui::nav::{Alert, AlertStyle};
+use crate::document_package;
 use bifrost_ui::undo::ChangeCount;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -48,6 +49,16 @@ pub trait Document: Sized {
     fn readable_types() -> &'static [&'static str];
     /// The type of a new document and the one Save As offers.
     fn default_type() -> &'static str;
+    /// Reads a folder package of `uttype` from its files (name and bytes, as `document_package::read_package_dir` gives
+    /// them). Only the package types override it; the default refuses.
+    fn read_package(_files: &[(String, Vec<u8>)], _uttype: &str) -> Result<Self, DocumentError> {
+        Err(DocumentError::new("This document is not a package"))
+    }
+    /// The files of a folder package of `uttype` (`TXT.rtf` and the rest), which a save writes with
+    /// `document_package::write_package_dir`. Only the package types override it; the default refuses.
+    fn package_files(&self, _uttype: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
+        Err(DocumentError::new("This document is not a package"))
+    }
 }
 
 /// Identifies an open document for the life of the controller.
@@ -197,6 +208,8 @@ struct Entry<D> {
     edit_since: Option<f64>,
     /// the state an autosave last tried, so a failing one is not retried until the next change
     tried: Option<Stamp>,
+    /// the folder a package document was read from, which a save writes back to (None for a file)
+    package: Option<PathBuf>,
 }
 
 impl<D> Entry<D> {
@@ -319,7 +332,7 @@ impl<D: Document> DocumentController<D> {
     fn add(&mut self, doc: D, untitled: Option<u32>, name: String, grant: Option<GrantId>, uttype: &str) -> DocId {
         self.next_id += 1;
         let id = DocId(self.next_id);
-        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None });
+        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None });
         self.active = Some(id);
         id
     }
@@ -589,6 +602,11 @@ impl<D: Document> DocumentController<D> {
         let pending = self.pending.remove(&request)?;
         let mut out = Vec::new();
         for file in files {
+            // a folder grant is a package (the panels hand over folders only for package types)
+            if file.file.metadata().is_ok_and(|m| m.is_dir()) {
+                out.push(self.open_package(host, file));
+                continue;
+            }
             let mut bytes = Vec::new();
             if let Err(e) = (&file.file).read_to_end(&mut bytes) {
                 out.push(failed(None, None, &format!("cannot read {}: {e}", file.name)));
@@ -630,10 +648,67 @@ impl<D: Document> DocumentController<D> {
         Some(out)
     }
 
+    /// Opens a package folder: its files are read, and the document keeps the folder so a save writes it back.
+    fn open_package(&mut self, host: &dyn DocumentHost, file: crate::Document) -> Notice {
+        let name = file.name.clone();
+        let uttype = bifrost_ui::uttype::type_for_extension(&name).unwrap_or(D::default_type()).to_string();
+        let read = package_path(&file.file)
+            .ok_or_else(|| "the package cannot be reached".to_string())
+            .and_then(|path| {
+                let files = document_package::read_package_dir(&path).map_err(|e| e.to_string())?;
+                let doc = D::read_package(&files, &uttype).map_err(|DocumentError(m)| m)?;
+                Ok((doc, path))
+            });
+        match read {
+            Ok((doc, path)) => {
+                let id = self.add(doc, None, name.clone(), Some(file.grant), &uttype);
+                if let Some(e) = self.entry_mut(id) {
+                    e.package = Some(path);
+                }
+                self.note_recent(host, file.grant, &name);
+                Notice::Opened(id)
+            }
+            Err(m) => {
+                host.release(file.grant);
+                failed(None, None, &format!("{name}: {m}"))
+            }
+        }
+    }
+
+    /// A save of a package document: the package folder is written in place, atomically, and the temporary file the
+    /// shell made for the save is discarded.
+    fn save_package(&mut self, host: &dyn DocumentHost, request: u32, doc: DocId, op: SaveOp, stamp: Stamp, path: &Path) -> Vec<Notice> {
+        self.pending.remove(&request);
+        let written = match self.entry(doc) {
+            Some(e) => e.doc.package_files(&e.uttype).map_err(|DocumentError(m)| m).and_then(|files| {
+                let refs: Vec<(&str, &[u8])> = files.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+                document_package::write_package_dir(path, &refs).map_err(|err| err.to_string())
+            }),
+            None => Err("no such document".to_string()),
+        };
+        host.abort(request);
+        match written {
+            Ok(()) => {
+                if let Some(e) = self.entry_mut(doc) {
+                    e.saved = stamp;
+                    e.edit_since = None;
+                }
+                vec![Notice::Saved(doc, op)]
+            }
+            Err(m) => vec![failed(Some(doc), None, &m)],
+        }
+    }
+
     fn on_save_to(&mut self, host: &dyn DocumentHost, file: crate::Document) -> Option<Vec<Notice>> {
         let request = file.request;
-        let Some(Pending::Save { doc, .. }) = self.pending.get(&request) else { return None };
-        let doc = *doc;
+        let Some(Pending::Save { doc, op, stamp, .. }) = self.pending.get(&request) else { return None };
+        let (doc, op, stamp) = (*doc, *op, *stamp);
+        // a save in place of a package writes the folder, not the file the shell made
+        if op == SaveOp::Save {
+            if let Some(path) = self.entry(doc).filter(|e| bifrost_ui::uttype::is_package(&e.uttype)).and_then(|e| e.package.clone()) {
+                return Some(self.save_package(host, request, doc, op, stamp, &path));
+            }
+        }
         // the type follows the chosen name when it has a known extension
         let named = bifrost_ui::uttype::type_for_extension(&file.name);
         let Some(e) = self.entry(doc) else {
@@ -897,6 +972,12 @@ fn failed(doc: Option<DocId>, code: Option<DocErrorCode>, message: &str) -> Noti
 // ---- autosave copies of untitled documents ----
 
 const AUTOSAVE_DIR: &str = "autosave";
+
+/// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
+fn package_path(file: &std::fs::File) -> Option<PathBuf> {
+    use std::os::unix::io::AsRawFd;
+    std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok()
+}
 
 fn autosave_path(data_dir: &Path, n: u32) -> PathBuf {
     data_dir.join(AUTOSAVE_DIR).join(format!("untitled-{n}.autosave"))

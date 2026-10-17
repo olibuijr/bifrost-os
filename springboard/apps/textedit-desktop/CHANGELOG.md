@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.10.0 — 2026-10-17
+
+- Attachments are drawn inline: an attachment is as tall as its line and as wide as its picture, narrowed to the text
+  width, and is selected, deleted and undone as one character.
+- Insert > Image... opens a panel for PNG and JPEG files; image files dropped on the page are inserted at the drop point's
+  caret (rich text only).
+- Copy, cut and paste of pictures go through the general pasteboard as PNG or JPEG.
+- Format > Make Plain Text asks before removing attachments (Remove Attachments, or Cancel).
+- docx, odt, html and web archive saves leave attachments out instead of writing the attachment character.
+- RTFD folder packages open and save through the document controller; Files shows a package folder as one file.
+  Choosing a package in the open panel and opening one from Files are not wired yet.
+
 ## 1.9.1 — 2026-10-17
 
 - Ships a help book (`help/`: writing, formatting, find and print), indexed by the shell help index for the Help menu and `help://is.olibuijr.textedit.desktop` links.

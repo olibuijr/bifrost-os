@@ -38,14 +38,17 @@ use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_
 use bifrost_app::proto::CHORD_FLAG;
 use bifrost_app::services::ServiceCall;
 use bifrost_core::json::Json;
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::dnd::{self, dragop, DragPhase};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use document::TextDocument;
 use encoding::Encoding;
 use layout::Layout;
 use prefs::Options;
 use spell::Spelling;
 use std::ops::Range;
-use text::{Align, Cell, Kind, Style, Transform};
+use text::{Align, Cell, Kind, Style, Transform, OBJECT};
+use bifrost_app::graphics_imageio;
+use bifrost_app::pasteboard::NativePasteboard;
 use view::{Action, Button, Focus, Hit};
 
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
@@ -55,6 +58,8 @@ struct Cache {
     revision: u64,
     width: f32,
     zoom: f32,
+    /// the attachments' aspect ratios and decoded pictures, indexed like the attachments
+    art: view::Art,
     /// the document's cells at the zoom: sizes scaled, so the layout, the caret and the drawing agree
     cells: Vec<Cell>,
     layout: Layout,
@@ -90,6 +95,12 @@ struct TextEditApp {
     completion: Option<Completion>,
     /// File > Export as PDF: the save panel's request, until its file is written
     export_request: Option<u32>,
+    /// the open panel of Insert > Image, and the drag sessions this window accepted images from (kept after the drop,
+    /// so the files that arrive after `Perform` still land)
+    image_request: Option<u32>,
+    /// Format > Make Plain Text is asking to remove the attachments first
+    plain_sheet: bool,
+    drop_sessions: Vec<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
     /// Edit > Add Link: the address being typed for a range of text, while the panel is open
@@ -138,6 +149,27 @@ struct Completion {
 }
 
 /// The document of the active window, if any.
+/// The data of the first attachment among the cells, if any (a copy of a picture takes its file's bytes).
+fn picture_of(doc: &TextDocument, cells: &[Cell]) -> Option<Vec<u8>> {
+    cells.iter().filter(|c| c.ch == OBJECT).find_map(|c| doc.text.attachment_of(&c.style)).map(|a| a.data.clone()).filter(|d| !d.is_empty())
+}
+
+/// Puts a picture on the general pasteboard as its own type (PNG or JPEG); other formats are not put on it.
+fn put_picture(ctx: &Ctx, data: &[u8]) {
+    let Some(format) = graphics_imageio::detect(data) else { return };
+    let uti = format.type_identifier();
+    if matches!(uti, "public.png" | "public.jpeg") {
+        NativePasteboard::general().set_data(ctx, data, uti);
+    }
+}
+
+/// The picture on the general pasteboard (PNG or JPEG), if there is one.
+fn picture_on_board() -> Option<Vec<u8>> {
+    let board = NativePasteboard::general();
+    let uti = board.available_type(&["public.png", "public.jpeg"])?;
+    board.data(&uti).filter(|d| !d.is_empty())
+}
+
 fn active_doc(docs: &DocumentController<TextDocument>) -> Option<&TextDocument> {
     docs.active().and_then(|id| docs.get(id))
 }
@@ -235,6 +267,9 @@ impl TextEditApp {
             copied_style: None,
             completion: None,
             export_request: None,
+            image_request: None,
+            plain_sheet: false,
+            drop_sessions: Vec::new(),
             props: None,
             link: None,
             line: None,
@@ -344,12 +379,13 @@ impl TextEditApp {
             return;
         }
         let Some(doc) = self.docs.get(id) else { return };
-        let measure = |ch: char, style: &Style| view::char_width(ui, ch, style);
+        let art = view::art(doc.text.attachments());
+        let measure = view::measure_in(ui, &art.aspects, width);
         let cells = doc.text.cells();
         let scaled = zoomed(cells, zoom);
         let layout = layout::layout_tabs(&scaled, width, &measure, doc.text.tab_width() * zoom);
         let misspelled = if self.spelling.enabled { self.spelling.misspelled(cells) } else { Vec::new() };
-        self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, cells: scaled, layout, misspelled });
+        self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, art, cells: scaled, layout, misspelled });
     }
 
     /// Runs a text command on the active document. Returns whether the window needs a frame.
@@ -359,6 +395,21 @@ impl TextEditApp {
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
+        }
+        if matches!(action, Action::PlainDone) {
+            self.plain_sheet = false;
+            return self.make_plain_now();
+        }
+        if matches!(action, Action::PlainCancel) {
+            let was = self.plain_sheet;
+            self.plain_sheet = false;
+            return was;
+        }
+        // a paste with no text on the clipboard takes the picture on the pasteboard, if there is one
+        if matches!(action, Action::Paste) && clipboard::text().filter(|s| !s.is_empty()).is_none() {
+            if let Some(data) = picture_on_board() {
+                return self.insert_picture("Picture", data);
+            }
         }
         match action {
             Action::Document(id) => {
@@ -394,6 +445,7 @@ impl TextEditApp {
                 };
                 return self.insert_raw(&s.to_string());
             }
+            Action::InsertImage => return self.open_image_panel(ctx),
             Action::AddLink => return self.open_link_sheet(),
             Action::LinkDone => return self.finish_link(true),
             Action::LinkRemove => return self.finish_link(false),
@@ -695,18 +747,31 @@ impl TextEditApp {
             Action::Redo => doc.text.redo(),
             Action::Cut => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
+                let picture = picture_of(doc, &picked);
                 let cut = doc.text.cut();
+                // the clipboard text leaves the attachment characters out: they mean nothing to another application
+                let text: String = cut.chars().filter(|&c| c != OBJECT).collect();
+                if let Some(data) = picture {
+                    put_picture(ctx, &data);
+                }
                 if cut.is_empty() {
                     false
                 } else {
-                    clipboard::set_text(&cut);
-                    self.rich_clip = Some((cut, picked));
+                    clipboard::set_text(&text);
+                    self.rich_clip = Some((text, picked));
                     true
                 }
             }
             Action::Copy => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
-                let copied: String = picked.iter().map(|c| c.ch).collect();
+                let copied: String = picked.iter().filter(|c| c.ch != OBJECT).map(|c| c.ch).collect();
+                if let Some(data) = picture_of(doc, &picked) {
+                    put_picture(ctx, &data);
+                    // a picture alone: the text clipboard is emptied so a paste takes the picture
+                    if copied.is_empty() {
+                        clipboard::set_text("");
+                    }
+                }
                 if !copied.is_empty() {
                     clipboard::set_text(&copied);
                     self.rich_clip = Some((copied, picked));
@@ -830,9 +895,9 @@ impl TextEditApp {
                 true
             }
             Action::MakePlain => {
-                // attachments are not dropped silently: the user deletes them first (the confirmation is still to come)
+                // attachments are dropped only after the confirmation sheet says so
                 if doc.rich && doc.text.has_attachments() {
-                    self.note = Some("This document has attachments. Delete them before choosing Make Plain Text.".into());
+                    self.plain_sheet = true;
                     return true;
                 }
                 let was_rich = doc.rich;
@@ -1309,7 +1374,8 @@ impl TextEditApp {
         let info = self.print_info.clone();
         let doc = active_doc(&self.docs)?;
         let (_, _, width, _) = info.imageable();
-        let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+        let aspects = view::aspects(doc.text.attachments());
+        let measure = view::measure_in(&ctx.ui, &aspects, width);
         let (cells, layout) = if self.opts.rewrap {
             // wrapped to the page: the lines break at the printable width
             let cells = doc.text.cells().to_vec();
@@ -1375,6 +1441,104 @@ impl TextEditApp {
             }
             other => Err(other),
         }
+    }
+
+    /// Makes the active document plain text now (the confirmed case); one undo entry, edited when it changed.
+    fn make_plain_now(&mut self) -> bool {
+        let was_rich = match active_doc_mut(&mut self.docs) {
+            Some(doc) => {
+                let was = doc.rich;
+                doc.set_rich(false);
+                was
+            }
+            None => false,
+        };
+        if was_rich {
+            self.edited();
+        }
+        was_rich
+    }
+
+    /// The Make Plain Text confirmation's touches: the buttons it shows.
+    fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+        let buttons = view::plain_buttons(&ctx.ui, &layout);
+        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            Some(action) => self.perform(ctx, action),
+            None => true,
+        }
+    }
+
+    /// Insert > Image...: the open panel for PNG and JPEG files; the file it returns is inserted by `picture_event`.
+    fn open_image_panel(&mut self, ctx: &Ctx) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let options = OpenOptions { title: "Insert Image".into(), filters: vec!["public.png".into(), "public.jpeg".into()], ..Default::default() };
+        self.image_request = Some(ctx.open_panel(&options));
+        true
+    }
+
+    /// The answers for pictures: the Insert Image panel's file, and the files of an image drop (they arrive as documents
+    /// with the drag session's number). `Err` hands back an event that is not a picture's, for the document controller.
+    fn picture_event(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> Result<bool, DocumentEvent> {
+        match ev {
+            DocumentEvent::Opened(file) if Some(file.request) == self.image_request => {
+                self.image_request = None;
+                self.insert_picture_files(vec![file]);
+                Ok(true)
+            }
+            DocumentEvent::Opened(file) if self.drop_sessions.contains(&file.request) => {
+                self.insert_picture_files(vec![file]);
+                Ok(true)
+            }
+            DocumentEvent::OpenedMany { request, docs } if self.drop_sessions.contains(&request) => {
+                self.insert_picture_files(docs);
+                Ok(true)
+            }
+            DocumentEvent::Failed { request, .. } if Some(request) == self.image_request => {
+                self.image_request = None;
+                Ok(true)
+            }
+            other => Err(other),
+        }
+    }
+
+    /// Reads each picture file and inserts it as an attachment. A file that is not a picture is named in the note.
+    fn insert_picture_files(&mut self, files: Vec<bifrost_app::Document>) {
+        use std::io::Read;
+        for mut file in files {
+            let mut data = Vec::new();
+            let read = file.file.read_to_end(&mut data).map(|_| ()).map_err(|e| e.to_string());
+            match read {
+                Ok(()) => {
+                    let name = file.name.clone();
+                    self.insert_picture(&name, data);
+                }
+                Err(message) => self.note = Some(format!("{} could not be read: {message}", file.name)),
+            }
+        }
+    }
+
+    /// Inserts one picture at the caret, as an attachment in the active rich text document (one undo entry).
+    fn insert_picture(&mut self, name: &str, data: Vec<u8>) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let rich = active_doc(&self.docs).is_some_and(|d| d.rich);
+        if !rich {
+            self.note = Some("Pictures need rich text. Choose Format > Make Rich Text first.".into());
+            return true;
+        }
+        if bifrost_app::graphics_imageio::pixel_size(&data).is_none() {
+            self.note = Some(format!("{name} is not a picture this app can read."));
+            return true;
+        }
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        doc.text.insert_attachment(rtfd::attachment(name.to_string(), 0.0, 0.0, data), Kind::Inserting);
+        self.edited();
+        true
     }
 
     /// Print: the document is laid out for the page setup and sent to the default printer through the print operation.
@@ -1568,7 +1732,8 @@ impl TextEditApp {
     fn page_key(&mut self, ctx: &Ctx, code: u32) -> bool {
         let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
         self.ensure_layout(&ctx.ui, width);
-        let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+        let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+        let measure = view::measure_in(&ctx.ui, &aspects, fit);
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
         let head = doc.text.head();
         let target = match code {
@@ -1610,6 +1775,9 @@ impl TextEditApp {
                 if self.spelling_panel {
                     return self.touch_spelling(ctx, px, py);
                 }
+                if self.plain_sheet {
+                    return self.touch_plain(ctx, px, py);
+                }
                 if self.line.is_some() {
                     return self.touch_line(ctx, px, py);
                 }
@@ -1646,7 +1814,8 @@ impl TextEditApp {
                 self.focus = Focus::Body;
                 let width = geom.text_w;
                 self.ensure_layout(&ctx.ui, width);
-                let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+                let measure = view::measure_in(&ctx.ui, &aspects, fit);
                 let at = px - geom.text_x;
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -1671,7 +1840,8 @@ impl TextEditApp {
                 }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
                 self.ensure_layout(&ctx.ui, geom.text_w);
-                let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
+                let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
+                let measure = view::measure_in(&ctx.ui, &aspects, fit);
                 let at = px - geom.text_x;
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -1734,6 +1904,7 @@ impl TextEditApp {
             menu_item(Action::InsertPage, "Page Break", "", enabled).depth(1),
             menu_item(Action::InsertLine, "Line Break", "", enabled).depth(1),
             menu_item(Action::InsertParagraph, "Paragraph Break", "", enabled).depth(1),
+            menu_item(Action::InsertImage, "Image...", "", enabled).depth(1),
             AppMenuItem::submenu("Speech"),
             menu_item(Action::SpeakStart, "Start Speaking", "", enabled).depth(1),
             menu_item(Action::SpeakStop, "Stop Speaking", "", true).depth(1),
@@ -1949,6 +2120,8 @@ impl App for TextEditApp {
         self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
         self.spelling.enabled = self.opts.spell_enabled;
         document::set_markup_as_code(self.opts.markup_as_code);
+        // pictures dropped from Files or another app land in this window (see `drag`)
+        dnd::register_types(ctx, &["public.image"]);
         // a window starts with an untitled document, as a new document would
         if self.docs.is_empty() {
             let id = self.docs.new_document();
@@ -2024,6 +2197,13 @@ impl App for TextEditApp {
                 }
                 if self.spelling_panel && code == 27 {
                     return self.perform(ctx, Action::SpellingDone);
+                }
+                if self.plain_sheet {
+                    return match code {
+                        13 => self.perform(ctx, Action::PlainDone),
+                        27 => self.perform(ctx, Action::PlainCancel),
+                        _ => false,
+                    };
                 }
                 if self.line.is_some() {
                     return match code {
@@ -2129,8 +2309,37 @@ impl App for TextEditApp {
         }
     }
 
+    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
+    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
+    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
+        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
+        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
+        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        match phase {
+            DragPhase::Entered | DragPhase::Updated => {
+                if takes && !self.drop_sessions.contains(&session) {
+                    if self.drop_sessions.len() >= 16 {
+                        self.drop_sessions.remove(0);
+                    }
+                    self.drop_sessions.push(session);
+                }
+                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
+            }
+            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
+            DragPhase::Perform => {
+                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
+                dnd::performed(ctx, session, takes);
+            }
+        }
+        true
+    }
+
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let ev = match self.export_event(ctx, ev) {
+            Ok(handled) => return handled,
+            Err(ev) => ev,
+        };
+        let ev = match self.picture_event(ctx, ev) {
             Ok(handled) => return handled,
             Err(ev) => ev,
         };
@@ -2182,7 +2391,7 @@ impl App for TextEditApp {
             let sel = doc.text.selection();
             let head = doc.text.head();
             if self.follow {
-                let (_, top, height) = cache.layout.caret(&cache.cells, head, &|ch: char, st: &Style| view::char_width(ui, ch, st));
+                let (_, top, height) = cache.layout.caret(&cache.cells, head, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
                 if top < self.scroll {
                     self.scroll = top;
                 } else if top + height > self.scroll + view_h {
@@ -2198,6 +2407,7 @@ impl App for TextEditApp {
                 &geom,
                 &cache.layout,
                 &cache.cells,
+                &cache.art,
                 sel,
                 head,
                 self.scroll,
@@ -2217,6 +2427,11 @@ impl App for TextEditApp {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
             let buttons = view::link_buttons(ui, &layout, sheet.had_link);
             view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
+        }
+        if self.plain_sheet {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+            let buttons = view::plain_buttons(ui, &layout);
+            view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
         }
         if let Some(typed) = &self.line {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);

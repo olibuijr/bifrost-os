@@ -129,6 +129,17 @@ pub const MAX_PARAGRAPH_SPACE: u8 = 200;
 /// undone like a letter, drawn as the attachment instead of a glyph.
 pub const OBJECT: char = '\u{fffc}';
 
+/// The attachment a style points at, out of an attachment list.
+pub fn attachment_in<'a>(list: &'a [Attachment], style: &Style) -> Option<&'a Attachment> {
+    (style.attachment as usize).checked_sub(1).and_then(|i| list.get(i))
+}
+
+/// The point size an attachment's cell is given: its height over the line factor, so the line is as tall as the
+/// picture, kept within the sizes a character can have.
+pub fn attachment_size(att: &Attachment) -> f32 {
+    (att.height / crate::layout::LINE_FACTOR).clamp(MIN_SIZE, MAX_SIZE)
+}
+
 /// A file embedded in the document (Insert > Image, a paste or a drop of an image). `width` and `height` are its size in
 /// points as the line draws it; `data` is the file's bytes, saved with the document's package.
 #[derive(Clone, Debug, PartialEq)]
@@ -195,6 +206,7 @@ pub enum Kind {
     Pasting,
     Formatting,
     Replacing,
+    Inserting,
 }
 
 impl Kind {
@@ -206,6 +218,7 @@ impl Kind {
             Kind::Pasting => "Pasting",
             Kind::Formatting => "Formatting",
             Kind::Replacing => "Replacing",
+            Kind::Inserting => "Inserting",
         }
     }
 
@@ -281,6 +294,7 @@ impl Text {
     pub fn load_with_attachments(&mut self, cells: Vec<Cell>, attachments: Vec<Attachment>) {
         self.cells = cells;
         self.attachments = attachments;
+        self.size_attachment_cells();
         self.anchor = 0;
         self.head = 0;
         self.typing = Style::default();
@@ -304,12 +318,22 @@ impl Text {
     /// The attachment a character's style points at, if it is an attachment.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn attachment_of(&self, style: &Style) -> Option<&Attachment> {
-        (style.attachment as usize).checked_sub(1).and_then(|i| self.attachments.get(i))
+        attachment_in(&self.attachments, style)
     }
 
     /// Whether the text holds any attachment (Format > Make Plain Text asks before dropping them).
     pub fn has_attachments(&self) -> bool {
         self.cells.iter().any(|c| c.ch == OBJECT)
+    }
+
+    /// Sets the size of every attachment cell from its picture: the line it sits on is as tall as the picture (see
+    /// `attachment_size`), so the picture fills its line. A picture taller than the largest size is drawn at that size.
+    fn size_attachment_cells(&mut self) {
+        for c in self.cells.iter_mut().filter(|c| c.ch == OBJECT) {
+            if let Some(att) = attachment_in(&self.attachments, &c.style) {
+                c.style.size = attachment_size(att);
+            }
+        }
     }
 
     /// Inserts an attachment at the caret (replacing the selection) as one `OBJECT` cell. One undo entry.
@@ -321,6 +345,7 @@ impl Text {
         let range = self.selection();
         let at = range.start;
         self.cells.splice(range, [Cell { ch: OBJECT, style }]);
+        self.size_attachment_cells();
         self.anchor = at + 1;
         self.head = self.anchor;
         self.sync_typing();
@@ -1586,5 +1611,16 @@ mod attachment_tests {
         t.load(vec![]);
         assert!(t.attachments().is_empty());
     }
-}
 
+    #[test]
+    fn an_attachment_cell_is_as_tall_as_its_picture() {
+        let mut t = doc_with("ab");
+        t.select(1, 1);
+        t.insert_attachment(Attachment { file: "a.png".into(), width: 100.0, height: 50.0, data: Vec::new() }, Kind::Pasting);
+        assert_eq!(t.cells()[1].style.size, 50.0 / crate::layout::LINE_FACTOR);
+        // a picture taller than the largest size is clamped to it
+        t.select(0, 0);
+        t.insert_attachment(Attachment { file: "b.png".into(), width: 1.0, height: 900.0, data: Vec::new() }, Kind::Pasting);
+        assert_eq!(t.cells()[0].style.size, MAX_SIZE);
+    }
+}
