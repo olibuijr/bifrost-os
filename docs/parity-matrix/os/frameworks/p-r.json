@@ -2273,7 +2273,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: still photos in the built-in Photos app (springboard/src/shell/photos/). Not covered: video and Live Photo playback (no video assets, no Live Photo support in photokit.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -2294,7 +2294,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: thumbnail caching and request coalescing in springboard/ui/src/photo_caching.rs and photo_request.rs. Not covered: the reference full-size rendering of adjusted images beyond the edit.rs operations.",
    "rea": [],
    "method": "assessed"
   },
@@ -2314,8 +2314,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "n/a: spatial (stereoscopic) photo and video is Apple's headset-class media format; BifrOSt has no stereo capture or spatial metadata path.",
    "rea": [],
    "method": "assessed"
   },
@@ -2335,8 +2335,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "n/a: spatial media core format for Apple's headset-class capture; BifrOSt has no stereo capture or spatial metadata path.",
    "rea": [],
    "method": "assessed"
   },
@@ -2356,8 +2356,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "n/a: editing of spatial (stereoscopic) media for Apple's headset-class format; BifrOSt has no stereo capture or spatial metadata path.",
    "rea": [],
    "method": "assessed"
   },
@@ -2378,7 +2378,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. The Photos app is drawn with the shell's own kit (springboard/src/shell/photos/), not SwiftUI. Not covered: the reference shared SwiftUI photo views.",
    "rea": [],
    "method": "assessed"
   },
@@ -2399,7 +2399,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: Notes has an app-local camera-roll picker (springboard/apps/notes-desktop/src/notes/picker.rs). Not covered: a shared system picker for apps (photokit.json gap).",
    "rea": [],
    "method": "assessed"
   },
@@ -2420,7 +2420,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: the Photos app draws its library, albums and slideshow (springboard/src/shell/photos/). Not covered: the reference core selection and editing flows.",
    "rea": [],
    "method": "assessed"
   },
@@ -2441,7 +2441,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: built-in edit mode in springboard/src/shell/photos/edit.rs (quarter-turn rotate, crop presets, brightness, contrast, colour filters) and adjustment records in springboard/ui/src/photo_adjustment.rs. Not covered: an extension point for third-party editors.",
    "rea": [],
    "method": "assessed"
   },
@@ -2462,7 +2462,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "note": "Partial. Covered: pure models springboard/ui/src/photo_media.rs, photo_changes.rs and photo_project.rs, not yet wired into the shell (photokit row notes). Not covered: the reference shared foundation types.",
    "rea": [],
    "method": "assessed"
   },
@@ -2503,8 +2503,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "private framework, owner Photos; from SDK matrix photokit.json",
+   "status": "n/a",
+   "note": "n/a: Apple's photosensitivity (flashing content) analysis is an Apple-trained model pack for Apple's Photos pipeline; BifrOSt ships no such model and no analysis service.",
    "rea": [],
    "method": "assessed"
   },
