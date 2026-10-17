@@ -247,6 +247,35 @@ impl FontMetrics for EstimatedMetrics {
     }
 }
 
+/// Metrics read from a loaded font: advances from its shaping, heights from its x-height, cap-height and
+/// descent. Per-glyph outlines are not read, so the heights are an estimate; the math constants come from the
+/// caller (`constants`, from a MATH table when the font has one).
+pub struct FontFaceMetrics<'a> {
+    pub font: &'a crate::font::Font<'static>,
+    pub constants: Option<MathConstants>,
+}
+
+impl FontMetrics for FontFaceMetrics<'_> {
+    fn glyph(&self, ch: char) -> GlyphMetrics {
+        let lm = self.font.line_metrics(1.0);
+        let mut buf = [0u8; 4];
+        let advance = self.font.measure_var(ch.encode_utf8(&mut buf), 1.0, &[]);
+        let (ascent, descent) = match ch {
+            '∑' | '∏' => (0.75, 0.25),
+            '∫' => (0.8, 0.25),
+            _ if ch.is_ascii_lowercase() && !"bdfhklt".contains(ch) => (lm.x_height, 0.0),
+            _ if "gjpqy".contains(ch) => (lm.cap_height, lm.descent),
+            _ if ch.is_whitespace() => (0.0, 0.0),
+            _ => (lm.cap_height, 0.0),
+        };
+        GlyphMetrics { ch, advance, ascent, descent }
+    }
+
+    fn constants(&self) -> Option<MathConstants> {
+        self.constants
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
