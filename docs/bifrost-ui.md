@@ -4905,3 +4905,33 @@ menu bar does not draw module items from the pref, and the battery item does not
 energy is not built: `activity-desktop/src/sample.rs` has the `/proc` CPU-time sampler, but it lives in the app and
 is not shared with the shell. Apple parity gap: ControlWidgetButton, ControlWidgetToggle and ControlValueProvider
 on screen.
+
+## Colour management (ColorSync: `bifrost_render::icc`, `icc_lut`, `icc_transform`, `icc_builtin`, `edid`)
+
+Clean-room from the public ICC.1:2022 specification. Code: `render/src/icc.rs` (header, tag table, `desc`/`mluc`
+text, matrix-shaper curves `curv`/`para`, `wtpt`, `vcgt`), `render/src/icc_lut.rs` (lookup tables: `mft1`, `mft2`,
+`mAB `, `mBA `, stages of curves, CLUT and matrix, Lab and XYZ connection-space encodings), `render/src/icc_transform.rs`
+(profile-to-profile conversion, intents, black point compensation, baked 3D tables), `render/src/icc_builtin.rs`
+(built-in profiles), `render/src/edid.rs` (display chromaticities). Named working spaces stay in `colorspace.rs`.
+
+| Piece | Apple | What BifrOSt does |
+|---|---|---|
+| Profile reader | `ColorSyncProfileCreateWithURL`, `ColorSyncProfileCopyTag` | `icc::Profile::parse` checks the header magic and the tag table and refuses a tag that runs past the profile. `Profile::lut` reads the `A2B0`..`B2A2` tags in all three lookup-table types. |
+| Lookup tables | `ColorSyncTransformCreate` with `mft`/`mAB` profiles | `icc_lut::Lut` runs the stages in the order the tag type defines (A, CLUT, M, matrix, B for device-to-PCS; the reverse for PCS-to-device). Lab 8-bit and 16-bit (v2 scaling) and v4 encodings are decoded; XYZ PCS uses the 1 + 32767/32768 scale. |
+| Matrix-shaper profiles | ColorSync's matrix/TRC path | `MatrixShaper` from `rXYZ`/`gXYZ`/`bXYZ` and `rTRC`/`gTRC`/`bTRC`; the inverse uses the Bradford-adapted colorant inverse and a closed-form or bisected tone curve. |
+| Built-in profiles | `kColorSyncSRGBProfile`, `kColorSyncDisplayP3Profile`, `kColorSyncAdobeRGB1998Profile` | `Builtin::{Srgb, DisplayP3, AdobeRgb1998, Rec2020, Gray22}` generate real ICC bytes at run time from the chromaticities in `colorspace` and a 1024-sample tone table; the same parser reads them. No profile files are shipped. |
+| Transform | `ColorSyncTransformConvert`, `ColorSyncProfileCreateLink`, intents | `Conversion::new(src, dst, intent, black_point_compensation)` goes device to PCS (D50) to device. Perceptual and saturation use their own tables and fall back to relative colorimetric; a matrix profile has one transform, so every intent uses it. Absolute colorimetric scales by the media white on the way out and back in. Black point compensation is the ICC v4 formula on the PCS black (zero for matrix profiles, so a no-op there). |
+| 3D table | ColorSync's cached link | `Lut3d::build` bakes a 33-point grid per (source profile, display, intent) and samples it trilinearly; eight tables are kept. |
+| Display profile | `ColorSyncProfileCreateWithDisplayID` | `icc_transform::display_target` builds the display profile from the first connected connector's EDID under `/sys/class/drm` (chromaticities as ten-bit values, gamma from byte 23 or the sRGB curve); with no readable EDID the built-in sRGB profile is used. |
+| Image decode | `CGImageSource` with `ColorSync` conversion to the display | `cg::imageio::ImageSource::all` converts every decoded frame with an embedded profile (PNG `iCCP`, JPEG `APP2`, TIFF and WebP `ICCP`) to the display profile once per decode. A picture already in the display profile is not tagged with its source profile again. Preview, Photos and any other app that decodes through `ImageSource` get this. sRGB-tagged pictures on an sRGB display are not converted. |
+
+Decisions and limits:
+- The conversion is the matrix or table path only. Perceptual gamut mapping is not done for matrix profiles; out-of-gamut
+  colours clip at the end. A profile's own perceptual table, when it has one, is used as is.
+- CMYK and other non-RGB device spaces are not converted: the engine feeds three device channels, so a profile with
+  four or more does not convert. A grey profile's pixels take their red channel.
+- Not done: profile creation and embedding (`ColorSyncMutableProfile`), `mluc` text in other scripts than the first
+  record, `vcgt` loading into the hardware (`kms.rs` still applies no ramp), the HDR Headroom Adaptive Gain Curve, the
+  PDF `ICCBased` path (`cg/pdf/image.rs` still takes the component count only), and the `ColorSync` SDK call (no app
+  calls `icc_transform` yet; the `bifrost_app::colorsync` surface still exposes only the named-space converter).
+- Verified on the host only by unit tests (`cargo test -p bifrost-render icc`, `colorspace`, `edid`). Not verified on Midget.
