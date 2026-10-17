@@ -1,7 +1,8 @@
 //! The Time Limit shield: a full-screen cover shown over an app whose daily
 //! limit is reached (or that Downtime does not allow). It offers OK (back to
-//! the Home Screen) and "Ignore Limit" for 15 minutes or the rest of the
-//! day, each behind the Screen Time Passcode when one is set.
+//! the Home Screen) and "Ignore Limit" for one more minute, for 15 minutes,
+//! or for the rest of the day, each behind the Screen Time Passcode when one
+//! is set.
 //!
 //! It only ever takes touches. Hardware keys (power, volume, the screenshot
 //! chord) never reach it, Settings is never shielded, and the shell drops
@@ -24,6 +25,7 @@ const BUTTON_GAP_PT: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Btn {
+    OneMinute,
     Fifteen,
     Today,
     Ok,
@@ -75,24 +77,25 @@ impl Shield {
     fn rect(&self, ui: &Ui, b: Btn) -> (f32, f32, f32, f32) {
         let (bw, bh, gap) = (ui.pt(BUTTON_W_PT).min(self.w as f32 - ui.pt(40.0)), ui.pt(BUTTON_H_PT), ui.pt(BUTTON_GAP_PT));
         let idx = match b {
-            Btn::Fifteen => 0.0,
-            Btn::Today => 1.0,
-            Btn::Ok => 2.0,
+            Btn::OneMinute => 0.0,
+            Btn::Fifteen => 1.0,
+            Btn::Today => 2.0,
+            Btn::Ok => 3.0,
         };
         let top = self.h as f32 * 0.58;
         ((self.w as f32 - bw) / 2.0, top + idx * (bh + gap), bw, bh)
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Btn> {
-        [Btn::Fifteen, Btn::Today, Btn::Ok].into_iter().find(|&b| {
+        [Btn::OneMinute, Btn::Fifteen, Btn::Today, Btn::Ok].into_iter().find(|&b| {
             let (rx, ry, rw, rh) = self.rect(ui, b);
             x >= rx && x < rx + rw && y >= ry && y < ry + rh
         })
     }
 
-    /// Centre of a button's ignore/OK area, for tests: 0 = 15 min, 1 = today, 2 = OK.
+    /// Centre of a button's area, for tests: 0 = one minute, 1 = 15 min, 2 = today, 3 = OK.
     pub fn button_centre(&self, ui: &Ui, which: usize) -> (f32, f32) {
-        let b = [Btn::Fifteen, Btn::Today, Btn::Ok][which];
+        let b = [Btn::OneMinute, Btn::Fifteen, Btn::Today, Btn::Ok][which];
         let (x, y, w, h) = self.rect(ui, b);
         (x + w / 2.0, y + h / 2.0)
     }
@@ -142,6 +145,7 @@ impl Shield {
     fn press(&mut self, b: Btn, pass: &Path) -> Out {
         let how = match b {
             Btn::Ok => return Out::Home,
+            Btn::OneMinute => Ignore::OneMinute,
             Btn::Fifteen => Ignore::Fifteen,
             Btn::Today => Ignore::Today,
         };
@@ -165,7 +169,12 @@ impl Shield {
             y += img.h as f32 + ui.pt(4.0);
         }
         let radius = ui.pt(5.0).min(6.0);
-        for (b, label, color) in [(Btn::Fifteen, "Ignore Limit for 15 min", BLUE), (Btn::Today, "Ignore Limit For Today", BLUE), (Btn::Ok, "OK", WHITE)] {
+        for (b, label, color) in [
+            (Btn::OneMinute, "Ignore Limit for 1 More Minute", BLUE),
+            (Btn::Fifteen, "Ignore Limit for 15 min", BLUE),
+            (Btn::Today, "Ignore Limit For Today", BLUE),
+            (Btn::Ok, "OK", WHITE),
+        ] {
             let (x, by, w, h) = self.rect(ui, b);
             s.fill_rrect(x, by, w, h, radius, if self.pressed == Some(b) { rgba(70, 70, 74, 255) } else { PLATE });
             let img = ui.text(label, 17.0, Weight::Semibold, color);
@@ -201,9 +210,10 @@ mod tests {
         let ui = crate::shell::tests::ui();
         let none = Path::new("/nonexistent/screentime_passcode.ini");
         let mut sh = Shield::new(AppId::Files, Reason::Limit, 1200, 800);
-        assert_eq!(tap(&mut sh, &ui, 2, none), Out::Home);
-        assert_eq!(tap(&mut sh, &ui, 0, none), Out::Ignore(Ignore::Fifteen));
-        assert_eq!(tap(&mut sh, &ui, 1, none), Out::Ignore(Ignore::Today));
+        assert_eq!(tap(&mut sh, &ui, 3, none), Out::Home);
+        assert_eq!(tap(&mut sh, &ui, 0, none), Out::Ignore(Ignore::OneMinute));
+        assert_eq!(tap(&mut sh, &ui, 1, none), Out::Ignore(Ignore::Fifteen));
+        assert_eq!(tap(&mut sh, &ui, 2, none), Out::Ignore(Ignore::Today));
     }
 
     #[test]
@@ -216,7 +226,7 @@ mod tests {
         let mut store = crate::shell::passcode::Store::load(&path);
         store.set("1234").unwrap();
         let mut sh = Shield::new(AppId::Files, Reason::Limit, 1200, 800);
-        assert_eq!(tap(&mut sh, &ui, 1, &path), Out::Open, "the keypad is up, nothing granted yet");
+        assert_eq!(tap(&mut sh, &ui, 2, &path), Out::Open, "the keypad is up, nothing granted yet");
         assert!(sh.lock.is_some());
         let mut buf = vec![0u32; 1200 * 800];
         sh.draw(&mut Surface { w: 1200, h: 800, stride: 1200, px: &mut buf, y0: 0 }, &ui, 0.0);

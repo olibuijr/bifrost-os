@@ -335,6 +335,36 @@ mod tests {
     }
 
     #[test]
+    fn midnight_gap_is_credited_to_neither_day() {
+        let d = dir("midnight");
+        let mut t = Tracker::new(&d);
+        let midnight = (1_700_000_000 / 86_400 + 1) * 86_400;
+        t.tick(midnight - 10, 0, Some(AppId::Files), true);
+        t.tick(midnight - 5, 0, Some(AppId::Files), true);
+        t.tick(midnight + 3, 0, Some(AppId::Files), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 0, "the 3 s across midnight is not credited to the new day");
+        t.tick(midnight + 4, 0, Some(AppId::Files), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 1);
+        assert_eq!(load_day(&d, day_of(midnight - 1, 0)).app_secs(AppId::Files), 5, "the old day keeps its own seconds");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_app_switch_is_credited_from_the_tick_that_sees_it() {
+        let d = dir("switch");
+        let mut t = Tracker::new(&d);
+        let base = 1_700_000_000;
+        t.tick(base, 0, Some(AppId::Files), true);
+        t.tick(base + 1, 0, Some(AppId::Files), true);
+        t.tick(base + 2, 0, Some(AppId::Photos), true);
+        t.tick(base + 3, 0, Some(AppId::Photos), true);
+        assert_eq!(t.today().app_secs(AppId::Files), 1, "Files keeps only the seconds up to the switch");
+        assert_eq!(t.today().app_secs(AppId::Photos), 2, "Photos gets the seconds after it is seen");
+        assert_eq!(t.today().ranked()[0].0, AppId::Photos);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn history_lists_days_oldest_first() {
         let d = dir("hist");
         let h = history(&d, 10, 3);

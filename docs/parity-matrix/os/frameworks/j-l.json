@@ -1675,9 +1675,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Gap: the sign-in attempt counter and temporary lock exist in springboard/core/src/password_verify.rs (Attempts), but there is no lock screen panel that shows the lockout and the wait time. Build that panel in the shell lock screen.",
+   "bifrost": "springboard/src/shell/screentime/shield.rs",
+   "status": "partial",
+   "note": "Partial: the Time Limit lockout cover (Limit and Downtime, Ignore Limit for 1 more minute, 15 minutes or today, behind the Screen Time passcode) is built in springboard/src/shell/screentime/shield.rs. Gap: the sign-in attempt lock panel (springboard/core/src/password_verify.rs keeps the counter, but no lock screen panel shows the lockout and wait time yet). Not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },

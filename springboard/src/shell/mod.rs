@@ -509,6 +509,8 @@ pub struct Shell {
     /// Screen Time: today's usage, the Time Limit cover, and per-second gates
     screentime: screentime::usage::Tracker,
     shield: Option<screentime::shield::Shield>,
+    /// (local day, app) pairs already warned about five minutes before a limit
+    st_warned: Vec<(i64, AppId)>,
     st_checked: i64,
     st_blocked_at: i64,
     /// the parsed screentime.ini, reloaded only when the file changes on disk
@@ -873,6 +875,7 @@ impl Shell {
             session_token: None,
             screentime: screentime::usage::Tracker::new(deildu::data_dir().parent().map(|p| p.join("screentime")).unwrap_or_default()),
             shield: None,
+            st_warned: Vec::new(),
             st_checked: 0,
             st_blocked_at: 0,
             st_cfg: None,
@@ -2115,6 +2118,7 @@ impl Shell {
         self.fullscreen = false;
         self.end_multi();
         self.init_app(app, t);
+        self.st_launch_check(app, t);
         self.transition = Some(self.render_app_frame(app));
         self.anim = Some((Anim::Open { app, rect: self.icon_rect(app) }, t));
         if let Some(i) = apps().iter().position(|a| a.id == app) {
