@@ -116,6 +116,24 @@ pub fn install_command(root: bool) -> (&'static str, Vec<&'static str>) {
     }
 }
 
+/// Packages that cannot be removed from Software Update: the shell itself and the base system that the recovery
+/// guard protects.
+pub const PROTECTED_PACKAGES: [&str; 9] = ["springboard-shell", "base", "linux", "linux-rt", "linux-firmware", "pacman", "systemd", "glibc", "sudo"];
+
+/// The pacman arguments that remove one package, without a prompt because the shell has already confirmed the
+/// removal. Plain `-R` only: pacman refuses to remove a package that others need, and no dependencies are removed
+/// with it. Refuses a name that is not a plain package name, a name that reads as a flag, and a protected package.
+pub fn remove_args(package: &str) -> Result<Vec<String>, String> {
+    let plain = !package.is_empty() && !package.starts_with('-') && package.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c));
+    if !plain {
+        return Err(format!("{package:?} is not a package name"));
+    }
+    if PROTECTED_PACKAGES.contains(&package) {
+        return Err(format!("{package} is part of the base system and cannot be removed"));
+    }
+    Ok(vec!["-R".into(), "--noconfirm".into(), package.into()])
+}
+
 /// The last non-empty line of pacman's output, as the failure text.
 fn last_line(s: &str) -> String {
     s.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("pacman failed").trim().to_string()
@@ -175,6 +193,29 @@ pub fn rollback_local() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remove_args_name_one_package_without_dependencies() {
+        assert_eq!(remove_args("firefox").unwrap(), vec!["-R", "--noconfirm", "firefox"]);
+        assert_eq!(remove_args("gtk4-demo+x").unwrap()[2], "gtk4-demo+x");
+        assert_eq!(remove_args("python@3.12").unwrap()[2], "python@3.12");
+    }
+
+    #[test]
+    fn remove_args_refuse_flags_empty_and_unusual_names() {
+        assert!(remove_args("").is_err());
+        assert!(remove_args("--assume-installed=x").is_err());
+        assert!(remove_args("Firefox").is_err(), "package names are lower case");
+        assert!(remove_args("foo bar").is_err());
+        assert!(remove_args("foo;rm").is_err());
+    }
+
+    #[test]
+    fn remove_args_refuse_the_shell_and_the_base_system() {
+        for p in PROTECTED_PACKAGES {
+            assert!(remove_args(p).is_err(), "{p} must not be removable");
+        }
+    }
 
     #[test]
     fn installed_version_is_the_second_word() {
