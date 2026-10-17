@@ -453,6 +453,8 @@ pub enum Action {
     Account(super::account_page::Act),
     /// Bluetooth: type the PIN or passkey the device asked for while pairing (`addr`)
     BluetoothPrompt { addr: String, passkey: bool },
+    /// VPN: bring the NetworkManager connection `name` up (`up`) or down
+    Vpn { name: String, up: bool },
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -2079,6 +2081,27 @@ mod tests {
     }
 
     #[test]
+    fn the_vpn_page_lists_the_held_connections_and_a_tap_flips_one() {
+        use crate::shell::desktop_network::{Snapshot, VpnConnection};
+        let (mut info, opts) = (info(), Options::default());
+        let empty = spec(PageId::Vpn, &model(&info, &opts));
+        assert_eq!(empty.groups[0].items[0].label, "No VPN Configurations");
+        info.desktop_network = Some(Snapshot {
+            vpns: vec![
+                VpnConnection { name: "Office".into(), kind: "vpn".into(), active: false },
+                VpnConnection { name: "wg0".into(), kind: "wireguard".into(), active: true },
+            ],
+            ..Snapshot::default()
+        });
+        let s = spec(PageId::Vpn, &model(&info, &opts));
+        let items = &s.groups[0].items;
+        assert_eq!((items[0].label.as_str(), items[0].value.as_str()), ("Office", "Not Connected"));
+        assert_eq!((items[1].label.as_str(), items[1].value.as_str()), ("wg0", "Connected"));
+        assert_eq!(items[0].action, Action::Vpn { name: "Office".into(), up: true }, "a tap on a disconnected VPN connects it");
+        assert_eq!(items[1].action, Action::Vpn { name: "wg0".into(), up: false }, "a tap on a connected one disconnects it");
+    }
+
+    #[test]
     fn root_lists_the_bifrost_sections_with_live_values() {
         let (info, opts) = (info(), Options::default());
         let s = spec(PageId::Root, &model(&info, &opts));
@@ -2461,7 +2484,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(match network.map_or(&[][..],|n|n.vpns.as_slice()){[]=>"None",v if v.iter().any(|c|c.active)=>"Connected",_=>"Not Connected"}).link(PageId::Vpn)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }
@@ -2475,8 +2498,8 @@ fn desktop_ethernet_page(info:&Info)->Spec {
     ]).header(&i.name).footer("Connection details update automatically. Unplugging this cable disconnects remote access over Ethernet.")).collect()};
     Spec{id:PageId::Ethernet,title:"Ethernet".into(),large:false,groups}
 }
-fn desktop_vpn_page(_info:&Info)->Spec {
-    let profiles=super::desktop_network::vpn_profiles();
-    let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service. Adding one needs the tunnel client, which is not built yet, so this list stays empty.")]}
+fn desktop_vpn_page(info:&Info)->Spec {
+    let vpns:&[super::desktop_network::VpnConnection]=info.desktop_network.as_ref().map_or(&[],|n|n.vpns.as_slice());
+    let items:Vec<Item>=if vpns.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{vpns.iter().map(|v|Item::new(v.name.clone()).value(v.status_label()).action(Action::Vpn{name:v.name.clone(),up:!v.active})).collect()};
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("These are the VPN and WireGuard connections the system network service holds. Tap one to connect or disconnect it. Adding a configuration is done with the network service (nmcli connection import) and is not built into this page yet.")]}
 }

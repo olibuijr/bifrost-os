@@ -51,6 +51,13 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-game-controllers", title: "Open Game Controllers", description: "Show the connected game controllers", page: PageId::GameControllers },
     SettingsIntent { id: "open-backup", title: "Open Backup", description: "Show the backups of this computer's data", page: PageId::Backup },
     SettingsIntent { id: "open-language-region", title: "Open Language & Region", description: "Show the preferred language and the region", page: PageId::Language },
+    SettingsIntent { id: "open-dock", title: "Open Home Screen & Dock", description: "Show the Dock and home screen settings", page: PageId::HomeScreen },
+    SettingsIntent { id: "open-menu-bar", title: "Open Menu Bar", description: "Show which controls the menu bar shows", page: PageId::MenuBar },
+    SettingsIntent { id: "open-screen-saver", title: "Open Screen Saver", description: "Show the screen saver settings", page: PageId::ScreenSaver },
+    SettingsIntent { id: "open-lock-screen", title: "Open Lock Screen", description: "Show the lock screen settings", page: PageId::LockScreen },
+    SettingsIntent { id: "open-spotlight", title: "Open Spotlight", description: "Show what Search looks in", page: PageId::Spotlight },
+    SettingsIntent { id: "open-hot-corners", title: "Open Hot Corners", description: "Show what the screen corners do", page: PageId::HotCorners },
+    SettingsIntent { id: "open-accessibility-shortcut", title: "Open Accessibility Shortcut", description: "Show the features the Accessibility Shortcut switches", page: PageId::AccessibilityShortcut },
 ];
 
 /// The intent with this id, if the catalogue has one.
@@ -112,6 +119,29 @@ mod tests {
         assert_eq!(find("open-displays").map(|i| i.title), Some("Open Displays"));
         assert_eq!(page_for("missing"), None);
         assert_eq!(find(""), None);
+    }
+
+    #[test]
+    fn the_settings_extensions_each_have_the_intent_that_opens_their_pane() {
+        // AboutSettingsIntents, AccessibilitySettingsWidgetExtension, BluetoothSettings..., BiometricsAndPassword...,
+        // ControlCenterSettings, DesktopSettingsIntents and VpnSettingsIntents
+        for (id, page) in [
+            ("open-about", PageId::About),
+            ("open-accessibility", PageId::Accessibility),
+            ("open-accessibility-shortcut", PageId::AccessibilityShortcut),
+            ("open-bluetooth", PageId::Bluetooth),
+            ("open-passcode", PageId::Passcode),
+            ("open-passwords", PageId::Passwords),
+            ("open-control-centre", PageId::ControlCentre),
+            ("open-menu-bar", PageId::MenuBar),
+            ("open-dock", PageId::HomeScreen),
+            ("open-wallpaper", PageId::Wallpaper),
+            ("open-screen-saver", PageId::ScreenSaver),
+            ("open-lock-screen", PageId::LockScreen),
+            ("open-vpn", PageId::Vpn),
+        ] {
+            assert_eq!(page_for(id), Some(page), "{id}");
+        }
     }
 
     #[test]
