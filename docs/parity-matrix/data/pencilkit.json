@@ -19,7 +19,7 @@
    "apple": "PKDrawing, PKDrawing.dataRepresentation",
    "bifrost": "springboard/ui/src/drawing.rs; wired: springboard/apps/notes-desktop/src/notes/sketch.rs (save, load; <id>-<n>.sketch beside the picture)",
    "status": "partial",
-   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "Wave 3 (w3-pencilkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The stroke list lives inside the shell and is not serialised. Both editors save a flattened PNG only (markup.rs Done, Freeform save to the screenshot directory). A drawing cannot be reopened as strokes. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Refreshed 2026-10-17: covered by ui drawing.rs (Drawing::to_text and from_text round-trip); tests drawing::tests."
   },
   {
    "feature": "Stroke and point model (PKStroke, PKStrokePath, PKStrokePoint)",
@@ -40,7 +40,7 @@
    "apple": "PKToolPicker",
    "bifrost": "springboard/ui/src/tool_picker.rs (ToolPicker: tool set, selection, colour and width per inking tool, visibility); springboard/ui/tests/parity_sdk-tests-05b.rs; springboard/src/shell/markup.rs:27 (TOOLS) and the colour row; springboard/apps/freeform-desktop/src/freeform.rs (palette)",
    "status": "partial",
-   "note": "ToolPicker (re-exported by the SDK) holds the tool set, selection, colour and width of each inking tool, and is tested headless in ui/tests/parity_sdk-tests-05b.rs. The markup editor and Freeform do not use it yet, and no view attaches a picker to a canvas, so each editor draws its own tool and colour row."
+   "note": "ToolPicker (re-exported by the SDK) holds the tool set, selection, colour and width of each inking tool, and is tested headless in ui/tests/parity_sdk-tests-05b.rs. The markup editor and Freeform do not use it yet, and no view attaches a picker to a canvas, so each editor draws its own tool and colour row. Refreshed 2026-10-17: SDK re-exports ui tool_picker (bifrost_sdk::tool_picker); tests tool_picker::tests."
   },
   {
    "feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)",
@@ -96,7 +96,7 @@
    "apple": "PKStrokePoint force, altitude, azimuth",
    "bifrost": "springboard/ui/src/drawing.rs (StrokePoint, pressure_width); springboard/ui/tests/parity_sdk-complete-15.rs",
    "status": "partial",
-   "note": "The stylus force sets each point's width through pressure_width, and a point's opacity scales its paint, both tested headless in springboard/ui/tests/parity_sdk-complete-15.rs. Gap: tilt (azimuth, altitude) does not change the rendered mark, and Markup and Freeform still send only position on touch events, so the shell has no pressure to pass on yet."
+   "note": "The stylus force sets each point's width through pressure_width, and a point's opacity scales its paint, both tested headless in springboard/ui/tests/parity_sdk-complete-15.rs. Gap: tilt (azimuth, altitude) does not change the rendered mark, and Markup and Freeform still send only position on touch events, so the shell has no pressure to pass on yet. Refreshed 2026-10-17: ui stylus.rs maps raw pressure and tilt onto StrokePoint force, altitude and azimuth; tests stylus::tests. The shell and Freeform still read touch only."
   },
   {
    "feature": "Rendering to an image",
@@ -114,12 +114,12 @@
   }
  ],
  "gaps": [
-  "No SDK canvas view or drawing model: apps cannot capture, store or reopen strokes (the ui models are not exposed through springboard/sdk/src).",
-  "No serialised drawing format in the shell or Freeform: both editors save flattened PNG only. The ui crate's text format is not used by them yet.",
+  "No app-facing canvas view: the drawing model and tool picker are re-exported by the SDK (bifrost_sdk::drawing, bifrost_sdk::tool_picker), but no SDK view captures strokes into a drawing for an app window.",
+  "Shell and Freeform save flattened PNG only; Drawing::to_text and from_text (ui drawing.rs) give a serialised format they do not use yet.",
   "No handwriting recogniser: the line layout and Recognizer hook exist in springboard/ui/src/handwriting.rs, but nothing recognises letters.",
   "No Scribble input path into text fields: the gesture model exists in springboard/ui/src/scribble.rs, but nothing routes stylus strokes to views.",
-  "No pressure, tilt or altitude data from the input device: the stroke point model carries those fields, but the shell and Freeform only read touch position.",
-  "No system tool picker that apps can attach to a canvas; the markup tools and palette are private to the shell.",
+  "Stylus input: ui stylus.rs maps pressure and tilt onto stroke points, but the shell and Freeform only read touch position.",
+  "The tool picker is re-exported by the SDK (bifrost_sdk::tool_picker), but no app can attach it to a canvas; the markup tools stay private to the shell.",
   "The shell markup editor (springboard/src/shell/markup.rs) and the Freeform app each keep their own stroke code, so they do not use the shared ui drawing module."
  ]
 }

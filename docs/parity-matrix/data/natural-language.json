@@ -61,7 +61,7 @@
       "apple": "NLContextualEmbedding, NLContextualEmbeddingKey",
       "bifrost": "springboard/ui/src/embedding.rs (Embedding::from_vector_text); tests: springboard/ui/tests/parity_sdk-complete-25.rs",
       "status": "partial",
-      "note": "Vocabularies load from text vector files (from_vector_text) and the neighbour, distance and sentence-vector queries are tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no on-device contextual model and no per-script asset download, which Apple provides and BifrOSt has not built; no shell or app client yet."
+      "note": "Vocabularies load from text vector files (from_vector_text) and the neighbour, distance and sentence-vector queries are tested headless in ui/tests/parity_sdk-complete-25.rs. Gap: no on-device contextual model and no per-script asset download, which Apple provides and BifrOSt has not built; no shell or app client yet. Refreshed 2026-10-17: EmbeddingIndex nearest-neighbour search in sdk embedding.rs; tests embedding::tests."
     },
     {
       "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",
@@ -79,11 +79,10 @@
     }
   ],
   "gaps": [
-    "Language recognizer: no text language detection and no hypotheses API",
-    "Linguistic tagger: no lexical class, lemma, name type or script tags for apps",
-    "Embeddings: sdk embedding.rs gives hashed bag-of-words vectors compared by cosine similarity; no learned word or sentence vectors and no nearest-neighbour search for apps",
-    "Custom NLModel runtime for classifiers and word taggers",
-    "Sentence and paragraph tokenization; word segmentation is alphanumeric runs, not UAX #29",
+    "No lemma or name-type tags: ui lexical_tags.rs gives lexical classes only.",
+    "No learned word or sentence vectors ship with the OS: sdk embedding.rs hashes bag-of-words and EmbeddingIndex::nearest searches vectors the app inserts; ui embedding.rs loads vector text files.",
+    "No general NLModel runtime for word taggers: ui text_classifier.rs and ml_runtime.rs run app-supplied classifiers only.",
+    "Word segmentation is letter and digit runs (ui segment.rs), not UAX #29 word boundaries; sentence and paragraph units exist in segment.rs.",
     "Named entity recognition: data detectors cover only link, date, address and phone"
   ]
 }

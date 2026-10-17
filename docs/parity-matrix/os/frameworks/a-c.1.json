@@ -62,7 +62,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/avfaudio.json",
    "status": "partial",
-   "note": "from SDK matrix avfaudio.json",
+   "note": "From SDK matrix avfaudio.json. Open: AVAudioSession, route and interruption events and the recording permission are modelled but not wired to audiod or the shell; no MIDI playback or sound bank; speech has no word events; player pan, rate and fade are not applied by audiod.",
    "rea": [],
    "method": "assessed"
   },
@@ -270,7 +270,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessory-access.json",
    "status": "partial",
-   "note": "from SDK matrix accessory-access.json",
+   "note": "From SDK matrix accessory-access.json. Open: no bus source calls attach or detach for USB accessories; no USB device permission in the app manifest; descriptors come from the caller; no USB device nodes are bound into app sandboxes.",
    "rea": [],
    "method": "assessed"
   },
@@ -624,7 +624,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/application-services.json",
    "status": "partial",
-   "note": "from SDK matrix application-services.json",
+   "note": "From SDK matrix application-services.json. Open: accessibility text markers, selection and caret events are not bridged through AT-SPI; no ColorSync CMM or profile matching for apps; no print panel plug-ins; HIShape boolean operations; no universal access zoom focus API.",
    "rea": [],
    "method": "assessed"
   },
@@ -971,7 +971,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/callkit.json",
    "status": "partial",
-   "note": "from SDK matrix callkit.json",
+   "note": "From SDK matrix callkit.json. Open: the shell does not draw incoming or outgoing call UI; caller ID and blocking has no system directory source.",
    "rea": [],
    "method": "assessed"
   },
@@ -2031,7 +2031,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-text.json",
    "status": "partial",
-   "note": "from SDK matrix core-text.json",
+   "note": "From SDK matrix core-text.json. Open: no GPOS reader or feature selection (kern table pairs only), no ligatures outside colour emoji; metrics not yet compared with the reference on Midget.",
    "rea": [],
    "method": "assessed"
   },

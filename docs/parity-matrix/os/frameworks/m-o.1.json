@@ -622,11 +622,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/natural-language.json",
+   "bifrost": "springboard/ui/src/language.rs, springboard/ui/src/lexical_tags.rs, springboard/ui/src/segment.rs, springboard/ui/src/embedding.rs, springboard/ui/src/text_classifier.rs, springboard/sdk/src/embedding.rs",
    "status": "partial",
    "note": "from SDK matrix natural-language.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "language::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lexical_tags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "segment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "embedding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "text_classifier::tests"
+    }
+   ],
+   "ready_note": "Host tests for language hypotheses, lexical classes, sentence and word segmentation, embedding nearest-neighbour search and the app-supplied text classifier. Not verified on Midget. Named entity recognition, lemma and name-type tags, learned vectors shipped with the OS, and a general NLModel runtime for word taggers remain gaps."
   },
   {
    "id": "path:/System/Library/Frameworks/NearbyInteraction.framework",
