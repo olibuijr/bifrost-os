@@ -50,6 +50,10 @@ const KEY_RIGHTMETA: u16 = 126;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TermKey {
     Copy,
+    /// Edit > Copy Special > Text with Colors (no key equivalent; the Edit menu runs it)
+    CopyStyled,
+    /// Edit > Copy Special > Without Background Colour
+    CopyStyledPlain,
     SelectAll,
     Find,
     FindNext,

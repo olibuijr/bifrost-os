@@ -4132,6 +4132,7 @@ impl Shell {
                 term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
+                term.set_look(self.terminal_ui.look);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();

@@ -297,6 +297,11 @@ impl super::Shell {
                     let Some(def) = super::apps::apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return (WorkspaceStatus::NotFound, Vec::new()) };
                     let batch: Vec<GrantId> = plan.iter().filter(|(k, _)| *k == key).map(|(_, g)| *g).collect();
                     self.desk_open_or_start(def, t);
+                    // Terminal runs the files it is given (a .command or an executable) in new tabs
+                    if matches!(def, super::AppId::Terminal) {
+                        let docs: Vec<PathBuf> = files.iter().zip(&plan).filter(|(_, (k, _))| *k == key).map(|((p, _), _)| p.clone()).collect();
+                        self.terminal_open_documents(&docs);
+                    }
                     if let super::AppId::External(to) = def {
                         let request = self.app_share.next_inbound();
                         self.inbound_files(app_id, &key, to, request, &batch);

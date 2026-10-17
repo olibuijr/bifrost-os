@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Terminal: Edit > Copy Special has Text with Colors and Without Background Colour. Both put plain text and RTF on the pasteboard, and the RTF keeps each cell's colours.
+- Terminal: the Profile Editor (More > Profile Editor) sets the 16 ANSI colours with colour wells and red, green and blue steppers, Bold as Bright, Allow Blink (stored; blinking text is not drawn yet), character and line spacing, and the cursor style. It is saved in prefs and applies to every tab.
+- Terminal: a .command file, or an executable, opened with Terminal runs in its own new tab in its folder, and the tab stays at a login shell.
+
 - Photos: album folders have a tested model (names, one folder per album, slots kept in step when an album is deleted, stored under uf.<n> in photos.ini). The picker does not show folders yet.
 - Terminal: Edit Title for a tab, Allow Mouse Reporting, Search the Web and Open man Page for the selection, Save Selected Text, and Use Selection for Find (Cmd+E).
 - Terminal: the More menu has Close Other Tabs, Paste Escaped Text, Paste Selection and a Terminal Help line.
