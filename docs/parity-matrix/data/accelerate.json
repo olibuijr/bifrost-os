@@ -33,7 +33,7 @@
       "apple": "vImage geometric transforms (rotate, reflect, shear, scale) and resampling",
       "bifrost": "springboard/render/src/gfx/rotate.rs:157 (rotated), springboard/render/src/emoji.rs:402 (resample), springboard/src/shell/photos/edit.rs:214 (rotate)",
       "status": "partial",
-      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API."
+      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API. Built 2026-10-17: PixelTransfer::sheared, a 2x2 matrix shear about the centre with bounding-box output (sdk pixel_transfer.rs; tests pixel_transfer::tests)."
     },
     {
       "feature": "Compositing and blend modes",

@@ -5178,8 +5178,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "n/a: the intents of Apple's Clock app, an Apple first-party app BifrOSt does not ship. The App Intents layer a clock app would use is in place (see the AppIntents row).",
    "rea": [],
    "method": "assessed"
   },
