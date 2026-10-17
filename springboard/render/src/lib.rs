@@ -80,6 +80,7 @@ pub mod gaussian_filter;
 pub mod laplacian_pyramid;
 pub mod lanczos;
 pub mod generators;
+pub mod transition_filters;
 pub mod spot_light;
 pub mod comic_filter;
 pub mod morphology;

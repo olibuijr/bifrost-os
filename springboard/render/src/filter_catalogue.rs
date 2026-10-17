@@ -12,6 +12,11 @@ pub const CATEGORY_HALFTONE: &str = "CICategoryHalftoneEffect";
 pub const CATEGORY_TILE: &str = "CICategoryTileEffect";
 pub const CATEGORY_BLUR: &str = "CICategoryBlur";
 pub const CATEGORY_COMPOSITE: &str = "CICategoryCompositeOperation";
+pub const CATEGORY_COLOR_ADJUSTMENT: &str = "CICategoryColorAdjustment";
+pub const CATEGORY_COLOR_EFFECT: &str = "CICategoryColorEffect";
+pub const CATEGORY_GENERATOR: &str = "CICategoryGenerator";
+pub const CATEGORY_GRADIENT: &str = "CICategoryGradient";
+pub const CATEGORY_TRANSITION: &str = "CICategoryTransition";
 
 /// One input attribute: its reference key, default and range.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,6 +41,7 @@ const fn a(key: &'static str, default: f32, min: f32, max: f32) -> Attribute {
 
 const RADIUS: Attribute = a("inputRadius", 300.0, 0.0, 1000.0);
 const ANGLE: Attribute = a("inputAngle", 0.0, -PI, PI);
+const TIME: Attribute = a("inputTime", 0.0, 0.0, 1.0);
 
 static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CITwirlDistortion", category: CATEGORY_DISTORTION, attributes: &[RADIUS, a("inputAngle", PI, -12.566, 12.566)] },
@@ -66,6 +72,25 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CISourceOverCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
     FilterInfo { name: "CIMultiplyBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
     FilterInfo { name: "CIScreenBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIExposureAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputEV", 0.0, -10.0, 10.0)] },
+    FilterInfo { name: "CIGammaAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputPower", 1.0, 0.1, 3.0)] },
+    FilterInfo { name: "CIVibrance", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputAmount", 0.0, -1.0, 1.0)] },
+    FilterInfo { name: "CIWhitePointAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[] },
+    FilterInfo { name: "CISepiaTone", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
+    FilterInfo { name: "CIColorMonochrome", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
+    FilterInfo { name: "CIColorPosterize", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputLevels", 6.0, 2.0, 30.0)] },
+    FilterInfo { name: "CIFalseColor", category: CATEGORY_COLOR_EFFECT, attributes: &[] },
+    FilterInfo { name: "CIColorInvert", category: CATEGORY_COLOR_EFFECT, attributes: &[] },
+    FilterInfo { name: "CIEdges", category: CATEGORY_STYLIZE, attributes: &[a("inputIntensity", 1.0, 0.0, 10.0)] },
+    FilterInfo { name: "CIHighlightShadowAdjust", category: CATEGORY_STYLIZE, attributes: &[a("inputHighlightAmount", 1.0, 0.0, 1.0), a("inputShadowAmount", 0.0, -1.0, 1.0)] },
+    FilterInfo { name: "CIRandomGenerator", category: CATEGORY_GENERATOR, attributes: &[] },
+    FilterInfo { name: "CICheckerboardGenerator", category: CATEGORY_GENERATOR, attributes: &[a("inputWidth", 80.0, 1.0, 400.0), a("inputSharpness", 1.0, 0.0, 1.0)] },
+    FilterInfo { name: "CIStripesGenerator", category: CATEGORY_GENERATOR, attributes: &[a("inputWidth", 80.0, 1.0, 400.0), a("inputSharpness", 1.0, 0.0, 1.0), ANGLE] },
+    FilterInfo { name: "CILinearGradient", category: CATEGORY_GRADIENT, attributes: &[] },
+    FilterInfo { name: "CIRadialGradient", category: CATEGORY_GRADIENT, attributes: &[a("inputRadius0", 0.0, 0.0, 1000.0), a("inputRadius1", 100.0, 0.0, 1000.0)] },
+    FilterInfo { name: "CISwipeTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE] },
+    FilterInfo { name: "CIBarsSwipeTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE, a("inputWidth", 30.0, 1.0, 1000.0)] },
+    FilterInfo { name: "CICopyMachineTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE, a("inputWidth", 50.0, 0.0, 1000.0)] },
 ];
 
 /// Every catalogued filter name, in catalogue order.
@@ -117,6 +142,19 @@ mod tests {
         assert_eq!(default_value("CIPinchDistortion", "inputScale"), Some(0.5));
         assert_eq!(default_value("CIBloom", "inputBogus"), None);
         assert!(attributes("CINope").is_none());
+    }
+
+    #[test]
+    fn colour_stylize_generator_and_transition_filters_are_listed() {
+        assert_eq!(filter_names(Some(CATEGORY_TRANSITION)), ["CISwipeTransition", "CIBarsSwipeTransition", "CICopyMachineTransition"]);
+        assert_eq!(filter_names(Some(CATEGORY_GRADIENT)), ["CILinearGradient", "CIRadialGradient"]);
+        assert!(filter_names(Some(CATEGORY_COLOR_EFFECT)).contains(&"CIFalseColor"));
+        assert!(filter_names(Some(CATEGORY_COLOR_ADJUSTMENT)).contains(&"CIWhitePointAdjust"));
+        assert!(filter_names(Some(CATEGORY_STYLIZE)).contains(&"CIEdges"));
+        assert!(filter_names(Some(CATEGORY_GENERATOR)).contains(&"CIRandomGenerator"));
+        assert_eq!(default_value("CIVibrance", "inputAmount"), Some(0.0));
+        assert_eq!(default_value("CIColorPosterize", "inputLevels"), Some(6.0));
+        assert_eq!(default_value("CISwipeTransition", "inputTime"), Some(0.0));
     }
 
     #[test]
