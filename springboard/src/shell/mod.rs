@@ -1118,7 +1118,7 @@ impl Shell {
             dirty: true,
             perf_only: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,recent_list:recent_items::new(),desktop_context:None,
+            desktop_menu:None,defaults:None,recent_list:recent_items::initial(),desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
