@@ -12,37 +12,37 @@
    "feature": "Icon view",
    "area": "view",
    "apple": "Finder View > as Icons",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/toolbar.rs:64",
-   "note": "Icon grid with the view switcher (window.rs:199 set_view)",
-   "wire": ""
+   "note": "Icon grid with the view switcher (window.rs:199 set_view) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "List view with sortable column headers",
    "area": "view",
    "apple": "Finder View > as List",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/window.rs:317",
-   "note": "List rows, column headers click to sort, disclosure triangles (views/options.rs:278 toggle_expand)",
-   "wire": ""
+   "note": "List rows, column headers click to sort, disclosure triangles (views/options.rs:278 toggle_expand) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Column view with ancestor columns",
    "area": "view",
    "apple": "Finder View > as Columns",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/views/column.rs:43",
-   "note": "paint_columns draws the ancestors and the open folder (window.rs:445)",
-   "wire": ""
+   "note": "paint_columns draws the ancestors and the open folder (window.rs:445) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Gallery view",
    "area": "view",
    "apple": "Finder View > as Gallery",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/views/options.rs:394",
-   "note": "paint_gallery: large preview over a filmstrip; set_gallery at options.rs:251",
-   "wire": ""
+   "note": "paint_gallery: large preview over a filmstrip; set_gallery at options.rs:251 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "View Options panel (sort, group, text and icon size)",
@@ -57,10 +57,10 @@
    "feature": "Sort by name, date, size, kind",
    "area": "view",
    "apple": "Finder Sort By",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/src/files/fs.rs:173",
-   "note": "fs::sort with natural name order (fs.rs:137)",
-   "wire": ""
+   "note": "fs::sort with natural name order (fs.rs:137) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Group by None, Kind, Date",
@@ -75,55 +75,55 @@
    "feature": "Status bar (item count, free space)",
    "area": "view",
    "apple": "Finder View > Show Status Bar",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/window.rs:98",
-   "note": "toggle_status_bar; free space from capacity (springboard/src/files/fs.rs:585)",
-   "wire": ""
+   "note": "toggle_status_bar; free space from capacity (springboard/src/files/fs.rs:585) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Path bar at the foot of the window",
    "area": "view",
    "apple": "Finder View > Show Path Bar",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/pathbar.rs:5",
-   "note": "Path items from the computer or home down to the open folder; each item navigates",
-   "wire": ""
+   "note": "Path items from the computer or home down to the open folder; each item navigates Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Toolbar: back, forward, view switcher, sort, new folder, select, search",
    "area": "view",
    "apple": "Finder toolbar",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/toolbar.rs:56",
-   "note": "Toolbar items built per window",
-   "wire": ""
+   "note": "Toolbar items built per window Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Sidebar show and hide",
    "area": "view",
    "apple": "Finder View > Hide Sidebar",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/window.rs:94",
-   "note": "toggle_sidebar; Ctrl+Cmd+S chord at keys.rs (toggle_sidebar call)",
-   "wire": ""
+   "note": "toggle_sidebar; Ctrl+Cmd+S chord at keys.rs (toggle_sidebar call) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Hidden files toggle (Shift+Cmd+.)",
    "area": "view",
    "apple": "Finder Show Hidden Files",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/keys.rs:59",
-   "note": "Shift+period chord calls toggle_hidden",
-   "wire": ""
+   "note": "Shift+period chord calls toggle_hidden Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Expand and collapse folders in list view",
    "area": "view",
    "apple": "Finder list disclosure",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/views/options.rs:278",
-   "note": "toggle_expand splices the children under the row",
-   "wire": ""
+   "note": "toggle_expand splices the children under the row Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Sidebar sections: Favorites, Locations, Tags",
@@ -147,19 +147,19 @@
    "feature": "Tags in the sidebar and colour dots on items",
    "area": "sidebar",
    "apple": "Finder Tags sidebar, tag dots",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/info.rs:127",
-   "note": "tag_dots draws the colour dots; the Tags sidebar rows are at sidebar.rs:54",
-   "wire": ""
+   "note": "tag_dots draws the colour dots; the Tags sidebar rows are at sidebar.rs:54 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Assign tags from the Tags panel and the menu",
    "area": "sidebar",
    "apple": "Finder Tags…",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/info.rs:153",
-   "note": "toggle_tag applies to the selection; Tags… context item at menus.rs:86",
-   "wire": ""
+   "note": "toggle_tag applies to the selection; Tags… context item at menus.rs:86 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Custom tag names and colours",
@@ -174,10 +174,10 @@
    "feature": "Smart folders: saved searches listed in the sidebar",
    "area": "sidebar",
    "apple": "Finder Smart Folders",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/smart.rs:84",
-   "note": "results() matches saved folders on words, kind, tag and age; listed in the sidebar at sidebar.rs:66",
-   "wire": ""
+   "note": "results() matches saved folders on words, kind, tag and age; listed in the sidebar at sidebar.rs:66 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Save a search as a Smart Folder",
@@ -192,10 +192,10 @@
    "feature": "Tabs in one window",
    "area": "window",
    "apple": "Finder File > New Tab",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/tabs.rs:195",
-   "note": "new_tab, close_tab and step_tab; Cmd+T, Cmd+W and Ctrl+Tab at keys.rs:62",
-   "wire": ""
+   "note": "new_tab, close_tab and step_tab; Cmd+T, Cmd+W and Ctrl+Tab at keys.rs:62 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "New Finder window (Cmd+N)",
@@ -210,10 +210,10 @@
    "feature": "Quick Look preview (Space)",
    "area": "window",
    "apple": "Finder Quick Look",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/system.rs:251",
-   "note": "quick_look calls the shell's quick-look service; arrows step it (follow_preview at system.rs:267)",
-   "wire": ""
+   "note": "quick_look calls the shell's quick-look service; arrows step it (follow_preview at system.rs:267) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Get Info window",
@@ -228,28 +228,28 @@
    "feature": "Open With (choose app, default marked)",
    "area": "window",
    "apple": "Finder Open With",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/openwith.rs:33",
-   "note": "Candidates from the launch service; default is marked",
-   "wire": ""
+   "note": "Candidates from the launch service; default is marked Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Folder totals and item counts in Get Info",
    "area": "window",
    "apple": "Finder Get Info folder size",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/info.rs:167",
-   "note": "Folder totals count until a deadline (info.rs:11); the info rows come from springboard/src/files/info.rs",
-   "wire": ""
+   "note": "Folder totals count until a deadline (info.rs:11); the info rows come from springboard/src/files/info.rs Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Owner, group and permissions in Get Info (read)",
    "area": "window",
    "apple": "Finder Sharing & Permissions",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/info.rs:87",
-   "note": "permission_rows shows owner and group names from /etc/passwd and /etc/group",
-   "wire": ""
+   "note": "permission_rows shows owner and group names from /etc/passwd and /etc/group Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Edit owner, group and permissions in Get Info",
@@ -264,46 +264,46 @@
    "feature": "Back and forward history",
    "area": "navigation",
    "apple": "Finder Go > Back, Forward",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/window.rs:169",
-   "note": "go_back and go_forward; [ and ] keys at keys.rs:66-67",
-   "wire": ""
+   "note": "go_back and go_forward; [ and ] keys at keys.rs:66-67 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Enclosing folder (Cmd+Up)",
    "area": "navigation",
    "apple": "Finder Go > Enclosing Folder",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/keys.rs:56",
-   "note": "go_up",
-   "wire": ""
+   "note": "go_up Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Go to Folder with path completion (Shift+Cmd+G)",
    "area": "navigation",
    "apple": "Finder Go > Go to Folder",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/go.rs:94",
-   "note": "open_goto; path completion described in go.rs:1",
-   "wire": ""
+   "note": "open_goto; path completion described in go.rs:1 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Go Home, Desktop, Documents, Downloads, Recents",
    "area": "navigation",
    "apple": "Finder Go menu",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/go.rs:95",
-   "note": "go_chord shortcuts for each place",
-   "wire": ""
+   "note": "go_chord shortcuts for each place Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Recents",
    "area": "navigation",
    "apple": "Finder Recents",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/src/files/fs.rs:545",
-   "note": "recent_in lists recent files newest first, skipping hidden ones",
-   "wire": ""
+   "note": "recent_in lists recent files newest first, skipping hidden ones Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Connect to Server",
@@ -318,28 +318,28 @@
    "feature": "Spring-loaded folders during a drag",
    "area": "navigation",
    "apple": "Finder spring-loaded folders",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/go.rs:156",
-   "note": "spring_hover opens a hovered folder after SPRING_DELAY (go.rs:6, 800 ms)",
-   "wire": ""
+   "note": "spring_hover opens a hovered folder after SPRING_DELAY (go.rs:6, 800 ms) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Keyboard navigation (arrows, Return to rename, Cmd+A select all)",
    "area": "navigation",
    "apple": "Finder keyboard",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/window.rs:186",
-   "note": "move_focus moves the focus; Return starts a rename (keys.rs:47); Cmd+A selects all (keys.rs:52)",
-   "wire": ""
+   "note": "move_focus moves the focus; Return starts a rename (keys.rs:47); Cmd+A selects all (keys.rs:52) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Search by name (words, ignoring case)",
    "area": "search",
    "apple": "Finder search field",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/search.rs:19",
-   "note": "query_changed runs FileManager on a worker; name_matches needs every word (springboard/src/files/find.rs:51)",
-   "wire": ""
+   "note": "query_changed runs FileManager on a worker; name_matches needs every word (springboard/src/files/find.rs:51) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Search tokens (kind:, tag:, date:)",
@@ -372,19 +372,19 @@
    "feature": "Copy, Cut and Paste files",
    "area": "file-ops",
    "apple": "Finder Edit > Copy, Cut, Paste",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:307",
-   "note": "copy_selected puts file URLs on the shared pasteboard; paste at ops.rs:528",
-   "wire": ""
+   "note": "copy_selected puts file URLs on the shared pasteboard; paste at ops.rs:528 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Duplicate (Cmd+D)",
    "area": "file-ops",
    "apple": "Finder Duplicate",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:517",
-   "note": "Copies the selection into its folder under new names",
-   "wire": ""
+   "note": "Copies the selection into its folder under new names Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Make Alias (symbolic link)",
@@ -417,100 +417,100 @@
    "feature": "Rename inline (Return)",
    "area": "file-ops",
    "apple": "Finder Rename",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:552",
-   "note": "start_rename and commit_rename",
-   "wire": ""
+   "note": "start_rename and commit_rename Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Move to Trash (Cmd+Delete)",
    "area": "file-ops",
    "apple": "Finder Move to Trash",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:473",
-   "note": "trash_selected; Backspace chord at keys.rs:45",
-   "wire": ""
+   "note": "trash_selected; Backspace chord at keys.rs:45 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Put Back from Trash",
    "area": "file-ops",
    "apple": "Finder Put Back",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:501",
-   "note": "put_back restores each item to its origin folder",
-   "wire": ""
+   "note": "put_back restores each item to its origin folder Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Empty Trash with confirmation",
    "area": "file-ops",
    "apple": "Finder Empty Trash",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/empty_trash.rs:2",
-   "note": "Confirmation sheet, then a worker job (ops.rs:485)",
-   "wire": ""
+   "note": "Confirmation sheet, then a worker job (ops.rs:485) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Undo file operations (Cmd+Z)",
    "area": "file-ops",
    "apple": "Finder Edit > Undo",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/undo.rs:88",
-   "note": "undo_file_op reverses moves, renames and trashing",
-   "wire": ""
+   "note": "undo_file_op reverses moves, renames and trashing Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "New Folder (Shift+Cmd+N)",
    "area": "file-ops",
    "apple": "Finder New Folder",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:536",
-   "note": "new_folder with a free name",
-   "wire": ""
+   "note": "new_folder with a free name Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Compress to ZIP, TAR.GZ, TAR.XZ",
    "area": "file-ops",
    "apple": "Finder Compress",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:454",
-   "note": "compress; the three formats are menu items at menus.rs:83-85",
-   "wire": ""
+   "note": "compress; the three formats are menu items at menus.rs:83-85 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Expand archives",
    "area": "file-ops",
    "apple": "Finder Open or Expand archive",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:466",
-   "note": "extract runs as a job; Expand item at menus.rs:87",
-   "wire": ""
+   "note": "extract runs as a job; Expand item at menus.rs:87 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Background copy with progress and cancel",
    "area": "file-ops",
    "apple": "Finder copy progress",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/ops.rs:335",
-   "note": "spawn_work runs the job; cancel_job at ops.rs:429",
-   "wire": ""
+   "note": "spawn_work runs the job; cancel_job at ops.rs:429 Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Conflict prompt: keep both, replace, skip",
    "area": "file-ops",
    "apple": "Finder replace prompt",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/main.rs:599",
-   "note": "K, R and S answer the conflict prompt",
-   "wire": ""
+   "note": "K, R and S answer the conflict prompt Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Drag items out to other windows and apps",
    "area": "file-ops",
    "apple": "Finder drag and drop",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/dragout.rs:105",
-   "note": "Drag sessions carry read grants; files from other apps are copied in (1.27.0 changelog)",
-   "wire": ""
+   "note": "Drag sessions carry read grants; files from other apps are copied in (1.27.0 changelog) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Share and Send Nearby",
@@ -543,10 +543,10 @@
    "feature": "Thumbnails and previews of pictures",
    "area": "integration",
    "apple": "Finder thumbnails",
-   "status": "parity",
+   "status": "partial",
    "bifrost": "springboard/apps/files/src/system.rs:49",
-   "note": "Thumbnail service request per view (thumb_answer at views/options.rs:334)",
-   "wire": ""
+   "note": "Thumbnail service request per view (thumb_answer at views/options.rs:334) Built; not yet verified on Midget, so partial until a Midget check.",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Scripting (Finder dictionary)",
@@ -587,10 +587,10 @@
  ],
  "summary": {
   "features": 64,
-  "parity": 41,
-  "partial": 17,
+  "parity": 0,
+  "partial": 58,
   "gap": 5,
   "n/a": 1,
-  "coverage_pct": 78.6
+  "coverage_pct": 46.0
  }
 }
