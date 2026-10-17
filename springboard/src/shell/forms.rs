@@ -36,6 +36,9 @@ pub enum Purpose {
     AccountEmail,
     /// step 2 of 2: the password for `email`. It goes to the cloud's sign-in route and is not kept.
     AccountPassword { email: String },
+    /// Bluetooth pairing: the PIN (up to 16 characters) or the six-digit passkey `addr` asks for. Not kept; it is
+    /// sent to the radio as `Cmd::AnswerPairing`.
+    BluetoothPairing { addr: String, passkey: bool },
 }
 
 /// What the sheet shows.
@@ -110,6 +113,16 @@ impl Prompt {
             max: 256,
             ..Prompt::new(Purpose::AccountPassword { email: email.to_string() }, "Sign In", message, "Password", "Sign In")
         }
+    }
+
+    /// The Bluetooth pairing prompt for the device `addr`: a six-digit passkey, or a PIN of up to 16 characters.
+    pub fn bluetooth_pairing(addr: &str, passkey: bool) -> Prompt {
+        let (message, placeholder, max) = if passkey {
+            ("Type the six-digit passkey shown on the device.", "Passkey", 6)
+        } else {
+            ("Type the PIN for the device: up to 16 letters or digits.", "PIN", 16)
+        };
+        Prompt { secure: true, max, ..Prompt::new(Purpose::BluetoothPairing { addr: addr.to_string(), passkey }, "Pair Device", message, placeholder, "Pair") }
     }
 
     pub fn new_group() -> Prompt {
@@ -196,6 +209,8 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::AccountPassword { .. } => !text.is_empty(),
         Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
         Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
+        Purpose::BluetoothPairing { passkey: true, .. } => bifrost_core::bt_pairing::validate_passkey(text).is_ok(),
+        Purpose::BluetoothPairing { passkey: false, .. } => bifrost_core::bt_pairing::validate_pin(text).is_ok(),
     }
 }
 
@@ -230,5 +245,17 @@ mod tests {
     fn an_unusable_suggestion_is_left_empty() {
         let second = Prompt::next(&Purpose::NewUserFull { admin: false }, "9 Lives").expect("account name step");
         assert_eq!(second.initial, "", "an account name cannot start with a digit");
+    }
+
+    #[test]
+    fn bluetooth_pairing_takes_a_pin_or_a_six_digit_passkey() {
+        let pin = Prompt::bluetooth_pairing("AA:BB:CC:DD:EE:FF", false);
+        assert!(pin.secure && pin.max == 16);
+        assert!(acceptable(&pin.purpose, "1234") && acceptable(&pin.purpose, "abc123"));
+        assert!(!acceptable(&pin.purpose, "") && !acceptable(&pin.purpose, "12 34"));
+        let passkey = Prompt::bluetooth_pairing("AA:BB:CC:DD:EE:FF", true);
+        assert_eq!(passkey.max, 6);
+        assert!(acceptable(&passkey.purpose, "000042"));
+        assert!(!acceptable(&passkey.purpose, "42") && !acceptable(&passkey.purpose, "12a456"));
     }
 }

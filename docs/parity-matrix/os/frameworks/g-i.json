@@ -292,7 +292,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/iobluetooth.json",
    "status": "partial",
-   "note": "from SDK matrix iobluetooth.json Built 2026-10-17: Pairing input checks (PIN, passkey, numeric comparison) in springboard/sdk/src/bluetooth_pairing.rs, tests bluetooth_pairing::tests; app-facing Bluetooth SDK gaps stay open.",
+   "note": "from SDK matrix iobluetooth.json Built 2026-10-17: Pairing input checks (PIN, passkey, numeric comparison) in springboard/core/src/bt_pairing.rs, tests bt_pairing::tests; app-facing Bluetooth SDK gaps stay open.",
    "rea": [],
    "method": "assessed"
   },

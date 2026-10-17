@@ -411,6 +411,8 @@ pub enum Action {
     InternetAccounts(super::internet_accounts_page::Act),
     /// a tap on the Settings > BifrOSt Account page (see `account_page::Act`)
     Account(super::account_page::Act),
+    /// Bluetooth: type the PIN or passkey the device asked for while pairing (`addr`)
+    BluetoothPrompt { addr: String, passkey: bool },
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -593,6 +595,14 @@ fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> S
         return page("Bluetooth", false, groups);
     }
     if bt.on() {
+        if let Some(p) = &bt.prompt {
+            let label = bt.device(&p.addr).map_or(p.addr.as_str(), |d| d.label());
+            let passkey = p.method == bifrost_core::bt_pairing::PairingMethod::Passkey;
+            let ask = Item::new(format!("Enter the {} for {label}", if passkey { "passkey" } else { "PIN" }))
+                .tint(Tint::Blue)
+                .action(Action::BluetoothPrompt { addr: p.addr.clone(), passkey });
+            groups.push(Group::new(vec![ask]).footer("The device is waiting for this code to finish pairing."));
+        }
         let note = |addr: &str, connected: bool| match (bt.busy.as_deref() == Some(addr), connected) {
             (true, _) => "Connecting…",
             (_, true) => "Connected",

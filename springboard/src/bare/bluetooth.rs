@@ -21,6 +21,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use bifrost_core::bt_address::{ClassOfDevice, DeviceKind};
+use bifrost_core::bt_pairing::{answer_for, PairingAnswer, PairingMethod};
 
 // ---- the mgmt wire format (linux/include/net/bluetooth/mgmt.h) ----
 
@@ -45,6 +46,8 @@ const OP_USER_CONFIRM_NEG_REPLY: u16 = 0x001D;
 const OP_START_DISCOVERY: u16 = 0x0023;
 const OP_STOP_DISCOVERY: u16 = 0x0024;
 const OP_CONFIRM_NAME: u16 = 0x0025;
+const OP_USER_PASSKEY_REPLY: u16 = 0x001E;
+const OP_USER_PASSKEY_NEG_REPLY: u16 = 0x001F;
 
 const EV_CMD_COMPLETE: u16 = 0x0001;
 const EV_CMD_STATUS: u16 = 0x0002;
@@ -61,6 +64,7 @@ const EV_AUTH_FAILED: u16 = 0x0011;
 const EV_DEVICE_FOUND: u16 = 0x0012;
 const EV_DISCOVERING: u16 = 0x0013;
 const EV_DEVICE_UNPAIRED: u16 = 0x0016;
+const EV_USER_PASSKEY_REQUEST: u16 = 0x0010;
 
 /// "no controller" index used by commands that are not per controller.
 const INDEX_NONE: u16 = 0xFFFF;
@@ -123,6 +127,14 @@ pub fn parse_addr(s: &str) -> Option<[u8; 6]> {
 /// Wire bytes to "AA:BB:CC:DD:EE:FF".
 pub fn fmt_addr(wire: &[u8]) -> String {
     wire.iter().rev().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":")
+}
+
+/// The PIN as the mgmt reply carries it: 16 bytes, zero padded.
+fn pin_bytes(pin: &str) -> [u8; 16] {
+    let mut b = [0u8; 16];
+    let n = pin.len().min(16);
+    b[..n].copy_from_slice(&pin.as_bytes()[..n]);
+    b
 }
 
 /// `mgmt_addr_info`: the address bytes and the type, 7 bytes.
@@ -252,6 +264,14 @@ pub enum State {
     On,
 }
 
+/// A PIN or passkey the user has to type for the pairing in progress.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PairingPrompt {
+    /// "AA:BB:CC:DD:EE:FF"
+    pub addr: String,
+    pub method: PairingMethod,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
     pub state: State,
@@ -261,6 +281,8 @@ pub struct Status {
     /// the address being paired or connected right now
     pub busy: Option<String>,
     pub error: Option<String>,
+    /// the PIN or passkey the shell asks the user for; answered with `Cmd::AnswerPairing`
+    pub prompt: Option<PairingPrompt>,
 }
 
 impl Status {
@@ -297,6 +319,8 @@ pub enum Cmd {
     Disconnect(String),
     /// unpair and drop the stored key
     Forget(String),
+    /// the PIN or passkey typed for the pairing in progress; None refuses the request
+    AnswerPairing(Option<String>),
 }
 
 // ---- the bonds on disk ----
@@ -477,6 +501,7 @@ impl Core {
                 self.status.state = State::Off;
                 self.status.scanning = false;
                 self.status.busy = None;
+                self.status.prompt = None;
                 self.scan_since = None;
                 self.status.devices.retain(|d| d.paired);
                 self.status.devices.iter_mut().for_each(|d| d.connected = false);
@@ -516,8 +541,38 @@ impl Core {
                 out.push(Out::Save);
                 out
             }
+            Cmd::AnswerPairing(text) => self.answer(text),
             _ => vec![],
         }
+    }
+
+    /// The PIN or passkey the user typed. A typed value that is not valid keeps the prompt and says why.
+    fn answer(&mut self, text: Option<String>) -> Vec<Out> {
+        let Some(prompt) = self.status.prompt.take() else { return vec![] };
+        let Some(text) = text else { return self.refuse(&prompt) };
+        match answer_for(&prompt.method, &text, true) {
+            Ok(PairingAnswer::Pin(pin)) => {
+                let mut tail = vec![pin.len() as u8];
+                tail.extend_from_slice(&pin_bytes(&pin));
+                self.mgmt(OP_PIN_CODE_REPLY, &prompt.addr, &tail).into_iter().collect()
+            }
+            Ok(PairingAnswer::Passkey(value)) => self.mgmt(OP_USER_PASSKEY_REPLY, &prompt.addr, &value.to_le_bytes()).into_iter().collect(),
+            Ok(PairingAnswer::Confirmed(_)) => vec![],
+            Err(e) => {
+                self.status.prompt = Some(prompt);
+                self.status.error = Some(e.to_string());
+                vec![]
+            }
+        }
+    }
+
+    /// The negative reply for a prompt the user refused, or that timed out.
+    fn refuse(&self, prompt: &PairingPrompt) -> Vec<Out> {
+        let op = match prompt.method {
+            PairingMethod::Passkey => OP_USER_PASSKEY_NEG_REPLY,
+            _ => OP_PIN_CODE_NEG_REPLY,
+        };
+        self.mgmt(op, &prompt.addr, &[]).into_iter().collect()
     }
 
     fn forget(&mut self, addr: &str) {
@@ -544,6 +599,9 @@ impl Core {
             out = self.stop_scan();
         }
         if self.status.busy.is_some() && now.saturating_sub(self.busy_since) >= PAIR_MS {
+            if let Some(p) = self.status.prompt.take() {
+                out.extend(self.refuse(&p));
+            }
             self.status.busy = None;
             self.status.error = Some("Timed Out".into());
         }
@@ -662,21 +720,25 @@ impl Core {
                         self.status.busy = None;
                     }
                 }
+                self.status.prompt = None;
                 self.status.error = Some(if p.code == EV_AUTH_FAILED { "Pairing Failed" } else { "Could Not Connect" }.into());
                 vec![]
             }
-            // pairing we started: accept; anyone else asking is refused
-            EV_USER_CONFIRM_REQUEST | EV_PIN_CODE_REQUEST => {
+            // pairing we started: confirm, or ask the user for a PIN or passkey; anyone else asking is refused
+            EV_USER_CONFIRM_REQUEST | EV_PIN_CODE_REQUEST | EV_USER_PASSKEY_REQUEST => {
                 let Some(a) = addr() else { return vec![] };
                 let ours = self.status.busy.as_deref() == Some(&a);
-                let confirm = p.code == EV_USER_CONFIRM_REQUEST;
-                let (op, tail): (u16, Vec<u8>) = match (confirm, ours) {
-                    (true, true) => (OP_USER_CONFIRM_REPLY, vec![]),
-                    (true, false) => (OP_USER_CONFIRM_NEG_REPLY, vec![]),
-                    (false, true) => (OP_PIN_CODE_REPLY, [&[4u8][..], b"0000", &[0; 12]].concat()),
-                    (false, false) => (OP_PIN_CODE_NEG_REPLY, vec![]),
-                };
-                self.mgmt(op, &a, &tail).into_iter().collect()
+                if p.code != EV_USER_CONFIRM_REQUEST {
+                    if ours {
+                        let method = if p.code == EV_PIN_CODE_REQUEST { PairingMethod::PinCode } else { PairingMethod::Passkey };
+                        self.status.prompt = Some(PairingPrompt { addr: a, method });
+                        return vec![];
+                    }
+                    let op = if p.code == EV_PIN_CODE_REQUEST { OP_PIN_CODE_NEG_REPLY } else { OP_USER_PASSKEY_NEG_REPLY };
+                    return self.mgmt(op, &a, &[]).into_iter().collect();
+                }
+                let op = if ours { OP_USER_CONFIRM_REPLY } else { OP_USER_CONFIRM_NEG_REPLY };
+                self.mgmt(op, &a, &[]).into_iter().collect()
             }
             EV_NEW_LINK_KEY if d.len() >= 26 => {
                 let Some(a) = d.get(1..7).map(fmt_addr) else { return vec![] };
@@ -709,6 +771,7 @@ impl Core {
             match op {
                 OP_PAIR_DEVICE | OP_SET_POWERED => {
                     self.status.busy = None;
+                    self.status.prompt = None;
                     self.status.error = Some(status_text(status).into());
                     if op == OP_SET_POWERED && self.status.state == State::On {
                         self.status.state = State::Off;
@@ -724,6 +787,7 @@ impl Core {
                 let a = fmt_addr(&data[..6]);
                 self.entry(&a, data[6]).paired = true;
                 self.status.busy = None;
+                self.status.prompt = None;
             }
             OP_GET_CONNECTIONS if data.len() >= 2 => {
                 for c in data[2..].chunks_exact(7) {
@@ -1338,6 +1402,61 @@ mod tests {
         assert_eq!(out, vec![Out::Link(A.into(), 0)]);
         c.link_result(A, true);
         assert!(c.status.device(A).unwrap().connected && c.status.busy.is_none());
+    }
+
+    #[test]
+    fn a_pin_request_for_our_pairing_asks_the_user_and_the_answer_is_sent() {
+        let mut c = on_core();
+        c.event(&found(A, "Keys", 0, 0));
+        c.command(Cmd::Pair(A.into()), 0);
+        let ask = Packet { code: EV_PIN_CODE_REQUEST, index: 0, data: [&parse_addr(A).unwrap()[..], &[0]].concat() };
+        assert!(c.event(&ask).is_empty());
+        assert_eq!(c.status.prompt, Some(PairingPrompt { addr: A.into(), method: PairingMethod::PinCode }));
+        let out = c.command(Cmd::AnswerPairing(Some("1234".into())), 1);
+        let mut tail = vec![4u8];
+        tail.extend_from_slice(b"1234");
+        tail.extend([0u8; 12]);
+        assert_eq!(out, vec![Out::Mgmt(OP_PIN_CODE_REPLY, [&parse_addr(A).unwrap()[..], &[0], &tail].concat())]);
+        assert!(c.status.prompt.is_none());
+    }
+
+    #[test]
+    fn a_passkey_is_checked_before_it_is_sent_and_a_refusal_is_negative() {
+        let mut c = on_core();
+        c.event(&found(A, "Keys", 0, 0));
+        c.command(Cmd::Pair(A.into()), 0);
+        let ask = Packet { code: EV_USER_PASSKEY_REQUEST, index: 0, data: [&parse_addr(A).unwrap()[..], &[0]].concat() };
+        c.event(&ask);
+        assert_eq!(c.status.prompt.as_ref().map(|p| p.method.clone()), Some(PairingMethod::Passkey));
+        assert!(c.command(Cmd::AnswerPairing(Some("12x".into())), 1).is_empty());
+        assert!(c.status.prompt.is_some(), "a refused entry keeps the prompt");
+        assert_eq!(c.status.error.as_deref(), Some("a passkey is exactly 6 digits"));
+        let out = c.command(Cmd::AnswerPairing(Some("000042".into())), 2);
+        assert_eq!(out, vec![Out::Mgmt(OP_USER_PASSKEY_REPLY, [&parse_addr(A).unwrap()[..], &[0], &42u32.to_le_bytes()].concat())]);
+        c.event(&ask);
+        let out = c.command(Cmd::AnswerPairing(None), 3);
+        assert_eq!(out, vec![Out::Mgmt(OP_USER_PASSKEY_NEG_REPLY, [&parse_addr(A).unwrap()[..], &[0]].concat())]);
+        assert!(c.status.prompt.is_none());
+    }
+
+    #[test]
+    fn a_pin_request_from_another_device_is_refused_and_a_timed_out_prompt_is_refused() {
+        let mut c = on_core();
+        c.event(&found(A, "Keys", 0, 0));
+        c.command(Cmd::Pair(A.into()), 0);
+        let other = Packet { code: EV_PIN_CODE_REQUEST, index: 0, data: [&parse_addr("11:22:33:44:55:66").unwrap()[..], &[0]].concat() };
+        assert!(matches!(c.event(&other)[0], Out::Mgmt(OP_PIN_CODE_NEG_REPLY, _)));
+        let ask = Packet { code: EV_PIN_CODE_REQUEST, index: 0, data: [&parse_addr(A).unwrap()[..], &[0]].concat() };
+        c.event(&ask);
+        let out = c.tick(PAIR_MS);
+        assert!(matches!(out[0], Out::Mgmt(OP_PIN_CODE_NEG_REPLY, _)));
+        assert!(c.status.prompt.is_none() && c.status.busy.is_none());
+    }
+
+    #[test]
+    fn pin_bytes_are_zero_padded_and_capped_at_sixteen() {
+        assert_eq!(pin_bytes("ab")[..3], [b'a', b'b', 0]);
+        assert_eq!(pin_bytes(&"x".repeat(20)), [b'x'; 16]);
     }
 
     #[test]

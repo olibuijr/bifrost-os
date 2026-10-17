@@ -488,7 +488,8 @@ pub mod wireless_accessory_browser;
 pub mod bluetooth_devices;
 pub mod bluetooth_inquiry;
 pub mod bluetooth_hid;
-pub mod bluetooth_pairing;
+/// PIN and passkey input (`bifrost_core::bt_pairing`), shared with the shell.
+pub use bifrost_core::bt_pairing as bluetooth_pairing;
 pub mod bluetooth_service;
 pub mod ble_error;
 pub mod central;

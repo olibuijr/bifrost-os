@@ -1947,6 +1947,9 @@ impl Settings {
                 }
             };
         }
+        if let super::forms::Purpose::BluetoothPairing { .. } = purpose {
+            return vec![Effect::Bluetooth(crate::bare::bluetooth::Cmd::AnswerPairing(Some(text.to_string())))];
+        }
         if super::account_page::owns(purpose) {
             match super::account_page::next_prompt(purpose, text) {
                 super::account_page::Step::Ask(next) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
@@ -2405,6 +2408,10 @@ impl Settings {
             Action::Passwords(act) => self.passwords_act(ui, act),
             Action::InternetAccounts(act) => self.ia_act(ui, act, t),
             Action::Account(act) => self.account_act(ui, act, t),
+            Action::BluetoothPrompt { addr, passkey } => {
+                self.sheet = Some(Sheet::form(ui, self.w, t, super::forms::Prompt::bluetooth_pairing(&addr, passkey)));
+                vec![]
+            }
             Action::Pick(pick) => {
                 self.list_mut().expect("list").set_check(g, i);
                 match pick {
