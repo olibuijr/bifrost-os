@@ -1,0 +1,58 @@
+{
+  "framework": "LiveCommunicationKit",
+  "doc": "https://developer.apple.com/documentation/livecommunicationkit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/call.rs, springboard/ui/src/call_ui.rs, springboard/ui/src/call_apps.rs",
+  "summary": "The shell models call state, the incoming-call card and the default calling app as pure models with host tests. There is no VoIP audio or video transport, no cellular path and no conversation merge or history. iPadOS 17.4 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Conversation state and actions",
+      "apple": "ConversationManager, Conversation, StartConversationAction, EndConversationAction, MuteConversationAction, PauseConversationAction",
+      "bifrost": "springboard/ui/src/call.rs",
+      "status": "partial",
+      "note": "NativeCallController and NativeCallTransaction hold calls, their states and the requests applied as one transaction; no media streams behind them"
+    },
+    {
+      "feature": "Incoming conversation presentation",
+      "apple": "JoinConversationAction, ConversationManagerDelegate",
+      "bifrost": "springboard/ui/src/call_ui.rs",
+      "status": "partial",
+      "note": "the card the shell shows for a ringing call; nothing in the tree feeds it from a VoIP provider yet"
+    },
+    {
+      "feature": "Default calling app",
+      "apple": "Preparing your app to be the default dialer app",
+      "bifrost": "springboard/ui/src/call_apps.rs",
+      "status": "partial",
+      "note": "picks which installed app takes calls the user does not start from an app; no dialer app ships"
+    },
+    {
+      "feature": "Merge, unmerge, tone and translation actions",
+      "apple": "MergeConversationAction, UnmergeConversationAction, PlayToneAction, SetTranslatingAction",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no merge, DTMF tone or live translation for calls"
+    },
+    {
+      "feature": "Cellular network conversations",
+      "apple": "TelephonyConversationManager, StartCellularConversationAction, CellularService",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "needs the carrier telephony service of a cellular modem, which the tablet port does not have"
+    },
+    {
+      "feature": "Live assistance extension",
+      "apple": "LiveAssistanceExtension, LiveAssistance",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "a service contract that Apple runs for live assistance providers; no BifrOSt counterpart"
+    }
+  ],
+  "gaps": [
+    "No audio or video transport for VoIP conversations; the call models are not connected to a media path.",
+    "No cellular conversations: the tablet port has no carrier telephony service.",
+    "No merge, DTMF tone or translation actions and no default dialer app."
+  ]
+}

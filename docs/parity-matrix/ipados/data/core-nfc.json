@@ -1,0 +1,36 @@
+{
+  "framework": "Core NFC",
+  "doc": "https://developer.apple.com/documentation/corenfc",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "none",
+  "summary": "No NFC reader or NDEF stack exists in the SDK, the UI kit or the core. Whether the target devices have an NFC reader is not verified.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Reader sessions and NDEF tags",
+      "apple": "NFCNDEFReaderSession, NFCNDEFTag, NFCNDEFMessage, NFCNDEFPayload",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no NFC reader; the tablet and PC hardware need checking before building"
+    },
+    {
+      "feature": "Tag protocols (ISO 7816, ISO 15693, FeliCa, MIFARE)",
+      "apple": "NFCTagReaderSession, NFCISO7816Tag, NFCMiFareTag",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no tag protocol stack"
+    },
+    {
+      "feature": "Background tag reading",
+      "apple": "Adding Support for Background Tag Reading",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no background tag event"
+    }
+  ],
+  "gaps": [
+    "No NFC reader or NDEF support.",
+    "Hardware presence on the target devices is not checked."
+  ]
+}

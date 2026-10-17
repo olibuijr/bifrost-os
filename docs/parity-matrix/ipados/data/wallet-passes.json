@@ -1,0 +1,50 @@
+{
+  "framework": "Wallet Passes",
+  "doc": "https://developer.apple.com/documentation/walletpasses",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "none",
+  "summary": "BifrOSt has no pass format, no pass signing, no pass update service and no Wallet surface. Passes are an Apple service with a server-side update protocol.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Pass creation and signing",
+      "apple": "Pass, PassFields, Building a Pass",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no pass bundle format or signing"
+    },
+    {
+      "feature": "Pass types (boarding, coupon, event, generic, store card)",
+      "apple": "Pass.BoardingPass, Pass.Coupon, Pass.EventTicket, Pass.Generic, Pass.StoreCard",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no pass field model"
+    },
+    {
+      "feature": "Pass updates from a web service",
+      "apple": "Adding a Web Service to Update Passes, PushToken, SerialNumbers",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no registration or update protocol"
+    },
+    {
+      "feature": "Semantic tags and upcoming information",
+      "apple": "SemanticTags, UpcomingPassInformationEntry",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no semantic tag model"
+    },
+    {
+      "feature": "Wallet surface on the desktop",
+      "apple": "The Wallet app",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no Wallet app or pass list"
+    }
+  ],
+  "gaps": [
+    "No pass format, signing or update service.",
+    "No Wallet surface."
+  ]
+}

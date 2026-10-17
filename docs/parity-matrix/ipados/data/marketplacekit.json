@@ -1,0 +1,58 @@
+{
+  "framework": "MarketplaceKit",
+  "doc": "https://developer.apple.com/documentation/marketplacekit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/store/mod.rs, springboard/src/shell/store/install.rs",
+  "summary": "The PC App Store browses, installs and updates apps. Apple's alternative-marketplace services (app library, install tokens, website install, age-rating checks) have no counterpart, and the store is not an SDK API.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Browse and install apps from a store",
+      "apple": "ActionButton, InstallConfiguration, InstallMetadata",
+      "bifrost": "springboard/src/shell/store/mod.rs, springboard/src/shell/store/install.rs",
+      "status": "partial",
+      "note": "GET, progress and OPEN flow with an Updates tab; the store is the system store only, not an SDK component"
+    },
+    {
+      "feature": "Alternative marketplace app library",
+      "apple": "AppLibrary, AutomaticUpdate, AppVersion",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no catalog of installed apps that a third-party marketplace can manage"
+    },
+    {
+      "feature": "Install from a website",
+      "apple": "MarketplaceKitURIScheme, com.apple.developer.browser.app-installation",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no website install link or browser install hook"
+    },
+    {
+      "feature": "Install verification and license tokens",
+      "apple": "App License Delivery SDK, install verification token",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no signed install tokens"
+    },
+    {
+      "feature": "Age-rating restrictions",
+      "apple": "Providing age-rating appropriate content",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no age-rating check at install time"
+    },
+    {
+      "feature": "Transaction reporting tokens",
+      "apple": "TransactionReporting, Reporting transactions for the Core Technology Commission",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "a commission reporting service that Apple runs for App Store purchases"
+    }
+  ],
+  "gaps": [
+    "No SDK API for a third-party marketplace to list, install and update apps.",
+    "No website install path and no signed install verification.",
+    "No age-rating checks at install."
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "framework": "Media Setup",
+  "doc": "https://developer.apple.com/documentation/mediasetup",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Media Setup configures HomePod speakers for a streaming service. BifrOSt has no HomePod or Apple speaker configuration.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "HomePod configuration session",
+      "apple": "MSSetupSession, MSServiceAccount",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "configures Apple's HomePod hardware, which BifrOSt cannot drive"
+    }
+  ],
+  "gaps": []
+}

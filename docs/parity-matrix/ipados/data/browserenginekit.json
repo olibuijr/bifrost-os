@@ -1,0 +1,64 @@
+{
+  "framework": "BrowserEngineKit",
+  "doc": "https://developer.apple.com/documentation/browserenginekit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/webview.rs, springboard/sdk/src/webview_dev.rs, springboard/ui/src/browser_sheet.rs, springboard/ui/src/browser_settings.rs, springboard/ui/src/web_extension.rs, springboard/src/shell/browser/budget.rs",
+  "summary": "The shell's browser and the SDK web view run an in-process engine. Browser settings, an in-app browser sheet and web extensions have counterparts. Running an alternative engine in a separate extension process is not built.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run in this batch); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Web content view",
+      "apple": "BEScrollView, View and input coordination",
+      "bifrost": "springboard/sdk/src/webview.rs",
+      "status": "partial",
+      "note": "web content in an SDK app; the engine runs in process"
+    },
+    {
+      "feature": "Browser settings and default browser",
+      "apple": "Preparing your app to be the default web browser",
+      "bifrost": "springboard/ui/src/browser_settings.rs",
+      "status": "partial",
+      "note": "homepage, search engine and session restore; no default-browser registration"
+    },
+    {
+      "feature": "In-app browser sheet",
+      "apple": "Browser sheet",
+      "bifrost": "springboard/ui/src/browser_sheet.rs",
+      "status": "partial",
+      "note": "the model for an in-app browser sheet with reader and dismiss settings"
+    },
+    {
+      "feature": "Browser extensions",
+      "apple": "Creating browser extensions in Xcode, extension life cycle",
+      "bifrost": "springboard/ui/src/web_extension.rs",
+      "status": "partial",
+      "note": "identity, host permissions and enable state; no separate engine extension process"
+    },
+    {
+      "feature": "Engine in a separate extension process",
+      "apple": "Extension life cycle, extension resources",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no separate process for an alternative engine"
+    },
+    {
+      "feature": "Drag and context menu interaction",
+      "apple": "BEDragInteraction, BEContextMenuConfiguration",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "no delegate for asynchronous drag items or deferred context menus from a web engine"
+    },
+    {
+      "feature": "Download reporting",
+      "apple": "BEDownloadMonitor",
+      "bifrost": "springboard/src/shell/browser/budget.rs",
+      "status": "partial",
+      "note": "a budget for browser work; download progress is not reported to the system"
+    }
+  ],
+  "gaps": [
+    "No separate extension process for an alternative browser engine.",
+    "No drag or context menu delegates for a web engine."
+  ]
+}
