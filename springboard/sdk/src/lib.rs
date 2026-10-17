@@ -250,6 +250,23 @@ pub mod media_extension;
 pub mod audio_application;
 pub mod audio_player_control;
 pub mod now_playing;
+/// Media library queries over the records an app supplies (`bifrost_ui::media_query`).
+pub mod media_library;
+/// The media picker as a list of rows and a footer count (`bifrost_ui::media_picker`); draws nothing.
+pub mod media_picker_view;
+/// Like, dislike, bookmark and rating for the Lock Screen and Control Center (`now_playing` service events).
+pub mod now_playing_feedback;
+/// Routes menu bar, Control Center and media key transport requests to the app's remote command handlers.
+pub mod remote_routing;
+/// Purchase receipts the PC App Store signs; the caller supplies the signature check.
+pub mod store_receipt;
+/// StoreKit-shaped purchase models for the PC App Store: products and their types, purchases and their outcomes,
+/// the entitlement ledger, subscriptions, promotions. No payment is taken here.
+pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
+/// Picture in Picture for video players: life cycle, delegate events and the floating window's rectangle and corner.
+pub mod picture_in_picture;
+/// The AirPlay-style route picker: outputs and nearby receivers in sections, and taps that activate authorized routes.
+pub mod route_picker;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;

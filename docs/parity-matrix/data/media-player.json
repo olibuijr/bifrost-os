@@ -33,7 +33,7 @@
       "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate",
       "bifrost": "springboard/ui/src/media_query.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library Built 2026-10-17: SDK bifrost_app::media_library::run over bifrost_ui::media_query (filters, groupings, sections); tests springboard/sdk/src/media_library.rs::tests."
     },
     {
       "feature": "Media items, collections and playlists",
@@ -54,7 +54,7 @@
       "apple": "MPMediaPickerController",
       "bifrost": "springboard/ui/src/media_picker.rs",
       "status": "partial",
-      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify."
+      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify. Built 2026-10-17: SDK row model over the picker (bifrost_app::media_picker_view: rows, footer, tap); the shell draws nothing yet. Tests springboard/sdk/src/media_picker_view.rs::tests."
     },
     {
       "feature": "Volume control and route button",
@@ -75,7 +75,7 @@
       "apple": "MPRemoteCommandCenter, MPRemoteCommand, MPRemoteCommandEvent",
       "bifrost": "springboard/ui/src/remote_command.rs (CommandCenter), springboard/sdk/src/lib.rs (remote_command); wired: springboard/src/shell/now_playing_menu.rs, springboard/src/shell/desktop_bar.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell's Control Center and lock screen send transport commands to the audio service; apps cannot register handlers and hardware media keys are not mapped. Headless tests: ui/tests/parity_sdk-tests-01a.rs (remote_actions_are_dispatched_to_the_newest_handler, an_action_without_a_handler_or_switched_off_is_refused, rating_command_refuses_values_outside_its_range). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: SDK routing of menu bar, Control Center and media key transport to the app's CommandCenter (bifrost_app::remote_routing: action_for, media_key, route); shell dispatch to the owning app still to wire. Tests springboard/sdk/src/remote_routing.rs::tests."
     },
     {
       "feature": "Track navigation and seeking",
@@ -103,7 +103,7 @@
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
       "bifrost": "springboard/ui/src/media_feedback.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system Built 2026-10-17: SDK feedback body and like/dislike/bookmark and rate event decoding (bifrost_app::now_playing_feedback); shell side not wired yet. Tests springboard/sdk/src/now_playing_feedback.rs::tests."
     },
     {
       "feature": "Now Playing sessions and focus",
