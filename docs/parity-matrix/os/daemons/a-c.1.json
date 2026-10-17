@@ -333,9 +333,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Content caching for the vendor's software and cloud downloads on the local network. BifrOSt updates come from its own repository through updated.",
    "rea": [],
    "method": "rule"
   },
@@ -354,9 +354,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Locator for the vendor's content caching service. BifrOSt has no content cache.",
    "rea": [],
    "method": "rule"
   },
@@ -690,9 +690,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/log.rs, springboard/core/src/signpost.rs",
-   "status": "partial",
-   "note": "rule: unified logging and signpost models; Console app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Submits diagnostics to the vendor's servers. BifrOSt sends no telemetry; logs stay on the machine (Console app, springboard/core/src/log.rs).",
    "rea": [],
    "method": "rule"
   },
@@ -736,7 +736,16 @@
    "status": "partial",
    "note": "role filled by desktop_dock.rs and dock_stack.rs; no separate process; runs inside the shell",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock::"
+    }
+   ],
+   "ready_note": "desktop_dock.rs builds the dock with its running-app and stack tiles; dock_stack.rs covers stacks. Tests cover the dock model."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.DwellControl.plist",
@@ -817,8 +826,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/mod.rs",
-   "status": "partial",
-   "note": "Screen Time agent role is filled inside the shell: on-device per-app usage, pickups and notifications (usage.rs), App Limits and Downtime (config.rs), the Time Limit cover with Ignore Limit choices and the passcode (shield.rs), and a five-minute warning. Family controls and family-group management (parental accounts, remote approval) have no equivalent and stay gap. Not verified on Midget.",
+   "status": "gap",
+   "note": "Family accounts, remote management and Screen Time sharing have no BifrOSt counterpart. The on-device usage and limit pieces are the Screen Time rows (springboard/src/shell/screentime), not this agent. Kept a gap.",
    "rea": [],
    "method": "heuristic"
   },
@@ -904,7 +913,16 @@
    "status": "partial",
    "note": "role filled by desk.rs (desktop and icons) with the Files app; no separate process; file windows are the Files app, not the agent",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desk::"
+    }
+   ],
+   "ready_note": "desk.rs draws the desktop, its icons and the file-window hand-off to the Files app; the desk tests cover layout and selection."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FollowUpUI.plist",
@@ -988,7 +1006,16 @@
    "status": "partial",
    "note": "role filled by game_controllers_page.rs; no separate process; settings page only",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::"
+    }
+   ],
+   "ready_note": "game_controllers_page.rs lists and configures connected game controllers over gamepad_service; tests cover the page model."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GamePolicyAgent.plist",
@@ -1009,7 +1036,16 @@
    "status": "partial",
    "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::"
+    }
+   ],
+   "ready_note": "gamemode.rs enters Game Mode for a full-screen game and leaves after 3 s; tests cover the enter and leave rules."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GenerativeFunctions.agentstored.plist",
@@ -1236,9 +1272,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/maps-desktop",
-   "status": "partial",
-   "note": "rule: Maps app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs Maps data between the vendor's devices through the vendor's account and cloud. BifrOSt has no vendor account sync; the Maps app keeps its data on the device.",
    "rea": [],
    "method": "rule"
   },
@@ -1257,9 +1293,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/maps-desktop",
-   "status": "partial",
-   "note": "rule: Maps app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Vendor push relay for Maps data. BifrOSt has no vendor push service.",
    "rea": [],
    "method": "rule"
   },
@@ -1303,7 +1339,16 @@
    "status": "partial",
    "note": "role filled by desktop_bar.rs; no separate process; no per-app menu extras host API",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar::"
+    }
+   ],
+   "ready_note": "desktop_bar.rs draws the menu bar, its menus and the status items in-process; tests cover menu layout and regions."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.MobileAccessoryUpdater.fudHelperAgent.plist",
@@ -1618,7 +1663,16 @@
    "status": "partial",
    "note": "role filled by accessibility/reader.rs; no separate process; no braille or caption panel",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::"
+    }
+   ],
+   "ready_note": "accessibility/reader.rs drives the screen reader UI; tests cover the reader model. No braille or caption panel."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ScreenTimeAgent.plist",
@@ -1660,7 +1714,16 @@
    "status": "partial",
    "note": "Screen Time settings page",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::"
+    }
+   ],
+   "ready_note": "screentime/page.rs is the Screen Time settings page over the shell's usage and limit models; tests cover the page."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ScriptMenuApp.plist",
@@ -1741,8 +1804,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/assistant-client",
-   "status": "partial",
-   "note": "Cmd+Shift+A opens a panel over the desktop (assistant_panel.rs) with a question field, a wrapped answer and a Run/Cancel card; Settings > Assistant (assistant_page.rs) has the switch, backend (Off by default), history (off) and per-app intent access. Requests go to the Anthropic API only when the backend is chosen and a key is in the keychain. Partial: no speech input (no engine on the image), no assistant service registration, and the panel is drawn on the desktop only. Built but not compiled or run on Midget yet.",
+   "status": "gap",
+   "note": "Assistant panel (Cmd+Shift+A), Settings page and the assistant client exist, but there is no on-device model, speech pipeline or account service behind them, and the reference agent role has no counterpart. Kept a gap.",
    "rea": [],
    "method": "heuristic"
   },
@@ -1786,7 +1849,16 @@
    "status": "partial",
    "note": "role filled by ota.rs; no separate process; notices come from the update check",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::"
+    }
+   ],
+   "ready_note": "ota.rs runs the update check and posts update notices; tests cover the notice logic."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SpacesTouchBarAgent.plist",
@@ -1828,7 +1900,16 @@
    "status": "partial",
    "note": "role filled by quicksearch.rs and quicksearch_math.rs; no separate process; no per-volume metadata server",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::"
+    }
+   ],
+   "ready_note": "quicksearch.rs and quicksearch_math.rs run the search panel (apps, files, math). No per-volume metadata server."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.StatusKitAgent.plist",
@@ -1912,7 +1993,16 @@
    "status": "partial",
    "note": "The shell draws the menu bar and its status items in-process, with no separate server process. No host for third-party menu extras is provided.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar::"
+    }
+   ],
+   "ready_note": "The menu bar and its status items are drawn in-process by desktop_bar.rs (no separate server). No host for third-party menu extras."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TMHelperAgent.plist",
@@ -1954,7 +2044,16 @@
    "status": "partial",
    "note": "role filled by input_source_hud.rs and kb_layouts.rs; no separate process; menu extra is part of the menu bar",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::"
+    }
+   ],
+   "ready_note": "input_source_hud.rs shows the input source switcher; kb_layouts.rs and fcitx_bridge.rs carry the layouts. Tests cover the HUD state."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TextInputSwitcher.plist",
@@ -1975,7 +2074,16 @@
    "status": "partial",
    "note": "role filled by input_source_hud.rs; no separate process; switching goes through fcitx_bridge.rs",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::"
+    }
+   ],
+   "ready_note": "input_source_hud.rs shows the input source HUD; switching goes through fcitx_bridge.rs. Tests cover the HUD state."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ThreadCommissionerService.plist",
@@ -2101,7 +2209,16 @@
    "status": "partial",
    "note": "Login window events",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "login.rs is the login window: the user picker, password entry and the login event flow; tests cover the flow."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.UserPictureSyncAgent.plist",
@@ -2164,7 +2281,16 @@
    "status": "partial",
    "note": "role filled by workspace.rs and window_fx.rs; no separate process; window placement lives in the shell and compositor config",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::workspace::"
+    }
+   ],
+   "ready_note": "workspace.rs places and tracks windows for the shell; window_fx.rs holds the effects. Tests cover placement."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.AXVisualSupportAgent.plist",
@@ -2727,9 +2853,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
-   "status": "partial",
-   "note": "rule: record store models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs app placeholders through the vendor's account cloud. BifrOSt installs apps from its own PC App Store and keeps no cloud placeholders.",
    "rea": [],
    "method": "rule"
   },
@@ -3189,9 +3315,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
-   "status": "partial",
-   "note": "rule: record store models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Asset service for the reference book store. BifrOSt has no book store or book library.",
    "rea": [],
    "method": "rule"
   },
@@ -3210,9 +3336,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
-   "status": "partial",
-   "note": "rule: record store models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Library data store for the reference book store. BifrOSt has no book store or book library.",
    "rea": [],
    "method": "rule"
   },
@@ -3277,7 +3403,16 @@
    "status": "partial",
    "note": "The shell trims disposable caches when free space falls below a threshold, with one call that frees every cache. It runs only on low space, with no daily sweep.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::"
+    }
+   ],
+   "ready_note": "storage.rs trims disposable caches on low free space in one call; tests cover the threshold and the trim."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.calaccessd.plist",
@@ -3399,9 +3534,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/assistant-desktop",
-   "status": "partial",
-   "note": "The assistant app runs on demand and has no always-on background service. No on-device model service is provided, and the reference daemon is behind a feature flag of the reference system.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "On-device model service of the reference assistant (Apple Intelligence). BifrOSt's assistant app runs on demand with its own cloud and local model paths; there is no shared model daemon.",
    "rea": [],
    "method": "audit"
   },
@@ -3651,9 +3786,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Uses the vendor's phone as a camera through device continuity. BifrOSt has no vendor device continuity camera.",
    "rea": [],
    "method": "rule"
   },
@@ -3756,9 +3891,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
-   "status": "partial",
-   "note": "rule: nearby and peer session models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Pairs the vendor's companion devices such as a watch. BifrOSt has no vendor companion device.",
    "rea": [],
    "method": "rule"
   },
@@ -3777,9 +3912,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/contacts.rs",
-   "status": "partial",
-   "note": "rule: contacts model; Contacts app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Donates contact suggestions to the reference prediction service. BifrOSt has no suggestion donation.",
    "rea": [],
    "method": "rule"
   },
@@ -3798,9 +3933,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/contacts.rs",
-   "status": "partial",
-   "note": "rule: contacts model; Contacts app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs contact posters through the vendor's account cloud. BifrOSt has no vendor account sync.",
    "rea": [],
    "method": "rule"
   },
@@ -3865,7 +4000,16 @@
    "status": "partial",
    "note": "role filled by control_center.rs; no separate process; module set is smaller than Apple's",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center::"
+    }
+   ],
+   "ready_note": "control_center.rs hosts the control module set; tests cover the module state. The module set is smaller than the reference."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.controlstrip.plist",
@@ -4075,7 +4219,16 @@
    "status": "partial",
    "note": "role filled by spotindex.rs; no separate process; no donation daemon",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::"
+    }
+   ],
+   "ready_note": "spotindex.rs indexes files and apps for search in-process; tests cover the index. No donation daemon."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.corespotlightservice.plist",
@@ -4096,7 +4249,16 @@
    "status": "partial",
    "note": "Shell search index",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::"
+    }
+   ],
+   "ready_note": "spotindex.rs answers index queries for the search panel in-process."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.csuseragent.plist",
@@ -4449,9 +4611,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/log.rs, springboard/core/src/signpost.rs",
-   "status": "partial",
-   "note": "rule: unified logging and signpost models; Console app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Runs the vendor's hardware diagnostics on Apple hardware. BifrOSt targets generic PC hardware and has no diagnostics daemon.",
    "rea": [],
    "method": "rule"
   },
@@ -4516,7 +4678,16 @@
    "status": "partial",
    "note": "rule: notification centre and notify bus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "notify_center::"
+    }
+   ],
+   "ready_note": "core notify_center.rs is the in-process notification centre that posts and delivers named notifications; tests cover delivery. The SDK notify bus carries the app side."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.dmd.agent.plist",
