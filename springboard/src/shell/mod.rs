@@ -163,6 +163,8 @@ pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
 pub mod window_fx;
+/// Picture in Picture placement and the automatic start gated by the Settings toggle.
+pub mod pip;
 pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
