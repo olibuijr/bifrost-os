@@ -130,6 +130,28 @@ pub fn copy_machine(from: &Image, to: &Image, time: f32, angle: f32, band: f32) 
     }))
 }
 
+/// `CIFlashTransition`: a flash of light centred on `center` (pixels). In the first half of the
+/// transition the picture brightens towards white at the centre and the glow fades with distance
+/// (to nothing at the far corner), peaking at time 0.5; in the second half the picture switches to
+/// `to`, still flashed, and the glow dies away. `None` when the sizes differ or `center` is not finite.
+pub fn flash(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let strength = 1.0 - (2.0 * t - 1.0).abs();
+    let white = Rgb::new(1.0, 1.0, 1.0);
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let d = ((x as f32 + 0.5 - center.0).powi(2) + (y as f32 + 0.5 - center.1).powi(2)).sqrt();
+        let glow = strength * (1.0 - d / reach).max(0.0);
+        let px = if t < 0.5 { a } else { b };
+        if glow <= 0.0 { px } else { colorfx::map_pixel(px, |c| c.mix(white, glow)) }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +230,22 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn flash_starts_and_ends_on_the_pictures_and_peaks_at_the_centre() {
+        let (a, b) = (flat(8, 8, BLACK), flat(8, 8, GREY));
+        assert_eq!(flash(&a, &b, 0.0, (4.0, 4.0)).unwrap(), a);
+        assert_eq!(flash(&a, &b, 1.0, (4.0, 4.0)).unwrap(), b);
+        let mid = flash(&a, &b, 0.5, (4.0, 4.0)).unwrap();
+        assert!(mid.px[4 * 8 + 4] & 0xff > 0xe0, "the centre is nearly white at the peak");
+        assert!(mid.px[4 * 8 + 4] & 0xff > mid.px[0] & 0xff, "the glow fades with distance");
+    }
+
+    #[test]
+    fn flash_rejects_a_non_finite_centre() {
+        let a = flat(4, 4, BLACK);
+        assert!(flash(&a, &a, 0.5, (f32::NAN, 0.0)).is_none());
     }
 
     #[test]
