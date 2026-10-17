@@ -202,10 +202,85 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
     }
 }
 
+/// Live results over a context (`NSFetchedResultsController`, the list a `@FetchRequest` keeps current): a fetch
+/// request and the rows it returned last time. `refresh` runs the request again over the context and reports whether
+/// the rows changed (an identity, a value or the order), so a view redraws only when it has to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FetchedResults<R> {
+    request: FetchRequest,
+    items: Vec<(ObjectId, R)>,
+}
+
+impl<R: Clone + PartialEq + Record> FetchedResults<R> {
+    /// Runs `request` over `context` now.
+    pub fn new(request: FetchRequest, context: &ManagedContext<R>) -> Self {
+        let items = context.fetch(&request);
+        Self { request, items }
+    }
+
+    /// The rows as of the last run, in the request's order.
+    pub fn items(&self) -> &[(ObjectId, R)] {
+        &self.items
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Runs the request again over `context`. Returns true when the rows differ from the previous run.
+    pub fn refresh(&mut self, context: &ManagedContext<R>) -> bool {
+        let next = context.fetch(&self.request);
+        let changed = next != self.items;
+        self.items = next;
+        changed
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fetch::{Field, Predicate};
+    use crate::fetch::{Field, Op, Predicate};
+
+    #[test]
+    fn live_results_refresh_only_when_the_rows_change() {
+        let mut c = ManagedContext::new();
+        c.insert(note("beta", 2));
+        c.insert(note("alpha", 1));
+        c.save();
+        let mut live = FetchedResults::new(FetchRequest::new().sorted_by("title", true), &c);
+        assert_eq!(live.len(), 2);
+        assert_eq!(live.items()[0].1, note("alpha", 1));
+        assert!(!live.refresh(&c), "nothing changed, so no redraw");
+        let gamma = c.insert(note("gamma", 3));
+        assert!(live.refresh(&c), "an insert adds a row");
+        assert_eq!(live.len(), 3);
+        c.update(gamma, |n| n.title = "aardvark".into()).unwrap();
+        assert!(live.refresh(&c), "a value that moves a row re-orders the results");
+        assert_eq!(live.items()[0].1, note("aardvark", 3));
+        c.delete(gamma).unwrap();
+        assert!(live.refresh(&c));
+        assert_eq!(live.len(), 2);
+        assert!(!live.is_empty());
+    }
+
+    #[test]
+    fn live_results_keep_the_request_filter_and_limit() {
+        let mut c = ManagedContext::new();
+        c.insert(note("one", 1));
+        c.insert(note("two", 9));
+        c.save();
+        let request = FetchRequest::new().filter(Predicate::compare("pages", Op::Gt, Field::Int(5))).limit(1);
+        let mut live = FetchedResults::new(request, &c);
+        assert_eq!(live.items().iter().map(|(_, n)| n.title.as_str()).collect::<Vec<_>>(), vec!["two"]);
+        c.insert(note("three", 7));
+        assert!(!live.refresh(&c), "the new row is cut off by the limit, so the rows do not change");
+        assert_eq!(live.len(), 1, "the limit still applies after a refresh");
+    }
+
 
     #[derive(Clone, Debug, PartialEq)]
     struct Note {
