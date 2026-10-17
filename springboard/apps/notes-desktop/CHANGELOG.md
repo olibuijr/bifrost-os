@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.0 — 2026-10-17
+
+- Collapsible sections model (notes/fold.rs): Title, Heading and Subheading lines fold the lines up to the next heading of the same or a higher level. Format > Collapse Section, Expand Section, Collapse All Sections and Expand All Sections fold the section under the caret. The folded headings are saved per note in `.springboard-notes-folds`; the note text never changes. The editor does not hide folded lines or draw disclosure chevrons yet.
+- Gallery layout model (notes/gallery.rs): the column count follows the list width, and the cards share the rest of it. Prefs saves `layout=list|gallery`; View > as List / as Gallery sets it. The grid itself is not drawn yet.
+
 ## 1.19.0 — 2026-10-17
 
 - Edit > Speech: Start Speaking speaks the selection of the open note (else the whole note) through the shell speech service; Stop Speaking ends it.

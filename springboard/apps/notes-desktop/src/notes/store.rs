@@ -249,11 +249,13 @@ pub struct Prefs {
     pub resume_quick: bool,
     /// the list is cut into Today, Previous 7 Days, Previous 30 Days and month sections (date sorts only)
     pub group_by_date: bool,
+    /// the note list shows rows or a gallery of cards (View > as List / as Gallery)
+    pub layout: super::gallery::Layout,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, oldest_first: false, math_results: false, resume_quick: false, group_by_date: false }
+        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, oldest_first: false, math_results: false, resume_quick: false, group_by_date: false, layout: super::gallery::Layout::List }
     }
 }
 
@@ -269,6 +271,7 @@ pub fn load_prefs(dir: &Path) -> Prefs {
             Some(("math_results", v)) => p.math_results = v.trim() == "1",
             Some(("resume_quick", v)) => p.resume_quick = v.trim() == "1",
             Some(("group_by_date", v)) => p.group_by_date = v.trim() == "1",
+            Some(("layout", v)) => p.layout = super::gallery::Layout::parse(v.trim()).unwrap_or(p.layout),
             _ => {}
         }
     }
@@ -277,13 +280,14 @@ pub fn load_prefs(dir: &Path) -> Prefs {
 
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
     let text = format!(
-        "sort={}\nchecked_to_bottom={}\noldest_first={}\nmath_results={}\nresume_quick={}\ngroup_by_date={}\n",
+        "sort={}\nchecked_to_bottom={}\noldest_first={}\nmath_results={}\nresume_quick={}\ngroup_by_date={}\nlayout={}\n",
         p.sort.name(),
         p.checked_to_bottom as u8,
         p.oldest_first as u8,
         p.math_results as u8,
         p.resume_quick as u8,
-        p.group_by_date as u8
+        p.group_by_date as u8,
+        p.layout.name()
     );
     springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), text)
 }
@@ -678,10 +682,10 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true, group_by_date: true };
+        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true, group_by_date: true, layout: super::gallery::Layout::Gallery };
         save_prefs(&dir, set).unwrap();
         assert_eq!(load_prefs(&dir), set);
-        std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\n").unwrap();
+        std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\nlayout=grid\n").unwrap();
         assert_eq!(load_prefs(&dir), Prefs::default());
         let _ = std::fs::remove_dir_all(&dir);
     }

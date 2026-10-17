@@ -136,6 +136,9 @@ const MENU_MATH: u32 = 9;
 /// The Speech submenu: start speaking the selection (else the note), and stop.
 const MENU_SPEAK_START: u32 = 10;
 const MENU_SPEAK_STOP: u32 = 11;
+/// View > as List / as Gallery.
+const MENU_LAYOUT_LIST: u32 = 12;
+const MENU_LAYOUT_GALLERY: u32 = 13;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
 const MENU_RECENT: u32 = 100;
 /// The Format menu: `FORMAT_BASE + n` is the n-th row of `format_table`, `TABLE_BASE + n` the n-th table command.
@@ -186,6 +189,11 @@ fn format_table() -> Vec<Option<(&'static str, &'static str, FormatCmd)>> {
         None,
         Some(("Add Link...", "cmd+k", Do(Format::AddLink))),
         Some(("Calculate Math Results", "", Do(Format::CalculateMath))),
+        None,
+        Some(("Collapse Section", "", Do(Format::CollapseSection))),
+        Some(("Expand Section", "", Do(Format::ExpandSection))),
+        Some(("Collapse All Sections", "", Do(Format::CollapseAll))),
+        Some(("Expand All Sections", "", Do(Format::ExpandAll))),
     ]
 }
 
@@ -196,6 +204,18 @@ fn format_command(id: u32) -> Option<FormatCmd> {
     }
     let i = id.checked_sub(TABLE_BASE)?;
     notes::table::Op::ALL.get(i as usize).map(|op| FormatCmd::Do(notes::Format::Table(*op)))
+}
+
+/// The View menu: the note list as rows or as a gallery of cards.
+fn view_menu(n: &notes::Notes) -> AppMenu {
+    let layout = n.prefs().layout;
+    AppMenu {
+        title: "View".into(),
+        items: vec![
+            AppMenuItem::new(MENU_LAYOUT_LIST, "as List").checked(layout == notes::gallery::Layout::List),
+            AppMenuItem::new(MENU_LAYOUT_GALLERY, "as Gallery").checked(layout == notes::gallery::Layout::Gallery),
+        ],
+    }
 }
 
 /// The Format menu for the open note (every row is disabled while no note is open).
@@ -338,7 +358,7 @@ impl App for NotesApp {
         note.push(AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1));
         note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
-        vec![AppMenu { title: "Note".into(), items: note }, format_menu(n)]
+        vec![AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n)]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
@@ -413,6 +433,11 @@ impl App for NotesApp {
             MENU_PASTE_PLAIN => n.paste_match_style(&ctx.ui, now),
             MENU_MATH => {
                 n.toggle_math_results();
+                true
+            }
+            MENU_LAYOUT_LIST | MENU_LAYOUT_GALLERY => {
+                let layout = if id == MENU_LAYOUT_GALLERY { notes::gallery::Layout::Gallery } else { notes::gallery::Layout::List };
+                n.set_layout(layout);
                 true
             }
             id if (MENU_RECENT..MENU_RECENT + notes::RECENT_MENU as u32).contains(&id) => {

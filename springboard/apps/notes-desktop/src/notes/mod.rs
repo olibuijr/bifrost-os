@@ -24,6 +24,8 @@ pub mod import;
 pub mod math;
 pub mod outline;
 pub mod table;
+pub mod fold;
+pub mod gallery;
 
 mod parity;
 mod pdf;
@@ -194,6 +196,12 @@ pub enum Format {
     AddLink,
     /// Answer every line that ends with `=` after a calculation.
     CalculateMath,
+    /// Fold or unfold the section under the caret (Format > Collapse / Expand Section).
+    CollapseSection,
+    ExpandSection,
+    /// Fold or unfold every section of the note.
+    CollapseAll,
+    ExpandAll,
 }
 
 /// A formatting button: inline emphasis or a list style for the paragraphs.
@@ -380,6 +388,8 @@ pub struct Notes {
     appearance: u32,
     view: View,
     prefs: store::Prefs,
+    /// the collapsed headings of every note (Format > Collapse Section)
+    folds: fold::Folds,
     menu: Option<Menu>,
     /// the Photos picker sheet
     picker: Option<picker::Picker>,
@@ -479,6 +489,7 @@ impl Notes {
         let (notes, loc, folders) = load_everything(&dir, wall.now(0.0));
         let pinned = store::load_pins(&dir, &notes);
         let prefs = store::load_prefs(&dir);
+        let folds = fold::load(&dir);
         let mut n = Notes {
             w,
             h,
@@ -492,6 +503,7 @@ impl Notes {
             appearance: LABEL.now(),
             view: View::All,
             prefs,
+            folds,
             menu: None,
             picker: None,
             sketch: None,
@@ -1634,6 +1646,8 @@ impl Notes {
             Format::UncheckAll => self.set_checks(ui, false, t),
             Format::Table(op) => self.edit_table(ui, op, t),
             Format::CalculateMath => self.calculate(ui, t),
+            Format::CollapseSection | Format::ExpandSection => self.fold_section(matches!(f, Format::CollapseSection)),
+            Format::CollapseAll | Format::ExpandAll => self.fold_all(matches!(f, Format::CollapseAll)),
             Format::AddLink => self.start_link(ui, t),
         }
     }
@@ -2250,6 +2264,43 @@ impl Notes {
                 self.save_prefs();
             }
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
+        }
+    }
+
+    /// Folds (`collapse`) or unfolds the heading the caret is under. Only the sidecar of folds changes, never the text.
+    fn fold_section(&mut self, collapse: bool) {
+        let Some(id) = self.editing().map(|note| note.id.clone()) else { return };
+        let text = self.editor.text().to_string();
+        let line = self.editor.caret_line();
+        let keys = self.folds.entry(id).or_default();
+        let changed = if collapse { fold::collapse(keys, &text, line) } else { fold::expand(keys, &text, line) };
+        if changed {
+            self.save_folds();
+        }
+    }
+
+    /// Folds every heading of the open note, or unfolds them all.
+    fn fold_all(&mut self, collapse: bool) {
+        let Some(id) = self.editing().map(|note| note.id.clone()) else { return };
+        let text = self.editor.text().to_string();
+        let keys = self.folds.entry(id).or_default();
+        let changed = if collapse { fold::collapse_all(keys, &text) } else { fold::expand_all(keys) };
+        if changed {
+            self.save_folds();
+        }
+    }
+
+    fn save_folds(&mut self) {
+        if let Err(error) = fold::save(&self.dir, &self.folds) {
+            self.notice = Some(format!("Unable to save sections: {error}"));
+        }
+    }
+
+    /// View > as List / as Gallery. The gallery grid is not drawn yet; the choice is saved in Prefs.
+    pub fn set_layout(&mut self, layout: gallery::Layout) {
+        if self.prefs.layout != layout {
+            self.prefs.layout = layout;
+            self.save_prefs();
         }
     }
 
@@ -4685,6 +4736,41 @@ mod tests {
         n.run(&ui, Act::Do(Format::AddLink), 2400.0);
         assert!(n.escape(&ui, 2500.0));
         assert!(n.naming.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collapse_commands_fold_the_section_under_the_caret_and_survive_a_restart() {
+        let ui = ui();
+        let dir = scratch("fold-section");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "# Plan\nintro\n## Steps\none\ntwo\n## Notes\nlast");
+        let text = n.editor.text().to_string();
+        let id = n.editing().unwrap().id.clone();
+        caret_after(&mut n, "one");
+        n.run(&ui, Act::Do(Format::CollapseSection), 3000.0);
+        assert!(n.folds[&id].contains("## Steps"));
+        assert_eq!(n.editor.text(), text, "folding never changes the note text");
+        n.run(&ui, Act::Do(Format::CollapseAll), 3100.0);
+        assert_eq!(n.folds[&id].len(), 3, "Plan, Steps and Notes are folded");
+        n.run(&ui, Act::Do(Format::ExpandSection), 3200.0);
+        assert!(!n.folds[&id].contains("## Steps"), "Expand Section unfolds the heading above the caret");
+        let reopened = app(&ui, &dir);
+        assert_eq!(reopened.folds[&id].len(), 2, "the folds are saved with the note");
+        n.run(&ui, Act::Do(Format::ExpandAll), 3300.0);
+        assert!(n.folds.get(&id).is_none_or(|keys| keys.is_empty()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn view_menu_layout_choice_is_saved_with_the_prefs() {
+        let ui = ui();
+        let dir = scratch("layout");
+        let mut n = seeded(&ui, &dir);
+        assert_eq!(n.prefs().layout, gallery::Layout::List);
+        n.set_layout(gallery::Layout::Gallery);
+        assert_eq!(n.prefs().layout, gallery::Layout::Gallery);
+        assert_eq!(app(&ui, &dir).prefs().layout, gallery::Layout::Gallery);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

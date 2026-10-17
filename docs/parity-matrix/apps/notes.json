@@ -202,10 +202,10 @@
    "feature": "Gallery view",
    "area": "view",
    "apple": "MainMenu: View > as Gallery; ICMNoteGridController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a list/gallery mode to Prefs and a grid renderer of note thumbnails (first image or text preview); toggle from View menu and the list toolbar."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/gallery.rs:35 (columns), gallery.rs:45 (card_width); springboard/apps/notes-desktop/src/main.rs:207 (view_menu); springboard/apps/notes-desktop/src/notes/store.rs:240 (Prefs.layout)",
+   "note": "Layout choice in Prefs and View > as List / as Gallery, and the width-derived column math are built and tested on the host. The grid is not drawn: the list still shows rows.",
+   "wire": "In draw_list (mod.rs:3007) and row_rect (mod.rs:855), when prefs.layout is Gallery, lay out cards with gallery::columns(list width, CARD_MIN_PT, CARD_GAP_PT) and card_width (first image thumbnail from the attachments, else a text preview, then title and date); hit-test cards in list_hit; add the list toolbar toggle beside the More button."
   },
   {
    "feature": "Smart folders with user filters (tags, dates, attachments, checklists, folders, pinned, locked)",
@@ -292,10 +292,10 @@
    "feature": "Collapsible sections under headings",
    "area": "view",
    "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No folding model or UI is present in the Notes source; the prior fold.rs citation was stale.",
-   "wire": "Implement heading detection and collapsed-line state, draw a disclosure control beside headings, and add Collapse/Expand Section and All commands."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/fold.rs:39 (headings), fold.rs:58 (hidden), springboard/apps/notes-desktop/src/notes/mod.rs:2261 (fold_section); Format menu springboard/apps/notes-desktop/src/main.rs:190",
+   "note": "Heading detection, collapse ranges, Format > Collapse/Expand Section and All Sections, and per-note persistence (.springboard-notes-folds) are built and tested on the host. Remaining: the editor does not hide folded lines or draw disclosure chevrons.",
+   "wire": "Draw a disclosure chevron beside each heading in draw_editor (mod.rs) using the kit disclosure control, and hide the lines of fold::hidden(text, folds[note id]) in the TextArea (springboard/src/shell/textarea.rs), so the caret, line layout and taps skip them."
   },
   {
    "feature": "Settings window: default text size, dark note background, new notes start with, group by date",
