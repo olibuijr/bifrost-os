@@ -641,7 +641,7 @@ impl Shell {
                     Action::StatusItem(slot,item,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::StatusItemAction{item,id});}},
                     Action::AppMenu(slot,id)=>{if self.screen==Screen::App(AppId::External(slot)){if let Some(Some(h))=self.ext.get_mut(slot as usize){h.input(bifrost_proto::WindowInput::MenuAction(id));}}},
                     Action::Dock(change)=>effects.extend(self.dock_change(change,t)),
-                    Action::QuickAction(slot,index)=>{if let Some(item)=self.quick_actions_for(slot as usize).get(index as usize).cloned(){if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::QuickAction{kind:item.kind,user_info:item.user_info});}}},
+                    Action::QuickAction(slot,index)=>{if let Some(item)=self.quick_actions_for(slot as usize).get(index as usize).cloned(){self.record_quick_action(slot as usize,&item.kind);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::QuickAction{kind:item.kind,user_info:item.user_info});}}},
                     Action::DockMenu(slot,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id));}},
                     Action::Tile(t)=>{if self.foreign_active().is_none(){self.desk_tile_front(t);}},
                     Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},

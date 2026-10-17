@@ -749,6 +749,8 @@ pub struct Shell {
     print_sheet: Option<print_sheet::PrintSheet>,
     /// Edit > Emoji & Symbols: the character viewer panel (see `character_viewer.rs`)
     char_viewer: Option<character_viewer::CharacterViewer>,
+    /// How often each app's Home Screen quick actions were picked this session (see `quick_actions.rs`)
+    quick_action_uses: quick_actions::Usage,
     help_viewer: Option<help_viewer::HelpViewer>,
     /// Option+Cmd+F5: the Accessibility Shortcut panel with a checkbox per chosen feature (see `accessibility::shortcut_panel`)
     a11y_panel: Option<accessibility::shortcut_panel::ShortcutPanel>,
@@ -1088,6 +1090,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
             char_viewer: None,
+            quick_action_uses: quick_actions::Usage::default(),
             help_viewer: None,
             a11y_panel: None,
             keyboard_viewer: None,
