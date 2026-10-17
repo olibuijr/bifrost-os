@@ -5,7 +5,8 @@
 //! and the bytes that were signed.
 //!
 //! A link is trusted only when the child certificate carries `signed` and `signature` and the issuer carries
-//! `public_key`, and the signature verifies over `signed`. A certificate without those fields fails its link, so the
+//! `public_key`, `signed` is exactly the canonical encoding of the child's fields ([`to_be_signed`]), and the signature
+//! verifies over it. Binding the fields to the signed bytes means a certificate altered after signing fails. A certificate without those fields fails its link, so the
 //! service stays fail-closed for anything it cannot check. Network connections are verified by the TLS stack (rustls
 //! with the webpki roots), not by this service.
 //!
@@ -30,6 +31,28 @@ struct Signing {
     public_key: Option<Vec<u8>>,
     signed: Option<Vec<u8>>,
     signature: Option<Vec<u8>>,
+    /// The canonical encoding of the certificate's own fields, which `signed` must equal.
+    tbs: Vec<u8>,
+}
+
+/// The canonical bytes a certificate's issuer signs: a version line, then one line per field in a fixed order (DNS
+/// names comma separated, the public key as hex, empty when absent).
+pub fn to_be_signed(cert: &Certificate, public_key: Option<&[u8]>) -> Vec<u8> {
+    let path_len = cert.path_len.map(|n| n.to_string()).unwrap_or_default();
+    let key = public_key.map(bifrost_core::plist::hex_encode).unwrap_or_default();
+    format!(
+        "bifrost-cert-1\nsubject={}\nissuer={}\nnot_before={}\nnot_after={}\nis_ca={}\npath_len={}\ndigital_signature={}\ndns_names={}\npublic_key={}\n",
+        cert.subject.replace('\n', " "),
+        cert.issuer.replace('\n', " "),
+        cert.not_before,
+        cert.not_after,
+        cert.is_ca,
+        path_len,
+        cert.digital_signature,
+        cert.dns_names.join(",").replace('\n', " "),
+        key,
+    )
+    .into_bytes()
 }
 
 /// The signing material of `cert`, found by its address in one of the `(certificates, material)` lists.
@@ -42,6 +65,9 @@ fn link_signed(child: &Signing, issuer: &Signing) -> bool {
     let (Some(signed), Some(signature), Some(key)) = (&child.signed, &child.signature, &issuer.public_key) else {
         return false;
     };
+    if *signed != child.tbs {
+        return false;
+    }
     match PublicKey::from_raw_representation(key) {
         Ok(key) => key.is_valid_signature(signature, signed),
         Err(_) => false,
@@ -106,7 +132,7 @@ fn certificates(params: &Json, key: &str) -> Result<(Vec<Certificate>, Vec<Signi
         None | Some(Json::Null) => Ok((Vec::new(), Vec::new())),
         Some(Json::Arr(items)) => {
             let certs = items.iter().map(certificate).collect::<Result<Vec<_>, _>>()?;
-            let signing = items.iter().map(signing).collect::<Result<Vec<_>, _>>()?;
+            let signing = items.iter().zip(&certs).map(|(j, c)| signing(j, c)).collect::<Result<Vec<_>, _>>()?;
             Ok((certs, signing))
         }
         Some(_) => Err(format!("{key} must be a list of certificates")),
@@ -114,14 +140,16 @@ fn certificates(params: &Json, key: &str) -> Result<(Vec<Certificate>, Vec<Signi
 }
 
 /// The signing fields of one certificate. Each is hex text; a field that is absent stays `None`.
-fn signing(j: &Json) -> Result<Signing, String> {
+fn signing(j: &Json, cert: &Certificate) -> Result<Signing, String> {
     let field = |k: &str| -> Result<Option<Vec<u8>>, String> {
         match j.str_field(k) {
             None => Ok(None),
             Some(hex) => hex_decode(&hex).map(Some).ok_or_else(|| format!("certificate {k} must be hex text")),
         }
     };
-    Ok(Signing { public_key: field("public_key")?, signed: field("signed")?, signature: field("signature")? })
+    let public_key = field("public_key")?;
+    let tbs = to_be_signed(cert, public_key.as_deref());
+    Ok(Signing { public_key, signed: field("signed")?, signature: field("signature")?, tbs })
 }
 
 fn certificate(j: &Json) -> Result<Certificate, String> {
@@ -192,9 +220,10 @@ mod tests {
 
     /// The certificate `subject` issued by `issuer`, holding `own`'s public key and signed by `signer` over its fields.
     fn signed(subject: &str, issuer: &str, is_ca: bool, own: &PrivateKey, signer: &PrivateKey) -> Json {
-        let tbs = format!("{subject}|{issuer}|{is_ca}").into_bytes();
-        let signature = signer.signature_for(&tbs);
         let mut c = cert(subject, issuer, is_ca);
+        let own_key = own.public_key().raw_representation();
+        let tbs = to_be_signed(&certificate(&c).unwrap(), Some(&own_key));
+        let signature = signer.signature_for(&tbs);
         if let Json::Obj(pairs) = &mut c {
             pairs.push(("public_key".into(), Json::Str(hex_encode(&own.public_key().raw_representation()))));
             pairs.push(("signed".into(), Json::Str(hex_encode(&tbs))));
