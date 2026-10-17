@@ -16,6 +16,7 @@ pub mod leave;
 pub mod lastcomm;
 pub mod mdfind;
 pub mod mdutil;
+pub mod neighbors;
 pub mod mtree;
 pub mod hdiutil;
 pub mod iconutil;
