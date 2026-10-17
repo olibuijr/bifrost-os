@@ -101,6 +101,13 @@ fn run() -> std::io::Result<()> {
         Some(Err(e)) => eprintln!("springboard: restore failed: {e}"),
         None => {}
     }
+    // the BifrOSt Account session moves from its old plain file into the keychain group, once (`cloud_session`)
+    let (xdg, home) = (std::env::var("XDG_DATA_HOME").ok(), std::env::var("HOME").ok());
+    if let Some(file) = springboard::cloud_session::file_path(xdg.as_deref(), home.as_deref()) {
+        if let Err(e) = springboard::cloud_session::migrate_file(&springboard::cloud_session::GroupVault::new(std::path::Path::new(&dir)), &file) {
+            eprintln!("springboard: account session not moved to the keychain: {e:?}");
+        }
+    }
     // the crash-loop rule applies on every start
     if !springboard::bare::takeover::begin(&dir) {
         return Ok(());

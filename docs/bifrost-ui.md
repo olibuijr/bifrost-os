@@ -4397,6 +4397,32 @@ lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for 
 - Parity: the four `compression` rows (multiple-step streams, input and output filters, DEFLATE encoding, error reporting) stay `partial` until the tests run on Midget. Not yet: a flush call, and dynamic-table reuse across blocks.
 - Tests: `springboard/sdk/tests/parity_sdk-tests-20.rs` (compression section), plus inline tests in `compression.rs`, `compression/dynamic.rs` and `compression/inflate_stream.rs`. Not yet compiled or run in this round.
 
+## BifrOSt Account session (`springboard/src/cloud_session.rs`, `bifrost_app::cloud_account::session`)
+
+The signed-in BifrOSt Account of this device is one keychain item, shared through the `is.bifrost.account` access group.
+
+- **Item**: group `is.bifrost.account`, service `bc_session`, account `session`. The value is JSON
+  `{"v":1,"token","account","server","expires"}`: the device bearer token, the account id (empty for a migrated file),
+  the `https` cloud API address, and the expiry as Unix seconds (`null` when the sign-in answer gave no lifetime; read it
+  from the cookie's `Max-Age` with `cloud_account::cookie_expiry`). The token is letters and digits only.
+- **Lifecycle** (`cloud_session::{store, load, sign_out}` over a `Vault`): sign-in stores the session, a refresh stores the
+  new one over it (one item), sign-out deletes the item. `GroupVault` is the real group store
+  (`keychain::Store::open_group`); tests use a fake vault. The server side of sign-out is `cloud_account::sign_out_request`.
+- **Migration**: `cloud_session::migrate_file` moves the old plain file (`$XDG_DATA_HOME/bifrost/cloud_session`, a
+  `token=` line; `file_path` gives the path) into the group once and deletes it. An item that already exists wins over
+  the file. A failed keychain write keeps the file for the next start. The shell runs it at start (`src/bin/shell.rs`).
+- **Who may read it**: `shell::services::keychain_groups::groups_of` grants `is.bifrost.account` only to first-party
+  system apps (`first_party`: id under `is.olibuijr.` and `kind = "system-app"`), and only with the `keychain` permission.
+  Other apps that list the group are refused with `NotPermitted`. Locate (`is.olibuijr.locate.desktop`) is the one reader.
+- **App side**: `cloud_account::session(ctx)` asks the group (reply through `service_reply`), and `decode_session` gives a
+  `Session` (`token`, `account_id`, `server`, `expires`), `SessionError::SignedOut` when there is no item (or it does not
+  decode), or `SessionError::Keychain(e)` for a refusal. The token is never printed; `Session`'s `Debug` redacts it.
+- **Gaps**: no code path yet delivers the token to the device. Sign-in happens on the account web page
+  (`setup::ACCOUNT_URL`, opened by the setup assistant), and Settings has no BifrOSt Account page, so nothing calls `store`
+  yet. `bug_report::CloudSession::load()` still reads the plain file: once the shell has migrated it, bug reports say
+  "sign in" until that reader moves to the keychain (it is synchronous today, the keychain read is a service call).
+  Not run on Midget or on the host.
+
 ## Locate: device locator, end-to-end location (`bifrost-locate`, `bifrost_app::cloud_findmy`)
 
 Locate (`springboard/apps/locate-desktop`, id `is.olibuijr.locate.desktop`) is the BifrOSt answer to Find My. It shows
@@ -4436,8 +4462,9 @@ Play sound uses the new shell message `ToShell::PlaySystemSound`: the SDK call `
 shell queues up to four sounds per frame and the audio worker plays them on the sound-effects role.
 
 **Not built, or blocked:**
-- The session: no app writes the BifrOSt Account session into the `is.bifrost.account` keychain group yet, so the worker
-  does not start until the account sign-in does. Until then the cloud is off, and the join button says so.
+- The session: the shell's account helpers can hold the session in the `is.bifrost.account` group now (see "BifrOSt
+  Account session"), but nothing calls them yet, so the worker does not start until the sign-in delivers the token. Until
+  then the cloud is off, and the join button says so.
 - Contact copies: no contact share is created by the app, so a report goes only to the owner's own devices.
 - The join key pair is held in memory until approval. A restart during a wait begins the join again.
 - A sound's ack is sent when the worker takes the command, not when the tone has played.

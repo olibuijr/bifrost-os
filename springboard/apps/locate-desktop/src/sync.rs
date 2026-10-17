@@ -10,7 +10,7 @@ use bifrost_locate::control::Request;
 use bifrost_app::core_location::{AuthorizationStatus, Delegate, Location, LocationError};
 use bifrost_app::power_sources;
 use bifrost_app::controls::x25519::PrivateKey;
-use bifrost_app::keychain_groups;
+use bifrost_app::cloud_account;
 use bifrost_app::usernotif;
 use bifrost_app::{entropy, Ctx};
 use bifrost_core::json::Json;
@@ -19,11 +19,6 @@ use bifrost_locate::pairing::PollAnswer;
 use bifrost_locate::reporting::Action;
 use bifrost_locate::sealing::{self, Report, Sealed};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-/// The keychain group and item the BifrOSt Account session is read from. The account sign-in stores it there.
-pub const SESSION_GROUP: &str = "is.bifrost.account";
-pub const SESSION_SERVICE: &str = "bc_session";
-pub const SESSION_ACCOUNT: &str = "session";
 
 /// The window's location delegate: the newest fix delivered, whether a request failed, and the authorization.
 #[derive(Default)]
@@ -69,9 +64,9 @@ pub fn device_name() -> String {
 }
 
 impl LocateWindow {
-    /// Asks the keychain group for the session. Called once at start.
+    /// Asks the keychain group for the BifrOSt Account session. Called once at start.
     pub fn start_session(&mut self, ctx: &Ctx) {
-        self.session_request = Some(keychain_groups::get(ctx, SESSION_GROUP, SESSION_SERVICE, SESSION_ACCOUNT));
+        self.session_request = Some(cloud_account::session(ctx));
     }
 
     /// A service reply: the session starts the worker, and a location reply goes to the location manager. Returns
@@ -79,12 +74,10 @@ impl LocateWindow {
     pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         if self.session_request == Some(request) {
             self.session_request = None;
-            match keychain_groups::decode(result) {
-                Ok(bytes) => match String::from_utf8(bytes) {
-                    Ok(token) if !token.trim().is_empty() => self.connect(ctx, token.trim().to_string()),
-                    _ => ctx.log("locate: the account session is empty"),
-                },
-                Err(_) => ctx.log("locate: no BifrOSt Account session; the cloud is off"),
+            match cloud_account::decode_session(result) {
+                Ok(session) => self.connect(ctx, session.token),
+                Err(cloud_account::SessionError::SignedOut) => ctx.log("locate: no BifrOSt Account session; the cloud is off"),
+                Err(e) => ctx.log(&format!("locate: {e}")),
             }
             return true;
         }
