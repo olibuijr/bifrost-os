@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 31,
-  "gap": 3,
+  "partial": 32,
+  "gap": 2,
   "n/a": 2,
-  "coverage_pct": 58.0
+  "coverage_pct": 59.1
  },
  "features": [
   {
@@ -212,10 +212,10 @@
    "feature": "Speech",
    "area": "menu",
    "apple": "Edit.nib: Edit > Speech > Start/Stop Speaking",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No speech output. The SDK speech module models utterances but has no audio engine behind it, and the device rules forbid sound that the user did not ask for.",
-   "wire": "Start/Stop Speaking items calling an audio speech service once one exists."
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs (Action::SpeakStart, Action::SpeakStop; Text > Speech); springboard/apps/textedit-desktop/src/text.rs (selected_text); springboard/sdk/src/speech.rs; springboard/src/shell/services/speech.rs",
+   "note": "Start Speaking speaks the selection, else the whole document, through the shell speech service (espeak-ng). Stop Speaking ends it. The items sit in Text > Speech because the shell's Edit menu takes no app items. Host unit tests cover the service and the engine arguments; the menu wiring has no test.",
+   "wire": "Verify on Midget with espeak-ng installed (speak, stop, the menu entries). Move the items under Edit once the shell lets an app add to Edit."
   },
   {
    "feature": "Bold / Italic / Underline",

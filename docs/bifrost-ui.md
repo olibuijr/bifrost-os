@@ -2884,6 +2884,30 @@ through `append` and `end_audio`; the caller drives the task with `pump`, which 
 must be supplied; no alternatives beyond the best transcription; no dictation entry point on the keyboard. Rows stay
 partial until a Midget check.
 
+## Speech service (`bifrost_app::speech`, the `speech` service)
+
+Text to speech for apps, the BifrOSt counterpart of the reference speech synthesizer. The shell owns the engine:
+`espeak-ng`, else `espeak`, a system package. The shell runs it as a child process and feeds it the text on standard
+input, written from a thread so the shell never blocks on a long text.
+
+- Calls: `speak {text, voice?, rate?}` replies `{id}`; `stop` replies `{stopped}`; `pause` and `continue` (SIGSTOP and
+  SIGCONT to the engine) reply `{paused}`; `is_speaking` replies `{speaking, paused}`; `voices` replies
+  `{voices: [{name, language}], loading}`. The voice listing is read once in a thread on the first call, so apps ask
+  again while `loading` is true.
+- One utterance per app. A new `speak` replaces the current one, `stop` ends it, and the shell ends it when the app
+  quits. An engine that has exited stops counting as speaking.
+- Limits: text is at most 16 KiB, the rate is a whole number from 80 to 450 words per minute, and a voice name may not
+  start with a dash or contain spaces. No engine installed fails `speak` and `voices` with "no speech engine is
+  installed (install espeak-ng)".
+- Gaps against the reference synthesizer: no word or sentence events, no pitch or volume, no delegate callbacks, no
+  per-utterance language (the voice carries it), and no pause of an engine the shell did not start.
+- Code: `springboard/src/shell/services/speech.rs` (service: the state machine behind a `Spawner` trait, so tests run
+  with a fake engine), `springboard/core/src/speech_engine.rs` (engine programs, `engine_args`, `parse_voices`, shared
+  with the `say` tool in `springboard/cmd/src/say.rs`), `springboard/sdk/src/speech.rs` (client).
+- Parity: `docs/parity-matrix/data/avfaudio.json` (speech synthesis row, partial). Notes and TextEdit have Speech menus
+  (Note > Speech, Text > Speech) rather than Edit > Speech, because the shell's Edit menu takes no app items.
+- Not verified on Midget: the menus and the engine path need espeak-ng installed on the device.
+
 ## Local Authentication (`bifrost_app::local_auth`, the `local_auth` service)
 
 `LAContext` mirrors Apple's type: `can_evaluate_policy` (canEvaluatePolicy), `evaluate_policy` (evaluatePolicy with a

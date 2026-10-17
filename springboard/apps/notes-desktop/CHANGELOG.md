@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.0 — 2026-10-17
+
+- Edit > Speech: Start Speaking speaks the selection of the open note (else the whole note) through the shell speech service; Stop Speaking ends it.
+
 ## 1.18.2 — 2026-10-14
 
 - Use named system black and white colors for sketch ink and paper pixels.

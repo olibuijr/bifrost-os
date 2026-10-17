@@ -1406,6 +1406,16 @@ impl Notes {
         Some(self.editor.text().to_string())
     }
 
+    /// The text Edit > Speech speaks: the selection of the open note, else the whole note. `None` when no note is open
+    /// or the note is blank.
+    pub fn speakable_text(&self) -> Option<String> {
+        let text = match self.selected_markdown() {
+            Some(selected) => selected,
+            None => self.printable_text()?,
+        };
+        Some(text).filter(|t| !t.trim().is_empty())
+    }
+
     /// Whether Edit > Undo and Redo have something to do in the open note.
     pub fn can_undo_redo(&self) -> (bool, bool) {
         (self.is_editing() && self.editor.can_undo(), self.is_editing() && self.editor.can_redo())

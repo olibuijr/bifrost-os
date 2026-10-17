@@ -10,12 +10,11 @@
 //! Gap: `-o` writes WAV (the engine's format), where the reference tool writes AIFF by default; the rate is passed through as words
 //! per minute without checking the engine's range.
 
+use bifrost_core::speech_engine::{engine_args as shared_engine_args, ENGINES, NO_ENGINE};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 pub const USAGE: &str = "usage: say [-v voice] [-r rate] [-o file] [-f file | text ...]";
-/// The engines the tool tries in order: the packaged one first, then the older name.
-pub const ENGINES: &[&str] = &["espeak-ng", "espeak"];
 
 /// The parsed command line.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -75,17 +74,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
 
 /// The engine's arguments for `o`. The text itself goes on standard input, so text that starts with a dash is safe.
 pub fn engine_args(o: &Options) -> Vec<String> {
-    let mut a = Vec::new();
-    if let Some(v) = &o.voice {
-        a.extend(["-v".to_string(), v.clone()]);
-    }
-    if let Some(r) = o.rate {
-        a.extend(["-s".to_string(), r.to_string()]);
-    }
-    if let Some(out) = &o.out {
-        a.extend(["-w".to_string(), out.clone()]);
-    }
-    a
+    shared_engine_args(o.voice.as_deref(), o.rate, o.out.as_deref())
 }
 
 /// The text to speak: the `-f` file's contents, else the operands joined with spaces, else nothing (the engine then reads
@@ -116,7 +105,7 @@ pub fn speak(args: &[String], text: Option<&[u8]>) -> Result<(), String> {
         let status = child.wait().map_err(|e| format!("{engine}: {e}"))?;
         return if status.success() { Ok(()) } else { Err(format!("{engine} failed ({status})")) };
     }
-    Err(format!("no speech engine is installed (install {})", ENGINES[0]))
+    Err(NO_ENGINE.to_string())
 }
 
 #[cfg(test)]

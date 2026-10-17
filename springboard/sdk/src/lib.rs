@@ -84,6 +84,7 @@ pub mod input_events;
 pub mod touch_events;
 pub mod launch_services;
 pub mod notify_bus;
+pub mod speech;
 pub mod locale;
 pub mod time_zone;
 pub mod formatters;

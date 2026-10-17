@@ -416,6 +416,18 @@ impl TextEditApp {
                 return true;
             }
             Action::Complete => return self.complete(),
+            Action::SpeakStart => {
+                let Some(doc) = active_doc(&self.docs) else { return false };
+                let text = doc.text.selected_text().unwrap_or_else(|| doc.text.text());
+                if !text.trim().is_empty() {
+                    bifrost_app::speech::speak(ctx, &bifrost_app::speech::Utterance::new(&text));
+                }
+                return false;
+            }
+            Action::SpeakStop => {
+                bifrost_app::speech::stop(ctx);
+                return false;
+            }
             Action::UseSelection => {
                 let Some(doc) = active_doc(&self.docs) else { return false };
                 let picked: String = doc.text.cells()[doc.text.selection()].iter().map(|c| c.ch).collect();
@@ -1713,6 +1725,9 @@ impl TextEditApp {
             menu_item(Action::InsertPage, "Page Break", "", enabled).depth(1),
             menu_item(Action::InsertLine, "Line Break", "", enabled).depth(1),
             menu_item(Action::InsertParagraph, "Paragraph Break", "", enabled).depth(1),
+            AppMenuItem::submenu("Speech"),
+            menu_item(Action::SpeakStart, "Start Speaking", "", enabled).depth(1),
+            menu_item(Action::SpeakStop, "Stop Speaking", "", true).depth(1),
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
