@@ -513,6 +513,21 @@ impl Files {
         self.navigate(dir, false);
         self.notice = failed.map(|e| format!("Could not put back: {e}"));
     }
+    /// Make Alias (Cmd+L): a symbolic link beside each selected item, named "name alias". Links are made on the spot.
+    pub(crate) fn make_alias(&mut self) {
+        if self.in_bin() || self.in_recents() {
+            return;
+        }
+        let mut failed = None;
+        for path in self.selected_paths() {
+            if let Err(e) = springboard::files::fs::make_alias(&path) {
+                failed = Some(e.to_string());
+            }
+        }
+        let dir = self.path.clone();
+        self.navigate(dir, false);
+        self.notice = failed.map(|e| format!("Could not make an alias: {e}"));
+    }
     /// Copies the selected items into their own folder under new names.
     pub(crate) fn duplicate(&mut self) {
         if self.in_bin() || self.in_recents() {

@@ -34,6 +34,10 @@ impl Files {
         if mods & CHORD_META != 0 && self.naming.is_none() && self.go_chord(key, shift, mods & CHORD_ALT != 0) {
             return true;
         }
+        if key == 46 && mods & CHORD_META != 0 && mods & CHORD_ALT != 0 && self.naming.is_none() {
+            self.copy_item_path(); // Option+Cmd+C: Copy Item Path
+            return true;
+        }
         if mods & CHORD_ALT != 0 || mods & (CHORD_CTRL | CHORD_META) == 0 || self.naming.is_some() {
             return false;
         }
@@ -68,6 +72,7 @@ impl Files {
             (3, false) => self.set_view(false, false), // 2: list
             (4, false) => self.set_view(false, true),  // 3: columns
             (5, false) => self.set_gallery(),          // 4: gallery
+            (38, false) => self.make_alias(),          // L: Make Alias
             (36, false) => {                           // J: Show View Options
                 self.vo.show = !self.vo.show;
                 self.revision += 1;
