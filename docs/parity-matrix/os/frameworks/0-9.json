@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -125,7 +125,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -248,7 +248,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -548,7 +548,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/media-intents.json",
    "status": "partial",
-   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json",
+   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1054,7 +1054,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "overlay module, owner Translation; from SDK matrix translation.json",
+   "note": "overlay module, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -1138,7 +1138,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
