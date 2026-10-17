@@ -4736,3 +4736,20 @@ Descriptors travel as JSON, not Apple event descriptors; there is no sdef file a
 JavaScript (`JavaScriptOSA`, `JavaScriptAppleEvents`) is not built, and `osascript -l JavaScript` is refused. Setting
 properties and deleting notes or events from a script are refused by the apps for now. The language has no
 `repeat while`, no `considering`, and no object references beyond specifiers.
+
+## App controls in Control Center (`shell::app_controls`, `ui::control_widget`)
+
+Apps add buttons and toggles to Control Center by declaring `[[control]]` tables in `manifest.toml`:
+`kind = "toggle"` or `"button"`, `title`, an optional `symbol`, and `intent`, the id of one of the app's `[[intent]]`
+tables. The shell reads them with the manifest (`apphost::Manifest::controls`), drops any table with an unknown
+kind, a blank title or an unsafe intent id, and registers the rest in a `ControlRegistry` under `<app id>.<intent>`.
+A button press sends `intent.<id>` with no parameters. A toggle sends `intent.<id>` with the string parameter
+`on` set to `"true"` or `"false"`, the new state. Both travel over the app's control socket (`shell::intents`).
+
+Status: the model, parsing, registration and request mapping are in place with host tests
+(`shell/app_controls.rs`). Not done: the Control Center panel does not draw these controls yet, and the Edit
+Controls gallery (add, remove, reorder, menu-bar extras) does not list them. Apple parity gap: ControlWidgetButton,
+ControlWidgetToggle and ControlValueProvider on screen. Edit Controls also lacks a menu-bar pref for choosing
+which modules get their own status item; the module list (`control_center_modules`, `parse_slots`,
+`move_slot`, `tile_visible`) already persists order and visibility. Battery percentage and per-app energy are
+not in the Control Center model yet.

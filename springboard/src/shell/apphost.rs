@@ -64,6 +64,8 @@ pub struct Manifest {
     pub schemes: Vec<String>,
     /// App Intents declared as `[[intent]]` tables (`shell::intents`); Search lists the shortcuts.
     pub intents: Vec<super::intents::ManifestIntent>,
+    /// `[[control]]` tables: buttons and toggles the app adds to Control Center (`shell::app_controls`).
+    pub controls: Vec<super::app_controls::ManifestControl>,
     /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
     pub services: Vec<bifrost_ui::app_services::ServiceDecl>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
@@ -178,6 +180,7 @@ impl Manifest {
                 _ => {}
             }
         }
+        m.controls = super::app_controls::parse_controls(text);
         m.quick_actions = super::quick_actions::parse_static(text);
         m.background_tasks = super::services::background::parse_tasks(text);
         // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here

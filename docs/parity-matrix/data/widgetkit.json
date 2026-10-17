@@ -101,9 +101,9 @@
   {
    "feature": "Controls (ControlWidgetButton, ControlWidgetToggle, StaticControlConfiguration, ControlCenter)",
    "apple": "ControlWidgetButton, ControlWidgetToggle, AppIntentControlConfiguration, ControlCenter, ControlValueProvider",
-   "bifrost": "springboard/ui/src/control_widget.rs (ControlRegistry: buttons and toggles, identifiers, toggle values, presses); springboard/src/shell/control_center.rs (Airplane, volume, backlight, Rotation Lock toggles); springboard/src/shell/assistive_touch.rs (Action enum)",
+   "bifrost": "springboard/ui/src/control_widget.rs (ControlRegistry: buttons and toggles, identifiers, toggle values, presses); springboard/src/shell/app_controls.rs (manifest [[control]] tables, registration as <app id>.<intent>, intent request lines for a press or toggle); springboard/src/shell/control_center.rs (Airplane, volume, backlight, Rotation Lock toggles); springboard/src/shell/assistive_touch.rs (Action enum)",
    "status": "partial",
-   "note": "The control registry holds an app's buttons and toggles under unique identifiers, with their values and presses, tested headless in ui/tests/parity_sdk-os-09.rs. Gap: Control Center shows only its fixed toggles and does not read the registry, so apps cannot add controls to the panel yet."
+   "note": "The control registry holds an app's buttons and toggles under unique identifiers, with their values and presses, tested headless in ui/tests/parity_sdk-os-09.rs. Apps declare [[control]] tables in manifest.toml (kind, title, symbol, intent); the shell parses them and maps each to a registry entry and to the intent request a press or toggle sends (host tests in shell/app_controls.rs). Gap: the Control Center panel does not yet draw the registry's entries or an Edit Controls gallery, so app controls are not visible on screen yet."
   },
   {
    "feature": "Push-driven widget and control updates (WidgetPushHandler, ControlPushHandler, APNs)",
@@ -145,7 +145,7 @@
   "No app-facing widget extension: apps cannot register a widget kind, a size or a configuration (Widget, WidgetBundle, StaticConfiguration, AppIntentConfiguration).",
   "No timeline or reload API for apps (TimelineProvider, TimelineEntry, WidgetCenter.reloadTimelines); shell tiles refresh themselves only.",
   "No Live Activity API (ActivityKit, ActivityConfiguration, DynamicIsland); the lock screen shows shell now-playing only.",
-  "No app-provided Control Center controls (ControlWidgetButton, ControlWidgetToggle, ControlValueProvider).",
+  "No on-screen Control Center panel for app controls yet (ControlWidgetButton, ControlWidgetToggle, ControlValueProvider): manifest [[control]] tables are parsed and registered, but the panel and its Edit Controls gallery do not show them.",
   "No interactive widget actions that run app intents (Button or Toggle invoking AppIntent) and no widget deep links (widgetURL).",
   "No large widget family; shell widgets stop at small (155 pt) and medium (329 pt).",
   "No widget container background for the accented look; the accented and vibrant modes exist only as a model (springboard/ui/src/widget_render.rs).",
