@@ -256,10 +256,11 @@ pub fn set_wallpaper_catalogue(list: Vec<(String, String)>) {
 /// "Set Wallpaper to" row per picture in the catalogue.
 fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
     use super::settings_actions::SettingsIntent;
-    let fixed: [(&str, &str, &str, SettingsIntent); 3] = [
+    let fixed: [(&str, &str, &str, SettingsIntent); 4] = [
         ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
         ("wifi-on", "Turn Wi-Fi On", "Switch the Wi-Fi radio on", SettingsIntent::WifiPower(true)),
         ("wifi-off", "Turn Wi-Fi Off", "Switch the Wi-Fi radio off", SettingsIntent::WifiPower(false)),
+        ("lock-screen", "Lock Screen", "Lock the screen now", SettingsIntent::LockScreen),
     ];
     let mut rows: Vec<(search_rank::Item, String)> = fixed
         .into_iter()
@@ -1969,6 +1970,10 @@ impl Shell {
                     f.show_folder(&self.ui, &folder, t);
                 }
             }
+            Hit::SettingsAction { intent: super::settings_actions::SettingsIntent::LockScreen, .. } => {
+                // locking changes the lock state too, so it goes through the same path as the menu item
+                return self.lock_screen();
+            }
             Hit::SettingsAction { intent, .. } => {
                 // the same effect the Settings pane and the agent socket apply; no window opens
                 return vec![intent.into_effect()];
@@ -2151,6 +2156,8 @@ mod tests {
         let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
         assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
         set_wallpaper_catalogue(Vec::new());
+        let lock = Hit::SettingsAction { intent: SettingsIntent::LockScreen, title: "Lock Screen".into() };
+        assert!(results("lock screen", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == lock));
     }
 
     #[test]
