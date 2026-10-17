@@ -5832,28 +5832,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
    "status": "gap",
-   "note": "The suggestion engine and its data tables (airport and time zone tables, attribute names, reverse-template scripts and classifier calibration for finding events, flights and contacts in mail). Built 2026-10-17 (wave 12): springboard/ui/src/found_in.rs reads a message for meeting times (proposed_event), flights with the airports named beside them (a table of 49 airports with city and time zone), emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device.",
+   "note": "The suggestion engine and its data tables (airport and time zone tables, attribute names, reverse-template scripts and classifier calibration for finding events, flights and contacts in mail). Built 2026-10-17 (wave 12): springboard/ui/src/found_in.rs reads a message for meeting times (proposed_event), flights with the airports named beside them (a table of 49 airports with city and time zone), emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "found_in::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "suggested_actions::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "detect::tests"
-    }
-   ],
-   "ready_note": "found_in::tests covers extraction of each kind, the airport table, routes and dismissal memory; detect::tests and suggested_actions::tests cover the detector and the per-kind actions."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsML.framework",
@@ -5893,28 +5874,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
    "status": "gap",
-   "note": "Suggestion views for Mail, Messages and Search: a suggested-event popover, a paging popover and a found-in suggestion view. Built 2026-10-17 (wave 12): found_in::Pager is the model of the paging popover (page label, next, previous, dismiss, accept returning an Action) and Found carries the row text and the 'Found in <app>' line; the view draws it with the SDK popover and list kits. Wiring into Mail's reading pane is the app's step.",
+   "note": "Suggestion views for Mail, Messages and Search: a suggested-event popover, a paging popover and a found-in suggestion view. Built 2026-10-17 (wave 12): found_in::Pager is the model of the paging popover (page label, next, previous, dismiss, accept returning an Action) and Found carries the row text and the 'Found in <app>' line; the view draws it with the SDK popover and list kits. Wiring into Mail's reading pane is the app's step. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "found_in::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "suggested_actions::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "detect::tests"
-    }
-   ],
-   "ready_note": "found_in::tests covers paging, dismissing, accepting and the row text; the event, flight, contact and place actions come from the same model."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsUIMacHelper.framework",
@@ -5933,28 +5895,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs",
    "status": "os",
-   "note": "Helper bundle for the suggestion views (Info.plist and version.plist only). Its job is hosting CoreSuggestionsUI in a separate process; BifrOSt draws the views in-process from the found_in models.",
+   "note": "Helper bundle for the suggestion views (Info.plist and version.plist only). Its job is hosting CoreSuggestionsUI in a separate process; BifrOSt draws the views in-process from the found_in models. Lead 2026-10-17: not ready: found_in is not wired into the Mail reading pane yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "found_in::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "suggested_actions::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "detect::tests"
-    }
-   ],
-   "ready_note": "Hosting plumbing for CoreSuggestionsUI; the function it hosts is covered by found_in::tests."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSymbolication.framework",
@@ -6008,28 +5951,9 @@
    "doc": "",
    "bifrost": "springboard/render/src/theme.rs; springboard/src/appearance_portal.rs; springboard/ui/src/bar_appearance.rs",
    "status": "partial",
-   "note": "The data model and compiler for themes (Core Data models and a distill tool in the bundle). BifrOSt reads the effective scheme and accent from the appearance file, bar appearances inherit from a standard appearance, and a theme file of the named colours (render/src/theme.rs: TOML colour table, unknown keys ignored, built-in colours when missing) defines themes as data. Applying a theme file to the constants the drawing code reads is a separate step that is not done.",
+   "note": "The data model and compiler for themes (Core Data models and a distill tool in the bundle). BifrOSt reads the effective scheme and accent from the appearance file, bar appearances inherit from a standard appearance, and a theme file of the named colours (render/src/theme.rs: TOML colour table, unknown keys ignored, built-in colours when missing) defines themes as data. Applying a theme file to the constants the drawing code reads is a separate step that is not done. Lead 2026-10-17: not ready: drawing still reads the ui.rs constants, not the theme file.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-render",
-     "filter": "theme::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "appearance_portal::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "bar_appearance::tests"
-    }
-   ],
-   "ready_note": "The editable theme definition format and its loader (theme::tests), the appearance hand-off to apps (appearance_portal::tests) and inherited appearance objects (bar_appearance::tests). Apple's compiled theme artwork has no counterpart; BifrOSt draws controls in code."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreThread.framework",
