@@ -83,9 +83,11 @@ pub fn record_of(c: &Contact) -> Record {
 /// The record of a store contact together with its extra multi-value fields. The file's phone and email come first.
 pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     let mut r = Record::new(c.id);
-    let (given, family) = split_name(&c.name);
-    r.set(Key::GivenName, Value::Text(given));
-    r.set(Key::FamilyName, Value::Text(family));
+    let parts = name_parts(&c.name);
+    r.set(Key::GivenName, Value::Text(parts.given));
+    r.set(Key::MiddleName, Value::Text(parts.middle));
+    r.set(Key::FamilyName, Value::Text(parts.family));
+    r.set(Key::NameSuffix, Value::Text(parts.suffix));
     r.set(Key::Organization, Value::Text(c.company.clone()));
     let first = |value: &str, set: usize, more: &[LabeledValue]| {
         let label = LABELS[set].get(c.labels[set] as usize).copied().unwrap_or("other");
@@ -105,12 +107,53 @@ pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     r
 }
 
-fn split_name(name: &str) -> (String, String) {
-    let name = name.trim();
-    match name.rsplit_once(' ') {
-        Some((given, family)) => (given.trim().to_string(), family.to_string()),
-        None => (name.to_string(), String::new()),
+/// The parts of a store name: given, middle, family and suffix. The store keeps one name string, so these are derived
+/// from it on read and joined back into it on save.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct NameParts {
+    given: String,
+    middle: String,
+    family: String,
+    suffix: String,
+}
+
+/// Generational and professional suffixes that end a name ("Jr", "III", "Esq."). Matched without case.
+const NAME_SUFFIXES: [&str; 9] = ["Jr", "Jr.", "Sr", "Sr.", "II", "III", "IV", "Esq", "Esq."];
+
+/// Splits a name the way a contact card reads it: a trailing suffix is taken off first, then the first word is the
+/// given name, the last word the family name and any words between them the middle name. A one-word name is a given
+/// name; a two-word name has no middle.
+fn name_parts(name: &str) -> NameParts {
+    let mut words: Vec<&str> = name.split_whitespace().collect();
+    let mut parts = NameParts::default();
+    if words.len() > 1 {
+        if let Some(last) = words.last().copied() {
+            if NAME_SUFFIXES.iter().any(|s| s.eq_ignore_ascii_case(last)) {
+                parts.suffix = last.to_string();
+                words.pop();
+            }
+        }
     }
+    match words.len() {
+        0 => {}
+        1 => parts.given = words[0].to_string(),
+        n => {
+            parts.given = words[0].to_string();
+            parts.middle = words[1..n - 1].join(" ");
+            parts.family = words[n - 1].to_string();
+        }
+    }
+    parts
+}
+
+/// Joins name parts back into the one name string the store keeps, skipping empty parts.
+fn join_name(parts: &NameParts) -> String {
+    [&parts.given, &parts.middle, &parts.family, &parts.suffix]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The JSON of one partial record: its id and each fetched key, `null` when the contact has no value for it.
@@ -227,12 +270,16 @@ fn contact_of(id: u64, (record, cleared): &(Record, Vec<Key>), base: Option<&Con
             Ok(kept.to_string())
         }
     };
-    let (kept_given, kept_family) = base.map_or(("", ""), |c| c.name.rsplit_once(' ').unwrap_or(("", c.name.as_str())));
-    let given = field(Key::GivenName, kept_given)?;
-    let family = field(Key::FamilyName, kept_family)?;
+    let kept = base.map_or_else(NameParts::default, |c| name_parts(&c.name));
+    let name = NameParts {
+        given: field(Key::GivenName, &kept.given)?,
+        middle: field(Key::MiddleName, &kept.middle)?,
+        family: field(Key::FamilyName, &kept.family)?,
+        suffix: field(Key::NameSuffix, &kept.suffix)?,
+    };
     let contact = Contact {
         id,
-        name: [given, family].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" "),
+        name: join_name(&name),
         company: field(Key::Organization, base.map_or("", |c| &c.company))?,
         phone: field(Key::Phones, base.map_or("", |c| &c.phone))?,
         email: field(Key::Emails, base.map_or("", |c| &c.email))?,
@@ -872,13 +919,32 @@ mod tests {
     }
 
     #[test]
-    fn a_name_splits_into_given_and_family_on_the_last_space() {
+    fn a_name_splits_into_given_middle_and_family() {
         let r = record_of(&contact(9, "Mary Ann Smith", "", "", ""));
-        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Mary Ann".into())));
+        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Mary".into())));
+        assert_eq!(r.get(Key::MiddleName), Some(&Value::Text("Ann".into())));
         assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("Smith".into())));
+        let two = record_of(&contact(11, "Jan van der Berg", "", "", ""));
+        assert_eq!(two.get(Key::MiddleName), Some(&Value::Text("van der".into())));
         let one = record_of(&contact(10, "Cher", "", "", ""));
         assert_eq!(one.get(Key::GivenName), Some(&Value::Text("Cher".into())));
         assert_eq!(one.get(Key::FamilyName), None);
+    }
+
+    #[test]
+    fn a_trailing_suffix_is_split_off_the_name() {
+        let r = record_of(&contact(12, "Martin Luther King Jr.", "", "", ""));
+        assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Martin".into())));
+        assert_eq!(r.get(Key::MiddleName), Some(&Value::Text("Luther".into())));
+        assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("King".into())));
+        assert_eq!(r.get(Key::NameSuffix), Some(&Value::Text("Jr.".into())));
+    }
+
+    #[test]
+    fn a_name_joins_back_to_the_same_string_when_nothing_changes() {
+        for name in ["Mary Ann Smith", "Cher", "Henry Ford III", "Jan van der Berg"] {
+            assert_eq!(join_name(&name_parts(name)), name);
+        }
     }
 
     fn extras_for_ada() -> Book {
