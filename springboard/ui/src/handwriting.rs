@@ -1,6 +1,7 @@
 //! Handwriting input for a drawing: the strokes are grouped into text lines, the lines are put in reading order, and
 //! each line is handed to a recogniser. This module does the layout work only. It does not recognise letters: a
-//! shell or app supplies a `Recognizer` that turns the strokes of one line into text.
+//! shell or app supplies a `Recognizer` that turns the strokes of one line into text. `glyph_recognizer::GlyphRecognizer`
+//! is one, for single-stroke letters and digits.
 //!
 //! Rule: a stroke joins the first line whose vertical band it overlaps by at least half of the smaller of the two
 //! heights. Lines read top to bottom, and the strokes of a line read left to right by the left edge of their boxes.
