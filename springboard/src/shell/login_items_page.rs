@@ -230,7 +230,7 @@ pub fn refresh_group(ext: &LoginExtensions) -> Option<Group> {
     if ext.refresh.is_empty() {
         return None;
     }
-    let rows = ext.refresh.iter().map(|b| Item::new(b.app_name.as_str()).switch(!ext.refresh_off.contains(&b.app_id), Action::RefreshToggle(b.app_id.clone()))).collect();
+    let rows = ext.refresh.iter().map(|b| Item::new(b.app_name.as_str()).app_icon(b.app_id.as_str()).switch(!ext.refresh_off.contains(&b.app_id), Action::RefreshToggle(b.app_id.clone()))).collect();
     Some(Group::new(rows).header("APPS").footer("Apps with background tasks may refresh their content while no window is open. Turn one off to stop its refresh."))
 }
 
