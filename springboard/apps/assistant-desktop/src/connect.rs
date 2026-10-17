@@ -9,6 +9,7 @@
 //! "no service ..."; the app then carries on as if the service were not there.
 
 use crate::model::{self, Block, Span};
+use bifrost_app::language_model::{on_device_availability, Availability};
 use bifrost_app::network_path::{self, Path, Status};
 use bifrost_app::pasteboard_types::{self as pasteboard, Board, Item};
 use bifrost_app::Ctx;
@@ -18,6 +19,16 @@ use bifrost_core::json::Json;
 pub const OFFLINE: &str = "You are offline. Connect to a network to send this message.";
 /// The hint in an empty conversation while offline.
 pub const OFFLINE_HINT: &str = "You are offline. Connect to a network to chat.";
+/// The notice in an empty conversation while no on-device model exists: the messages go to a cloud model.
+pub const CLOUD_NOTICE: &str = "Your messages are sent to a cloud model. This computer has no on-device model yet.";
+
+/// The privacy notice to show, or `None` once an on-device model can answer.
+pub fn cloud_notice() -> Option<&'static str> {
+    match on_device_availability() {
+        Availability::Available => None,
+        Availability::Unavailable(_) => Some(CLOUD_NOTICE),
+    }
+}
 
 /// The network path as the shell last reported it. Until the shell has answered, the link is not offline, so a shell
 /// without the `network` service never blocks a send.
@@ -192,6 +203,12 @@ mod tests {
         assert_eq!(reps[0].str_field("text").as_deref(), Some("<p>Hi <strong>there</strong></p><pre><code>a &lt; b</code></pre>"));
         assert_eq!(reps[1].str_field("uti").as_deref(), Some(pasteboard::STRING));
         assert_eq!(reps[1].str_field("text").as_deref(), Some("Hi there\n\na < b"));
+    }
+
+    #[test]
+    fn the_cloud_notice_shows_until_an_on_device_model_exists() {
+        assert_eq!(cloud_notice(), Some(CLOUD_NOTICE));
+        assert!(CLOUD_NOTICE.contains("cloud"));
     }
 
     #[test]

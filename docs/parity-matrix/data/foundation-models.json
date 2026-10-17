@@ -12,14 +12,14 @@
       "apple": "SystemLanguageModel, LanguageModelError",
       "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: bifrost_app::language_model re-exports the session, profile, tool, schema and budget types and run_turn, and on_device_availability reports the on-device model Unavailable (NoOnDeviceModel) because BifrOSt ships none; the SDK has no network provider (tests language_model::tests). No on-device model runtime exists yet."
     },
     {
       "feature": "Sessions and prompts",
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
       "bifrost": "springboard/ui/src/model_session.rs (Session::prompt, Session::respond); wired: springboard/apps/assistant-desktop/src/session.rs (session, request)",
       "status": "partial",
-      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget."
+      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget. Built 2026-10-17: The Assistant's empty conversation now states that messages go to a cloud model, because on_device_availability is unavailable (apps/assistant-desktop connect::cloud_notice, test connect::tests::the_cloud_notice_shows_until_an_on_device_model_exists)."
     },
     {
       "feature": "Streaming responses",
@@ -82,7 +82,7 @@
       "apple": "LanguageModel, LanguageModelExecutor, LanguageModelCapabilities",
       "bifrost": "springboard/ui/src/model_provider.rs (ModelProvider, run_turn)",
       "status": "partial",
-      "note": "run_turn against a scripted provider is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_tool_call_runs_the_tool_records_its_output_and_asks_again, a_turn_stops_when_the_model_keeps_asking_for_tools, a_provider_failure_and_an_empty_tool_request_are_both_reported). No app implements the trait yet: the Assistant is hard-wired to the Anthropic Messages API."
+      "note": "run_turn against a scripted provider is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_tool_call_runs_the_tool_records_its_output_and_asks_again, a_turn_stops_when_the_model_keeps_asking_for_tools, a_provider_failure_and_an_empty_tool_request_are_both_reported). No app implements the trait yet: the Assistant is hard-wired to the Anthropic Messages API. Built 2026-10-17: bifrost_app::language_model exposes ModelProvider and run_turn to apps (tests language_model::tests::a_turn_runs_against_a_provider_and_records_the_answer)."
     },
     {
       "feature": "Session properties",

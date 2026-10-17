@@ -12,7 +12,7 @@
       "apple": "DataScannerViewController, RecognizedItem (barcode items), DataScannerViewControllerDelegate",
       "bifrost": "springboard/sdk/src/data_scanner.rs (DataScanner over springboard/src/shell/camera/qr.rs)",
       "status": "partial",
-      "note": "Wave 5 (w5-visionkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies."
+      "note": "Wave 5 (w5-visionkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies. Built 2026-10-17: DataScanner also reads EAN-13 and Code 39 barcodes from sample rows (bifrost_ui::barcode::decode_row) when a frame has no QR code; the 1D encoders moved to pub render_modules and ean13_modules; tests data_scanner::tests (ean13_barcode_in_the_frame_is_one_item)."
     },
     {
       "feature": "Live text scanning through the camera",
@@ -40,7 +40,7 @@
       "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
       "bifrost": "springboard/ui/src/subject_lift.rs (segment_background, Interaction::lift); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
       "status": "partial",
-      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget."
+      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget. Built 2026-10-17: the SDK re-exports the colour-key segmenter as bifrost_app::image_analysis::segment_background, and Preview's Tools > Lift Subject replaces the picture with the subject cut out of a plain backdrop (apps/preview-desktop pixels::lift_subject); tests image_analysis::tests (the_colour_key_finds_the_subject_on_a_plain_backdrop) and pixels::tests (lift_subject_crops_to_the_subject_with_a_transparent_backdrop). Still no learned segmentation model."
     },
     {
       "feature": "Visual Look Up",
@@ -54,7 +54,7 @@
       "apple": "VNDocumentCameraViewController, VNDocumentCameraViewControllerDelegate, VNDocumentCameraScan",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs."
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs. Built 2026-10-17: bifrost_app::document_scan exposes DocumentScan and the page geometry, and flatten warps a camera frame's RGBA pixels onto a page by nearest-pixel inverse mapping (tests document_scan::tests). The Camera app still has no page mode and no corner detection, so the scan is not reachable from a user action yet."
     },
     {
       "feature": "Stabilised camera region of interest",
