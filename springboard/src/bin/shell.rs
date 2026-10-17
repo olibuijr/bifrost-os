@@ -130,8 +130,9 @@ fn run() -> std::io::Result<()> {
     let font_data = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::System)?;
     let mono = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::Mono)?;
     let font = Font::parse(font_data).ok_or_else(|| std::io::Error::other("bad font"))?;
-    // characters the UI font lacks draw from the other fonts in the library instead of .notdef
-    bifrost_render::fontfallback::install_from_dir(&bifrost_render::fontprefs::library(&dir), "en");
+    // characters the UI font lacks draw from the other fonts in the library, then from the script fonts the
+    // packages install (Noto scripts, CJK, symbols), instead of .notdef
+    bifrost_render::fontfallback::install_with_system(&bifrost_render::fontprefs::library(&dir), "en");
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
     // the volume is the default output device's volume control on the audio server (connected lazily), and key
