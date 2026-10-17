@@ -84,6 +84,7 @@ pub mod forms;
 pub mod users_page;
 pub mod mouse_page;
 pub mod sharing_page;
+pub mod location_page;
 pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
@@ -359,6 +360,8 @@ pub enum Effect {
     LockWallpaper(String),
     /// Dark Appearance Dims Wallpaper changed
     WallpaperDim(bool),
+    /// Location Services changed a pref: the shell saves these (key, value) pairs to `settings.ini`
+    Location(Vec<(String, String)>),
     /// the idle timeout changed (ms, 0 = never); the shell already applies it
     AutoLock(u32),
     /// Energy: minutes of display-off before the system sleeps (0 = never); the binary applies it live

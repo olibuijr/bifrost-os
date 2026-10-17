@@ -2987,20 +2987,33 @@ Privacy model (owner decision, follows the reference platform):
   without it is refused by `privacy_permissions::location_purpose_gate` (built on `location_auth::request_purpose`), so no
   prompt shows without a reason. The request sheet does not show the text yet.
 - **Retention**: the last fix lives in memory only. The service records when each app last got a fix
-  (`Location::last_use`), in memory, never on disk and never a location history.
+  (`services::location::record_use` / `last_use_of`, a thread-local map), in memory, never on disk and never a location
+  history. It drives "Used in the last 24 hours" on the Location Services page.
 - **No third-party lookup**: the IP-address estimate (`location.ip.*`) was removed. bifrost-cloud has no geo endpoint
   (checked `~/Projects/bifrost-cloud`: `device_locations` is encrypted sharing data, not IP geolocation), so there is no
   IP source. GeoClue2 is not built (no D-Bus client for it is in use; `zbus` exists only for AT-SPI and Wayland).
 
 - **Menu bar indicator state**: `Location::in_use(t, ACTIVE_WINDOW)` lists the apps with a live watch or a fix in the
-  last 5 s, sorted. The menu bar arrow (springboard/src/shell/desktop_bar.rs) is not drawn yet.
+  last 5 s, sorted. The menu bar arrow (springboard/src/shell/desktop_bar.rs) shows while that list is not empty; its
+  menu lists those apps and ends with "Location Services Settings…", which opens the page below.
+- **Settings > Privacy & Security > Location Services** (`springboard/src/shell/location_page.rs`): the global switch
+  (footer: turned off, every app is denied, and a watching app gets `didFailWithError` on the next tick); System
+  location (Set Location… asks for latitude then longitude in two one-field sheets, validated to -90..90 and
+  -180..180, a decimal comma is accepted; Clear removes it; no network geocoding, so the place has no city or
+  country); and one row group per app that has an answer in the privacy store (`privacy_permissions::location_asked`):
+  an access row whose value is Never, Ask Next Time or While Using the App (it pushes a page with the three choices;
+  Ask Next Time forgets the answer so the next request shows the sheet again), a Precise Location switch
+  (`location.precise.<id>`), and "Used in the last 24 hours" (a check while the last fix is within 24 h). Pref writes
+  go through `Effect::Location`, which the shell saves to `settings.ini`. Apps that have only been asked, and not
+  answered, are not listed: the store keeps no entry for them. Gaps: no app icon in the rows (the list rows have no
+  image slot), the access page has no Allow Once choice, and the page is host-tested only until checked on Midget.
 
-Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m). Settings has no row yet to set it
-or the switches: they are read from the prefs file only. Gaps still open: the Settings > Privacy > Location page
-(city search, global switch, per-app access and last-use list), the menu bar arrow itself, the Allow Once choice
-(the request sheet is two buttons: Don't Allow and Allow; Allow Once needs a third button and a session-only grant),
-the purpose text on the sheet, and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`,
-because the weather app does not run with an SDK `Ctx`).
+Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m), set in Settings > Privacy & Security
+> Location Services. Gaps still open: the city and country of the fixed place (no geocoding, so they stay empty), the
+Allow Once choice on the request sheet (the sheet is two buttons: Don't Allow and Allow; Allow Once needs a third
+button and a session-only grant; the Location Services popup has no Allow Once either), the purpose text on the sheet,
+and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`, because the weather app does not
+run with an SDK `Ctx`).
 
 Altitude is always absent; reverse geocoding knows only the fixed place within 50 km, not a worldwide gazetteer;
 no heading, regions or background updates. Host-tested only (not run in this round); the rows stay partial until

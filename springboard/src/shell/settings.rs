@@ -296,6 +296,8 @@ pub struct Settings {
     login_ext: super::login_items_page::LoginExtensions,
     /// the pages' reads off the UI thread (fonts, graphics, crash logs, ...)
     loads: Loads,
+    /// Privacy > Location Services: the switches and System location, read from the prefs when Settings opened
+    location: super::location_page::Store,
     /// Displays > Refresh Rate: the choice in the display-refresh file, read when the Displays pages open
     refresh: super::services::display_services::RefreshChoice,
     sound: super::sound_page::SoundView,
@@ -508,6 +510,7 @@ impl Settings {
             login_ext: Default::default(),
             login_out: Vec::new(),
             loads: Loads::default(),
+            location: super::location_page::Store::load(prefs),
             refresh: super::services::display_services::RefreshChoice::Max,
             sound: Default::default(),
             notify_edge: None,
@@ -641,6 +644,7 @@ impl Settings {
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
+            PageId::LocationServices | PageId::LocationAccess(_) => super::location_page::spec(id, &self.location, super::services::location::now_unix()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value }),
             _ => spec(id, &self.model()),
         }
@@ -1166,6 +1170,7 @@ impl Settings {
             "Ethernet" => PageId::Ethernet,
             "Wi-Fi" => PageId::Wifi,
             "Bluetooth" => PageId::Bluetooth,
+            "Location Services" => PageId::LocationServices,
             "Display & Brightness" => PageId::Display,
             "Night Shift" => PageId::NightShift,
             "Wallpaper" => PageId::Wallpaper,
@@ -1780,7 +1785,48 @@ impl Settings {
     }
 
     /// A one-field prompt was submitted: privd gets the change, or the flow opens its next prompt.
+    /// A Location Services change: the switches and System location update the page now, and the shell saves the pref.
+    fn location_act(&mut self, ui: &Ui, edit: super::location_page::Edit, t: f64) -> Vec<Effect> {
+        use super::location_page::Edit;
+        let pairs = match edit {
+            Edit::Services(on) => self.location.set_services(on),
+            Edit::Precise { app, on } => self.location.set_precise(&app, on),
+            Edit::Access { app, choice } => {
+                super::services::privacy_permissions::set_location_access(&app, choice);
+                vec![]
+            }
+            Edit::ClearLocation => self.location.clear_manual(),
+            Edit::SetLocation => {
+                let current = self.location.manual.map_or_else(String::new, |(la, _)| format!("{la}"));
+                self.sheet = Some(Sheet::form(ui, self.w, t, super::forms::Prompt::set_latitude(&current)));
+                return vec![];
+            }
+        };
+        self.rebuild_visible(ui);
+        if pairs.is_empty() {
+            vec![]
+        } else {
+            vec![Effect::Location(pairs)]
+        }
+    }
+
     fn form_done(&mut self, ui: &Ui, purpose: &super::forms::Purpose, text: &str, t: f64) -> Vec<Effect> {
+        if super::location_page::owns(purpose) {
+            return match super::location_page::step(&mut self.location, purpose, text) {
+                Ok(super::location_page::Flow::Next(next)) => {
+                    self.sheet = Some(Sheet::form(ui, self.w, t, next));
+                    vec![]
+                }
+                Ok(super::location_page::Flow::Save(pairs)) => {
+                    self.rebuild_visible(ui);
+                    vec![Effect::Location(pairs)]
+                }
+                Err(e) => {
+                    self.edit_result(ui, t, Err(e));
+                    vec![]
+                }
+            };
+        }
         if super::internet_accounts_page::owns(purpose) {
             let r = super::internet_accounts_page::list_path().and_then(|path| super::internet_accounts_page::finish(&path, &super::apphost::root(), purpose, text));
             match r {
@@ -2420,6 +2466,7 @@ impl Settings {
                     }
                 }
             }
+            Action::Location(edit) => self.location_act(ui, edit, t),
             Action::Sharing(edit) => {
                 // the view the page last showed; the services are read again on a worker below
                 let view = self.loads.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);
@@ -3294,6 +3341,7 @@ mod tests {
             (vec!["Battery"], PageId::Battery),
             (vec!["Privacy"], PageId::Privacy),
             (vec!["Privacy", "App Permissions"], PageId::PrivacyPermissions),
+            (vec!["Privacy", "Location Services"], PageId::LocationServices),
             (vec!["Privacy", "Analytics & Diagnostics"], PageId::Diagnostics),
             (vec!["General", "bifrost Storage"], PageId::Storage),
             (vec!["General", "Backup"], PageId::Backup),

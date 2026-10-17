@@ -52,6 +52,25 @@ pub const ACTIVE_WINDOW: f64 = 5.0;
 thread_local! {
     /// The apps using location as of the last service call or tick. The menu bar reads it through `in_use_now`.
     static IN_USE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// When each app last got a fix this run (Unix seconds). Kept in memory only: nothing is written to disk.
+    static LAST_USE: std::cell::RefCell<BTreeMap<String, f64>> = const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// Records that `app_id` got a fix at `t` (Unix seconds). Memory only, see the module note.
+pub fn record_use(app_id: &str, t: f64) {
+    LAST_USE.with(|u| {
+        u.borrow_mut().insert(app_id.to_string(), t);
+    });
+}
+
+/// When `app_id` last got a fix this run, in Unix seconds. `None` when it never has.
+pub fn last_use_of(app_id: &str) -> Option<f64> {
+    LAST_USE.with(|u| u.borrow().get(app_id).copied())
+}
+
+/// Whether `last` (a fix time) is within `window` seconds before `now`. A fix in the future does not count.
+pub fn used_within(last: Option<f64>, now: f64, window: f64) -> bool {
+    last.is_some_and(|u| now >= u && now - u <= window)
 }
 
 /// Records the apps using location now, for the menu bar.
@@ -205,19 +224,18 @@ struct Watch {
 #[derive(Default)]
 pub struct Location {
     watching: BTreeMap<String, Watch>,
-    last_use: BTreeMap<String, f64>,
 }
 
 impl Location {
     /// When `app_id` last received a fix this run, in Unix seconds. `None` when it never has.
     pub fn last_use(&self, app_id: &str) -> Option<f64> {
-        self.last_use.get(app_id).copied()
+        last_use_of(app_id)
     }
 
     /// The apps using location now, sorted by id: each one with a live watch, or with a fix within `window` seconds of
     /// `t`. Drives the menu bar location indicator, which shows while this list is not empty. Nothing is recorded here.
     pub fn in_use(&self, t: f64, window: f64) -> Vec<String> {
-        let recent = self.last_use.iter().filter(|&(_, &u)| t >= u && t - u <= window).map(|(a, _)| a.clone());
+        let recent: Vec<String> = LAST_USE.with(|u| u.borrow().iter().filter(|&(_, &u)| t >= u && t - u <= window).map(|(a, _)| a.clone()).collect());
         let mut apps: Vec<String> = self.watching.keys().cloned().chain(recent).collect();
         apps.sort();
         apps.dedup();
@@ -246,7 +264,7 @@ impl Location {
                     return Err(format!("{e:?}"));
                 }
                 let f = fix.ok_or_else(|| format!("{:?}", LocationError::LocationUnknown))?;
-                self.last_use.insert(app_id.to_string(), t);
+                record_use(app_id, t);
                 Ok(fix_json(f))
             }
             "start" => {
@@ -301,7 +319,7 @@ impl Location {
             }
         }
         for app in used {
-            self.last_use.insert(app, t);
+            record_use(&app, t);
         }
         out
     }
@@ -312,7 +330,8 @@ impl Location {
     }
 }
 
-fn now_unix() -> f64 {
+/// The current time in Unix seconds (0 when the clock is before 1970).
+pub fn now_unix() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64())
 }
 

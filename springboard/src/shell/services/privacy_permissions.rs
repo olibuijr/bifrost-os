@@ -192,6 +192,73 @@ pub fn set_location_by_user(app_id: &str, allowed: bool) -> AuthorizationStatus 
     set_location_grant(app_id, if allowed { Grant::WhileUsing } else { Grant::Deny })
 }
 
+/// The three choices of an app's Location Services access popup (Settings > Privacy & Security > Location Services).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocationAccess {
+    Never,
+    AskNextTime,
+    WhileUsing,
+}
+
+impl LocationAccess {
+    /// The popup's choices, in the order it lists them.
+    pub const ALL: [LocationAccess; 3] = [LocationAccess::Never, LocationAccess::AskNextTime, LocationAccess::WhileUsing];
+
+    /// The text of the choice (and of the row's value).
+    pub fn label(self) -> &'static str {
+        match self {
+            LocationAccess::Never => "Never",
+            LocationAccess::AskNextTime => "Ask Next Time",
+            LocationAccess::WhileUsing => "While Using the App",
+        }
+    }
+
+    /// The choice an app's grant shows as. A restricted app shows Never (its grant cannot change, see `label_of`).
+    pub fn of(status: AuthorizationStatus) -> LocationAccess {
+        match status {
+            AuthorizationStatus::NotDetermined => LocationAccess::AskNextTime,
+            AuthorizationStatus::Denied | AuthorizationStatus::Restricted => LocationAccess::Never,
+            AuthorizationStatus::AuthorizedWhenInUse | AuthorizationStatus::AuthorizedAlways => LocationAccess::WhileUsing,
+        }
+    }
+}
+
+/// The value a row shows for an app's grant: its choice, or Restricted when the device restricts the app.
+pub fn access_label_of(status: AuthorizationStatus) -> &'static str {
+    if status == AuthorizationStatus::Restricted {
+        "Restricted"
+    } else {
+        LocationAccess::of(status).label()
+    }
+}
+
+/// Writes an app's location access from the popup. Never denies, While Using allows while in use, and Ask Next Time
+/// forgets the answer so the app's next request shows the sheet again. A restricted app keeps its status.
+pub fn set_location_access(app_id: &str, choice: LocationAccess) -> AuthorizationStatus {
+    match choice {
+        LocationAccess::Never => set_location_grant(app_id, Grant::Deny),
+        LocationAccess::WhileUsing => set_location_grant(app_id, Grant::WhileUsing),
+        LocationAccess::AskNextTime => {
+            let current = location_status(app_id);
+            if current != AuthorizationStatus::Restricted {
+                ONCE.with(|o| {
+                    o.borrow_mut().remove(app_id);
+                });
+                LOCATION.with(|s| {
+                    s.borrow_mut().remove(app_id);
+                });
+            }
+            location_status(app_id)
+        }
+    }
+}
+
+/// Every app that has an answer for location (granted, refused or Allow Once), sorted by app id. An app the person
+/// has not answered for is not listed: the store keeps no entry for it.
+pub fn location_asked() -> Vec<(String, AuthorizationStatus)> {
+    LOCATION.with(|s| s.borrow().iter().map(|(id, st)| (id.clone(), *st)).collect())
+}
+
 /// The wire name of a location status.
 pub fn location_name(status: AuthorizationStatus) -> &'static str {
     match status {

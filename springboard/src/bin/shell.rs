@@ -1046,6 +1046,12 @@ fn run() -> std::io::Result<()> {
                 },
                 Effect::LockWallpaper(id) => set_lock_wallpaper(&mut shell, &dir, &id, &mut lock_mapped),
                 Effect::WallpaperDim(on) => shell.set_wallpaper_dim(on),
+                Effect::Location(pairs) => {
+                    let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                    if let Err(e) = prefs.set_many(&refs) {
+                        eprintln!("springboard: settings.ini: {e}");
+                    }
+                }
             }
         }
         // Low Power Mode flipped (Settings, or the alert's button): re-cap the backlight now
