@@ -5361,11 +5361,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
+   "bifrost": "springboard/sdk/src/crypto_kit.rs; springboard/core/src/sha256.rs; springboard/core/src/sha512.rs; springboard/core/src/hkdf.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
    "status": "partial",
-   "note": "The primitives the bridge exposes to the crypto kit (SHA-2, AES-GCM, X25519, Ed25519) are pure Rust and tested headless. Gap: apps cannot call them yet.",
+   "note": "The primitives the bridge exposes to the crypto kit are pure Rust and tested headless. The SDK crypto_kit module now gives apps SHA-256, SHA-384 and SHA-512, HKDF-SHA256, AES-GCM keys, X25519 key agreement and Ed25519 signing, with ChaCha20-Poly1305 and HMAC-SHA256 from their own modules. Not built: SHA-384 and SHA-512 HMAC.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crypto_kit::tests"
+    }
+   ],
+   "ready_note": "App-facing digests, HKDF, AES-GCM, X25519 and Ed25519 in sdk crypto_kit (its tests check RFC and NIST vectors)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CryptoKitPrivate.framework",
@@ -5382,9 +5391,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
+   "bifrost": "springboard/sdk/src/crypto_kit.rs; springboard/core/src/sha256.rs; springboard/core/src/aes_gcm.rs; springboard/ui/src/x25519.rs; springboard/ui/src/ed25519.rs",
    "status": "partial",
-   "note": "The private layer's primitives are covered by the same pure Rust modules. Gap: there is no hardware-backed key path and no app entry point.",
+   "note": "The private layer uses the same pure Rust modules as the public crypto kit, which apps can now call through sdk crypto_kit. Gap: there is no hardware-backed key path, and the private key-object types are not exposed.",
    "rea": [],
    "method": "assessed"
   },
