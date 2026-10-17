@@ -199,6 +199,11 @@ impl Shell {
         let e=match menu {Menu::Cpu=>E::Cpu,Menu::Memory=>E::Memory,Menu::Power=>E::Battery,Menu::Network=>E::Network,Menu::ControlCenter=>E::ControlCenter,_=>return true};
         self.options().menu_extras&e.bit()!=0
     }
+    /// The percentage the battery menu bar item shows beside its glyph: only when the Control Center pref asks for it
+    /// (`BATTERY_PERCENT_PREF`) and the machine has a battery.
+    pub(super) fn battery_bar_label(&self)->Option<String> {
+        (self.info.battery_present && super::control_center::battery_percent_shown(self.prefs.get(super::control_center::BATTERY_PERCENT_PREF))).then(|| format!("{}%",self.info.battery))
+    }
     /// A CPU or RAM menu is open: it prints the full reading.
     pub(super) fn metrics_menu_open(&self)->bool {matches!(self.desktop_menu,Some(Menu::Cpu|Menu::Memory))}
     /// Whether anything on screen shows the CPU and RAM readings: the bar readouts or their menus. Otherwise nothing samples or wakes.
@@ -216,7 +221,7 @@ impl Shell {
             let width=self.measure_chrome(label,13.,Weight::Semibold)+self.ui.pt(24.);buttons.push((kind,x,width,label.into()));x+=width;
         }
         let network=self.info.desktop_network.as_ref();let wired=network.is_some_and(|n|n.interfaces.iter().any(|i|i.kind=="ethernet"&&i.connected()));
-        let nw=self.ui.pt(STATUS_ICON_PT);let pw=self.ui.pt(STATUS_ICON_PT);let clock=self.measure_chrome(&self.clock_text(),12.,Weight::Medium);let right=self.w as f32-self.ui.pt(16.)-clock-self.ui.pt(2.);
+        let nw=self.ui.pt(STATUS_ICON_PT);let pw=self.ui.pt(STATUS_ICON_PT)+self.battery_bar_label().map_or(0.,|t|self.measure_chrome(&t,12.,Weight::Regular)+self.ui.pt(4.));let clock=self.measure_chrome(&self.clock_text(),12.,Weight::Medium);let right=self.w as f32-self.ui.pt(16.)-clock-self.ui.pt(2.);
         // Golden Gate menu extras, placed from the clock leftwards: Control Center, Wi-Fi or ethernet, battery or power; an item that would run into the app menus is left out
         let limit=x+self.ui.pt(8.);let mut edge=right;let mut tail=Vec::new();
         // the owner's CPU and RAM readouts sit left of the system extras (like iStat Menus), dropped first when space runs out
@@ -485,7 +490,14 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location) {
+            // the battery item with its percentage: the glyph stays at the item's left, the percentage follows it
+            let percent=if menu==Menu::Power {self.battery_bar_label()} else {None};
+            let glyph_x=if percent.is_some() {x+self.ui.pt(STATUS_ICON_PT)/2.} else {x+width/2.};
+            self.draw_desktop_status_icon(s,menu,&label,glyph_x,height as f32/2.);
+            if let Some(t)=percent {self.bar_label(s,&t,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_ICON_PT)+self.ui.pt(4.)) as i32,(height as i32-im.h as i32)/2));}
+            continue;
+        }if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
         let text=self.clock_text();
         self.bar_label(s,&text,12.,Weight::Medium,|im|(self.w-im.w as i32-self.ui.pt(16.) as i32,(height as i32-im.h as i32)/2));
     }
