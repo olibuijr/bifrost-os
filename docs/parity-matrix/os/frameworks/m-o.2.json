@@ -2094,28 +2094,9 @@
    "doc": "",
    "bifrost": "springboard/src/keychain.rs (save_share_login, share_login, share_access, answer_share_prompt, forget_share_login); springboard/src/net_auth.rs (share_prompt, wifi_prompt, validate, complete_share); springboard/sdk/src/wifi_secrets.rs (eap_access, answer_eap_prompt, forget_eap)",
    "status": "gap",
-   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs). Not built: the shell sheet that draws the prompt.",
+   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs). Not built: the shell sheet that draws the prompt. Lead 2026-10-17: not ready: the share and Wi-Fi prompt model is built but no sheet draws it.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "keychain::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "net_auth::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "wifi_secrets::tests"
-    }
-   ],
-   "ready_note": "The agent's job is to decide saved-login-or-prompt and to take the answer. SMB shares: keychain share_access and answer_share_prompt. 802.1X networks: WifiSecrets::eap_access, answer_eap_prompt and forget_eap. net_auth.rs holds the sheet's wording and fields (Prompt), the checks on what was typed and the remember choice (complete_share). The shell sheet that draws the Prompt is not wired yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
@@ -3745,23 +3726,9 @@
    "doc": "",
    "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs",
    "status": "partial",
-   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs; the text engine does not call it yet.",
+   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs; the text engine does not call it yet. Lead 2026-10-17: not ready: the text engine does not call rasterize_glyph, so colour glyphs still draw as outlines.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-render",
-     "filter": "svg_table::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-render",
-     "filter": "svg::tests"
-    }
-   ],
-   "ready_note": "OpenType-SVG colour glyphs: the table index, gunzip, per-glyph markup extraction (shared documents with id=glyphN elements) and rasterisation at a pixel size with the baseline. The text engine does not call rasterize_glyph yet, so shaped text still draws outlines for colour fonts."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OctagonTrust.framework",

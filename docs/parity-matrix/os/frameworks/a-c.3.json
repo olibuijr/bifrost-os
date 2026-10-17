@@ -2187,23 +2187,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/recipient_autocomplete.rs, springboard/ui/src/recipient_recents.rs",
    "status": "partial",
-   "note": "Recipient completion for address fields: contacts and the recent recipients merged, ranked and de-duplicated by recipient_autocomplete.rs. Tests: bifrost_ui::recipient_autocomplete::tests.",
+   "note": "Recipient completion for address fields: contacts and the recent recipients merged, ranked and de-duplicated by recipient_autocomplete.rs. Tests: bifrost_ui::recipient_autocomplete::tests. Lead 2026-10-17: not ready: Mail compose does not call recipient_autocomplete yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "recipient_autocomplete::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "recipient_recents::tests"
-    }
-   ],
-   "ready_note": "recipient_autocomplete::complete merges address-book email addresses with the recent recipients, ranks word-start matches first, favourites first, and never repeats an address."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsAutocompleteUI.framework",
@@ -2222,23 +2208,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/recipient_autocomplete.rs (RecipientField), springboard/ui/src/contact_picker.rs",
    "status": "partial",
-   "note": "The recipient field behind completion: recipient_autocomplete.rs RecipientField (tokens, suggestion list, highlight, commit and remove keys) and the picker model in contact_picker.rs. The widget that draws it is the caller's.",
+   "note": "The recipient field behind completion: recipient_autocomplete.rs RecipientField (tokens, suggestion list, highlight, commit and remove keys) and the picker model in contact_picker.rs. The widget that draws it is the caller's. Lead 2026-10-17: not ready: Mail compose does not call recipient_autocomplete yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "recipient_autocomplete::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "contact_picker::tests"
-    }
-   ],
-   "ready_note": "RecipientField is the token field model: typed text, suggestion list with arrow-key highlight, commit on return, comma or tab, backspace removes the last recipient. contact_picker is the whole-contact or value picker."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonation.framework",
@@ -2257,18 +2229,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/contact_donation.rs",
    "status": "partial",
-   "note": "Suggested contacts from donations: apps donate a name and one email address or phone number, the store keeps and ranks them, hides people already in the address book, and builds the contact on accept. Local only; text file form for storage.",
+   "note": "Suggested contacts from donations: apps donate a name and one email address or phone number, the store keeps and ranks them, hides people already in the address book, and builds the contact on accept. Local only; text file form for storage. Lead 2026-10-17: not ready: nothing calls contact_donation yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "contact_donation::tests"
-    }
-   ],
-   "ready_note": "DonationStore keeps people apps donated (name plus an email or phone), suggests those not in the address book, and turns an accepted suggestion into a contact."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonationFeedback.framework",
@@ -2287,18 +2250,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/contact_donation.rs (DonationStore::feedback)",
    "status": "partial",
-   "note": "Local feedback on suggested contacts: accept or dismiss, kept as blocked and accepted lists beside the donations (contact_donation.rs). No upload.",
+   "note": "Local feedback on suggested contacts: accept or dismiss, kept as blocked and accepted lists beside the donations (contact_donation.rs). No upload. Lead 2026-10-17: not ready: nothing calls contact_donation yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "contact_donation::tests"
-    }
-   ],
-   "ready_note": "Feedback is local: accepting ends the suggestion, dismissing blocks the address so later donations of it are refused; a dismissal can be lifted. Nothing is sent anywhere."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsFoundation.framework",
