@@ -177,7 +177,7 @@ pub fn restore_files<'a>(layout: &ContainerLayout, files: impl IntoIterator<Item
 }
 
 /// Creates the folders between `root` and the parent of `target`, refusing a symbolic link or a file on the way.
-fn create_parent_dirs(root: &Path, target: &Path) -> io::Result<()> {
+pub fn create_parent_dirs(root: &Path, target: &Path) -> io::Result<()> {
     let rel = target.strip_prefix(root).map_err(|_| io::Error::other("restore target is outside the container"))?;
     let parts: Vec<Component> = rel.components().collect();
     let mut current = root.to_path_buf();

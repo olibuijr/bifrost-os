@@ -60,11 +60,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/daily_metric_report.rs; springboard/sdk/src/diagnostic_report.rs",
+   "bifrost": "springboard/core/src/daily_metric_report.rs; springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/diagnostic_report.rs",
    "status": "partial",
-   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
+   "note": "Core types of MetricKit: the daily metric payload with its schedule and archive, the call stack tree and the diagnostic report, each built and tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    }
+   ],
+   "ready_note": "Host tests for the daily payload, schedule and JSON form, the call stack tree and the diagnostic report model that make up MetricKit's core types."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricKitServices.framework",
@@ -81,11 +100,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/diagnostic_report.rs",
+   "bifrost": "springboard/src/shell/services/metric_reports.rs; springboard/core/src/daily_metric_report.rs; springboard/sdk/src/diagnostic_report.rs",
    "status": "partial",
-   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
+   "note": "The service side of MetricKit: the shell's metrics service feeds per-app totals, runs the daily schedule and delivers reports to subscribed apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::metric_reports::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    }
+   ],
+   "ready_note": "Host tests for the metrics shell service (totals, daily schedule, delivery to subscribers), the payload model and the diagnostic report."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricKitSource.framework",
@@ -102,11 +140,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/call_stack_tree.rs; springboard/sdk/src/diagnostic_report.rs",
+   "bifrost": "springboard/core/src/frame_metrics.rs; springboard/core/src/app_disk_writes.rs; springboard/core/src/app_transfer.rs; springboard/sdk/src/call_stack_tree.rs",
    "status": "partial",
-   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
+   "note": "The metric sources MetricKit reads: frame and hitch timing, per-app disk writes, per-app network transfer and sampled call stacks, each a tested model in core or the SDK.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "frame_metrics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_disk_writes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "Host tests for the frame metrics, per-app disk write and network transfer totals and the call stack tree that feed the daily payload."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricMeasurement.framework",
@@ -124,8 +186,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle, and the name alone does not show what it measures.",
+   "status": "n/a",
+   "note": "n/a: the index lists one XPC helper (XPCServices/MetricMeasurementHelper.xpc) and Info.plist, with no resources. A helper that measures and reports usage metrics is Apple telemetry and analytics, which BifrOSt deliberately does not mirror; on-device app metrics are covered by the MetricKit rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -270,11 +332,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/container_layout.rs (restore_target, restore_files)",
+   "bifrost": "springboard/src/shell/migration.rs; springboard/src/shell/backup.rs; springboard/core/src/container_layout.rs",
    "status": "gap",
-   "note": "Needed to move a user's files, settings and apps from another machine or an earlier install; nothing provides it. Build a restore that reads a backup archive and fills the per-app container folders in springboard/sdk/src/container_layout.rs. Built 2026-10-17: restore_target and restore_files write backed-up files into an app container and skip Library/Caches and tmp (springboard/core/src/container_layout.rs, tests container_layout::tests). The backup archive reader and the Settings restore flow are not built.",
+   "note": "Moves a user's data from another disk or a backup archive into this machine: migration.rs lists categories (shell data sets and per-app folders), stages the picked ones and applies them at the next start through the backup restore; container_layout restore_files fills app containers safely. Driven by `springboard --migrate DEST SOURCE [CATEGORY...]`.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::migration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Host tests for category listing, folder and archive sources, staged restore of picked categories, the encrypted archive round trip and the container restore path rules. There is no Settings screen for it yet; the command-line entry in the shell binary is the way in."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MilAneflow.framework",
@@ -389,11 +470,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated/src/assets.rs",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/core/src/asset_pack_file.rs; springboard/ui/src/managed_download.rs; springboard/ui/src/assetpack.rs",
    "status": "gap",
-   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format. Built 2026-10-17: ManagedDownloads::run_next and run_all run the queue through a transfer callback (ui managed_download::tests); the shell service that calls them and fetches the packs is not built. Built 2026-10-17: the asset daemon (springboard/updated/src/assets.rs, tests assets::tests) runs the queues on unmetered links; no pack source or pack format is built, so a pack that reaches the transfer fails and is counted.",
+   "note": "On-demand asset packs for apps. Built 2026-10-17 (wave 12): the pack file format (BFPK1, SHA-256 sealed, safe names only) in core/src/asset_pack_file.rs, a local pack source in updated/src/assets.rs (`<pack folder>/<app>/<pack>.bfpk`, default /usr/share/bifrost/asset-packs, BIFROST_ASSET_PACKS overrides) whose transfer verifies and installs the pack into the app container under Library/Caches/AssetPacks/<id>, and the update agent now calls it instead of the old stub. Packs come only from the local folder, never from a third party.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ],
+   "ready_note": "Host tests: pack file round trip, digest and unsafe-name refusal, install and replace in the purgeable pack folder, the daemon installing a queued pack from the local source and failing missing, damaged or mismatched packs, plus the existing queue and manifest tests. There is no remote pack index; packs are placed in the pack folder by the system image, an administrator or a disk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetDaemon.framework",
@@ -410,11 +515,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated/src/assets.rs",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/ui/src/managed_download.rs; springboard/core/src/asset_pack_file.rs",
    "status": "gap",
-   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built. Built 2026-10-17: AssetDaemon in springboard/updated/src/assets.rs runs the apps' queues (tests assets::tests). Lead 2026-10-17: not ready: the asset queue runs but the transfer is a stub (no pack source or format).",
+   "note": "The background daemon behind on-demand assets: AssetDaemon in the update agent runs each app's managed download queue on an unmetered, non-low-power link with a daily budget and three attempts, and since wave 12 its transfer is real (LocalPackSource reads, verifies and installs the pack file into the app container; main.rs calls it).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    }
+   ],
+   "ready_note": "Host tests for the daemon passes (wired, metered, retries, daily budget, low power) and for the local source transfer that installs a verified pack. Packs come from the local pack folder only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
@@ -452,11 +576,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/updated/src/assets.rs; springboard/core/src/asset_pack_file.rs",
    "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests it applies asset updates; the download side is the gap recorded on MobileAsset.",
+   "note": "Applies asset pack updates (inferred from the name; the index lists only Info.plist, an en.lproj and a signature). LocalPackSource::transfer installs a pack only when it is new or its version differs from the installed one, and replaces the old files as a whole; the daemon runs it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "asset_pack_file::tests"
+    }
+   ],
+   "ready_note": "Host tests for installing a pack, accepting an already-current version and replacing it with a newer one, and for the daemon run. The job is inferred from the name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileBluetooth.framework",
@@ -473,11 +611,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/bare/bluetooth.rs",
+   "bifrost": "springboard/src/bare/bluetooth.rs; springboard/core/src/bt_pairing.rs; springboard/core/src/bt_address.rs",
    "status": "partial",
-   "note": "Bluetooth device handling for the desktop runs in bare/bluetooth.rs. Gap: no SDK API for apps covers this framework's device and pairing surface.",
+   "note": "Bluetooth for the desktop runs in bare/bluetooth.rs over the kernel management socket: power, discovery, pairing with the answer policy, unpairing, link keys kept across reboots and device class decoding. The index lists only localisations for this framework.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_address::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Bluetooth state machine (events in, commands out), pairing answers and address and class decoding. The app-facing Bluetooth API is tracked in the Core Bluetooth rows, not here."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileContainerManager.framework",
@@ -524,11 +681,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/thumb_service.rs; springboard/ui/src/uttype.rs",
    "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests system icon lookup; BifrOSt takes app icons from the icon field of manifest.toml.",
+   "note": "Document and folder type icons with badges (the index lists default icons, DocumentBadgeMask and AppFolderBadge masks). BifrOSt resolves a file to a type icon with an optional badge through thumb_service::icon_for over uttype conformance; app icons come from manifest.toml.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "thumb_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "uttype::tests"
+    }
+   ],
+   "ready_note": "Host tests for the type icon fallback, provider choice by nearest content type and the cache key, and for type identifier conformance. The icon artwork is BifrOSt's own."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileIdentityServiceUI.framework",
@@ -631,11 +802,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain_protection.rs, springboard/src/keychain.rs",
+   "bifrost": "springboard/core/src/keybag.rs; springboard/sdk/src/keychain_protection.rs; springboard/src/keychain.rs",
    "status": "partial",
-   "note": "Data protection classes are modelled and the keychain is encrypted at rest under a master key on disk. Gap: the classes are not enforced and there is no device-lock key, as the keychain module states.",
+   "note": "Built 2026-10-17 (wave 12): core/src/keybag.rs is the device-lock key store: three class keys, the after-first-unlock and when-unlocked keys wrapped under a PBKDF2-HMAC-SHA256 key from the password (HKDF pad plus HMAC tag), lock and unlock lifetimes as the class names promise, password change that keeps the class keys, and a wire form. Protection::key_class ties the SDK classes to it. Gap: the keychain Store still seals with its on-disk master key; it does not yet take its keys from the keybag, so classes are not enforced at rest until the shell unlocks the bag at login.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "keybag::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_protection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Host tests: PBKDF2 against the published vectors, create, lock, unlock, wrong password, tampered key, password change, wire form, and a test that each protection class is readable exactly when the keybag can hand out its key. The keychain store is not yet fed from the keybag."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileMulticastTransfer.framework",
@@ -673,11 +863,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/erase_content.rs; springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/bin/shell.rs",
    "status": "gap",
-   "note": "Erases all user content and settings for a reset; nothing provides it. Build the wipe in the recovery path under packaging/arch/recovery, keeping the system, with a confirmation step in Settings.",
+   "note": "Built 2026-10-17 (wave 12): Settings > General > Transfer or Reset > Erase All Content and Settings asks for confirmation, writes erase.pending and restarts; the shell binary applies it before anything loads (core/src/erase_content.rs): the keychain goes first (deleting its master key), then every other entry of the data directory, keeping only update bookkeeping; links are removed, never followed; unsafe directories are refused. The system outside the data directory is untouched.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "erase_content::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_reset_page_offers_a_confirmed_erase"
+    }
+   ],
+   "ready_note": "Host tests on temporary directories: refusal of unsafe roots and links, plan order with the keychain first, erase removing user data and keeping the update files, links not followed, withdrawn request, ignored link marker. A test covers the Reset page row that starts it; the alert text and the start-up hook are not tested, and the erase is a file removal, not a block-level wipe."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework",
@@ -781,8 +985,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name, the reference image index and the extract for this framework: it holds no binary or plist in the extract, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: iOS-origin shim. The index lists only Info.plist, version.plist and a code signature (no resources, XPC service or plug-in), and the Mobile* naming is the iOS container and installation lookup layer. BifrOSt has its own app container and package model (container_layout, shell apphost), so no counterpart is mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -944,8 +1148,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: interfaces of the Apple on-device model stack (the index lists only Info.plist and a signature; sibling bundles ModelManagerServices and ModelManagerExclaveInternal belong to the same stack). It serves Apple ML model packs, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -965,8 +1169,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist is in it. The name suggests internal code for a secure execution environment of the model manager, but that is unverified, so the job is not determined.",
+   "status": "n/a",
+   "note": "n/a: internal side of the model manager that runs in an exclave, Apple silicon's secure execution environment (the name; the index lists only Info.plist, version.plist and a signature). Apple hardware internals and Apple ML model packs, not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -986,8 +1190,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: the only file is a default factors protobuf with no plist or daemon, so the job is not determined.",
+   "status": "n/a",
+   "note": "n/a: services of the Apple on-device model manager. The only resource in the index is default_factors_1690.pb, a protobuf of default factors for Apple ML models; there is no plist or daemon. Apple ML model packs are not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -1036,11 +1240,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/thumb_service.rs",
    "status": "os",
-   "note": "Tried the name and the extract: only a localization table is in it, with no binary or plist, so the job is not determined.",
+   "note": "Thumbnail grid support (inferred from its resources: UnsupportedThumbnailFile.png, Assets.car and string tables). BifrOSt's system thumbnail service answers every request with a rendered thumbnail or a type icon when the file cannot be drawn.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "thumb_service::tests"
+    }
+   ],
+   "ready_note": "Host tests for thumbnail requests, provider choice and the fall back to a type icon for a file no provider can draw. The job is inferred from the resource names, not read from the binary."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MonitorPanel.framework",
@@ -1057,11 +1270,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs (desktop_display); springboard/wm/src/output_layout.rs",
+   "bifrost": "springboard/src/shell/pages.rs (desktop_display); springboard/wm/src/output_layout.rs; springboard/src/bare/power.rs",
    "status": "partial",
-   "note": "The Displays page shows the active mode, scale and night shift, and the arrangement model is tested. Gap: the reference's per-monitor panel plug-ins and hardware brightness control are not built; arrangement is not yet applied to hardware. Corrected 2026-10-17: hardware brightness is already driven (springboard/src/bare/power.rs set_brightness, the Displays slider). The remaining gap is the per-monitor panel plug-ins and applying the arrangement to hardware.",
+   "note": "The framework behind the Displays settings panel (the index lists GenericDisplay, GenericDisplayPortrait and iPadDisplay pictures, localised strings and a Genlock string table). BifrOSt's Displays page shows the active mode, scale and night shift, the arrangement model is tested, and hardware brightness is driven by bare/power.rs. Genlock and the extended-display (iPad) picture are not applicable on this hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::desktop_display"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "output_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Displays page contents, the output arrangement model and brightness and battery handling. Applying the arrangement to hardware is tracked in the display rows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Montreal.framework",
@@ -1079,8 +1311,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: the index lists only Info.plist, version.plist and a signature: no resources, XPC service or plug-in, and no other bundle names it, so its job cannot be read from the reference. It sits among the Apple ML framework codenames (Morpheus, ModelManager) and is treated as Apple internal ML plumbing, not mirrored. Low confidence; revisit only if a hosting bundle shows a user-visible job.",
    "rea": [],
    "method": "assessed"
   },
@@ -1100,8 +1332,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: its substantive resource is Resources/default.metallib (34 MB), a precompiled GPU shader library for Apple's Metal, with an 11 KB LICENSE.txt. Apple GPU shader binaries are not usable on Linux and are not reproduced; BifrOSt's compute kernels are its own (springboard/gpu, render).",
    "rea": [],
    "method": "assessed"
   },
@@ -1121,8 +1353,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: extension companion of Morpheus (the index lists only Info.plist and a signature); Morpheus is an Apple GPU (Metal) shader library, which is not mirrored (see Morpheus).",
    "rea": [],
    "method": "assessed"
   },
@@ -1141,11 +1373,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/inflection.rs",
    "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "note": "Per-language resources of the morphology engine (the index lists asset-fallback.plist). Built 2026-10-17 (wave 12): ui/src/inflection.rs holds the plural category rules for all recogniser languages and the noun rules for English, Spanish and French; rules_for falls back to an invariant rule set for any other language, the counterpart of the asset fallback.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "inflection::tests"
+    }
+   ],
+   "ready_note": "Host tests for plural categories of the recogniser languages, regular and irregular nouns in three languages and the invariant fallback. Noun rules for other languages are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MorphunSwift.framework",
@@ -1162,11 +1403,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/inflection.rs; springboard/sdk/src/lib.rs",
    "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "note": "The morphology and grammar agreement API (inflection of text by number). Built 2026-10-17 (wave 12): bifrost_app::inflection (bifrost_ui::inflection) gives plural_category, inflect_noun and agree, which rewrites ^[2 apple](inflect: true) spans. No case, gender or article agreement.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "inflection::tests"
+    }
+   ],
+   "ready_note": "Host tests for the agreement markup (numbers, decimals, thousands separators, irregular nouns, unfinished spans) and plural categories."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MotionSensorLogging.framework",
@@ -1184,8 +1434,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist is in it. The name suggests motion sensor logging, which is unverified, so the job is not determined.",
+   "status": "n/a",
+   "note": "n/a: the name and the index (Info.plist, version.plist, signature only) show logging of motion sensor data, an Apple hardware accelerometer and gyroscope diagnostics path. BifrOSt has no motion sensors to log and does not mirror hardware diagnostics logging.",
    "rea": [],
    "method": "assessed"
   },
@@ -1204,11 +1454,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/wm/src/input.rs; springboard/ui/src/trackpad_gesture.rs",
    "status": "os",
-   "note": "Tried the name and the extract: no binary or plist is in it. The name suggests a session filter for the trackpad driver, which is unverified, so the job is not determined.",
+   "note": "Supplies the trackpad session filter's preferences (the index lists one XPC service, SessionFilterPreferenceProvider.xpc). In BifrOSt the shell reads the pointer and trackpad preferences (tap to click, secondary click, natural scroll, speed) from settings.ini and applies them to libinput devices in wm/src/input.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    }
+   ],
+   "ready_note": "Host tests for the preference parsing and per-device libinput configuration and for the pinch and rotation gesture recognition. The filter itself is libinput's."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MultitouchSupport.framework",
@@ -1225,11 +1489,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/wm/src/input.rs; springboard/ui/src/trackpad_gesture.rs",
+   "bifrost": "springboard/sdk/src/touch_events.rs; springboard/ui/src/trackpad_gesture.rs; springboard/wm/src/input.rs",
    "status": "partial",
-   "note": "Trackpad and pointer input run through libinput: device settings, pinch and rotation gestures are built and tested. Not covered: raw multitouch frames for apps, which the reference's framework exposes.",
+   "note": "Multitouch for apps: touch frames with phase, location, previous location, tap count, force and radius reach apps that opt in (sdk touch_events), trackpad pinch and rotation are recognised, and device settings run through libinput. Raw per-contact trackpad frames are not forwarded: a trackpad reaches an app as one indirect touch.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "touch_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    }
+   ],
+   "ready_note": "Host tests for touch frame routing and tracking, the gesture recognisers and the input preferences. Raw trackpad contact frames are not exposed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MultiverseSupport.framework",
@@ -1247,8 +1530,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: the index lists only Info.plist and a signature (no resources, XPC service or plug-in) and no other bundle names it, so no user-visible job can be shown. Treated as Apple internal support code, not mirrored. Low confidence; revisit if a hosting bundle shows otherwise.",
    "rea": [],
    "method": "assessed"
   },
@@ -1460,8 +1743,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: API half of an NDO pair with NDOUI (the index lists Info.plist, version.plist and a signature; NDOUI adds Assets.car and a localised string table). A client API plus UI for an online Apple service, which BifrOSt does not mirror (accounts, stores, offers). Low confidence on the exact service; no local function is shown.",
    "rea": [],
    "method": "assessed"
   },
@@ -1481,8 +1764,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: UI half of an NDO pair with NDOAPI (the index lists Assets.car, Localizable.loctable and localisations, and no daemon or XPC service): screens for an online Apple service, which BifrOSt does not mirror. Low confidence on the exact service; no local function is shown.",
    "rea": [],
    "method": "assessed"
   },
@@ -1501,11 +1784,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/lexical_tags.rs",
+   "bifrost": "springboard/ui/src/lexical_tags.rs; springboard/ui/src/language.rs",
    "status": "partial",
-   "note": "Rule-based lexical tagging of words (noun, verb, adjective and so on) is built and tested. Not covered: the reference's statistical language models, language identification, and the per-language model resources in the image.",
+   "note": "Language processing: rule-based lexical tagging of words and a language recogniser (script detection plus per-language scoring with hints and constraints). Not covered: statistical models for tagging and the per-language model resources in the reference image.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lexical_tags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "language::tests"
+    }
+   ],
+   "ready_note": "Host tests for the lexical tagger and for language and script recognition. Statistical models are not part of it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NPTKit.framework",
@@ -1523,8 +1820,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: the index lists a single plug-in, PlugIns/NPTWiFiDiagnosticsExtension_macOS.appex: a Wi-Fi diagnostics extension, Apple diagnostics tooling that BifrOSt does not mirror (Wi-Fi status and logs are in Settings and Console).",
    "rea": [],
    "method": "assessed"
   },
@@ -1543,11 +1840,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/predicate_validating.rs",
    "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "note": "Security policy for predicates: PredicateValidating checks a predicate tree against the keys and operators an app exposes before anything evaluates it, so a search field or saved filter cannot reach other keys or comparisons.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "predicate_validating::tests"
+    }
+   ],
+   "ready_note": "Host tests for walking compound and comparison predicates against an allow policy."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NameRecognition.framework",
@@ -1663,8 +1969,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: no binary or plist for this framework is in it, so its job is not determined.",
+   "status": "n/a",
+   "note": "n/a: near-field communication stack for Apple's secure element: the index lists Core Data models NFStorageAppletModel, NFStorageDeveloperPresentmentModel, NFStorageExpressModel and NFStoragePurpleTrustModel (secure-element applets, express transit, Apple trust service). Apple hardware and payment services with no open equivalent; not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -1746,11 +2052,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/network_attribution.rs; springboard/core/src/app_firewall.rs; springboard/core/src/app_transfer.rs",
    "status": "os",
-   "note": "Not determined: the bundle identifier and Info.plist give no purpose, the reference binary is not in the extracted payload, and the index lists no file names or symbols for it.",
+   "note": "Per-app network utilities (inferred from the name and the iOSSupport sibling NetAppsUtilitiesUI; the index lists only Info.plist, version.plist and a signature): which app made a connection, the local-network permission, the per-app inbound firewall policy and per-app transfer totals.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "network_attribution::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_transfer::tests"
+    }
+   ],
+   "ready_note": "Host tests for connection attribution and the local-network permission, the per-app firewall ruleset and per-app transfer totals. The job is inferred from the name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetAuth.framework",

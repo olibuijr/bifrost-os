@@ -132,6 +132,12 @@ fn run() -> std::io::Result<()> {
         springboard::bare::platform::data_dir(root, std::env::var("XDG_DATA_HOME").ok().as_deref(), std::env::var("HOME").ok().as_deref())
     });
     springboard::bare::crashlog::install(&dir);
+    // an erase asked for in Settings › Transfer or Reset runs before anything loads (and before a staged restore)
+    match bifrost_core::erase_content::apply_pending(std::path::Path::new(&dir)) {
+        Some(Ok(r)) => eprintln!("springboard: erased {} entries, kept {}, {} not removed", r.removed, r.kept, r.failed.len()),
+        Some(Err(e)) => eprintln!("springboard: erase failed: {e}"),
+        None => {}
+    }
     // a restore staged by `bifrost pc` restore or Settings › Backup applies before anything loads the data
     match springboard::shell::backup::apply_pending(std::path::Path::new(&dir)) {
         Some(Ok(n)) => eprintln!("springboard: restored {n} files from backup"),

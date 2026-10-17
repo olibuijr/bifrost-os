@@ -361,6 +361,8 @@ pub enum Slider {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     ResetSettings,
+    /// Transfer or Reset › Erase All Content and Settings: staged, done at the next start (`bifrost_core::erase_content`)
+    EraseContent,
     Restart,
     /// power the computer off (General › Shut Down)
     ShutDown,
@@ -1286,6 +1288,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![
                 Group::new(vec![Item::new("Reset All Settings").tint(Tint::Blue).action(Action::Run(Command::ResetSettings))]).footer("Returns every setting, including the wallpaper, to its default. Saved Wi-Fi networks are kept."),
                 Group::new(vec![Item::new("Restart BifrOSt").tint(Tint::Blue).action(Action::Run(Command::Restart))]).footer("Quits the shell and starts it again."),
+                Group::new(vec![Item::new("Erase All Content and Settings").tint(Tint::Red).action(Action::Run(Command::EraseContent))]).footer("Removes your files, accounts, passwords and settings from this computer and starts again as new. The system stays installed."),
             ],
         ),
         PageId::Display => page(
@@ -2138,6 +2141,15 @@ mod tests {
         let cafe = spec(PageId::WifiDetail, &Model { detail: "Cafe", ..model(&info, &opts) });
         let problem = cafe.groups.iter().find(|g| g.header.as_deref() == Some("DIAGNOSTICS")).unwrap();
         assert_eq!(problem.items[0].value, "Incorrect Password");
+    }
+
+    #[test]
+    fn the_reset_page_offers_a_confirmed_erase_of_all_content() {
+        let info = info();
+        let opts = Options::default();
+        let s = spec(PageId::Reset, &model(&info, &opts));
+        let erase = s.groups.iter().flat_map(|g| &g.items).find(|i| i.label == "Erase All Content and Settings").expect("the Reset page has the erase row");
+        assert_eq!(erase.action, Action::Run(Command::EraseContent), "the row asks for confirmation through the command");
     }
 
     #[test]

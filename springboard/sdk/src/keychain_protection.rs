@@ -74,6 +74,16 @@ impl Protection {
         )
     }
 
+    /// The keybag key class (`bifrost_core::keybag`) that seals items of this protection class.
+    pub fn key_class(self) -> bifrost_core::keybag::KeyClass {
+        use bifrost_core::keybag::KeyClass;
+        match self {
+            Protection::WhenUnlocked | Protection::WhenUnlockedThisDeviceOnly => KeyClass::WhenUnlocked,
+            Protection::AfterFirstUnlock | Protection::AfterFirstUnlockThisDeviceOnly => KeyClass::AfterFirstUnlock,
+            Protection::Always | Protection::AlwaysThisDeviceOnly => KeyClass::Always,
+        }
+    }
+
     /// True when an item in this class can be read in `state`.
     pub fn readable(self, state: DeviceState) -> bool {
         match self {
@@ -123,6 +133,28 @@ mod tests {
         assert!(Protection::Always.readable(locked_before_unlock));
         assert!(!Protection::AfterFirstUnlockThisDeviceOnly.readable(locked_before_unlock));
         assert!(Protection::AlwaysThisDeviceOnly.readable(locked_before_unlock));
+    }
+
+    #[test]
+    fn a_class_is_readable_exactly_when_the_keybag_can_hand_out_its_key() {
+        use bifrost_core::keybag::{Keybag, ENTROPY_LEN};
+        let mut bag = Keybag::create(b"pw", &[5u8; ENTROPY_LEN], 1).unwrap();
+        let mut read = Keybag::from_bytes(&bag.to_bytes()).unwrap();
+        for b in [&mut bag, &mut read] {
+            for step in 0..3 {
+                match step {
+                    1 => b.lock(),
+                    2 => {
+                        let _ = b.unlock(b"pw");
+                    }
+                    _ => {}
+                }
+                let state = DeviceState { unlocked: b.unlocked(), unlocked_since_boot: b.unlocked_since_boot() };
+                for class in ALL {
+                    assert_eq!(class.readable(state), b.class_key(class.key_class()).is_ok(), "{class:?} step {step}");
+                }
+            }
+        }
     }
 
     #[test]

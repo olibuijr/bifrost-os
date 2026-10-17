@@ -5,6 +5,7 @@ edition = "2021"
 description = "BifrOSt update agent (is.olibuijr.update): background OS and app update checks, system package installs and the OS download"
 
 [dependencies]
+bifrost-core = { path = "../core" }
 bifrost-proto = { path = "../proto" }
 bifrost-ui = { path = "../ui" }
 springboard = { path = ".." }
