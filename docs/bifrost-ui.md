@@ -2230,9 +2230,11 @@ is written as plain threads with a deadline so a slow source never holds up the 
   sections in source order (each capped), and the names of sources that were late or failed (`missing`).
 - Shell: the Documents section (`springboard/src/shell/quicksearch.rs`, `indexed_groups`) keeps the index's matching
   and re-orders the top candidates with `order`; an open of a Documents result bumps its count.
-- Gaps: the runtime is not yet called by the Search panel (its apps, settings, contacts and files are built synchronously
-  in `results`), so the deadline is not used on the desktop yet; the per-source adapter is not built; the ranking is not
-  applied across sources; the semantic hook has no model; and apps and settings do not yet count opens.
+- Panel: the sources (apps, Settings pages, clock, Deildu titles, contacts, shortcuts, files and calendar events) are
+  `Table` sources built per query (`build_tables`); `Query` runs them on threads with a 300 ms deadline and a 12 ms grace
+  before the first frame. Late sections stream in, the top hit freezes once shown, and groups already on screen keep their
+  order. Opens of apps and Settings pages count alongside indexed results.
+- Gaps: notes is not a source (no shell-side store); the semantic hook has no model.
 
 ## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
 

@@ -3,6 +3,10 @@
 //! (atomically replaced, only when it changed), and the Search panel searches it ("Documents" section). Opening a
 //! result starts the app and sends `ToApp::ContinueActivity` (see `Shell::quicksearch_act`).
 //!
+//! The Search panel re-orders the matches this index returns with `bifrost_ui::search_rank` (BM25 over title and text,
+//! recency of indexing, local open counts). The order below is this index's own matching order, which the panel keeps
+//! for the items the ranker does not score.
+//!
 //! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
 //! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). A title match outranks a keyword
 //! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
