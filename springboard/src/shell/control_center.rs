@@ -3,7 +3,10 @@
 //! screen. Geometry follows the bifrost mini: 65 pt tiles, 10 pt gaps, the
 //! cluster 34 pt from the right edge and 68 pt from the top.
 
+use super::app_controls::AppControls;
 use super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
+use bifrost_ui::control_widget::ControlKind;
+use std::time::Duration;
 use super::music::nowplaying::Target as Media;
 use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
@@ -88,6 +91,25 @@ fn media_tile(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
     (x + ui.pt(BIG_PITCH_PT), y, ui.pt(BIG_PT), ui.pt(BIG_PT))
 }
 
+/// App-control tiles per row, under the built-in modules: four square tiles span the cluster's width.
+const APP_COLS: usize = 4;
+
+/// How long an app control's request may take on its control socket.
+const APP_CONTROL_WAIT: Duration = Duration::from_secs(8);
+
+/// Where app control `index` sits under the built-in modules, (x, y, w, h) in px. Rows fill left to right.
+pub fn app_tile_rect(ui: &Ui, w: i32, index: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    let col = (index % APP_COLS) as f32;
+    let row = (index / APP_COLS) as f32;
+    (x + ui.pt(col * PITCH_PT), y + ui.pt(BIG_PITCH_PT + 2.0 * PITCH_PT + SMALL_PT + GAP_PT + row * PITCH_PT), ui.pt(SMALL_PT), ui.pt(SMALL_PT))
+}
+
+/// The app control tile under (x, y), of `count` tiles on the panel.
+pub fn app_hit(ui: &Ui, w: i32, count: usize, x: f32, y: f32) -> Option<usize> {
+    (0..count).find(|&i| inside(app_tile_rect(ui, w, i), x, y))
+}
+
 /// Where a tile sits, (x, y, w, h) in px.
 pub fn tile_rect(ui: &Ui, w: i32, tile: Tile) -> (f32, f32, f32, f32) {
     let (x, y) = origin(ui, w);
@@ -154,6 +176,8 @@ enum Touch {
     Panel(Option<Tile>),
     /// a tap on the Now Playing plate's progress bar: released there, it seeks the shown session
     Scrub,
+    /// a finger on an app control tile (its index in the panel's order): released there, it uses the control
+    App(usize),
 }
 
 /// How long a finger rests on a module before it expands, like bifrost.
@@ -341,11 +365,13 @@ pub struct ControlCenter {
     press: Option<(Tile, f64, f32, f32)>,
     /// the toggle whose glyph bounces after it changed, with the bounce effect (seconds on the shell clock)
     bounce: Option<(Tile, SymbolEffect)>,
+    /// the app controls shown under the built-in modules, in panel order
+    pub app_controls: AppControls,
 }
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None }
+        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new() }
     }
 }
 
@@ -496,7 +522,17 @@ impl Shell {
         hit(&self.ui, self.w, x, y).filter(|&t| tile_visible(&slots, t))
     }
 
+    /// The app control tile under (x, y), if any.
+    fn cc_app_at(&self, x: f32, y: f32) -> Option<usize> {
+        app_hit(&self.ui, self.w, self.cc.app_controls.entries().len(), x, y)
+    }
+
     fn cc_down(&mut self, x: f32, y: f32, t: f64, range: f32) -> Vec<Effect> {
+        if let Some(i) = self.cc_app_at(x, y) {
+            self.cc.press = None;
+            self.cc.touch = Some(Touch::App(i));
+            return vec![];
+        }
         let tile = self.cc_tile_at(x, y);
         self.cc.press = tile.filter(|&k| Expanded::of(k).is_some()).map(|k| (k, t, x, y));
         match tile {
@@ -536,6 +572,7 @@ impl Shell {
         self.cc.press = None;
         match self.cc.touch.take() {
             Some(Touch::Tile(tile)) if self.cc_tile_at(x, y) == Some(tile) => self.activate_tile(tile, t),
+            Some(Touch::App(index)) if self.cc_app_at(x, y) == Some(index) => self.activate_app(index),
             Some(Touch::Outside(mut d)) => {
                 d.moved(y, t);
                 let tap = d.travel().abs() < self.ui.pt(TAP_PT);
@@ -597,6 +634,19 @@ impl Shell {
             }
         }
         fx
+    }
+
+    /// Uses app control `index`: a toggle flips in the registry, and its request goes to the app's control socket on
+    /// a worker thread. The app's dialog text, if any, is not shown yet.
+    fn activate_app(&mut self, index: usize) -> Vec<Effect> {
+        let Some(entry) = self.cc.app_controls.entries().get(index).cloned() else { return vec![] };
+        let Ok(line) = self.cc.app_controls.press(&entry.identifier) else { return vec![] };
+        std::thread::spawn(move || {
+            if let Err(e) = super::intents::exchange(&entry.app_id, &line, APP_CONTROL_WAIT).and_then(|reply| super::intents::parse_reply(&reply)) {
+                eprintln!("control center: {}: {e}", entry.app_id);
+            }
+        });
+        vec![]
     }
 
     fn activate_tile(&mut self, tile: Tile, t: f64) -> Vec<Effect> {
@@ -878,6 +928,28 @@ impl Shell {
                 draw_speaker(s, cx, cy, ui.s, a(SECONDARY));
             }
         }
+
+        // app controls: one tile per control the user added, under the built-in modules
+        let app_pressed = match self.cc.touch {
+            Some(Touch::App(i)) => Some(i),
+            _ => None,
+        };
+        for (i, entry) in self.cc.app_controls.entries().iter().enumerate() {
+            let (x, y, w, h) = app_tile_rect(ui, self.w, i);
+            let y = y + slide;
+            let on = entry.control.kind == ControlKind::Toggle && self.cc.app_controls.value(&entry.identifier);
+            let mut bg = if on { BLUE } else { rgba(255, 255, 255, 34) };
+            if app_pressed == Some(i) {
+                bg = over(bg, rgba(255, 255, 255, 50));
+            }
+            s.fill_rrect(x, y, w, h, r, a(bg));
+            let (cx, cy) = (x + w / 2.0, y + h / 2.0 - ui.pt(8.0));
+            draw_app_symbol(s, &entry.control.symbol, cx, cy, ui.s, a(WHITE));
+            let title = ui.text(&entry.control.title, 10.0, Weight::Semibold, WHITE);
+            let tx = (x + (w - title.w as f32) / 2.0).max(x) as i32;
+            s.blit(&title, tx, (y + h - ui.pt(16.0)) as i32, 255, (alpha * 255.0) as u32);
+        }
+
         if let Some(e) = self.cc.expanded {
             self.draw_expanded(s, e, (alpha * 255.0) as u32);
         }
@@ -996,6 +1068,20 @@ fn media_target(tile: Tile) -> Option<Media> {
 }
 
 /// An airplane pointing up-right, `size` px across its wings.
+/// The glyph an app control shows for its manifest `symbol` name. Names the shell has no glyph for get a plain dot.
+fn draw_app_symbol(s: &mut Surface, name: &str, cx: f32, cy: f32, pt: f32, color: u32) {
+    match name {
+        "moon" => status::draw_moon(s, cx - pt / 2.0, cy - pt / 2.0, pt, color),
+        "bell" => draw_bell(s, cx, cy, pt, color, false),
+        "timer" => draw_timer(s, cx, cy, pt, color),
+        "camera" => draw_camera(s, cx, cy, pt, color),
+        "sun.max" | "sun" => draw_sun(s, cx, cy, pt, color),
+        "speaker.wave.2" | "speaker" => draw_speaker(s, cx, cy, pt, color),
+        "wifi" => status::draw_wifi(s, cx - pt / 2.0, cy - pt / 2.0, pt, color),
+        _ => s.fill_rrect(cx - pt / 4.0, cy - pt / 4.0, pt / 2.0, pt / 2.0, pt / 4.0, color),
+    }
+}
+
 fn draw_airplane(s: &mut Surface, cx: f32, cy: f32, size: f32, color: u32) {
     const P: [(f32, f32); 18] = [
         (0.5, 0.0),
@@ -1181,6 +1267,31 @@ mod tests {
     fn centre(sh: &Shell, tile: Tile) -> (f32, f32) {
         let (x, y, w, h) = tile_rect(&sh.ui, sh.w, tile);
         (x + w / 2.0, y + h / 2.0)
+    }
+
+    #[test]
+    fn app_control_tiles_sit_under_the_modules_and_hit_test() {
+        let sh = shell();
+        let module_bottom = {
+            let (_, y, _, h) = cluster(&sh.ui, sh.w);
+            y + h
+        };
+        let (x0, y0, w0, h0) = app_tile_rect(&sh.ui, sh.w, 0);
+        assert!(y0 >= module_bottom, "app tiles start below the built-in modules");
+        // four to a row: the fifth control wraps to the second row, under the first
+        let (x4, y4, _, _) = app_tile_rect(&sh.ui, sh.w, 4);
+        assert!((x4 - x0).abs() < 0.5 && y4 > y0 + h0 / 2.0);
+        let centre = |i: usize| {
+            let (x, y, w, h) = app_tile_rect(&sh.ui, sh.w, i);
+            (x + w / 2.0, y + h / 2.0)
+        };
+        let (cx, cy) = centre(1);
+        assert_eq!(app_hit(&sh.ui, sh.w, 2, cx, cy), Some(1));
+        assert_eq!(app_hit(&sh.ui, sh.w, 1, cx, cy), None, "a tile past the count does not answer");
+        assert_eq!(app_hit(&sh.ui, sh.w, 3, x0 + w0 / 2.0, y0 - 1.0), None, "the gap above a row is not a tile");
+        // a built-in module's centre is not an app tile
+        let (wx, wy) = centre(&sh, Tile::Wifi);
+        assert_eq!(app_hit(&sh.ui, sh.w, 12, wx, wy), None);
     }
 
     #[test]
