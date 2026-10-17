@@ -1,5 +1,6 @@
 //! The Notes model and views, used by the desktop app in `main.rs`.
 pub mod notes;
+pub mod scripting;
 
 #[cfg(test)]
 pub fn test_ui() -> bifrost_app::Ui {
