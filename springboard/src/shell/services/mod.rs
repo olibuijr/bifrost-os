@@ -85,6 +85,16 @@ pub mod photos;
 pub mod background;
 pub mod scripting;
 pub mod metric_reports;
+pub mod backup_exclusions;
+pub mod snapshots;
+pub mod braille_text;
+pub mod record_store;
+pub mod directory;
+pub mod console_seat;
+pub mod trust_eval;
+pub mod obex_codec;
+pub mod domains;
+pub mod peer_hub;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -164,6 +174,16 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(background::BackgroundService::at(super::apphost::root().join(background::STORE_FILE))),
         Box::new(scripting::Scripting),
         Box::new(metric_reports::MetricReports),
+        Box::new(backup_exclusions::BackupExclusions),
+        Box::new(snapshots::Snapshots::default()),
+        Box::new(braille_text::BrailleText),
+        Box::new(record_store::RecordStore::default()),
+        Box::new(directory::Directory::default()),
+        Box::new(console_seat::ConsoleSeat),
+        Box::new(trust_eval::TrustEval),
+        Box::new(obex_codec::ObexCodec),
+        Box::new(domains::Domains),
+        Box::new(peer_hub::PeerHub::new()),
     ]
 }
 

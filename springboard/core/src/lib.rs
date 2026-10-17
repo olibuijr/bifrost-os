@@ -84,6 +84,8 @@ pub mod codesign_events;
 pub mod security_event;
 pub mod code_seal;
 pub mod backup_exclusion;
+pub mod pref_domains;
+pub mod peer_session;
 pub mod biometry;
 pub mod auth_context;
 pub mod auth_session;
