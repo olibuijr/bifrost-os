@@ -31,6 +31,6 @@
   ],
   "gaps": [
     "No smart-home ecosystem or accessory setup flow",
-    "No Matter or Thread stack in the system layer"
+    "No Thread stack; the Matter model (springboard/core/src/matter*.rs) is pure and has no network transport"
   ]
 }

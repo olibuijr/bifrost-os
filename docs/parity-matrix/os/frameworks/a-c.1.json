@@ -1500,11 +1500,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-audio-types.json",
+   "bifrost": "springboard/audio/types/src/format.rs, springboard/audio/types/src/codec_id.rs, springboard/sdk/src/audio_format.rs",
    "status": "partial",
    "note": "from SDK matrix core-audio-types.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-types",
+     "filter": "format::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_format::tests"
+    }
+   ],
+   "ready_note": "Stream description, codec identifiers and buffer lists exist and are tested. The speaker and decoders do not use the shared types yet."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreBluetooth.framework",
