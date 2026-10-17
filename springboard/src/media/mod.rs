@@ -64,6 +64,7 @@ pub mod speaker;
 pub mod audioplayer;
 pub mod timestretch;
 pub mod speed;
+pub mod crossfade;
 pub mod queue;
 #[cfg(target_os = "linux")]
 pub mod player;
