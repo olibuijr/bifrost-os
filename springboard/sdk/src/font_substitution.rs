@@ -152,15 +152,48 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("yuanti", CjkRounded), ("tsukushiamarugothic", CjkRounded), ("tsukushibmarugothic", CjkRounded),
 ];
 
+/// Reference family name (lowercase) to the open face that stands in for it by name, tried before the class's
+/// equivalents. Only packaged faces appear here (noto-fonts, noto-fonts-cjk, ttf-dejavu, gsfonts): P052 is the URW
+/// Palatino clone, the rest are the closest packaged face for the role, and the package row notes which is which.
+const FACES: &[(&str, &str)] = &[
+    ("palatino", "P052"),
+    ("pt sans", "Noto Sans"), ("pt serif", "Noto Serif"), ("pt serif caption", "Noto Serif"), ("pt mono", "DejaVu Sans Mono"),
+    ("papyrus", "Noto Sans"), ("partylet-plain", "Noto Sans"), ("party let", "Noto Sans"), ("phosphate", "Noto Sans"),
+    ("rockwell", "Noto Serif"), ("macintoshskeletal", "Noto Sans"),
+    ("ornanong", "Noto Sans Thai"),
+    ("osaka", "Noto Sans CJK JP"), ("osaka-mono", "DejaVu Sans Mono"), ("osakamono", "DejaVu Sans Mono"),
+    ("ヒラギノ角ゴシック w0", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w1", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w2", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w3", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w4", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w5", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w6", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w7", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w8", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w9", "Noto Sans CJK JP"),
+    ("ヒラギノ丸ゴ pron w4", "Noto Sans CJK JP"), ("ヒラギノ明朝 pron", "Noto Serif CJK JP"),
+    ("儷宋 pro", "Noto Serif CJK SC"), ("儷黑 pro", "Noto Sans CJK SC"), ("华文仿宋", "Noto Serif CJK SC"),
+    ("华文细黑", "Noto Sans CJK SC"), ("华文黑体", "Noto Sans CJK SC"),
+];
+
+/// The open face named for `family` in FACES, if any (case and surrounding space ignored).
+pub fn face_of(family: &str) -> Option<&'static str> {
+    let key = family.trim().to_lowercase();
+    FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
+}
+
 /// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
 pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     let key = family.trim().to_lowercase();
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
-/// The open families that stand in for `family`, preferred first. Empty when the name is unknown.
+/// The open families that stand in for `family`, preferred first: its named face, then its class's equivalents.
+/// Empty when the name is unknown.
 pub fn substitute(family: &str) -> Vec<&'static str> {
-    class_of_family(family).map(|c| c.equivalents().to_vec()).unwrap_or_default()
+    let mut out: Vec<&'static str> = face_of(family).into_iter().collect();
+    for &f in class_of_family(family).map(|c| c.equivalents()).unwrap_or(&[]) {
+        if !out.contains(&f) {
+            out.push(f);
+        }
+    }
+    out
 }
 
 /// The generic class for a descriptor whose family is unknown: fixed pitch is monospaced, everything else is the
@@ -178,13 +211,18 @@ pub fn class_for_spec(spec: &FontSpec) -> FamilyClass {
 pub fn candidates(spec: &FontSpec) -> Vec<FontSpec> {
     let Some(name) = spec.family.as_deref() else { return Vec::new() };
     let class = class_of_family(name).unwrap_or_else(|| class_for_spec(spec));
-    class
-        .equivalents()
-        .iter()
+    let mut names: Vec<&'static str> = face_of(name).into_iter().collect();
+    for &f in class.equivalents() {
+        if !names.contains(&f) {
+            names.push(f);
+        }
+    }
+    names
+        .into_iter()
         .filter(|f| !f.eq_ignore_ascii_case(name))
         .map(|f| {
             let mut s = spec.clone();
-            s.family = Some((*f).to_string());
+            s.family = Some(f.to_string());
             s
         })
         .collect()
@@ -267,6 +305,30 @@ mod tests {
         assert_eq!(substitute("Futura")[0], "Outfit");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
+    }
+
+    #[test]
+    fn named_faces_come_before_the_class_equivalents() {
+        assert_eq!(substitute("Palatino")[0], "P052");
+        assert_eq!(substitute("PT Serif")[0], "Noto Serif");
+        assert_eq!(substitute("PT Mono")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("Ornanong")[0], "Noto Sans Thai");
+        assert_eq!(substitute("OsakaMono")[0], "DejaVu Sans Mono");
+        assert_eq!(substitute("ヒラギノ角ゴシック W3")[0], "Noto Sans CJK JP");
+        let c = candidates(&FontSpec::new().family("Palatino").size(12.0));
+        assert_eq!(c[0].family.as_deref(), Some("P052"));
+        assert!(c.iter().all(|s| s.family.as_deref() != Some("Palatino")));
+        assert_eq!(c[0].size, Some(12.0));
+    }
+
+    #[test]
+    fn named_face_keys_are_unique_and_lowercase() {
+        let mut seen = std::collections::HashSet::new();
+        for (n, f) in FACES {
+            assert_eq!(*n, n.to_lowercase(), "key {n} must be lowercase");
+            assert!(!f.is_empty());
+            assert!(seen.insert(*n), "duplicate key {n}");
+        }
     }
 
     #[test]
