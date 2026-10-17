@@ -71,6 +71,7 @@ pub mod migrate;
 pub mod occlusion;
 pub mod memory_pressure;
 pub mod pacman_progress;
+pub mod packet_parser;
 pub mod progress;
 pub mod notify_center;
 pub mod app_firewall;
