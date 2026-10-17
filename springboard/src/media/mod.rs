@@ -29,6 +29,7 @@ pub mod codec;
 pub mod convert;
 #[cfg(target_os = "linux")]
 pub mod dl;
+pub mod hls;
 pub mod demux;
 pub mod id3;
 pub mod ilst;

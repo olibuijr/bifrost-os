@@ -1361,9 +1361,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/collection.rs",
    "status": "partial",
-   "note": "The card grid model (adaptive columns, hero item, hit-testing) covers the grid layout of the collection view. Not covered: item diffing, cell reuse and the layout engine.",
+   "note": "The card grid model (adaptive columns, hero item, hit-testing) covers the grid layout of the collection view. item_diff (springboard/ui/src/collection.rs) gives the inserts, deletes and moves between two snapshots for a batch update. Not covered: cell reuse and the layout engine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "collection::tests"
+    }
+   ],
+   "ready_note": "Card grid layout, hit-testing and item diffing (collection tests). Cell reuse and the compositional layout engine are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CollectionsInternal.framework",
@@ -3164,7 +3173,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/character_viewer.rs; springboard/apps/keyboard/src/emoji.rs",
    "status": "partial",
-   "note": "The emoji catalogue, the character viewer panel and the keyboard emoji page exist, and a pick types or copies the emoji. Missing: a search field over the catalogue, recent emoji, and the search name lists.",
+   "note": "The emoji catalogue, the character viewer panel and the keyboard emoji page exist, and a pick types or copies the emoji. The keyboard page has a keyword search over the catalogue and a persisted, newest-first recents list. Not built: the reference search name lists beyond the built-in keyword table.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3172,10 +3181,20 @@
     {
      "kind": "test",
      "crate": "bifrost-keyboard",
+     "filter": "kb_emoji::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
      "filter": "emoji::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::character_viewer::tests"
     }
    ],
-   "ready_note": "Emoji catalogue for the keyboard page: one-page categories without duplicates, newest-first capped recents, and tab switching (keyboard emoji tests); the character viewer tests cover the shared panel."
+   "ready_note": "Emoji catalogue, keyword search and persisted recents on the keyboard page (kb_emoji and emoji tests), and the shared Emoji and Symbols panel (character_viewer tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreFP.framework",
@@ -3297,11 +3316,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/haptic_request.rs; springboard/core/src/force_effect.rs",
+   "bifrost": "springboard/core/src/haptic_request.rs; springboard/core/src/force_effect.rs; springboard/core/src/haptic_sequence.rs",
    "status": "partial",
-   "note": "Rate-limited pulse requests and force-feedback effects for wheels and joysticks exist. Authoring of haptic patterns is missing, and the touchpad actuator the reference system uses has no counterpart on this hardware.",
+   "note": "Rate-limited pulse requests and force-feedback effects for wheels and joysticks exist. Haptic pattern authoring is built as timed sequences of pulses (core haptic_sequence.rs). The touchpad actuator the reference system uses has no counterpart on this hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "haptic_sequence::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "haptic_request::tests"
+    }
+   ],
+   "ready_note": "Pulse requests with throttling, force-feedback effects and timed pulse sequences (haptic_sequence and haptic_request tests). The touchpad actuator has no counterpart on this hardware."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreIDCred.framework",
@@ -3768,9 +3801,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/mod.rs",
+   "bifrost": "springboard/src/media/mod.rs; springboard/src/media/hls.rs",
    "status": "partial",
-   "note": "File demux and playback in springboard/src/media exist. No HTTP live streaming segment support was found, so streamed network media is not covered.",
+   "note": "File demux and playback in springboard/src/media exist. HLS media playlists are now parsed and their segment addresses resolved (media/hls.rs). Not built: fetching the segments over HTTP, joining them into one stream for the demuxer, and master playlist variant selection, so streamed network media does not play yet.",
    "rea": [],
    "method": "assessed"
   },
