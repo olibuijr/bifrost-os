@@ -52,6 +52,8 @@ pub struct Reader {
     silent: bool,
     /// earcons asked for since the shell last took them
     earcons: Vec<Earcon>,
+    /// the screen reader mode seen by the last `note_mode` (None before the first, so a start is not a toggle)
+    mode: Option<bool>,
 }
 
 impl Reader {
@@ -112,6 +114,18 @@ impl Reader {
     /// The earcons asked for since the last call, in order; the shell's sound player plays them.
     pub fn take_earcons(&mut self) -> Vec<Earcon> {
         std::mem::take(&mut self.earcons)
+    }
+
+    /// Records whether the screen reader is on this frame. A change after the first call queues the mode cue.
+    pub fn note_mode(&mut self, on: bool) {
+        match self.mode {
+            Some(prev) if prev == on => {}
+            Some(_) => {
+                self.mode = Some(on);
+                self.cue(ReaderEvent::ModeToggled(on));
+            }
+            None => self.mode = Some(on),
+        }
     }
 
     /// The rotor index the cursor walks.
@@ -457,6 +471,19 @@ mod tests {
         r.set_sounds(true);
         r.step(&els, true);
         assert_eq!(r.take_earcons(), vec![Earcon::Focus]);
+    }
+
+    #[test]
+    fn switching_the_reader_on_or_off_queues_its_mode_cue_but_starting_does_not() {
+        let mut r = Reader::default();
+        r.note_mode(false);
+        assert!(r.take_earcons().is_empty(), "the first state is not a change");
+        r.note_mode(true);
+        assert_eq!(r.take_earcons(), vec![Earcon::ModeOn]);
+        r.note_mode(true);
+        assert!(r.take_earcons().is_empty(), "the same mode again is not a change");
+        r.note_mode(false);
+        assert_eq!(r.take_earcons(), vec![Earcon::ModeOff]);
     }
 
     #[test]

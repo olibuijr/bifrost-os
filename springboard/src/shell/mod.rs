@@ -3157,6 +3157,8 @@ impl Shell {
     }
 
     fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
+        let reader_on = self.screen_reader_on();
+        self.reader.note_mode(reader_on);
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();
             self.chrome_gen += 1;
@@ -4462,6 +4464,12 @@ impl Shell {
     /// method sends them (`bare::kms`).
     pub fn take_input_method_out(&mut self) -> Vec<textinput::ImOut> {
         std::mem::take(&mut self.im_out)
+    }
+
+    /// The screen reader's cues asked for since the last call (its moves, wraps, activations and mode changes); the
+    /// audio worker plays them on the sound-effects role.
+    pub fn take_reader_earcons(&mut self) -> Vec<accessibility::earcons::Earcon> {
+        self.reader.take_earcons()
     }
 
     /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
