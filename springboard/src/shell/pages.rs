@@ -202,6 +202,8 @@ pub enum Toggle {
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
+    /// Accessibility > Hearing > Live Captions: captions for the sound the computer plays (`a11y_live_captions`)
+    LiveCaptions,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1405,6 +1407,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                         .header("KEYBOARD")
                         .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough."),
+                    Group::new(vec![Item::new("Live Captions").switch(a.live_captions, Action::Toggle(Toggle::LiveCaptions))])
+                        .header("HEARING")
+                        .footer("Shows what is said in the sound this computer plays as captions at the bottom of the screen. It uses the on-device speech model from Keyboard > Dictation, English only, and nothing leaves the computer."),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),

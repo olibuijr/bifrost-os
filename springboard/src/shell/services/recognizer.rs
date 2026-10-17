@@ -13,6 +13,10 @@
 //! - `stop` `{}` ends this app's recognition (the pipeline is interrupted so it flushes its last transcript); replies
 //!   `{stopped}`.
 //! - `model` `{}` replies `{granted, installed, downloading, size_bytes}`.
+//! - `captions_start` `{}`, `captions_poll` `{}` and `captions_stop` `{}` are the shell's own, for Live Captions
+//!   (`shell/live_captions.rs`): they capture the sound the computer plays (the default output's monitor) instead of the
+//!   microphone and run beside an app's recognition. An app calling them is refused. `captions_poll` replies
+//!   `{transcripts: [{text, final}], running}` with hypotheses as well as final transcripts.
 //! - `consent` `{granted}` records the person's answer; revoking ends a running recognition. Replies `{granted}`.
 //! - `download` `{}` fetches the model in a thread once consent is granted; replies `{started}`. Progress is in `model`.
 //!
@@ -20,8 +24,8 @@
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_ui::whisper::{
-    consent_path, data_subdir, locale_supported, model_path, parse_transcript_line, pipeline_argv, Capture, Consent,
-    PipelineError, Refusal, Transcript, MODEL_SIZE_BYTES, MODEL_URL,
+    consent_path, data_subdir, locale_supported, model_path, parse_transcript_line, pipeline_argv, pipeline_argv_for, Capture,
+    Consent, PipelineError, Refusal, Source, Transcript, MODEL_SIZE_BYTES, MODEL_URL,
 };
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -30,6 +34,8 @@ use std::sync::{Arc, Mutex};
 
 /// The name the service is registered under.
 pub const SERVICE: &str = "speech_recognizer";
+/// The caller name of the shell itself. Only it may capture the sound the computer plays.
+pub const SHELL_APP: &str = "bifrost-shell";
 
 unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
@@ -166,6 +172,8 @@ pub struct Recognizer {
     spawner: Box<dyn PipelineSpawner>,
     fetcher: Arc<dyn Fetcher>,
     session: Option<Session>,
+    /// the Live Captions pipeline, which captures the computer's own sound; it runs beside an app's recognition
+    captions: Option<Box<dyn Pipeline>>,
     next: u32,
 }
 
@@ -293,8 +301,18 @@ impl Recognizer {
         Self::with_parts(data_dir, Box::new(GstSpawner), Arc::new(CurlFetcher))
     }
 
-    fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
-        Recognizer { data_dir, spawner, fetcher, session: None, next: 1 }
+    pub(crate) fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
+        Recognizer { data_dir, spawner, fetcher, session: None, captions: None, next: 1 }
+    }
+
+    fn stop_captions(&mut self) -> bool {
+        match self.captions.take() {
+            Some(mut p) => {
+                p.kill();
+                true
+            }
+            None => false,
+        }
     }
 
     fn installed(&self) -> bool {
@@ -354,6 +372,31 @@ impl Recognizer {
                 }
                 Ok(poll_json(&transcripts, !finished))
             }
+            "captions_start" | "captions_poll" | "captions_stop" if app != SHELL_APP => {
+                Err("speech recognizer: only the shell captures the sound the computer plays".to_string())
+            }
+            "captions_start" => {
+                consent_of(&self.data_dir).may_recognize(self.installed()).map_err(refusal_text)?;
+                let argv = pipeline_argv_for(capture(), Source::SystemAudio, &model_path(&self.data_dir)).map_err(pipeline_error)?;
+                let pipeline = self.spawner.start(&argv)?;
+                self.stop_captions();
+                self.captions = Some(pipeline);
+                Ok(obj(vec![("started", Json::Bool(true))]))
+            }
+            "captions_poll" => {
+                if !consent_of(&self.data_dir).is_granted() {
+                    self.stop_captions();
+                    return Ok(poll_json(&[], false));
+                }
+                let Some(pipeline) = self.captions.as_mut() else { return Ok(poll_json(&[], false)) };
+                let transcripts: Vec<Transcript> = pipeline.take_lines().iter().filter_map(|l| parse_transcript_line(l)).collect();
+                let finished = pipeline.finished();
+                if finished {
+                    self.captions = None;
+                }
+                Ok(poll_json(&transcripts, !finished))
+            }
+            "captions_stop" => Ok(obj(vec![("stopped", Json::Bool(self.stop_captions()))])),
             "stop" => {
                 let stopped = match self.session.as_mut().filter(|s| s.app == app) {
                     Some(s) => {
@@ -380,6 +423,7 @@ impl Recognizer {
                 };
                 if !granted {
                     self.stop_session();
+                    self.stop_captions();
                 }
                 write_consent(&self.data_dir, Consent::from_record(if granted { "granted" } else { "revoked" }))?;
                 Ok(obj(vec![("granted", Json::Bool(granted))]))
@@ -618,6 +662,53 @@ mod tests {
         assert_eq!(r.log.lock().unwrap().kills, 1);
         let record = std::fs::read_to_string(consent_path(&r.root)).unwrap();
         assert!(!Consent::from_record(&record).is_granted());
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn captions_capture_the_computers_sound_only_for_the_shell_and_only_with_consent() {
+        let mut r = rig(true, false);
+        let err = r.rec.handle(SHELL_APP, "captions_start", &Json::Null).unwrap_err();
+        assert!(err.contains("consent"), "{err}");
+        let mut r = rig(true, true);
+        let err = r.rec.handle("app.a", "captions_start", &Json::Null).unwrap_err();
+        assert!(err.contains("only the shell"), "{err}");
+        assert!(r.rec.handle("app.a", "captions_poll", &Json::Null).is_err());
+        assert!(r.rec.handle("app.a", "captions_stop", &Json::Null).is_err());
+        assert!(r.log.lock().unwrap().argvs.is_empty(), "nothing was captured");
+        assert!(flag(&r.rec.handle(SHELL_APP, "captions_start", &Json::Null), "started"));
+        let argv = r.log.lock().unwrap().argvs[0].clone();
+        assert!(argv.iter().any(|a| a == "device=@DEFAULT_MONITOR@" || a.starts_with("stream-properties=")), "{argv:?}");
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn captions_run_beside_an_apps_recognition_and_report_hypotheses() {
+        let mut r = rig(true, true);
+        r.rec.handle("app.a", "start", &params(r#"{"locale":"en_US"}"#)).unwrap();
+        r.rec.handle(SHELL_APP, "captions_start", &Json::Null).unwrap();
+        assert_eq!(r.log.lock().unwrap().kills, 0, "the app keeps its recognition");
+        r.lines.lock().unwrap().push(r#"whisper0: {text="hello", is-final=(boolean)false}"#.to_string());
+        let reply = r.rec.handle(SHELL_APP, "captions_poll", &Json::Null);
+        assert_eq!(text_of(&reply, 0), "hello", "a hypothesis is reported");
+        assert!(flag(&reply, "running"));
+        // a withdrawn consent ends both
+        r.rec.handle(SHELL_APP, "consent", &params(r#"{"granted":false}"#)).unwrap();
+        assert_eq!(r.log.lock().unwrap().kills, 2);
+        assert!(!flag(&r.rec.handle(SHELL_APP, "captions_poll", &Json::Null), "running"));
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn captions_stop_ends_the_pipeline() {
+        let mut r = rig(true, true);
+        r.rec.handle(SHELL_APP, "captions_start", &Json::Null).unwrap();
+        assert!(flag(&r.rec.handle(SHELL_APP, "captions_stop", &Json::Null), "stopped"));
+        assert_eq!(r.log.lock().unwrap().kills, 1);
+        assert!(!flag(&r.rec.handle(SHELL_APP, "captions_stop", &Json::Null), "stopped"));
+        r.rec.handle(SHELL_APP, "captions_start", &Json::Null).unwrap();
+        r.finished.store(true, Ordering::SeqCst);
+        assert!(!flag(&r.rec.handle(SHELL_APP, "captions_poll", &Json::Null), "running"), "a pipeline that exited is gone");
         let _ = std::fs::remove_dir_all(&r.root);
     }
 

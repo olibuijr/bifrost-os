@@ -125,6 +125,7 @@ mod auth_sheet;
 mod volume_sheet;
 mod account_access_sheet;
 mod firewall_sheet;
+mod live_captions;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -596,6 +597,9 @@ pub struct Shell {
     /// the input source HUD; `input_hud_drawn` says the last frame had it
     input_hud: SourceHud,
     input_hud_drawn: bool,
+    /// Live Captions: the plate and the pipeline behind it (see `live_captions.rs`); `captions_drawn` says the last frame had it
+    captions: live_captions::Captions,
+    captions_drawn: bool,
     /// the source each app keeps (Settings > Keyboard > Keyboards, "Remember Input Source for Each App")
     input_memory: input_memory::InputMemory,
     /// Developer › Performance HUD; `perf_drawn` says the last frame had it
@@ -1004,6 +1008,8 @@ impl Shell {
             kbd_backlight: None,
             input_hud: SourceHud::default(),
             input_hud_drawn: false,
+            captions: live_captions::Captions::default(),
+            captions_drawn: false,
             input_memory: input_memory::InputMemory::default(),
             perf: diag::PerfHud::default(),
             perf_drawn: false,
@@ -1979,6 +1985,9 @@ impl Shell {
         if let Some(w) = self.input_hud.next_wake(t).filter(|_| self.screen_on) {
             due.add(Some(w));
         }
+        if let Some(w) = self.captions.next_wake(t).filter(|_| self.screen_on) {
+            due.add(Some(w));
+        }
         let app_wake = if self.screen_on {
             match self.screen {
                 // the app's socket is in the poll set (`ext_fds`): its frames wake the loop themselves
@@ -2112,6 +2121,10 @@ impl Shell {
         }
         if self.hud.visible(t) || self.hud_drawn {
             let (x, y, w, h) = VolumeHud::damage_rect(&self.ui, self.w);
+            damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
+        }
+        if self.captions.visible(t) || self.captions_drawn {
+            let (x, y, w, h) = self.captions.rect(&self.ui, self.w, self.h);
             damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
         }
         if self.input_hud.visible(t) || self.input_hud_drawn {
@@ -3594,6 +3607,7 @@ impl Shell {
         self.volume_tick(t);
         self.access_tick();
         self.fw_tick(t);
+        self.captions_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -3989,6 +4003,10 @@ impl Shell {
         if self.input_hud_drawn {
             self.input_hud.draw(s, &self.ui, self.w, t);
         }
+        self.captions_drawn = self.captions.visible(t);
+        if self.captions_drawn {
+            self.captions.draw(s, &self.ui, self.w, self.h, t);
+        }
         if let Some(o) = &self.shot {
             damage.all();
             o.draw(s, t);
@@ -4081,7 +4099,7 @@ impl Shell {
         let term = self.term.as_ref()?;
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
-            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.captions.visible(t) && !self.captions_drawn && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.fw_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
@@ -4102,7 +4120,7 @@ impl Shell {
     fn settings_key(&self, t: f64) -> Option<(u64, i32)> {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
-            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.captions.visible(t) && !self.captions_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.fw_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
