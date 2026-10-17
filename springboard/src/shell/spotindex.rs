@@ -977,6 +977,22 @@ pub fn parse_items(list: &[Json]) -> Vec<(SearchableItem, Option<u64>)> {
         .collect()
 }
 
+/// The searchable item for a file: the title, description and keywords its importer reads from the content (see
+/// `bifrost_ui::mdimport`), the path as the unique ID and the file's URL as the content URL, so the type filters and the
+/// kind apply. Fails when the file cannot be read.
+pub fn file_item(domain: &str, path: &Path) -> io::Result<SearchableItem> {
+    let found = bifrost_ui::mdimport::import_path(path)?;
+    Ok(SearchableItem {
+        unique_id: path.display().to_string(),
+        domain: domain.to_string(),
+        title: found.title,
+        description: found.description,
+        keywords: found.keywords,
+        thumbnail: String::new(),
+        content_url: format!("file://{}", path.display()),
+    })
+}
+
 /// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
 pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
     with(|ix| {
@@ -1086,6 +1102,24 @@ mod tests {
 
     fn it(id: &str, domain: &str, title: &str, desc: &str, kw: &[&str]) -> SearchableItem {
         SearchableItem { unique_id: id.into(), domain: domain.into(), title: title.into(), description: desc.into(), keywords: kw.iter().map(|s| s.to_string()).collect(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_file_becomes_an_item_with_its_imported_metadata() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Trip plan.txt");
+        std::fs::write(&path, "Lisbon trip\nflights and hotel\n").unwrap();
+        let item = file_item("Documents", &path).unwrap();
+        assert_eq!(item.title, "Lisbon trip");
+        assert_eq!(item.description, "flights and hotel");
+        assert_eq!(item.domain, "Documents");
+        assert!(item.content_url.starts_with("file://") && item.content_url.ends_with("Trip plan.txt"));
+        let mut ix = Index::default();
+        ix.index("files", vec![item]);
+        assert_eq!(ix.search("lisbon", 5).len(), 1);
+        assert!(file_item("Documents", &dir.join("missing.txt")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
