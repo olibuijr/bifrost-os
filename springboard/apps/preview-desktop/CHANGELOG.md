@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.8 — 2026-10-17
+
+- Services menu: "Open Images in Viewer" appears for a picture or PDF selection (the app declares it as a `[[service]]`
+  in its manifest) and opens the first picture or PDF of the selection in the Viewer.
+
 ## 0.11.7 — 2026-10-17
 
 - Preview > Speech > Start Speaking reads the selected PDF text, or the shown page's text when nothing is selected,

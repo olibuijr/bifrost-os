@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0 — 2026-10-17
+
+- Services menu: "New Window Containing Selection" opens the selected text in a new untitled document, and "Open Selected
+  File" opens the file whose path is selected (as an untitled document; Save asks for a place to write it).
+
 ## 1.7.0 — 2026-10-17
 
 - Text > Speech: Start Speaking speaks the selection (else the whole document) through the shell speech service; Stop Speaking ends it.

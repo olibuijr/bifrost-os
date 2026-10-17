@@ -201,6 +201,7 @@ pub mod layout;
 pub mod control;
 pub mod intent_form;
 pub mod intents;
+pub mod services;
 pub mod intent_presentation;
 pub mod system_audio;
 pub mod intent_catalog;

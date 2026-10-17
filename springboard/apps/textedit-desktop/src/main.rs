@@ -33,7 +33,10 @@ use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::kit::ui::Ui;
 use bifrost_app::kit::{clipboard, Damage, Surface};
 use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
+use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::proto::CHORD_FLAG;
+use bifrost_app::services::ServiceCall;
+use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use document::TextDocument;
 use encoding::Encoding;
@@ -1891,6 +1894,45 @@ fn menu_item(action: Action, title: &str, key: &str, enabled: bool) -> AppMenuIt
 }
 
 impl App for TextEditApp {
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["service.new_window_with_text", "service.open_selected_file"]
+    }
+
+    /// Services menu: "New Window Containing Selection" (an untitled document with the text) and "Open Selected File"
+    /// (the file's contents as an untitled document, so Save asks for a place to write it).
+    fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        if ctx.is_none() {
+            return Err(RpcError::new(INTERNAL_ERROR, "TextEdit is not running yet"));
+        }
+        let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text or path"))?;
+        let doc = match method {
+            "service.new_window_with_text" => {
+                let text = call.text.ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service needs text"))?;
+                TextDocument::read_bytes(text.as_bytes(), false).map_err(|e| RpcError::new(INTERNAL_ERROR, e.0))?
+            }
+            "service.open_selected_file" => {
+                const MAX_OPEN_BYTES: u64 = 16 << 20;
+                let path = call.paths.first().ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service needs a path"))?;
+                let len = std::fs::metadata(path).map_err(|e| RpcError::new(INVALID_PARAMS, format!("{path}: {e}")))?.len();
+                if len > MAX_OPEN_BYTES {
+                    return Err(RpcError::new(INVALID_PARAMS, format!("{path} is too large to open here")));
+                }
+                let bytes = std::fs::read(path).map_err(|e| RpcError::new(INTERNAL_ERROR, format!("{path}: {e}")))?;
+                TextDocument::read_bytes(&bytes, false).map_err(|e| RpcError::new(INTERNAL_ERROR, e.0))?
+            }
+            _ => return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),
+        };
+        let id = self.docs.new_document();
+        if let Some(d) = self.docs.get_mut(id) {
+            *d = doc;
+        }
+        // show the new document from its top, as after_documents does for a created document
+        self.scroll = 0.0;
+        self.follow = true;
+        self.revision += 1;
+        Ok(Json::Obj(Vec::new()))
+    }
+
     fn id(&self) -> &str {
         "is.olibuijr.textedit.desktop"
     }
