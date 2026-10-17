@@ -60,6 +60,7 @@ pub mod password_verify;
 pub mod migrate;
 pub mod occlusion;
 pub mod memory_pressure;
+pub mod pacman_progress;
 pub mod progress;
 pub mod notify_center;
 pub mod speech_engine;
