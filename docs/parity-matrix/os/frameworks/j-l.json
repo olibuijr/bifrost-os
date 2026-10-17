@@ -1738,9 +1738,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Gap: no system-wide Look Up service shows a definition for selected text. The dictionary app (springboard/apps/dictionary-desktop/src/main.rs) looks words up only inside itself. Build a Look Up service and popover that other apps can call.",
+   "bifrost": "springboard/src/shell/look_up_popover.rs; springboard/ui/src/look_up.rs",
+   "status": "partial",
+   "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself.",
    "rea": [],
    "method": "assessed"
   },

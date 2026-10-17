@@ -2582,7 +2582,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). Build it on springboard/ui/src/plugin_host.rs, which models instances and parameters but has no install or list surface.",
+   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). springboard/ui/src/audio_extension.rs (manifest, registry, render session) and springboard/ui/src/plugin_host.rs (instances, parameters) are models with no install or list surface; no plug-in is loaded and no Settings page is drawn. Build the pane on plugin_host.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -7244,7 +7244,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "The reference ships switch-control templates (ascconfig bundles) for scanning-based input, and BifrOSt has no switch scanning. Build switch scanning in the accessibility layer (springboard/src/shell/atspi) with a template format for switch layouts.",
+   "note": "The reference ships switch-control templates (ascconfig bundles) for scanning-based input. BifrOSt has a pure switch-scan model (springboard/ui/src/switch_scan.rs: scan order, auto and manual steps) that nothing calls, and no switch input or switch-layout template format. Wire the model into the accessibility layer (springboard/src/shell/atspi) with a template format.",
    "rea": [],
    "method": "assessed"
   },
@@ -8187,9 +8187,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build an SDK job API for background work that the system schedules, delivered as systemd user timers. Nothing on the desktop provides this yet.",
+   "bifrost": "springboard/sdk/src/background_tasks.rs; springboard/src/shell/services/background.rs",
+   "status": "partial",
+   "note": "Partial: apps declare task identifiers in manifest.toml and submit refresh or processing requests through the SDK; the background service runs them hidden when the network and external power they need are present. Not built: systemd user timers as the scheduler, and tasks for system jobs.",
    "rea": [],
    "method": "assessed"
   },
@@ -13439,7 +13439,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Nothing does on-device speech-to-text: no recogniser or dictation service exists in springboard/. Build a local speech recognition service that takes microphone audio and returns text, for dictation in the Search field and in apps.",
+   "note": "Nothing does on-device speech-to-text. springboard/ui/src/recognition.rs and recognition_task.rs are result and task models only; no recognizer or dictation service exists in springboard/. Build a local recognition service that takes microphone audio and returns text, for dictation in the Search field and in apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -14151,9 +14151,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Splits a full name into given, middle, family and suffix parts using bundled frequency and surname tables. Build a pure name parser in the contacts module (springboard/src/shell/services/contacts.rs) for the Contacts app and for import.",
+   "bifrost": "springboard/src/shell/services/contacts.rs",
+   "status": "partial",
+   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). Not built: middle and suffix parts, and the bundled frequency and surname tables.",
    "rea": [],
    "method": "assessed"
   },
@@ -14762,7 +14762,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Speech recognition models and signed model blobs for dictation and the voice assistant. Build an on-device recognizer that consumes the audio service's recordings (springboard/audiod/src/main.rs); the keyboard's dictation key does nothing today.",
+   "note": "Speech recognition models and signed model blobs for dictation and the voice assistant. The recognition models in springboard/ui/src/recognition_task.rs have no recognizer behind them, and the keyboard dictation key does nothing. Build an on-device recognizer that consumes the audio service recordings (springboard/audiod/src/main.rs).",
    "rea": [],
    "method": "assessed"
   },
