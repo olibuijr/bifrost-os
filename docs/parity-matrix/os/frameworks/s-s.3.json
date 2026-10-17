@@ -439,8 +439,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Siri intelligence-flow component. The reference index shows a bare framework (Info.plist and version.plist); its only other mention is WorkflowResponsiveness/Resources/WorkflowPlists/SiriIntelligenceFlow_CustomInterval_SkimmerDecision.plist, a Siri flow responsiveness workflow. BifrOSt does not mirror Siri flows.",
    "rea": [],
    "method": "assessed"
   },
@@ -489,8 +489,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Health sleep tracking and sleep schedules (Apple Watch and iPhone sleep data, Sleep Focus). The reference index shows a localized-only resource bundle (about 40 languages, no code resources); the only other mention is the Siri AlarmFlowPlugin template SleepAlarmDescriptionModifier. BifrOSt has no Health data store and no sleep-tracking hardware to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -740,9 +740,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/social.json",
+   "bifrost": "springboard/sdk/src/social_account.rs, springboard/sdk/src/sign_in.rs, springboard/sdk/src/oauth_credential.rs",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json. Not ready: the shell has no sign-in flow to add an account, and Compose Post does not send its draft through draft_request (social.json gaps).",
+   "note": "Social account core: the account store (service, user name, signing method), credentials in the keychain, web sign-in sessions and OAuth credentials.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_account::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "oauth_credential::tests"
+    }
+   ],
+   "ready_note": "Accounts are metadata plus secrets kept in the keychain (social_account.rs); sign-in runs as a web session that ends on the app callback scheme (sign_in.rs); OAuth credentials are typed (oauth_credential.rs). No social network service ships, by design (privacy-first: BifrOSt bundles no third-party network clients); an app that adds a service signs in through these and sends requests signed by the account. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -782,9 +801,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/social.json",
+   "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/social_account.rs, springboard/sdk/src/social_oauth2.rs",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json Built 2026-10-17: Token refresh and bearer signing for OAuth 2 in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests).",
+   "note": "Social services: service request assembly (GET, POST, multipart), OAuth 1.0a and OAuth 2 signing, bearer tokens and refresh.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_account::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_oauth2::tests"
+    }
+   ],
+   "ready_note": "social.rs builds the HTTP request for a web service, social_account.rs signs it with the account, social_oauth2.rs reads token responses, signs as a bearer and builds the refresh POST. No named networks (privacy-first). Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -803,9 +841,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/social.json",
+   "bifrost": "springboard/src/shell/compose_sheet.rs, springboard/ui/src/compose.rs, springboard/sdk/src/share.rs",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json. Not ready: the share sheet has no image property and performs only Copy; apps and Compose Post are reached through the menu (social.json gaps).",
+   "note": "Social UI: the share menu (installed apps and Copy) and the Compose Post sheet with typed text, attachments, links and a character count.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::compose_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    }
+   ],
+   "ready_note": "The share menu lists the installed apps that accept the items plus Copy; Compose Post opens a sheet seeded from the shared items, editable by typing. Post hands text, attachments and links to the clipboard because no network service sits behind it. The share sheet has no image property (images are shared as file items). Host tests only; not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
@@ -973,9 +1030,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/automix.rs, springboard/apps/music-desktop/src/music/playback.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The mixer parameters of a transition (two gains, a low cut on each song, incoming playback rate) as automation over the overlap.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "automix::tests"
+    }
+   ],
+   "ready_note": "Transition::frame gives the gain, high-pass corner and varispeed rate a mixer stage takes at any point of an overlap; the units themselves (gain, filter, varispeed) are the audio service stages, which have no transition command yet. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -994,9 +1060,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/automix.rs, springboard/ui/src/music.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Shared foundations of the transition engine: beat grids (RhythmResult), tempo folding for half and double time, bar arithmetic.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "automix::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the transition engine: the beat-grid types are bifrost_ui::music and the tempo and bar helpers are in automix.rs, covered by their tests. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1015,9 +1095,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/automix.rs, springboard/ui/src/music.rs, springboard/apps/music-desktop/src/music/playback.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Beat-matched transitions between songs (automix): the plan comes from ui::automix over the song beat grids.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "automix::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "Index evidence: SonicKit hosts SonicDiagnostics.appex (diagnostics plug-in) and _SonicKit_MusicKit with TransitionStyles.json and DSPGraph.dspg, i.e. song-to-song transitions. ui::automix plans whole-bar, bar-aligned overlaps with a tempo ramp and bass swap from RhythmResult grids (analyze_rhythm); music-desktop playback.rs has the equal-power crossfade and Sound Check. The audio service has no crossfade command yet, so the plan is not played; host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1036,9 +1130,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/storage.rs, springboard/src/shell/storage_page.rs, springboard/core/src/container_layout.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Space attribution: the data partition is accounted by category and by per-app container, shown as the Storage usage bar.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Index: spaceattributiond plus CacheDelete_PathList.plist and SpaceAttributionFramework_PathList.plist (which paths count towards which category and are purgeable). Storage::Scanner classifies the data partition by category in a worker thread (Usage, account, bar_widths) and the Storage page draws it; per-app containers split Documents, Library and purgeable Caches (container_layout.rs). Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1058,8 +1171,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: no BifrOSt-visible function found, and no evidence that one exists. The reference index shows a bare framework (Info.plist, version link; no resources, plug-ins, XPC services or hosting bundle; no other bundle names it). It is an Apple-internal span-matching helper of the Siri and language-understanding stack, which BifrOSt does not mirror. Lead to confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -1079,8 +1192,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: no BifrOSt-visible function found, and no evidence that one exists. The reference index shows a bare framework (Info.plist and version.plist; no resources, plug-ins, XPC services or hosting bundle; the only other Spark-named hit is the unrelated Messages Sparkles effect). Treated as an Apple-internal component with nothing to mirror. Lead to confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -1268,8 +1381,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: instrument-based display calibration data. The reference index shows a CIE 1931 colour matching table (CIEXYZ1931_2deg.json) and per-backlight spectral correction files (calibrations/*.edr, custom/) for the Display Calibrator Assistant's spectrophotometer and colorimeter support of Apple panels. It needs Apple panel calibration data and USB instruments; BifrOSt colour management (ICC profiles, EDID primaries) is render/src/icc.rs and sdk colorsync.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1288,9 +1401,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/ui/src/voice_activity.rs, springboard/apps/voicememos-desktop/src/store.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the main job, recognition, is partial (on-device through the whisper element, not verified on Midget); detector behaviour not audited in this round.",
+   "note": "Speech detection: voice activity detection over audio (speech spans, next speech time, skip silence).",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_activity::tests"
+    }
+   ],
+   "ready_note": "voice_activity.rs finds speech spans; Voice Memos uses it to skip silence. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1330,9 +1452,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/ui/src/whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/core/src/speech_engine.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no SpeechAnalyzer engine surface; recognition runs through the whisper element, not verified on Midget (speech.json).",
+   "note": "The speech engines: on-device recognition through the whisper pipeline (shell recognizer service, SDK backend) and text to speech through espeak.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::tests"
+    }
+   ],
+   "ready_note": "Recognition: pipeline argv and transcript parser (whisper.rs), the shell recognizer service, and the SDK WhisperBackend behind the recognizer API. Synthesis: speech_engine.rs drives espeak-ng. Needs the model, which the person downloads after consent. Host tests only; not verified on Midget. No SpeechAnalyzer-shaped engine surface beyond the recognizer API.",
    "rea": [],
    "method": "assessed"
   },
@@ -1351,20 +1497,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/sdk/src/speech_whisper.rs",
+   "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/recognition.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: recognition results are SFTranscription with segments and alternatives; no further object model is audited here (speech.json).",
-   "rea": [],
-   "method": "assessed",
+   "note": "Speech result objects: transcription with segments (timestamp, duration, confidence), partial and final results, contextual strings.",
    "ready": true,
    "checks": [
     {
      "kind": "test",
      "crate": "bifrost-app",
      "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recognition::tests"
     }
    ],
-   "ready_note": "Host tests for the SFTranscription result types (segments with timing and confidence, partial then final results) and the whisper backend over them. Not verified on Midget; no alternatives list yet (speech.json)."
+   "ready_note": "speech_recognizer.rs has the request, task, result, transcription and segment types; recognition.rs the ranged results and contextual strings. No alternative transcriptions beyond the best one. Host tests only.",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpeechRecognitionCommandServices.framework",
@@ -1381,9 +1532,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/ui/src/dictation_commands.rs, springboard/ui/src/dictation_entry.rs, springboard/apps/keyboard/src/main.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the keyboard Mic key now emits Dictate and starts a dictation session (built 2026-10-17, not verified on Midget); system-wide dictation commands are still missing (speech.json gaps).",
+   "note": "Dictation commands: spoken punctuation, new line and paragraph, case, no space, literal and \"scratch that\", in English and Icelandic.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "dictation_commands::tests"
+    }
+   ],
+   "ready_note": "Built in wave 12: Interpreter turns recognized phrases into text edits (backspaces plus insert); the on-screen keyboard types dictation through it and Dictation::with_commands offers it to controls. Spoken commands that drive the UI (\"click\", \"open\") are not covered. Host tests only; not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
@@ -1444,18 +1604,23 @@
    "doc": "",
    "bifrost": "springboard/ui/src/speech_assets.rs, springboard/src/shell/services/recognizer.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the model install path (speech_assets) exists but is not verified on Midget (speech.json).",
-   "rea": [],
-   "method": "assessed",
+   "note": "Shared recognition support: the on-device model install and the shell recognizer service the apps share.",
    "ready": true,
    "checks": [
     {
      "kind": "test",
      "crate": "bifrost-ui",
      "filter": "speech_assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
     }
    ],
-   "ready_note": "Host tests for the per-locale speech asset inventory (install states, reservations, eviction). Consent and download run in the shell recognizer service. Not verified on Midget."
+   "ready_note": "speech_assets.rs models the consented model download and install; the recognizer service is the one process that runs recognition for every app. Host tests only; the install path is not verified on Midget.",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpeechRuntime.framework",
@@ -1472,9 +1637,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/ui/src/mic_consent.rs, springboard/ui/src/analyzer_input.rs",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no app-facing microphone permission prompt; the audio service records only on explicit user action (speech.json gaps). Checked 2026-10-17: the SDK already has privacy_permissions::request for the microphone (sdk privacy_permissions.rs), which the shell answers with an Allow sheet. Still open: the audio service records only on explicit user action (springboard/proto/src/svc.rs), so no app can stream microphone audio.",
+   "note": "The speech runtime: the shell-hosted recognizer service apps drive through the SDK, with microphone consent and analyzer input conversion.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mic_consent::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "analyzer_input::tests"
+    }
+   ],
+   "ready_note": "The shell owns the microphone and runs the pipeline (start, poll, stop); apps ask through speech_whisper and the SDK privacy_permissions request. The audio service records only on explicit user action, so an app cannot stream raw microphone audio to its own recognizer; that is a deliberate privacy limit. Host tests only; not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
@@ -2783,9 +2972,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/container_layout.rs, springboard/core/src/cache_purge.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Storage containers: the fixed per-app container layout (Documents, Library, Library/Caches, tmp) and which parts the system may purge.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "container_layout.rs defines the folders, refuses symbolic-link container roots and marks Caches and tmp purgeable; cache_purge.rs plans the least-recently-used purge when space runs short. The reference index lists no files for this framework, so this is the name-based reading. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -2869,9 +3067,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/storage.rs, springboard/core/src/cache_purge.rs, springboard/src/privd/methods.rs, springboard/src/files/trash.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Storage management service: low-space guard that clears caches by itself, the Storage clean-up actions and the \"empty the Trash after 30 days\" policy.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "files::trash::tests"
+    }
+   ],
+   "ready_note": "Index: StorageManagement.framework/PlugIns/StorageManagementService and its man page. storage.rs has the Guard (clears disposable caches when /data runs low), CLEARS actions and purge_app_caches over idle apps; the 30-day Trash policy is written by privd (storage.policy_set) and executed by files/trash.rs. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -2890,9 +3107,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/storage_page.rs, springboard/src/shell/storage.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The Storage settings page: usage bar, category list, clean-up actions and removable packages.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    }
+   ],
+   "ready_note": "storage_page.rs builds the page (Bar, category rows, Available, clear actions, APPLICATIONS list). Host tests only; not verified on Midget in this round.",
    "rea": [],
    "method": "assessed"
   },
@@ -3059,8 +3290,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: extraction plug-ins of Apple's asset delivery pipeline. The reference index lists /System/Library/StreamingExtractorPlugins with STAEAExtractionPlugin.bundle (Apple Encrypted Archive) and \"Managed Background Assets Processing Pipeline.bundle\". BifrOSt delivers updates through pacman and its own staged OTA (background_download.rs, archive.rs) and has no Apple Encrypted Archive or Managed Background Assets.",
    "rea": [],
    "method": "assessed"
   },
@@ -3219,9 +3450,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/der.rs, springboard/core/src/oid.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "ASN.1 DER codec: strict reader and writer for tags, lengths, integers, booleans, bit strings, strings, times and object identifiers.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "der::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "oid::tests"
+    }
+   ],
+   "ready_note": "Built in wave 12: bifrost_core::der (strict DER, bounded nesting) with bifrost_core::oid for identifiers. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3240,9 +3485,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/der.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Internal helpers of the DER codec: header and length coding, canonical-form checks, time conversion.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "der::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the DER codec implemented in one module (der.rs parse_header, push_length, time helpers), covered by its tests.",
    "rea": [],
    "method": "assessed"
   },
@@ -3261,9 +3515,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/crlite.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Offline certificate revocation by filter cascade: build, encode, decode and look up.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "crlite::tests"
+    }
+   ],
+   "ready_note": "Built in wave 12: bifrost_core::crlite answers revoked or not from a Bloom-filter cascade without asking any online responder (privacy-first). Wire format is our own (BFCR v1); the reference system's published filter format is not read, and no filter feed ships yet. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3282,9 +3545,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/x509.rs, springboard/sdk/src/trust.rs, springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "X.509 certificates: parse and assemble, names, validity, basic constraints, key usage, alternative names, chain evaluation and the trust panels.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "x509::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "certificate_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "certificate_trust::tests"
+    }
+   ],
+   "ready_note": "Built in wave 12: bifrost_core::x509 parses certificate DER into fields and feeds bifrost_app::trust (Certificate::from_x509); the certificate panel and trust editor models exist. Signature verification is left to rustls; no OCSP or policy trees. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3304,8 +3591,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Message Layer Security client of iMessage group chats. The reference index shows SwiftMLS.plist (feature flag), the com.apple.SwiftMLS logging subsystem plist, and a copy inside DiagnosticExtensions.framework/PlugIns/IMDiagnosticExtension.appex, all iMessage. iMessage is an Apple-only protocol with no open equivalent; BifrOSt messaging uses Matrix.",
    "rea": [],
    "method": "assessed"
   },
@@ -3324,9 +3611,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/player_view.rs, springboard/src/media/speed.rs, springboard/src/media/subtitles.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Media playback views and controls: player view chrome and layout, playback speed steps and subtitle selection.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "player_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::subtitles::tests"
+    }
+   ],
+   "ready_note": "player_view.rs models the video player view and its controls; speed.rs and subtitles.rs are the speed and subtitle pickers' models. The route, speed and subtitle picker views are not all drawn yet (tracked on _SwiftMedia_SwiftUI). Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3346,8 +3652,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Swift-language binding over the system SQLite library for Apple's Swift frameworks (the reference index shows only Info.plist and a version file). BifrOSt is Rust and has no SQLite dependency; its stores are its own file formats (defaults_file, object_graph, keyed archives).",
    "rea": [],
    "method": "assessed"
   },
@@ -3396,9 +3702,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/accessible_look.rs, springboard/sdk/src/accessibility_display.rs, springboard/sdk/src/runtime.rs, springboard/src/shell/atspi/mod.rs",
    "status": "partial",
-   "note": "private framework, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors, display flags and the custom-action model exist. Still open: app-facing live-region announcements (no SDK call), AT-SPI on live Orca, and the declarative accessibility modifiers.",
+   "note": "Accessibility for declarative views: element map, roles, actions, announcements (Ctx::announce, politeness priorities), display flags and the AT-SPI bridge.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "accessible_look::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessibility_display::tests"
+    }
+   ],
+   "ready_note": "ax.rs has the element map, role names, custom actions and the announcement queue; Ctx::announce is the app-facing live-region call; accessible_look.rs and accessibility_display.rs carry the display settings. Untested on a live Orca session; the declarative accessibility modifiers are part of the view layer, not this row. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3515,9 +3840,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/net_path.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/reachability_flags.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Link advice for apps: path status, interface kinds and the expensive (metered) flag that tells an app to hold back traffic.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "net_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "reachability_flags::tests"
+    }
+   ],
+   "ready_note": "net_path.rs derives the path (satisfied or not, interfaces in preference order, expensive when the primary link is metered) from the network daemon's reports; apps read it through network_path.rs and reachability flags. No congestion or low-quality advisory beyond status and metered; the reference index lists only the framework stub. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -3536,9 +3880,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/link_conditioner.rs, springboard/core/src/net_path.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Network diagnosis: explains the first failing stage of a request (link, address, name lookup, connection, handshake, status) with the next step for the person.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_diagnostic::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_conditioner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "net_path::tests"
+    }
+   ],
+   "ready_note": "net_diagnostic.rs takes the observations the app or shell records and returns the first failure with a title and next step; link_conditioner.rs shapes test links. The framework's Common and Core companions (SymptomNetworkDiagnosticsCommon, SymptomNetworkDiagnosticsCore) are listed as separate frameworks. Diagnostics stay local; nothing is uploaded. Host tests only.",
    "rea": [],
    "method": "assessed"
   },

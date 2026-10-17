@@ -275,9 +275,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/console-desktop/src/signposts.rs, springboard/sdk/src/signpost.rs, springboard/core/src/signpost.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Collects signposts: apps write intervals and events through bifrost_app::signpost into the unified log, and the Console reads them back and totals them per name.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "signposts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "Signposter (bifrost_app::signpost) logs each finished interval and event; the Console parses them back (signposts.rs) and sums count, total and longest per name. Host tests only; the reference index shows the framework as Info.plist only, so no further surface was seen.",
    "rea": [],
    "method": "assessed"
   },
@@ -296,9 +310,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/signpost.rs, springboard/core/src/daily_metric_report.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Signpost metrics: finished intervals are folded into per-name totals (core signpost Summary) and the daily metric report.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "daily_metric_report::tests"
+    }
+   ],
+   "ready_note": "bifrost_core::signpost::Summary keeps count, total and longest duration per interval name, the shape of a daily metric report (daily_metric_report.rs). Everything stays on the machine. Host tests only.",
    "rea": [],
    "method": "assessed"
   },
@@ -317,9 +345,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/signpost.rs, springboard/apps/console-desktop/src/signposts.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Delivery of signpost intervals and events to observers is the unified log: the Signposter logs each one and the Console lists them.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "signposts::tests"
+    }
+   ],
+   "ready_note": "Observers (the Console Signposts view) receive signposts by reading the unified log, not by a separate push channel; there is no cross-process notification for signposts. Host tests only. The reference index shows Info.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -338,9 +380,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/signpost.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Signpost bookkeeping: ids, interval begin and end pairing, event records and errors (core signpost).",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "The pure bookkeeping every signpost part builds on (Signposter, Open, Interval, Event, Stats) is bifrost_core::signpost; internal plumbing of the signpost module, covered by its tests.",
    "rea": [],
    "method": "assessed"
   },

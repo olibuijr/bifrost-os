@@ -5358,3 +5358,23 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   16-bit texture coordinates, delta-coded indices, FNV-1a checksum). Parity row: `GeometryCompression`.
 - **Focus modes in Settings (`shell::notify_page::modes_group`)**: the Focus page lists every mode and switches the one on by hand.
   Gap: a mode's people, apps and schedule are not editable from Settings yet. Parity row: `FocusSettingsUI`.
+
+
+## DER, X.509, revocation filters, Automix and dictation commands (private frameworks wave 12)
+
+Four small engines that private reference frameworks stand for, built clean-room and tested on the host:
+
+- `bifrost_core::der`: strict ASN.1 DER reader and writer (shortest lengths, minimal integers, bounded nesting, UTC and
+  generalized time). `bifrost_core::x509`: parses a certificate (names in RFC 4514 form, validity, basic constraints, key
+  usage, subject alternative names, the signed body) and assembles one around a caller-made signature.
+  `bifrost_app::trust::Certificate::from_x509` feeds parsed chains to the existing chain rules. Signature checking stays
+  with rustls; apple parity gap kept: no OCSP, no certificate policy trees.
+- `bifrost_core::crlite`: offline revocation from a Bloom-filter cascade (exact for every certificate the publisher
+  listed, one signal for others). No online lookup, so no site is revealed to a responder. The wire format is ours
+  (`BFCR` v1); the reference system's published filter format is not read.
+- `bifrost_ui::automix`: plans a beat-matched transition between two songs from their `RhythmResult` grids (whole bars,
+  bar-aligned, equal-power gains, bass swap, tempo ramp). The audio service has no crossfade command yet, so nothing
+  plays it; the plan is the contract for that command.
+- `bifrost_ui::dictation_commands`: spoken punctuation, line breaks, case and "scratch that" for dictation, English and
+  Icelandic tables, as an edit (backspaces plus insert). The on-screen keyboard types dictation through it;
+  `Dictation::with_commands` offers it to controls. Not verified on Midget.

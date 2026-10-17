@@ -22,6 +22,22 @@ pub struct Certificate {
     pub is_ca: bool,
 }
 
+impl Certificate {
+    /// The trust fields of a certificate parsed from its DER (`bifrost_core::x509::parse`): names as RFC 4514 strings,
+    /// the DNS subject alternative names, the validity window and the authority flag from basic constraints. Signatures
+    /// are not checked here.
+    pub fn from_x509(cert: &bifrost_core::x509::Certificate) -> Result<Certificate, bifrost_core::x509::X509Error> {
+        Ok(Certificate {
+            subject: cert.subject.to_string(),
+            issuer: cert.issuer.to_string(),
+            dns_names: cert.dns_names()?,
+            not_before: cert.not_before,
+            not_after: cert.not_after,
+            is_ca: cert.can_sign_certificates()?,
+        })
+    }
+}
+
 /// What the chain is checked for. `ssl_server` names a host the leaf must cover.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Policy {
@@ -270,5 +286,26 @@ mod tests {
             evaluate(&chain, &[root()], &Policy::ssl_server("cart.shop.example"), NOW),
             Verdict::Trusted
         );
+    }
+
+    #[test]
+    fn a_chain_parsed_from_der_is_evaluated_by_the_same_rules() {
+        use bifrost_core::der;
+        use bifrost_core::oid::Oid;
+        use bifrost_core::x509::{encode, parse, Template};
+        let alg = Oid::parse("1.2.840.10045.4.3.2").unwrap();
+        let spki = der::sequence(&[der::sequence(&[der::oid(&Oid::parse("1.2.840.10045.2.1").unwrap()).unwrap()]), der::bit_string(0, &[4u8; 65])]);
+        let make = |issuer: &str, subject: &str, dns: &[&str], authority: bool| {
+            let (i, s) = ([("CN", issuer)], [("CN", subject)]);
+            let t = Template { serial: &[1], signature_algorithm: &alg, issuer: &i, subject: &s, not_before: NOW - DAY, not_after: NOW + DAY, spki: &spki, dns_names: dns, authority };
+            Certificate::from_x509(&parse(&encode(&t, &[1]).unwrap()).unwrap()).unwrap()
+        };
+        let chain = [make("Test Root", "www.example.is", &["www.example.is"], false), make("Test Root", "Test Root", &[], true)];
+        assert_eq!(chain[0].subject, "CN=www.example.is");
+        assert_eq!(chain[0].dns_names, vec!["www.example.is".to_string()]);
+        assert!(!chain[0].is_ca && chain[1].is_ca);
+        let anchors = [chain[1].clone()];
+        assert_eq!(evaluate(&chain, &anchors, &Policy::ssl_server("www.example.is"), NOW), Verdict::Trusted);
+        assert_eq!(evaluate(&chain, &anchors, &Policy::ssl_server("other.example.is"), NOW), Verdict::Refused(Reason::HostMismatch));
     }
 }
