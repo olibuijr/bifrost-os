@@ -232,6 +232,7 @@ pub mod transfer_drag;
 pub mod layout;
 pub mod control;
 pub mod intent_form;
+pub mod intent_tools;
 pub mod intents;
 pub mod services;
 pub mod intent_presentation;
