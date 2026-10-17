@@ -1,7 +1,7 @@
 //! `TranslationSession` parity: a session between one installed source and target language that translates single
-//! strings or batches through an engine the app supplies (`Translator`), and can be cancelled. BifrOSt has no
-//! language packs or system translation popover; `TranslationMemory` is the built-in engine, a table of strings
-//! translated ahead of time.
+//! strings or batches through an engine the app supplies (`Translator`), and can be cancelled. The built-in engines are
+//! `TranslationMemory` (a table of strings translated ahead of time, exact matches) and `GlossaryTranslator` (running
+//! text from the phrases of a language pack, longest phrase first); `LanguagePack` reads packs from a folder.
 
 use crate::attributed::{AttributedString, Attrs};
 use crate::error::ErrorCode;

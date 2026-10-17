@@ -82,8 +82,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; the component's role is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: helper library of Apple's App Store client (purchases, receipts, store accounts), which BifrOSt does not mirror; the reference index holds only the binary stub, Resources and Info.plist, and BifrOSt installs apps from its own PC App Store.",
    "rea": [],
    "method": "assessed"
   },
@@ -123,11 +123,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/places.rs",
    "status": "os",
-   "note": "Resource-only bundle of city and country name tables (CityInfo.db and localized tables); the reference index shows only data files, so its runtime role is not confirmed.",
+   "note": "City and country name tables. BifrOSt builds them from the system time zone database (iso3166.tab for country codes and names, zone1970.tab for zone, countries and position) in ui::places: country names with per-language overrides, cities named from their zone, and a folded search that matches Icelandic letters. Not mirrored: the reference's per-language city name tables (Localizable_Places.db); a caller sets country names per language with set_country_name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "places::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/share/zoneinfo/iso3166.tab"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/share/zoneinfo/zone1970.tab"
+    }
+   ],
+   "ready_note": "ui/src/places.rs parses the installed tz tables; its tests cover parsing, coordinates, localised country names and ranked search; the file checks confirm the tables are on the system."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppSupportUI.framework",
@@ -145,8 +162,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; the component's role is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: iOS-origin UI shim of AppSupport: the index carries a second copy under System/iOSSupport/System/Library/PrivateFrameworks/AppSupportUI.framework (a Catalyst shim) and only the binary stub, Resources, Info.plist and version.plist. What it fronts, the city and country tables, is covered by the AppSupport row (ui places).",
    "rea": [],
    "method": "assessed"
   },
@@ -231,8 +248,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and version file are in the reference index; the component's role is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: app usage event collection for analytics: the index lists a sibling bundle _AppUserEvents_AppAnalytics.framework next to it. BifrOSt has no app analytics or telemetry by design (privacy-first).",
    "rea": [],
    "method": "assessed"
   },
@@ -385,8 +402,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and version file are in the reference index; the component's role is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: support library private to Apple's first-party apps; the index holds only the binary stub, Info.plist and version.plist (no resources, XPC service or plug-in), so it has no function an app or user sees that BifrOSt would mirror. BifrOSt's own apps share code through the SDK (springboard/sdk).",
    "rea": [],
    "method": "assessed"
   },
@@ -553,8 +570,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: queries the roster of Apple device models and their capabilities: the index shows AppleDeviceQueryService.xpc and the data libraries libZhuGeArmory.dylib and libZhuGeRoster.dylib (a hardware roster keyed by Apple device identifiers). BifrOSt runs on PC and Samsung tablet hardware, which it reads from the kernel (sysinfo), not by Apple device identifiers.",
    "rea": [],
    "method": "assessed"
   },
@@ -636,11 +653,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/flatbuffers.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "FlatBuffers serialisation library. BifrOSt has the format's builder and a bounds-checked reader in bifrost_core::flatbuffers: the public wire layout (little-endian scalars, vtables, strings, vectors, tables, optional file identifier). The writer does not share vtables and there is no schema compiler.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "flatbuffers::tests"
+    }
+   ],
+   "ready_note": "core/src/flatbuffers.rs builds and reads buffers; tests check the exact bytes of a one-field table, defaults, strings, vectors, nested tables, growth to 200 tables and that damaged buffers give errors."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleGPIOUser.framework",
@@ -909,11 +935,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/cg/imageio/jpeg.rs; springboard/render/src/cg/imageio/encode.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "JPEG codec. BifrOSt reads baseline and progressive JPEG with size, components, density, EXIF and ICC properties (zune-jpeg, render::cg::imageio::jpeg) and writes JPEG from imageio::encode. The hardware JPEG engine (the AppleJPEGDriver.kext in the index) is Apple silicon and is not mirrored; the codec runs in software.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::imageio::jpeg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::imageio::encode::tests"
+    }
+   ],
+   "ready_note": "imageio decodes and encodes JPEG in software; its tests cover probing, decoding and the encoder round trip."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleJPEGXL.framework",
@@ -932,7 +972,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "JPEG XL codec. Not built: BifrOSt has no JPEG XL decoder or encoder (imageio reads PNG, JPEG, GIF, BMP and ICO, TIFF and WebP) and no jxl crate is in the offline registry. A decoder (modular mode with its entropy coding and transforms, then VarDCT) is a whole engine, not one agent's slice. Plan: render/src/cg/imageio/jxl.rs starting with the container and size-header probe; add Format::Jxl in imageio/mod.rs (detect, UTI public.jpeg-xl, MIME image/jxl, extension jxl) and its uses in sdk graphics_imageio; then the modular decoder; then VarDCT.",
    "rea": [],
    "method": "assessed"
   },
@@ -972,11 +1012,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/ldap_directory.rs; springboard/sdk/src/krb5_client.rs; packaging/arch/runtime-packages.txt (openldap)",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "LDAP client library. BifrOSt searches LDAP servers through the OpenLDAP client (the openldap package is in runtime-packages.txt) in sdk::ldap_directory: simple binds with the password in a private 0600 file, LDIF parsing with base64 values, and loading the results into the directory query model; Kerberos in sdk::krb5_client. It is a client only; there is no LDAP server.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "krb5_client::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ldapsearch"
+    }
+   ],
+   "ready_note": "sdk::ldap_directory runs ldapsearch and parses the answer; the tests cover search arguments, LDIF, bind files and loading; ldapsearch is a packaged file."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleLOM.framework",
@@ -1015,8 +1073,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple silicon hardware messaging support: the index shows a matching System/Library/Extensions/AppleMSG.kext (a kernel driver) next to the framework. BifrOSt runs on PC and Samsung tablet hardware with the Linux kernel's drivers.",
    "rea": [],
    "method": "assessed"
   },
@@ -1246,8 +1304,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton (no binary, no Info.plist, no payload entries) and no other index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: the reference image 26A434 holds only the empty framework directory (no binary, Info.plist, resources or XPC service) and no other index path names it, so no function can be observed to mirror; an Apple-prefixed private helper with no user- or app-visible surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -1267,8 +1325,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton and no other index entry names it, so its purpose (likely an optical sensor service) cannot be confirmed here.",
+   "status": "n/a",
+   "note": "n/a: service for an Apple-specific optical (photon detector) sensor; the index holds only the framework directory skeleton and the binary stub. It is Apple hardware with no PC or Samsung tablet equivalent; ambient light on BifrOSt is read by springboard/core/src/ambient_light.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1330,8 +1388,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton (no binary, no Info.plist) and no other index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: the reference image holds only the framework directory skeleton and the binary stub (no Info.plist or resources) and no other index path names it, so no function can be observed to mirror; an Apple-prefixed private component with no user- or app-visible surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -1391,8 +1449,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton and no index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: Apple service and repair diagnostics toolkit for Apple hardware: the index shows the binary stub and the com.apple.AppleServiceToolkit Logging/Subsystems plist only. Apple service diagnostics and upload are not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -1412,8 +1470,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The name suggests a point-splat (Gaussian splat) renderer, but the reference image holds only the framework directory skeleton, so the purpose is unconfirmed and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: the name points to a Gaussian-splat renderer for spatial scene content; the index holds only the directory skeleton and the binary stub. BifrOSt has no spatial-scene content type, app or capture source to render.",
    "rea": [],
    "method": "assessed"
   },
@@ -1554,8 +1612,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton and no index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: the index holds the binary stub, Info.plist and a localised bundle name (InfoPlist.loctable) only; the name points to Apple's virtual personal assistant stack, whose cloud and Apple ML model parts BifrOSt does not mirror. BifrOSt's assistant is the local Assistant app (springboard/apps/assistant-desktop).",
    "rea": [],
    "method": "assessed"
   },
@@ -1595,11 +1653,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/translation.rs; springboard/ui/src/translation.rs; springboard/sdk/src/translation_popover.rs",
    "status": "gap",
-   "note": "No on-device text translation exists in BifrOSt. Build a local translation engine behind an SDK translation API, with Icelandic and English as the first language pairs.",
+   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation), and now GlossaryTranslator: it translates running text from a language pack's phrases by longest-phrase match, keeps punctuation and spacing, carries capitals over, passes unknown words through, and refuses a text where fewer than half the words matched. It is a phrase-pack engine, not a neural model, so quality depends on the pack; no language pack data ships yet, so Icelandic and English need packs (<source>-<target>.tsv) to be installed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::glossary_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "sdk::translation has the session API, pack loader and the glossary engine, all tested; language pack data is not shipped, so a user needs packs installed before anything translates."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ApplicationFirewall.framework",
@@ -1616,11 +1688,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/app_firewall.rs",
+   "bifrost": "springboard/core/src/app_firewall.rs; springboard/cmd/src/firewall.rs; packaging/arch/bifrost-firewall.service",
    "status": "gap",
-   "note": "Nothing sets an inbound policy per application: the sysinfo app only reads the nftables and iptables state. Build an application-level firewall: a settings page that writes nftables rules for each app's listening ports, applied by a service at boot. Built 2026-10-17: the ruleset model bifrost_core::app_firewall (per-app allow or block by port, conflict refusal, nftables text with its own table); tests app_firewall::tests. Not built: the settings page that sets policies, and the boot service that applies the ruleset. Built 2026-10-17: policy file read and write (parse_policies, format_policies) and plan_from_file for the boot step (app_firewall::tests). Still open: the settings page that writes the file and the boot service that runs nft.",
+   "note": "Per-app inbound firewall. Policies live in /etc/bifrost/app-firewall.conf; bifrost_core::app_firewall turns them into one nftables table of its own (drop rules for blocked apps' ports, conflict refusal, policy file read and write, set and remove); bifrost-firewall (springboard/cmd) sets, removes, lists and shows policies and loads the ruleset with nft; bifrost-firewall.service applies it at boot before the network comes up (nftables is in runtime-packages.txt). Not built: a Settings page for the policies (the tool writes the same file). nftables cannot match a process, so a policy applies to the ports an app declares.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "firewall::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-firewall.service"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/bifrost-firewall"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/nft"
+    }
+   ],
+   "ready_note": "The ruleset model, the policy file tool and the boot unit are built and tested; nft and the unit are packaged files. The Settings page is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Archetype.framework",
@@ -1638,8 +1736,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only localisation resources for this framework and its directory skeleton, with no binary, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: Apple Intelligence text-context stack: the index shows the LaunchAgent com.apple.Archetype.textcontextd with its sandbox profile (a per-user text context daemon feeding on-device ML models) beside localisation resources for this framework. It depends on Apple ML model packs, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1659,8 +1757,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton and no other index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: engine half of the Archetype text-context stack (LaunchAgent com.apple.Archetype.textcontextd in the index; this bundle is the directory skeleton and binary stub only). It runs Apple ML model packs, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1680,8 +1778,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only the framework directory skeleton and no other index entry names it, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: foundation half of the Archetype text-context stack (LaunchAgent com.apple.Archetype.textcontextd in the index; this bundle is the directory skeleton and binary stub only). It exists to serve Apple ML model packs, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1701,8 +1799,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference image 26A434 holds only localisation resources for this framework and its directory skeleton, with no binary, so its purpose cannot be determined here.",
+   "status": "n/a",
+   "note": "n/a: user-interface strings (Localizable.loctable and lproj folders) for the Archetype text-context stack (LaunchAgent com.apple.Archetype.textcontextd in the index), which serves Apple ML model packs that BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2437,11 +2535,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/switch_panels.rs; springboard/src/shell/accessibility/switch_scan.rs; springboard/ui/src/switch_scan.rs",
    "status": "gap",
-   "note": "The reference ships switch-control templates (ascconfig bundles) for scanning-based input. BifrOSt has a pure switch-scan model (springboard/ui/src/switch_scan.rs: scan order, auto and manual steps) that nothing calls, and no switch input or switch-layout template format. Wire the model into the accessibility layer (springboard/src/shell/atspi) with a template format.",
+   "note": "Switch Control support. BifrOSt has the scanning models (ui::switch_scan with auto and manual steps; shell::accessibility::switch_scan with next and select presses) and now a panel template text format (shell::accessibility::switch_panels): panels of labelled buttons with actions, built-in System and Media panels, parse with line errors and a round trip; a PanelScanner that moves the highlight and answers a select with the action to perform; and the key bindings for the two switches. Not wired: the shell input loop does not yet feed key events to a scanner or draw the highlight.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_panels::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "switch_scan::tests"
+    }
+   ],
+   "ready_note": "The template format, panel scanner, key bindings and scan models are built and tested as pure models; the shell input loop does not call them yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AsyncAlgorithmsInternal.framework",
@@ -2500,11 +2617,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/idle_monitor.rs; springboard/src/shell/screensaver.rs",
    "status": "os",
-   "note": "Attention-detection framework, known by name only: the reference index extract holds no binary or strings for it, so its exact job is unconfirmed and it stays os.",
+   "note": "User attention and inactivity. BifrOSt tracks inactivity with core idle_monitor (one idle and one active transition, a clock that moves backwards counts as no time) and drives the screen saver and the display sleep timer from it. Not mirrored: camera-based gaze or face attention, which needs Apple's depth-camera hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "idle_monitor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screensaver::tests"
+    }
+   ],
+   "ready_note": "The inactivity monitor and the screen saver that uses it are tested; the camera-based attention part is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AttributeGraph.framework",
@@ -2521,11 +2652,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/observable.rs (with_observation_tracking, Observable::get records reads); springboard/ui/src/observe.rs",
+   "bifrost": "springboard/ui/src/attribute_graph.rs; springboard/sdk/src/observable.rs; springboard/ui/src/observe.rs",
    "status": "partial",
-   "note": "The graph that tracks which values a view reads and re-evaluates on change is modelled as automatic dependency tracking over observable values. Gap: there is no attribute graph that updates view bodies incrementally.",
+   "note": "Dependency graph for incremental updates. ui::attribute_graph has inputs and rules with automatically recorded dependencies (that follow what a rule reads), lazy recomputation, dirty marking that stops where a result did not change, and an evaluation counter; observable values and observation tracking are in sdk::observable and ui::observe. The shell's view bodies are not yet computed through the graph.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "attribute_graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    }
+   ],
+   "ready_note": "The graph is built and tested (diamond, cut-off, laziness, dynamic dependencies, list of rows); view drawing does not use it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioAccessoryAssetManagement.framework",
@@ -2647,11 +2792,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/fourier.rs (FFT and DFT); springboard/audio/engine/src/graph.rs (tap nodes, TapRing)",
+   "bifrost": "springboard/audio/engine/src/analysis.rs; springboard/ui/src/fourier.rs; springboard/audio/engine/src/graph.rs (tap nodes)",
    "status": "partial",
-   "note": "Spectral analysis exists as an FFT and DFT model and as tap nodes that copy audio out of the graph. Gap: no system analysis service publishes DSP measurements to other clients.",
+   "note": "Level and spectrum analysis. audio::engine::analysis measures peak, RMS and eight octave bands (Hann-windowed Goertzel) and an AnalysisHub publishes the newest measurement of each tap to its subscribers, with a one-line text form to send over a socket; ui::fourier has the FFT and DFT, and the engine's tap nodes copy audio out of the graph. Not wired: the daemon does not yet feed taps into the hub or expose it on the control socket.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-engine",
+     "filter": "analysis::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fourier::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-engine",
+     "filter": "graph::tests"
+    }
+   ],
+   "ready_note": "The analyser and the hub are built and tested; connecting taps to the hub on the control socket is not done."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioDSPGraph.framework",
@@ -2668,11 +2832,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/engine/src/graph.rs",
+   "bifrost": "springboard/audio/policy/src/dsp.rs; springboard/audio/engine/src/graph.rs",
    "status": "partial",
-   "note": "The node graph with format-checked connections, a cycle check and offline rendering is built. Gap: there is no system-wide DSP graph that assigns processing to devices.",
+   "note": "System-wide DSP graph. audio::policy::dsp assigns processing stages (gain, equaliser, compressor, noise gate, delay, limiter) to each device, adds per-application stages, orders a limiter last, sums the added latency and saves and loads the whole configuration; the render-side node graph with format-checked connections and a cycle check is audio::engine::graph. Not wired: audiod does not yet load the plan or run the stages on a device path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "dsp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-engine",
+     "filter": "graph::tests"
+    }
+   ],
+   "ready_note": "The system graph model is built and tested; the audio thread does not run the planned stages yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioDSPManager.framework",
@@ -2689,11 +2867,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/units/src/host.rs (in-process hosting); springboard/audio/units/src/registry.rs",
+   "bifrost": "springboard/audio/policy/src/dsp.rs; springboard/audio/units/src/host.rs; springboard/audio/units/src/registry.rs",
    "status": "partial",
-   "note": "Hosting and registration of audio processing units exists. Gap: no manager decides which DSP stages run for each device or session.",
+   "note": "DSP stage manager. audio::policy::dsp decides which stages run for each device and each application stream: disabled stages drop out, a session category bypasses the stages that colour the signal (a recording session bypasses the equaliser, compressor, delay and limiter of the microphone chain), and chains are validated when set; hosting and registration of processing units is audio::units. Not wired: audiod does not yet ask the manager for a plan.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "dsp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-units",
+     "filter": "host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-units",
+     "filter": "registry::tests"
+    }
+   ],
+   "ready_note": "The manager's decisions are built and tested; the daemon does not consult it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioPasscode.framework",
@@ -2711,8 +2908,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Audio passcode service (name only). Its purpose could not be confirmed from the reference index extract, so it stays os until the framework can be inspected.",
+   "status": "n/a",
+   "note": "n/a: audio passcode for Apple's proprietary nearby-device pairing: the index lists tone files (WOCAudioPasscodeTone.wav, FadingRing.wav, Lighthouse.wav, FadingPingPong.wav) that play a passcode as sound between Apple devices. An Apple-only protocol with no open equivalent.",
    "rea": [],
    "method": "assessed"
   },
@@ -2732,8 +2929,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "DSP half of the audio passcode service (name only). Purpose could not be confirmed from the reference index extract; stays os.",
+   "status": "n/a",
+   "note": "n/a: signal-processing half of AudioPasscode (the sound-encoded passcode for Apple's proprietary nearby-device pairing); the index holds only the directory skeleton. An Apple-only protocol with no open equivalent.",
    "rea": [],
    "method": "assessed"
   },
@@ -2752,11 +2949,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/hal/src/lib.rs (client library over the control socket)",
+   "bifrost": "springboard/audio/policy/src/clients.rs; springboard/audio/policy/src/volume.rs; springboard/audio/hal/src/lib.rs",
    "status": "partial",
-   "note": "Clients get, set and listen to the audio object model and run IO procedures on real-time threads. Gap: the server does not yet track per-application identity beyond per-app volume in the policy crate.",
+   "note": "Applications of the audio server. audio::policy::clients keeps one process object per client (the application id from Hello, the pid from the socket credentials, an object id that is never reused, the streams running in each direction) and answers which applications are playing or recording; per-app volume is audio::policy::volume and the client library over the control socket is audio::hal. Not wired: the daemon's control loop does not yet feed the registry.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "clients::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "volume::tests"
+    }
+   ],
+   "ready_note": "The application registry is built and tested; the control loop does not feed it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriver.framework",
@@ -2773,11 +2984,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/driver/src/lib.rs (Driver and DeviceIo traits); springboard/sdk/src/audio_virtual.rs",
+   "bifrost": "springboard/audio/driver/src/lib.rs; springboard/audio/driver/src/plugin.rs; springboard/audio/driver/src/loopback.rs; springboard/sdk/src/audio_virtual.rs",
    "status": "partial",
-   "note": "The driver interface between the audio server and its device drivers exists, with null and loopback drivers. Gap: virtual devices are described as data only and no user-space plug-in is loaded to publish them.",
+   "note": "Driver interface and plug-ins. The Driver and DeviceIo traits with null and loopback drivers, and now a plug-in loader: PluginDriver reads *.vdev description files from /etc/bifrost/audio/plugins and publishes each as a playback and a capture device (<uid>:out and <uid>:in) that loop into each other, with refused files listed and hot publish and remove events; bifrost-audiod loads it in its default driver list; the SDK checks and writes the descriptions (sdk::audio_virtual). A plug-in is a description, not loaded code, so a virtual device cannot run its own signal processing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-driver",
+     "filter": "plugin::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-driver",
+     "filter": "loopback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_virtual::tests"
+    }
+   ],
+   "ready_note": "The loader is built, tested and in audiod's default driver list; a plug-in cannot carry code."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriverTransports_Base.framework",
@@ -2794,11 +3024,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/shm/src/lib.rs (activation records, rings, zero timestamps)",
+   "bifrost": "springboard/audio/driver/src/transport.rs; springboard/audio/shm/src/lib.rs",
    "status": "partial",
-   "note": "The shared-memory transport between the audio server and its clients is built and layout-tested. Gap: there is no pluggable base transport for drivers other than this one.",
+   "note": "Transports. audio::driver::transport gives the device transports a type (pci, usb, hdmi, bluetooth, network, virtual, aggregate) with hot-plug, wireless and hardware properties, and a CompositeDriver that serves devices from several providers by uid ownership, so a driver other than ALSA plugs in; the shared-memory transport between the server and its clients (activation records, rings, zero timestamps) is audio::shm. Not wired: audiod's ServerCore still takes a plain driver list instead of a CompositeDriver.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-driver",
+     "filter": "transport::tests"
+    }
+   ],
+   "ready_note": "The transport types and the composite provider driver are built and tested; audiod does not use the composite yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriverTransports_IOA2.framework",
@@ -2850,11 +3089,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/driver/src/lib.rs (DeviceIo trait)",
+   "bifrost": "springboard/audio/driver/src/transport.rs; springboard/audio/driver/src/lib.rs (DeviceIo trait)",
    "status": "partial",
-   "note": "Device IO is a trait that drivers implement. Gap: no separate provider-based transport exists; device IO is served by the ALSA driver only.",
+   "note": "Provider-based device IO. Any Driver is a provider; audio::driver::transport::CompositeDriver routes enumerate, open, controls, set_control and events to the provider that owns a uid (ALSA, loopback, the plug-in driver, or a future network or Bluetooth driver), refuses a uid two providers publish and re-enumerates when a device appears. Not wired: audiod does not use the composite yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-driver",
+     "filter": "transport::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-driver",
+     "filter": "plugin::tests"
+    }
+   ],
+   "ready_note": "Provider routing is built and tested; audiod does not use the composite yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioSession.framework",
@@ -2871,11 +3124,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/audio_session.rs",
+   "bifrost": "springboard/audio/policy/src/sessions.rs; springboard/sdk/src/audio_session.rs",
    "status": "partial",
-   "note": "Audio session categories, activation, interruption and route-change notifications are modelled in the SDK. Gap: the sound server does not yet enforce session categories across applications.",
+   "note": "Audio sessions. The SDK models categories, activation, interruptions and route changes for apps (sdk::audio_session), and audio::policy::sessions enforces them for the server: a category allows only its directions, activating a session that does not mix interrupts the others that do not mix (pause) and ending it resumes them, a session can duck the others, and the mixer gain follows. Not wired: audiod does not yet call the arbiter when streams are created (the policy daemon loop is not attached to the HAL client yet).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "sessions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_session::tests"
+    }
+   ],
+   "ready_note": "The enforcement arbiter is built and tested; the daemon does not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioSessionServer.framework",
