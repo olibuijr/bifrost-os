@@ -104,7 +104,25 @@ fn calendar_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
     items
 }
 
+/// The AppEvents Calendar answers: `make new event` (`calendar.make`), through the Create Event intent.
+fn calendar_event(app: &mut CalendarApp, ctx: Option<&Ctx>, data_dir: &std::path::Path, ev: &bifrost_app::app_events::AppEvent) -> Result<Json, RpcError> {
+    match (ev.class.as_str(), ev.id.as_str()) {
+        ("calendar", "make") => {
+            let params = bifrost_calendar::scripting::intent_params(&ev.params)?;
+            Ok(app.perform_intent(ctx, data_dir, "create-event", &params)?.to_json())
+        }
+        _ => Err(bifrost_calendar::scripting::unhandled(&ev.method())),
+    }
+}
+
 impl App for CalendarApp {
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        match bifrost_app::app_events::AppEvent::from_method(method, params) {
+            Some(ev) => calendar_event(self, ctx, data_dir, &ev),
+            None => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no method {method}"))),
+        }
+    }
+
     fn id(&self) -> &str {
         "is.olibuijr.calendar.desktop"
     }
