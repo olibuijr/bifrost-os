@@ -288,6 +288,18 @@ impl Client {
         self.call(bifrost_core::usb_approval::M_USB_AUTHORIZE, vec![("port", privd::s(port)), ("allow", Json::Bool(allow))]).map(|_| ())
     }
 
+    /// Asks privd to install the package archive at `path` with pacman (`package.install_file`). privd copies the file
+    /// into its own staging folder before pacman reads it.
+    pub fn package_install_file(&self, path: &str) -> Result<(), ClientError> {
+        self.call_timeout("package.install_file", vec![("path", privd::s(path))], Duration::from_secs(3600)).map(|_| ())
+    }
+
+    /// Asks privd to install packages from the sync databases (`package.install_repo`).
+    pub fn package_install_repo(&self, names: &[String]) -> Result<(), ClientError> {
+        let names = Json::Arr(names.iter().map(|n| privd::s(n.as_str())).collect());
+        self.call_timeout("package.install_repo", vec![("names", names)], Duration::from_secs(3600)).map(|_| ())
+    }
+
     pub fn store_uninstall(&self, id: &str) -> Result<(), ClientError> {
         self.call("store.uninstall", vec![("id", privd::s(id))]).map(|_| ())
     }

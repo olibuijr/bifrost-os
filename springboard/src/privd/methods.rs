@@ -66,6 +66,8 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         }
         "store.install" => store_install(p),
         "package.remove" => package_remove(str_param(p, "name")?),
+        "package.install_file" => package_install_file(str_param(p, "path")?),
+        "package.install_repo" => package_install_repo(p.get("names")),
         bifrost_core::usb_approval::M_USB_AUTHORIZE => usb_authorize(Path::new(bifrost_core::usb_approval::SYSFS_USB_DEVICES), str_param(p, "port")?, p.get("allow")),
         "store.uninstall" => {
             let id = str_param(p, "id")?;
@@ -113,6 +115,60 @@ fn usb_authorize(devices_root: &Path, port: &str, allow: Option<&Json>) -> Resul
         Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => Err(PErr::bad("not a USB device port")),
         Err(e) => Err(PErr::internal(format!("usb {port}: {e}"))),
     }
+}
+
+/// The largest package archive privd copies into staging, in bytes.
+const MAX_PACKAGE_BYTES: u64 = 4 << 30;
+
+/// Installs the package archive at `path` with `pacman -U`. The shell asks the person first; privd checks the name like a
+/// package archive, opens the file without following a link at the end, and copies it into a folder only root can write,
+/// so pacman installs the bytes that were checked and not a path the user can swap meanwhile.
+fn package_install_file(path: &str) -> Result<Json, PErr> {
+    use std::io::Read;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+    let src_path = Path::new(path);
+    if !src_path.is_absolute() || src_path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(PErr::bad("the package path must be absolute"));
+    }
+    let file = src_path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if !pacman_update::is_package_file(file) {
+        return Err(PErr::bad("not a package file"));
+    }
+    let mut src = std::fs::OpenOptions::new().read(true).custom_flags(O_NOFOLLOW).open(src_path).map_err(|e| PErr::bad(format!("{file}: {e}")))?;
+    let meta = src.metadata().map_err(|e| PErr::internal(e.to_string()))?;
+    if !meta.is_file() || meta.len() == 0 || meta.len() > MAX_PACKAGE_BYTES {
+        return Err(PErr::bad("not a usable package file"));
+    }
+    let staging = Path::new(STATE_DIR).join("staging");
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&staging).map_err(|e| PErr::internal(format!("staging: {e}")))?;
+    std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o700)).map_err(|e| PErr::internal(format!("staging: {e}")))?;
+    let staged = staging.join(file);
+    let copied = (|| -> std::io::Result<()> {
+        let mut dst = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).custom_flags(O_NOFOLLOW).open(&staged)?;
+        std::io::copy(&mut (&mut src).take(MAX_PACKAGE_BYTES), &mut dst)?;
+        dst.sync_all()
+    })();
+    let result = match copied {
+        Ok(()) => {
+            let args = pacman_update::install_file_args(&staged.to_string_lossy());
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            run("pacman", &args).map(|_| obj(vec![]))
+        }
+        Err(e) => Err(PErr::internal(format!("staging {file}: {e}"))),
+    };
+    let _ = std::fs::remove_file(&staged);
+    result
+}
+
+/// Installs packages from the sync databases with `pacman -S --needed`. The names are checked like a removal's.
+fn package_install_repo(names: Option<&Json>) -> Result<Json, PErr> {
+    let names: Vec<String> = match names {
+        Some(Json::Arr(items)) if items.iter().all(|j| j.as_str().is_some()) => items.iter().filter_map(|j| j.as_str().map(str::to_string)).collect(),
+        _ => return Err(PErr::bad("names must be a list of strings")),
+    };
+    let args = pacman_update::install_repo_args(&names).map_err(PErr::bad)?;
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    run("pacman", &args).map(|_| obj(vec![]))
 }
 
 fn power(verb: &str) -> Result<Json, PErr> {
@@ -300,6 +356,22 @@ fn network_dns_set(p: &Json) -> Result<Json, PErr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_installs_refuse_bad_paths_and_names_before_anything_runs() {
+        let file = |p: &str| call("package.install_file", &obj(vec![("path", s(p))]));
+        for bad in ["relative/a-1-1-any.pkg.tar.zst", "/tmp/../etc/a-1-1-any.pkg.tar.zst", "/tmp/notes.txt", "/tmp/a-1-1-any.tar.gz", ""] {
+            assert_eq!(file(bad).unwrap_err().code, "bad_params", "{bad}");
+        }
+        assert_eq!(file("/nonexistent-dir/a-1-1-any.pkg.tar.zst").unwrap_err().code, "bad_params", "a file that cannot be opened");
+        assert_eq!(call("package.install_file", &obj(vec![])).unwrap_err().code, "bad_params");
+        let repo = |names: Json| call("package.install_repo", &obj(vec![("names", names)]));
+        assert_eq!(repo(Json::Arr(vec![s("--overwrite=*")])).unwrap_err().code, "bad_params");
+        assert_eq!(repo(Json::Arr(vec![])).unwrap_err().code, "bad_params");
+        assert_eq!(repo(Json::Arr(vec![Json::Bool(true)])).unwrap_err().code, "bad_params");
+        assert_eq!(repo(s("htop")).unwrap_err().code, "bad_params");
+        assert_eq!(call("package.install_repo", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
 
     #[test]
     fn usb_authorize_writes_a_device_port_and_refuses_hubs_and_paths() {
