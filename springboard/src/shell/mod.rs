@@ -124,6 +124,7 @@ pub mod contact_pick_sheet;
 mod auth_sheet;
 mod volume_sheet;
 mod account_access_sheet;
+mod firewall_sheet;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -788,6 +789,8 @@ pub struct Shell {
     auth_clock: f64,
     /// the Allow / Don't Allow sheet for an app's request for an account type (see `account_access_sheet.rs`)
     access_sheet: Option<account_access_sheet::AccessSheet>,
+    /// the app firewall's Allow / Deny question and the apps asked (see `firewall_sheet.rs`)
+    fw: firewall_sheet::Firewall,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
@@ -1118,6 +1121,7 @@ impl Shell {
             volume_sheet: None,
             auth_clock: 0.0,
             access_sheet: None,
+            fw: firewall_sheet::Firewall::default(),
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
@@ -1555,6 +1559,11 @@ impl Shell {
         if self.access_showing() {
             let t = self.auth_clock;
             self.access_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
+        if self.fw_showing() {
+            let t = self.auth_clock;
+            self.fw_touch(x, y, matches!(ev, Event::Up(..)), t);
             return Some(vec![]);
         }
         if let Some(fx) = self.share_modal(ev) {
@@ -3169,11 +3178,13 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
+                let firewall = self.fw_views(t);
                 let mut ext = self.login_ext_cache.get();
                 ext.refresh_off = services::background::off_from_pref(self.prefs.get(services::background::PREF_OFF));
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 ext.extensions_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::EXTENSIONS_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
+                st.set_firewall(firewall);
                 st.set_login_items(logins, pending);
                 st.set_login_extensions(ext, background_off);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
@@ -3192,6 +3203,7 @@ impl Shell {
                 let login_removed = st.take_login_removed();
                 let login_moved = st.take_login_moved();
                 let login_approved = st.take_login_approved();
+                let firewall_edits = st.take_firewall_edits();
                 let preview = st.take_screensaver_preview();
                 for change in changes {
                     match change {
@@ -3217,6 +3229,7 @@ impl Shell {
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
                 self.login_items_approve(login_approved);
+                self.fw_edits(firewall_edits, t);
                 self.login_items_move(login_moved);
                 if self.desk.is_some() {
                     for change in dock_changes {
@@ -3580,6 +3593,7 @@ impl Shell {
         self.auth_tick(t);
         self.volume_tick(t);
         self.access_tick();
+        self.fw_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -3993,7 +4007,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.fw_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4020,6 +4034,9 @@ impl Shell {
             }
             if self.access_showing() {
                 self.access_draw(s);
+            }
+            if self.fw_showing() {
+                self.fw_draw(s);
             }
             if let Some(a) = &self.crash_alert {
                 a.draw(s, &self.ui, self.w, self.h);
@@ -4066,7 +4083,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.fw_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }
@@ -4087,7 +4104,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.fw_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }

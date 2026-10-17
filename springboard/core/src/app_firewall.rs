@@ -20,6 +20,13 @@ pub struct Port {
     pub number: u16,
 }
 
+impl Port {
+    /// The port as the policy file and the service write it, `tcp/80`.
+    pub fn text(&self) -> String {
+        format!("{}/{}", self.proto.keyword(), self.number)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Proto {
     Tcp,
@@ -263,7 +270,7 @@ pub fn socket_inode(link: &str) -> Option<u64> {
 
 /// The ports as the service writes them (`tcp/80`), comma separated.
 pub fn format_ports(ports: &[Port]) -> String {
-    ports.iter().map(|p| format!("{}/{}", p.proto.keyword(), p.number)).collect::<Vec<_>>().join(", ")
+    ports.iter().map(Port::text).collect::<Vec<_>>().join(", ")
 }
 
 #[cfg(test)]

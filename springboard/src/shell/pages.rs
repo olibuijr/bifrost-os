@@ -51,6 +51,8 @@ pub enum PageId {
     FontPick(FontRole),
     Dictionary,
     Vpn,
+    /// Network > Firewall (desktop): the incoming connection choice for each app (see `firewall_sheet`)
+    Firewall,
     SoftwareUpdate,
     Backup,
     DateTime,
@@ -443,6 +445,8 @@ pub enum Action {
     DefaultApp(usize, String),
     /// Login Items: stop starting this app (id) at login
     LoginItemRemove(String),
+    /// Network > Firewall: allow or block this app's (id) incoming connections, or forget the choice
+    Firewall(String, super::firewall_sheet::Edit),
     /// a tap on a Settings > Passwords row (see `passwords_page::Act`)
     Passwords(super::passwords_page::Act),
     /// a tap on a Settings > Internet Accounts row (see `internet_accounts_page::Act`)
@@ -517,6 +521,8 @@ pub struct Model<'a> {
     pub login_items: &'a [(String, String)],
     /// the Login Items page: (app id, name) of each registration waiting for approval
     pub login_pending: &'a [(String, String)],
+    /// the Firewall page: each app with a remembered incoming connection choice
+    pub firewall: &'a [super::firewall_sheet::FirewallView],
     /// the background agents and app extensions of the Login Items & Extensions page
     pub ext: &'a super::login_items_page::LoginExtensions,
     /// the Fonts pages: each role's default and override, and the font library
@@ -694,6 +700,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("ethernet", "wired cable lan network"),
     ("bluetooth", "wireless devices pair headphones speaker mouse keyboard"),
     ("vpn", "tunnel private network"),
+    ("firewall", "incoming connections block allow ports listening network security"),
     ("airplane mode", "flight offline wireless radio"),
     ("display & brightness", "screen monitor brightness resolution scale night shift text size"),
     ("displays", "screen monitor brightness resolution scale appearance"),
@@ -824,6 +831,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Network => desktop_network_page(info),
         PageId::Ethernet => desktop_ethernet_page(info),
         PageId::Vpn => desktop_vpn_page(info),
+        PageId::Firewall => super::firewall_sheet::page(m.firewall),
         PageId::Wifi if info.desktop_network.as_ref().is_some_and(|n|!n.wifi_available) => page("Wi-Fi",false,vec![Group::new(vec![Item::new("No Wi-Fi adapter").tint(Tint::Dim)]).footer("Connect a supported Wi-Fi adapter to browse and join wireless networks. Ethernet is managed separately in Network settings.")]),
         PageId::Wifi => {
             let current = info.current_ssid.as_deref().filter(|_| m.wifi_on);
@@ -1987,7 +1995,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS, account: "" }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], firewall: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS, account: "" }
     }
 
     #[test]
@@ -2068,6 +2076,17 @@ mod tests {
         let s = spec(PageId::Root, &off);
         assert_eq!(s.groups[1].items[1].value, "Off");
         assert_eq!(s.groups[1].items[0].accessory, Accessory::Switch(true));
+    }
+
+    #[test]
+    fn the_desktop_network_page_links_to_the_firewall() {
+        let mut info = Info { desktop_network: Some(Default::default()), ..Info::default() };
+        info.battery_present = true;
+        let opts = Options::default();
+        let s = spec(PageId::Network, &model(&info, &opts));
+        let firewall = s.groups[0].items.iter().find(|i| i.label == "Firewall").expect("a Firewall row");
+        assert_eq!(firewall.action, Action::Push(PageId::Firewall));
+        assert!(spec(PageId::Firewall, &model(&info, &opts)).groups[0].items[0].label.starts_with("No Apps"));
     }
 
     #[test]
@@ -2431,7 +2450,7 @@ fn desktop_network_page(info:&Info)->Spec {
     let wifi=network.is_some_and(|n|n.wifi_available);
     let eth_status=ethernet.map(|i|if i.connected(){"Connected"}else{"Not Connected"}).unwrap_or("No adapter");
     Spec{id:PageId::Network,title:"Network".into(),large:false,groups:vec![
-        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn)]).header("CONNECTIONS"),
+        Group::new(vec![Item::new("Ethernet").icon(Icon::General).value(eth_status).link(PageId::Ethernet),Item::new("Wi-Fi").icon(Icon::Wifi).value(if wifi {info.wifi.as_str()}else{"No adapter"}).link(PageId::Wifi),Item::new("VPN").icon(Icon::General).value(if super::desktop_network::vpn_profiles().is_empty(){"None"}else{"Configured"}).link(PageId::Vpn),Item::new("Firewall").icon(Icon::Passcode).link(PageId::Firewall)]).header("CONNECTIONS"),
         rows(vec![("Network Manager", "NetworkManager".into())]).footer("Ethernet and Wi-Fi use separate connection settings. Changes are applied by the system network service."),
     ]}
 }

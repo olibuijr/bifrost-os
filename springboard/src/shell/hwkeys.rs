@@ -718,8 +718,8 @@ impl Shell {
             self.volume_type(out, t);
             return vec![];
         }
-        // the account access sheet takes touches only: typing waits for the answer
-        if self.access_showing() {
+        // the account access sheet and the firewall question take touches only: typing waits for the answer
+        if self.access_showing() || self.fw_showing() {
             return vec![];
         }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
