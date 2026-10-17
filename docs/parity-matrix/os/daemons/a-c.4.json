@@ -1367,8 +1367,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: Apple-private on-device daemon from CoreLSKD.framework (31.7 MB daemon, 25 MB framework, its own sandbox profile com.apple.lskdd.sb and a rule list usr/share/kdrl.bundle/lskd.rl in the reference index). No public API, setting or app uses it, and the size points to Apple ML model data (Apple ML model packs). The exact purpose is unconfirmed because the binary is not extracted.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Very large on-device component (daemon lskdd 31.7 MB inside CoreLSKD.framework, framework 25 MB, sandbox profile com.apple.lskdd.sb, rule list usr/share/kdrl.bundle/lskd.rl 112 B). Size alone does not prove it is Apple-only ML. Needs: the sandbox profile and launchd plist to see which Mach services and files it serves and which clients (if any) call it; BifrOSt would need a local daemon only if a user-visible feature (for example on-device recognition or knowledge distillation) depends on it.",
    "rea": [],
    "method": "assessed"
   },
@@ -2367,8 +2367,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: Apple system-asset delivery daemon: usr/libexec/multiversed (225 KB) has only its launchd plist in the reference index, with no resources and no sandbox profile, and chooses among Apple-served variants of system assets. BifrOSt delivers its assets through its own pacman repository. The exact purpose is unconfirmed because the binary is not extracted.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. usr/libexec/multiversed (225 KB) with only a launchd plist (466 B) and no sandbox profile, resources or man page in the index. It shares the Multiverse name with MultiverseSupport.framework (that framework is also bare), which suggests one feature (name only: handling several versions or variants of something). The earlier claim that it picks among Apple-served system-asset variants has no evidence. Needs: decode the plist and the binary strings to see its Mach service and clients.",
    "rea": [],
    "method": "assessed"
   },
@@ -3870,7 +3870,7 @@
    "doc": "",
    "bifrost": "",
    "status": "n/a",
-   "note": "n/a: XNU SCSI Architecture Model helper: usr/libexec/scsid (135 KB, a 540-byte man8 page, plist only) sits beside the IOSCSIArchitectureModelFamily kexts and the SCSI DriverKit frameworks in the reference index. Linux handles SCSI in the kernel midlayer (sd, sg) and needs no user-space daemon. The exact purpose is inferred from those neighbours because the binary is not extracted.",
+   "note": "n/a: XNU storage-driver helper with no Linux user-space counterpart; evidence: usr/libexec/scsid (135 KB), launchd plist com.apple.scsid.plist, man page usr/share/man/man8/scsid.8, and the SCSIDeviceSpecifics.kext plug-in inside AppleStorageDrivers.kext in the same reference tree. It serves the IOKit SCSI Architecture Model family; on Linux the SCSI midlayer (sd, sg) and udev do this in the kernel, so BifrOSt has nothing to add in user space.",
    "rea": [],
    "method": "assessed"
   },

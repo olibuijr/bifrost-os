@@ -1134,8 +1134,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: no BifrOSt-visible function found, and no evidence that one exists. The reference index shows a bare framework (Info.plist, version link; no resources, plug-ins, XPC services or hosting bundle; no other bundle names it). It is an Apple-internal span-matching helper of the Siri and language-understanding stack, which BifrOSt does not mirror. Lead to confirm.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1463 B only); no other bundle names it. By name it matches spans of text (or time), which is a plausible text-processing helper for search or language understanding rather than an Apple service. Needs: exports and callers; BifrOSt could host a span matcher in fuzzy.rs or the text kit if used.",
    "rea": [],
    "method": "assessed"
   },
@@ -1155,8 +1155,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: no BifrOSt-visible function found, and no evidence that one exists. The reference index shows a bare framework (Info.plist and version.plist; no resources, plug-ins, XPC services or hosting bundle; the only other Spark-named hit is the unrelated Messages Sparkles effect). Treated as an Apple-internal component with nothing to mirror. Lead to confirm.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1282 B only); the other 'Spark' hits are unrelated (Messages Sparkles effect, Books build asset, Weather VFX). Nothing visible. Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -4387,8 +4387,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "n/a",
-   "note": "n/a: Apple-internal component. The reference index shows only a binary, Info.plist and version.plist (no resources, no XPC service, no hosting bundle and no other bundle that links it), so there is no user-visible function to mirror; the name points to an internal system-wide override switch of the vendor's own services. Low confidence: evidence is the empty bundle only.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1309 B, version.plist 369 B). Name suggests a system-wide override or management switch, which could be local policy (for example a debug or MDM override) rather than an Apple service. Needs: exports and callers; BifrOSt would need a settings or policy hook if user-facing.",
    "rea": [],
    "method": "assessed"
   },

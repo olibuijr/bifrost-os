@@ -1172,8 +1172,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: Apple-internal component. The reference index shows only a binary, Info.plist and version.plist (no resources, no XPC service, no hosting bundle and no other bundle that links it), so no function that BifrOSt is missing can be named. Low confidence: evidence is the empty bundle only.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1297 B, version.plist 510 B); no linking bundle in the index. Name suggests a template engine for documents or UI (a candidate for the SDK document kit). Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },

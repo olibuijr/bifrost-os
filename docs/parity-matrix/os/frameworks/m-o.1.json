@@ -1391,8 +1391,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: name-based (low confidence): external-account sync for the vendor's messaging stack (MSG prefix, ExternalSync); the index holds only Info.plist. BifrOSt Messages is a Matrix client and Mail syncs over IMAP and DAV (dav_sync), neither through a vendor sync service.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1413 B only). By name external-account sync for the messaging stack (MSG prefix), which may be a local sync engine for mail or chat accounts. BifrOSt Messages is a Matrix client and Mail syncs over IMAP and DAV (dav_sync), so a partial counterpart may exist. Needs: strings and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -2639,8 +2639,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: name-based (low confidence): the index shows only Info.plist and an InfoPlist.loctable in every locale, so it is a branded vendor component with no readable function, no linked app and no daemon. Nothing in BifrOSt maps to it and no user-visible job can be shown.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Framework with Info.plist (1376 B) and a localised InfoPlist.loctable (4.7 KB) only; the localised bundle display name suggests a user-facing name in some UI. Needs: decode the loctable (it may name the feature) and find its host.",
    "rea": [],
    "method": "assessed"
   },
@@ -2801,8 +2801,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: name-based (low confidence): the index shows only Info.plist and version.plist, no resources, no daemon and no linking bundle, which fits a vendor-internal support kit. Nothing in BifrOSt maps to it.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1288 B, version.plist 457 B). Name suggests a matrix or grid support kit; no linking bundle in the index. Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },

@@ -633,8 +633,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: requests to join a shared Apple-account space (family and sharing invitations). It depends on Apple account and cloud services, which BifrOSt does not mirror; BifrOSt sharing is local and consent based. Evidence: the bundle holds only an Info.plist (2022), so the feature is inferred from the name.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1402 B only). By name it handles requests to join a shared group or space, likely tied to an Apple account service (family or sharing invitations), but the index shows no evidence of which. Needs: strings and callers; BifrOSt would need a local consent-based join flow if it backs a feature such as shared calendars or albums.",
    "rea": [],
    "method": "assessed"
   },
@@ -803,8 +803,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: Apple's personal knowledge graph library (entities and relations mined from a person's content for on-device intelligence features), built on Apple-trained models and Apple-cloud-synced data. BifrOSt keeps no inferred profile of the person (privacy-first). Evidence: the bundle holds only an Info.plist; the feature is inferred from the name.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1480 B only). By name a knowledge-graph library; the reference OS uses graphs for photos, search and suggestions. It may be a local on-device store (entities and relations) rather than a cloud service, and BifrOSt has entity_index.rs as a partial local analogue. Needs: callers and strings; a local graph store would need to stay opt-in and private.",
    "rea": [],
    "method": "assessed"
   },
@@ -980,8 +980,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: private Apple framework with no resources, no hosting bundle and no strings in the index (Info.plist and version.plist only), so it has no user-visible surface to mirror. Low confidence: its exact function is not visible.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist and version.plist only; the only other 'Leo' hits are the unrelated Leonardo.framework and old Leopard actions). Nothing visible. Needs: dyld-cache data to see exports and callers.",
    "rea": [],
    "method": "assessed"
   },
@@ -1087,8 +1087,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: private Apple UI framework with no resources of any kind in the index (Info.plist and version.plist only: no nib, strings or images), so there is no user-visible surface to mirror. Low confidence: the exact feature is not visible.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1279 B, version.plist 454 B; no nib, strings or images). Name suggests a UI toolkit layer, which would be a candidate for the bifrost-ui kit if apps call it. Needs: exports and callers.",
    "rea": [],
    "method": "assessed"
   },

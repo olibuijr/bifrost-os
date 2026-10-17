@@ -2445,8 +2445,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "n/a: Sensing personalised to Apple wearables and device sensors (name only, Info.plist and version.plist in the index). It serves Apple sensor hardware features; the sensors BifrOSt reads (ambient light, motion, magnetometer) have their own modules in core.",
+   "status": "os",
+   "note": "Reopened from n/a (audit 2026-10-17): purpose unknown. Bare framework (Info.plist 1320 B, version.plist 457 B). By name sensing personalised to a user; the wearable reading is not supported by the index. It may be a context or activity-sensing client (motion, ambient light, location), for which BifrOSt has sensor modules in core but no unified activity API. Needs: strings and callers.",
    "rea": [],
    "method": "assessed"
   },
