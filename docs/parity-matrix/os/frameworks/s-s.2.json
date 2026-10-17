@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Shazam service data; BifrOSt has no Shazam service (ShazamKit row is n/a)",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple game-service framework tied to Game Center; BifrOSt has no game services",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +166,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple iPad-as-display continuity; BifrOSt tablet is a separate OS build without Sidecar",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +187,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple iPad-as-display continuity UI; BifrOSt has no Sidecar",
    "rea": [],
    "method": "assessed"
   },
@@ -314,7 +314,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +334,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri analytics pipeline; BifrOSt sends no telemetry",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +355,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri analytics runtime; BifrOSt sends no telemetry",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +376,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri analytics tool-kit; BifrOSt sends no telemetry",
    "rea": [],
    "method": "assessed"
   },
@@ -399,6 +399,15 @@
    "bifrost": "docs/parity-matrix/data/app-intents.json",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "App Intents: the shell runs an app's intent over its control socket (shell/intents.rs). The typed SDK surface is docs/parity-matrix/data/app-intents.json.",
    "rea": [],
    "method": "assessed"
   },
@@ -420,6 +429,15 @@
    "bifrost": "docs/parity-matrix/data/app-intents.json",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "App intent runtime: shell/intents.rs builds the request line and parses the reply; the shell runs intents over the app socket. Tests cover the protocol.",
    "rea": [],
    "method": "assessed"
   },
@@ -440,7 +458,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -461,7 +479,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -482,7 +500,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -503,7 +521,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -524,7 +542,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -545,7 +563,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -566,7 +584,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -587,7 +605,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -608,7 +626,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -629,7 +647,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -650,7 +668,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -671,7 +689,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -692,7 +710,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -713,7 +731,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -734,7 +752,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -755,7 +773,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -775,8 +793,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple account cloud-synced Siri settings; BifrOSt Account (bifrost-cloud) does not sync Siri settings",
    "rea": [],
    "method": "assessed"
   },
@@ -797,7 +815,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -818,7 +836,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -839,7 +857,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -860,7 +878,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -880,8 +898,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri metrics; BifrOSt sends no telemetry",
    "rea": [],
    "method": "assessed"
   },
@@ -902,7 +920,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -922,8 +940,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple multi-device (iPhone/HomePod) arbitration; BifrOSt is single device",
    "rea": [],
    "method": "assessed"
   },
@@ -943,8 +961,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple multi-device arbitration feedback; BifrOSt is single device",
    "rea": [],
    "method": "assessed"
   },
@@ -965,7 +983,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -985,8 +1003,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple multi-device selection; BifrOSt is single device",
    "rea": [],
    "method": "assessed"
   },
@@ -1006,8 +1024,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple multi-device selection signals; BifrOSt is single device",
    "rea": [],
    "method": "assessed"
   },
@@ -1028,7 +1046,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1048,8 +1066,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple emergency-call intents; BifrOSt has no emergency calling",
    "rea": [],
    "method": "assessed"
   },
@@ -1070,7 +1088,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1090,8 +1108,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Find My is Apple's device-location service tied to Apple accounts and hardware; no BifrOSt meaning",
    "rea": [],
    "method": "assessed"
   },
@@ -1112,7 +1130,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1133,7 +1151,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1154,7 +1172,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1175,7 +1193,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1196,7 +1214,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1216,8 +1234,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Home accessory control; BifrOSt has no HomeKit-style accessory stack",
    "rea": [],
    "method": "assessed"
   },
@@ -1238,7 +1256,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1258,8 +1276,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple in-call Siri on the phone; BifrOSt has no telephony",
    "rea": [],
    "method": "assessed"
   },
@@ -1280,7 +1298,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1301,7 +1319,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1322,7 +1340,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1343,7 +1361,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1364,7 +1382,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1385,7 +1403,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1405,8 +1423,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri instrumentation; BifrOSt logs go through the Logger registry instead",
    "rea": [],
    "method": "assessed"
   },
@@ -1426,8 +1444,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri instrumentation; BifrOSt logs go through the Logger registry instead",
    "rea": [],
    "method": "assessed"
   },
@@ -1447,8 +1465,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri instrumentation manifest; no BifrOSt equivalent",
    "rea": [],
    "method": "assessed"
   },
@@ -1469,7 +1487,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1490,7 +1508,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1511,7 +1529,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1533,6 +1551,15 @@
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Intent invocation: shell/intents.rs runs an intent by app and intent id and parses the reply. Covers invocation, not Siri's domain resolution.",
    "rea": [],
    "method": "assessed"
   },
@@ -1553,7 +1580,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1574,7 +1601,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1595,7 +1622,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1616,7 +1643,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1637,7 +1664,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1658,7 +1685,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1679,7 +1706,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1700,7 +1727,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1721,7 +1748,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1742,7 +1769,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1763,7 +1790,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1784,7 +1811,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1805,7 +1832,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1826,7 +1853,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1846,8 +1873,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri bug reporter; BifrOSt has no Siri metrics upload",
    "rea": [],
    "method": "assessed"
   },
@@ -1868,7 +1895,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1889,7 +1916,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1910,7 +1937,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1931,7 +1958,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1952,7 +1979,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1973,7 +2000,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -1994,7 +2021,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2015,7 +2042,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2036,7 +2063,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2057,7 +2084,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2077,8 +2104,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri ontology wire format; BifrOSt has no ontology",
    "rea": [],
    "method": "assessed"
   },
@@ -2099,7 +2126,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2120,7 +2147,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2140,8 +2167,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Pay payment intents; BifrOSt has no payment service",
    "rea": [],
    "method": "assessed"
   },
@@ -2161,8 +2188,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple phone call-audio telephony; BifrOSt has no telephony stack",
    "rea": [],
    "method": "assessed"
   },
@@ -2182,8 +2209,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple phone calling intents; BifrOSt has no telephony stack",
    "rea": [],
    "method": "assessed"
   },
@@ -2204,7 +2231,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2225,7 +2252,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2245,8 +2272,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple Siri power instrumentation; no BifrOSt equivalent",
    "rea": [],
    "method": "assessed"
   },
@@ -2266,8 +2293,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple private cloud learning analytics; no BifrOSt equivalent",
    "rea": [],
    "method": "assessed"
   },
@@ -2287,8 +2314,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple private cloud learning inference; no BifrOSt equivalent",
    "rea": [],
    "method": "assessed"
   },
@@ -2308,8 +2335,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple private cloud learning logging; no BifrOSt equivalent",
    "rea": [],
    "method": "assessed"
   },
@@ -2330,7 +2357,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2351,7 +2378,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2372,7 +2399,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2393,7 +2420,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2414,7 +2441,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2435,7 +2462,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2456,7 +2483,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2477,7 +2504,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2497,8 +2524,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple device Siri setup flow; BifrOSt has its own installer and assistant settings",
    "rea": [],
    "method": "assessed"
   },
@@ -2519,7 +2546,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2540,7 +2567,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2561,7 +2588,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2582,7 +2609,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2603,7 +2630,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2624,7 +2651,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2645,7 +2672,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2666,7 +2693,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2687,7 +2714,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2708,7 +2735,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2729,7 +2756,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2750,7 +2777,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2770,8 +2797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "status": "n/a",
+   "note": "Apple speech-model training pipeline; BifrOSt ships no voice models",
    "rea": [],
    "method": "assessed"
   },
@@ -2792,7 +2819,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2813,7 +2840,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2834,7 +2861,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2855,7 +2882,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2876,7 +2903,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2897,7 +2924,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2918,7 +2945,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2939,7 +2966,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2960,7 +2987,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -2981,7 +3008,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -3002,7 +3029,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -3023,7 +3050,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   },
@@ -3044,7 +3071,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/siri-kit.json",
    "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
    "rea": [],
    "method": "assessed"
   }
