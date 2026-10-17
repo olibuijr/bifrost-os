@@ -299,9 +299,9 @@
    "description": "",
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
-   "bifrost": "springboard/render/src/temporal_upscale.rs",
+   "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/temporal_upscale.rs (shutter_blend)",
    "status": "partial",
-   "note": "A temporal accumulation model exists on CPU rasters. There is no virtual shutter kernel.",
+   "note": "A temporal accumulation model exists on CPU rasters. Built: shutter_blend averages the sub-frames inside a shutter of N degrees (temporal_upscale::tests). Gap: no virtual shutter kernel runs on the GPU, and the shader's own filter is not reproduced.",
    "rea": [],
    "method": "assessed"
   },

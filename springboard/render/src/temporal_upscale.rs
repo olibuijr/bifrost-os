@@ -260,6 +260,36 @@ impl TemporalScaler {
     }
 }
 
+/// Virtual shutter: averages the newest sub-frames that fall inside a shutter of `angle_deg` degrees. `frames` are the
+/// sub-frames of one output interval, oldest first, spread evenly over 360 degrees, so a 180 degree shutter over four
+/// frames averages the last two. At least one frame is always used. Returns `None` for no frames, a shutter outside
+/// (0, 360], or frames of unequal length.
+pub fn shutter_blend(frames: &[&[[f32; 3]]], angle_deg: f32) -> Option<Vec<[f32; 3]>> {
+    if frames.is_empty() || !(angle_deg > 0.0 && angle_deg <= 360.0) {
+        return None;
+    }
+    let n = frames[0].len();
+    if frames.iter().any(|f| f.len() != n) {
+        return None;
+    }
+    let k = ((frames.len() as f32 * angle_deg / 360.0).round() as usize).clamp(1, frames.len());
+    let used = &frames[frames.len() - k..];
+    let mut out = vec![[0.0f32; 3]; n];
+    for frame in used {
+        for (o, c) in out.iter_mut().zip(frame.iter()) {
+            for ch in 0..3 {
+                o[ch] += c[ch];
+            }
+        }
+    }
+    for o in out.iter_mut() {
+        for ch in 0..3 {
+            o[ch] /= k as f32;
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,5 +387,31 @@ mod tests {
         let depth = vec![0.3; 4];
         let motion = vec![[0.0, 0.0]; 4];
         assert_eq!(s.resolve(&short, &depth, &motion).err(), Some(UpscaleError::LengthMismatch));
+    }
+
+    #[test]
+    fn shutter_blend_averages_the_frames_inside_the_shutter() {
+        let a = [[0.0f32; 3]];
+        let b = [[0.0f32; 3]];
+        let c = [[1.0f32; 3]];
+        let d = [[3.0f32; 3]];
+        let frames: [&[[f32; 3]]; 4] = [&a, &b, &c, &d];
+        // A full shutter averages all four frames: (0 + 0 + 1 + 3) / 4.
+        assert!(near(shutter_blend(&frames, 360.0).unwrap()[0][0], 1.0));
+        // A 180 degree shutter keeps the newest two: (1 + 3) / 2.
+        assert!(near(shutter_blend(&frames, 180.0).unwrap()[0][0], 2.0));
+        // A tiny shutter still uses one frame: the newest.
+        assert!(near(shutter_blend(&frames, 1.0).unwrap()[0][0], 3.0));
+    }
+
+    #[test]
+    fn shutter_blend_refuses_bad_input() {
+        let one = [[0.5f32; 3]];
+        let two = [[0.5f32; 3], [0.5f32; 3]];
+        assert!(shutter_blend(&[], 180.0).is_none());
+        assert!(shutter_blend(&[&one[..]], 0.0).is_none());
+        assert!(shutter_blend(&[&one[..]], 400.0).is_none());
+        assert!(shutter_blend(&[&one[..], &two[..]], 180.0).is_none());
+        assert_eq!(shutter_blend(&[&one[..]], 90.0).unwrap(), vec![[0.5; 3]]);
     }
 }
