@@ -1008,6 +1008,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
         let ax_meta=app.ax_meta(c);
         if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
+        // the notifications posted since the last frame (`ax::post`) reach the shell, which turns them into AT-SPI signals
+        let notes=bifrost_ui::ax::take_notifications();
+        for chunk in notes.chunks(crate::proto::axtext::MAX_NOTES) {let _=chan.send(&ToShell::AxNotify(chunk.to_vec()).encode(),&[]);}
         let commands=app.commands(c);
         let menus=app.menus_for(c,c.key_window());
         if menus!=menus_seen {let _=chan.send(&ToShell::AppMenus(menus.clone()).encode(),&[]);menus_seen=menus;}

@@ -165,11 +165,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/atspi/ (AT-SPI2 bridge), springboard/ui/src/ax.rs, springboard/sdk/src/lib.rs (controls_tree, ax_set), springboard/proto/src/lib.rs (Configure, reduce_motion, text_scale), springboard/src/shell/accessibility/mod.rs, springboard/src/shell/magnifier.rs, springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/spoken.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/audio_graph.rs, springboard/src/shell/earcon.rs (PopupCues), springboard/proto/src/axtext.rs (AxNotify), springboard/sdk/src/widgets.rs (toolbar and sheet groups), springboard/sdk/src/runtime.rs (notification forwarding)",
    "status": "partial",
    "note": "from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::audio_graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "axtext::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "grouped_kit_controls_publish"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Screen reader bridge, reader cursor, rotors, earcons, Speak Selection, Braille line, toolbar and sheet groups, and AT-SPI notification signals; host tests only, live Orca and Midget not verified; named custom actions not exported."
   },
   {
    "id": "path:/System/Library/Frameworks/AccessoryAccess.framework",
@@ -2783,7 +2832,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no aggregate statistics collection.",
    "rea": [],
    "method": "assessed"
   },
@@ -2804,7 +2853,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility asset loader.",
    "rea": [],
    "method": "assessed"
   },
@@ -2825,7 +2874,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared core utilities are modelled separately.",
    "rea": [],
    "method": "assessed"
   },
@@ -2846,7 +2895,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: guest pass sharing is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -2867,7 +2916,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no image explorer for image descriptions.",
    "rea": [],
    "method": "assessed"
   },
@@ -2888,7 +2937,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no media description utilities.",
    "rea": [],
    "method": "assessed"
   },
@@ -2909,7 +2958,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: motion cues are not built; the shell honours Reduce Motion only.",
    "rea": [],
    "method": "assessed"
   },
@@ -2930,7 +2979,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: the element tree is the SDK tree, not this framework's runtime.",
    "rea": [],
    "method": "assessed"
   },
@@ -3023,7 +3072,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: the audit model (springboard/ui/src/ax_audit.rs) is not wired into any app or shell surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -3044,7 +3093,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility bundles.",
    "rea": [],
    "method": "assessed"
   },
@@ -3065,7 +3114,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility performance counters.",
    "rea": [],
    "method": "assessed"
   },
@@ -3084,11 +3133,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs, springboard/proto/src/axtext.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "axtext::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "AT-SPI2 bridge: role, state and text mapping, announcements, and element notifications sent as AT-SPI signals; host tests only, not checked with a live screen reader."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityReaderData.framework",
@@ -3105,11 +3168,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/walk.rs, springboard/src/shell/accessibility/reader.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Reader element data: the spoken kind, name and value of each element, and the rotor roles; host tests only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityReaderServices.framework",
@@ -3126,11 +3198,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/accessibility/earcons.rs, springboard/src/shell/accessibility/walk.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Screen reader cursor, spoken element text through espeak-ng, reader earcons and rotor walk; host tests only, not checked on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityReadingUI.framework",
@@ -3147,11 +3228,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/spoken.rs, springboard/src/shell/accessibility/banner.rs, springboard/src/shell/accessibility/braille_out.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::spoken"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Spoken content: Speak Selection on the focused field's selection and the announcement banner; Braille line for the reader's speech. Host tests only; Speak Items Under the Pointer is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySettingsUI.framework",
@@ -3168,11 +3263,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Settings > Accessibility: the pages, speech, zoom, hold and reader settings (accessibility::tests); host tests only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySharedSupport.framework",
@@ -3191,7 +3295,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared support module beyond the Accessibility settings.",
    "rea": [],
    "method": "assessed"
   },
@@ -3212,7 +3316,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared accessibility UI support.",
    "rea": [],
    "method": "assessed"
   },
@@ -3233,7 +3337,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no separate support service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3254,7 +3358,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: the Switch Control and Voice Control interfaces are not built (their models are pure).",
    "rea": [],
    "method": "assessed"
   },
@@ -3275,7 +3379,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no accessibility UI service process.",
    "rea": [],
    "method": "assessed"
   },
@@ -3296,7 +3400,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared accessibility UI.",
    "rea": [],
    "method": "assessed"
   },
@@ -3317,7 +3421,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accessibility.json",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no utilities module.",
    "rea": [],
    "method": "assessed"
   },

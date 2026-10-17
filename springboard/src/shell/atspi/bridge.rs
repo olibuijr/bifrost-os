@@ -609,6 +609,36 @@ impl Bridge {
         let _ = self.conn.emit_signal(None::<&str>, app_path(slot).as_str(), "org.a11y.atspi.Event.Object", "Announcement", &body);
     }
 
+    /// An element notification an app posted (`ToShell::AxNotify`): emits the signal `note_signal` names on the element's
+    /// object (or on the app's object for layout and removal), so Orca hears what `ax::post` said.
+    pub fn notify(&self, slot: u8, id: u64, n: bifrost_ui::ax::AxNotification) {
+        let obj = "org.a11y.atspi.Event.Object";
+        let node = node_path(slot, id);
+        let app = app_path(slot);
+        let none = (String::new(), 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+        match note_signal(n) {
+            NoteSignal::Focused => {
+                let body = ("focused", 1i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                let _ = self.conn.emit_signal(None::<&str>, node.as_str(), obj, "StateChanged", &body);
+            }
+            NoteSignal::Value => {
+                let body = ("accessible-value", 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                let _ = self.conn.emit_signal(None::<&str>, node.as_str(), obj, "PropertyChange", &body);
+            }
+            NoteSignal::Selection => {
+                let _ = self.conn.emit_signal(None::<&str>, node.as_str(), obj, "SelectionChanged", &none);
+            }
+            NoteSignal::Layout => {
+                let body = ("add", 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                let _ = self.conn.emit_signal(None::<&str>, app.as_str(), obj, "ChildrenChanged", &body);
+            }
+            NoteSignal::Removed => {
+                let body = ("remove", 0i32, 0i32, Value::from(0i32), HashMap::<String, Value>::new());
+                let _ = self.conn.emit_signal(None::<&str>, app.as_str(), obj, "ChildrenChanged", &body);
+            }
+        }
+    }
+
     /// Requests screen readers made since the last call (press, value write, focus).
     pub fn drain(&self) -> Vec<Request> {
         self.rx.try_iter().collect()

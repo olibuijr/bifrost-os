@@ -457,6 +457,8 @@ pub fn toolbar_layout(ui: &Ui, bounds: Rect, bar: &Toolbar) -> ToolbarLayout {
 /// their own capsule. `Custom` slots are only laid out; the app draws them at the returned rectangles. Buttons that
 /// do not fit move behind a `»` button. The band behind the bar is `toolbar_band`. `pressed` is the id being pressed.
 pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed: Option<u32>) -> ToolbarLayout {
+    // the buttons are the bar's children in the accessibility tree (`ax::begin_group`)
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Toolbar", bounds);
     let placed = toolbar_layout(ui, bounds, bar);
     for (_, r) in &placed.groups {
         capsule(s, ui, *r);
@@ -501,6 +503,7 @@ pub fn toolbar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pressed
         let img = ui.text("\u{bb}", MAC_BODY_PT, Weight::Regular, LABEL.now());
         blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     }
+    bifrost_ui::ax::end_group();
     placed
 }
 
@@ -1091,7 +1094,8 @@ fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::She
 pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
     use bifrost_ui::sheet::SHEET_PAD_PT;
     let l = sheet.layout(parent, titlebar_h, progress);
-    bifrost_ui::ax::record(bifrost_ui::Role::Window, &sheet.title, "sheet", l.panel, true);
+    // the sheet is a window whose buttons are its children in the accessibility tree (closed on every return below)
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::Window, &sheet.title, l.panel);
     let dim = (0.28 * progress.clamp(0.0, 1.0) * 255.0) as u8;
     s.fill_rrect(RectF::new(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h)), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
     // the top edge is square against the title bar: extend the rounded panel upward and keep it inside the parent
@@ -1099,6 +1103,7 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     let top = (l.panel.y - r).max(parent.y);
     let body = Rect { x: l.panel.x, y: top, w: l.panel.w, h: l.panel.bottom() - top };
     if body.h <= r {
+        bifrost_ui::ax::end_group();
         return l.panel;
     }
     material(s, ui, body, r, Material::Popover);
@@ -1122,6 +1127,7 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
         sheet_button(s, ui, *rect, b, pressed == Some(*id));
     }
     let btn_top = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT);
+    bifrost_ui::ax::end_group();
     Rect { x: l.panel.x + SHEET_PAD_PT, y, w: l.panel.w - SHEET_PAD_PT * 2.0, h: (btn_top - 12.0 - y).max(0.0) }
 }
 

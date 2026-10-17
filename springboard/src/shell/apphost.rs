@@ -470,6 +470,8 @@ pub struct AppHost {
     pub announcements: Vec<(String, bifrost_proto::AnnouncePriority)>,
     /// The same announcements, waiting for the on-screen banner (`accessibility::banner`); the shell takes them each tick.
     pub announce_banner: Vec<(String, bifrost_proto::AnnouncePriority)>,
+    /// Element notifications the app posted (`ToShell::AxNotify`), waiting for the bridge to emit their AT-SPI signals; at most 64.
+    pub ax_notes: Vec<(u64, bifrost_ui::ax::AxNotification)>,
     /// The app's custom rotors (`ToShell::AxRotors`), cleaned with `bifrost_ui::ax_rotor::clean`; empty when it declares none.
     pub custom_rotors: Vec<bifrost_ui::ax::AxCustomRotor>,
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
@@ -599,6 +601,7 @@ impl AppHost {
             ax_meta: Vec::new(),
             announcements: Vec::new(),
             announce_banner: Vec::new(),
+            ax_notes: Vec::new(),
             custom_rotors: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
@@ -979,6 +982,14 @@ impl AppHost {
             ToShell::ControlsTree(tree) => self.controls_tree=tree,
             ToShell::AxText(list) => self.ax_text=list,
             ToShell::AxMeta(list) => self.ax_meta=list,
+            ToShell::AxNotify(list) => {
+                for note in list {
+                    if self.ax_notes.len() >= 64 {
+                        self.ax_notes.remove(0);
+                    }
+                    self.ax_notes.push(note);
+                }
+            }
             ToShell::Announce { text, priority } => {
                 if self.announcements.len() >= 8 {
                     self.announcements.remove(0);

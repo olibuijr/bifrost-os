@@ -826,6 +826,9 @@ pub enum ToShell {
     Announce { text: String, priority: AnnouncePriority },
     /// Custom rotors the screen reader steps through beside the standard ones (`bifrost_ui::ax_rotor`). Tag 0x213.
     AxRotors(Vec<AxCustomRotor>),
+    /// The accessibility notifications an app posted for its elements (`bifrost_ui::ax::post`), in posting order; the
+    /// shell turns each into an AT-SPI signal on the element's object. Tag 0x214.
+    AxNotify(Vec<(u64, bifrost_ui::ax::AxNotification)>),
     /// Guided Access: `on` asks for a single-app session with these restrictions, `!on` ends it. Tag 0x170.
     GuidedAccessRequest { on: bool, restrictions: Vec<GuidedRestriction> },
     /// `UNUserNotificationCenter.add`: answered with `NotificationStatus`.
@@ -1809,7 +1812,7 @@ impl ToShell {
             m @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => quicksearch::encode_shell(m, &mut b),
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => workspace::encode_shell(m, &mut b),
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
-            m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. }) => axtext::encode_shell(m, &mut b),
+            m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),

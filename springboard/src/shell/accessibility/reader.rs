@@ -280,7 +280,9 @@ impl Shell {
         let els = self.reader_walk();
         let rotor = self.reader.rotor();
         if let Some(e) = self.reader.step_in(&els, rotor, forward) {
-            self.announce.post(&walk::speech(e), AnnouncePriority::High);
+            let said = walk::speech(e);
+            self.braille.show(&said);
+            self.announce.post(&said, AnnouncePriority::High);
         }
         self.dirty = true;
         Vec::new()
@@ -289,6 +291,7 @@ impl Shell {
     /// Ctrl+Alt+Down (true) or Up (false): picks the next or previous rotor and speaks its name.
     pub(in crate::shell) fn reader_rotor(&mut self, forward: bool, _t: f64) -> Vec<Effect> {
         let rotor = self.reader.cycle_rotor(forward);
+        self.braille.show(walk::rotor_name(rotor));
         self.announce.post(walk::rotor_name(rotor), AnnouncePriority::High);
         self.dirty = true;
         Vec::new()

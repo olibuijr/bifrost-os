@@ -195,6 +195,8 @@ pub enum Shortcut {
     ReaderRotor(bool),
     /// Ctrl+Alt+Space: the screen reader presses the element under its cursor
     ReaderActivate,
+    /// Option+Escape: speaks the selected text of the focused field (`accessibility::spoken`)
+    SpeakSelection,
     /// Option+Cmd+F5: switches the features chosen for the Accessibility Shortcut (`accessibility::shortcut`)
     AccessibilityShortcut,
     /// Ctrl+Cmd+D: Look Up the selection in Dictionary (the Services menu's Look Up in Dictionary)
@@ -223,7 +225,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -449,6 +451,7 @@ impl HwKeys {
             KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
+            KEY_ESC if alt && !ctrl && !meta && self.shift == 0 => Some(Shortcut::SpeakSelection),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
             KEY_5 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Capture),
             KEY_SLASH if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::HelpSearch),
@@ -860,6 +863,10 @@ impl Shell {
             Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
             Shortcut::ReaderActivate if self.screen_reader_on() => self.reader_activate(t),
+            Shortcut::SpeakSelection => {
+                self.speak_selection();
+                vec![]
+            }
             Shortcut::AccessibilityShortcut => {
                 self.accessibility_shortcut();
                 vec![]
@@ -1064,6 +1071,9 @@ mod tests {
         // the screen reader's cursor: Ctrl+Alt+Right forward, Ctrl+Alt+Left back
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_RIGHT), Some(Shortcut::ReaderStep(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_LEFT), Some(Shortcut::ReaderStep(false)));
+        // Spoken Content: Option+Escape speaks the selection (Escape alone is Back)
+        assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_ESC), Some(Shortcut::SpeakSelection));
+        assert_eq!(chord(&mut k, &[], KEY_ESC), Some(Shortcut::Back));
         // the rotor keys and the press key on the same chord family; Ctrl+Space keeps the input source
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_DOWN), Some(Shortcut::ReaderRotor(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
