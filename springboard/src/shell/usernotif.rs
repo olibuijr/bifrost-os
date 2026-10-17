@@ -5,7 +5,8 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use std::path::PathBuf;
 use std::collections::HashMap;
 
 /// Pending requests one app may hold (`UNUserNotificationCenter` allows 64 local notifications).
@@ -47,8 +48,11 @@ pub struct Registry {
     queued: Vec<(String, ToApp)>,
     /// requests that wait for the first-time alert of their app: app, slot, request id, request
     held: Vec<(String, u8, u32, NotifRequest)>,
-    /// `requestAuthorization` calls that wait for the first-time alert of their app: app, slot, request id
-    auth_held: Vec<(String, u8, u32)>,
+    /// `requestAuthorization` calls that wait for the first-time alert of their app: app, slot, request id, options
+    auth_held: Vec<(String, u8, u32, u8)>,
+    /// What each app was granted, as `NOTIF_AUTH_*` bits (provisional included); 0 is a denial. Saved to `granted_path`.
+    granted: HashMap<String, u8>,
+    granted_path: Option<PathBuf>,
 }
 
 impl Registry {
@@ -219,15 +223,49 @@ impl Registry {
         mine.into_iter().map(|(_, slot, request, req)| (slot, request, req)).collect()
     }
 
-    pub fn hold_authorization(&mut self, app: &str, slot: u8, request: u32) {
-        self.auth_held.push((app.to_string(), slot, request));
+    pub fn hold_authorization(&mut self, app: &str, slot: u8, request: u32, options: u8) {
+        self.auth_held.push((app.to_string(), slot, request, options));
     }
 
-    /// The app's authorization requests that waited for its answer, oldest first, as (slot, request id).
-    pub fn take_authorization(&mut self, app: &str) -> Vec<(u8, u32)> {
+    /// The app's authorization requests that waited for its answer, oldest first, as (slot, request id, options).
+    pub fn take_authorization(&mut self, app: &str) -> Vec<(u8, u32, u8)> {
         let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.auth_held).into_iter().partition(|(a, ..)| a == app);
         self.auth_held = rest;
-        mine.into_iter().map(|(_, slot, request)| (slot, request)).collect()
+        mine.into_iter().map(|(_, slot, request, options)| (slot, request, options)).collect()
+    }
+
+    /// What the app was granted (`NOTIF_AUTH_*` bits), or None when it was never decided by `requestAuthorization`.
+    pub fn granted(&self, app: &str) -> Option<u8> {
+        self.granted.get(app).copied()
+    }
+
+    /// Records what the app was granted and saves it.
+    pub fn set_granted(&mut self, app: &str, bits: u8) {
+        self.granted.insert(app.to_string(), bits);
+        self.save_granted();
+    }
+
+    /// Reads the grants saved at `path` and saves there from now on; malformed lines are skipped.
+    pub fn load_granted(&mut self, path: PathBuf) {
+        self.granted = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| {
+                let (app, bits) = line.split_once('\t')?;
+                let bits: u8 = bits.parse().ok()?;
+                (!app.is_empty() && bits & !NOTIF_AUTH_MASK == 0).then(|| (app.to_string(), bits))
+            })
+            .collect();
+        self.granted_path = Some(path);
+    }
+
+    fn save_granted(&self) {
+        let Some(path) = &self.granted_path else { return };
+        let mut lines: Vec<String> = self.granted.iter().map(|(app, bits)| format!("{app}\t{bits}\n")).collect();
+        lines.sort();
+        if let Err(e) = crate::shell::prefs::write_atomic(path, &lines.concat()) {
+            eprintln!("springboard: authorization.ini: {e}");
+        }
     }
 
     /// Holds an answer for an app that is not running; delivered by `take_queued` when it starts.
@@ -255,6 +293,9 @@ impl Registry {
         self.queued.retain(|(a, _)| a != app);
         self.held.retain(|(a, ..)| a != app);
         self.auth_held.retain(|(a, ..)| a != app);
+        if self.granted.remove(app).is_some() {
+            self.save_granted();
+        }
     }
 }
 
@@ -289,11 +330,12 @@ impl super::Shell {
         match msg {
             ToShell::NotifyCategories(list) if permitted => self.usernotif.set_categories(&app, list),
             // the first request of an app that was never asked waits for the first-time alert (`permission.rs`)
-            ToShell::NotifyRequest { request, req } if permitted && !self.notify.store().is_asked(super::AppId::External(slot)) => {
+            ToShell::NotifyRequest { request, req } if permitted && !self.usernotif_decided(slot, &app) => {
                 self.usernotif_hold(slot, &app, &name, request, req);
             }
             ToShell::NotifyRequest { request, req } => {
-                let status = if permitted { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
+                let posting = permitted && self.usernotif.granted(&app).is_none_or(|bits| bits != 0);
+                let status = if posting { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
                 self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
             }
             ToShell::NotifyRemove { delivered, ids } if permitted => {
@@ -306,10 +348,16 @@ impl super::Shell {
                 let ids = self.usernotif.list(&app, delivered);
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
             }
-            ToShell::NotifyAuthorize { request, .. } => self.usernotif_authorize(slot, &app, &name, request, permitted),
+            ToShell::NotifyAuthorize { request, options } => self.usernotif_authorize(slot, &app, &name, request, options, permitted),
             ToShell::NotifySettings { request } => {
                 let muted = self.notify.store().is_muted(super::AppId::External(slot));
-                let settings = settings_for(permitted, muted, self.dnd());
+                let mut settings = settings_for(permitted, muted, self.dnd());
+                if let Some(bits) = self.usernotif.granted(&app) {
+                    settings.authorized = permitted && bits != 0;
+                    settings.alert &= bits & NOTIF_AUTH_ALERT != 0;
+                    settings.sound &= bits & NOTIF_AUTH_SOUND != 0;
+                    settings.badge &= bits & NOTIF_AUTH_BADGE != 0;
+                }
                 self.ext_send(slot as usize, &ToApp::NotificationSettings { request, settings });
             }
             _ => {}
@@ -334,18 +382,29 @@ impl super::Shell {
         self.usernotif_ask_first_time(super::AppId::External(slot), name);
     }
 
-    /// `requestAuthorization`: an app asked before gets the stored answer (granted while its alerts are not muted). An
-    /// app never asked waits for the first-time alert and is answered after the person chose. The option bits are
-    /// validated by the protocol; the single alert switch decides all of them, so they are not stored per option.
-    fn usernotif_authorize(&mut self, slot: u8, app: &str, name: &str, request: u32, permitted: bool) {
+    /// Whether the app's first-time question is settled: asked on the alert, or granted provisionally.
+    fn usernotif_decided(&self, slot: u8, app: &str) -> bool {
+        self.notify.store().is_asked(super::AppId::External(slot)) || self.usernotif.granted(app).is_some()
+    }
+
+    /// `requestAuthorization`. An app already decided gets its stored grant without a prompt. A provisional request is
+    /// granted at once, quietly, with no prompt. Otherwise the app waits for the first-time alert and is answered after
+    /// the person chose, with the options it asked for (critical alerts are never granted).
+    fn usernotif_authorize(&mut self, slot: u8, app: &str, name: &str, request: u32, options: u8, permitted: bool) {
         let id = super::AppId::External(slot);
         if !permitted {
             self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: false });
+        } else if let Some(bits) = self.usernotif.granted(app) {
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: bits != 0 });
         } else if self.notify.store().is_asked(id) {
+            // answered before the per-option grants existed: the single alert switch decides
             let granted = !self.notify.store().is_muted(id);
             self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted });
+        } else if options & NOTIF_AUTH_PROVISIONAL != 0 {
+            self.usernotif.set_granted(app, (options & (NOTIF_AUTH_BADGE | NOTIF_AUTH_SOUND | NOTIF_AUTH_ALERT)) | NOTIF_AUTH_PROVISIONAL);
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: true });
         } else {
-            self.usernotif.hold_authorization(app, slot, request);
+            self.usernotif.hold_authorization(app, slot, request, options);
             self.usernotif_ask_first_time(id, name);
         }
     }
@@ -404,8 +463,18 @@ impl super::Shell {
             let status = if allowed { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
             self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
         }
-        for (slot, request) in self.usernotif.take_authorization(&app) {
-            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: allowed });
+        // the grant is the union of what the waiting requests asked for; a request held for a notification alone
+        // asks for all three alert options
+        let waiting = self.usernotif.take_authorization(&app);
+        let asked = waiting.iter().fold(0, |bits, (_, _, options)| bits | options) & (NOTIF_AUTH_BADGE | NOTIF_AUTH_SOUND | NOTIF_AUTH_ALERT);
+        let bits = match (allowed, waiting.is_empty()) {
+            (false, _) => 0,
+            (true, true) => NOTIF_AUTH_BADGE | NOTIF_AUTH_SOUND | NOTIF_AUTH_ALERT,
+            (true, false) => asked,
+        };
+        self.usernotif.set_granted(&app, bits);
+        for (slot, request, _) in waiting {
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: bits != 0 });
         }
     }
 
@@ -417,7 +486,7 @@ impl super::Shell {
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
         let id = self.notify_id(n);
-        if let Some(count) = req.badge {
+        if let Some(count) = req.badge.filter(|_| self.usernotif.granted(app).is_none_or(|bits| bits & NOTIF_AUTH_BADGE != 0)) {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
                 h.badge = if count == 0 { String::new() } else { super::apphost::clean_badge(&count.to_string()) };
                 self.dirty = true;
@@ -511,14 +580,37 @@ mod tests {
     #[test]
     fn an_authorization_waits_for_its_own_app_only() {
         let mut r = Registry::default();
-        r.hold_authorization(APP, 2, 7);
-        r.hold_authorization("is.other", 3, 8);
-        assert_eq!(r.take_authorization(APP), vec![(2, 7)]);
+        r.hold_authorization(APP, 2, 7, 4);
+        r.hold_authorization("is.other", 3, 8, 2);
+        assert_eq!(r.take_authorization(APP), vec![(2, 7, 4)]);
         assert!(r.take_authorization(APP).is_empty());
-        assert_eq!(r.take_authorization("is.other"), vec![(3, 8)]);
-        r.hold_authorization(APP, 2, 9);
+        assert_eq!(r.take_authorization("is.other"), vec![(3, 8, 2)]);
+        r.hold_authorization(APP, 2, 9, 0);
         r.forget_app(APP);
         assert!(r.take_authorization(APP).is_empty());
+    }
+
+    #[test]
+    fn grants_are_kept_per_option_and_survive_a_reload() {
+        let dir = std::env::temp_dir().join(format!("usernotif-grants-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("authorization.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut r = Registry::default();
+        r.load_granted(path.clone());
+        assert_eq!(r.granted(APP), None);
+        r.set_granted(APP, NOTIF_AUTH_ALERT | NOTIF_AUTH_PROVISIONAL);
+        r.set_granted("is.other", 0);
+        let mut again = Registry::default();
+        again.load_granted(path.clone());
+        assert_eq!(again.granted(APP), Some(NOTIF_AUTH_ALERT | NOTIF_AUTH_PROVISIONAL));
+        assert_eq!(again.granted("is.other"), Some(0));
+        again.forget_app(APP);
+        assert_eq!(Registry::default().granted(APP), None);
+        let mut third = Registry::default();
+        third.load_granted(path);
+        assert_eq!(third.granted(APP), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

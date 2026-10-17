@@ -111,7 +111,17 @@ impl NotifStatus {
 
 /// `UNAuthorizationOptions` bits a `requestAuthorization` may carry: badge 1, sound 2, alert 4, critical alert 16,
 /// provisional 64. Other bits make the message invalid.
-pub const NOTIF_AUTH_MASK: u8 = 1 | 2 | 4 | 16 | 64;
+pub const NOTIF_AUTH_MASK: u8 = NOTIF_AUTH_BADGE | NOTIF_AUTH_SOUND | NOTIF_AUTH_ALERT | NOTIF_AUTH_CRITICAL | NOTIF_AUTH_PROVISIONAL;
+/// `UNAuthorizationOptions.badge`
+pub const NOTIF_AUTH_BADGE: u8 = 1;
+/// `UNAuthorizationOptions.sound`
+pub const NOTIF_AUTH_SOUND: u8 = 2;
+/// `UNAuthorizationOptions.alert`
+pub const NOTIF_AUTH_ALERT: u8 = 4;
+/// `UNAuthorizationOptions.criticalAlert` (needs the critical-alert grant, which the shell does not hand out)
+pub const NOTIF_AUTH_CRITICAL: u8 = 16;
+/// `UNAuthorizationOptions.provisional`: granted at once, delivered quietly, no prompt
+pub const NOTIF_AUTH_PROVISIONAL: u8 = 64;
 
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
