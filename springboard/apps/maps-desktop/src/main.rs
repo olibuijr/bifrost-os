@@ -10,7 +10,7 @@ use bifrost_core::json::Json;
 use bifrost_maps::geocode::{Geocoder, DEFAULT_BASE};
 use bifrost_maps::net::{Live, Net, Offline};
 use bifrost_maps::source::user_agent;
-use bifrost_maps::state::{Act, MENU_COLLECTIONS};
+use bifrost_maps::state::{Act, Shared, SharedData, MENU_COLLECTIONS};
 use bifrost_maps::units::UnitsSetting;
 use bifrost_maps::window::Window;
 use bifrost_maps::rpc;
@@ -39,6 +39,10 @@ struct MapsApp {
     w: Option<Window>,
     /// the windows the person opened, front to back of the app's registry; each one has its own map state
     extra: Vec<ExtraWindow>,
+    /// the data every window shares (library, pins, units, areas), made when the first window is configured
+    shared: Option<SharedData>,
+    /// the window that has the focus: the one a touch last reached. Keys, commands, the toolbar and the menus go to it.
+    focus: WindowId,
     net: Arc<dyn Net>,
     kb: bool,
     path_request: Option<u32>,
@@ -83,7 +87,7 @@ fn go_items(w: &Window) -> Vec<AppMenuItem> {
         AppMenuItem::submenu("Add Place to Collection"),
     ];
     for i in 0..MENU_COLLECTIONS {
-        let title = w.maps.library.collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
+        let title = w.maps.lib().collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
         items.push(sub(item(w, Act::AddToCollection(i), &title, "")));
     }
     items.push(AppMenuItem::separator());
@@ -92,8 +96,27 @@ fn go_items(w: &Window) -> Vec<AppMenuItem> {
 }
 
 impl MapsApp {
+    /// The window with this id, the main window included.
+    fn window(&self, id: WindowId) -> Option<&Window> {
+        if id.is_main() { self.w.as_ref() } else { self.extra.iter().find(|e| e.id == id).map(|e| &e.win) }
+    }
+
+    fn window_mut(&mut self, id: WindowId) -> Option<&mut Window> {
+        if id.is_main() { self.w.as_mut() } else { self.extra.iter_mut().find(|e| e.id == id).map(|e| &mut e.win) }
+    }
+
+    /// The focused window: keys, commands, the toolbar and the menus act on it.
+    fn focused_ref(&self) -> Option<&Window> {
+        self.window(self.focus)
+    }
+
+    fn focused_mut(&mut self) -> Option<&mut Window> {
+        let id = self.focus;
+        self.window_mut(id)
+    }
+
     fn sync_keyboard(&mut self, ctx: &Ctx) {
-        let on = self.w.as_ref().is_some_and(|w| w.keyboard_shown());
+        let on = self.focused_ref().is_some_and(|w| w.keyboard_shown());
         if on != self.kb {
             self.kb = on;
             ctx.wants_keyboard(on);
@@ -106,8 +129,11 @@ impl MapsApp {
         let Ok(id) = ctx.open_window(WindowSpec::new("Maps", pw, ph)) else { return false };
         let pt = ctx.ui.pt(1.0);
         let px = ((pw * pt) as i32, (ph * pt) as i32);
-        let win = Window::new(&ctx.ui, px.0, px.1, ctx.data_dir.clone(), VERSION, self.net.clone());
+        let Some(shared) = self.shared.clone() else { return false };
+        let win = Window::with_shared(&ctx.ui, px.0, px.1, ctx.data_dir.clone(), VERSION, self.net.clone(), shared);
         self.extra.push(ExtraWindow { id, win, px });
+        // a new window is in front, so it has the focus
+        self.focus = id;
         true
     }
 }
@@ -123,7 +149,9 @@ impl App for MapsApp {
         match &mut self.w {
             Some(win) => win.set_size(w, h),
             None => {
-                self.w = Some(Window::new(&ctx.ui, w, h, ctx.data_dir.clone(), VERSION, self.net.clone()));
+                let shared = Shared::open(&ctx.data_dir);
+                self.shared = Some(shared.clone());
+                self.w = Some(Window::with_shared(&ctx.ui, w, h, ctx.data_dir.clone(), VERSION, self.net.clone(), shared));
                 self.path_request = Some(network_path::request_path(ctx));
                 dock_tile::set_menu(ctx, &[MenuItem { id: DOCK_NEW_WINDOW, title: "New Window".into(), enabled: true }]);
             }
@@ -134,8 +162,12 @@ impl App for MapsApp {
         if matches!(ev, Input::ContextAction(id) if id == DOCK_NEW_WINDOW) {
             return self.open_new_window(ctx);
         }
-        let Some(w) = &mut self.w else { return false };
+        // a touch on the main window gives it the focus
+        if matches!(ev, Input::Touch { kind: bifrost_app::TouchKind::Down, .. }) {
+            self.focus = WindowId::MAIN;
+        }
         let now = bifrost_app::proto::sys::now_ms();
+        let Some(w) = self.focused_mut() else { return false };
         let handled = match ev {
             Input::Touch { kind, id, x, y, t } => {
                 w.finger(ctx, &ctx.ui, id, kind, x, y, t);
@@ -171,6 +203,10 @@ impl App for MapsApp {
         if window.is_main() {
             return self.event(ctx, ev);
         }
+        // a touch on a window gives it the focus; keys, commands and the menus then go to it
+        if matches!(ev, Input::Touch { kind: bifrost_app::TouchKind::Down, .. }) {
+            self.focus = window;
+        }
         let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
             Input::Touch { kind, id, x, y, t } => {
@@ -203,15 +239,18 @@ impl App for MapsApp {
         let Some(at) = self.extra.iter().position(|e| e.id == window) else { return false };
         let mut gone = self.extra.remove(at);
         gone.win.leave(ctx);
+        if self.focus == window {
+            self.focus = WindowId::MAIN;
+        }
         true
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
-        self.w.as_ref().map(|w| w.controls(&ctx.ui)).unwrap_or_default()
+        self.focused_ref().map(|w| w.controls(&ctx.ui)).unwrap_or_default()
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let Some(w) = &self.w else { return Vec::new() };
+        let Some(w) = self.focused_ref() else { return Vec::new() };
         let sub = |it: AppMenuItem| AppMenuItem { depth: 1, ..it };
         vec![
             AppMenu {
@@ -257,25 +296,33 @@ impl App for MapsApp {
         if id == NEW_WINDOW_MENU {
             return self.open_new_window(ctx);
         }
-        let (Some(act), Some(w)) = (Act::from_menu_id(id), self.w.as_mut()) else { return false };
+        let (Some(act), Some(w)) = (Act::from_menu_id(id), self.focused_mut()) else { return false };
         let handled = w.act(ctx, act, bifrost_app::proto::sys::now_ms());
         self.sync_keyboard(ctx);
         handled
     }
 
     fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
-        let Some(w) = &mut self.w else { return false };
-        match ev {
-            DocumentEvent::Opened(mut doc) if w.take_gpx_request(doc.request) => {
-                let mut text = String::new();
-                match (&mut doc.file).take(GPX_LIMIT).read_to_string(&mut text) {
-                    Ok(_) => w.gpx_text(&text),
-                    Err(e) => w.gpx_text(&format!("not readable: {e}")),
-                }
-                true
+        let DocumentEvent::Opened(mut doc) = ev else { return false };
+        let request = doc.request;
+        // the window that asked for the file gets it
+        let owner = if self.w.as_mut().is_some_and(|w| w.take_gpx_request(request)) {
+            WindowId::MAIN
+        } else {
+            match self.extra.iter_mut().find_map(|e| if e.win.take_gpx_request(request) { Some(e.id) } else { None }) {
+                Some(id) => id,
+                None => return false,
             }
-            _ => false,
+        };
+        let mut text = String::new();
+        let body = match (&mut doc.file).take(GPX_LIMIT).read_to_string(&mut text) {
+            Ok(_) => text,
+            Err(e) => format!("not readable: {e}"),
+        };
+        if let Some(w) = self.window_mut(owner) {
+            w.gpx_text(&body);
         }
+        true
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
@@ -343,7 +390,7 @@ impl App for MapsApp {
 }
 
 fn main() {
-    bifrost_app::run(MapsApp { w: None, extra: Vec::new(), net: net(), kb: false, path_request: None });
+    bifrost_app::run(MapsApp { w: None, extra: Vec::new(), shared: None, focus: WindowId::MAIN, net: net(), kb: false, path_request: None });
 }
 
 #[cfg(test)]

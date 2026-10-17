@@ -22,7 +22,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/main.rs:1",
    "note": "The app exists: manifest.toml (full-size window, storage, network, documents), main.rs on the SDK App trait, window.rs and the model crate. Not built or run by the author; the lead checks it on the lab machine. Extra windows (File > New Window, Dock) are in the User activity row.",
-   "wire": "Add springboard/apps/maps-desktop/manifest.toml (id is.olibuijr.maps.desktop, window = \"full-size\", permissions storage and network), src/main.rs with the SDK App trait as in weather-desktop/src/main.rs, a src/window.rs holding MapView, Pins, TileCache and a worker thread for tile and search requests, and add the app to the shell's app list."
+   "wire": "Run the app on the lab machine (not yet built or run); no code is missing."
   },
   {
    "feature": "Map drawing from tiles",
@@ -31,7 +31,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:1025",
    "note": "Tiles are loaded by loader.rs (cache first, paced network fetch with the identifying user agent, PNG/JPEG decode) and blitted at the fractional zoom scale in draw_map. Raster only; no vector labels or retina tiles.",
-   "wire": "Add a tile worker in the window crate that fetches missing TileIds with source::delay_before_request pacing and MAX_IN_FLIGHT, stores bytes through cache::TileCache, decodes PNG and blits the tiles from MapView::tiles (view.rs:101)."
+   "wire": "Retina (@2x) tiles when the display scale is above 1; vector labels need a vector source, which is not planned."
   },
   {
    "feature": "Pan and zoom",
@@ -67,7 +67,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/areas.rs:1",
    "note": "View > Download Map: the visible area for the zoom level on screen and two more levels, a tile count and size estimate before it starts (state.rs), a progress bar and Cancel. Finished downloads are kept in a saved-areas list (areas.json) shown in the same card with a Delete button that removes the area's tiles unless another area still needs them. Capped at 300 tiles by the tile usage policy; areas cannot be renamed yet.",
-   "wire": "Add cache::prefetch(bounds, zoom_range) in cache.rs enumerating tiles_in_view for a rectangle, a Download Map selection UI and a size estimate before it starts."
+   "wire": "Rename a saved area in the Download Map card's list (areas cannot be renamed yet)."
   },
   {
    "feature": "Search for places",
@@ -76,7 +76,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/state.rs:339",
    "note": "The sidebar search field: coordinates are parsed first (geocode::parse_coordinates), suggestions go out after a typing pause at most once a second (state.rs:326), Return searches at once, rows show under the field (window.rs:258). Floats over the map when the window is narrow.",
-   "wire": "Add Geocoder::parse_coordinates for lat,lon input, debounce suggestions at one request per second with the same user agent, and render a results list under the search_field kit widget."
+   "wire": "An offline gazetteer for suggestions without the network; none is bundled and no data source is chosen."
   },
   {
    "feature": "Offline place search",
@@ -85,7 +85,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/state.rs:379",
    "note": "Saved places (Home, Work, Favorites, Collections) and Recents (recorded when a place is shown, state.rs:524; persisted in places.json) are searched offline first and shown above the geocoder rows. There is no bundled offline gazetteer.",
-   "wire": "Persist searched and pinned places to the app data dir and pass them to search_offline as the suggestions source."
+   "wire": "A bundled offline gazetteer of places; none is bundled and no data source is chosen."
   },
   {
    "feature": "Pins and markers",
@@ -94,7 +94,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:1094",
    "note": "Pins draw as markers, the pointer context action on the map drops one (window.rs:704, state.rs:448), a tap opens its card with Directions and Remove Pin. Pins persist in settings.json.",
-   "wire": "Draw Pins::visible markers over the tiles, add a Drop Pin context menu action calling Pins::add with MapView::to_geo (view.rs:95) and a callout with Directions and Remove."
+   "wire": "Check the Drop Pin context action and the pin card on Midget; no code remains."
   },
   {
    "feature": "Place card",
@@ -103,7 +103,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:387",
    "note": "The place card shows title, kind, address lines, phone, website and opening hours from the geocoder (addressdetails and extratags), coordinates, and Directions, Favorite, Share, Copy Link, Print, Home, Work and collection buttons. No photos or ratings (no source for them).",
-   "wire": "Extend geocode::Place with the address details Nominatim returns (addressdetails=1, extratags=1) and show a card with address, phone, website and opening hours when present."
+   "wire": "Photos and ratings have no source; phone and hours show only when the geocoder returns them."
   },
   {
    "feature": "Directions by car",
@@ -112,7 +112,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/route.rs:143 (parse_routes); springboard/apps/maps-desktop/src/state.rs:710 (Act::PickRoute)",
    "note": "The directions card: from and to, Swap, Drive/Walk/Cycle, every route of the server reply with its time and distance (alternatives=true), the steps, the route drawn on the map. With no routing server set (routing_url in settings.json) a labelled straight-line estimate shows.",
-   "wire": "Request alternatives=true in Router::route_url (route.rs:78), parse every route in parse_route (route.rs:103) and offer alternates with their times in a directions panel."
+   "wire": "A routing server is not bundled: without routing_url the card shows a straight-line estimate. Set one in settings.json."
   },
   {
    "feature": "Directions on foot and by bike",
@@ -130,7 +130,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/transit.rs:23 (Departure); springboard/apps/maps-desktop/src/transit.rs:103 (plan_url_at)",
    "note": "built on parity/team-d-maps; not yet verified on Midget. Journeys come from an OpenTripPlanner-compatible planner set as transit_url in settings.json (Profile::Transit, transit::Planner); each leg lists the line, the stops in between and the times. No planner is bundled, so without the setting the card says transit is not set up. Leave-at and arrive-by times are in the planner request and tested headless in tests/parity_app-maps.rs; the card has no time picker yet.",
-   "wire": "Bundle or default a public journey planner endpoint for the region; add departure-time choice (leave at, arrive by) to Planner::plan_url and show the legs' stop counts."
+   "wire": "A leave-at and arrive-by choice on the directions card: the Departure values and the planner request exist (transit.rs, Planner::plan_url_at), but the card only asks for the default time."
   },
   {
    "feature": "Turn-by-turn navigation",
@@ -157,7 +157,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/source.rs:12",
    "note": "View > Map, Satellite and Hybrid (Cmd+1, Cmd+2, Cmd+3; the toolbar pair offers Map and Satellite). Hybrid is the imagery with a labels layer (source.rs LABELS_TEMPLATE, drawn over the base tiles by window.rs draw_map from map_labels) in its own cache folder. Each type has its own tile source, cache folder and credit line. Transit is not offered: there is no transit tile source.",
-   "wire": "Add TileSource presets in source.rs for a standard and an imagery layer, keep a MapType setting in the window state and switch the template and cache key (source.rs:65)."
+   "wire": "A transit tile source: none exists, so Transit is not offered."
   },
   {
    "feature": "3D and street-level views",
@@ -184,7 +184,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/store.rs:59",
    "note": "Favorites, Home and Work are saved in places.json (store.rs) and listed in the sidebar (window.rs:258); Favorite, Set Home, Set Work and Go to Home are in the Go menu and on the card. Home and Work do not yet read the Contacts address.",
-   "wire": "Persist Pins to the app data dir as JSON (view.rs:113), add Home and Work slots tied to the Contacts address and list them in a source_list sidebar."
+   "wire": "Home and Work from the Contacts address; the sidebar already lists them and the saved places are persisted."
   },
   {
    "feature": "Guides and Collections",
@@ -211,7 +211,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/printmap.rs:13 (draw_tiles); springboard/apps/maps-desktop/src/printmap.rs:55 (draw_line, draw_dot); springboard/apps/maps-desktop/src/window.rs:731 (map_picture)",
    "note": "File > Print (Cmd+P) prints the map as the loaded tiles show it on the first page, with the followed route line and the pins drawn over it (printmap.rs draw_line, draw_dot; window.rs map_picture), then the place or the directions text with its steps on the pages after it, through the print service. The overlay pixels are tested headless in tests/parity_app-maps.rs; the printed page is not yet checked on the lab machine.",
-   "wire": "Draw the route line and the pins into the picture with the same projection as draw_map, so a printed route shows its line."
+   "wire": "Check the printed page on the lab machine; the route line and the pins are already drawn into the picture."
   },
   {
    "feature": "Measure distance and scale bar",
@@ -220,7 +220,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:1116",
    "note": "The scale bar is drawn from the centre latitude in the chosen units; View > Measure Distance collects clicks and the card shows the total and last leg (measure.rs, state.rs:845).",
-   "wire": "Draw a scale bar from tiles::world_px at the centre latitude and add a measure mode that sums haversine_m over clicked points."
+   "wire": "Check the scale bar and Measure Distance on Midget; both are drawn in code."
   },
   {
    "feature": "Units setting",
@@ -229,7 +229,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/units.rs:7",
    "note": "View > Distance Units: Automatic, Kilometres, Miles, saved in settings.json; Automatic follows the language region (LC_MEASUREMENT, LANG) because the shell has no measurement-system setting to read.",
-   "wire": "Add a distance formatter (km or mi) in route.rs and read the system measurement unit; reuse weather insights::scale_text logic."
+   "wire": "Read a shell measurement-system setting when the shell has one; the formatter exists (units.rs) and the setting follows the language region."
   },
   {
    "feature": "URL schemes",
@@ -247,7 +247,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/gpx.rs:93",
    "note": "manifest.toml handles GPX; File > Open GPX File reads waypoints as pins and tracks as lines and fits the view (state.rs:817). The reference types are private formats, so only GPX is read.",
-   "wire": "Declare .gpx as a document type and import it as Pins and a track, since the reference types are private formats."
+   "wire": "Reference route and trace types are private formats; only GPX is read."
   },
   {
    "feature": "User activity handoff and Dock New Window",
@@ -255,8 +255,8 @@
    "apple": "Dock menu New Window, user activity for handoff",
    "status": "partial",
    "bifrost": "",
-   "note": "Dock New Window and File > New Window (Cmd+N) open a second window through the SDK multi-window API; each window has its own map state and takes its own touches (main.rs). Keys, the menu bar and the toolbar still act on the main window, and the windows share places.json and settings.json (last save wins). Handoff is not done: no user activity is published or accepted yet. Not yet run on the lab machine.",
-   "wire": "Publish a user activity for the place or route on the card and accept an incoming one once the shell user-activity service is wired; route keys and the menu bar to the focused window."
+   "note": "Dock New Window and File > New Window (Cmd+N) open a second window through the SDK multi-window API. Each window has its own camera, card and sheets; the saved places, pins, units setting and offline areas are one shared store, so windows do not overwrite each other. Keys, the menu bar, the toolbar and the menus act on the focused window (a touch on a window focuses it). Handoff is not done: no user activity is published or accepted yet. Not yet run on the lab machine.",
+   "wire": "Publish a user activity for the place or route on the card and accept an incoming one once the shell user-activity service is wired."
   },
   {
    "feature": "Automation and widgets",
@@ -265,7 +265,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/rpc.rs:47",
    "note": "Control methods maps.search {query} and maps.route {from, to, profile} call the same Geocoder and Router as the window (main.rs:208). No widgets.",
-   "wire": "Expose search(query), route(from, to, profile) as app control methods (bifrost-app-control) calling Geocoder and Router."
+   "wire": "Widgets: the shell has no widget host yet. maps.search and maps.route are already exposed."
   },
   {
    "feature": "Map data credit",
@@ -274,7 +274,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:1507 (draws the credit); springboard/apps/maps-desktop/src/source.rs:63 (attribution)",
    "note": "The credit for the active tile source (OpenStreetMap contributors, or the imagery credit) is drawn in the bottom-right corner of the map (source.rs:47).",
-   "wire": "Draw the data credit line the tile source requires (OpenStreetMap contributors) in the map corner."
+   "wire": "Check the credit on Midget; it is already drawn in the map corner."
   }
  ]
 }

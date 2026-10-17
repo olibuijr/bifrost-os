@@ -7,7 +7,7 @@ use crate::loader::TileLoader;
 use crate::net::Net;
 use crate::route::{self, Route};
 use crate::source::{MapType, LABELS_MAX_AGE, TRAFFIC_MAX_AGE};
-use crate::state::{Act, Effect, Here, Maps, Panel};
+use crate::state::{Act, Effect, Here, Maps, Panel, Shared, SharedData};
 use crate::tiles::{TileId, TILE_SIZE};
 use crate::units::{metres_per_pt, scale_bar};
 use bifrost_app::controls::location_auth::RequestOutcome;
@@ -244,9 +244,16 @@ fn bar_table() -> Vec<(u32, &'static str, &'static str, Act, u32)> {
 }
 
 impl Window {
+    /// A window over its own shared data, opened from the data folder (one window, or a test).
     pub fn new(ui: &Ui, w: i32, h: i32, root: PathBuf, version: &str, net: Arc<dyn Net>) -> Window {
+        let shared = Shared::open(&root);
+        Window::with_shared(ui, w, h, root, version, net, shared)
+    }
+
+    /// A window over the app's shared data. Every window of the app is given the same `shared`.
+    pub fn with_shared(ui: &Ui, w: i32, h: i32, root: PathBuf, version: &str, net: Arc<dyn Net>, shared: SharedData) -> Window {
         let pt = ui.pt(1.0).max(0.01);
-        let maps = Maps::new(&root, version, (w as f32 / pt) as f64, (h as f32 / pt) as f64);
+        let maps = Maps::with_shared(&root, version, (w as f32 / pt) as f64, (h as f32 / pt) as f64, shared);
         let loader = TileLoader::new(&root, maps.map_type.source(version), net.clone());
         let traffic = maps.traffic_source().cloned().map(|source| TileLoader::overlay(&root, source, net.clone(), TRAFFIC_MAX_AGE));
         let map_labels = maps.map_type.labels_source(version).map(|source| TileLoader::overlay(&root, source, net.clone(), LABELS_MAX_AGE));
@@ -363,7 +370,7 @@ impl Window {
             items.push(item);
             ids.push(id);
         };
-        let lib = &self.maps.library;
+        let lib = self.maps.lib();
         if !self.maps.query.is_empty() {
             let sug = self.maps.suggestions();
             let head = if sug.is_empty() {
@@ -417,14 +424,14 @@ impl Window {
     fn row_activate(&mut self, id: u32) {
         match id {
             HOME_ID => {
-                if self.maps.library.home.is_some() {
+                if self.maps.lib().home.is_some() {
                     self.maps.act(Act::GoHome, 0);
                 } else {
                     self.maps.note = Some("Choose a place, then Set Home in the Go menu".to_string());
                 }
             }
             WORK_ID => {
-                if self.maps.library.work.is_some() {
+                if self.maps.lib().work.is_some() {
                     self.maps.act(Act::GoWork, 0);
                 } else {
                     self.maps.note = Some("Choose a place, then Set Work in the Go menu".to_string());
@@ -437,13 +444,15 @@ impl Window {
                 }
             }
             i if i >= REC_ID => {
-                if let Some(p) = self.maps.library.recents.get((i - REC_ID) as usize).cloned() {
+                let recent = self.maps.lib().recents.get((i - REC_ID) as usize).cloned();
+                if let Some(p) = recent {
                     self.maps.show_place(p.to_place());
                 }
             }
             i if i >= COLL_ID => self.maps.show_collection((i - COLL_ID) as usize),
             i if i >= FAV_ID => {
-                if let Some(p) = self.maps.library.favorites.get((i - FAV_ID) as usize).cloned() {
+                let favorite = self.maps.lib().favorites.get((i - FAV_ID) as usize).cloned();
+                if let Some(p) = favorite {
                     self.maps.show_place(p.to_place());
                 }
             }
@@ -517,7 +526,7 @@ impl Window {
                 v.push(Item::Buttons(vec![(pin.0.into(), pin.1, false), ("Copy Link".into(), Act::CopyLink, false), ("Print".into(), Act::Print, false)]));
                 v.push(Item::Buttons(vec![("Set Home".into(), Act::SetHome, false), ("Set Work".into(), Act::SetWork, false), ("New Collection".into(), Act::NewCollection, false)]));
                 let colls: Vec<(String, Act, bool)> = m
-                    .library
+                    .lib()
                     .collections
                     .iter()
                     .enumerate()
@@ -597,10 +606,10 @@ impl Window {
                     v.push(Item::Gap(4.0));
                     v.push(Item::Buttons(vec![("Download".into(), Act::StartDownload, false), ("Done".into(), Act::ClosePanel, false)]));
                 }
-                if !m.areas.list.is_empty() {
+                if !m.areas().list.is_empty() {
                     v.push(Item::Rule);
                     v.push(Item::Sub("Saved for offline use".into()));
-                    for (i, a) in m.areas.list.iter().enumerate() {
+                    for (i, a) in m.areas().list.iter().enumerate() {
                         v.push(Item::Line(a.line()));
                         v.push(Item::Buttons(vec![("Delete".into(), Act::DeleteArea(i), false)]));
                     }
@@ -746,7 +755,7 @@ impl Window {
                 crate::printmap::draw_line(&mut picture, &line, 5.0, [0x1e, 0x6b, 0x8a]);
             }
         }
-        for (_, x, y) in self.maps.pins.visible(&view) {
+        for (_, x, y) in self.maps.pins().visible(&view) {
             crate::printmap::draw_dot(&mut picture, x, y, 4.0, [0xd0, 0x30, 0x30]);
         }
         Some(picture)
@@ -758,7 +767,7 @@ impl Window {
     }
 
     fn pin_at(&self, mx: f32, my: f32) -> Option<usize> {
-        self.maps.pins.visible(&self.maps.view).into_iter().rev().find(|&(_, x, y)| (x as f32 - mx).abs() < 14.0 && (y as f32 - 9.0 - my).abs() < 16.0).map(|(i, _, _)| i)
+        self.maps.pins().visible(&self.maps.view).into_iter().rev().find(|&(_, x, y)| (x as f32 - mx).abs() < 14.0 && (y as f32 - 9.0 - my).abs() < 16.0).map(|(i, _, _)| i)
     }
 
     /// A pointer or touch event with no finger id (a mouse, or one finger).
@@ -1458,7 +1467,7 @@ impl Window {
             }
         }
         if let Some(i) = self.maps.shown_collection {
-            if let Some(coll) = self.maps.library.collections.get(i) {
+            if let Some(coll) = self.maps.lib().collections.get(i) {
                 for pl in &coll.places {
                     let (x, y) = to_px(pl.lat, pl.lon);
                     Self::dot(&mut c, x, y, ui.pt(SPACE_S), WHITE);
@@ -1466,7 +1475,7 @@ impl Window {
                 }
             }
         }
-        for (i, pin) in self.maps.pins.items().iter().enumerate() {
+        for (i, pin) in self.maps.pins().items().iter().enumerate() {
             let (x, y) = to_px(pin.lat, pin.lon);
             if x < -20.0 || y < oy - 20.0 || x > c.w as f32 + 20.0 || y > c.h as f32 + 40.0 {
                 continue;
@@ -1641,7 +1650,7 @@ impl Window {
             self.maps.panel,
             self.maps.map_type.key(),
             self.maps.view.zoom(),
-            self.maps.pins.items().len(),
+            self.maps.pins().items().len(),
             self.focused
         )
     }
@@ -1762,7 +1771,7 @@ mod tests {
     fn tapping_a_pin_opens_its_card_with_directions() {
         let (mut w, ui, ctx) = window("pin", 1200, 780);
         let (lat, lon) = w.maps.view.centre();
-        w.maps.pins.add("Camp", lat, lon).unwrap();
+        w.maps.pins_mut().add("Camp", lat, lon).unwrap();
         let (lx, ly) = w.maps.view.to_screen(lat, lon);
         let m = w.map_rect();
         click(&mut w, &ctx, &ui, m.x + lx as f32, m.y + ly as f32 - 9.0);
@@ -1806,7 +1815,7 @@ mod tests {
     #[test]
     fn the_sidebar_lists_home_work_and_saved_places() {
         let (mut w, ui, ctx) = window("sidebar", 1200, 780);
-        w.maps.library.toggle_favorite(crate::store::Saved::new("Perlan, Reykjavik", 64.1295, -21.9186));
+        w.maps.lib_mut().toggle_favorite(crate::store::Saved::new("Perlan, Reykjavik", 64.1295, -21.9186));
         let names: Vec<String> = w.buttons(&ui).into_iter().filter(|b| b.role == Role::Row).map(|b| b.label).collect();
         assert_eq!(names, vec!["Home", "Work", "Perlan"]);
         let (x, y) = centre_of(&find(&w, &ui, "Perlan"));
@@ -1842,7 +1851,7 @@ mod tests {
         }
         let (x, y) = centre_of(&find(&w, &ui, "Favorite"));
         click(&mut w, &ctx, &ui, x, y);
-        assert!(w.maps.library.is_favorite(64.1295, -21.9186));
+        assert!(w.maps.lib().is_favorite(64.1295, -21.9186));
         find(&w, &ui, "Unfavorite");
         let (x, y) = centre_of(&find(&w, &ui, "Close"));
         click(&mut w, &ctx, &ui, x, y);
