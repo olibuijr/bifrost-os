@@ -135,6 +135,16 @@ impl WatchStream {
         self.running = false;
     }
 
+    /// Callback delivery: polls at `now` and hands each non-empty batch to `on_change`. Returns the number of
+    /// events delivered. Call it from the app's wake handler (the descriptor from `fd`) or `tick`.
+    pub fn deliver<F: FnMut(&[WatchEvent])>(&mut self, now: Instant, mut on_change: F) -> usize {
+        let batch = self.poll(now);
+        if !batch.is_empty() {
+            on_change(&batch);
+        }
+        batch.len()
+    }
+
     /// The descriptor for `App::wake_fd` (None while stopped).
     pub fn fd(&self) -> Option<i32> {
         (self.fd >= 0).then_some(self.fd)
@@ -480,6 +490,28 @@ mod tests {
         let ev = wait(&mut s, |e| e.iter().any(|e| e.path == d));
         assert!(ev.iter().any(|e| e.path == d), "a new subfolder of the root is reported");
         assert_eq!(s.wds.len(), 1, "and not watched");
+    }
+
+    #[test]
+    fn deliver_hands_each_batch_to_the_callback() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = WatchStream::new(
+            &[t.path().to_path_buf()],
+            Duration::from_millis(20),
+            WatchStreamFlags::FILE_EVENTS.union(WatchStreamFlags::NO_DEFER),
+        );
+        assert!(s.start());
+        let f = t.path().join("cb.txt");
+        std::fs::write(&f, b"x").unwrap();
+        let mut seen: Vec<PathBuf> = Vec::new();
+        let end = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < end && !seen.contains(&f) {
+            s.deliver(Instant::now(), |batch| seen.extend(batch.iter().map(|e| e.path.clone())));
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(seen.contains(&f), "the callback receives the change");
+        s.stop();
+        assert_eq!(s.deliver(Instant::now(), |_| panic!("stopped")), 0, "a stopped stream delivers nothing");
     }
 
     #[test]
