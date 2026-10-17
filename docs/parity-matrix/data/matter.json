@@ -53,7 +53,7 @@
   "gaps": [
     "No Matter controller: no fabric, certificates, commissioning or interaction model, in the shell or the SDK.",
     "No Thread support: no border router, no Thread network credentials and no OpenThread stack.",
-    "No mDNS or DNS-SD transport: the name and TXT parsers in springboard/core/src/matter.rs have no multicast responder or querier, and apps cannot browse services. The only LAN beacon is springboard/src/net/share.rs.",
+    "No mDNS or DNS-SD transport: springboard/core/src/dns_browse (via sdk network_browser) is a model fed by the caller; it sends no multicast query and no responder answers, so apps cannot browse services.",
     "No BLE commissioning path, and no camera or scan source for setup codes. The Bluetooth module handles classic pairing only (springboard/src/bare/bluetooth.rs).",
     "No SDK API or app-facing surface for smart-home accessories, and no Home-style app. Whether BifrOSt should add one is a product decision, not a technical gap."
   ]
