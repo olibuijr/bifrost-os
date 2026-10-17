@@ -135,7 +135,8 @@ impl Notes {
         if side == 0.0 {
             items.push(ToolbarItem::icon(B_SIDEBAR, "Show Sidebar", "sidebar.left"));
         }
-        items.push(ToolbarItem::custom(B_LIST_TITLE, "Title", (w - buttons * CAPSULE_PT - 2.0 * TOOLBAR_GAP_PT).max(40.0)));
+        // the title takes what the buttons and their gaps leave: one gap before each item after it, plus the one before it
+        items.push(ToolbarItem::custom(B_LIST_TITLE, "Title", (w - buttons * CAPSULE_PT - (buttons + 1.0) * TOOLBAR_GAP_PT).max(40.0)));
         items.push(ToolbarItem::flexible_space());
         items.push(ToolbarItem::icon(B_LAYOUT, "View as Gallery", "square.grid.2x2"));
         items.push(ToolbarItem::icon(B_LIST_MORE, "View Options", "ellipsis"));

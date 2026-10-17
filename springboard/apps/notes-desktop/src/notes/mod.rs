@@ -5206,7 +5206,15 @@ mod tests {
         n.set_layout(&ui, gallery::Layout::Gallery);
         let (cells, _, total) = n.gallery_grid(&ui);
         assert_eq!(cells.len(), n.shown.len());
-        assert!(cells.len() >= 2 && cells[0].1 == cells[1].1 && cells[1].0 > cells[0].0, "the first cards share a row");
+        // the list column is at most 270 pt, so the card count per row follows from its width: two cards share a row
+        // only when the column is wide enough for them, otherwise the cards stack one per row
+        let cols = n.gallery_cols(&ui).0;
+        assert!(cells.len() >= 2);
+        if cols >= 2 {
+            assert!(cells[0].1 == cells[1].1 && cells[1].0 > cells[0].0, "the first cards share a row");
+        } else {
+            assert!(cells[1].1 > cells[0].1, "one card per row when the list column is narrow");
+        }
         assert!(total > cells[0].1, "the grid reports its height for the scroll range");
         draw(&mut n, &ui, 0.0);
         n.toggle_layout(&ui, 0.0);
