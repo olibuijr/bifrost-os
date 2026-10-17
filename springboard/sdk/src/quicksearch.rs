@@ -416,6 +416,63 @@ impl<'d> IndexExtensionRequests<'d> {
     }
 }
 
+/// An item the app's own query found in the shell's index (`CSSearchableItem` identifiers and title).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FoundItem {
+    pub unique_identifier: String,
+    pub domain_identifier: String,
+    pub title: String,
+    /// the `uttype` identifier of the item's file, when the shell knows it
+    pub content_type: Option<String>,
+}
+
+/// `CSSearchQuery` over the shell's index: runs `query_string` over the items this app indexed. The shell answers with
+/// the app's own items only, ranked, every word must match ("pdf" and "last week" filter; see
+/// `springboard/src/shell/services/search_ranking.rs`).
+///
+/// ```ignore
+/// let id = CSSearchQuery::new("milk").limit(5).start(ctx)?;
+/// // in App::service_reply, for that id:
+/// //   let items = quicksearch::found_items(&reply?);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CSSearchQuery {
+    query_string: String,
+    limit: usize,
+}
+
+/// The most items one query asks the shell for (the shell caps it too).
+pub const SEARCH_QUERY_DEFAULT_LIMIT: usize = 10;
+
+impl CSSearchQuery {
+    pub fn new(query_string: &str) -> Self {
+        CSSearchQuery { query_string: query_string.to_string(), limit: SEARCH_QUERY_DEFAULT_LIMIT }
+    }
+
+    /// The most items to return.
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = limit.max(1);
+        self
+    }
+
+    /// Sends the query to the shell and returns its request id. A blank query string is refused with
+    /// `SearchQueryError::EmptyQueryString`, as the query model does.
+    pub fn start(&self, ctx: &Ctx) -> Result<u32, SearchQueryError> {
+        if self.query_string.trim().is_empty() {
+            return Err(SearchQueryError::EmptyQueryString);
+        }
+        Ok(crate::search_ranking::search(ctx, &self.query_string, self.limit))
+    }
+}
+
+/// The items of a [`CSSearchQuery`] reply, best match first. A reply that is not a list gives none.
+pub fn found_items(reply: &bifrost_core::json::Json) -> Vec<FoundItem> {
+    crate::search_ranking::parse_hits(reply)
+        .into_iter()
+        .map(|h| FoundItem { unique_identifier: h.id, domain_identifier: h.domain, title: h.title, content_type: h.kind })
+        .collect()
+}
+
 /// `CSSearchableIndexDescription` and the protection class of a named index (`bifrost_ui::searchindex`).
 pub use bifrost_ui::searchindex::{IndexDescription, NameError as IndexNameError, ProtectionClass};
 
@@ -732,5 +789,36 @@ mod tests {
         let sent = c.take_sent();
         assert_eq!(sent.len(), 1);
         assert_eq!(batch_ids(&sent[0]), ["a"]);
+    }
+
+    #[test]
+    fn a_search_query_goes_to_the_shell_index_service() {
+        let c = ctx();
+        let id = CSSearchQuery::new("milk").limit(5).start(&c).unwrap();
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { request, service, method, body } = &sent[0] else { panic!("no search call") };
+        assert_eq!(*request, id);
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "search");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("query").and_then(|q| q.as_str()), Some("milk"));
+        assert_eq!(body.get("limit").and_then(|l| l.as_u64()), Some(5));
+    }
+
+    #[test]
+    fn a_blank_search_query_is_refused_and_sends_nothing() {
+        let c = ctx();
+        assert_eq!(CSSearchQuery::new("   ").start(&c), Err(SearchQueryError::EmptyQueryString));
+        assert!(c.take_sent().is_empty());
+    }
+
+    #[test]
+    fn a_search_query_reply_decodes_to_found_items() {
+        let reply = bifrost_core::json::parse(r#"[{"id":"n1","domain":"notes","title":"Milk","kind":null},{"id":"r1","domain":"files","title":"Q1","kind":"com.adobe.pdf"}]"#).unwrap();
+        let items = found_items(&reply);
+        assert_eq!(items[0], FoundItem { unique_identifier: "n1".into(), domain_identifier: "notes".into(), title: "Milk".into(), content_type: None });
+        assert_eq!(items[1].content_type.as_deref(), Some("com.adobe.pdf"));
+        assert!(found_items(&bifrost_core::json::Json::Null).is_empty());
     }
 }
