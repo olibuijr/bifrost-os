@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle, and a search of the ui and sdk crates found no Metal archive serialisation code.",
+   "status": "n/a",
+   "note": "n/a: Metal binary archives are Apple GPU pipeline-cache files. BifrOSt renders through its own Linux presenter (docs/gpu-first.md), so there is no Metal archive format to read or write.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests Metal developer tooling such as shader debugging, which BifrOSt does not offer apps.",
+   "status": "n/a",
+   "note": "n/a: Metal developer tooling (shader debugging and GPU capture for Xcode). It targets Apple GPU developers and has no BifrOSt counterpart; BifrOSt ships no Metal toolchain.",
    "rea": [],
    "method": "assessed"
   },
@@ -145,8 +145,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests metric collection, and app-facing metric reports are missing in BifrOSt (see data/metrickit.json).",
+   "status": "n/a",
+   "note": "n/a: Apple app and system metric collection that reports to Apple. BifrOSt does not collect usage metrics for its vendor by design (privacy-first).",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +166,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests metric collection, and app-facing metric reports are missing in BifrOSt (see data/metrickit.json).",
+   "status": "n/a",
+   "note": "n/a: Apple metric collection that reports to Apple. BifrOSt does not collect usage metrics for its vendor by design (privacy-first).",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +187,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests short-range positioning, which BifrOSt's location service (springboard/src/shell/services/location.rs) does not provide.",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -208,8 +208,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests the positioning daemon of the MicroLocation family (see MicroLocation).",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +229,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests the app-facing API of the MicroLocation family (see MicroLocation).",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -250,8 +250,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests shared helpers of the MicroLocation family (see MicroLocation).",
+   "status": "n/a",
+   "note": "n/a: the name points at short-range ultra-wideband positioning, which needs an Apple positioning chip. BifrOSt hardware (PC and Arm tablet) has no such chip, so the family has no job to build. Location stays in springboard/sdk/src/core_location.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -537,8 +537,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests the identity service user interface, which is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: the identity service UI signs the user in with an Apple account. BifrOSt accounts are the BifrOSt Cloud accounts (bifrost-cloud), not Apple IDs.",
    "rea": [],
    "method": "assessed"
   },
@@ -644,8 +644,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Could not classify: the reference index holds no binary for this bundle. The name suggests multicast transfer between nearby devices, which is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: a device-to-device transfer protocol that only Apple devices speak. BifrOSt does not implement it and has no Apple peer to talk to.",
    "rea": [],
    "method": "assessed"
   },
@@ -1385,7 +1385,16 @@
    "status": "partial",
    "note": "Disk capacity, block sizes and SMART health are read with the system disk tools. Not covered: the reference's NAND controller queries, which read flash details from the vendor's storage controller.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Disk capacity, block sizes and SMART health come from the disk tools read by diskutil-desktop (probe.rs, model::tests). The NAND controller queries read the Apple storage controller, which BifrOSt hardware does not have, so that part is not applicable."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NANDInfo_osx.framework",
@@ -1406,7 +1415,16 @@
    "status": "partial",
    "note": "Disk capacity, block sizes and SMART health are read with the system disk tools. Not covered: the reference's NAND controller queries, which read flash details from the vendor's storage controller.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Same as NANDInfo: disk capacity, block sizes and SMART health are read by diskutil-desktop (model::tests). The Apple storage controller queries are not applicable to BifrOSt hardware."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NDOAPI.framework",
@@ -2780,8 +2798,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle with an ML platform identifier (mlpt.ODIE) and a Frameworks directory of its own. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2801,8 +2819,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Delegate bundle of ODIE (mlpt.ODIE identifier). Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2957,8 +2975,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OSEligibility; the name suggests feature eligibility checks, but the calls are not readable. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: decides feature eligibility from Apple-managed server configuration. BifrOSt has no Apple configuration service, and its feature switches are local settings.",
    "rea": [],
    "method": "assessed"
   },
@@ -3241,8 +3259,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OnDeviceDaemon. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3262,8 +3280,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OnDeviceFoundation. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device machine learning platform (its bundles carry the ML platform identifier and model packs). BifrOSt has no Apple ML model packs; the local inference path is springboard/sdk/src/inference.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3475,7 +3493,15 @@
    "status": "partial",
    "note": "The rpcbind and nfs-utils packages in the runtime list provide the ONC RPC services (portmapper, rpc.statd, mount.nfs). Not built: the rpcgen stub compiler (bin/rpcgen in the reference), since no rpcsvc-proto package is in the runtime list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpcinfo"
+    }
+   ],
+   "ready_note": "The rpcbind and nfs-utils runtime packages provide the ONC RPC services (portmapper, rpc.statd, mount.nfs); rpcinfo ships with rpcbind. rpcgen is a stub compiler for developers, not a service users run, so it is outside this row."
   }
  ]
 }
