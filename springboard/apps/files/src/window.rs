@@ -260,9 +260,7 @@ impl Files {
             return;
         }
         if x < self.side() {
-            if let Some(p) = self.sidebar().hit(self.sidebar_bounds(), SIDEBAR_SCROLL, x, y).and_then(|id| self.sidebar_path(id)) {
-                self.navigate(p, true);
-            }
+            self.sidebar_click(x, y);
             return;
         }
         if y < HEADER_H {
