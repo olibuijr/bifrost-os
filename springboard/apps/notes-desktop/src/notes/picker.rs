@@ -77,3 +77,47 @@ impl Picker {
         (x >= 0.0 && col < COLS && i < self.photos.len()).then_some(i)
     }
 }
+
+/// The indices of the photos whose file name contains `query`, ignoring case, in the order given. A blank query matches
+/// every photo. This is the model behind the picker's search field; the field itself is not drawn yet.
+pub fn matching(photos: &[PathBuf], query: &str) -> Vec<usize> {
+    let needle = query.trim().to_lowercase();
+    photos
+        .iter()
+        .enumerate()
+        .filter(|(_, path)| {
+            needle.is_empty()
+                || path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.to_lowercase().contains(&needle))
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn paths(names: &[&str]) -> Vec<PathBuf> {
+        names.iter().map(|n| PathBuf::from(format!("/pics/{n}"))).collect()
+    }
+
+    #[test]
+    fn a_blank_query_matches_every_photo_in_order() {
+        let photos = paths(&["a.jpg", "b.png"]);
+        assert_eq!(matching(&photos, ""), vec![0, 1]);
+        assert_eq!(matching(&photos, "   "), vec![0, 1]);
+    }
+
+    #[test]
+    fn a_query_matches_file_names_ignoring_case() {
+        let photos = paths(&["Holiday-01.JPG", "receipt.png", "holiday-02.png"]);
+        assert_eq!(matching(&photos, "HOLIDAY"), vec![0, 2]);
+        assert_eq!(matching(&photos, " receipt "), vec![1]);
+    }
+
+    #[test]
+    fn no_match_gives_an_empty_list() {
+        assert!(matching(&paths(&["a.jpg"]), "zzz").is_empty());
+        assert!(matching(&[], "a").is_empty());
+    }
+}
