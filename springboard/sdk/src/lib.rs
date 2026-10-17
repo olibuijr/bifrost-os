@@ -138,6 +138,7 @@ pub mod system;
 pub mod autofill;
 pub mod secure_entry;
 pub mod trust;
+pub mod certificate_assistant;
 pub mod gss_status;
 pub mod gss_oid;
 pub mod gss_buffer;
