@@ -225,7 +225,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/link-presentation.json",
    "status": "partial",
-   "note": "from SDK matrix link-presentation.json",
+   "note": "from SDK matrix link-presentation.json Built 2026-10-17: Metadata parsing, relative address resolution and fetch state (timeout, cancel, typed LinkError) in springboard/sdk/src/link_metadata.rs (tests link_metadata::tests); the request and the rich link view are still open.",
    "rea": [],
    "method": "assessed"
   },

@@ -386,7 +386,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/social.json",
    "status": "partial",
-   "note": "from SDK matrix social.json",
+   "note": "from SDK matrix social.json Built 2026-10-17: OAuth 2 token model in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests); compose sheet editing and sign-in still open.",
    "rea": [],
    "method": "assessed"
   },

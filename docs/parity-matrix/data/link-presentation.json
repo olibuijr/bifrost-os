@@ -26,7 +26,7 @@
       "apple": "LPLinkMetadata.title, iconProvider, imageProvider",
       "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)",
       "status": "partial",
-      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup."
+      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup. Built 2026-10-17: SDK metadata parsing (title from og:title or the title element, og:image or twitter:image, icon links, relative addresses resolved against the page) and a fetch state with timeout and cancel in springboard/sdk/src/link_metadata.rs (checked_url, resolve, parse, LinkFetch, LinkError); tests link_metadata::tests. The app still sends the request and reports the reply."
     },
     {
       "feature": "Video of a link",
@@ -65,10 +65,9 @@
     }
   ],
   "gaps": [
-    "No SDK API that fetches a URL's title, icon, image and video (LPMetadataProvider equivalent), with a timeout and cancel",
+    "No SDK function sends the request for a URL's metadata: link_metadata::LinkFetch holds the timeout and cancel state and parses the reply, but the app does the HTTP request. No video metadata.",
     "No rich link view widget (LPLinkView equivalent) in the shared kit, with placeholder and metadata modes",
     "The News app's og:image scrape (springboard/apps/news-desktop/src/pictures.rs) is app-local and not reusable by other apps",
-    "The share sheet sends URLs as plain items and does not show a rich link preview",
-    "No typed error model for link fetches (LPError equivalent)"
+    "The share sheet sends URLs as plain items and does not show a rich link preview"
   ]
 }
