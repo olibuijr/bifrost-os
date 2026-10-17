@@ -1962,3 +1962,93 @@
         for k in 0..n {let t=1000.+k as f64*16.;let app=if k%2==0 {AppId::Settings} else {AppId::Files};sh.desk_open(app,t);sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t+8.);}
         eprintln!("focus switch: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
     }
+
+#[cfg(test)]
+mod live_wallpaper_tests {
+    use super::*;
+    use crate::shell::live_wallpaper::{Look, FRAME_MS};
+
+    fn centre(sh: &Shell) -> u32 {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut img = Image::new(w, h);
+        sh.draw_desktop_background(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 });
+        img.px[(h / 2) * w + w / 2]
+    }
+
+    #[test]
+    fn a_chosen_look_is_what_the_desktop_draws_under_the_windows() {
+        let mut sh = desktop_shell();
+        let still = centre(&sh);
+        assert_eq!(still, rgba(20, 20, 30, 255), "the still photo");
+        assert!(!sh.live_wallpaper_tick(0.0), "the still look makes no frame");
+        sh.set_live_look(Look::Drift);
+        assert_eq!(sh.live_look(), Look::Drift);
+        assert_eq!(centre(&sh), still, "until the first frame is due the still stays");
+        assert!(sh.live_wallpaper_tick(0.0), "the first frame is rendered");
+        let first = centre(&sh);
+        assert_ne!(first, still, "the desktop now shows the drift frame");
+        assert_eq!(first, sh.wallpaper_frame().px[(sh.h as usize / 2) * sh.w as usize + sh.w as usize / 2]);
+        assert!(!sh.live_wallpaper_tick(FRAME_MS / 2.0), "within a frame interval the cached frame is reused");
+        assert!(sh.live_wallpaper_tick(FRAME_MS * 40.0), "a later frame moves the picture");
+        assert_ne!(centre(&sh), first);
+        sh.set_live_look(Look::Still);
+        assert_eq!(centre(&sh), still, "choosing Still brings the photo back");
+    }
+
+    #[test]
+    fn a_new_frame_redraws_and_asks_the_presenter_to_upload_it_again() {
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::Waves);
+        sh.note_wallpaper_uploaded();
+        sh.dirty = false;
+        assert!(sh.desktop_wallpaper_once().is_none(), "uploaded");
+        assert!(sh.live_wallpaper_tick(0.0));
+        assert!(sh.dirty, "the desktop redraws");
+        let (wp, x) = sh.desktop_wallpaper_once().expect("the presenter takes the new frame");
+        assert_eq!((wp.w, wp.h, x), (sh.w as usize, sh.h as usize, 0));
+        assert_eq!(wp.px.as_ptr(), sh.wallpaper_frame().px.as_ptr(), "it is the live frame, not the still");
+        let next = sh.next_wake(0.0).expect("an animated look schedules its next frame");
+        assert!(next <= FRAME_MS + 1.0, "{next}");
+    }
+
+    #[test]
+    fn low_power_mode_freezes_an_animated_look_on_one_frame() {
+        let mut sh = desktop_shell();
+        sh.prefs.set("low_power", "1").unwrap();
+        assert!(sh.low_power());
+        sh.set_live_look(Look::Dither);
+        assert!(sh.live_wallpaper_tick(0.0));
+        let frozen = centre(&sh);
+        assert_ne!(frozen, rgba(20, 20, 30, 255), "the fallback is a drawn still frame, not a blank");
+        assert!(!sh.live_wallpaper_tick(60_000.0), "no further frames");
+        assert_eq!(centre(&sh), frozen);
+        assert_eq!(sh.live_still_only(), true);
+    }
+
+    #[test]
+    fn the_time_of_day_poster_follows_the_clock() {
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::TimeOfDay);
+        let day = 86_400 * 20_000;
+        sh.set_wall(day, 0, 0.0);
+        assert!(sh.live_wallpaper_tick(0.0));
+        let night = centre(&sh);
+        sh.set_wall(day + 12 * 3600, 0, 0.0);
+        assert!(sh.live_wallpaper_tick(0.0), "noon is a different minute");
+        let noon = centre(&sh);
+        let sum = |p: u32| (p & 0xff) + (p >> 8 & 0xff) + (p >> 16 & 0xff);
+        assert!(sum(noon) > sum(night) + 150, "noon is brighter than midnight");
+        assert!(!sh.live_wallpaper_tick(1.0), "the same minute keeps the cached poster");
+    }
+
+    #[test]
+    fn the_look_does_not_run_off_the_desktop_or_with_the_screen_off() {
+        let mut sh = shell();
+        sh.set_live_look(Look::Drift);
+        assert!(!sh.live_wallpaper_tick(0.0), "the bifrost home screen has no live wallpaper");
+        let mut sh = desktop_shell();
+        sh.set_live_look(Look::Drift);
+        sh.screen_on = false;
+        assert!(!sh.live_wallpaper_tick(0.0), "the screen is off");
+    }
+}

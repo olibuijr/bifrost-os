@@ -212,6 +212,7 @@ pub mod account_page;
 pub mod timeset_page;
 pub mod night_shift;
 pub mod notify_page;
+pub mod live_wallpaper;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;
 pub mod wallpaper_types;
@@ -397,6 +398,8 @@ pub enum Effect {
     LockWallpaper(String),
     /// Dark Appearance Dims Wallpaper changed
     WallpaperDim(bool),
+    /// the desktop wallpaper look changed (`live_wallpaper::Look::pref` value): the shell calls `set_live_look`
+    LiveWallpaper(String),
     /// Location Services changed a pref: the shell saves these (key, value) pairs to `settings.ini`
     Location(Vec<(String, String)>),
     /// the idle timeout changed (ms, 0 = never); the shell already applies it
@@ -503,6 +506,8 @@ pub struct Shell {
     wallpapers: Rc<Vec<Wallpaper>>,
     /// lock wallpaper and dimmed copies
     wpx: wallpaper_page::Extra,
+    /// the animated or time-of-day desktop wallpaper (`wallpaper_look`) and its cached frame
+    live: live_wallpaper::Live,
     dock_bg: Option<Image>,
     dock: Vec<Tile>,
     grid: Vec<Tile>,
@@ -941,6 +946,7 @@ impl Shell {
             heap_trim_due: false,
             wallpapers: Rc::new(Vec::new()),
             wpx: Default::default(),
+            live: Default::default(),
             dock,
             grid,
             base_icons,
@@ -1913,6 +1919,7 @@ impl Shell {
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
+        if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {
             // the CPU/RAM read joins a wake-up that is already planned inside its tolerance window
             let menu = self.metrics_menu_open();
@@ -2281,10 +2288,64 @@ impl Shell {
         rotate::still(self.home_src, &self.fit_home)
     }
 
+    /// What the desktop shows under the windows: the cached live frame while an animated or time-of-day look is
+    /// chosen, else the home still.
+    pub(super) fn wallpaper_frame(&self) -> View<'_> {
+        self.live.view().unwrap_or_else(|| self.home_still())
+    }
+
+    /// The wallpaper look in force.
+    pub fn live_look(&self) -> live_wallpaper::Look {
+        self.live.look()
+    }
+
+    /// Chooses the desktop wallpaper look (the `wallpaper_look` pref); `Still` goes back to the home still.
+    pub fn set_live_look(&mut self, look: live_wallpaper::Look) {
+        if self.live.set_look(look) {
+            self.live_changed();
+        }
+    }
+
+    /// Animated and time-of-day looks pause on one frame under Reduce Motion and Low Power Mode.
+    fn live_still_only(&self) -> bool {
+        bifrost_render::appearance::reduce_motion() || self.low_power()
+    }
+
+    /// Local minute of the day at monotonic `t` ms.
+    fn live_minute(&self, t: f64) -> u16 {
+        let (unix, offset) = self.wall_now(t);
+        notify::schedule::Schedule::minute_of_day(unix, offset)
+    }
+
+    /// Brings the live wallpaper to the frame due at `t`. True when the picture changed (the desktop is then
+    /// redrawn and the presenter re-uploads it).
+    pub fn live_wallpaper_tick(&mut self, t: f64) -> bool {
+        if self.live.look() == live_wallpaper::Look::Still || !self.desk_active() || !self.screen_on {
+            return false;
+        }
+        let (still, minute) = (self.live_still_only(), self.live_minute(t));
+        let changed = self.live.update(t, minute, still, self.w as usize, self.h as usize);
+        if changed {
+            self.live_changed();
+        }
+        changed
+    }
+
+    /// The live frame (or the look) changed: redraw, re-upload, and refresh what is sampled from the wallpaper.
+    fn live_changed(&mut self) {
+        self.wallpaper_uploaded = false;
+        // the presenter keys its texture on the pixel address, which a new frame may reuse
+        #[cfg(target_os = "linux")]
+        crate::gpu::wl::bump_wallpaper_generation();
+        *self.bar_backdrop.borrow_mut() = None;
+        self.bar_on_light = desktop_bar::wallpaper_is_light(self.wallpaper_frame(), self.desktop_bar_height());
+        self.dirty = true;
+    }
+
     /// The wallpaper and where it sits on screen, for the GPU presenter; None once uploaded.
     pub fn desktop_wallpaper_once(&self) -> Option<(View<'_>, i32)> {
         (!self.wallpaper_uploaded).then(|| {
-            let wp = self.home_still();
+            let wp = self.wallpaper_frame();
             (wp, (self.w - wp.w as i32) / 2)
         })
     }
@@ -3310,6 +3371,7 @@ impl Shell {
         self.dock_tick(t);
         self.fx_tick(t);
         self.metrics_tick(t);
+        self.live_wallpaper_tick(t);
         let mut fx = self.tick_inner(t);
         fx.append(&mut self.voice_fx);
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));

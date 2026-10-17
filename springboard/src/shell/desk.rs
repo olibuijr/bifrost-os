@@ -1926,7 +1926,8 @@ impl Shell {
             return;
         }
         s.fill_rect(0, 0, s.w, s.h, BLACK);
-        let wp = self.home_still();
+        // the live frame while an animated or time-of-day look is chosen (cached: this only copies), else the still
+        let wp = self.wallpaper_frame();
         s.copy(wp, (self.w - wp.w as i32) / 2, 0);
     }
 

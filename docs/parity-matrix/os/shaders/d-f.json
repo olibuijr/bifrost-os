@@ -272,9 +272,9 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (drift_frame: domain-warped fractal noise through a ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Not wired into the desktop: Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) still draws only the still JPEG and there is no wallpaper choice for animated looks. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (drift_frame: domain-warped fractal noise through a ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -293,9 +293,29 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
     }
    ],
-   "ready_note": "Ready: drift_frame (domain-warped fractal noise through a colour ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Shell integration (a wallpaper picker and a per-frame call) is separate from this shader job. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
+   "ready_note": "Ready: drift_frame (domain-warped fractal noise through a colour ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DynamicBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -312,9 +332,9 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "springboard/ui/src/sprite_frames.rs",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dynamic_frame: time-of-day cross-fade between keyed ramps), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Not wired into the desktop: Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) still draws only the still JPEG and there is no wallpaper choice for animated looks. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dynamic_frame: time-of-day cross-fade between keyed ramps), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -333,9 +353,29 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
     }
    ],
-   "ready_note": "Ready: dynamic_frame and dynamic_phase (time-of-day cross-fade between keyed ramps) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Shell integration (a wallpaper picker and a per-frame call) is separate from this shader job. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
+   "ready_note": "Ready: dynamic_frame and dynamic_phase (time-of-day cross-fade between keyed ramps) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -382,9 +422,9 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (waves_frame: layered travelling ridges over a sky ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Not wired into the desktop: Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) still draws only the still JPEG and there is no wallpaper choice for animated looks. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (waves_frame: layered travelling ridges over a sky ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -403,9 +443,29 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
     }
    ],
-   "ready_note": "Ready: waves_frame and wave_edge (layered travelling ridges over a sky ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Shell integration (a wallpaper picker and a per-frame call) is separate from this shader job. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
+   "ready_note": "Ready: waves_frame and wave_edge (layered travelling ridges over a sky ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex/Contents/Resources/default.metallib",
@@ -422,9 +482,9 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "springboard/ui/src/sprite_frames.rs",
+   "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dither_frame: scrolling ordered Bayer one-bit dither), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Not wired into the desktop: Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) still draws only the still JPEG and there is no wallpaper choice for animated looks. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dither_frame: scrolling ordered Bayer one-bit dither), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -443,9 +503,29 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_wallpaper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::live_wallpaper_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::live_look"
     }
    ],
-   "ready_note": "Ready: dither_frame (scrolling ordered-Bayer one-bit dither of a ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Shell integration (a wallpaper picker and a per-frame call) is separate from this shader job. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
+   "ready_note": "Ready: dither_frame (scrolling ordered-Bayer one-bit dither of a ramp) in springboard/render/src/wallpaper_shaders.rs, pure per-pixel frames independent of resolution and aspect, tests wallpaper_shaders::tests (with wallpaper_frame::tests and gradient::tests); GLSL twin of the drift look springboard/gpu/shaders/wallpaper_drift.frag (not wired to a pipeline). Wired: Settings > Wallpaper > Live Look (wallpaper_look pref) selects it and Shell::draw_wallpaper_layer draws the cached frame (springboard/src/shell/live_wallpaper.rs), 4 frames a second, one frozen frame under Reduce Motion and Low Power Mode; tests shell::live_wallpaper::tests, shell::tests::live_wallpaper_tests, shell::wallpaper_page::tests, shell::settings::tests::live_look. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex/Contents/Resources/default.metallib",
@@ -4007,9 +4087,9 @@
    "description": "",
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/wallpaper_frame.rs, springboard/src/shell/live_wallpaper.rs",
    "status": "partial",
-   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "The desktop has animated and time-of-day wallpapers (Settings > Wallpaper > Live Look, springboard/src/shell/live_wallpaper.rs) built on the wallpaper_shaders kernels; stills stay the default and screen savers are models (springboard/ui/src/screensaver.rs). The two-ramp frame in springboard/render/src/wallpaper_frame.rs is not used by any look yet. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -4020,7 +4100,7 @@
      "filter": "wallpaper_frame::tests"
     }
    ],
-   "ready_note": "Ready: one animated-wallpaper frame (diagonal gradient cross-faded by a ping-pong phase) in springboard/render/src/wallpaper_frame.rs, tests wallpaper_frame::tests. The CPU frame renderer only; no GLSL shader was written and no wallpaper app calls it yet."
+   "ready_note": "Ready: one animated-wallpaper frame (diagonal gradient cross-faded by a ping-pong phase) in springboard/render/src/wallpaper_frame.rs, tests wallpaper_frame::tests. The CPU frame renderer only; no GLSL shader was written and none of the Live Look choices calls it yet (they use wallpaper_shaders)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowEditor.framework/Versions/A/Resources/default.metallib",

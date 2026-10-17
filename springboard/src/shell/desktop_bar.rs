@@ -487,11 +487,11 @@ impl Shell {
             s.fill_rect(0,0,self.w as usize,height,0);
             self.draw_desktop_bar_items(s,height);return;
         }
-        let key=(self.w as usize,height,self.home_still().px.as_ptr() as usize);
+        let key=(self.w as usize,height,self.wallpaper_frame().px.as_ptr() as usize);
         let mut cache=self.bar_backdrop.borrow_mut();
         if cache.as_ref().is_none_or(|(k,_)|*k!=key) {
             let mut image=Image::new(self.w as usize,height);let mut bg=Surface{w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0};
-            bg.fill_rect(0,0,bg.w,bg.h,CELL);{let wp=self.home_still();bg.copy(wp,(self.w-wp.w as i32)/2,0);}
+            bg.fill_rect(0,0,bg.w,bg.h,CELL);{let wp=self.wallpaper_frame();bg.copy(wp,(self.w-wp.w as i32)/2,0);}
             *cache=Some((key,image));
         }
         let (_,image)=cache.as_ref().unwrap();s.blit(image,0,0,255,255);drop(cache);
@@ -535,7 +535,7 @@ impl Shell {
             let r=self.ui.pt(MENU_RADIUS_PT);
             bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::ShellSurface::MenuBarMenu.request((x as f32,y as f32,w as f32,h as f32),r)));
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,bifrost_render::glass::tint(MENU_TINT.now()));
-        } else {let mut image=Image::new(w,h);let mut bg=Surface{w,h,stride:w,px:&mut image.px,y0:0};bg.fill_rect(0,0,w,h,CELL);{let wp=self.home_still();bg.copy(wp,(self.w-wp.w as i32)/2-x as i32,-(y as i32));}image.blur_material(self.ui.pt(10.) as usize);s.blit(&image,x as i32,y as i32,255,255);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,self.ui.pt(MENU_RADIUS_PT),MENU_TINT.now());}
+        } else {let mut image=Image::new(w,h);let mut bg=Surface{w,h,stride:w,px:&mut image.px,y0:0};bg.fill_rect(0,0,w,h,CELL);{let wp=self.wallpaper_frame();bg.copy(wp,(self.w-wp.w as i32)/2-x as i32,-(y as i32));}image.blur_material(self.ui.pt(10.) as usize);s.blit(&image,x as i32,y as i32,255,255);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,self.ui.pt(MENU_RADIUS_PT),MENU_TINT.now());}
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
         let sel=self.menu_row_of(menu);let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
         // Golden Gate: a row's symbol sits at the text edge and pushes only that row's title right

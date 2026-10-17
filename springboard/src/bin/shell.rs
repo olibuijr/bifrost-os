@@ -400,6 +400,7 @@ fn run() -> std::io::Result<()> {
         });
     }
     shell.set_wallpaper_dim(prefs.get("wallpaper_dim") != Some("0"));
+    shell.set_live_look(springboard::shell::live_wallpaper::Look::parse(prefs.get(springboard::shell::live_wallpaper::LOOK_PREF).unwrap_or("")));
     let mut lock_mapped: Option<&'static [u8]> = None;
     set_lock_wallpaper(&mut shell, &dir, prefs.get("wallpaper_lock").unwrap_or(""), &mut lock_mapped);
     shell.set_rotation_lock(prefs.get("rotation_lock") == Some("1"), sys::now_ms());
@@ -1222,6 +1223,7 @@ fn run() -> std::io::Result<()> {
                 },
                 Effect::LockWallpaper(id) => set_lock_wallpaper(&mut shell, &dir, &id, &mut lock_mapped),
                 Effect::WallpaperDim(on) => shell.set_wallpaper_dim(on),
+                Effect::LiveWallpaper(look) => shell.set_live_look(springboard::shell::live_wallpaper::Look::parse(&look)),
                 Effect::Location(pairs) => {
                     let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
                     if let Err(e) = prefs.set_many(&refs) {

@@ -26,6 +26,7 @@ use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
 use super::{backup, backup_page, diag, diagnostics_page};
 use super::ui::{AlertCard, Ui, Weight, CONTENT_BG, SEPARATOR_C, SIDEBAR_BG};
+use super::live_wallpaper::{Look, LOOK_PREF};
 use super::wallpaper_page::{Tap, Target, Wallpaper, WallpaperPage};
 use super::controls::{notch, slider_value};
 pub use super::list::fill_row;
@@ -306,6 +307,8 @@ pub struct Settings {
     wallpaper_dim: bool,
     /// Dynamic Wallpaper (`wallpaper_dynamic` pref): the shell changes the still with the time of day
     wallpaper_dynamic: bool,
+    /// Live Look (`wallpaper_look` pref): the desktop's animated or time-of-day wallpaper, or the still
+    wallpaper_look: Look,
     stack: Vec<Entry>,
     transition: Option<Slide>,
     sheet: Option<Sheet>,
@@ -540,6 +543,7 @@ impl Settings {
             wallpapers,
             wallpaper_dim: prefs.get("wallpaper_dim") != Some("0"),
             wallpaper_dynamic: prefs.get("wallpaper_dynamic") == Some("1"),
+            wallpaper_look: Look::parse(prefs.get(LOOK_PREF).unwrap_or("")),
             stack: vec![],
             transition: None,
             sheet: None,
@@ -728,6 +732,7 @@ impl Settings {
             let title = "Wallpaper".to_string();
             let mut page = WallpaperPage::new(ui, self.w, self.screen_aspect, &self.wallpapers, &self.info.wallpaper, self.wallpaper_dim);
             page.set_dynamic(self.wallpaper_dynamic);
+            page.set_look(self.wallpaper_look);
             return Entry { id, nav: NavBar::new(ui, &title, back).height(self.pane().nav_pt), title, view: View::Wallpaper(page) };
         }
         let spec = self.spec_for(id);
@@ -1813,9 +1818,9 @@ impl Settings {
                             if let Some(tap) = page.tap(ui, w, h, x, y) {
                                 return Outcome::Wallpaper(tap);
                             }
-                        } else if matches!(page.tap(ui, w, h, x, y), Some(Tap::Dynamic)) {
-                            // the Dynamic Wallpaper switch row sits above the grid and is not a thumbnail
-                            return Outcome::Wallpaper(Tap::Dynamic);
+                        } else if let Some(tap @ (Tap::Dynamic | Tap::Look(_))) = page.tap(ui, w, h, x, y) {
+                            // the Dynamic Wallpaper switch and the Live Look row sit above the grid and are not thumbnails
+                            return Outcome::Wallpaper(tap);
                         } else if let Some(i) = held.filter(|&i| page.hit(ui, w, h, x, y) == Some(i)) {
                             return Outcome::Wallpaper(Tap::Thumb(i));
                         }
@@ -2174,6 +2179,12 @@ impl Settings {
                 } else {
                     vec![Effect::Wallpaper(self.info.wallpaper.clone())]
                 }
+            }
+            Tap::Look(look) => {
+                page.set_look(look);
+                self.wallpaper_look = look;
+                save(prefs, LOOK_PREF, look.pref());
+                vec![Effect::LiveWallpaper(look.pref().to_string())]
             }
             Tap::Dim => {
                 let on = !page.dim();
@@ -3177,8 +3188,9 @@ impl Settings {
                 self.info.wallpaper.clear();
                 self.wallpaper_dim = true;
                 self.wallpaper_dynamic = false;
+                self.wallpaper_look = Look::Still;
                 self.rebuild(ui);
-                vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true)]
+                vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true), Effect::LiveWallpaper(Look::Still.pref().to_string())]
             }
             Command::EraseContent => match bifrost_core::erase_content::request(&self.data_dir) {
                 Ok(()) => vec![Effect::Restart],
@@ -3969,6 +3981,37 @@ mod tests {
         assert_eq!(prefs.get("wallpaper_dynamic"), Some("1"));
         assert_eq!(tap(&mut st, &ui, &mut prefs, x + w / 2.0, y + h / 2.0), vec![Effect::Wallpaper("a".into())], "off: the picked still comes back");
         assert_eq!(prefs.get("wallpaper_dynamic"), Some("0"));
+    }
+
+    #[test]
+    fn live_look_row_picks_an_animated_wallpaper_persists_it_and_reset_goes_back_to_the_still() {
+        let ui = super::super::tests::ui();
+        let mut prefs = Prefs::memory();
+        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
+        st.allow_split(&ui, false);
+        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
+        let centre = |i: usize| {
+            let (x, y, w, h) = super::super::wallpaper_page::look_segment(&ui, 1200, i);
+            (x + w / 2.0, y + h / 2.0)
+        };
+        for (i, look) in Look::ALL.into_iter().enumerate() {
+            let (x, y) = centre(i);
+            assert_eq!(tap(&mut st, &ui, &mut prefs, x, y), vec![Effect::LiveWallpaper(look.pref().to_string())], "{look:?}");
+            assert_eq!(prefs.get("wallpaper_look"), Some(look.pref()));
+            let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
+            assert_eq!(page.look(), look, "the selected plate follows the tap");
+        }
+        let (x, y) = centre(1);
+        tap(&mut st, &ui, &mut prefs, x, y);
+        let mut buf = vec![0u32; 1200 * 1920];
+        st.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1e9);
+        // a fresh Settings reads the stored look back
+        let again = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
+        assert_eq!(again.wallpaper_look, Look::Drift);
+        let fx = st.run(&ui, &mut prefs, Command::ResetSettings, 0.0);
+        assert!(fx.contains(&Effect::LiveWallpaper("still".into())));
+        assert_eq!(st.wallpaper_look, Look::Still);
+        assert_eq!(prefs.get("wallpaper_look"), None);
     }
 
     #[test]
