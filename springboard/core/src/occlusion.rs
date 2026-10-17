@@ -15,6 +15,9 @@ pub enum Event {
     OnScreen(bool),
     /// Every shown window of the app is covered by windows of other apps.
     Covered(bool),
+    /// The app holds a process assertion (for example audio playing or a running download). A held assertion keeps the
+    /// app running even when nothing shows it, so the grace period never starts while it is held.
+    Assertion(bool),
 }
 
 /// The app's run state.
@@ -39,6 +42,8 @@ pub struct Occlusion {
     focused: bool,
     on_screen: bool,
     covered: bool,
+    /// A process assertion is held (see `Event::Assertion`).
+    asserted: bool,
     /// When the app first became unseen and unfocused; `None` while it is seen or focused.
     hidden_since: Option<u64>,
     suspended: bool,
@@ -53,12 +58,17 @@ impl Default for Occlusion {
 impl Occlusion {
     /// A new app is on screen, not covered and not focused.
     pub fn new() -> Self {
-        Occlusion { focused: false, on_screen: true, covered: false, hidden_since: None, suspended: false }
+        Occlusion { focused: false, on_screen: true, covered: false, asserted: false, hidden_since: None, suspended: false }
     }
 
-    /// Focus or a visible, uncovered window keeps the app running.
+    /// Focus, a held process assertion, or a visible, uncovered window keeps the app running.
     pub fn wants_running(&self) -> bool {
-        self.focused || (self.on_screen && !self.covered)
+        self.focused || self.asserted || (self.on_screen && !self.covered)
+    }
+
+    /// Whether the app holds a process assertion.
+    pub fn is_asserted(&self) -> bool {
+        self.asserted
     }
 
     pub fn run(&self) -> Run {
@@ -77,6 +87,7 @@ impl Occlusion {
             Event::Focus(on) => self.focused = on,
             Event::OnScreen(on) => self.on_screen = on,
             Event::Covered(on) => self.covered = on,
+            Event::Assertion(on) => self.asserted = on,
         }
         self.tick(now_ms)
     }
@@ -175,6 +186,35 @@ mod tests {
         assert_eq!(o.report(Event::OnScreen(false), 0), Transition::None);
         assert_eq!(o.tick(GRACE_MS), Transition::Suspend);
         assert_eq!(o.report(Event::OnScreen(true), GRACE_MS + 1), Transition::Resume);
+        assert_eq!(o.run(), Run::Running);
+    }
+
+    #[test]
+    fn a_held_assertion_keeps_an_unseen_app_running() {
+        let mut o = Occlusion::new();
+        assert_eq!(o.report(Event::Assertion(true), 0), Transition::None);
+        assert!(o.is_asserted());
+        o.report(Event::OnScreen(false), 1);
+        assert_eq!(o.tick(10 * GRACE_MS), Transition::None, "audio playing is not stopped");
+        assert_eq!(o.run(), Run::Running);
+    }
+
+    #[test]
+    fn releasing_an_assertion_starts_the_grace_period_from_that_moment() {
+        let mut o = Occlusion::new();
+        o.report(Event::Assertion(true), 0);
+        o.report(Event::OnScreen(false), 0);
+        assert_eq!(o.report(Event::Assertion(false), 5 * GRACE_MS), Transition::None);
+        assert_eq!(o.tick(6 * GRACE_MS - 1), Transition::None);
+        assert_eq!(o.tick(6 * GRACE_MS), Transition::Suspend);
+    }
+
+    #[test]
+    fn taking_an_assertion_resumes_a_suspended_app() {
+        let mut o = Occlusion::new();
+        o.report(Event::OnScreen(false), 0);
+        assert_eq!(o.tick(GRACE_MS), Transition::Suspend);
+        assert_eq!(o.report(Event::Assertion(true), 3 * GRACE_MS), Transition::Resume);
         assert_eq!(o.run(), Run::Running);
     }
 
