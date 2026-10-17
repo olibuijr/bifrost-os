@@ -1592,23 +1592,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/malware_scan.rs, springboard/core/src/pattern_rules.rs, springboard/core/src/quarantine.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework, no plausible owner found Lead 2026-10-17: not ready: malware_scan is not called on the shell open path yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "malware_scan::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "pattern_rules::tests"
-    }
-   ],
-   "ready_note": "Built in core/src/malware_scan.rs: a local signature scanner for files and trees, a rule store that installs only compiled, newer rule sets and detects tampering by SHA-256, and a disposition that blocks or warns, escalating for items that carry a quarantine record. Nothing is fetched from the network: updates are files handed to the store. Wiring the scan into the open path of the shell is separate."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ZeoliteFramework.framework",
