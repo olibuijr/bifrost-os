@@ -50,11 +50,23 @@ pub fn access_of(app_id: &str) -> Access {
 
 /// The answer to the access prompt the app is waiting on. The prompt is shown once.
 pub fn answer_prompt(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().request(choice))
+}
+
+/// Every app with a contacts answer, as `(app, status, picked contacts)`, for the privacy store to save.
+pub fn grants_snapshot() -> Vec<(String, Status, Vec<u64>)> {
+    ACCESS.with(|a| {
+        a.borrow()
+            .iter()
+            .map(|(app, access)| (app.clone(), access.status(), access.picked().iter().copied().collect()))
+            .collect()
+    })
 }
 
 /// A change the person makes in Settings for one app. Only a system restriction blocks it.
 pub fn change_by_user(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().change_in_settings(choice))
 }
 
