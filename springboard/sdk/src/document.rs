@@ -250,7 +250,6 @@ pub struct DocumentController<D: Document> {
     active: Option<DocId>,
     next_id: u32,
     recents: Vec<RecentDocument>,
-    recents_loaded: bool,
     pending: HashMap<u32, Pending>,
     alert: Option<CloseAlert>,
     sent: Option<(String, bool, String)>,
@@ -267,7 +266,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), recents_loaded: false, pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, now: 0.0 }
     }
 
     // ---- the document list ----
@@ -407,12 +406,10 @@ impl<D: Document> DocumentController<D> {
         self.store_recents(host);
     }
 
+    /// Re-reads the shared store on every use, so a list another process wrote since the last
+    /// read (the Recents store is shared by every app that opens documents) is seen here too.
     fn load_recents(&mut self, host: &dyn DocumentHost) {
-        if self.recents_loaded {
-            return;
-        }
-        self.recents_loaded = true;
-        self.recents = host.pref(RECENTS_KEY).map(|t| parse_recents(&t)).unwrap_or_default();
+        self.recents =  host.pref(RECENTS_KEY).map(|t| parse_recents(&t)).unwrap_or_default();
     }
 
     fn store_recents(&self, host: &dyn DocumentHost) {
@@ -1560,5 +1557,17 @@ mod tests {
         assert!(m.log().contains(&"release:1".to_string()), "a grant that left the list is released");
         assert_eq!(parse_recents(&format_recents(&r)), r);
         assert_eq!(parse_recents("zz\tbad\n"), vec![]);
+    }
+
+    #[test]
+    fn recents_written_by_another_controller_are_seen_on_the_next_read() {
+        let m = Mock::new("shared-recents");
+        let mut first = DocumentController::<Text>::new();
+        let mut second = DocumentController::<Text>::new();
+        assert!(second.recents(&m).is_empty());
+        let id = open(&mut first, &m, "shared.txt", 9, "x");
+        first.close(&m, id);
+        let seen = second.recents(&m).to_vec();
+        assert_eq!(seen, vec![RecentDocument { grant: [9; 16], name: "shared.txt".into() }]);
     }
 }
