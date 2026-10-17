@@ -480,6 +480,36 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
     }
 }
 
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `merge(with:)`: a subject that sends every value sent on either this subject or `other`, in the order
+    /// they are sent. The returned `Cancellables` keeps both links alive; dropping it detaches the merge.
+    pub fn merge(&self, other: &PassthroughSubject<T>) -> (PassthroughSubject<T>, Cancellables) {
+        let out = PassthroughSubject::new();
+        let mut links = Cancellables::new();
+        let o1 = out.clone();
+        self.sink(move |v| o1.send(v.clone())).store(&mut links);
+        let o2 = out.clone();
+        other.sink(move |v| o2.send(v.clone())).store(&mut links);
+        (out, links)
+    }
+
+    /// `flatMap(_:)` for inner publishers that replay synchronously: each value is turned into a [`Finite`]
+    /// publisher and every value that publisher replays is sent on the result. The inner completion is not
+    /// forwarded, as Combine's `flatMap` does not end the outer stream when an inner one finishes.
+    pub fn flat_map<U, E>(&self, f: impl Fn(&T) -> Finite<U, E> + 'static) -> (PassthroughSubject<U>, Subscription)
+    where
+        U: Clone + 'static,
+        E: Clone,
+    {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            f(v).subscribe(|u| o.send(u.clone()), |_completion| {});
+        });
+        (out, sub)
+    }
+}
+
 /// `Subscribers.Completion`: how a publisher stopped producing values.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Completion<E> {
@@ -1073,5 +1103,90 @@ mod tests {
     fn counter_u32() -> (Rc<RefCell<Vec<u32>>>, Rc<RefCell<Vec<u32>>>) {
         let l = Rc::new(RefCell::new(Vec::new()));
         (l.clone(), l)
+    }
+}
+
+#[cfg(test)]
+mod merge_flat_map_tests {
+    use super::*;
+
+    fn log_of<T: Clone + 'static>(subject: &PassthroughSubject<T>) -> (Rc<RefCell<Vec<T>>>, Subscription) {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let sub = subject.sink(move |v: &T| l.borrow_mut().push(v.clone()));
+        (log, sub)
+    }
+
+    #[test]
+    fn merge_forwards_values_from_both_subjects_in_send_order() {
+        let a = PassthroughSubject::new();
+        let b = PassthroughSubject::new();
+        let (merged, _links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        a.send(1);
+        b.send(2);
+        a.send(3);
+        b.send(4);
+        assert_eq!(*log.borrow(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn merge_stops_forwarding_when_links_are_cleared() {
+        let a = PassthroughSubject::new();
+        let b = PassthroughSubject::new();
+        let (merged, mut links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        a.send(1);
+        links.clear();
+        a.send(2);
+        b.send(3);
+        assert_eq!(*log.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn merge_with_no_values_sends_nothing() {
+        let a: PassthroughSubject<i32> = PassthroughSubject::new();
+        let b: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (merged, _links) = a.merge(&b);
+        let (log, _sub) = log_of(&merged);
+        assert!(log.borrow().is_empty());
+        assert_eq!(merged.subscriber_count(), 1);
+    }
+
+    #[test]
+    fn flat_map_sends_each_inner_value_in_order() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.flat_map(|n: &i32| Finite::<i32, Never>::record(vec![*n, *n * 10], Completion::Finished));
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        assert_eq!(*log.borrow(), vec![1, 10, 2, 20]);
+    }
+
+    #[test]
+    fn flat_map_empty_inner_sends_nothing_and_does_not_end_the_outer_stream() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.flat_map(|n: &i32| {
+            if *n == 0 {
+                Finite::<i32, Never>::empty(true)
+            } else {
+                Finite::<i32, Never>::just(*n)
+            }
+        });
+        let (log, _log_sub) = log_of(&out);
+        src.send(0);
+        src.send(5);
+        assert_eq!(*log.borrow(), vec![5]);
+    }
+
+    #[test]
+    fn flat_map_cancelled_upstream_stops_inner_values() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, sub) = src.flat_map(|n: &i32| Finite::<i32, Never>::just(*n));
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        sub.cancel();
+        src.send(2);
+        assert_eq!(*log.borrow(), vec![1]);
     }
 }
