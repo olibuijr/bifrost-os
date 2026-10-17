@@ -14,12 +14,19 @@
 //!
 //! Limits: at most [`MAX_NOTES`] notes are read in one walk and a body is cut at [`MAX_BODY_BYTES`]. Bodies are read
 //! and written as plain text, so formatting in a note made elsewhere is flattened. Not here: finding the server URL
-//! (autodiscover), OAuth sign-in, and the account kind in Settings; the Notes app passes the URL and login in.
+//! (autodiscover) and OAuth sign-in. The account is an Exchange account of Settings > Internet Accounts
+//! ([`Kind::Exchange`]) with its Notes service on; [`Sync`] reads it, asks the passwords store for the password and
+//! runs a round ([`sync_once`]: the local changes first, then the folder) on a background thread for the Notes app.
 
-use crate::dav_client::Send;
+use crate::controls::internet_accounts::{self as shared, Account, Kind, Service};
+use crate::dav_client::{self, Send};
+use crate::passwords;
 use crate::url::URLRequest;
+use crate::Ctx;
+use bifrost_core::json::Json;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 
 /// Most notes one walk reads.
 pub const MAX_NOTES: usize = 5_000;
@@ -544,6 +551,199 @@ pub fn changes(before: &[Note], now: &[Note]) -> Changes {
     out
 }
 
+// --- the sync an app runs -----------------------------------------------------------------------------------------
+
+/// How often the first Exchange account with Notes switched on is read while the app runs, in the app's clock (ms).
+pub const EVERY_MS: f64 = 5.0 * 60.0 * 1000.0;
+/// How long to wait before looking for an account again when there is none (ms).
+pub const NO_ACCOUNT_MS: f64 = 10_000.0;
+
+/// One local change that waits to reach the mailbox. `local` is the app's own name for the note and `stamp` is
+/// whatever the app needs to remember about the text that was sent; both come back in [`Written`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Op {
+    Create { local: String, stamp: u64, subject: String, body: String },
+    Update { local: String, stamp: u64, id: ItemId, subject: String, body: String },
+    Delete { local: String, id: ItemId },
+}
+
+impl Op {
+    pub fn local(&self) -> &str {
+        match self {
+            Op::Create { local, .. } | Op::Update { local, .. } | Op::Delete { local, .. } => local,
+        }
+    }
+}
+
+/// What one [`Op`] did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Written {
+    pub local: String,
+    /// The `stamp` of the op (0 for a delete).
+    pub stamp: u64,
+    /// The new address of a created or updated note, `None` for a delete, or the reason the server did not take it.
+    pub result: Result<Option<ItemId>, String>,
+    /// True for a delete.
+    pub deleted: bool,
+}
+
+/// One round: the local changes sent, then the notes folder read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Report {
+    pub written: Vec<Written>,
+    pub notes: Result<Vec<Note>, String>,
+}
+
+/// Sends `ops` in order, then reads the folder. A refused login or a dead transport stops the writes (the rest are
+/// reported with that reason, unsent) so a wrong password is not tried once per note.
+pub fn sync_once(send: &mut Send<'_>, url: &str, auth: &str, ops: &[Op]) -> Report {
+    let mut written = Vec::with_capacity(ops.len());
+    let mut stopped: Option<String> = None;
+    for op in ops {
+        let (stamp, deleted) = match op {
+            Op::Delete { .. } => (0, true),
+            Op::Create { stamp, .. } | Op::Update { stamp, .. } => (*stamp, false),
+        };
+        let result = match &stopped {
+            Some(why) => Err(why.clone()),
+            None => {
+                let r = match op {
+                    Op::Create { subject, body, .. } => create_note(send, url, auth, subject, body).map(Some),
+                    Op::Update { id, subject, body, .. } => update_note(send, url, auth, id, subject, body).map(Some),
+                    Op::Delete { id, .. } => delete_note(send, url, auth, id).map(|()| None),
+                };
+                if matches!(r, Err(ExchangeError::Unauthorized | ExchangeError::Transport(_) | ExchangeError::NotSecure)) {
+                    stopped = r.as_ref().err().map(|e| e.to_string());
+                }
+                r.map_err(|e| e.to_string())
+            }
+        };
+        written.push(Written { local: op.local().to_string(), stamp, result, deleted });
+    }
+    let notes = fetch_notes(send, url, auth).map_err(|e| e.to_string());
+    Report { written, notes }
+}
+
+/// The first account that switches Notes on and is an Exchange account.
+pub fn first_account(all: &[Account]) -> Option<Account> {
+    shared::serving(all, Service::Notes).into_iter().find(|a| a.kind == Kind::Exchange).cloned()
+}
+
+/// A finished round for an account.
+#[derive(Debug)]
+pub struct Done {
+    pub account: Account,
+    pub report: Report,
+}
+
+/// The sync state of the Notes app: it asks the passwords store for the account's password, runs a round on a
+/// background thread, and hands the result back on the next `poll_local`. The password never reaches the account list
+/// or a log.
+pub struct Sync {
+    /// The account whose password was asked for: request id, account and the changes to send.
+    asking: Option<(u32, Account, Vec<Op>)>,
+    running: Option<(Receiver<Report>, Account)>,
+    /// A result that is ready for the next poll (a missing password is reported this way).
+    ready: Option<Done>,
+    /// The app clock when the last round started.
+    last: Option<f64>,
+}
+
+impl Default for Sync {
+    fn default() -> Sync {
+        Sync::new()
+    }
+}
+
+impl Sync {
+    pub fn new() -> Sync {
+        Sync { asking: None, running: None, ready: None, last: None }
+    }
+
+    /// Call from `tick` with the app clock `t` (ms). Returns a finished round, if one just ended, and starts the next
+    /// one when it is due. `plan` is asked for the changes to send when a round starts, given the account it is for;
+    /// it is not called otherwise.
+    pub fn poll_local(&mut self, ctx: &Ctx, t: f64, plan: &mut dyn FnMut(&Account) -> Vec<Op>) -> Option<Done> {
+        let done = self.collect();
+        let due = self.last.map_or(true, |last| t - last >= EVERY_MS);
+        if due && self.asking.is_none() && self.running.is_none() && self.ready.is_none() {
+            self.start(ctx, t, plan);
+        }
+        done
+    }
+
+    /// Asks for a round on the next poll, not waiting for the interval.
+    pub fn refresh(&mut self) {
+        self.last = None;
+    }
+
+    /// True while a round waits for the password or runs.
+    pub fn busy(&self) -> bool {
+        self.asking.is_some() || self.running.is_some()
+    }
+
+    /// Call from `service_reply`. True when `request` was the password this sync asked for.
+    pub fn reply(&mut self, request: u32, result: &Result<Json, String>) -> bool {
+        match &self.asking {
+            Some((id, _, _)) if *id == request => {}
+            _ => return false,
+        }
+        let Some((_, account, ops)) = self.asking.take() else { return false };
+        match passwords::decode_password(result) {
+            Ok(password) => self.spawn(account, password, ops),
+            Err(_) => {
+                let why = format!("No password is saved for {} in Passwords.", account.username);
+                self.ready = Some(Done { account, report: Report { written: Vec::new(), notes: Err(why) } });
+            }
+        }
+        true
+    }
+
+    fn collect(&mut self) -> Option<Done> {
+        if let Some(done) = self.ready.take() {
+            return Some(done);
+        }
+        let outcome = {
+            let (rx, _) = self.running.as_ref()?;
+            rx.try_recv()
+        };
+        match outcome {
+            Ok(report) => {
+                let (_, account) = self.running.take()?;
+                Some(Done { account, report })
+            }
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => {
+                let (_, account) = self.running.take()?;
+                Some(Done { account, report: Report { written: Vec::new(), notes: Err("The sync stopped before it finished.".into()) } })
+            }
+        }
+    }
+
+    fn start(&mut self, ctx: &Ctx, t: f64, plan: &mut dyn FnMut(&Account) -> Vec<Op>) {
+        // without an account the list is looked at again in ten seconds, not on every tick
+        self.last = Some(t - EVERY_MS + NO_ACCOUNT_MS);
+        let Some(path) = shared::store_path() else { return };
+        let Ok(all) = shared::load(&path) else { return };
+        let Some(account) = first_account(&all) else { return };
+        self.last = Some(t);
+        let ops = plan(&account);
+        let id = passwords::fill(ctx, &account.password_site(), &account.username);
+        self.asking = Some((id, account, ops));
+    }
+
+    fn spawn(&mut self, account: Account, password: String, ops: Vec<Op>) {
+        let (tx, rx) = channel();
+        let url = account.url.clone();
+        let auth = dav_client::basic_auth(&account.username, &password);
+        std::thread::spawn(move || {
+            let mut send = |req: &URLRequest| dav_client::session_send(req);
+            let _ = tx.send(sync_once(&mut send, &url, &auth, &ops));
+        });
+        self.running = Some((rx, account));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -740,5 +940,75 @@ mod tests {
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].inner, "<a:Items><a:Items/>x</a:Items>y");
         assert_eq!(found[1].inner, "z");
+    }
+
+    fn written_answer(kind: &str, n: &str) -> String {
+        format!(
+            r#"<m:{kind}Response><m:ResponseMessages><m:{kind}ResponseMessage ResponseClass="Success"><m:Items>
+            <t:Item><t:ItemId Id="AAMk{n}" ChangeKey="CQnew{n}"/></t:Item></m:Items></m:{kind}ResponseMessage></m:ResponseMessages></m:{kind}Response>"#
+        )
+    }
+
+    #[test]
+    fn a_round_sends_the_local_changes_first_then_reads_the_folder() {
+        let ops = vec![
+            Op::Create { local: "l1".into(), stamp: 11, subject: "New".into(), body: "New\nbody".into() },
+            Op::Update { local: "l2".into(), stamp: 22, id: id("2"), subject: "Two".into(), body: "Two".into() },
+            Op::Delete { local: "l3".into(), id: id("3") },
+        ];
+        let mut order: Vec<&'static str> = Vec::new();
+        let mut send = |req: &URLRequest| {
+            let body = String::from_utf8(req.body.clone().unwrap()).unwrap();
+            let (name, answer) = if body.contains("<m:CreateItem>") {
+                ("create", written_answer("CreateItem", "9"))
+            } else if body.contains("<m:UpdateItem ") {
+                ("update", written_answer("UpdateItem", "2"))
+            } else if body.contains("<m:DeleteItem ") {
+                ("delete", r#"<m:DeleteItemResponseMessage ResponseClass="Success"/>"#.to_string())
+            } else if body.contains("<m:FindItem ") {
+                ("find", find_answer(&["9", "2"], true))
+            } else {
+                ("get", get_answer(&[("9", "New", "New\nbody"), ("2", "Two", "Two")]))
+            };
+            order.push(name);
+            Ok((200, answer))
+        };
+        let report = sync_once(&mut send, URL, "Basic x", &ops);
+        assert_eq!(order, vec!["create", "update", "delete", "find", "get"]);
+        assert_eq!(report.written.len(), 3);
+        assert_eq!(report.written[0], Written { local: "l1".into(), stamp: 11, result: Ok(Some(ItemId { id: "AAMk9".into(), change_key: "CQnew9".into() })), deleted: false });
+        assert_eq!(report.written[1].result, Ok(Some(ItemId { id: "AAMk2".into(), change_key: "CQnew2".into() })));
+        assert!(report.written[2].deleted && report.written[2].result == Ok(None));
+        assert_eq!(report.notes.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_refused_login_stops_the_writes_and_is_not_tried_per_note() {
+        let ops: Vec<Op> = (1..=3).map(|n| Op::Delete { local: format!("l{n}"), id: id(&n.to_string()) }).collect();
+        let mut sent = 0;
+        let mut send = |_: &URLRequest| {
+            sent += 1;
+            Ok((401, String::new()))
+        };
+        let report = sync_once(&mut send, URL, "Basic wrong", &ops);
+        assert_eq!(sent, 2, "one refused write, then the read; the other writes are not sent");
+        assert!(report.written.iter().all(|w| w.result.is_err()));
+        assert!(report.notes.unwrap_err().contains("did not accept the login"));
+    }
+
+    #[test]
+    fn only_an_exchange_account_with_notes_on_is_synced() {
+        let ex = |id: &str, on: bool| {
+            let mut a = Account { url: "https://mail.example.com/EWS/Exchange.asmx".into(), ..Account::new(Kind::Exchange, id, id, "ann") };
+            a.set_service(Service::Notes, on);
+            a
+        };
+        assert_eq!(first_account(&[ex("off", false), ex("on", true)]).unwrap().id, "on");
+        assert!(first_account(&[ex("off", false)]).is_none());
+        let mut s = Sync::new();
+        assert!(!s.reply(5, &Err("x".into())), "a reply nobody asked for is not the password");
+        s.last = Some(1.0);
+        s.refresh();
+        assert!(s.last.is_none());
     }
 }

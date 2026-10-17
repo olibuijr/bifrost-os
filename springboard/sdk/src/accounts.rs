@@ -212,11 +212,12 @@ impl ErrorCode for AccountError {
 }
 
 /// The account types the system defines: identifier and description. They match the kinds of the Internet Accounts
-/// page (mail, CalDAV calendars and reminders, CardDAV contacts) and the BifrOSt account, so an app can name them.
-pub const BUILTIN_TYPES: [(&str, &str); 4] = [
+/// page (mail, CalDAV calendars and reminders, CardDAV contacts, Exchange notes) and the BifrOSt account, so an app can name them.
+pub const BUILTIN_TYPES: [(&str, &str); 5] = [
     ("bifrost.mail", "Mail"),
     ("bifrost.caldav", "Calendars and Reminders"),
     ("bifrost.carddav", "Contacts"),
+    ("bifrost.exchange", "Notes (Exchange)"),
     ("bifrost.cloud", "BifrOSt Account"),
 ];
 

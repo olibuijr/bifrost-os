@@ -64,12 +64,14 @@ mod sidebar;
 mod statusbar;
 mod tabs;
 mod empty_trash;
+mod extensions;
 mod system;
 mod toolbar;
 mod undo;
 mod views;
 mod window;
 mod windows;
+use extensions::*;
 use go::*;
 use info::*;
 use openwith::*;
@@ -185,6 +187,9 @@ struct Files {
     sys: SystemState,
     /// The windows opened with New Window (⌘N), in the order they were opened. The main window is `self`.
     windows: Vec<windows::ExtraWindow>,
+    /// File-manager sync extensions: apps that badge items and add menu items for the folders they declare. A cell,
+    /// because drawing asks for the badges.
+    ext: std::cell::RefCell<Extensions>,
 }
 fn home() -> PathBuf {
     let account = std::fs::read_to_string("/var/lib/springboard/account").unwrap_or_default();
@@ -216,6 +221,8 @@ impl Files {
         }
         let tag_index = TagIndex::load(&sidecar_path(&home));
         let smart = smart::load(&home);
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+        let ext = std::cell::RefCell::new(Extensions::discover(&springboard::shell::apphost::root(), &home, runtime.as_deref(), "is.olibuijr.files.desktop"));
         let mut f = Self {
             path: home.clone(),
             tabs: tabs::TabStrip::new(tabs::TabState { path: home.clone(), history: vec![], at: 0 }),
@@ -275,6 +282,7 @@ impl Files {
             row_text: Default::default(),
             sys: SystemState::default(),
             windows: Vec::new(),
+            ext,
         };
         // a folder given on the command line opens there (Show in Files)
         let start = std::env::args().nth(1).map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| f.home.clone());
@@ -480,6 +488,10 @@ impl App for Files {
             changed = true;
         }
         self.ctl_tick();
+        // a badge an extension answered with is drawn on this frame
+        if self.poll_extensions() {
+            changed = true;
+        }
         self.flush_services(ctx);
         if changed {
             self.revision += 1;
@@ -777,14 +789,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fixture(rows: Vec<Entry>) -> Files {
+    pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             dnd: Default::default(), windows: Vec::new(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
     }
     fn folder(name: &str) -> Entry {

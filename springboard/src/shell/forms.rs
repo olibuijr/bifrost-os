@@ -146,6 +146,7 @@ impl Prompt {
             Kind::Mail => ("Add Mail Account", "Enter the email address. The IMAP and SMTP servers are taken from its domain.", "Email Address"),
             Kind::CalDav => ("Add Calendar Account", "Enter the CalDAV server address, such as https://dav.example.com/.", "Server Address"),
             Kind::CardDav => ("Add Contacts Account", "Enter the CardDAV server address, such as https://dav.example.com/.", "Server Address"),
+            Kind::Exchange => ("Add Exchange Account", "Enter the Exchange Web Services address, such as https://mail.example.com/EWS/Exchange.asmx. Notes reads the Notes folder of this mailbox.", "Server Address"),
         };
         Prompt { max: 255, ..Prompt::new(Purpose::NewAccountAddress { kind }, title, message, label, "Next") }
     }
@@ -226,6 +227,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
         Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } | Purpose::ConfirmPassword { .. } => accounts::valid_password(text),
         Purpose::NewAccountAddress { kind: Kind::Mail } => shared::valid_address(text.trim()),
+        Purpose::NewAccountAddress { kind: Kind::Exchange } => shared::valid_exchange_url(text.trim()),
         Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
         Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
@@ -243,6 +245,17 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_exchange_server_address_must_be_https() {
+        let ask = Purpose::NewAccountAddress { kind: Kind::Exchange };
+        assert!(acceptable(&ask, "https://mail.example.com/EWS/Exchange.asmx"));
+        assert!(!acceptable(&ask, "http://mail.example.com/EWS/Exchange.asmx"));
+        assert!(acceptable(&Purpose::NewAccountAddress { kind: Kind::CalDav }, "http://dav.example.com/"), "DAV keeps its own rule");
+        let prompt = Prompt::new_account_address(Kind::Exchange);
+        assert_eq!(prompt.title, "Add Exchange Account");
+        assert_eq!(prompt.purpose, ask);
+    }
 
     #[test]
     fn a_new_password_is_typed_again_before_it_is_used() {

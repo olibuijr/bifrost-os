@@ -2,7 +2,7 @@
 //! read from the shared list (`bifrost_ui::internet_accounts`).
 //!
 //! Each account lists its services with a switch per service (Mail; Calendars and Reminders for CalDAV; Contacts for
-//! CardDAV), then a Remove row. Add Account asks for the address, the user name and the password in three one-field
+//! CardDAV; Notes for Exchange), then a Remove row. Add Account asks for the address, the user name and the password in three one-field
 //! prompts ([`super::forms`]). The password goes to the passwords group; the list file never holds one.
 //!
 //! The page is built from the list read at build time, so it needs no state of its own. The file operations here
@@ -83,7 +83,7 @@ pub fn spec(s: &PageState) -> Spec {
         groups.push(Group::new(rows).header("DECLINED REQUESTS").footer("Apps that asked for an account type you refused. Tap one to let it ask again."));
     }
     let adds: Vec<Item> = Kind::ALL.iter().map(|&k| Item::new(k.label()).tint(Tint::Blue).action(Action::InternetAccounts(Act::Add(k)))).collect();
-    groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Passwords are saved in Passwords."));
+    groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Exchange gives Notes the notes of a mailbox. Passwords are saved in Passwords."));
     Spec { id: PageId::InternetAccounts, title: "Internet Accounts".into(), large: false, groups }
 }
 
@@ -91,7 +91,7 @@ pub fn spec(s: &PageState) -> Spec {
 fn detail(a: &Account) -> String {
     let place = match a.kind {
         Kind::Mail => a.email.as_str(),
-        Kind::CalDav | Kind::CardDav => a.url.as_str(),
+        Kind::CalDav | Kind::CardDav | Kind::Exchange => a.url.as_str(),
     };
     format!("{}  ·  {}  ·  {}", a.kind.label(), a.username, place)
 }
@@ -153,11 +153,13 @@ pub fn finish(path: &Path, root: &Path, purpose: &Purpose, text: &str) -> Result
             let ok = match kind {
                 Kind::Mail => shared::valid_address(address),
                 Kind::CalDav | Kind::CardDav => shared::valid_dav_url(address),
+                Kind::Exchange => shared::valid_exchange_url(address),
             };
             if !ok {
                 return Err(match kind {
                     Kind::Mail => "Enter an email address, such as name@example.com.".to_string(),
                     Kind::CalDav | Kind::CardDav => "Enter a web address that starts with https://.".to_string(),
+                    Kind::Exchange => "Enter the Exchange server address; it must start with https://.".to_string(),
                 });
             }
             Ok(Some(Prompt::new_account_user(*kind, address)))
@@ -181,8 +183,8 @@ fn add(path: &Path, root: &Path, kind: Kind, address: &str, username: &str, pass
     crate::credentials::save(root, &account.password_site(), &account.username, password).map_err(|_| "The password could not be saved in Passwords.".to_string())
 }
 
-/// The account for an address (mail) or server URL (CalDAV, CardDAV). Mail takes its servers from the address's
-/// domain: IMAP on 993 with TLS and SMTP on 587 with STARTTLS. The DAV account is named by its host.
+/// The account for an address (mail) or server URL (CalDAV, CardDAV, Exchange). Mail takes its servers from the address's
+/// domain: IMAP on 993 with TLS and SMTP on 587 with STARTTLS. The DAV and Exchange accounts are named by their host.
 pub fn build(kind: Kind, id: &str, address: &str, username: &str) -> Result<Account, String> {
     let account = match kind {
         Kind::Mail => {
@@ -194,7 +196,7 @@ pub fn build(kind: Kind, id: &str, address: &str, username: &str) -> Result<Acco
                 ..Account::new(kind, id, address, username)
             }
         }
-        Kind::CalDav | Kind::CardDav => {
+        Kind::CalDav | Kind::CardDav | Kind::Exchange => {
             let host = shared::url_host(address).unwrap_or("").to_string();
             Account { url: address.to_string(), ..Account::new(kind, id, &host, username) }
         }
@@ -257,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_list_says_so_and_offers_three_kinds() {
+    fn an_empty_list_says_so_and_offers_four_kinds() {
         let s = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
         assert_eq!(s.id, PageId::InternetAccounts);
         assert_eq!(s.title, "Internet Accounts");
@@ -265,7 +267,40 @@ mod tests {
         let adds = s.groups.last().unwrap();
         assert_eq!(adds.header.as_deref(), Some("ADD ACCOUNT"));
         let kinds: Vec<Action> = adds.items.iter().map(|i| i.action.clone()).collect();
-        assert_eq!(kinds, vec![Action::InternetAccounts(Act::Add(Kind::Mail)), Action::InternetAccounts(Act::Add(Kind::CalDav)), Action::InternetAccounts(Act::Add(Kind::CardDav))]);
+        assert_eq!(kinds, vec![Action::InternetAccounts(Act::Add(Kind::Mail)), Action::InternetAccounts(Act::Add(Kind::CalDav)), Action::InternetAccounts(Act::Add(Kind::CardDav)), Action::InternetAccounts(Act::Add(Kind::Exchange))]);
+    }
+
+    #[test]
+    fn an_exchange_account_is_added_in_three_prompts_and_gives_notes() {
+        let dir = std::env::temp_dir().join(format!("ia-exchange-{}", std::process::id()));
+        let path = dir.join(shared::STORE_FILE);
+        let kind = Kind::Exchange;
+        // http:// is refused with its reason before a second prompt
+        let err = finish(&path, &dir, &Purpose::NewAccountAddress { kind }, "http://mail.example.com/EWS/Exchange.asmx").unwrap_err();
+        assert!(err.contains("https://"), "{err}");
+        let user = finish(&path, &dir, &Purpose::NewAccountAddress { kind }, "https://mail.example.com/EWS/Exchange.asmx").unwrap().unwrap();
+        assert_eq!(user.purpose, Purpose::NewAccountUser { kind, address: "https://mail.example.com/EWS/Exchange.asmx".into() });
+        let pass = finish(&path, &dir, &user.purpose, "ann").unwrap().unwrap();
+        assert!(pass.secure);
+        assert_eq!(finish(&path, &dir, &pass.purpose, "secret"), Ok(None));
+        let saved = shared::load(&path).unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].kind, Kind::Exchange);
+        assert_eq!(saved[0].id, "exchange-1");
+        assert_eq!(saved[0].name, "mail.example.com");
+        assert!(saved[0].has(Service::Notes));
+        // the page lists it with a Notes switch and the server in the footer
+        let s = spec(&PageState { accounts: &saved, store: &Contents::default(), note: "" });
+        assert_eq!(s.groups[0].items[0].label, "Notes");
+        assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("Notes (Exchange)"));
+        assert_eq!(s.groups[0].items[0].action, Action::InternetAccounts(Act::Toggle { id: "exchange-1".into(), service: Service::Notes }));
+        // the password sits in the passwords group, not in the list
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("secret"));
+        toggle(&path, "exchange-1", Service::Notes).unwrap();
+        assert!(!shared::load(&path).unwrap()[0].has(Service::Notes));
+        remove(&path, &dir, "exchange-1").unwrap();
+        assert!(shared::load(&path).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

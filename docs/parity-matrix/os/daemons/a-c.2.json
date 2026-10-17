@@ -3167,10 +3167,44 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/exchange_notes.rs",
+   "bifrost": "springboard/sdk/src/exchange_notes.rs; springboard/apps/notes-desktop/src/notes/exchange.rs; springboard/apps/notes-desktop/src/main.rs; springboard/src/shell/internet_accounts_page.rs; springboard/ui/src/internet_accounts.rs",
    "status": "partial",
-   "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Not wired: the Notes app and an Exchange account type in Settings. Lead 2026-10-17: not ready: the Notes app does not call exchange_notes and Settings has no Exchange account yet.",
-   "rea": []
+   "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Wired 2026-10-17 (wave 14): Settings > Internet Accounts > Notes (Exchange) and the Notes app (exchange.rs, Sync in the SDK).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "exchange_notes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "exchange::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "exchange_notes_appear_in_their_folder_and_local_edits_go_back_as_changes"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests::an_exchange_account_feeds_notes_and_needs_https"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "internet_accounts_page::tests::an_exchange_account_is_added_in_three_prompts_and_gives_notes"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "forms::tests::an_exchange_server_address_must_be_https"
+    }
+   ],
+   "ready_note": "The user path: Settings > Internet Accounts > Add Account > Notes (Exchange) takes an https:// server address, a user name and a password (saved in Passwords), and the account lists a Notes switch. The Notes app reads the first such account on start, every five minutes and from Note > Sync Exchange Notes (password through the passwords store, network on a worker thread): the mailbox's Notes folder becomes a Notes folder named after the account, local edits, new notes and deletions are sent (delete moves the item to Deleted Items), and a note open in the editor is not replaced. Tested with canned server answers (no live Exchange server); verify against a real mailbox on Midget."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.notificationcenterui.plist",

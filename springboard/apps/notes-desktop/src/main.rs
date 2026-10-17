@@ -38,6 +38,8 @@ struct NotesApp {
     widget: Option<Vec<String>>,
     /// the menu bar extra with New Quick Note, made once the window is configured
     quick: Option<StatusItem>,
+    /// Internet Accounts: the Exchange account whose Notes service is on is read and written in the background
+    exchange: bifrost_app::exchange_notes::Sync,
 }
 
 /// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
@@ -148,6 +150,8 @@ const MENU_LAYOUT_GALLERY: u32 = 13;
 const MENU_OPEN_WINDOW: u32 = 14;
 /// Window > Float on Top, for the focused note window.
 const MENU_FLOAT_ON_TOP: u32 = 15;
+/// Note > Sync Exchange Notes: a round now, not at the next interval.
+const MENU_EXCHANGE: u32 = 17;
 /// Notes > Settings: the pane over the window (text size, new note start, dark background, sort and grouping).
 const MENU_SETTINGS: u32 = 16;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
@@ -411,6 +415,7 @@ impl App for NotesApp {
         note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
         note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(editing));
+        note.push(AppMenuItem::new(MENU_EXCHANGE, "Sync Exchange Notes").enabled(!self.exchange.busy()));
         note.push(AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,"));
         let focused = n.windows.focused();
         let float = AppMenu {
@@ -514,6 +519,10 @@ impl App for NotesApp {
             MENU_FIND => {
                 n.find(&ctx.ui, now);
                 true
+            }
+            MENU_EXCHANGE => {
+                self.exchange.refresh();
+                false
             }
             MENU_OPEN_WINDOW => {
                 n.request_window();
@@ -762,7 +771,11 @@ impl App for NotesApp {
 
     /// A service call's error (an older shell answers "no service ..." for a service it does not have) is logged;
     /// the app keeps going without the feature.
-    fn service_reply(&mut self, ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // the password the Exchange sync asked Passwords for
+        if self.exchange.reply(request, result) {
+            return false;
+        }
         if let Err(e) = result {
             ctx.log(&format!("service: {e}"));
         }
@@ -804,7 +817,16 @@ impl App for NotesApp {
             self.last_wall = t;
             n.set_wall(Wall::sample(t));
         }
-        let redraw = n.tick(&ctx.ui, t);
+        // Internet Accounts > Exchange: a finished round is taken into the Notes folder of the account
+        let mut exchanged = false;
+        if let Some(done) = self.exchange.poll_local(ctx, t, &mut |account| n.exchange_plan(account)) {
+            let applied = n.exchange_apply(&ctx.ui, t, &done.account, &done.report);
+            for e in &applied.errors {
+                ctx.log(&format!("exchange notes: {e}"));
+            }
+            exchanged = applied.changed();
+        }
+        let redraw = n.tick(&ctx.ui, t) || exchanged;
         let requested = n.take_window_request();
         self.track_restorable(ctx);
         let opened = requested.is_some_and(|id| self.open_note_window(ctx, &id));
@@ -853,5 +875,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None, exchange: bifrost_app::exchange_notes::Sync::new() });
 }

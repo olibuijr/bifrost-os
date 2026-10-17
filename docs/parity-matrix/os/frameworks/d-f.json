@@ -6447,11 +6447,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs",
+   "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs; springboard/apps/files/src/extensions.rs; springboard/src/shell/apphost.rs",
    "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Open: Files does not host extensions or draw badges yet. Lead 2026-10-17: not ready: the file-manager extension API has no process host or badge drawing yet.",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Wired 2026-10-17 (wave 14): Files hosts the extension apps that declare file_manager_folders and draws their badges and menu rows (extensions.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_manager_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "extensions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "apphost::tests::file_manager_extensions_declare_the_folders_they_watch"
+    }
+   ],
+   "ready_note": "An app whose manifest.toml has file_manager_folders = [\"~/Cloud\"] is an extension for those folders. Files finds it at start, tells it which folder is shown, asks it for badges on a worker thread (drawn on icon, list and column items on the next frame) and for menu rows when a shortcut menu opens, and sends the chosen row back, all over the app's control socket and only for paths inside the declared folders. The extension app must already be running (nothing launches it) and the toolbar button it can describe is not drawn. Tested with an in-process extension behind the real request and answer path; verify with a running extension app on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FlexMusicKit.framework",

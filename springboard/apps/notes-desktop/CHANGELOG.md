@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.23.0 — 2026-10-17
+
+- Exchange notes: an Exchange account added in Settings > Internet Accounts (Notes (Exchange)) with its Notes switch on is mirrored in a Notes folder named after the account (`notes/exchange.rs`, SDK `exchange_notes`). Notes made there appear in the folder and open, edit, search and delete like any note; edits, new notes and deletions go back to the mailbox's Notes folder (a deleted note moves to Deleted Items on the server). A round runs when the app starts, every five minutes, and from Note > Sync Exchange Notes. A note edited on both sides keeps the local text as a separate note; a note open in the editor is not replaced until it is closed. The manifest asks for `network` and `keychain` (the password is read from Passwords).
+
 ## 1.22.0 — 2026-10-17
 
 - Open in Separate Window: a double-click on a note row, or Note > Open in Separate Window, opens the note in a window of its own (`notes/note_windows.rs`). The window shows the note's text read-only: keyboard input is not routed to extra windows yet. Window > Float on Top stacks the focused note window above the others (`windows::set_window_level`).

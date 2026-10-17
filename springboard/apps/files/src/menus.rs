@@ -134,6 +134,8 @@ impl Files {
         if hit.is_none() && self.in_bin() {
             items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
         }
+        // the rows file-manager extensions add for the selection, or for the folder
+        items.extend(self.extension_menu_items(hit.is_some()));
         ctx.context_menu(x, y, items);
     }
     /// Copy Item Path (Option+Cmd+C): the focused item's full path as text on the clipboard.
@@ -178,7 +180,7 @@ impl Files {
                 self.sort_rows();
                 self.revision += 1;
             }
-            _ => return false,
+            _ => return self.extension_action(id),
         }
         true
     }

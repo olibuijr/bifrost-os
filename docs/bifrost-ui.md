@@ -5347,8 +5347,24 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
 
 - **File-manager sync extensions (`bifrost_app::file_manager_sync`)**: `SyncExtension` (observe begin and end, badge request, menus,
   toolbar button), `SyncController` (observed folders, registered badges, per-item badges limited to the observed folders, the host's
-  selection) and `SyncHost` (what the Files app asks). Parity row: `FinderSyncPriv`. Gap: Files does not host an extension process or
-  draw the badges yet, and there is no enable screen in Settings.
+  selection) and `SyncHost` (what the Files app asks). Parity row: `FinderSyncPriv`. Wired in wave 14: an extension app declares
+  `file_manager_folders = ["~/Cloud"]` in its manifest (`~/` is home; `/`, home itself, relative paths and `..` are refused) and answers
+  `ae.filemanager.*` events on its control socket with `file_manager_sync::serve` (describe, observe, badges, menu, perform).
+  `RemoteExtension` is the host side: badges are asked for on a worker thread in batches and cached (asked again after 5 s), menu
+  items are asked for with a 200 ms timeout and an app that does not answer is skipped for 30 s, and only paths inside the declared
+  folders are ever sent. Files (`apps/files/src/extensions.rs`) discovers the apps at start, tells them which folder is shown, draws
+  their badges on icon, list and column items, adds their rows to the item and folder shortcut menus and sends the choice back.
+  Gaps: no enable screen in Settings (declaring the folders is the enabling), nothing starts an extension app that is not running (no
+  SDK call launches an app by id), the toolbar button an extension describes is not drawn, the app list is read at start, and badge
+  images are symbol names.
+- **Exchange notes (`bifrost_app::exchange_notes`, wave 14)**: Settings > Internet Accounts offers Notes (Exchange) (`Kind::Exchange`,
+  account type `bifrost.exchange`, service `Notes`; the server address must be `https://`, the password goes to Passwords). The Notes
+  app (1.23.0) mirrors the Notes folder of the first Exchange account with Notes switched on into a Notes folder named after the account
+  (`notes/exchange.rs`): a round runs at start, every five minutes and from Note > Sync Exchange Notes; local edits, new notes and
+  deletions go to the server first (a delete moves the item to Deleted Items), then the server's changes come in. A note edited on both
+  sides keeps the local text as a second note; the open note is not replaced until it is closed; a deleted account folder never deletes
+  on the server. Gaps: plain text only (formatting is flattened), no autodiscover or OAuth, one account, no sync progress or error shown
+  in the window (errors go to the app log).
 - **Local language model (`bifrost_app::local_model`)**: `LocalModelProvider` is a `ModelProvider` for the local inference engine over
   a loopback port (chat-completions JSON over HTTP). `LocalEndpoint::parse` refuses any non-loopback host, so a conversation never leaves
   the machine. Tool calls come back either as the engine's `tool_calls` field or as the prompted `{"tool_calls": [...]}` JSON.
