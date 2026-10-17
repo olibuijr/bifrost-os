@@ -313,7 +313,13 @@ impl Run<'_> {
 /// Runs `actions` through `host` and reports each step that ran, in order, with the steps of a block once per pass. The
 /// first step that cannot be done stops the run; every step after it in the list is reported as not run.
 pub fn run(actions: &[Action], host: &mut dyn Host) -> Vec<Step> {
-    let mut r = Run { actions, host, vars: Vec::new(), output: String::new(), steps: Vec::new(), budget: MAX_STEPS, failed_at: None };
+    run_with_input(actions, host, "")
+}
+
+/// Like [`run`], but the first step sees `input` as the previous output: the text a caller hands the shortcut (the files
+/// dropped on its droplet, one path per line).
+pub fn run_with_input(actions: &[Action], host: &mut dyn Host, input: &str) -> Vec<Step> {
+    let mut r = Run { actions, host, vars: Vec::new(), output: input.to_string(), steps: Vec::new(), budget: MAX_STEPS, failed_at: None };
     r.range(0, actions.len());
     if let Some(f) = r.failed_at {
         for a in actions.iter().skip(f + 1).filter(|a| !is_marker(a)) {
