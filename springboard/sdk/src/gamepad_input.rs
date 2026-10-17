@@ -11,6 +11,9 @@
 //! Reading the device and delivering its records to the focused app is the shell's gamepad service; apps receive
 //! the changes through the same model.
 
+use crate::gamepad_service::{Controller as PadController, Event as PadEvent};
+use std::collections::BTreeMap;
+
 pub use bifrost_ui::gamepad::{element, Axis, AxisRange, Button, Change, ControllerInput, Element, Gamepad, QUEUE_LIMIT};
 
 /// The name of a button as it reads in a log or a label.
@@ -108,6 +111,48 @@ impl ExtendedProfile {
     }
 }
 
+/// One app's view of the controllers the shell reports. The shell sends `connected`, `disconnected` and `input` service
+/// events to the focused app (connections to every app); feed each one to [`Session::apply`] from the app's
+/// `service_event` hook, then read the pads and their input queues from the session.
+#[derive(Default)]
+pub struct Session {
+    pads: BTreeMap<u32, (PadController, ControllerInput)>,
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Applies one decoded service event: a connect adds the pad with an empty input stream, a disconnect removes it
+    /// and its queue, and an input is pushed onto its controller's stream (ignored when that controller is unknown).
+    pub fn apply(&mut self, event: PadEvent) {
+        match event {
+            PadEvent::Connected(c) => {
+                self.pads.insert(c.id, (c, ControllerInput::new()));
+            }
+            PadEvent::Disconnected(c) => {
+                self.pads.remove(&c.id);
+            }
+            PadEvent::Input { controller, change } => {
+                if let Some((_, input)) = self.pads.get_mut(&controller) {
+                    input.push(change);
+                }
+            }
+        }
+    }
+
+    /// The connected controllers, in id order.
+    pub fn controllers(&self) -> impl Iterator<Item = &PadController> {
+        self.pads.values().map(|(c, _)| c)
+    }
+
+    /// The input stream of controller `id`, for polling or callbacks.
+    pub fn input_mut(&mut self, id: u32) -> Option<&mut ControllerInput> {
+        self.pads.get_mut(&id).map(|(_, input)| input)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,6 +164,23 @@ mod tests {
             bits[usize::from(code / 8)] |= 1u8 << (code % 8);
         }
         bits
+    }
+
+    #[test]
+    fn session_tracks_connects_inputs_and_disconnects() {
+        let mut session = Session::new();
+        let pad = PadController { id: 3, name: "Pad A".into(), path: "/dev/input/event5".into() };
+        session.apply(PadEvent::Connected(pad.clone()));
+        assert_eq!(session.controllers().collect::<Vec<_>>(), vec![&pad]);
+        session.apply(PadEvent::Input { controller: 3, change: Change::Button { button: Button::South, pressed: true } });
+        session.apply(PadEvent::Input { controller: 9, change: Change::Dpad { x: 1, y: 0 } });
+        let input = session.input_mut(3).expect("pad 3 is connected");
+        assert!(input.gamepad().is_pressed(Button::South));
+        assert_eq!(input.poll(), Some(Change::Button { button: Button::South, pressed: true }));
+        assert_eq!(input.poll(), None);
+        session.apply(PadEvent::Disconnected(pad));
+        assert_eq!(session.controllers().count(), 0);
+        assert!(session.input_mut(3).is_none());
     }
 
     #[test]

@@ -12,7 +12,7 @@
       "apple": "MKMapView, Map (SwiftUI)",
       "bifrost": "springboard/ui/src/mapview.rs (MapView, MapType, MapInteraction); wired: springboard/apps/weather-desktop/src/insights.rs (map_view, grid) and weather.rs MAP card",
       "status": "partial",
-      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Built 2026-10-17: bifrost_app::maps re-exports the map view, camera, controls, user location, snapshot and place models for apps; tests maps::tests. Drawing the map and its tile source are still missing."
+      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Built 2026-10-17: bifrost_app::maps re-exports the map view, camera, controls, user location, snapshot and place models for apps; tests maps::tests. Drawing the map and its tile source are still missing. Wave 4 (2026-10-17): bifrost_app::maps::Snapshotter renders the Maps app's tiles into a picture; an embedded map view in an app window is still missing; tests maps::tests."
     },
     {
       "feature": "Map camera and region",
@@ -33,7 +33,7 @@
       "apple": "MKGeocodingRequest",
       "bifrost": "springboard/src/shell/weather/data.rs (geocode_url, parse_places, search_places)",
       "status": "partial",
-      "note": "Place-name text search asks for six matches and returns places with name, region, lat and lon; tested headless in springboard/tests/parity_sdk-tests-21.rs. Not the reference geocoder: no placemark or address parts, no map display and no reverse geocoding."
+      "note": "Place-name text search asks for six matches and returns places with name, region, lat and lon; tested headless in springboard/tests/parity_sdk-tests-21.rs. Not the reference geocoder: no placemark or address parts, no map display and no reverse geocoding. Wave 4 (2026-10-17): bifrost_app::maps::search_places uses the Maps app's Nominatim geocoder, which returns the placemark parts (type, address details); tests maptiles::geocode::tests and maps::tests."
     },
     {
       "feature": "Reverse geocoding (coordinate to address)",
@@ -68,7 +68,7 @@
       "apple": "MKMapSnapshotter, MKMapSnapshotter.Snapshot",
       "bifrost": "springboard/ui/src/map_snapshot.rs (Snapshot::tiles, Snapshot::point, Snapshot::fit_zoom, tile_path)",
       "status": "partial",
-      "note": "The tiles that cover a snapshot, the pixel placement of tiles and pins, and the zoom that fits a set of coordinates are modelled and tested in map_snapshot and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no tile source and no renderer that composes the image, so no snapshot is produced yet."
+      "note": "The tiles that cover a snapshot, the pixel placement of tiles and pins, and the zoom that fits a set of coordinates are modelled and tested in map_snapshot and springboard/ui/tests/parity_sdk-gaps-02.rs. Gap: no tile source and no renderer that composes the image, so no snapshot is produced yet. Wave 4 (2026-10-17): bifrost_app::maps::Snapshotter renders a picture of the tiles of a view (springboard::maptiles::compose::snapshot, offline tiles stay white); no PNG encoder or snapshot object yet; tests maps::tests and maptiles::compose::tests."
     },
     {
       "feature": "Map controls (compass, zoom, scale, user tracking)",
@@ -82,7 +82,7 @@
       "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
       "bifrost": "springboard/ui/src/map_user_location.rs (UserLocation); springboard/ui/src/mapview.rs (UserTracking, MapCamera::follow); springboard/ui/src/location_auth.rs; springboard/ui/src/location.rs (LocationFix); tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine."
+      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine. Wave 4 (2026-10-17): bifrost_app::maps::feed_user_location takes a shell location report into UserLocation (fix_from_location); the shell's location service still needs a Midget check; tests maps::tests."
     },
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",
