@@ -270,9 +270,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/container_layout.rs (restore_target, restore_files)",
    "status": "gap",
-   "note": "Needed to move a user's files, settings and apps from another machine or an earlier install; nothing provides it. Build a restore that reads a backup archive and fills the per-app container folders in springboard/sdk/src/container_layout.rs.",
+   "note": "Needed to move a user's files, settings and apps from another machine or an earlier install; nothing provides it. Build a restore that reads a backup archive and fills the per-app container folders in springboard/sdk/src/container_layout.rs. Built 2026-10-17: restore_target and restore_files write backed-up files into an app container and skip Library/Caches and tmp (springboard/core/src/container_layout.rs, tests container_layout::tests). The backup archive reader and the Settings restore flow are not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -389,9 +389,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/updated/src/assets.rs",
    "status": "gap",
-   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format. Built 2026-10-17: ManagedDownloads::run_next and run_all run the queue through a transfer callback (ui managed_download::tests); the shell service that calls them and fetches the packs is not built.",
+   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format. Built 2026-10-17: ManagedDownloads::run_next and run_all run the queue through a transfer callback (ui managed_download::tests); the shell service that calls them and fetches the packs is not built. Built 2026-10-17: the asset daemon (springboard/updated/src/assets.rs, tests assets::tests) runs the queues on unmetered links; no pack source or pack format is built, so a pack that reaches the transfer fails and is counted.",
    "rea": [],
    "method": "assessed"
   },
@@ -410,11 +410,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/updated/src/assets.rs",
    "status": "gap",
-   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built.",
+   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built. Built 2026-10-17: AssetDaemon in springboard/updated/src/assets.rs runs the apps' queues (tests assets::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "assets::tests"
+    }
+   ],
+   "ready_note": "the asset daemon in the update agent: runs each app's managed download queue on unmetered links, with a daily budget, low-power stop and three attempts (springboard/updated/src/assets.rs); the pack transport is the MobileAsset row"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
@@ -1059,7 +1068,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs (desktop_display); springboard/wm/src/output_layout.rs",
    "status": "partial",
-   "note": "The Displays page shows the active mode, scale and night shift, and the arrangement model is tested. Gap: the reference's per-monitor panel plug-ins and hardware brightness control are not built; arrangement is not yet applied to hardware.",
+   "note": "The Displays page shows the active mode, scale and night shift, and the arrangement model is tested. Gap: the reference's per-monitor panel plug-ins and hardware brightness control are not built; arrangement is not yet applied to hardware. Corrected 2026-10-17: hardware brightness is already driven (springboard/src/bare/power.rs set_brightness, the Displays slider). The remaining gap is the per-monitor panel plug-ins and applying the arrangement to hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -1767,9 +1776,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login)",
+   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login, share_access, answer_share_prompt, forget_share_login)",
    "status": "gap",
-   "note": "Build a network authentication agent that prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs); the reference's network-auth agent app has no BifrOSt counterpart yet. Built 2026-10-17: the keychain store for SMB share logins (springboard/src/keychain.rs save_share_login and share_login, tests keychain::tests); the prompt that asks for a login and the 802.1X path are not built.",
+   "note": "Build a network authentication agent that prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs); the reference's network-auth agent app has no BifrOSt counterpart yet. Built 2026-10-17: the keychain store for SMB share logins (springboard/src/keychain.rs save_share_login and share_login, tests keychain::tests); the prompt that asks for a login and the 802.1X path are not built. Built 2026-10-17: share_access, answer_share_prompt and forget_share_login decide between a saved login and a prompt (springboard/src/keychain.rs, tests keychain::tests). The prompt sheet and the 802.1X path are not built.",
    "rea": [],
    "method": "assessed"
   },
