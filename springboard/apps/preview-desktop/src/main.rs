@@ -31,6 +31,8 @@ use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::proto::DocMode;
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::{screenshot, speech};
+use bifrost_core::json::Json;
 use canvas::{Action, Layout, Mode, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
@@ -55,6 +57,12 @@ const MENU_INSERT_FILE: u32 = 0x5003;
 const MENU_INSERT_BLANK: u32 = 0x5004;
 /// Tools > Insert Signature: one item per saved signature, from this id on.
 const MENU_SIGNATURE: u32 = 0x5100;
+/// Edit > Speech (speaks the selection, else the page) and File > Take Screenshot (selection, window, whole screen).
+const MENU_SPEAK_START: u32 = 0x5005;
+const MENU_SPEAK_STOP: u32 = 0x5006;
+const MENU_SHOT_SELECTION: u32 = 0x5007;
+const MENU_SHOT_WINDOW: u32 = 0x5008;
+const MENU_SHOT_SCREEN: u32 = 0x5009;
 /// The size a text box is dragged out to, as a share of the page, when a click places it.
 const TEXT_BOX: (f32, f32) = (0.3, 0.06);
 /// The width an inserted signature takes, as a share of the page.
@@ -157,6 +165,8 @@ struct Viewer {
     export_shown: bool,
     /// Whether the signature picker is shown on the right.
     signatures_shown: bool,
+    /// The screenshot request the shell has not answered yet.
+    shot_request: Option<u32>,
     export_format: export_panel::Format,
     /// A PDF that needs a password, and the password being typed for it.
     asking: Option<Ask>,
@@ -213,6 +223,7 @@ impl Viewer {
             color_panel: false,
             export_shown: false,
             signatures_shown: false,
+            shot_request: None,
             export_format: export_panel::Format::Png,
             asking: None,
             password: None,
@@ -467,6 +478,43 @@ impl Viewer {
             }
             None => self.status = "The picture could not be copied.".into(),
         }
+    }
+
+    /// Edit > Speech > Start Speaking: the selected PDF text, else the shown page's text. The PDF worker reads both and
+    /// `finish_speak` starts the speech when they arrive. A picture has no text to speak.
+    fn speak(&mut self) -> bool {
+        let Some(doc) = &self.doc else { return false };
+        let Some(src) = doc.source_of(self.view.page) else { return false };
+        if !doc.is_pdf {
+            self.status = "There is no text to speak here.".into();
+            return true;
+        }
+        let band = self.selection_on_page().map(|sel| (sel.y, sel.y + sel.h));
+        let sent = doc.send(find::speech_job(src, band));
+        self.status = if sent { "Reading the text".into() } else { "The document is not open.".into() };
+        true
+    }
+
+    /// Speaks the text the worker read for `speak`: the selection when it has text, else the page.
+    fn finish_speak(&mut self, ctx: &Ctx, selected: &str, page: &str) {
+        match find::speech_text(selected, page) {
+            Some((text, what)) => {
+                speech::speak(ctx, &speech::Utterance::new(text));
+                self.status = format!("Speaking {what}");
+            }
+            None => self.status = "There is no text to speak here.".into(),
+        }
+    }
+
+    /// File > Take Screenshot: asks the shell's screenshot service. The shell answers the request, then sends the
+    /// picture's path as a `captured` event, and `service_event` opens it.
+    fn take_shot(&mut self, ctx: &Ctx, pick: screenshot::Pick) -> bool {
+        self.shot_request = Some(screenshot::take(ctx, pick));
+        self.status = match pick {
+            screenshot::Pick::Screen => "Taking a screenshot of the screen".into(),
+            _ => "Choose what to capture".into(),
+        };
+        true
     }
 
     /// Puts the text the worker copied on the clipboard.
@@ -768,6 +816,7 @@ impl Viewer {
         let mut saved = None;
         let mut inserted = None;
         let mut copied = None;
+        let mut spoken = None;
         if let Some(doc) = &self.doc {
             let (arrived, replies) = doc.take_replies();
             changed |= arrived;
@@ -786,6 +835,7 @@ impl Viewer {
                     Reply::Printed(status) => self.status = status,
                     Reply::Found(query, hits) => results = Some((query, hits)),
                     Reply::Copied(text) => copied = Some(text),
+                    Reply::Spoken(selected, page) => spoken = Some((selected, page)),
                     _ => {}
                 }
             }
@@ -798,6 +848,9 @@ impl Viewer {
         }
         if let Some(text) = copied {
             self.finish_copy(ctx, text);
+        }
+        if let Some((selected, page)) = spoken {
+            self.finish_speak(ctx, &selected, &page);
         }
         if let Some((query, hits)) = results {
             self.show_results(query, hits);
@@ -2295,6 +2348,11 @@ impl App for Viewer {
         file_items.push(item(Action::Save, open, false));
         file_items.push(item(Action::RevertToSaved, open, false));
         file_items.push(item(Action::RevertToOriginal, open, false));
+        file_items.push(AppMenuItem::separator());
+        file_items.push(AppMenuItem::submenu("Take Screenshot"));
+        file_items.push(AppMenuItem::new(MENU_SHOT_SELECTION, "From Selection\u{2026}").depth(1));
+        file_items.push(AppMenuItem::new(MENU_SHOT_WINDOW, "From Window\u{2026}").depth(1));
+        file_items.push(AppMenuItem::new(MENU_SHOT_SCREEN, "From Entire Screen").depth(1));
         let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
             AppMenu { title: "File".into(), items: file_items },
@@ -2310,6 +2368,10 @@ impl App for Viewer {
                     AppMenuItem::separator(),
                     item(Action::CopyText, open, false),
                     item(Action::SelectAll, open, false),
+                    AppMenuItem::separator(),
+                    AppMenuItem::submenu("Speech"),
+                    AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(open).depth(1),
+                    AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1),
                 ],
             },
             AppMenu {
@@ -2402,6 +2464,17 @@ impl App for Viewer {
         if self.open_menu(ctx, id) {
             return true;
         }
+        match id {
+            MENU_SPEAK_START => return self.speak(),
+            MENU_SPEAK_STOP => {
+                speech::stop(ctx);
+                return false;
+            }
+            MENU_SHOT_SELECTION => return self.take_shot(ctx, screenshot::Pick::Selection),
+            MENU_SHOT_WINDOW => return self.take_shot(ctx, screenshot::Pick::Window),
+            MENU_SHOT_SCREEN => return self.take_shot(ctx, screenshot::Pick::Screen),
+            _ => {}
+        }
         if (MENU_SIGNATURE..MENU_SIGNATURE + signature::MAX_SIGNATURES as u32).contains(&id) {
             let index = (id - MENU_SIGNATURE) as usize;
             self.track(|v| v.insert_signature(index));
@@ -2484,6 +2557,27 @@ impl App for Viewer {
             Err(e) => self.status = format!("Could not open {}: {e}", doc.name),
         }
         true
+    }
+
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.shot_request != Some(request) {
+            return false;
+        }
+        self.shot_request = None;
+        if let Err(e) = screenshot::started_from_reply(result) {
+            self.status = format!("Could not take a screenshot: {e}");
+        }
+        true
+    }
+
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        match screenshot::captured_path(service, event, body) {
+            Some(path) => {
+                self.open_path(&path);
+                true
+            }
+            None => false,
+        }
     }
 
     fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {

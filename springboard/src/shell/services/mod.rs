@@ -69,6 +69,7 @@ pub mod text_services;
 pub mod focus_filter;
 pub mod notify_bus;
 pub mod speech;
+pub mod screenshot;
 pub mod launch_services;
 pub mod display_services;
 pub mod window_services;
@@ -142,6 +143,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(focus_filter::FocusFilterService::default()),
         Box::new(notify_bus::NotifyBus::default()),
         Box::new(speech::Speech::default()),
+        Box::new(screenshot::ScreenshotService::default()),
         Box::new(launch_services::LaunchServices),
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),

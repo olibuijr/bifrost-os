@@ -131,6 +131,27 @@ pub fn copy_job(src: usize, band: Option<(f32, f32)>) -> Job {
     pdfjob::run(move |pdf: &Pdf| Reply::Copied(copy_text(pdf, src, band)))
 }
 
+/// A job that reads the text for Speech on source page `src`: the lines in `band` (the selection, when there is one)
+/// and the whole page's lines. [`speech_text`] picks which one is spoken.
+pub fn speech_job(src: usize, band: Option<(f32, f32)>) -> Job {
+    pdfjob::run(move |pdf: &Pdf| {
+        let selected = if band.is_some() { copy_text(pdf, src, band) } else { String::new() };
+        Reply::Spoken(selected, copy_text(pdf, src, None))
+    })
+}
+
+/// What Speech says: the selected text when it has any, else the page's text, with a label for the status line.
+/// `None` when neither has text.
+pub fn speech_text<'a>(selected: &'a str, page: &'a str) -> Option<(&'a str, &'static str)> {
+    if !selected.trim().is_empty() {
+        Some((selected, "the selection"))
+    } else if !page.trim().is_empty() {
+        Some((page, "the page"))
+    } else {
+        None
+    }
+}
+
 /// The shown page of the next (or previous) hit after `current`, from the shown pages of the hits (in any order). It
 /// wraps round to the other end. None with no hits.
 pub fn next_page(places: &[usize], current: usize, forward: bool) -> Option<usize> {
@@ -219,6 +240,14 @@ mod tests {
         assert_eq!(summary("x", 1), "1 match for \u{201c}x\u{201d}");
         assert_eq!(summary("x", 4), "4 matches for \u{201c}x\u{201d}");
         assert!(summary("x", MAX_HITS).starts_with("500 or more"));
+    }
+
+    #[test]
+    fn speech_says_the_selection_when_there_is_one_else_the_page() {
+        assert_eq!(speech_text("Hello", "Whole page"), Some(("Hello", "the selection")));
+        assert_eq!(speech_text("  \n ", "Whole page"), Some(("Whole page", "the page")), "a blank selection is no selection");
+        assert_eq!(speech_text("", "Whole page"), Some(("Whole page", "the page")));
+        assert_eq!(speech_text("", "   "), None, "no text at all says nothing");
     }
 
     #[test]
