@@ -64,3 +64,71 @@ pub fn message(level: Level, volume: &str) -> Option<String> {
         Level::Critical => Some(format!("{volume} is almost out of disk space. Free space now to avoid lost work.")),
     }
 }
+
+/// Once a shortage was announced, the same level is announced again after this many seconds.
+pub const REMIND_EVERY_S: i64 = 6 * 3600;
+
+/// Remembers the last level announced so a shortage is posted once per escalation, then again on a reminder interval.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Watch {
+    last: Option<Level>,
+    last_at: i64,
+}
+
+impl Watch {
+    /// The level to announce now, or `None` when nothing new needs saying. Easing back to `Ok` clears the memory, so
+    /// the next shortage is announced at once. A level above the last announced one is always announced; any other
+    /// shortage is announced again once `REMIND_EVERY_S` has passed (or when the clock has gone backwards).
+    pub fn observe(&mut self, level: Level, now: i64) -> Option<Level> {
+        if level == Level::Ok {
+            self.last = None;
+            return None;
+        }
+        let escalated = self.last.map_or(true, |last| level > last);
+        let due = now.saturating_sub(self.last_at) >= REMIND_EVERY_S || now < self.last_at;
+        if escalated || due {
+            self.last = Some(level);
+            self.last_at = now;
+            Some(level)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod watch_tests {
+    use super::*;
+
+    #[test]
+    fn the_first_shortage_is_announced_and_repeats_wait_for_the_reminder_interval() {
+        let mut w = Watch::default();
+        assert_eq!(w.observe(Level::Low, 1000), Some(Level::Low));
+        assert_eq!(w.observe(Level::Low, 1000 + REMIND_EVERY_S - 1), None);
+        assert_eq!(w.observe(Level::Low, 1000 + REMIND_EVERY_S), Some(Level::Low));
+    }
+
+    #[test]
+    fn escalating_is_announced_at_once_and_easing_is_not() {
+        let mut w = Watch::default();
+        assert_eq!(w.observe(Level::Low, 0), Some(Level::Low));
+        assert_eq!(w.observe(Level::Critical, 10), Some(Level::Critical));
+        assert_eq!(w.observe(Level::Critical, 20), None);
+        assert_eq!(w.observe(Level::Low, 30), None);
+    }
+
+    #[test]
+    fn easing_back_to_ok_rearms_the_next_shortage() {
+        let mut w = Watch::default();
+        assert_eq!(w.observe(Level::Critical, 0), Some(Level::Critical));
+        assert_eq!(w.observe(Level::Ok, 5), None);
+        assert_eq!(w.observe(Level::Low, 10), Some(Level::Low));
+    }
+
+    #[test]
+    fn a_clock_that_goes_backwards_announces_again() {
+        let mut w = Watch::default();
+        assert_eq!(w.observe(Level::Low, 500), Some(Level::Low));
+        assert_eq!(w.observe(Level::Low, 100), Some(Level::Low));
+    }
+}
