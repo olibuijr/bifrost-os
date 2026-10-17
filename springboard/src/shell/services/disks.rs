@@ -18,15 +18,22 @@
 //!
 //! When a removable whole disk (not a partition) appears, the shell also posts a "USB Disk Connected" notice in
 //! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice.
+//!
+//! The same arrival starts a probe on a thread (`bifrost_core::disk_magic`): the first sectors of each partition (or
+//! of the disk itself when it has none) are read and matched against the filesystems the system mounts. When a
+//! volume matches none (and is not an encrypted volume or swap), the shell posts a "Disk Not Readable" notice that
+//! points at Disk Utility, the counterpart of the reference's prompt for a disk it cannot read.
 use super::{Event, Shell, SystemService};
 use crate::shell::apps::AppId;
 use crate::shell::notify::store::Notification;
 use bifrost_core::disk_events::{Disk, DiskEvent};
+use bifrost_core::disk_magic::{self, Verdict};
 use bifrost_core::disk_scan;
 use bifrost_core::disk_session::Session;
 use bifrost_core::disk_wire;
 use bifrost_core::json::Json;
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 
 /// The shell clock `t` of a service tick is in milliseconds. How often the device list is read again.
 pub const SCAN_EVERY_MS: f64 = 2_000.0;
@@ -40,6 +47,10 @@ pub struct Disks {
     next_scan: f64,
     /// The removable whole disks that appeared in the last read, waiting for their notice.
     arrivals: Vec<Disk>,
+    /// where the device nodes are (`/dev`)
+    dev: PathBuf,
+    /// the probes running for arrived disks: each sends the disk's label and a verdict per volume
+    probes: Vec<Receiver<(String, Vec<(String, Verdict)>)>>,
 }
 
 impl Default for Disks {
@@ -58,7 +69,39 @@ impl Disks {
             primed: false,
             next_scan: 0.0,
             arrivals: Vec::new(),
+            dev: PathBuf::from("/dev"),
+            probes: Vec::new(),
         }
+    }
+
+    /// Starts reading the volumes of `disk` on a thread, so a flaky medium cannot stall the shell.
+    fn probe(&mut self, disk: &Disk) {
+        let mut volumes = disk_magic::partitions_of(&self.sys_block, &disk.bsd_name);
+        if volumes.is_empty() {
+            volumes.push(disk.bsd_name.clone());
+        }
+        let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
+        let dev = self.dev.clone();
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let results = volumes.into_iter().filter_map(|v| disk_magic::classify(&dev.join(&v)).map(|verdict| (v, verdict))).collect();
+            let _ = tx.send((label, results));
+        });
+        self.probes.push(rx);
+    }
+
+    /// The finished probes' sentences for volumes that cannot be read.
+    fn unreadable_notices(&mut self) -> Vec<String> {
+        let mut out = Vec::new();
+        self.probes.retain(|rx| match rx.try_recv() {
+            Ok((label, results)) => {
+                out.extend(disk_magic::unreadable_notice(&label, &results));
+                false
+            }
+            Err(TryRecvError::Empty) => true,
+            Err(TryRecvError::Disconnected) => false,
+        });
+        out
     }
 
     /// Reads the devices now and returns the events since the last read (none the first time).
@@ -144,6 +187,10 @@ impl SystemService for Disks {
         for disk in std::mem::take(&mut self.arrivals) {
             let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
             shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now));
+            self.probe(&disk);
+        }
+        for body in self.unreadable_notices() {
+            shell.notify(Notification::new(AppId::Settings, "Disk Not Readable", body, now));
         }
         events
     }
@@ -218,6 +265,34 @@ mod tests {
         add_disk(&sys, "sdc", "0", "3000");
         s.rescan();
         assert!(s.arrivals.is_empty());
+    }
+
+    #[test]
+    fn a_probe_reports_only_the_volumes_that_match_no_filesystem() {
+        let (sys, mounts) = fixture("probe");
+        add_disk(&sys, "sdb", "1", "2000");
+        let part = sys.join("sdb").join("sdb1");
+        fs::create_dir_all(&part).unwrap();
+        fs::write(part.join("partition"), "1").unwrap();
+        let dev = sys.parent().unwrap().join("dev");
+        fs::create_dir_all(&dev).unwrap();
+        fs::write(dev.join("sdb1"), vec![0u8; 8192]).unwrap();
+        let mut s = Disks::at(&sys, &mounts);
+        s.dev = dev;
+        let disk = Disk { bsd_name: "sdb".into(), size: 1, removable: true, read_only: false, model: "Flash Disk".into(), mount_point: None };
+        s.probe(&disk);
+        let mut notices = Vec::new();
+        for _ in 0..200 {
+            notices = s.unreadable_notices();
+            if !s.probes.is_empty() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            } else {
+                break;
+            }
+        }
+        assert_eq!(notices.len(), 1);
+        assert!(notices[0].contains("Flash Disk (sdb1)"), "{notices:?}");
+        assert!(s.probes.is_empty());
     }
 
     #[test]

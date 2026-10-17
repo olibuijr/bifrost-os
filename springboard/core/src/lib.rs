@@ -86,6 +86,7 @@ pub mod disk_wire;
 pub mod disk_format;
 pub mod disk_run;
 pub mod disk_scan;
+pub mod disk_magic;
 pub mod disk_request;
 pub mod volume_unlock;
 pub mod privd_wire;
