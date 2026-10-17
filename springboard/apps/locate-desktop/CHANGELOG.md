@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-10-17
+
+- The BifrOSt Account session comes from the SDK helper `bifrost_app::cloud_account::session` (the `is.bifrost.account`
+  group, item `bc_session`), not from its own reads. The session is a JSON item (token, account, server, expiry); a
+  session that does not decode counts as signed out. The group is granted only to first-party system apps.
+
 ## 0.4.0 — 2026-10-17
 
 - Account key in the keychain: the first device that turns Share My Location on creates the Find My key pair; the

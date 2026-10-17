@@ -1,6 +1,6 @@
 id = "is.olibuijr.locate.desktop"
 name = "Locate"
-version = "0.4.0"
+version = "0.4.1"
 exec = "bifrost-locate"
 min_shell = "0.4.84"
 summary = "Shows your BifrOSt devices on a map with their battery and last position, and lets you play a sound on or locate a device."
