@@ -161,9 +161,107 @@ pub fn rgba_scale(src: &Image, ow: usize, oh: usize) -> Image {
     img
 }
 
+/// Per-channel gains for white balance (1.0 leaves a channel as it is).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gains {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
+/// The gains at which the average colour of a frame's opaque pixels is grey (the gray-world assumption: a scene
+/// averages to neutral). Each gain is limited to 1/4 to 4, so a frame of one colour is not pushed to a wild cast.
+/// Transparent pixels are left out of the average. `None` when there is no opaque pixel or the frame is black.
+pub fn gray_world_gains(img: &Image) -> Option<Gains> {
+    let (mut sum, mut n) = ([0u64; 3], 0u64);
+    for &p in &img.px {
+        if p >> 24 == 255 {
+            sum[0] += (p & 255) as u64;
+            sum[1] += ((p >> 8) & 255) as u64;
+            sum[2] += ((p >> 16) & 255) as u64;
+            n += 1;
+        }
+    }
+    if n == 0 || sum.iter().all(|&s| s == 0) {
+        return None;
+    }
+    let avg = sum.map(|s| s as f32 / n as f32);
+    let grey = (avg[0] + avg[1] + avg[2]) / 3.0;
+    let gain = |a: f32| if a < 1.0 { 1.0 } else { (grey / a).clamp(0.25, 4.0) };
+    Some(Gains { r: gain(avg[0]), g: gain(avg[1]), b: gain(avg[2]) })
+}
+
+/// Multiplies the colour of every opaque pixel by `gains`, clamped to 255. Transparent pixels are not touched.
+pub fn apply_gains(img: &mut Image, gains: Gains) {
+    let scale = |c: u32, k: f32| (c as f32 * k).round().clamp(0.0, 255.0) as u32;
+    for p in img.px.iter_mut() {
+        if *p >> 24 == 255 {
+            let (r, g, b) = (*p & 255, (*p >> 8) & 255, (*p >> 16) & 255);
+            *p = scale(r, gains.r) | scale(g, gains.g) << 8 | scale(b, gains.b) << 16 | 255 << 24;
+        }
+    }
+}
+
+/// Gray-world white balance of a frame in place. Returns the gains used, or `None` when the frame was left as it was.
+pub fn white_balance(img: &mut Image) -> Option<Gains> {
+    let gains = gray_world_gains(img)?;
+    apply_gains(img, gains);
+    Some(gains)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn frame(px: Vec<u32>) -> Image {
+        let n = px.len();
+        Image { w: n, h: 1, px }
+    }
+
+    fn opaque(r: u32, g: u32, b: u32) -> u32 {
+        r | g << 8 | b << 16 | 255 << 24
+    }
+
+    #[test]
+    fn a_yellow_cast_is_taken_out_of_a_frame() {
+        let mut img = frame(vec![opaque(200, 200, 100); 16]);
+        let gains = white_balance(&mut img).expect("a cast can be corrected");
+        assert!(gains.b > gains.r, "blue is boosted and red reduced");
+        let p = img.px[0];
+        let (r, g, b) = (p & 255, (p >> 8) & 255, (p >> 16) & 255);
+        assert!(r.abs_diff(g) <= 1 && g.abs_diff(b) <= 2, "the average becomes grey: {r} {g} {b}");
+    }
+
+    #[test]
+    fn a_neutral_frame_gets_unit_gains() {
+        let mut img = frame(vec![opaque(90, 90, 90); 4]);
+        let gains = white_balance(&mut img).unwrap();
+        assert!((gains.r - 1.0).abs() < 1e-6 && (gains.g - 1.0).abs() < 1e-6 && (gains.b - 1.0).abs() < 1e-6);
+        assert_eq!(img.px[0], opaque(90, 90, 90));
+    }
+
+    #[test]
+    fn transparent_pixels_are_left_out_of_the_average_and_untouched() {
+        let clear = 0x12;
+        let mut img = frame(vec![opaque(200, 200, 100), clear, opaque(200, 200, 100)]);
+        white_balance(&mut img).unwrap();
+        assert_eq!(img.px[1], clear);
+    }
+
+    #[test]
+    fn a_black_or_transparent_frame_is_left_alone() {
+        let mut black = frame(vec![opaque(0, 0, 0); 4]);
+        assert_eq!(white_balance(&mut black), None);
+        let mut clear = frame(vec![0; 4]);
+        assert_eq!(white_balance(&mut clear), None);
+    }
+
+    #[test]
+    fn gains_are_limited_so_a_single_colour_is_not_pushed_out() {
+        let g = gray_world_gains(&frame(vec![opaque(250, 2, 2)])).unwrap();
+        assert!(g.g <= 4.0 && g.b <= 4.0 && g.r >= 0.25, "{g:?}");
+    }
+
 
     #[test]
     fn fit_keeps_aspect_inside_the_viewport() {

@@ -5146,7 +5146,7 @@
    "doc": "",
    "bifrost": "springboard/src/files/trash.rs (purge)",
    "status": "partial",
-   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure.",
+   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure. Built 2026-10-17: core::cache_purge::execute removes the planned folders under the cache root and never reaches outside it (tests execute_tests). Still open: nothing calls the plan under disk pressure yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -5814,7 +5814,7 @@
    "doc": "",
    "bifrost": "springboard/src/media/convert.rs",
    "status": "partial",
-   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built.",
+   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced.",
    "rea": [],
    "method": "assessed"
   },

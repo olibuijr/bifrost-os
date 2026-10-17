@@ -84,18 +84,43 @@ pub fn collections(send: &mut Send<'_>, base: &str, kind: Kind, auth: &str) -> R
     Ok(answer(send, &req)?.iter().filter(|r| dav::collection_kind(r) == Some(kind)).map(|r| dav::resolve(&home, &r.href)).collect())
 }
 
-/// The iCalendar text of every event that overlaps `start..end` (Unix seconds) in every calendar of the account.
-pub fn calendar_texts(send: &mut Send<'_>, base: &str, auth: &str, start: i64, end: i64) -> Result<Vec<String>, String> {
+/// One calendar object or card as the server holds it: its address, its version (ETag) and its text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Item {
+    /// The absolute URL of the object.
+    pub href: String,
+    /// The `getetag` value, when the server sent one.
+    pub etag: Option<String>,
+    pub text: String,
+}
+
+/// Every calendar object that overlaps `start..end` (Unix seconds) in every calendar of the account, with its address
+/// and version.
+pub fn calendar_items(send: &mut Send<'_>, base: &str, auth: &str, start: i64, end: i64) -> Result<Vec<Item>, String> {
     let mut out = Vec::new();
     for calendar in collections(send, base, Kind::CalDav, auth)? {
         let req = request("REPORT", &calendar, auth, "1", dav::calendar_query_body(start, end));
-        for r in answer(send, &req)? {
-            if let Some(text) = r.prop("calendar-data").filter(|t| !t.trim().is_empty()) {
-                out.push(text.to_string());
-                if out.len() >= MAX_ITEMS {
-                    return Ok(out);
-                }
-            }
+        collect_items(send, &req, "calendar-data", &calendar, &mut out)?;
+        if out.len() >= MAX_ITEMS {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+/// The iCalendar text of every event that overlaps `start..end` (Unix seconds) in every calendar of the account.
+pub fn calendar_texts(send: &mut Send<'_>, base: &str, auth: &str, start: i64, end: i64) -> Result<Vec<String>, String> {
+    Ok(calendar_items(send, base, auth, start, end)?.into_iter().map(|i| i.text).collect())
+}
+
+/// Every card in every address book of the account, with its address and version.
+pub fn card_items(send: &mut Send<'_>, base: &str, auth: &str) -> Result<Vec<Item>, String> {
+    let mut out = Vec::new();
+    for book in collections(send, base, Kind::CardDav, auth)? {
+        let req = request("REPORT", &book, auth, "1", dav::addressbook_query_body());
+        collect_items(send, &req, "address-data", &book, &mut out)?;
+        if out.len() >= MAX_ITEMS {
+            break;
         }
     }
     Ok(out)
@@ -103,19 +128,20 @@ pub fn calendar_texts(send: &mut Send<'_>, base: &str, auth: &str, start: i64, e
 
 /// The vCard text of every card in every address book of the account.
 pub fn card_texts(send: &mut Send<'_>, base: &str, auth: &str) -> Result<Vec<String>, String> {
-    let mut out = Vec::new();
-    for book in collections(send, base, Kind::CardDav, auth)? {
-        let req = request("REPORT", &book, auth, "1", dav::addressbook_query_body());
-        for r in answer(send, &req)? {
-            if let Some(text) = r.prop("address-data").filter(|t| !t.trim().is_empty()) {
-                out.push(text.to_string());
-                if out.len() >= MAX_ITEMS {
-                    return Ok(out);
-                }
+    Ok(card_items(send, base, auth)?.into_iter().map(|i| i.text).collect())
+}
+
+/// Adds the items of one REPORT answer to `out`: each response with a non-empty `data` property, up to [`MAX_ITEMS`].
+fn collect_items(send: &mut Send<'_>, req: &URLRequest, data: &str, collection: &str, out: &mut Vec<Item>) -> Result<(), String> {
+    for r in answer(send, req)? {
+        if let Some(text) = r.prop(data).filter(|t| !t.trim().is_empty()) {
+            out.push(Item { href: dav::resolve(collection, &r.href), etag: r.prop("getetag").map(str::to_string), text: text.to_string() });
+            if out.len() >= MAX_ITEMS {
+                break;
             }
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 /// The write transport: sends one request and reads its status and `ETag` header. [`session_send_etag`] uses the URL

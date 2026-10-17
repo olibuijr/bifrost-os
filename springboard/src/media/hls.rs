@@ -1,10 +1,107 @@
 //! HTTP Live Streaming media playlists (RFC 8216 section 4.3.3): the text an HLS stream starts from, listing the
 //! segments to fetch in order. This module parses that text and resolves each segment's address against the playlist's
-//! own address. It fetches nothing and decodes nothing; the caller downloads the segments and hands them to the demuxer.
-//! A master playlist (a list of variant streams) is refused by [`parse`] with [`Error::Master`]; [`parse_master`] reads
-//! it and [`select_variant`] picks the variant whose media playlist the caller then fetches.
+//! own address. [`load_media`] reads a stream's playlist (choosing a variant from a master playlist) and [`Segments`]
+//! joins its segments into one byte stream for the demuxer, fetching each segment when the reader reaches it. Fetching
+//! goes through a caller's function (the shell's HTTP client via [`client_fetch`]), so the logic is tested offline.
+//! A master playlist is refused by [`parse`] with [`Error::Master`]; [`parse_master`] reads it.
 
+use crate::deildu::http::Client;
+use std::collections::VecDeque;
 use std::fmt;
+use std::io::{self, Cursor, Read};
+use std::sync::Arc;
+
+/// Fetches one address and returns its body. Errors name the failure.
+pub type Fetch = dyn FnMut(&str) -> io::Result<Vec<u8>> + Send;
+
+/// Why a stream could not be loaded.
+#[derive(Debug)]
+pub enum LoadError {
+    /// A playlist or segment could not be fetched.
+    Fetch(io::Error),
+    /// The text fetched is not a usable playlist.
+    Playlist(Error),
+}
+
+impl fmt::Display for LoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoadError::Fetch(e) => write!(f, "fetch failed: {e}"),
+            LoadError::Playlist(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
+/// Reads the media playlist of a stream at `url`. When `url` is a master playlist, the variant
+/// [`select_variant`] picks for `max_bandwidth` is fetched and its media playlist read. Returns the address the media
+/// playlist came from (its segment addresses are relative to it) and the playlist.
+pub fn load_media(get: &mut Fetch, url: &str, max_bandwidth: u64) -> Result<(String, Playlist), LoadError> {
+    let text = fetched_text(get, url)?;
+    match parse(&text) {
+        Ok(playlist) => Ok((url.to_string(), playlist)),
+        Err(Error::Master) => {
+            let master = parse_master(&text).map_err(LoadError::Playlist)?;
+            let variant = select_variant(&master, max_bandwidth).ok_or(LoadError::Playlist(Error::Master))?;
+            let media_url = resolve(url, &variant.uri);
+            let playlist = parse(&fetched_text(get, &media_url)?).map_err(LoadError::Playlist)?;
+            Ok((media_url, playlist))
+        }
+        Err(e) => Err(LoadError::Playlist(e)),
+    }
+}
+
+fn fetched_text(get: &mut Fetch, url: &str) -> Result<String, LoadError> {
+    get(url).map(|body| String::from_utf8_lossy(&body).into_owned()).map_err(LoadError::Fetch)
+}
+
+/// The segments of a media playlist as one byte stream. Each segment is fetched when the reader reaches it, so
+/// playback starts after the first segment rather than after the whole list. A failed fetch is an `io::Error` from
+/// `read`.
+pub struct Segments {
+    urls: VecDeque<String>,
+    get: Box<Fetch>,
+    current: Cursor<Vec<u8>>,
+}
+
+impl Segments {
+    /// The segments of `playlist`, whose addresses are resolved against `playlist_url`.
+    pub fn new(playlist_url: &str, playlist: &Playlist, get: Box<Fetch>) -> Segments {
+        let urls = playlist.segments.iter().map(|s| resolve(playlist_url, &s.uri)).collect();
+        Segments { urls, get, current: Cursor::new(Vec::new()) }
+    }
+
+    /// The segment addresses not yet fetched.
+    pub fn remaining(&self) -> usize {
+        self.urls.len()
+    }
+}
+
+impl Read for Segments {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        loop {
+            let n = self.current.read(buf)?;
+            if n > 0 || buf.is_empty() {
+                return Ok(n);
+            }
+            let Some(url) = self.urls.pop_front() else { return Ok(0) };
+            self.current = Cursor::new((self.get)(&url)?);
+        }
+    }
+}
+
+/// A fetch function over the shell's HTTP client. A status outside 2xx is an error.
+pub fn client_fetch(client: Arc<Client>, limit: usize) -> Box<Fetch> {
+    Box::new(move |url: &str| {
+        let r = client.get(url, None, limit)?;
+        if (200..300).contains(&r.status) {
+            Ok(r.body)
+        } else {
+            Err(io::Error::other(format!("server answered {}", r.status)))
+        }
+    })
+}
 
 /// One media segment of a playlist.
 #[derive(Clone, Debug, PartialEq)]
@@ -283,6 +380,73 @@ mod tests {
     fn a_variant_without_bandwidth_is_refused() {
         let text = "#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=640x360\nlow.m3u8\n";
         assert_eq!(parse_master(text), Err(Error::BadSegment(0)));
+    }
+
+    /// A fake server: a map from address to body. An unknown address is a 404 error.
+    fn server(files: Vec<(&'static str, &'static str)>) -> Box<Fetch> {
+        let files: std::collections::HashMap<&'static str, &'static str> = files.into_iter().collect();
+        Box::new(move |url: &str| match files.get(url) {
+            Some(body) => Ok(body.as_bytes().to_vec()),
+            None => Err(io::Error::other(format!("server answered 404 to {url}"))),
+        })
+    }
+
+    const MEDIA: &str = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n";
+
+    #[test]
+    fn a_media_playlist_loads_directly() {
+        let mut get = server(vec![("https://cdn.example/a/index.m3u8", MEDIA)]);
+        let (url, p) = load_media(&mut *get, "https://cdn.example/a/index.m3u8", 0).unwrap();
+        assert_eq!(url, "https://cdn.example/a/index.m3u8");
+        assert_eq!(p.segments.len(), 2);
+    }
+
+    #[test]
+    fn a_master_playlist_loads_the_chosen_variant() {
+        let master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000\nhigh/index.m3u8\n";
+        let mut get = server(vec![("https://cdn.example/m.m3u8", master), ("https://cdn.example/low/index.m3u8", MEDIA)]);
+        let (url, p) = load_media(&mut *get, "https://cdn.example/m.m3u8", 1_000_000).unwrap();
+        assert_eq!(url, "https://cdn.example/low/index.m3u8");
+        assert_eq!(p.segments[0].uri, "seg0.ts");
+    }
+
+    #[test]
+    fn a_failed_playlist_fetch_is_reported() {
+        let mut get = server(vec![]);
+        assert!(matches!(load_media(&mut *get, "https://cdn.example/x.m3u8", 0), Err(LoadError::Fetch(_))));
+    }
+
+    #[test]
+    fn segments_are_joined_in_order_and_fetched_as_they_are_read() {
+        let fetched = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = fetched.clone();
+        let mut files = server(vec![("https://cdn.example/a/seg0.ts", "AAAA"), ("https://cdn.example/a/seg1.ts", "BB")]);
+        let get: Box<Fetch> = Box::new(move |url: &str| {
+            log.lock().unwrap().push(url.to_string());
+            files(url)
+        });
+        let p = parse(MEDIA).unwrap();
+        let mut segs = Segments::new("https://cdn.example/a/index.m3u8", &p, get);
+        assert_eq!(segs.remaining(), 2);
+        let mut first = [0u8; 2];
+        assert_eq!(segs.read(&mut first).unwrap(), 2);
+        assert_eq!(&first, b"AA");
+        assert_eq!(fetched.lock().unwrap().len(), 1, "the second segment waits until it is needed");
+        let mut rest = String::new();
+        segs.read_to_string(&mut rest).unwrap();
+        assert_eq!(rest, "AABB");
+        assert_eq!(segs.remaining(), 0);
+    }
+
+    #[test]
+    fn a_failed_segment_is_an_error_from_read() {
+        let mut files = server(vec![("https://cdn.example/a/seg0.ts", "AAAA")]);
+        let get: Box<Fetch> = Box::new(move |url: &str| files(url));
+        let p = parse(MEDIA).unwrap();
+        let mut segs = Segments::new("https://cdn.example/a/index.m3u8", &p, get);
+        let mut all = Vec::new();
+        assert!(segs.read_to_end(&mut all).is_err());
+        assert_eq!(all, b"AAAA");
     }
 
     #[test]
