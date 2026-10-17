@@ -25,7 +25,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream};
+use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream, WatchStreamFlags};
 
 extern "C" {
     fn flock(fd: i32, op: i32) -> i32;
