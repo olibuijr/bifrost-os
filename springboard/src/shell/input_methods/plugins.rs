@@ -7,7 +7,7 @@
 //! Pure model: the text is passed in by the caller, which reads the plugin list from its own location.
 
 use super::{new_controller, InputController};
-use super::{DEVANAGARI_PHONETIC, KANA_TYPING, KOREAN_2SET, PINYIN, TAMIL_PHONETIC, VIETNAMESE_TELEX, VIETNAMESE_VNI, ZHUYIN};
+use super::{AINU_KATAKANA, DEVANAGARI_PHONETIC, KANA_TYPING, KOREAN_2SET, PINYIN, TAMIL_PHONETIC, VIETNAMESE_TELEX, VIETNAMESE_VNI, ZHUYIN};
 
 /// The built-in engines a plugin can name, and the input source each one is.
 const ENGINES: &[(&str, &str)] = &[
@@ -16,6 +16,7 @@ const ENGINES: &[(&str, &str)] = &[
     ("zhuyin", ZHUYIN),
     ("tamil", TAMIL_PHONETIC),
     ("devanagari", DEVANAGARI_PHONETIC),
+    ("ainu-katakana", AINU_KATAKANA),
     ("hangul-2set", KOREAN_2SET),
     ("vietnamese-telex", VIETNAMESE_TELEX),
     ("vietnamese-vni", VIETNAMESE_VNI),

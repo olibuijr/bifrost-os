@@ -41,7 +41,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "note": "gap: the repo has no evidence of the language TYIM serves (the row has no description, role or doc, and no docs mention it), so no composer is written; Tibetan or Dzongkha are guesses only. Needs the TYIM bundle or its layout data to decide.",
    "rea": [],
    "method": "heuristic"
   },
