@@ -8,13 +8,17 @@
 //!   operation. `headers` is a list of `{id, kind, value}`: `kind` is `text`, `bytes`, `byte` or `dword`, and `value`
 //!   is the text, the hex bytes, or the number.
 //! - `connect {max_len}` answers `{hex}`: a CONNECT request for version 1.0 with that largest packet length.
-//! - `exchange {addr, channel, hex}` opens an RFCOMM channel to the device `addr` (`channel` 1 to 30), sends the
-//!   request packet `hex` and answers `{hex}` with the one packet that comes back (`bare::rfcomm::request`). It blocks
-//!   for at most the connect timeout and is open to first-party apps only.
+//! - `exchange {addr, channel, hex}` opens an RFCOMM channel to the device `addr` (`channel` 1 to 30) and sends the
+//!   request packet `hex`. The link runs on a worker thread (`bare::rfcomm::request`), so the call answers at once
+//!   with `{id}`; the app then calls `reply {id}`, which answers `{state: "pending"}` until the exchange ends, then
+//!   `{state: "done", hex}` (the one packet that came back) or `{state: "failed", error}`. An id is answered once, and
+//!   only to the app that started it. Links are open to first-party apps only.
 //!
 //! A packet the model cannot read (a short or inconsistent length, a value of the wrong type) is a service error.
 use super::keychain_groups::first_party;
 use super::{Shell, SystemService};
+use std::collections::HashMap;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use crate::keychain::{hex, unhex};
 use bifrost_core::json::Json;
 use bifrost_core::obex_packet::{connect_request, decode, fixed_len, Header, Packet, Value, FINAL};
@@ -22,8 +26,15 @@ use bifrost_core::obex_packet::{connect_request, decode, fixed_len, Header, Pack
 /// The service name.
 pub const SERVICE: &str = "obex";
 
-/// The `obex` service.
-pub struct ObexCodec;
+/// A link being exchanged: the app that started it, and the worker's answer when it comes.
+type Pending = (String, Receiver<Result<Vec<u8>, String>>);
+
+/// The `obex` service. The links in flight are kept until their reply is polled.
+#[derive(Default)]
+pub struct ObexCodec {
+    next_id: u64,
+    links: HashMap<u64, Pending>,
+}
 
 impl SystemService for ObexCodec {
     fn name(&self) -> &'static str {
@@ -31,34 +42,66 @@ impl SystemService for ObexCodec {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
-        if method == "exchange" {
-            return exchange(app_id, params);
+        match method {
+            "exchange" => self.start(app_id, params),
+            "reply" => self.reply(app_id, params),
+            _ => answer(method, params),
         }
-        answer(method, params)
     }
 }
 
-/// Sends one request over an RFCOMM channel and returns the answer. A link is opened only for a first-party app.
-fn exchange(app_id: &str, params: &Json) -> Result<Json, String> {
-    let installed = crate::shell::apphost::installed();
-    let first = installed.iter().find(|a| a.manifest.id == app_id).is_some_and(|a| first_party(&a.manifest));
-    if !first {
-        return Err("OBEX links are open to first-party apps only".into());
+impl ObexCodec {
+    /// Checks the request, then starts the link on a worker thread and answers its id.
+    fn start(&mut self, app_id: &str, params: &Json) -> Result<Json, String> {
+        let installed = crate::shell::apphost::installed();
+        let first = installed.iter().find(|a| a.manifest.id == app_id).is_some_and(|a| first_party(&a.manifest));
+        if !first {
+            return Err("OBEX links are open to first-party apps only".into());
+        }
+        let addr = text(params, "addr")?;
+        let channel = params.get("channel").and_then(Json::as_u64).and_then(|c| u8::try_from(c).ok()).ok_or("channel must be 1 to 30")?;
+        let packet = unhex(&text(params, "hex")?).ok_or("hex must be an even run of hex digits")?;
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(link(&addr, channel, &packet));
+        });
+        self.next_id += 1;
+        self.links.insert(self.next_id, (app_id.to_string(), rx));
+        Ok(obj(vec![("id", Json::Num(self.next_id as f64))]))
     }
-    let addr = text(params, "addr")?;
-    let channel = params.get("channel").and_then(Json::as_u64).and_then(|c| u8::try_from(c).ok()).ok_or("channel must be 1 to 30")?;
-    let packet = unhex(&text(params, "hex")?).ok_or("hex must be an even run of hex digits")?;
-    link(&addr, channel, &packet)
+
+    /// Answers a started link: pending, done or failed. A finished id is forgotten.
+    fn reply(&mut self, app_id: &str, params: &Json) -> Result<Json, String> {
+        let id = params.get("id").and_then(Json::as_u64).ok_or("id must be a whole number")?;
+        let owned = self.links.get(&id).is_some_and(|(owner, _)| owner == app_id);
+        if !owned {
+            return Err(format!("no OBEX link {id}"));
+        }
+        let outcome = match self.links.get(&id).map(|(_, rx)| rx.try_recv()) {
+            Some(Err(TryRecvError::Empty)) => return Ok(obj(vec![("state", Json::Str("pending".into()))])),
+            Some(Ok(outcome)) => outcome,
+            _ => Err("the link worker stopped".to_string()),
+        };
+        self.links.remove(&id);
+        Ok(match outcome {
+            Ok(bytes) => obj(vec![("state", Json::Str("done".into())), ("hex", Json::Str(hex(&bytes)))]),
+            Err(error) => obj(vec![("state", Json::Str("failed".into())), ("error", Json::Str(error))]),
+        })
+    }
 }
 
+fn obj(fields: Vec<(&str, Json)>) -> Json {
+    Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
+/// One request over an RFCOMM channel to `addr`, the answer packet's bytes.
 #[cfg(target_os = "linux")]
-fn link(addr: &str, channel: u8, packet: &[u8]) -> Result<Json, String> {
-    let reply = crate::bare::rfcomm::request(addr, channel, packet).map_err(|e| format!("obex link: {e}"))?;
-    Ok(Json::Obj(vec![("hex".into(), Json::Str(hex(&reply)))]))
+fn link(addr: &str, channel: u8, packet: &[u8]) -> Result<Vec<u8>, String> {
+    crate::bare::rfcomm::request(addr, channel, packet).map_err(|e| format!("obex link: {e}"))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn link(_addr: &str, _channel: u8, _packet: &[u8]) -> Result<Json, String> {
+fn link(_addr: &str, _channel: u8, _packet: &[u8]) -> Result<Vec<u8>, String> {
     Err("RFCOMM links need Linux".into())
 }
 
@@ -115,6 +158,42 @@ mod tests {
 
     fn obj(pairs: Vec<(&str, Json)>) -> Json {
         Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+    }
+
+    fn started(svc: &mut ObexCodec, app: &str, outcome: Option<Result<Vec<u8>, String>>) -> u64 {
+        let (tx, rx) = mpsc::channel();
+        if let Some(o) = outcome {
+            tx.send(o).unwrap();
+        } else {
+            std::mem::forget(tx);
+        }
+        svc.next_id += 1;
+        svc.links.insert(svc.next_id, (app.to_string(), rx));
+        svc.next_id
+    }
+
+    #[test]
+    fn a_reply_is_pending_then_done_once_and_only_for_its_owner() {
+        let mut svc = ObexCodec::default();
+        let waiting = started(&mut svc, "app.one", None);
+        let r = svc.reply("app.one", &obj(vec![("id", Json::Num(waiting as f64))])).unwrap();
+        assert_eq!(r.get("state").and_then(Json::as_str), Some("pending"));
+        assert!(svc.reply("app.two", &obj(vec![("id", Json::Num(waiting as f64))])).is_err());
+
+        let done = started(&mut svc, "app.one", Some(Ok(vec![0xA0, 0x00, 0x03])));
+        let r = svc.reply("app.one", &obj(vec![("id", Json::Num(done as f64))])).unwrap();
+        assert_eq!(r.get("state").and_then(Json::as_str), Some("done"));
+        assert_eq!(r.get("hex").and_then(Json::as_str), Some("a00003"));
+        assert!(svc.reply("app.one", &obj(vec![("id", Json::Num(done as f64))])).is_err());
+    }
+
+    #[test]
+    fn a_failed_link_is_reported_with_its_error() {
+        let mut svc = ObexCodec::default();
+        let id = started(&mut svc, "app.one", Some(Err("obex link: refused".into())));
+        let r = svc.reply("app.one", &obj(vec![("id", Json::Num(id as f64))])).unwrap();
+        assert_eq!(r.get("state").and_then(Json::as_str), Some("failed"));
+        assert_eq!(r.get("error").and_then(Json::as_str), Some("obex link: refused"));
     }
 
     #[test]

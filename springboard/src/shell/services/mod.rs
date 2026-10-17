@@ -187,7 +187,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(directory::Directory::default()),
         Box::new(console_seat::ConsoleSeat),
         Box::new(trust_eval::TrustEval),
-        Box::new(obex_codec::ObexCodec),
+        Box::new(obex_codec::ObexCodec::default()),
         Box::new(domains::Domains),
         Box::new(peer_hub::PeerHub::new()),
     ]

@@ -4,15 +4,16 @@
 //! by the caller and is open to first-party apps only, so a third-party app cannot read a suite another app uses.
 //!
 //! Values are text, flags (JSON booleans) and numbers (JSON numbers; a whole number is stored as an integer, any
-//! other as a double). Data is hex text: `data` on a set, and `value` as hex with `kind` "data" on a get. A property list value is
-//! not served: a read of one answers an error rather than a wrong value.
+//! other as a double). Data is hex text: `data` on a set, and `value` as hex with `kind` "data" on a get. Property lists (arrays and
+//! dictionaries) are sent as `plist` JSON and answered as the same JSON with `kind` "plist", through
+//! `bifrost_core::plist`.
 //!
 //! Methods (JSON parameters, `key` required):
-//! - `get {key, suite?}` answers `{value, kind}`: the text, flag, number or hex data, or `null` when unset, and `kind`
-//!   (`text`, `flag`, `number`, `data`). An app's own domain falls back to the global domain, as
+//! - `get {key, suite?}` answers `{value, kind}`: the text, flag, number, hex data or property list, or `null` when
+//!   unset, and `kind` (`text`, `flag`, `number`, `data`, `plist`). An app's own domain falls back to the global domain, as
 //!   `CFPreferencesCopyAppValue` does.
-//! - `set {key, value, suite?}` or `set {key, data, suite?}` (`data` is hex) writes the value and synchronises at
-//!   once, answering `{saved}`.
+//! - `set {key, value, suite?}`, `set {key, data, suite?}` (`data` is hex) or `set {key, plist, suite?}` writes the
+//!   value and synchronises at once, answering `{saved}`.
 //! - `remove {key, suite?}` deletes the key and synchronises, answering `{saved}`.
 //!
 //! The folder is `<apphost root>/domains`.
@@ -20,8 +21,8 @@ use super::keychain_groups::first_party;
 use super::{Shell, SystemService};
 use crate::shell::apphost;
 use bifrost_core::defaults_file::Value;
-use bifrost_core::json::Json;
-use bifrost_core::plist::{hex_decode, hex_encode};
+use bifrost_core::json::{parse, Json};
+use bifrost_core::plist::{self, hex_decode, hex_encode};
 use bifrost_core::pref_domains::{PrefStore, ANY_HOST, CURRENT_USER};
 use std::path::Path;
 
@@ -76,12 +77,16 @@ pub fn answer(root: &Path, app_id: &str, suite: Option<&str>, method: &str, para
                 Some(Value::Int(i)) => (Json::Num(i as f64), Json::Str("number".into())),
                 Some(Value::Double(d)) => (Json::Num(d), Json::Str("number".into())),
                 Some(Value::Data(bytes)) => (Json::Str(hex_encode(&bytes)), Json::Str("data".into())),
-                Some(_) => return Err(format!("{key} holds a property list; this service reads text, flags, numbers and data only")),
+                Some(Value::Plist(p)) => {
+                    let text = plist::to_json(&p, false)?;
+                    (parse(&text)?, Json::Str("plist".into()))
+                }
             };
             Ok(Json::Obj(vec![("value".into(), value), ("kind".into(), kind)]))
         }
         "set" => {
             let stored = match params.get("value") {
+                _ if params.get("plist").is_some() => Value::from_plist(plist::from_json(&params.get("plist").cloned().unwrap_or(Json::Null))?),
                 _ if params.get("data").is_some() => match params.str_field("data").and_then(|h| hex_decode(&h)) {
                     Some(bytes) => Value::Data(bytes),
                     None => return Err("data must be hex text".into()),
@@ -167,6 +172,22 @@ mod tests {
         assert_eq!(got.get("value"), Some(&Json::Str("00ff10".into())));
         assert_eq!(got.get("kind"), Some(&Json::Str("data".into())));
         assert!(answer(&root, "app.one", None, "set", &with_data("zz")).is_err());
+    }
+
+    #[test]
+    fn property_lists_round_trip_as_their_json_shape() {
+        let root = scratch("plist");
+        let dict = Json::Obj(vec![("name".into(), Json::Str("x".into()))]);
+        let arr = Json::Arr(vec![Json::Str("a".into()), Json::Str("b".into())]);
+        for (key, v) in [("dict", dict.clone()), ("list", arr.clone())] {
+            let set = obj(vec![("key", Json::Str(key.into())), ("plist", v)]);
+            assert_eq!(answer(&root, "app.one", None, "set", &set).unwrap().get("saved"), Some(&Json::Bool(true)));
+        }
+        let got = answer(&root, "app.one", None, "get", &obj(vec![("key", Json::Str("dict".into()))])).unwrap();
+        assert_eq!(got.get("value"), Some(&dict));
+        assert_eq!(got.get("kind"), Some(&Json::Str("plist".into())));
+        let got = answer(&root, "app.one", None, "get", &obj(vec![("key", Json::Str("list".into()))])).unwrap();
+        assert_eq!(got.get("value"), Some(&arr));
     }
 
     #[test]

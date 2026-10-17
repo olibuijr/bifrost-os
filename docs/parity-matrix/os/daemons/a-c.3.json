@@ -3421,7 +3421,7 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
-   "ready_note": "The domains service shares text, flag, number and hex data values per app and per first-party suite, synchronised on write (shell::services::domains::tests). Property list values are refused rather than served wrong; the model is bifrost_core::pref_domains.",
+   "ready_note": "The domains service shares text, flag, number and hex data values per app and per first-party suite, synchronised on write (shell::services::domains::tests). Property lists are served as JSON through bifrost_core::plist; the model is bifrost_core::pref_domains.",
    "status": "partial",
    "ready": true,
    "checks": [
@@ -3441,7 +3441,7 @@
      "filter": "defaults::tests"
     }
    ],
-   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex (built 2026-10-17); property list values are not",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex and property lists as JSON (built 2026-10-17)",
    "rea": [],
    "method": "rule"
   },
@@ -4151,7 +4151,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); no sync and no shared stores yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`) and a `changes` method that answers the records when the store moved since the client's revision (built 2026-10-17); no per-record change log and no sync to other devices yet",
    "rea": [],
    "method": "rule"
   },
