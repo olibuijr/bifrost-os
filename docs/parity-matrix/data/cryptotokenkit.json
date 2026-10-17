@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/cryptotokenkit",
   "macos_since": "10.10",
   "status": "partial",
-  "bifrost": "none for CryptoTokenKit; closest adjacent code is springboard/sdk/src/keychain.rs and springboard/src/keychain.rs (generic-password keychain only)",
+  "bifrost": "Pure models, not wired into the shell or apps: springboard/ui/src/token_registry.rs, token_objects.rs, smartcard_slot.rs, token_registration.rs. Generic-password keychain only: springboard/sdk/src/keychain.rs.",
   "summary": "CryptoTokenKit covers smart cards, token drivers and token authentication, none of which BifrOSt has. The repo has no smart card, PC/SC, token driver or token registration code. The app keychain stores only generic passwords and does not handle keys, certificates or tokens.",
   "rea_evidence": "ev_7e6dc41868020e0569f34207427910726479b76e591d0c195c261d76f5b92509",
   "features": [
@@ -72,7 +72,7 @@
     }
   ],
   "gaps": [
-    "No smart card reader or slot layer (PC/SC equivalent) in springboard/src/bare/ or anywhere else in the repo.",
+    "No smart card reader or PC/SC layer; springboard/ui/src/smartcard_slot.rs models slots and cards only.",
     "No token driver or app extension mechanism for hardware tokens.",
     "No way to store, list or use keys or certificates held by a token (keychain is generic-password only, per docs/bifrost-ui.md 'Keychain' section).",
     "No token-based login or two-factor factor for springboard/src/shell/login.rs.",

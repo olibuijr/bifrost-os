@@ -26,7 +26,7 @@
       "apple": "CWNetwork: ssid, bssid, rssi, channel, security, ibss, countryCode; scanForNetworks",
       "bifrost": "springboard/sdk/src/wlan.rs (merge, Network, Band, Phy, SecurityClass, channel_for_freq); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "Scan results merge by network name and report channel, band, PHY and security, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no IBSS flag, no country code, and no channel width, which the scan flags do not carry. Built 2026-10-17: networks from the last scan are readable by apps with bars, security and saved flag, and a scan can be started (tests wlan_service::tests, services::wifi::tests). Still no IBSS flag, country code or channel width."
+      "note": "Scan results merge by network name and report channel, band, PHY and security, tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no IBSS flag, no country code, and no channel width, which the scan flags do not carry. Built 2026-10-17: networks from the last scan are readable by apps with bars, security and saved flag, and a scan can be started (tests wlan_service::tests, services::wifi::tests). Still no IBSS flag, country code or channel width. Refreshed 2026-10-17: channel, band and PHY are decoded in springboard/sdk/src/wlan.rs (channel_for_freq, Band, Phy; tests in that module)."
     },
     {
       "feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)",
@@ -61,7 +61,7 @@
       "apple": "CWInterface.associate(to:password:), associateToEnterpriseNetwork, commitConfiguration",
       "bifrost": "springboard/sdk/src/wlan_keychain.rs (check_passphrase, password_item, eap_item); springboard/sdk/src/wifi_secrets.rs (WifiSecrets); sdk/src/wlan_service.rs; springboard/src/shell/services/wifi.rs",
       "status": "partial",
-      "note": "The passphrase, enterprise credential and per-network secret rules are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app call joins, selects or forgets a network; netd does those when the shell asks. Built 2026-10-17: apps join a network (open, or a WPA passphrase of 8 to 63 bytes or a 64-digit key) and forget a saved one through the wifi service; select of a saved network is not exposed. Tests services::wifi::tests and wlan_service::tests."
+      "note": "The passphrase, enterprise credential and per-network secret rules are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: no app call joins, selects or forgets a network; netd does those when the shell asks. Built 2026-10-17: apps join a network (open, or a WPA passphrase of 8 to 63 bytes or a 64-digit key) and forget a saved one through the wifi service; select of a saved network is not exposed. Tests services::wifi::tests and wlan_service::tests. Refreshed 2026-10-17: request_join, request_forget and request_host are in springboard/sdk/src/wlan_service.rs; passwords go through springboard/sdk/src/wlan_keychain.rs and wifi_secrets.rs."
     },
     {
       "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",
@@ -100,12 +100,9 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK API: springboard/sdk/src/ has no network module, so apps cannot list interfaces, scan, join or read status.",
-    "Typed event delegate: netd sends one Status snapshot, not per-event callbacks (ssid, bssid, link, power, scan cache, mode, country code, link quality).",
-    "Channel, band, width and PHY mode are not decoded (ScanResult keeps freq only).",
-    "Access-point and IBSS configuration and channel setting are absent.",
-    "Wi-Fi keychain domain and EAP identity list do not exist; passwords live in the config file.",
-    "WEP and WPA-only personal security types are not supported (Security enum).",
+    "Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs.",
+    "The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs.",
+    "The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI.",
     "Link quality beyond RSSI (noise, transmit rate) is not reported."
   ]
 }

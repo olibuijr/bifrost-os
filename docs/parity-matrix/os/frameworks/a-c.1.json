@@ -2050,11 +2050,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-transferable.json",
+   "bifrost": "springboard/sdk/src/transfer.rs, springboard/sdk/src/transfer_drag.rs, springboard/sdk/src/item_provider.rs, springboard/sdk/src/share.rs",
    "status": "partial",
    "note": "from SDK matrix core-transferable.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "transfer_drag::tests"
+    }
+   ],
+   "ready_note": "Refreshed 2026-10-17: the SDK side (Transferable, representations, file transfer, drag, share) is built and tested. Open: the shell publishes one MIME type to the Wayland clipboard (springboard/src/shell/pasteboard.rs), so multi-representation data does not reach other apps in full; file promises are missing."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreVideo.framework",
@@ -2266,7 +2280,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cryptotokenkit.json",
    "status": "partial",
-   "note": "from SDK matrix cryptotokenkit.json",
+   "note": "Remaining from data file cryptotokenkit (refreshed 2026-10-17): No smart card reader or PC/SC layer; springboard/ui/src/smartcard_slot.rs models slots and cards only. | No token driver or app extension mechanism for hardware tokens. | No way to store, list or use keys or certificates held by a token (keychain is generic-password only, per docs/bifrost-ui.md 'Keychain' section). | No token-based login or two-factor factor for springboard/src/shell/login.rs. | No token registration or managed-device policy for token authentication. | No persistent or HSM token support.",
    "rea": [],
    "method": "assessed"
   },
