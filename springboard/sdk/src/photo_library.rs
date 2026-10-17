@@ -124,6 +124,8 @@ pub struct PHAsset {
     /// Seconds since the epoch. A content change gives a new value; the wire falls back to `creation_date`.
     pub modification_date: u64,
     pub is_favorite: bool,
+    /// `PHAssetMediaSubtype.photoLive`: a still whose movie the library pairs with it (the movie is not listed).
+    pub is_live_photo: bool,
 }
 
 impl PHAsset {
@@ -142,6 +144,7 @@ impl PHAsset {
             creation_date: record.get("created").and_then(Json::as_u64)?,
             modification_date: record.get("modified").and_then(Json::as_u64).or_else(|| record.get("created").and_then(Json::as_u64))?,
             is_favorite: matches!(record.get("favorite"), Some(Json::Bool(true))),
+            is_live_photo: matches!(record.get("live"), Some(Json::Bool(true))),
         })
     }
 }
@@ -401,6 +404,16 @@ mod tests {
         let new = PHFetchResult::decode(&Json::Obj(vec![("assets".into(), Json::Arr(vec![edited]))])).unwrap();
         assert_eq!(new.object_at(0).unwrap().modification_date, 5000);
         assert_eq!(PHChange::change_details(&old, &new).unwrap().changed_indexes, vec![0]);
+    }
+
+    #[test]
+    fn a_live_photo_flag_decodes_from_the_asset_record() {
+        let mut live = record("a", "image");
+        if let Json::Obj(f) = &mut live {
+            f.push(("live".into(), Json::Bool(true)));
+        }
+        assert!(PHAsset::decode(&live).unwrap().is_live_photo);
+        assert!(!PHAsset::decode(&record("b", "image")).unwrap().is_live_photo);
     }
 
     #[test]
