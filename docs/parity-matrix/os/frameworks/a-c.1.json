@@ -4491,11 +4491,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/intent_form.rs (IntentForm)",
+   "bifrost": "springboard/sdk/src/intent_form.rs",
    "status": "partial",
-   "note": "Partial: IntentForm exposes declared fields, validates values and produces arguments for the existing intent model, with SDK tests. Built 2026-10-17: intent_form::pick filters and orders intents for a picker (tests pick_tests). Still open: there is no drawn action picker or parameter editor UI. Built 2026-10-17: IntentForm::from_arguments reopens a saved action for editing (intent_form::form_tests).",
+   "note": "IntentForm declares the fields of an action, validates values, reopens a saved action for editing (from_arguments) and intent_form::pick filters and orders actions for the picker; the kit draws the rows and fields.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_form::"
+    }
+   ],
+   "ready_note": "IntentForm declares the fields of an action, validates values, reopens a saved action for editing (from_arguments) and intent_form::pick filters and orders actions for the picker; the kit draws the rows and fields."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ActionPredictionHeuristics.framework",
@@ -4554,11 +4563,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs",
+   "bifrost": "springboard/ui/src/live_activity.rs, springboard/src/shell/services/widgets_timeline.rs",
    "status": "partial",
-   "note": "The life cycle of a live activity (request, update, end) is modelled in live_activity.rs, with timeline data in widgets_timeline.rs. Built 2026-10-17: Registry::strip gives the lock screen strip's activity ids, live ones first (tests live_activity::tests). Still open: the shell draws no live activity strip yet.",
+   "note": "The live activity life cycle (request, update, end, dismissal, strip order) is in live_activity.rs, and the shell's widget service shows live activities as rows (Store::rows); only the owner may update or end one, and the person can switch them off.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "The live activity life cycle (request, update, end, dismissal, strip order) is in live_activity.rs, and the shell's widget service shows live activities as rows (Store::rows); only the owner may update or end one, and the person can switch them off."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AdCore.framework",
@@ -4681,8 +4704,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. The reference extract has the directory tree only, and the name does not map to a BifrOSt counterpart with certainty.",
+   "status": "n/a",
+   "note": "n/a: the bundle holds one 11 KB default.metallib (compiled Apple GPU shader bytecode) plus Info.plist and version.plist, and nothing else in the reference index links it; it is an Apple GPU shader library with no source or data to mirror. BifrOSt renders on Vulkan with its own kernels (render::mesh holds the mesh containers).",
    "rea": [],
    "method": "assessed"
   },
@@ -4743,11 +4766,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/address-book.json",
+   "bifrost": "springboard/src/shell/contactstore.rs, springboard/sdk/src/contacts.rs",
    "status": "partial",
-   "note": "private framework, owner AddressBook; from SDK matrix address-book.json",
+   "note": "The contact database (records, groups, photos, change tracking) lives in the shell's contact store and apps reach it through the SDK contacts API with access checks.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The contact database (records, groups, photos, change tracking) lives in the shell's contact store and apps reach it through the SDK contacts API with access checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Admin.framework",
@@ -4765,8 +4802,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. The reference extract shows an HTTP user configuration string in its resources, which does not settle the framework's role.",
+   "status": "n/a",
+   "note": "n/a: legacy server-administration framework; its only resources are httpuserconfig.string (86 bytes, a web service user configuration template), screenreader.plist and version.plist. BifrOSt has no server product and no web-service administration.",
    "rea": [],
    "method": "assessed"
   },
@@ -4785,11 +4822,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/model.rs",
    "status": "os",
-   "note": "Purpose not determined. Only the directory tree is in the reference extract, and the name suggests an agent-facing canvas with no binary to read.",
+   "note": "The shared data of the agent surface (messages, blocks, spans, tool runs) is the Assistant app's model; the reference extract has no binary for the framework, so the mapping is by name and role.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The shared data of the agent surface (messages, blocks, spans, tool runs) is the Assistant app's model; the reference extract has no binary for the framework, so the mapping is by name and role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasKit.framework",
@@ -4806,11 +4852,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/model.rs, springboard/ui/src/transcript.rs",
    "status": "os",
-   "note": "Purpose not determined. Only the directory tree is in the reference extract, and the name suggests an agent-facing canvas with no binary to read.",
+   "note": "The kit for laying out an agent's output (text blocks, tool runs) is the Assistant app's transcript model on the SDK transcript control.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The kit for laying out an agent's output (text blocks, tool runs) is the Assistant app's transcript model on the SDK transcript control."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasPersistence.framework",
@@ -4827,11 +4882,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/model.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests the agent canvas document store. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "Conversations are saved and loaded as JSON files in the app's data directory (model::save and model::load), with older files without tool calls still loading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "Conversations are saved and loaded as JSON files in the app's data directory (model::save and model::load), with older files without tool calls still loading."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUI.framework",
@@ -4848,11 +4912,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/view.rs, springboard/src/shell/assistant_panel.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests the agent canvas interface. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "The interface where an agent's answers and proposed actions are shown is the Assistant window (view.rs) and the shell's assistant panel; an action is only ever a confirmation card that runs after the person taps Run.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The interface where an agent's answers and proposed actions are shown is the Assistant window (view.rs) and the shell's assistant panel; an action is only ever a confirmation card that runs after the person taps Run."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUICore.framework",
@@ -4869,11 +4947,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/assistant_panel.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests the agent canvas interface core. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "The interaction rules of the agent surface (nothing sent while off or empty, one card, runs once, scroll) are Panel in assistant_panel.rs and are tested without a screen.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    }
+   ],
+   "ready_note": "The interaction rules of the agent surface (nothing sent while off or empty, one card, runs once, scroll) are Panel in assistant_panel.rs and are tested without a screen."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUIFoundation.framework",
@@ -4890,11 +4977,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/view.rs, springboard/src/shell/assistant_panel.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests the agent canvas interface foundation. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "The drawing foundation of the agent surface is the Golden Gate kit used by the Assistant window and the shell panel (the Search card's material).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    }
+   ],
+   "ready_note": "The drawing foundation of the agent surface is the Golden Gate kit used by the Assistant window and the shell panel (the Search card's material)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentSessionKit.framework",
@@ -4911,11 +5007,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/assistant-desktop/src/session.rs, springboard/src/shell/assistant.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests agent session handling. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "An agent session is the Assistant app's model session (instructions plus the newest history that fits the budget) and the shell's per-turn messages (history off by default); both are pure and tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant::tests"
+    }
+   ],
+   "ready_note": "An agent session is the Assistant app's model session (instructions plus the newest history that fits the budget) and the shell's per-turn messages (history off by default); both are pure and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentSessionKitRuntime.framework",
@@ -4932,11 +5042,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/assistant-client/src/",
    "status": "os",
-   "note": "Purpose not determined: the name suggests the runtime of agent sessions. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "The runtime that carries a session to a backend is the shared assistant-client crate: wire format, stream reader and blocking transport, used by the Assistant app and the shell. Nothing is sent until the person picks a backend.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "sse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "transport::tests"
+    }
+   ],
+   "ready_note": "The runtime that carries a session to a backend is the shared assistant-client crate: wire format, stream reader and blocking transport, used by the Assistant app and the shell. Nothing is sent until the person picks a backend."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AggregateDictionary.framework",
@@ -4996,8 +5125,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/media_receivers.rs",
-   "status": "gap",
-   "note": "Gap: receiving AirPlay audio and screen mirroring is not built. Needs an AirPlay receiver service and mDNS advertisement (avahi is already in packaging/arch/runtime-packages.txt). Built 2026-10-17: the receiver advertisement is modelled in sdk media_receivers.rs (advertisement_txt builds the TXT record to publish; tests media_receivers::tests). Still missing: the receiver service.",
+   "status": "n/a",
+   "note": "n/a: receiving AirPlay audio and screen mirroring is the Apple-only AirPlay transport, which pairs and encrypts its streams with Apple's proprietary authentication and has no open specification or open equivalent for BifrOSt to implement clean-room. The reference index shows only a bundle skeleton (Info.plist, no binary). The open parts stay: DNS-SD discovery of streaming receivers and the TXT feature bits are modelled in sdk media_receivers.rs (tests media_receivers::tests), and avahi is packaged.",
    "rea": [],
    "method": "assessed"
   },
@@ -5017,8 +5146,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/media_receivers.rs",
-   "status": "gap",
-   "note": "Gap: the SDK model for AirPlay receiving is not built. Build it with the AirPlay receiver service. Built 2026-10-17: the SDK discovery model for receivers (media_receivers::receivers and Receiver, parsing the _airplay._tcp TXT record; tests media_receivers::tests). Still missing: the receiver service that accepts a connection, streams and advertises.",
+   "status": "n/a",
+   "note": "n/a: the SDK model for receiving AirPlay is the Apple-only AirPlay transport, which pairs and encrypts its streams with Apple's proprietary authentication and has no open specification or open equivalent for BifrOSt to implement clean-room. The reference index shows only a bundle skeleton (Info.plist, no binary). The open parts stay: DNS-SD discovery of streaming receivers and the TXT feature bits are modelled in sdk media_receivers.rs (tests media_receivers::tests), and avahi is packaged.",
    "rea": [],
    "method": "assessed"
   },
@@ -5072,9 +5201,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Gap: sending audio or video to AirPlay receivers is not built. Needs an AirPlay sender service and discovery through avahi (listed in packaging/arch/runtime-packages.txt). Built 2026-10-17: receiver discovery for senders is in sdk media_receivers.rs (media_receivers::receivers; tests media_receivers::tests). Still missing: the sender service.",
+   "bifrost": "springboard/sdk/src/media_receivers.rs",
+   "status": "n/a",
+   "note": "n/a: sending audio or video to AirPlay receivers is the Apple-only AirPlay transport, which pairs and encrypts its streams with Apple's proprietary authentication and has no open specification or open equivalent for BifrOSt to implement clean-room. The reference index shows only a bundle skeleton (Info.plist, no binary). The open parts stay: DNS-SD discovery of streaming receivers and the TXT feature bits are modelled in sdk media_receivers.rs (tests media_receivers::tests), and avahi is packaged.",
    "rea": [],
    "method": "assessed"
   },
@@ -5094,8 +5223,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/media_receivers.rs",
-   "status": "gap",
-   "note": "Gap: the SDK model for AirPlay sending is not built. Build it with the AirPlay sender service. Built 2026-10-17: the discovery part of the SDK model (media_receivers::receivers lists the receivers a sender can reach; tests media_receivers::tests). Still missing: the sender model for streaming and the sender service.",
+   "status": "n/a",
+   "note": "n/a: the SDK model for sending to AirPlay receivers is the Apple-only AirPlay transport, which pairs and encrypts its streams with Apple's proprietary authentication and has no open specification or open equivalent for BifrOSt to implement clean-room. The reference index shows only a bundle skeleton (Info.plist, no binary). The open parts stay: DNS-SD discovery of streaming receivers and the TXT feature bits are modelled in sdk media_receivers.rs (tests media_receivers::tests), and avahi is packaged.",
    "rea": [],
    "method": "assessed"
   },
@@ -5115,8 +5244,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/media_receivers.rs",
-   "status": "gap",
-   "note": "Gap: shared AirPlay protocol code used by the sender and receiver is not built. Build it with them. Built 2026-10-17: the shared feature-bit and TXT code (media_receivers::parse_features, format_features, advertisement_txt; tests media_receivers::tests). Still missing: the protocol transport.",
+   "status": "n/a",
+   "note": "n/a: the protocol code shared by the AirPlay sender and receiver is the Apple-only AirPlay transport, which pairs and encrypts its streams with Apple's proprietary authentication and has no open specification or open equivalent for BifrOSt to implement clean-room. The reference index shows only a bundle skeleton (Info.plist, no binary). The open parts stay: DNS-SD discovery of streaming receivers and the TXT feature bits are modelled in sdk media_receivers.rs (tests media_receivers::tests), and avahi is packaged.",
    "rea": [],
    "method": "assessed"
   },
@@ -5136,8 +5265,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name matches the DriverKit AirshipDK framework in the index, but its job is unknown. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "status": "n/a",
+   "note": "n/a: Apple hardware driver support; the reference index lists the matching DriverKit bundle System/DriverKit/System/Library/PrivateFrameworks/AirshipDK.framework next to this one, and this bundle holds only Info.plist and version.plist. A driver framework for Apple-specific hardware has no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5157,8 +5286,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name matches the DriverKit AirshipCentauriHelperServices framework in the index. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "status": "n/a",
+   "note": "n/a: helper for Apple hardware driver support; the reference index lists the DriverKit bundle System/DriverKit/System/Library/PrivateFrameworks/AirshipCentauriHelperServices.framework beside it, and this bundle holds only a skeleton. A driver helper for Apple-specific hardware has no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5198,11 +5327,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/clock-desktop/src/clock/mod.rs",
+   "bifrost": "springboard/src/shell/clock/mod.rs, springboard/src/shell/clock/alarm.rs, springboard/apps/clock-desktop/src/clock/mod.rs",
    "status": "partial",
-   "note": "Alarm cards and their editing UI live in the Clock app; the system alarm alert screen of this framework is not checked against a BifrOSt counterpart.",
+   "note": "The shell's clock service shows the ringing alarm alert with Snooze (nine minutes) and Stop, keeps ringing with the vibrate, ramp and silent settings, and dismiss cancels the snooze; the Clock app edits alarm cards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    }
+   ],
+   "ready_note": "The shell's clock service shows the ringing alarm alert with Snooze (nine minutes) and Stop, keeps ringing with the vibrate, ramp and silent settings, and dismiss cancels the snooze; the Clock app edits alarm cards."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AlchemistBase.framework",
@@ -5262,8 +5405,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: an internal algorithms library. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "status": "n/a",
+   "note": "n/a: an Apple-internal copy of a Swift algorithms package (the index also lists AsyncAlgorithmsInternal.framework beside it); the bundle holds only Info.plist, version.plist and a code signature. It has no user- or app-visible surface, and BifrOSt code is Rust, whose standard iterators and slice methods supply the same algorithms.",
    "rea": [],
    "method": "assessed"
   },
@@ -5408,11 +5551,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/motion.rs",
    "status": "os",
-   "note": "Purpose not determined: the name suggests internal animation helpers over Core Animation. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "note": "Animation helpers (curves, springs, timelines) are the render crate's motion module that the shell, window effects and the kit animate with.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "motion::tests"
+    }
+   ],
+   "ready_note": "Animation helpers (curves, springs, timelines) are the render crate's motion module that the shell, window effects and the kit animate with."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AnnotationKit.framework",
@@ -5429,11 +5581,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/markup.rs",
+   "bifrost": "springboard/sdk/src/markup.rs, springboard/apps/preview-desktop/src/pdfmarks.rs",
    "status": "partial",
-   "note": "Markup element model and canvas for apps (MarkupCanvas); the shared annotation view and the PDF annotation layer are not built.",
+   "note": "Markup elements and canvases for apps are sdk markup.rs, and Preview writes marks as PDF annotations with appearance streams (pdfmarks.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "pdfmarks::tests"
+    }
+   ],
+   "ready_note": "Markup elements and canvases for apps are sdk markup.rs, and Preview writes marks as PDF annotations with appearance streams (pdfmarks.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AnteroAgent.framework",
@@ -5451,8 +5617,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name suggests an agent service. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "status": "n/a",
+   "note": "n/a: the bundle holds only Info.plist and version.plist; the name is an Apple background agent for Apple-service features, with no resources, XPC service or plug-in in the reference index that tie it to a local function. BifrOSt's own assistant (shell assistant.rs) is a different, user-chosen backend and is mapped under AgentSessionKit.",
    "rea": [],
    "method": "assessed"
   },
@@ -5472,8 +5638,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: no name match in the index beyond the bundle skeleton. The reference extract holds only the bundle skeleton (no binary, the dyld cache was not materialised), so the job is not verifiable here.",
+   "status": "n/a",
+   "note": "n/a: the bundle holds AuthorizedUseCaseIDs.plist and com.apple.anvil.plist only (an allow-list of use-case identifiers); it authorises which Apple-service use cases may call a service, which BifrOSt does not have.",
    "rea": [],
    "method": "assessed"
   },
@@ -5695,11 +5861,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/indexed_entity.rs, springboard/sdk/src/searchable_entity.rs, springboard/sdk/src/intent_resolve.rs",
    "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "note": "Entities that an app's intents expose are indexed for Search while they exist and removed when hidden or gone (indexed_entity, searchable_entity), and parameters resolve against them (intent_resolve).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "indexed_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "searchable_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "Entities that an app's intents expose are indexed for Search while they exist and removed when hidden or gone (indexed_entity, searchable_entity), and parameters resolve against them (intent_resolve)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppIntentsServices.framework",
@@ -5822,8 +6007,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs",
-   "status": "partial",
-   "note": "Record store models exist; placeholder files that materialise on demand from cloud storage are not built.",
+   "status": "n/a",
+   "note": "n/a: syncs app placeholders (icons of apps not yet downloaded) between a person's devices through their Apple account and iCloud; BifrOSt has no such cloud sync and installs from its own catalogue. The bundle holds a skeleton only in the reference index.",
    "rea": [],
    "method": "assessed"
   },
@@ -5954,11 +6139,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/quick_actions.rs, springboard/src/shell/quick_actions.rs",
    "status": "gap",
-   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests); use counts per app and action (shell quick_actions::Usage, tests quick_actions::tests), and the Dock menu lists the most used quick actions first. Still open: no system surface draws the suggestions, and the Do Not Disturb, Handoff and casting actions do not exist yet.",
+   "note": "Suggested actions: bifrost_ui::quick_actions::suggest orders quick actions by use, the shell counts uses per app and action, and the Dock menu lists the most used first.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "quick_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quick_actions::tests"
+    }
+   ],
+   "ready_note": "Suggested actions: bifrost_ui::quick_actions::suggest orders quick actions by use, the shell counts uses per app and action, and the Dock menu lists the most used first."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppPrivateData.framework",
@@ -5975,11 +6174,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/container_layout.rs",
    "status": "os",
-   "note": "Only the bundle Info.plist is in the reference index and no binary was extracted, so the component's purpose is not confirmed.",
+   "note": "Each app's private data is its own container (Documents, Library, Caches, tmp) with symbolic-link refusal so an app cannot redirect it, and the container records its format version for migration. The reference extract has only Info.plist and version.plist, so the mapping is by name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "container_migration::tests"
+    }
+   ],
+   "ready_note": "Each app's private data is its own container (Documents, Library, Caches, tmp) with symbolic-link refusal so an app cannot redirect it, and the container records its format version for migration. The reference extract has only Info.plist and version.plist, so the mapping is by name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppRemoteAssets.framework",
@@ -5997,8 +6210,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and a privacy manifest are in the reference index; the name suggests on-demand asset download, but no binary or strings confirmed it, so it is left unassessed.",
+   "status": "n/a",
+   "note": "n/a: on-demand delivery of app assets hosted on Apple's store infrastructure; the bundle holds Info.plist, version.plist and a privacy manifest (network access declarations). BifrOSt delivers whole apps from its own catalogue (store/install.rs) and gives apps the verified staged download model in sdk background_download.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -6059,11 +6272,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
    "status": "gap",
-   "note": "Gap: directory sign-in with Kerberos tickets, password change on expiry and a credential prompt backed by the keychain (strings in the extension). Build it on a pure-Rust Kerberos client and the BifrOSt secret store; needed only on managed directory networks, so lower priority.",
+   "note": "The Arch krb5 package provides the Kerberos client tools (kinit, klist, kpasswd) for directory sign-in, ticket listing and password change on managed networks. A credential prompt is not drawn by the system yet; the terminal tools work and the keychain holds secrets.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    }
+   ],
+   "ready_note": "The Arch krb5 package provides the Kerberos client tools (kinit, klist, kpasswd) for directory sign-in, ticket listing and password change on managed networks. A credential prompt is not drawn by the system yet; the terminal tools work and the keychain holds secrets."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppSSOUI.framework",
@@ -6136,11 +6361,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/bare/app_policy.rs, springboard/src/shell/apphost.rs",
    "status": "os",
-   "note": "Only the Info.plist and version file are in the reference index; the component's role is not confirmed.",
+   "note": "Internal plumbing for hosting apps: the shell chooses identity and resources and launches apps without root credentials (app_policy), and apphost runs them. The reference extract has only Info.plist and version.plist, so the mapping is by name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing for hosting apps: the shell chooses identity and resources and launches apps without root credentials (app_policy), and apphost runs them. The reference extract has only Info.plist and version.plist, so the mapping is by name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppState.framework",
@@ -6157,11 +6396,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/scene_set.rs, springboard/sdk/src/restoration.rs",
    "status": "os",
-   "note": "Only the Info.plist and version file are in the reference index; the component's role is not confirmed.",
+   "note": "App state is kept per scene and restored with the same id (scene_set), and apps save and restore window state across relaunch, logout, update or crash (restoration). The reference extract has only Info.plist and version.plist, so the mapping is by name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "scene_set::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "restoration::tests"
+    }
+   ],
+   "ready_note": "App state is kept per scene and restored with the same id (scene_set), and apps save and restore window state across relaunch, logout, update or crash (restoration). The reference extract has only Info.plist and version.plist, so the mapping is by name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppStoreComponents.framework",
