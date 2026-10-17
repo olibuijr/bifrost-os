@@ -146,6 +146,8 @@ pub enum Action {
     FlipVertical,
     /// Tools > Remove Background: the background that touches the picture's edge becomes transparent.
     RemoveBackground,
+    /// Tools > Lift Subject: the picture becomes its subject, cut out of a plain backdrop.
+    LiftSubject,
     ZoomToSelection,
     /// Tools > Show Magnifier / Hide Magnifier.
     ToggleMagnifier,
@@ -304,6 +306,7 @@ pub const ACTIONS: &[Action] = &[
     Action::ChooseFormat(export_panel::Format::Pdf),
     Action::ExportNow,
     Action::ShowSignatures,
+    Action::LiftSubject,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -390,6 +393,7 @@ impl Action {
             Action::FlipHorizontal => "Flip Horizontal",
             Action::FlipVertical => "Flip Vertical",
             Action::RemoveBackground => "Remove Background",
+            Action::LiftSubject => "Lift Subject",
             Action::ZoomToSelection => "Zoom to Selection",
             Action::ToggleMagnifier => "Show Magnifier",
             Action::ShowNotes => "Markup",

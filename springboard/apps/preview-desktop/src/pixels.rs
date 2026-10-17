@@ -4,6 +4,7 @@
 //! mirrors them and cropping moves them into the cropped page. Everything here is plain data and runs without a window.
 
 use crate::model::{Mark, Norm};
+use bifrost_app::image_analysis::{segment_background, Interaction, Rgba, Subject};
 use bifrost_app::kit::Image;
 
 /// The default colour tolerance of Instant Alpha and Remove Background, as the largest allowed difference in any
@@ -202,6 +203,18 @@ pub fn remove_background(img: &Image, tol: u8) -> Image {
     clear_connected(img, &seeds, reference, tol)
 }
 
+/// Lift Subject: the subject against a plain backdrop, cut out with the backdrop transparent and cropped to the
+/// subject's bounds. The picture's pixels are `0xAABBGGRR` as `pack` writes them, so their little-endian bytes are
+/// RGBA. `None` when no pixel differs from the backdrop by more than `tol`.
+pub fn lift_subject(img: &Image, tol: u8) -> Option<Image> {
+    let bytes: Vec<u8> = img.px.iter().flat_map(|p| p.to_le_bytes()).collect();
+    let rgba = Rgba::new(img.w, img.h, bytes)?;
+    let mask = segment_background(&rgba, tol)?;
+    let cutout = Interaction::new(vec![Subject::new(1, mask)?]).lift(1, &rgba)?;
+    let px = cutout.pixels().chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    Some(Image { w: cutout.width(), h: cutout.height(), px })
+}
+
 /// The longest side Adjust Size makes, and the most pixels it makes.
 pub const MAX_SIDE: usize = 16_384;
 pub const MAX_PIXELS: usize = 64_000_000;
@@ -310,6 +323,22 @@ mod tests {
     use super::*;
     use crate::model::MarkKind;
     use bifrost_app::kit::pack;
+
+    #[test]
+    fn lift_subject_crops_to_the_subject_with_a_transparent_backdrop() {
+        let white = pack(255, 255, 255, 255);
+        let red = pack(255, 0, 0, 255);
+        let mut px = vec![white; 6 * 6];
+        for y in 2..4 {
+            for x in 2..4 {
+                px[y * 6 + x] = red;
+            }
+        }
+        let lifted = lift_subject(&Image { w: 6, h: 6, px }, TOLERANCE).expect("subject");
+        assert_eq!((lifted.w, lifted.h), (2, 2));
+        assert!(lifted.px.iter().all(|p| *p == red), "the subject keeps its colour and is opaque");
+        assert!(lift_subject(&Image { w: 2, h: 2, px: vec![white; 4] }, TOLERANCE).is_none(), "a flat picture has no subject");
+    }
 
     #[test]
     fn sharpening_by_nothing_keeps_the_picture_and_a_flat_area_does_not_change() {

@@ -40,7 +40,7 @@
       "apple": "ImageAnalysisInteraction.Subject, ImageAnalysis subjects, subject extraction to a separate image",
       "bifrost": "springboard/ui/src/subject_lift.rs (segment_background, Interaction::lift); tests: springboard/ui/tests/parity_sdk-complete-13.rs",
       "status": "partial",
-      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget."
+      "note": "Subject lists, hit testing, highlights and cutouts are tested headless, and a colour-key segmenter lifts a subject off a plain backdrop (background_removal_* in ui/tests/parity_sdk-complete-13.rs). Gap: there is no learned segmentation model for busy scenes, and the module is not wired into the shell or apps, so it is not yet checked on Midget. Built 2026-10-17: the SDK re-exports the colour-key segmenter as bifrost_app::image_analysis::segment_background, and Preview's Tools > Lift Subject replaces the picture with the subject cut out of a plain backdrop (apps/preview-desktop pixels::lift_subject); tests image_analysis::tests (the_colour_key_finds_the_subject_on_a_plain_backdrop) and pixels::tests (lift_subject_crops_to_the_subject_with_a_transparent_backdrop). Still no learned segmentation model."
     },
     {
       "feature": "Visual Look Up",

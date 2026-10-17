@@ -1541,6 +1541,24 @@ impl Viewer {
         }
     }
 
+    /// Tools > Lift Subject: the picture becomes the subject of its plain backdrop, cropped and transparent outside it.
+    fn lift_subject(&mut self) {
+        self.stop_editing();
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else {
+            self.status = "Lift Subject works on pictures, not PDFs.".into();
+            return;
+        };
+        match pixels::lift_subject(&picture, pixels::TOLERANCE) {
+            Some(subject) => {
+                doc.replace_picture(Rc::new(subject));
+                self.selection = None;
+                self.status = "Subject lifted. Export as PNG to keep the transparency.".into();
+            }
+            None => self.status = "No subject stands out from the background.".into(),
+        }
+    }
+
     /// The Instant Alpha tool: the region of one colour around the point clicked becomes transparent.
     fn instant_alpha(&mut self, lay: &Layout, x: f32, y: f32) {
         let Some(placed) = self.placed(lay) else { return };
@@ -1606,6 +1624,7 @@ impl Viewer {
             Action::FlipHorizontal => self.flip(true),
             Action::FlipVertical => self.flip(false),
             Action::RemoveBackground => self.remove_background(),
+            Action::LiftSubject => self.lift_subject(),
             Action::MovePageUp | Action::MovePageDown => {
                 let delta = if action == Action::MovePageUp { -1 } else { 1 };
                 if let Some(doc) = &mut self.doc {
@@ -2323,6 +2342,7 @@ impl App for Viewer {
             item(Action::FlipVertical, is_picture, false),
             item(Action::AdjustSize, is_picture, false),
             item(Action::RemoveBackground, is_picture, false),
+            item(Action::LiftSubject, is_picture, false),
             AppMenuItem::separator(),
             item(Action::SaveSignature, open, false),
             AppMenuItem::submenu("Insert Signature").enabled(open && !self.signatures.is_empty()),
