@@ -4,7 +4,9 @@
 use crate::music;
 use crate::music::chrome::{BAR_SEARCH, BAR_TITLE, SIDE_TAB};
 use crate::music::menus::{self, Command};
+use crate::music::miniplayer::{self, Layout, Part};
 use crate::music::system;
+use bifrost_app::app_windows::{is_close_window_key, WindowId, WindowSpec};
 use bifrost_app::audio::Client;
 use bifrost_app::audio_devices::{self, Change};
 use bifrost_app::controls::nav::ToolbarLayout;
@@ -16,7 +18,9 @@ use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::layout::{SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::now_playing::{self, CommandState, PlaybackState, RemoteCommand};
 use bifrost_app::widgets;
+use bifrost_app::windows::{self, Level};
 use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use springboard::shell::music::nowplaying::Target as Transport;
 use bifrost_core::json::Json;
 use springboard::shell::music::radio::Http;
 use std::path::{Path, PathBuf};
@@ -68,6 +72,12 @@ pub struct MusicApp {
     import_request: Option<u32>,
     /// whether the Dock tile shows the library scan's progress
     dock_busy: bool,
+    /// the MiniPlayer window, while it is open
+    mini: Option<WindowId>,
+    /// Window > Keep MiniPlayer on Top: the MiniPlayer floats above the other windows
+    mini_on_top: bool,
+    /// the MiniPlayer part a touch went down on, until it lifts
+    mini_down: Option<Part>,
 }
 
 /// What the last Now Playing publish carried: the key without the position, the position, when it went out (app clock,
@@ -97,6 +107,9 @@ impl MusicApp {
             picker_request: None,
             import_request: None,
             dock_busy: false,
+            mini: None,
+            mini_on_top: false,
+            mini_down: None,
         }
     }
 
@@ -330,6 +343,61 @@ fn shell_dir() -> PathBuf {
     PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()))
 }
 
+impl MusicApp {
+    /// Window > MiniPlayer: opens the MiniPlayer window, or closes it when it is open.
+    fn toggle_mini(&mut self, ctx: &Ctx) {
+        if self.mini.is_some() {
+            self.close_mini(ctx);
+            return;
+        }
+        if let Ok(id) = ctx.open_window(WindowSpec::new("MiniPlayer", miniplayer::WIDTH_PT, miniplayer::HEIGHT_PT)) {
+            self.mini = Some(id);
+            self.apply_mini_level(ctx);
+        }
+    }
+
+    fn close_mini(&mut self, ctx: &Ctx) {
+        if let Some(id) = self.mini.take() {
+            let _ = ctx.close_window(id);
+        }
+        self.mini_down = None;
+    }
+
+    /// Floats the MiniPlayer above the other windows, or lets it sit in the normal stack, as the Window menu says.
+    fn apply_mini_level(&self, ctx: &Ctx) {
+        if let Some(id) = self.mini {
+            let level = if self.mini_on_top { Level::Floating } else { Level::Normal };
+            windows::set_window_level(ctx, id, level);
+        }
+    }
+
+    /// A touch in the MiniPlayer. The scrubber and the volume bar follow the finger; a transport button acts when the
+    /// finger lifts over the part it went down on.
+    fn mini_touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32) -> bool {
+        let lay = miniplayer::layout(miniplayer::size_px(ctx.ui.s).0, ctx.ui.s);
+        if kind == TouchKind::Down {
+            self.mini_down = lay.hit(x, y);
+        }
+        let down = self.mini_down;
+        if matches!(kind, TouchKind::Up | TouchKind::Cancel) {
+            self.mini_down = None;
+        }
+        let Some(m) = &mut self.app else { return true };
+        match (kind, down) {
+            (TouchKind::Down | TouchKind::Move, Some(Part::Scrubber)) => m.seek_to_fraction(Layout::fraction(lay.scrub, x)),
+            (TouchKind::Down | TouchKind::Move, Some(Part::Volume)) => m.set_volume_fraction(Layout::fraction(lay.volume, x)),
+            (TouchKind::Up, Some(part)) if lay.hit(x, y) == Some(part) => match part {
+                Part::PlayPause => m.control(Transport::Play),
+                Part::Prev => m.control(Transport::Prev),
+                Part::Next => m.control(Transport::Next),
+                Part::Scrubber | Part::Volume => {}
+            },
+            _ => {}
+        }
+        true
+    }
+}
+
 impl App for MusicApp {
     fn id(&self) -> &str {
         "is.olibuijr.music.desktop"
@@ -453,11 +521,67 @@ impl App for MusicApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        self.app.as_ref().map(|m| menus::build(&m.menu_state())).unwrap_or_default()
+        let mut menus = self.app.as_ref().map(|m| menus::build(&m.menu_state())).unwrap_or_default();
+        menus.push(menus::window_menu(self.mini.is_some(), self.mini_on_top));
+        menus
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        if self.mini != Some(window) {
+            return false;
+        }
+        match ev {
+            Input::Touch { kind, x, y, .. } => self.mini_touch(ctx, kind, x, y),
+            Input::Key(k) if is_close_window_key(&k) => {
+                self.close_mini(ctx);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+        let mut d = Damage::new(s.w, s.h);
+        if window.is_main() || self.mini != Some(window) {
+            return d;
+        }
+        let pressed = self.mini_down;
+        let lay = miniplayer::layout(s.w as f32, ctx.ui.s);
+        if let Some(m) = &mut self.app {
+            let info = m.mini_info();
+            let art = m.mini_art();
+            miniplayer::draw(s, &ctx.ui, &lay, &info, art.as_ref(), pressed);
+        }
+        d.all();
+        d
+    }
+
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        if self.mini == Some(window) {
+            self.mini = None;
+            self.mini_down = None;
+            return true;
+        }
+        false
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(cmd) = Command::from_id(id) else { return false };
+        match cmd {
+            Command::MiniPlayer => {
+                self.toggle_mini(ctx);
+                return true;
+            }
+            Command::KeepMiniOnTop => {
+                self.mini_on_top = !self.mini_on_top;
+                self.apply_mini_level(ctx);
+                return true;
+            }
+            _ => {}
+        }
         if cmd == Command::Import {
             // the panel answers through `document`
             let options = OpenOptions { title: "Import to Music".into(), filters: IMPORT_TYPES.iter().map(|t| t.to_string()).collect(), multiple: true, ..OpenOptions::default() };
@@ -509,7 +633,8 @@ impl App for MusicApp {
         }
         self.sync_keyboard(ctx);
         self.sync_system(ctx);
-        due
+        // the MiniPlayer shows the position, so its window is redrawn with the main one while it is open
+        due || self.mini.is_some()
     }
 
     fn controls(&self, _: &Ctx) -> Vec<Node> {
