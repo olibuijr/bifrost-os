@@ -368,9 +368,9 @@ mod tests {
 
     #[test]
     fn the_main_page_with_the_switch_off_offers_to_turn_it_on_and_no_clear_without_a_place() {
-        let s = spec(&Store::default(), NOW);
-        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
-        assert_eq!(s.groups[0].items[0].action, Action::Location(Edit::Services(false)));
+        let s = spec(&Store { services_on: false, ..Store::default() }, NOW);
+        assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
+        assert_eq!(s.groups[0].items[0].action, Action::Location(Edit::Services(true)));
         assert_eq!(s.groups[1].items[0].value, "Not Set");
         assert_eq!(s.groups[1].items.len(), 1);
         assert_eq!(s.groups[2].items[0].label, "No apps have asked to use location");
@@ -379,11 +379,12 @@ mod tests {
     #[test]
     fn the_access_popup_sends_the_row_action_with_the_chosen_index() {
         let a = "is.example.loc-page-popup-map";
-        privacy::set_location_access(a, LocationAccess::AskNextTime);
+        // Ask Next Time forgets the answer, so an app only has a row once it has a Never or While Using answer
+        privacy::set_location_access(a, LocationAccess::WhileUsing);
         let s = spec(&Store::default(), NOW);
         let row = s.groups[2].items.iter().find(|i| i.label == a).cloned();
         let row = row.expect("a has asked, so it has a row");
-        assert_eq!(row.popup.as_ref().map(|p| p.selected), Some(1));
+        assert_eq!(row.popup.as_ref().map(|p| p.selected), Some(2));
         let edit = |choice| Action::Location(Edit::Access { app: a.into(), choice });
         assert_eq!(pages::chosen(&row.action, 0), Some(edit(LocationAccess::Never)));
         assert_eq!(pages::chosen(&row.action, 2), Some(edit(LocationAccess::WhileUsing)));
