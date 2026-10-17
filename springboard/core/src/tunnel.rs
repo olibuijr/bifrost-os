@@ -316,6 +316,16 @@ impl RoutePolicy {
         self.rules.push((route, RouteAction::Direct));
     }
 
+    /// The action for destinations no rule matches.
+    pub fn default_action(&self) -> RouteAction {
+        self.default
+    }
+
+    /// The rules in the order they were added.
+    pub fn rules(&self) -> &[(Ipv4Route, RouteAction)] {
+        &self.rules
+    }
+
     pub fn decide(&self, addr: Ipv4Addr) -> RouteAction {
         let mut best: Option<(u8, RouteAction)> = None;
         for (route, action) in &self.rules {

@@ -3,8 +3,8 @@
 //! source's reference and maximum distances, and an equal-power pan from the direction of the source against the
 //! listener's right vector (the cross product of its forward and up vectors).
 //!
-//! The model is pure. It computes the two channel gains; the audio service applies them to a stream. Playback of a
-//! positioned source through the audio service is not built yet.
+//! The model is pure. It computes the two channel gains; `audio_scene::Scene` applies them to sample buffers and mixes
+//! the sources of a scene to stereo, which the app hands to the audio service.
 
 use std::fmt;
 

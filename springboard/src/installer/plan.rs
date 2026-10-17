@@ -56,6 +56,8 @@ pub struct Config {
 /// multicast DNS and DNS-SD responder (the `.local` names and service browsing), and `cups.socket` starts the
 /// print scheduler on the first client connection, so printing needs no always-on daemon. `pcscd.socket` does the
 /// same for the smart card daemon that the `smartcards` shell service reads through `pcsc_scan`.
+/// print scheduler on the first client connection, so printing needs no always-on daemon. `pcscd.socket` does the same
+/// for the smart card daemon, which card readers and the PC/SC API need.
 pub const ENABLED_UNITS: &[&str] = &[
     "bifrost-update-guard.service",
     "springboard.service",
@@ -1119,6 +1121,7 @@ mod tests {
         assert!(super::ENABLED_UNITS.contains(&"avahi-daemon.service"));
         assert!(super::ENABLED_UNITS.contains(&"cups.socket"));
         assert!(super::ENABLED_UNITS.contains(&"pcscd.socket"), "smart card readers work without a manual start");
+        assert!(super::ENABLED_UNITS.contains(&"pcscd.socket"), "card readers need the PC/SC daemon on demand");
         assert!(super::ENABLED_UNITS.contains(&"bifrost-update-guard.service"), "the boot guard stays enabled");
         assert_eq!(super::ENABLED_UNITS.iter().filter(|u| u.ends_with(".service") || u.ends_with(".socket")).count(), super::ENABLED_UNITS.len());
     }
