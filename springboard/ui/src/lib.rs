@@ -595,6 +595,7 @@ pub mod visual_search;
 pub mod regex;
 pub mod format;
 pub mod region;
+pub mod places;
 pub mod gesture;
 pub mod recognizer;
 pub mod identity;
