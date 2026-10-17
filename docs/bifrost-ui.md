@@ -4335,8 +4335,9 @@ The feature lives in `springboard/src/shell/screentime/`; the parity rows are `c
 - Usage (`usage.rs`): one `key=value` file per local day under the shell data directory (`screentime/<day>.txt`):
   foreground seconds per app and per hour, pickups (screen comes on), and notifications per app. Files older than
   28 days are deleted on the day roll. A tick credits at most 15 s, so a stalled loop invents nothing, and the gap
-  across midnight is credited to neither day. Foreground time is credited to the app seen at the tick that follows
-  it, so the seconds before a switch can go to the next app (at most one tick, 5 s).
+  across midnight is credited to neither day. The shell records usage before and after every input event and tick,
+  so the seconds before a switch go to the app that was in front during them (the switch's own time, not the next
+  tick).
 - Settings (`page.rs`, `chart.rs`, the Screen Time page in `pages.rs`): day and week bars, most used apps, pickups,
   notifications, Downtime, App Limits (cycled 15 min to 4 h), Always Allowed, and a Content & Privacy Restrictions
   row marked "Not Available" (not enforced yet). Changing limits or Downtime needs the Screen Time passcode.
@@ -4348,12 +4349,16 @@ The feature lives in `springboard/src/shell/screentime/`; the parity rows are `c
   and "Ignore Limit For Today". Each grant is stored as `ignore.until.<app>` or `ignore.day.<app>` in
   `screentime.ini`. The passcode prompt comes first when a Screen Time passcode is set.
 - Launching (`mod.rs`, `st_launch_check`): opening a blocked app puts the cover up before its zoom starts, and the
-  cover stays up while that open animation runs.
-- Passcode: the Screen Time passcode uses the shell's salted, stretched SHA-256 store (`shell/passcode.rs`, file
-  `screentime_passcode.ini`), not the keychain service (`springboard/src/keychain.rs`). Moving it to the keychain is
-  open.
+  cover stays up while that open animation runs. On the desktop, `desk_open` runs the same check and skips the
+  native-route launches for a blocked app, so its own process does not start.
+- Desktop (`desk.rs`, `desk_cover`): the cover is drawn inside the window body below its title bar, so the window
+  can still be moved, and closed from its lights. Touches outside the body pass through; OK closes the window. Only
+  built-in and software-drawn windows are covered; native toplevels of other processes are not yet.
+- Passcode: kept in the shell keychain (`springboard/src/keychain.rs`) as item `bifrost.screentime` / `passcode`,
+  with the same salted, stretched SHA-256 record and failure count (`shell/passcode.rs`, `Store::load_keychain`).
+  The old `screentime_passcode.ini` is migrated once and removed; clearing the passcode removes the item.
 - Not built: category charts (the bars are per app), SDK access for apps (out of scope), family controls and
-  remote approval, and the desktop window path (`desk_open` does not check limits yet). Not verified on Midget.
+  remote approval, and cover over native toplevels. Not verified on Midget.
 
 Tests: `usage.rs` (midnight gap, app switches, rollover, pruning), `config.rs` (limits, warning window, one-minute,
 15-minute and today grants, Downtime over midnight, Settings exempt), `shield.rs` (button order, passcode gate),
