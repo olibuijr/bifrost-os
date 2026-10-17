@@ -7,6 +7,7 @@ use super::list::{Group, Item, Spec, Tint};
 use super::options::Options;
 use super::pages::{Action, PageId, Toggle};
 use crate::privd::accounts::{self, is_admin, is_human, Passwd};
+use bifrost_ui::account_policy::{Feature, PolicyTable};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct User {
@@ -32,12 +33,21 @@ pub struct View {
     pub groups: Vec<GroupRow>,
     /// the account BifrOSt was installed for
     pub me: String,
+    /// the content limits of every managed account, from the account policy file
+    pub limits: PolicyTable,
+    /// the policy file could not be read or parsed, so the limits shown are not the saved ones
+    pub limits_damaged: bool,
 }
 
 impl View {
     pub fn load() -> View {
         let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
-        View::from_text(&read("/etc/passwd"), &read("/etc/group"), &super::account::load().username)
+        let mut view = View::from_text(&read("/etc/passwd"), &read("/etc/group"), &super::account::load().username);
+        match crate::bare::account_policy::load(std::path::Path::new(crate::bare::account_policy::POLICY_FILE)) {
+            Ok(limits) => view.limits = limits,
+            Err(_) => view.limits_damaged = true,
+        }
+        view
     }
 
     pub fn from_text(passwd: &str, group: &str, me: &str) -> View {
@@ -52,7 +62,7 @@ impl View {
             .filter(|g| g.name == accounts::ADMIN_GROUP || !users.iter().any(|u| u.name == g.name && g.members.iter().all(|m| *m == u.name)))
             .map(|g| GroupRow { editable: g.name != accounts::ADMIN_GROUP, name: g.name, gid: g.gid, members: g.members })
             .collect();
-        View { users, groups, me: me.to_string() }
+        View { users, groups, me: me.to_string(), ..View::default() }
     }
 
     fn user(&self, name: &str) -> Option<&User> {
@@ -74,6 +84,49 @@ pub enum Edit {
     Password(String),
     AddGroup,
     Member { group: String, user: String, add: bool },
+    /// A content-limit switch for a managed account: `allowed` is the new state of the feature
+    LimitFeature { account: String, feature: Feature, allowed: bool },
+    /// An app switch for a managed account: `allowed` is false to block the app
+    LimitApp { account: String, app: String, allowed: bool },
+}
+
+/// The rules of `edit`'s account after the switch: (account, blocked apps, switched-off features). None for an edit
+/// that is not a content-limit switch.
+pub fn rules_after(limits: &PolicyTable, edit: &Edit) -> Option<(String, Vec<String>, Vec<String>)> {
+    let account = match edit {
+        Edit::LimitFeature { account, .. } | Edit::LimitApp { account, .. } => account,
+        _ => return None,
+    };
+    let policy = limits.policy(account).cloned().unwrap_or_default();
+    let mut blocked: Vec<String> = policy.blocked_apps().into_iter().map(str::to_string).collect();
+    let mut disabled = policy.disabled_features();
+    match edit {
+        Edit::LimitFeature { feature, allowed, .. } => {
+            disabled.retain(|f| f != feature);
+            if !*allowed {
+                disabled.push(*feature);
+            }
+        }
+        Edit::LimitApp { app, allowed, .. } => {
+            blocked.retain(|a| a != app);
+            if !*allowed {
+                blocked.push(app.clone());
+            }
+        }
+        _ => return None,
+    }
+    Some((account.clone(), blocked, disabled.into_iter().map(|f| f.name().to_string()).collect()))
+}
+
+/// The label of a content limit switch.
+pub fn feature_label(feature: Feature) -> &'static str {
+    match feature {
+        Feature::Purchases => "Purchases",
+        Feature::Camera => "Camera",
+        Feature::Microphone => "Microphone",
+        Feature::Location => "Location Services",
+        Feature::ContentSharing => "Sharing Content",
+    }
 }
 
 /// A deletion, which asks first.
@@ -116,6 +169,15 @@ pub fn apply(edit: &Edit, view: &View) -> Result<Option<Prompt>, String> {
         Edit::Password(name) => Ok(Some(if *name == view.me { Prompt::current_password(name) } else { Prompt::change_password(name) })),
         Edit::SetAdmin(name, admin) => c.user_set_admin(name, *admin).map(|_| None).map_err(client_err),
         Edit::Member { group, user, add } => c.group_member(group, user, *add).map(|_| None).map_err(client_err),
+        Edit::LimitFeature { .. } | Edit::LimitApp { .. } => {
+            if view.limits_damaged {
+                return Err("The limits file is damaged, so limits cannot be changed.".to_string());
+            }
+            let (account, blocked, disabled) = rules_after(&view.limits, edit).ok_or("not a content limit")?;
+            let blocked: Vec<&str> = blocked.iter().map(String::as_str).collect();
+            let disabled: Vec<&str> = disabled.iter().map(String::as_str).collect();
+            c.set_account_policy(&account, &blocked, &disabled).map(|_| None).map_err(client_err)
+        }
     }
 }
 
@@ -149,6 +211,40 @@ fn user_row(u: &User) -> Item {
     Item::new(u.name.as_str()).value(format!("{} · {}", u.full_name, role(u))).link(PageId::UserDetail)
 }
 
+/// The content-limit groups of a managed account: a switch per feature, then a switch per installed app. A switch
+/// that is on allows the feature or app; the launcher and the features enforce what is switched off.
+fn limit_groups(u: &User, v: &View) -> Vec<Group> {
+    let policy = v.limits.policy(&u.name).cloned().unwrap_or_default();
+    let disabled = policy.disabled_features();
+    let blocked = policy.blocked_apps();
+    let features: Vec<Item> = Feature::ALL
+        .into_iter()
+        .map(|feature| {
+            let allowed = !disabled.contains(&feature);
+            Item::new(feature_label(feature)).switch(allowed, Action::Users(Edit::LimitFeature { account: u.name.clone(), feature, allowed: !allowed }))
+        })
+        .collect();
+    let mut features_group = Group::new(features).header("CONTENT LIMITS");
+    features_group = features_group.footer(if v.limits_damaged {
+        "The limits file is damaged, so these switches show defaults and cannot be changed."
+    } else {
+        "Switched-off features are refused for this account."
+    });
+    let installed = super::apphost::installed();
+    let mut apps: Vec<Item> = installed
+        .iter()
+        .map(|app| {
+            let id = app.manifest.id.as_str();
+            let allowed = !blocked.contains(&id);
+            Item::new(app.manifest.name.as_str()).switch(allowed, Action::Users(Edit::LimitApp { account: u.name.clone(), app: id.to_string(), allowed: !allowed }))
+        })
+        .collect();
+    if apps.is_empty() {
+        apps.push(Item::new("No Installed Apps").tint(Tint::Dim));
+    }
+    vec![features_group, Group::new(apps).header("APPS").footer("A blocked app does not open for this account.")]
+}
+
 /// The pages of Settings > Users & Groups. `note` is the last error or result, shown under the list.
 pub fn spec(id: PageId, v: &View, detail: &str, note: &str, o: &Options) -> Spec {
     let page = |title: &str, groups: Vec<Group>| Spec { id, title: title.into(), large: false, groups };
@@ -169,6 +265,7 @@ pub fn spec(id: PageId, v: &View, detail: &str, note: &str, o: &Options) -> Spec
                 Group::new(vec![Item::new("Change Password…").tint(Tint::Blue).action(Action::Users(Edit::Password(u.name.clone())))]),
             ];
             if !installed {
+                groups.extend(limit_groups(u, v));
                 groups.push(Group::new(vec![Item::new("Delete User…").tint(Tint::Red).action(Action::Run(super::pages::Command::Account(Danger::DeleteUser(u.name.clone()))))]));
             }
             page(&u.full_name, with_note(groups))
@@ -294,6 +391,33 @@ mod tests {
         assert!(matches!(apply(&Edit::AddGroup, &view()), Ok(Some(p)) if p.title == "New Group"));
         assert!(matches!(apply(&Edit::Password("olof".into()), &view()), Ok(Some(p)) if matches!(p.purpose, Purpose::CurrentPassword { .. })));
         assert!(matches!(apply(&Edit::Password("kid".into()), &view()), Ok(Some(p)) if p.title == "Change Password"));
+    }
+
+    #[test]
+    fn a_limit_switch_rewrites_only_its_own_rule() {
+        let limits = PolicyTable::parse("kid block is.bifrost.store\nkid disable camera\nparent disable location\n").unwrap();
+        let allow_camera = Edit::LimitFeature { account: "kid".into(), feature: Feature::Camera, allowed: true };
+        let (account, blocked, disabled) = rules_after(&limits, &allow_camera).unwrap();
+        assert_eq!(account, "kid");
+        assert_eq!(blocked, vec!["is.bifrost.store".to_string()]);
+        assert!(disabled.is_empty());
+        let unblock = Edit::LimitApp { account: "kid".into(), app: "is.bifrost.store".into(), allowed: true };
+        assert_eq!(rules_after(&limits, &unblock).unwrap().1, Vec::<String>::new());
+        let block_notes = Edit::LimitApp { account: "kid".into(), app: "is.bifrost.notes".into(), allowed: false };
+        assert_eq!(rules_after(&limits, &block_notes).unwrap().1, vec!["is.bifrost.store".to_string(), "is.bifrost.notes".to_string()]);
+        assert_eq!(rules_after(&limits, &Edit::AddGroup), None);
+    }
+
+    #[test]
+    fn a_managed_account_shows_its_content_limits_and_the_installed_one_does_not() {
+        let mut v = view();
+        v.limits = PolicyTable::parse("kid disable camera\n").unwrap();
+        let s = spec(PageId::UserDetail, &v, "kid", "", &Options::default());
+        let features = s.groups.iter().find(|g| g.header.as_deref() == Some("CONTENT LIMITS")).expect("limits group");
+        assert_eq!(features.items[1].label, "Camera");
+        assert_eq!(features.items[1].action, Action::Users(Edit::LimitFeature { account: "kid".into(), feature: Feature::Camera, allowed: true }));
+        let me = spec(PageId::UserDetail, &v, "olof", "", &Options::default());
+        assert!(!me.groups.iter().any(|g| g.header.as_deref() == Some("CONTENT LIMITS")));
     }
 
     #[test]
