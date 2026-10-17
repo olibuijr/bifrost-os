@@ -974,6 +974,12 @@ impl AppHost {
                     out.frame = true;
                 }
             }
+            ToShell::WindowLevelOf { id, level } => {
+                // the main window (id 0) has its own level; an unknown extra window is ignored
+                if self.windows.set_floating(&self.id, id, level == bifrost_proto::WindowLevel::Floating) {
+                    out.frame = true;
+                }
+            }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::WindowOpen { id, title, w, h } => {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
@@ -2570,6 +2576,19 @@ mod route_tests {
         assert_eq!(rest.requests.len(), 4, "the rest of the flood is read on the next passes, in order");
         assert_eq!(rest.requests.first(), Some(&ToShell::Notify { title: "6".into(), body: String::new() }));
         assert!(matches!(peer.recv(false), Ok(Recv::Empty)));
+    }
+
+    #[test]
+    fn a_window_level_of_an_extra_window_is_kept_in_the_table() {
+        let (mut host, _peer) = fixture_host();
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 2, title: "CPU".into(), w: 300.0, h: 200.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowLevelOf { id: 2, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
+        assert_eq!(host.windows.floating_ids(&host.id), vec![2]);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal, "the main window keeps its level");
+        host.handle(ToShell::WindowLevelOf { id: 0, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
+        assert!(host.windows.floating_ids(&host.id).contains(&2));
+        host.kill();
     }
 
     #[test]

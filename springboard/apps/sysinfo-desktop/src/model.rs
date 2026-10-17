@@ -259,7 +259,7 @@ impl Category {
             Category::Volumes => "The mounted volumes and the space left on them.",
             Category::System => "The operating system and the kernel it runs.",
             Category::Apps => "The apps installed on this computer, with their newest version.",
-            Category::Installations => "The packages installed, upgraded and removed, newest first.",
+            Category::Installations => "The installed packages, newest install first, then the package changes in the pacman log.",
             Category::PrinterSoftware => "The printer drivers installed for the printing system.",
             Category::Extensions => "The kernel modules that are loaded now.",
             Category::StartupItems => "The apps and helpers that start when you sign in.",
@@ -393,7 +393,7 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Processor => Content::card(processor_rows(r, x)),
         Category::Memory => Content::card(memory_rows(r, x)),
         Category::Graphics => Content::list(r.graphics().into_iter().enumerate().map(|(i, d)| graphics_item(i, d, x)).collect()),
-        Category::Pci => Content::list(r.pci.iter().map(pci_item).collect()),
+        Category::Pci => Content::list(r.pci.iter().map(|d| pci_item(d, x)).collect()),
         Category::Usb => Content::list(usb_tree(&r.usb).into_iter().map(|(depth, d)| usb_item(depth, d, x)).collect()),
         Category::Displays => Content::list(r.displays.iter().map(|d| display_item(d, &x.screens)).collect()),
         Category::Audio => Content::list(x.hw.audio.iter().map(audio_item).collect()),
@@ -418,7 +418,7 @@ pub fn content(category: Category, r: &Report, x: &Extras) -> Content {
         Category::Volumes => Content::list(x.hw.volumes.iter().map(volume_item).collect()),
         Category::System => Content::card(system_rows(r, x)),
         Category::Apps => Content::list(r.apps.iter().map(|a| app_item(a, x)).collect()),
-        Category::Installations => Content::list(x.hw.installs.iter().map(install_item).collect()),
+        Category::Installations => Content::list(x.hw.packages.iter().map(package_item).chain(x.hw.installs.iter().map(install_item)).collect()),
         Category::PrinterSoftware => Content::list(x.hw.printer_drivers.iter().map(printer_driver_item).collect()),
         Category::Extensions => Content::card(x.modules.iter().map(|m| kv(m.name.clone(), format!("{} · used by {}", size_label(m.size_bytes, 1 << 10, "KB"), m.used_by))).collect()),
         Category::StartupItems => Content::card(x.startup.iter().map(|n| kv(n.clone(), "Opens at sign-in")).collect()),
@@ -643,11 +643,23 @@ fn graphics_item(i: usize, d: &PciDevice, x: &Extras) -> Item {
     item(format!("Graphics {}", i + 1), pci_line(d), detail)
 }
 
-fn pci_item(d: &PciDevice) -> Item {
+/// One PCI device. The vendor and device names come from the `pci.ids` database when the system has one; otherwise the
+/// built-in vendor names and the hexadecimal device ID.
+fn pci_item(d: &PciDevice, x: &Extras) -> Item {
+    let vendor = x.hw.pci_names.vendor(d.vendor_id).unwrap_or_else(|| d.vendor_name());
+    let device = x.hw.pci_names.device(d.vendor_id, d.device_id).unwrap_or_else(|| format!("Device {:04x}", d.device_id));
     item(
         d.address.clone(),
-        format!("{} · {} · {}", d.vendor_name(), d.class_name(), driver_label(&d.driver)),
-        vec![kv("Vendor", d.vendor_name()), kv("Vendor ID", format!("{:04x}", d.vendor_id)), kv("Device ID", format!("{:04x}", d.device_id)), kv("Class", d.class_name()), kv("Class code", format!("{:06x}", d.class)), kv("Driver", driver_label(&d.driver))],
+        format!("{vendor} · {} · {}", d.class_name(), driver_label(&d.driver)),
+        vec![
+            kv("Vendor", vendor.clone()),
+            kv("Device", device),
+            kv("Vendor ID", format!("{:04x}", d.vendor_id)),
+            kv("Device ID", format!("{:04x}", d.device_id)),
+            kv("Class", d.class_name()),
+            kv("Class code", format!("{:06x}", d.class)),
+            kv("Driver", driver_label(&d.driver)),
+        ],
     )
 }
 
@@ -889,6 +901,22 @@ fn app_item(a: &InstalledApp, x: &Extras) -> Item {
         name.clone(),
         format!("{} · {kind}", a.version),
         vec![kv("Name", name), kv("Identifier", a.id.clone()), kv("Version", a.version.clone()), kv("Kind", kind), kv("Installed", installed), kv("Package", package)],
+    )
+}
+
+/// An installed package from the pacman local database: its version and install day, with its size and description.
+fn package_item(p: &probe::PacmanPackage) -> Item {
+    let installed = if p.installed_epoch > 0 { day_label(p.installed_epoch / 86_400) } else { "—".to_string() };
+    item(
+        p.name.clone(),
+        format!("{} · {installed}", or_dash(&p.version)),
+        vec![
+            kv("Package", p.name.clone()),
+            kv("Version", or_dash(&p.version)),
+            kv("Installed", installed.clone()),
+            kv("Size", bytes_label(p.size)),
+            kv("Description", or_dash(&p.description)),
+        ],
     )
 }
 
@@ -1443,6 +1471,11 @@ mod tests {
         assert_eq!(installs.items[0].title, "bar");
         assert_eq!(installs.items[0].summary, "Removed · 2026-10-02 09:30");
         assert!(installs.items[0].detail.contains(&kv("Action", "Removed")));
+        x.hw.packages = vec![probe::PacmanPackage { name: "bash".into(), version: "5.2-1".into(), description: "shell".into(), installed_epoch: 86_400 * 20_000, size: 2048 }];
+        let both = content(Category::Installations, &Report::default(), &x);
+        assert_eq!(both.items[0].title, "bash", "the installed packages come before the log changes");
+        assert_eq!(both.items[0].summary, "5.2-1 · 2024-10-04");
+        assert!(both.items[0].detail.contains(&kv("Size", bytes_label(2048))));
         let printers = content(Category::PrinterSoftware, &Report::default(), &x);
         assert_eq!(printers.items[0].title, "HP LaserJet 4");
         assert_eq!(printers.items[1].title, "x.ppd", "a driver without a model is named by its file");

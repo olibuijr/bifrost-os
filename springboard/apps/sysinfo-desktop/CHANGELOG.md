@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- Software > Installations lists the installed packages read from the pacman local database (`/var/lib/pacman/local`, `desc` files; no pacman run), newest install first, then the package changes from the log.
+- PCI Devices take vendor and device names from `/usr/share/hwdata/pci.ids` (or `/usr/share/misc/pci.ids`) when present; otherwise the built-in vendor names and the hexadecimal ID are shown.
+
 ## 0.8.2 — 2026-10-14
 
 - Derive window geometry from the configured content size rather than a fixed-resolution fallback.

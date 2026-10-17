@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Window > CPU Usage opens a small floating window with the total and one bar per core, and closes again from the same menu item.
+- Window > CPU History opens a floating window with one history strip per core (the same strips as View > CPU History).
+- Window > Keep CPU Windows on Top floats both CPU windows above the normal windows; the choice is remembered. It needs the shell that carries `ToShell::WindowLevelOf` (min_shell 0.8.3).
+- The drawing lives in draw.rs (`draw_cpu_usage`, `draw_cpu_history_window`); the window sizes follow the core count.
+
 ## 0.7.3 — 2026-10-14
 
 - Job progress now wakes through the SDK main queue instead of a short polling timer; dropping a job requests cancellation.

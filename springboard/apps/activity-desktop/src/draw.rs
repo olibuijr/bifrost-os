@@ -23,6 +23,23 @@ const PAD: f32 = 8.0;
 const CARD_PAD: f32 = 14.0;
 /// Corner radius of the graph card (points): a grouped card.
 const CARD_RADIUS_PT: f32 = m::CARD_RADIUS;
+/// The centre line of the first CPU Usage row, and the pitch of the rows (points).
+const USAGE_ROWS_TOP: f32 = 60.0;
+const USAGE_ROW_PT: f32 = 22.0;
+/// The width of the CPU Usage window (points).
+pub const USAGE_WINDOW_W: f32 = 260.0;
+
+/// The size in points of the CPU Usage window for `cores` cores.
+pub fn usage_window_size(cores: usize) -> (f32, f32) {
+    (USAGE_WINDOW_W, USAGE_ROWS_TOP + USAGE_ROW_PT * cores.max(1) as f32 + 10.0)
+}
+
+/// The size in points of the CPU History window for `cores` cores: a header and one or two rows of strips.
+pub fn history_window_size(cores: usize) -> (f32, f32) {
+    let rows = if cores > 4 { 2.0 } else { 1.0 };
+    (420.0, 52.0 + rows * 64.0 + (rows - 1.0) * 6.0 + CARD_PAD)
+}
+
 /// The footer width the Memory tab's pressure strip and its label take, left of the footer text (points).
 const PRESSURE_SPACE_PT: f32 = 280.0;
 
@@ -366,7 +383,6 @@ impl Monitor {
 
     /// The CPU graph card as one strip per core, newest sample at the right, in two rows when there are more than four.
     fn draw_cores(&mut self, ui: &Ui, s: &mut Surface, r: Rect) {
-        const GAP: f32 = 6.0;
         let x = r.x + CARD_PAD;
         let w = r.w - 2.0 * CARD_PAD;
         let cores = self.history.cores.len();
@@ -374,13 +390,20 @@ impl Monitor {
         text(&mut self.labels, s, ui, "CPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
         let detail = format!("{cores} cores   Total {}", percent(busy));
         text(&mut self.labels, s, ui, &detail, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
+        self.core_strips(ui, s, x, r.y + 48.0, w, r.h - 58.0);
+    }
+
+    /// The per-core history strips in an area `w` by `h` points at (`x`, `top`): one row, or two when there are more
+    /// than four cores. Shared by the graph card and the CPU History window.
+    fn core_strips(&self, ui: &Ui, s: &mut Surface, x: f32, top: f32, w: f32, h: f32) {
+        const GAP: f32 = 6.0;
+        let cores = self.history.cores.len();
         if cores == 0 {
             return;
         }
         let rows = if cores > 4 { 2 } else { 1 };
         let per_row = (cores + rows - 1) / rows;
-        let top = r.y + 48.0;
-        let tile_h = ((r.h - 58.0) - GAP * (rows - 1) as f32) / rows as f32;
+        let tile_h = (h - GAP * (rows - 1) as f32) / rows as f32;
         let tile_w = (w - GAP * (per_row - 1) as f32) / per_row as f32;
         let color = SYSTEM_BLUE.now();
         for (i, series) in self.history.cores.iter().enumerate() {
@@ -394,6 +417,49 @@ impl Monitor {
                 fill(s, ui, tx + (offset + k) as f32 * slot, ty + tile_h - bh, (slot - 1.0).max(1.0), bh, color);
             }
         }
+    }
+
+    /// The busy share of each core in the last interval, in core order (empty before the first reading).
+    pub fn core_loads(&self) -> Vec<f32> {
+        self.snapshot.as_ref().map_or_else(Vec::new, |snap| snap.cores.clone())
+    }
+
+    /// The Window > CPU Usage floating window: total and one bar per core, with the percentage at the right.
+    pub fn draw_cpu_usage(&mut self, ui: &Ui, s: &mut Surface) {
+        let (w, h) = (s.w as f32 / ui.pt(1.0), s.h as f32 / ui.pt(1.0));
+        fill(s, ui, 0.0, 0.0, w, h, CONTENT_BG.now());
+        let busy = self.snapshot.as_ref().map_or(0.0, |snap| snap.cpu.busy);
+        text(&mut self.labels, s, ui, "CPU Usage", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), CARD_PAD, 18.0, w - 2.0 * CARD_PAD);
+        let total = format!("Total {}", percent(busy));
+        text(&mut self.labels, s, ui, &total, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), CARD_PAD, 36.0, w - 2.0 * CARD_PAD);
+        let loads = self.core_loads();
+        for (i, load) in loads.iter().enumerate() {
+            let y = USAGE_ROWS_TOP + i as f32 * USAGE_ROW_PT;
+            let label = format!("CPU {i}");
+            text(&mut self.labels, s, ui, &label, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), CARD_PAD, y, 56.0);
+            let value = percent(*load);
+            let value_w = width(ui, &value, MAC_SUBHEAD_PT, Weight::Regular);
+            let bar_x = CARD_PAD + 58.0;
+            let bar_w = (w - bar_x - CARD_PAD - value_w - 8.0).max(8.0);
+            rounded(s, ui, bar_x, y - 4.0, bar_w, 8.0, 4.0, SEPARATOR_C.now());
+            let fill_w = (load / 100.0).clamp(0.0, 1.0) * bar_w;
+            if fill_w > 0.0 {
+                rounded(s, ui, bar_x, y - 4.0, fill_w, 8.0, 4.0, SYSTEM_BLUE.now());
+            }
+            text(&mut self.labels, s, ui, &value, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), w - CARD_PAD - value_w, y, value_w + 2.0);
+        }
+    }
+
+    /// The Window > CPU History floating window: one strip per core, newest at the right.
+    pub fn draw_cpu_history_window(&mut self, ui: &Ui, s: &mut Surface) {
+        let (w, h) = (s.w as f32 / ui.pt(1.0), s.h as f32 / ui.pt(1.0));
+        fill(s, ui, 0.0, 0.0, w, h, CONTENT_BG.now());
+        let cores = self.history.cores.len();
+        let busy = self.snapshot.as_ref().map_or(0.0, |snap| snap.cpu.busy);
+        text(&mut self.labels, s, ui, "CPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), CARD_PAD, 18.0, w - 2.0 * CARD_PAD);
+        let detail = format!("{cores} cores   Total {}", percent(busy));
+        text(&mut self.labels, s, ui, &detail, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), CARD_PAD, 36.0, w - 2.0 * CARD_PAD);
+        self.core_strips(ui, s, CARD_PAD, 52.0, w - 2.0 * CARD_PAD, h - 52.0 - CARD_PAD);
     }
 
     /// The table rows that are on screen. Rows scrolled above the table are left out; the header covers the rest.
@@ -522,5 +588,27 @@ impl Monitor {
             let bh = (v / FULL_PCT).clamp(0.0, 1.0) * STRIP_H;
             fill(s, ui, strip_x + (offset + i) as f32 * slot, top + STRIP_H - bh.max(1.0), (slot - 0.5).max(1.0), bh.max(1.0), color);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cpu_usage_window_grows_one_row_per_core() {
+        let (w, h8) = usage_window_size(8);
+        let (_, h4) = usage_window_size(4);
+        assert_eq!(w, USAGE_WINDOW_W);
+        assert!((h8 - h4 - 4.0 * USAGE_ROW_PT).abs() < 0.001, "four more cores add four rows");
+        assert_eq!(usage_window_size(0), usage_window_size(1), "a window with no reading yet still has one row");
+    }
+
+    #[test]
+    fn the_cpu_history_window_takes_two_rows_above_four_cores() {
+        let (_, one) = history_window_size(4);
+        let (_, two) = history_window_size(5);
+        assert!(two > one, "more than four cores take a second row of strips");
+        assert_eq!(history_window_size(8).1, two, "eight cores still fit two rows");
     }
 }

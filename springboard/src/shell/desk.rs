@@ -781,14 +781,7 @@ impl Shell {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn take_wayland_windows(&mut self) -> Vec<crate::bare::wayland::WindowFrame> {
-        // the apps whose hosts asked for a floating window (`ToShell::WindowLevel`)
-        let floating: Vec<AppId> = self
-            .ext
-            .iter()
-            .enumerate()
-            .filter(|(_, h)| h.as_ref().is_some_and(|h| h.window_level == bifrost_proto::WindowLevel::Floating))
-            .map(|(slot, _)| AppId::External(slot as u8))
-            .collect();
+        let floating = self.floating_apps();
         self.desk.as_mut().map(|d| {
             d.sync_levels(floating);
             let mut frames = std::mem::take(&mut d.frames);
@@ -1368,6 +1361,20 @@ impl Shell {
         self.desk_refocus();
     }
 
+    /// The desk windows that float: each app whose host asked for `ToShell::WindowLevel`, and each extra window its app
+    /// set to `ToShell::WindowLevelOf`.
+    pub(super) fn floating_apps(&self) -> Vec<AppId> {
+        let mut out = Vec::new();
+        for (slot, host) in self.ext.iter().enumerate() {
+            let Some(h) = host else { continue };
+            if h.window_level == bifrost_proto::WindowLevel::Floating {
+                out.push(AppId::External(slot as u8));
+            }
+            out.extend(h.windows.floating_ids(&h.id).into_iter().filter_map(|id| u16::try_from(id).ok()).map(|id| AppId::ExternalWindow(slot as u8, id)));
+        }
+        out
+    }
+
     /// The extra windows follow each app host's table (`app_window_table::desk_changes`): a window the app opened gets a
     /// desk window of its own, one the app closed (or the table dropped) leaves the desk. Runs from the app host tick.
     pub(super) fn desk_sync_extra_windows(&mut self) {
@@ -1389,6 +1396,11 @@ impl Shell {
                 let sizes: Vec<(u32, f32, f32)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h)).collect();
                 plan.push((slot as u8, open, close, sizes));
             }
+        }
+        // a window that changed its level moves within the stack even when the table's windows did not change
+        let floating = self.floating_apps();
+        if let Some(d) = self.desk.as_mut() {
+            d.sync_levels(floating);
         }
         if plan.is_empty() {
             return;
@@ -2500,6 +2512,18 @@ mod tests {
             assert_eq!(win_id(a.id), Some(i as u32 + 1));
             assert_eq!(win_id(a.id).and_then(|id| apps().get(id as usize - 1)).map(|b| b.id), Some(a.id));
         }
+    }
+
+    #[test]
+    fn a_floating_extra_window_stays_above_the_normal_windows_of_the_desk() {
+        let m = metrics();
+        let mut d = Desk::default();
+        d.open(&m, AppId::ExternalWindow(3, 2), (300, 200));
+        d.open(&m, AppId::Files, (400, 300));
+        d.sync_levels(vec![AppId::ExternalWindow(3, 2)]);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(AppId::ExternalWindow(3, 2)), "the floating extra window is last");
+        d.sync_levels(Vec::new());
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Files, AppId::ExternalWindow(3, 2)], "a window that stops floating keeps its place in the normal band");
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! tests run on fixtures. `Hardware::collect` reads the real locations once.
 
 use bifrost_core::sysinfo::UsbDevice;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -1255,6 +1255,103 @@ pub fn read_installations(log: &Path, limit: usize) -> Vec<Installation> {
     parse_pacman_log(&read_trim_text(log), limit)
 }
 
+/// Vendor and device names from a `pci.ids` database (the hwdata file the PCI tools read).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PciNames {
+    vendors: BTreeMap<u32, String>,
+    devices: BTreeMap<(u32, u32), String>,
+}
+
+impl PciNames {
+    /// The vendor's name, when the database has it.
+    pub fn vendor(&self, id: u32) -> Option<String> {
+        self.vendors.get(&id).cloned()
+    }
+
+    /// The device's name under its vendor, when the database has it.
+    pub fn device(&self, vendor: u32, id: u32) -> Option<String> {
+        self.devices.get(&(vendor, id)).cloned()
+    }
+}
+
+/// `"8086  Intel Corporation"` as (0x8086, "Intel Corporation").
+fn split_pci_id(text: &str) -> Option<(u32, String)> {
+    let (id, name) = text.split_once("  ")?;
+    Some((u32::from_str_radix(id.trim(), 16).ok()?, name.trim().to_string()))
+}
+
+/// The vendor and device names in `pci.ids` text. Vendor lines start at column 0, device lines under them start with one
+/// tab (subsystem lines with two are skipped), and the class list at the "C " line ends the names.
+pub fn parse_pci_ids(text: &str) -> PciNames {
+    let mut names = PciNames::default();
+    let mut vendor: Option<u32> = None;
+    for line in text.lines() {
+        if line.starts_with("C ") {
+            break;
+        }
+        if line.is_empty() || line.starts_with('#') || line.starts_with("\t\t") {
+            continue;
+        }
+        if let Some(device) = line.strip_prefix('\t') {
+            if let (Some(v), Some((id, name))) = (vendor, split_pci_id(device)) {
+                names.devices.insert((v, id), name);
+            }
+            continue;
+        }
+        vendor = split_pci_id(line).map(|(id, name)| {
+            names.vendors.insert(id, name);
+            id
+        });
+    }
+    names
+}
+
+/// The names from the first `pci.ids` that is present (none is an empty table, and the names fall back to the IDs).
+pub fn read_pci_names(paths: &[&Path]) -> PciNames {
+    paths.iter().find_map(|p| fs::read_to_string(p).ok()).map(|text| parse_pci_ids(&text)).unwrap_or_default()
+}
+
+/// A package the pacman local database lists as installed (`/var/lib/pacman/local/<name-version>/desc`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PacmanPackage {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    /// Unix seconds of the install (`%INSTALLDATE%`); 0 when the file does not say.
+    pub installed_epoch: i64,
+    /// The installed size in bytes (`%SIZE%`).
+    pub size: u64,
+}
+
+/// The value under a `%KEY%` header of a pacman `desc` file: the lines after the header, up to the blank line.
+fn desc_value(text: &str, key: &str) -> Option<String> {
+    let header = format!("%{key}%");
+    let mut lines = text.lines();
+    lines.find(|l| l.trim() == header)?;
+    Some(lines.next().unwrap_or("").trim().to_string())
+}
+
+/// One package from the text of a pacman `desc` file. No name means no package.
+pub fn parse_pacman_desc(text: &str) -> Option<PacmanPackage> {
+    let name = desc_value(text, "NAME").filter(|n| !n.is_empty())?;
+    Some(PacmanPackage {
+        name,
+        version: desc_value(text, "VERSION").unwrap_or_default(),
+        description: desc_value(text, "DESC").unwrap_or_default(),
+        installed_epoch: desc_value(text, "INSTALLDATE").and_then(|v| v.parse().ok()).unwrap_or(0),
+        size: desc_value(text, "SIZE").and_then(|v| v.parse().ok()).unwrap_or(0),
+    })
+}
+
+/// The installed packages in a pacman local database directory, newest install first (then by name), at most `limit`.
+/// The database is read as files; pacman is not run.
+pub fn read_pacman_packages(local: &Path, limit: usize) -> Vec<PacmanPackage> {
+    let mut out: Vec<PacmanPackage> = entries(local).iter().filter_map(|dir| parse_pacman_desc(&read_trim_text(&local.join(dir).join("desc")))).collect();
+    out.sort_by(|a, b| b.installed_epoch.cmp(&a.installed_epoch).then_with(|| a.name.cmp(&b.name)));
+    out.truncate(limit);
+    out
+}
+
 /// A printer driver file (a PPD) installed for the printing system.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrinterDriver {
@@ -1331,6 +1428,8 @@ pub struct Hardware {
     pub optical: Vec<OpticalDrive>,
     pub diagnostics: Vec<DiagnosticReport>,
     pub installs: Vec<Installation>,
+    pub packages: Vec<PacmanPackage>,
+    pub pci_names: PciNames,
     pub printer_drivers: Vec<PrinterDriver>,
 }
 
@@ -1380,6 +1479,8 @@ impl Hardware {
             optical: read_optical_drives(p("/sys/block")),
             diagnostics: read_diagnostics(&[PathBuf::from("/var/crash"), PathBuf::from("/var/lib/systemd/coredump")], 50),
             installs: read_installations(p("/var/log/pacman.log"), 300),
+            packages: read_pacman_packages(p("/var/lib/pacman/local"), 2000),
+            pci_names: read_pci_names(&[p("/usr/share/hwdata/pci.ids"), p("/usr/share/misc/pci.ids")]),
             printer_drivers: read_printer_drivers(&[PathBuf::from("/usr/share/cups/model"), PathBuf::from("/usr/share/ppd")], 300),
         }
     }
@@ -1504,6 +1605,46 @@ mod tests {
         assert_eq!(changes[2].version, "6.1.1-1 -> 6.1.2-1");
         assert_eq!(parse_pacman_log(log, 1).len(), 1, "the limit holds");
         assert!(parse_pacman_log("", 10).is_empty());
+    }
+
+    #[test]
+    fn pci_ids_name_vendors_and_their_devices() {
+        let text = "# comment\n8086  Intel Corporation\n\t3ea0  UHD Graphics\n\t\t1028 0a3e  Subsystem\n10de  NVIDIA Corporation\n\t2504  GA106 [GeForce RTX 3060]\nC 03  Display controller\n\t00  VGA\n";
+        let names = parse_pci_ids(text);
+        assert_eq!(names.vendor(0x8086).as_deref(), Some("Intel Corporation"));
+        assert_eq!(names.device(0x8086, 0x3ea0).as_deref(), Some("UHD Graphics"));
+        assert_eq!(names.device(0x10de, 0x2504).as_deref(), Some("GA106 [GeForce RTX 3060]"));
+        assert_eq!(names.device(0x8086, 0x2504), None, "a device is named under its own vendor only");
+        assert_eq!(names.vendor(0x1234), None);
+        assert!(read_pci_names(&[Path::new("/nonexistent/pci.ids")]) == PciNames::default());
+    }
+
+    #[test]
+    fn a_pacman_desc_gives_name_version_install_time_and_size() {
+        let desc = "%NAME%\nbash\n\n%VERSION%\n5.2.37-1\n\n%DESC%\nThe GNU Bourne Again shell\n\n%INSTALLDATE%\n1700000000\n\n%SIZE%\n1234567\n";
+        let p = parse_pacman_desc(desc).unwrap();
+        assert_eq!(p, PacmanPackage { name: "bash".into(), version: "5.2.37-1".into(), description: "The GNU Bourne Again shell".into(), installed_epoch: 1_700_000_000, size: 1_234_567 });
+        assert_eq!(parse_pacman_desc("%VERSION%\n1\n").as_ref(), None, "a desc with no name is not a package");
+        let bare = parse_pacman_desc("%NAME%\nfoo\n").unwrap();
+        assert_eq!((bare.version.as_str(), bare.installed_epoch, bare.size), ("", 0, 0), "missing fields read as empty or zero");
+    }
+
+    #[test]
+    fn installed_packages_are_read_from_the_local_database_newest_first() {
+        let dir = scratch("pacman-local");
+        for (name, when) in [("alpha-1-1", "100"), ("beta-2-1", "300"), ("gamma-3-1", "300")] {
+            let pkg = dir.join(name);
+            fs::create_dir_all(&pkg).unwrap();
+            let pkg_name = name.rsplitn(3, '-').nth(2).unwrap();
+            put(&pkg.join("desc"), &format!("%NAME%\n{pkg_name}\n\n%INSTALLDATE%\n{when}\n"));
+        }
+        fs::create_dir_all(dir.join("ALPM_DB_VERSION")).unwrap();
+        put(&dir.join("ALPM_DB_VERSION").join("desc"), "not a package\n");
+        let all = read_pacman_packages(&dir, 10);
+        let names: Vec<&str> = all.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["beta", "gamma", "alpha"], "newest install first, then by name");
+        assert_eq!(read_pacman_packages(&dir, 1).len(), 1, "the limit holds");
+        assert!(read_pacman_packages(&dir.join("missing"), 10).is_empty());
     }
 
     #[test]
