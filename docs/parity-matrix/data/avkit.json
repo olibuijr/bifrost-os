@@ -61,7 +61,7 @@
    "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
    "bifrost": "springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (route_picker.rs, route_picker_view.rs); not wired into the shell or apps, not tested on Midget. Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent."
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (route_picker.rs, route_picker_view.rs); not wired into the shell or apps, not tested on Midget. Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent. Built 2026-10-17: SDK bifrost_app::route_picker (sections, authorized tap to activate); tests springboard/sdk/src/route_picker.rs::tests. Receiver discovery and drawing not wired yet."
   },
   {
    "feature": "Third-party casting and metadata identifiers",

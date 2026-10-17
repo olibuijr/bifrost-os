@@ -262,6 +262,8 @@ pub mod store_receipt;
 pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
 /// Picture in Picture for video players: life cycle, delegate events and the floating window's rectangle and corner.
 pub mod picture_in_picture;
+/// The AirPlay-style route picker: outputs and nearby receivers in sections, and taps that activate authorized routes.
+pub mod route_picker;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
