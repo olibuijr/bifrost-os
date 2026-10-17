@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.15.0 — 2026-10-17
+
+- Model for the merge review (`dupes::review`, `dupes::merge_with`): it lists the fields where duplicates disagree, and folds the cards with the value picked for each field (a phone or email takes its label along). The review sheet is not drawn yet, so Card > Merge Duplicates still keeps the first card's values.
+
 ## 1.14.0 — 2026-10-17
 
 - A tap on an email in a card opens a new message in Mail, prefilled with the address (`bifrost_app::mail_compose`); a tap on a phone number opens a `tel:` link through the shell. Other values still copy on a tap, and the Copy buttons still copy.
