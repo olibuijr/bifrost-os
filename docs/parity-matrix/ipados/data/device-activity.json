@@ -1,0 +1,50 @@
+{
+  "framework": "Device Activity",
+  "doc": "https://developer.apple.com/documentation/deviceactivity",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/screen_time.rs, springboard/src/shell/screentime/mod.rs, springboard/core/src/content_filter.rs",
+  "summary": "Screen Time has foreground-app usage per day, daily limits, downtime and a child-restriction state with an observer. Scheduled monitoring through an extension, activity reports and the privacy-preserving report view are missing. iPadOS 15.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Scheduled activity monitoring",
+      "apple": "DeviceActivityCenter, DeviceActivitySchedule, DeviceActivityMonitor",
+      "bifrost": "springboard/src/shell/screentime/mod.rs",
+      "status": "partial",
+      "note": "The shell tracks usage and limits; no app-facing schedule or monitor."
+    },
+    {
+      "feature": "Activity events and thresholds",
+      "apple": "DeviceActivityEvent, DeviceActivityName",
+      "bifrost": "springboard/src/shell/screentime/mod.rs",
+      "status": "partial",
+      "note": "Daily limits act as thresholds; no named event API."
+    },
+    {
+      "feature": "Activity report view",
+      "apple": "DeviceActivityReport, DeviceActivityReportExtension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No report extension or privacy-preserving report view."
+    },
+    {
+      "feature": "Authorization",
+      "apple": "DeviceActivityAuthorization",
+      "bifrost": "springboard/sdk/src/screen_time.rs",
+      "status": "partial",
+      "note": "The Screen Time state is readable by apps; no authorization request."
+    },
+    {
+      "feature": "Web domain filtering",
+      "apple": "Web domain activity",
+      "bifrost": "springboard/core/src/content_filter.rs",
+      "status": "partial",
+      "note": "A URL filter exists; it is not tied to activity reporting."
+    }
+  ],
+  "gaps": [
+    "No extension API to monitor scheduled activity or receive events.",
+    "No privacy-preserving report view or report extension."
+  ]
+}

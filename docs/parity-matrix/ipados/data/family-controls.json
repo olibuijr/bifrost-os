@@ -1,0 +1,57 @@
+{
+  "framework": "Family Controls",
+  "doc": "https://developer.apple.com/documentation/familycontrols",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/screen_time.rs, springboard/src/shell/screentime/mod.rs, springboard/core/src/content_filter.rs, springboard/src/shell/list.rs",
+  "summary": "Screen Time limits and content filtering exist in the shell, and apps can read the child-restriction state. There is no authorization center, no activity picker and no selection of apps, categories or web domains that an app can use for parental controls. iPadOS 15.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Authorization",
+      "apple": "AuthorizationCenter, AuthorizationStatus",
+      "bifrost": "springboard/sdk/src/screen_time.rs",
+      "status": "partial",
+      "note": "Restriction state is readable; no authorization request for an app."
+    },
+    {
+      "feature": "Account types",
+      "apple": "FamilyControlsMember",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No family member model."
+    },
+    {
+      "feature": "Activity picker",
+      "apple": "FamilyActivityPicker",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No picker that hides app and site names from the parent."
+    },
+    {
+      "feature": "Activity selection",
+      "apple": "FamilyActivitySelection",
+      "bifrost": "springboard/src/shell/screentime/mod.rs",
+      "status": "partial",
+      "note": "The shell has per-app limits; no selection type an app can store."
+    },
+    {
+      "feature": "Activity labels",
+      "apple": "Displaying Activity Labels",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No read-only activity label for an app or site."
+    },
+    {
+      "feature": "Web domain filtering",
+      "apple": "Web domains in a selection",
+      "bifrost": "springboard/core/src/content_filter.rs",
+      "status": "partial",
+      "note": "A URL filter model exists; it is not an app-facing selection."
+    }
+  ],
+  "gaps": [
+    "No app-facing authorization or activity picker for parental controls.",
+    "No selection type that hides names from the parent."
+  ]
+}

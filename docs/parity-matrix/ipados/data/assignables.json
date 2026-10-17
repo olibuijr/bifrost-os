@@ -1,0 +1,57 @@
+{
+  "framework": "Assignables",
+  "doc": "https://developer.apple.com/documentation/assignables",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/ui/src/pdfform.rs, springboard/ui/src/acroform.rs, springboard/apps/pdfcraft-desktop",
+  "summary": "Assignable PDFs for education: a teacher marks up a PDF, assigns it to students, and each student's copy is merged and scored. BifrOSt has PDF form models and a PDF app, but no assignment, taker, scorer or merge model. iPadOS 15.4 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Assignable document",
+      "apple": "AssignableDocument, Assignable",
+      "bifrost": "springboard/ui/src/pdfform.rs",
+      "status": "gap",
+      "note": "The PDF form model reads fields; it does not carry assignment markup."
+    },
+    {
+      "feature": "Assigned work per student",
+      "apple": "AssignedWorkDocument, AssignedWorkDocumentConfiguration",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No per-student copy or score."
+    },
+    {
+      "feature": "Document elements and identifiers",
+      "apple": "DocumentElement, DocumentElementID",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No element identity for PDF markup."
+    },
+    {
+      "feature": "Merging parts of a document",
+      "apple": "MergeableDocument, MergeablePartsContainer",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No merge across replicas."
+    },
+    {
+      "feature": "User identities for editors",
+      "apple": "UserIdentity, UserIdentityTypeRegistry",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No identity registry for document editors."
+    },
+    {
+      "feature": "PDF presentation",
+      "apple": "AssignableDocumentView (SwiftUI)",
+      "bifrost": "springboard/apps/pdfcraft-desktop",
+      "status": "partial",
+      "note": "The PDF app shows and marks up PDFs; it is not an assignment view."
+    }
+  ],
+  "gaps": [
+    "No assignment, per-student copy or scoring model.",
+    "No merge or identity model for shared PDF markup."
+  ]
+}

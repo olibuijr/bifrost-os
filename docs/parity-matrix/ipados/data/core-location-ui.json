@@ -1,0 +1,43 @@
+{
+  "framework": "Core Location UI",
+  "doc": "https://developer.apple.com/documentation/corelocationui",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/core_location.rs, springboard/src/shell/services/location.rs, springboard/src/shell/permission_sheet.rs",
+  "summary": "Core Location UI provides a location button that grants one-time location access. BifrOSt has location for apps and a permission sheet that asks Allow or Don't Allow when an app requests location, but no one-time location button and no one-time grant. iPadOS 15.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "One-time location button",
+      "apple": "LocationButton, CLLocationButton",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No button that an app can place to grant one-time location."
+    },
+    {
+      "feature": "One-time location authorization",
+      "apple": "CLLocationButton authorization",
+      "bifrost": "springboard/src/shell/permission_sheet.rs",
+      "status": "partial",
+      "note": "The permission sheet asks for location; it has no one-time grant."
+    },
+    {
+      "feature": "Button icon and label styles",
+      "apple": "CLLocationButtonIcon, CLLocationButtonLabel",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No styles for the location button."
+    },
+    {
+      "feature": "Location for apps",
+      "apple": "CLLocationManager (for context)",
+      "bifrost": "springboard/sdk/src/core_location.rs",
+      "status": "partial",
+      "note": "Location is available to apps after permission; the button path is missing."
+    }
+  ],
+  "gaps": [
+    "No one-time location button for apps.",
+    "No one-time grant; the permission sheet only offers Allow or Don't Allow."
+  ]
+}

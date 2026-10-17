@@ -1,0 +1,49 @@
+{
+  "framework": "FinanceKit",
+  "doc": "https://developer.apple.com/documentation/financekit",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Financial data from Apple Card, Apple Cash and Wallet accounts, with orders and background delivery. The data comes from Apple's Wallet and bank connections, and BifrOSt has neither. iPadOS 17.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Authorization",
+      "apple": "requestAuthorization(), authorizationStatus()",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Authorization for Wallet financial data."
+    },
+    {
+      "feature": "Accounts and balances",
+      "apple": "accounts(query:), accountBalances(query:)",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Data comes from Wallet accounts Apple holds."
+    },
+    {
+      "feature": "Transactions",
+      "apple": "transactions(query:), transactionHistory",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Transaction data comes from Wallet."
+    },
+    {
+      "feature": "Orders in Wallet",
+      "apple": "saveOrder(signedArchive:), FinanceStore",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Orders are signed by the merchant for Wallet."
+    },
+    {
+      "feature": "Background delivery",
+      "apple": "BackgroundDeliveryExtension",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Delivery comes from Wallet's store."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on Wallet and bank data that BifrOSt does not have."
+  ]
+}

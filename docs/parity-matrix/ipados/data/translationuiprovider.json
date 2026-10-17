@@ -1,0 +1,50 @@
+{
+  "framework": "TranslationUIProvider",
+  "doc": "https://developer.apple.com/documentation/translationuiprovider",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/translation_popover.rs, springboard/sdk/src/translation.rs",
+  "summary": "The shell has a system translation popover as a pure model, and the SDK has translation sessions over an engine the app supplies. Third-party translation apps cannot provide the selection popover, and there is no default-translation-app setting. iPadOS 18.4 and later per the index; nothing has run on a tablet.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "In-place translation popover for a selection",
+      "apple": "TranslationUIProviderSelectedTextScene",
+      "bifrost": "springboard/ui/src/translation_popover.rs",
+      "status": "partial",
+      "note": "The shell's popover is a model of the state shown while a selection translates."
+    },
+    {
+      "feature": "Extension protocol for a translation app",
+      "apple": "TranslationUIProviderExtension, TranslationUIProviderContext",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No extension point lets another app supply the popover."
+    },
+    {
+      "feature": "Extension scene",
+      "apple": "TranslationUIProviderExtensionScene",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No scene type for a translation extension."
+    },
+    {
+      "feature": "Configuration of the selected text",
+      "apple": "TranslationProviderUIExtensionConfiguration",
+      "bifrost": "springboard/sdk/src/translation.rs",
+      "status": "partial",
+      "note": "The session takes source and target language; the extension configuration object does not exist."
+    },
+    {
+      "feature": "Default translation app",
+      "apple": "Preparing your app to be the default translation app",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No setting chooses a translation app."
+    }
+  ],
+  "gaps": [
+    "Third-party apps cannot supply the selection popover (no extension point).",
+    "No default translation app setting."
+  ]
+}

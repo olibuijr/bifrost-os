@@ -1,0 +1,43 @@
+{
+  "framework": "Address Book UI",
+  "doc": "https://developer.apple.com/documentation/addressbookui",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/contacts.rs, springboard/ui/src/contact_card.rs, springboard/src/shell/contactstore.rs",
+  "summary": "This is the legacy contact picker and viewer that Apple replaced with ContactsUI. BifrOSt has the contact model and a contact card model with an existing, unknown and new-contact viewer, and an SDK to fetch and save contacts. There is no system people picker for apps. The legacy class names are not used in code, by owner rule. iPadOS 2.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "People picker",
+      "apple": "ABPeoplePickerNavigationController",
+      "bifrost": "springboard/sdk/src/contacts.rs",
+      "status": "gap",
+      "note": "No picker UI for apps; the SDK only fetches contacts the app may see."
+    },
+    {
+      "feature": "Contact viewer",
+      "apple": "ABPersonViewController, ABUnknownPersonViewController",
+      "bifrost": "springboard/ui/src/contact_card.rs",
+      "status": "partial",
+      "note": "The card model covers existing and unknown contacts; no app-facing viewer controller."
+    },
+    {
+      "feature": "New contact editor",
+      "apple": "ABNewPersonViewController",
+      "bifrost": "springboard/src/shell/contactstore.rs",
+      "status": "partial",
+      "note": "The Contacts app edits contacts; no app-facing editor."
+    },
+    {
+      "feature": "Address formatting",
+      "apple": "ABCreateStringWithAddressDictionary",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No postal address formatter in the UI or SDK."
+    }
+  ],
+  "gaps": [
+    "No people picker that apps can open.",
+    "Legacy API replaced by ContactsUI; the picker and viewer are not exposed to apps."
+  ]
+}

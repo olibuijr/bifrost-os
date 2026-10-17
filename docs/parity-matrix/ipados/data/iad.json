@@ -1,0 +1,35 @@
+{
+  "framework": "iAd",
+  "doc": "https://developer.apple.com/documentation/iad",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "The legacy iAd Attribution API for Apple Search Ads campaigns. The client and its macros are marked obsolete in the official reference, and Apple Search Ads is an Apple service BifrOSt does not have. iPadOS 4.0 and later per the index; the reference lists its deprecation and obsolescence.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Attribution request",
+      "apple": "ADClient",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Requests attribution from Apple Search Ads, which BifrOSt does not run."
+    },
+    {
+      "feature": "Attribution errors",
+      "apple": "ADClientError, ADClientErrorDomain",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Errors of the legacy client."
+    },
+    {
+      "feature": "Deprecated symbols and macros",
+      "apple": "Deprecated Symbols, ADCLIENT_DEPRECATED_* macros",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Reference lists the symbols as deprecated and obsoleted; not implemented."
+    }
+  ],
+  "gaps": [
+    "Not planned: legacy Apple Search Ads service, obsolete in the reference."
+  ]
+}
