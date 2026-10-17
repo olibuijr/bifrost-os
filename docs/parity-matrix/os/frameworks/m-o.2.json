@@ -2423,9 +2423,48 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "actions_tests"
+    }
+   ],
+   "ready_note": "Apps declare [[intent]] tables in manifest.toml and serve them on their control socket. Search and the Shortcuts action library list and run an installed app's shortcut intents (shell::intents::runnable_shortcuts). The assistant answers with intent cards that run only after the user confirms them, and reads answers aloud when Speak Answers is on. Voice recognition is not built: nothing turns speech into an intent request, so Siri's spoken requests are not covered.",
    "rea": [],
    "method": "assessed"
   },
