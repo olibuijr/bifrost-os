@@ -872,9 +872,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
+   "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
    "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is BlueZ's obex daemon, not built here",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::rfcomm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::obex_codec::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    }
+   ],
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "rea": [],
    "method": "rule"
   },
@@ -3164,9 +3188,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
+   "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
    "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is BlueZ's obex daemon, not built here",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::rfcomm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::obex_codec::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    }
+   ],
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
    "rea": [],
    "method": "rule"
   },

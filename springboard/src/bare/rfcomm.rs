@@ -59,6 +59,25 @@ impl Stream {
         Ok(n as usize)
     }
 
+    /// Reads one whole OBEX packet: the three head bytes, then the rest that the length field gives. A closed channel
+    /// before the packet ends is an error.
+    pub fn read_obex(&self) -> io::Result<Vec<u8>> {
+        use bifrost_core::obex_packet::packet_len;
+        let mut buf: Vec<u8> = Vec::new();
+        let mut want = 3usize;
+        while buf.len() < want {
+            let mut chunk = [0u8; 512];
+            let n = self.read(&mut chunk)?;
+            if n == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "the device closed the channel mid-packet"));
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            want = packet_len(&buf).unwrap_or(3);
+        }
+        buf.truncate(want);
+        Ok(buf)
+    }
+
     /// Sends all of `data`, retrying after partial writes.
     pub fn write_all(&self, mut data: &[u8]) -> io::Result<()> {
         use std::os::fd::AsRawFd;
@@ -78,6 +97,15 @@ impl Stream {
     }
 }
 
+/// Opens a channel to `addr`, sends one request packet and reads the one packet that answers it. Blocks for at most
+/// [`CONNECT_SECS`] to connect and as long to get each read or write through.
+#[cfg(target_os = "linux")]
+pub fn request(addr: &str, channel: u8, packet: &[u8]) -> io::Result<Vec<u8>> {
+    let stream = connect(addr, channel)?;
+    stream.write_all(packet)?;
+    stream.read_obex()
+}
+
 /// Opens an RFCOMM socket and connects it to `channel` on `addr`. Blocks for at most [`CONNECT_SECS`].
 #[cfg(target_os = "linux")]
 pub fn connect(addr: &str, channel: u8) -> io::Result<Stream> {
@@ -85,6 +113,7 @@ pub fn connect(addr: &str, channel: u8) -> io::Result<Stream> {
 
     const SOCK_STREAM: i32 = 1;
     const SOL_SOCKET: i32 = 1;
+    const SO_RCVTIMEO: i32 = 20;
     const SO_SNDTIMEO: i32 = 21;
 
     let sa = sockaddr(addr, channel).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "bad address or channel"))?;
@@ -94,9 +123,11 @@ pub fn connect(addr: &str, channel: u8) -> io::Result<Stream> {
     let fd = unsafe { OwnedFd::from_raw_fd(fd) };
     use std::os::fd::AsRawFd;
     let tv = super::sys::timeval { tv_sec: CONNECT_SECS as std::ffi::c_long, tv_usec: 0 };
-    super::sys::check(unsafe {
-        super::sys::setsockopt(fd.as_raw_fd(), SOL_SOCKET, SO_SNDTIMEO, &tv as *const _ as *const _, std::mem::size_of::<super::sys::timeval>() as u32)
-    })?;
+    for option in [SO_SNDTIMEO, SO_RCVTIMEO] {
+        super::sys::check(unsafe {
+            super::sys::setsockopt(fd.as_raw_fd(), SOL_SOCKET, option, &tv as *const _ as *const _, std::mem::size_of::<super::sys::timeval>() as u32)
+        })?;
+    }
     super::sys::check(unsafe { super::sys::connect(fd.as_raw_fd(), &sa as *const SockaddrRc as *const u8, std::mem::size_of::<SockaddrRc>() as u32) })?;
     Ok(Stream { fd })
 }
@@ -118,6 +149,11 @@ mod tests {
         assert!(sockaddr("AA:BB:CC:DD:EE:FF", CHANNEL_MAX).is_some());
         assert_eq!(sockaddr("AA:BB:CC:DD:EE:FF", 0), None);
         assert_eq!(sockaddr("AA:BB:CC:DD:EE:FF", 31), None);
+    }
+
+    #[test]
+    fn a_request_to_a_bad_address_fails_before_any_socket_opens() {
+        assert_eq!(request("not-an-address", 1, &[0x80, 0x00, 0x03]).unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
