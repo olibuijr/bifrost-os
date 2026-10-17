@@ -102,10 +102,26 @@ impl App for MailApp {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.route_focus(ctx);
         self.with_window(ctx, |mail| mail.menu(ctx, id))
     }
 
+    /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
+    fn route_focus(&mut self, ctx: &Ctx) {
+        let focused = ctx.windows().focused();
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(focused) {
+                self.composes.activate(mail, focused);
+            } else if focused.is_main() {
+                self.composes.deactivate(mail);
+            }
+        }
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if matches!(ev, Input::Key(_) | Input::Command(_)) {
+            self.route_focus(ctx);
+        }
         let changed = match &mut self.window {
             None => {
                 // a mailto: link before the window exists waits for configure
@@ -117,8 +133,8 @@ impl App for MailApp {
             Some(mail) => match ev {
                 Input::Touch { kind, x, y, t, .. } => {
                     // a touch on the main window hands the sheet slot back to the main window
-                    if matches!(kind, TouchKind::Down) {
-                        self.composes.deactivate(mail);
+                    if matches!(kind, TouchKind::Down) && !self.composes.deactivate(mail) {
+                        return false;
                     }
                     mail.touch(ctx, kind, x, y, t)
                 }
@@ -173,6 +189,9 @@ impl App for MailApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let mut changed = self.open_viewers(ctx) | self.refresh_viewers();
+        if let Some(mail) = &mut self.window {
+            self.composes.autosave(mail, t);
+        }
         changed |= self.with_window(ctx, |mail| mail.tick(ctx, t));
         changed
     }
@@ -195,7 +214,10 @@ impl App for MailApp {
         } else if let Some(mail) = &mut self.window {
             if let Some(compose) = self.composes.compose_of(window) {
                 self.composes.resized(window, s.w as f32, s.h as f32);
-                mail.draw_compose(s, &ctx.ui, &bifrost_mail::state::Sheet::Compose(compose));
+                // the window that asks the question shows it; the others show the message
+                let asking = self.composes.active == Some(window) && matches!(mail.mail.sheet, Some(bifrost_mail::state::Sheet::Question(_)));
+                let sheet = if asking { bifrost_mail::state::Sheet::Question(compose) } else { bifrost_mail::state::Sheet::Compose(compose) };
+                mail.draw_compose(s, &ctx.ui, &sheet);
             }
         }
         let mut d = Damage::new(s.w, s.h);
@@ -203,12 +225,12 @@ impl App for MailApp {
         d
     }
 
-    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+    fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
         let mut changed = before != self.viewers.len();
         if let Some(mail) = &mut self.window {
-            changed |= self.composes.closed(mail, window);
+            changed |= self.composes.closed(ctx, mail, window);
         }
         changed
     }

@@ -212,6 +212,8 @@ pub struct Compose {
     /// The misspelled words the last spelling check found, as ranges of characters of the message, and the one in view.
     pub misspelled: Vec<Range<usize>>,
     pub misspelled_at: usize,
+    /// The Message-ID of this message's draft in Drafts; empty until the first save.
+    pub draft_id: String,
 }
 
 impl Compose {
@@ -228,6 +230,7 @@ impl Compose {
             typing: Style::default(),
             misspelled: Vec::new(),
             misspelled_at: 0,
+            draft_id: String::new(),
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
         compose
@@ -435,6 +438,8 @@ pub enum PromptKind {
     SmartMailbox,
     /// New Rule.
     Rule,
+    /// Edit Rule: the rule at this place in the list.
+    EditRule(usize),
     /// Signature, other addresses and undo-send delay of the shown account.
     Settings,
     /// Account Settings: the setup form of the account with this id.
@@ -464,6 +469,10 @@ pub enum Sheet {
     /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
     Quickly(Form),
     Prompt(Prompt),
+    /// Closing a message that has text: Save This Message, Don't Save, or Cancel (back to the message).
+    Question(Compose),
+    /// Mailbox > Rules: the form is empty; the names are the rules' lines, in order (see `rules::describe`).
+    Rules(Form, Vec<String>),
 }
 
 impl Sheet {
@@ -471,18 +480,20 @@ impl Sheet {
     pub fn form(&self) -> &Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &compose.form,
             Sheet::Mailbox(sheet) => &sheet.form,
             Sheet::Prompt(prompt) => &prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
     pub fn form_mut(&mut self) -> &mut Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &mut compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &mut compose.form,
             Sheet::Mailbox(sheet) => &mut sheet.form,
             Sheet::Prompt(prompt) => &mut prompt.form,
+            Sheet::Rules(form, _) => form,
         }
     }
 
@@ -494,6 +505,8 @@ impl Sheet {
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(compose) if compose.in_reply_to.is_some() => "Reply",
             Sheet::Compose(_) => "New Message",
+            Sheet::Question(_) => "Save This Message?",
+            Sheet::Rules(..) => "Rules",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename Mailbox",
             Sheet::Mailbox(_) => "New Mailbox",
             Sheet::Prompt(prompt) => match prompt.kind {
@@ -501,6 +514,7 @@ impl Sheet {
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox => "New Smart Mailbox",
                 PromptKind::Rule => "New Rule",
+                PromptKind::EditRule(_) => "Edit Rule",
                 PromptKind::Settings => "Mail Settings",
                 PromptKind::EditAccount(_) => "Account Settings",
                 PromptKind::RemoveAccount(_) => "Remove Account",
@@ -516,13 +530,15 @@ impl Sheet {
             Sheet::Quickly(_) => "Go",
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(_) => "Send",
+            Sheet::Question(_) => "Save",
+            Sheet::Rules(..) => "Done",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename",
             Sheet::Mailbox(_) => "Create",
             Sheet::Prompt(prompt) => match prompt.kind {
                 PromptKind::Remind => "Remind Me",
                 PromptKind::Redirect => "Redirect",
                 PromptKind::SmartMailbox | PromptKind::Rule => "Add",
-                PromptKind::Settings | PromptKind::EditAccount(_) => "Save",
+                PromptKind::Settings | PromptKind::EditAccount(_) | PromptKind::EditRule(_) => "Save",
                 PromptKind::RemoveAccount(_) => "Remove",
                 PromptKind::Activity => "Done",
             },
@@ -582,6 +598,8 @@ pub struct Mail {
     pub fresh_compose: bool,
     /// Messages whose remote content the person allowed with Load Remote Content, by UID. Not kept between runs.
     pub remote_loaded: HashSet<u32>,
+    /// The sheet slot was closed on purpose (sent, saved or discarded), so its compose window closes without a question.
+    pub sheet_done: bool,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -642,6 +660,7 @@ impl Mail {
             sheet: None,
             fresh_compose: false,
             remote_loaded: HashSet::new(),
+            sheet_done: false,
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -1336,7 +1355,44 @@ impl Mail {
     }
 
     /// The rule a New Rule form describes. The mailbox to move to must exist in the shown account.
+    /// Mailbox > Rules: the rules as a list, each with Remove; a name opens its editor.
+    pub fn open_rules_pane(&mut self) {
+        let names = self.prefs.rules.iter().map(rules::describe).collect();
+        self.sheet = Some(Sheet::Rules(Form::new(Vec::new()), names));
+    }
+
+    /// Edit Rule: the editor of the rule at `index`, filled in from the rule.
+    pub fn open_rule_editor(&mut self, index: usize) {
+        let Some(rule) = self.prefs.rules.get(index).cloned() else { return };
+        let move_to = rule.actions.iter().find_map(|a| match a {
+            rules::Action::MoveTo(name) => Some(name.clone()),
+            _ => None,
+        });
+        let flag = rule.actions.iter().find_map(|a| match a {
+            rules::Action::Flag(color) => Some(color.label().to_string()),
+            _ => None,
+        });
+        let mark = if rule.actions.contains(&rules::Action::MarkRead) { "yes" } else { "no" };
+        self.open_prompt(
+            PromptKind::EditRule(index),
+            vec![
+                Field::new("Name", "Receipts", &rule.name),
+                Field::new("From contains", "shop.example", &rule.from),
+                Field::new("To contains", "", &rule.to),
+                Field::new("Subject contains", "receipt", &rule.subject),
+                Field::new("Move to mailbox", "Receipts", &move_to.unwrap_or_default()),
+                Field::new("Mark as read", "yes", mark),
+                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", &flag.unwrap_or_default()),
+            ],
+        );
+    }
+
     pub fn rule_from_form(&self, form: &Form) -> Result<Rule, String> {
+        self.rule_from_form_at(form, None)
+    }
+
+    /// The rule a form describes. `except` is the place of the rule being edited, which may keep its own name.
+    pub fn rule_from_form_at(&self, form: &Form, except: Option<usize>) -> Result<Rule, String> {
         let name = form.value("Name").trim().to_string();
         if name.is_empty() {
             return Err("Name the rule".into());
@@ -1353,7 +1409,7 @@ impl Mail {
             self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(target)).cloned().ok_or_else(|| format!("There is no mailbox named {target}"))?
         };
         let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag colour"))?;
-        if self.prefs.rules.iter().any(|r| r.name.eq_ignore_ascii_case(&name)) {
+        if self.prefs.rules.iter().enumerate().any(|(i, r)| Some(i) != except && r.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("There is already a rule named {name}"));
         }
         Ok(Rule { name, from, to, subject, actions })
@@ -1494,7 +1550,18 @@ impl Mail {
         if to.is_empty() {
             return Err("Add at least one recipient".into());
         }
-        Ok(Draft {
+        Ok(self.draft_fields(compose, from, to))
+    }
+
+    /// The draft of `compose` as it is kept in Drafts: the recipients may be empty.
+    pub fn draft_for_save(&self, compose: &Compose) -> Draft {
+        let from = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        let to = message::split_addresses(compose.form.value("To"));
+        self.draft_fields(compose, from, to)
+    }
+
+    fn draft_fields(&self, compose: &Compose, from: String, to: Vec<String>) -> Draft {
+        Draft {
             from,
             to,
             cc: message::split_addresses(compose.form.value("Cc")),
@@ -1511,7 +1578,7 @@ impl Mail {
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
             html: if self.prefs.plain_text { None } else { richtext::html_body(compose.message(), &compose.styles, &compose.signature) },
-        })
+        }
     }
 
     /// Adds an account the user set up, once it is in the shared list and its password is saved. It becomes the shown

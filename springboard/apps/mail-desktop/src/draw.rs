@@ -112,6 +112,10 @@ pub enum Hit {
     Favorite(usize),
     /// Load Remote Content, under the privacy note of the open message.
     LoadRemote,
+    /// Don't Save on the question sheet: the message is discarded.
+    Discard,
+    /// A rule's name in the Rules pane: its editor opens.
+    EditRule(usize),
     /// The disclosure triangle of a conversation: folds or unfolds it. The UID is its first message's.
     Fold(u32),
     /// A file named in the open message, by its place in the message.
@@ -266,6 +270,8 @@ pub struct SheetLayout {
     pub fields: Vec<Rect>,
     pub cancel: Rect,
     pub primary: Rect,
+    /// The question sheet's Don't Save button, left of Cancel.
+    pub discard: Option<Rect>,
     /// Compose: the Attach button at the left of the footer.
     pub attach: Option<Rect>,
     /// Compose: the line that shows the signature the message will end with.
@@ -290,11 +296,14 @@ fn field_height(ui: &Ui, label: &str) -> f32 {
 /// [`MAX_CHOICES`] and only the sheet that lists them takes any.
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> SheetLayout {
     let form = sheet.form();
+    // the question sheet has buttons only
+    let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
     let pad = ui.pt(SHEET_PAD_PT);
     let head = ui.pt(SHEET_HEAD_PT);
     let foot = ui.pt(SHEET_FOOT_PT);
-    let heights: Vec<f32> = form.fields.iter().map(|f| field_height(ui, f.label)).collect();
+    let heights: Vec<f32> = shown.iter().map(|f| field_height(ui, f.label)).collect();
     let (note_h, files) = match sheet {
+        Sheet::Rules(_, names) => (0.0, names.len()),
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
         _ => (0.0, 0),
     };
@@ -330,8 +339,9 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let by = py + ph - pad - bh;
     let primary = [px + pw - pad - bw, by, bw, bh];
     let cancel = [primary[0] - ui.pt(SPACE_S) - bw, by, bw, bh];
-    let attach = matches!(sheet, Sheet::Compose(_)).then(|| [px + pad, by, bw, bh]);
-    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, attach, note, files: rows, choices: matched }
+    let discard = matches!(sheet, Sheet::Question(_)).then(|| [cancel[0] - ui.pt(SPACE_S) - bw, by, bw, bh]);
+    let attach = matches!(sheet, Sheet::Compose(_) | Sheet::Rules(..)).then(|| [px + pad, by, bw, bh]);
+    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, files: rows, choices: matched }
 }
 
 /// The wrapped text of the open message, kept while the message and the width stay the same.
@@ -545,6 +555,9 @@ impl MailWindow {
             if inside(l.primary, x, y) {
                 return Hit::Primary;
             }
+            if l.discard.is_some_and(|r| inside(r, x, y)) {
+                return Hit::Discard;
+            }
             if inside(l.cancel, x, y) {
                 return Hit::Cancel;
             }
@@ -553,6 +566,11 @@ impl MailWindow {
             }
             if let Some(index) = l.files.iter().position(|(_, remove)| inside(*remove, x, y)) {
                 return Hit::RemoveAttachment(index);
+            }
+            if matches!(sheet, Sheet::Rules(..)) {
+                if let Some(index) = l.files.iter().position(|(row, _)| inside(*row, x, y)) {
+                    return Hit::EditRule(index);
+                }
             }
             if let Some(index) = l.choices.iter().position(|r| inside(*r, x, y)) {
                 return Hit::Choice(index);
@@ -642,7 +660,7 @@ impl MailWindow {
 
     /// Paints the window without the compose sheet while that sheet belongs to a compose window (`compose_windows`).
     pub fn draw_hiding_compose(&mut self, s: &mut Surface, ui: &Ui, hide: bool) {
-        let hidden = if hide && matches!(self.mail.sheet, Some(Sheet::Compose(_))) { self.mail.sheet.take() } else { None };
+        let hidden = if hide && matches!(self.mail.sheet, Some(Sheet::Compose(_) | Sheet::Question(_))) { self.mail.sheet.take() } else { None };
         self.draw(s, ui);
         if hidden.is_some() {
             self.mail.sheet = hidden;
@@ -1018,7 +1036,8 @@ impl MailWindow {
 
         let pad = ui.pt(SPACE_S);
         let caret = ui.pt(1.0).max(1.0);
-        for (i, field) in form.fields.iter().enumerate() {
+        let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
+        for (i, field) in shown.iter().enumerate() {
             let r = l.fields[i];
             let focused = form.focus == i;
             if focused {
@@ -1090,6 +1109,14 @@ impl MailWindow {
             }
         }
 
+        if let Sheet::Rules(_, names) = sheet {
+            for (name, (row, remove)) in names.iter().zip(&l.files) {
+                let text = fit(ui, name, MAC_FOOTNOTE_PT, Weight::Regular, (row[2] - remove[2]).max(0.0));
+                put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), row[0], row[1] + row[3] / 2.0);
+                put_centred(s, &mut self.labels, ui, "Remove", MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), remove[0] + remove[2] / 2.0, remove[1] + remove[3] / 2.0);
+            }
+        }
+
         // Open Quickly: the mailboxes the field matches, the first one is the one Return opens
         for (index, (name, row)) in matches.iter().zip(&l.choices).enumerate() {
             if index == 0 {
@@ -1102,8 +1129,13 @@ impl MailWindow {
 
         let (cr, pr) = (l.cancel, l.primary);
         if let Some(ar) = l.attach {
+            let label = if matches!(sheet, Sheet::Rules(..)) { "Add Rule..." } else { "Attach..." };
             s.fill_rrect(ar[0], ar[1], ar[2], ar[3], ui.pt(RADIUS_PT), FIELD_BG.now());
-            put_centred(s, &mut self.labels, ui, "Attach...", MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
+            put_centred(s, &mut self.labels, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), ar[0] + ar[2] / 2.0, ar[1] + ar[3] / 2.0);
+        }
+        if let Some(dr) = l.discard {
+            s.fill_rrect(dr[0], dr[1], dr[2], dr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
+            put_centred(s, &mut self.labels, ui, "Don't Save", MAC_BODY_PT, Weight::Regular, LABEL.now(), dr[0] + dr[2] / 2.0, dr[1] + dr[3] / 2.0);
         }
         s.fill_rrect(cr[0], cr[1], cr[2], cr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
         put_centred(s, &mut self.labels, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), cr[0] + cr[2] / 2.0, cr[1] + cr[3] / 2.0);

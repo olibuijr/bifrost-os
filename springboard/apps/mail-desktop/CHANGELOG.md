@@ -27,6 +27,21 @@ Signatures:
 
 - Mail Settings has "Signature above the quoted text": a reply's signature goes before the quote.
 
+Drafts:
+
+- Closing a message with changes asks Save This Message, Don't Save, or Cancel. Changed messages are also saved every
+  30 seconds. Drafts go to the Drafts mailbox over IMAP, or to a file on this computer when the account cannot sign in.
+  Sending removes the draft.
+
+Compose windows:
+
+- Send, Cancel and keys act on the compose window they came from. While a send is on its way, or a question is open, the
+  window stays the active one.
+
+Rules:
+
+- Mailbox > Rules lists the rules, with a name that opens its editor, Add Rule, and Remove.
+
 ## 0.12.2 — 2026-10-14
 
 - Draw and hit-test the mailbox toolbar and sidebar with the shared Golden Gate widgets.

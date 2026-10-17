@@ -122,6 +122,7 @@ pub const MENU_EXPORT_PDF: u32 = 76;
 pub const MENU_ALL_HEADERS: u32 = 77;
 pub const MENU_IGNORE_FOLLOW_UP: u32 = 78;
 pub const MENU_NEW_VIEWER: u32 = 79;
+pub const MENU_RULES_PANE: u32 = 80;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -276,6 +277,9 @@ pub struct MailWindow {
     pub remote_rect: Option<Rect>,
     /// How many remote images the open message has, as counted for it (message UID, count).
     pub remote_memo: Option<(u32, usize)>,
+    /// An immediate send is on its way from the compose window it was sent from: that window stays the active one until
+    /// the answer comes back.
+    pub sending: bool,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -413,6 +417,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Rules"),
+        AppMenuItem::new(MENU_RULES_PANE, "Rules...").depth(1).enabled(!mail.accounts.is_empty()),
         AppMenuItem::new(MENU_NEW_RULE, "New Rule...").depth(1).enabled(!mail.accounts.is_empty() && mail.prefs.rules.len() < MAX_RULES),
         AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").depth(1).enabled(!mail.prefs.rules.is_empty()),
     ];
@@ -568,6 +573,7 @@ impl MailWindow {
             attach_rects: Vec::new(),
             remote_rect: None,
             remote_memo: None,
+            sending: false,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -808,7 +814,7 @@ impl MailWindow {
                     self.edit_form(|form| form.backspace());
                 }
             }
-            KeyInput::Code(KEY_ESCAPE) => self.mail.close_sheet(),
+            KeyInput::Code(KEY_ESCAPE) => self.cancel_sheet(),
             KeyInput::Code(_) => return false,
         }
         self.dirty = true;
@@ -1023,6 +1029,126 @@ impl MailWindow {
         self.dirty = true;
     }
 
+    /// Cancel on a sheet: a question goes back to the message it asked about; any other sheet closes.
+    fn cancel_sheet(&mut self) {
+        match self.mail.sheet.take() {
+            Some(Sheet::Question(compose)) => self.mail.sheet = Some(Sheet::Compose(compose)),
+            _ => self.mail.close_sheet(),
+        }
+    }
+
+    /// Save This Message: the message is saved to Drafts and its window closes.
+    fn save_question(&mut self, compose: &Compose) {
+        self.save_draft(compose);
+        self.mail.sheet_done = true;
+        self.mail.close_sheet();
+    }
+
+    /// Don't Save: the message and its saved copy in Drafts are dropped, and the window closes.
+    fn discard_question(&mut self) {
+        if let Some(Sheet::Question(compose)) = self.mail.sheet.clone() {
+            self.discard_draft(&compose);
+        }
+        self.mail.sheet_done = true;
+        self.mail.close_sheet();
+    }
+
+    /// A Message-ID for a new draft.
+    pub fn new_draft_id(&mut self) -> String {
+        self.seq += 1;
+        let domain = self.mail.current().map_or("localhost", |a| a.email.rsplit_once('@').map_or("localhost", |(_, d)| d)).to_string();
+        message::new_message_id(&domain, now_unix(), self.seq)
+    }
+
+    /// Saves `compose` to Drafts under its draft id: IMAP (the Drafts mailbox, replacing the older copy) when the account
+    /// signs in, else a file in the data directory.
+    pub fn save_draft(&mut self, compose: &Compose) {
+        let key = compose.draft_id.clone();
+        let raw = match self.mail.draft_for_save(compose).render(&key, now_unix()) {
+            Ok(raw) => raw,
+            Err(e) => {
+                self.mail.status = e;
+                return;
+            }
+        };
+        let Some(account) = self.mail.current().cloned() else {
+            self.save_draft_locally(&key, &raw);
+            return;
+        };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.save_draft_locally(&key, &raw);
+            return;
+        };
+        self.jobs += 1;
+        let transport = self.transport.clone();
+        let (job_key, job_raw) = (key.clone(), raw.clone());
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::draft_job(transport.as_ref(), &account, &password, &job_key, Some(&job_raw)));
+    }
+
+    /// Removes the saved copy of `compose` from Drafts (and the file kept here), when it has one.
+    pub fn discard_draft(&mut self, compose: &Compose) {
+        let key = compose.draft_id.clone();
+        if key.is_empty() {
+            return;
+        }
+        let _ = std::fs::remove_file(self.draft_file(&key));
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
+        self.jobs += 1;
+        let transport = self.transport.clone();
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::draft_job(transport.as_ref(), &account, &password, &key, None));
+    }
+
+    /// The answer of a draft job: a saved copy is no longer needed here; a failed save keeps the text on this computer.
+    fn draft_saved(&mut self, key: String, raw: Option<String>, result: Result<(), String>) {
+        match (result, raw) {
+            (Ok(()), _) => {
+                let _ = std::fs::remove_file(self.draft_file(&key));
+            }
+            (Err(e), Some(raw)) => {
+                self.note(format!("The draft could not be saved to Drafts ({e}); it is kept on this computer"));
+                self.save_draft_locally(&key, &raw);
+            }
+            (Err(e), None) => self.note(format!("The draft could not be removed from Drafts: {e}")),
+        }
+    }
+
+    fn save_draft_locally(&mut self, key: &str, raw: &str) {
+        let dir = self.data_dir.join("drafts");
+        match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(self.draft_file(key), raw)) {
+            Ok(()) => self.note("A draft was saved on this computer".to_string()),
+            Err(e) => self.mail.status = format!("The draft could not be saved: {e}"),
+        }
+    }
+
+    fn draft_file(&self, key: &str) -> std::path::PathBuf {
+        let name: String = key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '.' { c } else { '_' }).collect();
+        self.data_dir.join("drafts").join(format!("{name}.eml"))
+    }
+
+    /// Remove in the Rules pane: the rule goes, and the pane lists the rest.
+    fn remove_rule(&mut self, index: usize) {
+        if index < self.mail.prefs.rules.len() {
+            self.mail.prefs.rules.remove(index);
+            self.save_prefs();
+            self.mail.open_rules_pane();
+        }
+    }
+
+    /// Save on the rule editor of the rule at `index`: the rule takes the form's values.
+    fn submit_edit_rule(&mut self, index: usize, form: &Form) {
+        match self.mail.rule_from_form_at(form, Some(index)) {
+            Ok(rule) => {
+                if let Some(slot) = self.mail.prefs.rules.get_mut(index) {
+                    *slot = rule;
+                }
+                self.save_prefs();
+                self.mail.close_sheet();
+            }
+            Err(e) => self.mail.status = e,
+        }
+    }
+
     /// Load Remote Content: the open message's remote content may load.
     fn load_remote(&mut self) {
         if let Some(uid) = self.mail.open {
@@ -1184,6 +1310,11 @@ impl MailWindow {
             MENU_NEW_RULE => {
                 if self.sheet_free() {
                     self.mail.open_rule();
+                }
+            }
+            MENU_RULES_PANE => {
+                if self.sheet_free() {
+                    self.mail.open_rules_pane();
                 }
             }
             MENU_APPLY_RULES => self.apply_rules_to_shown(),
@@ -1361,6 +1492,7 @@ impl MailWindow {
                 }
                 self.mail.status = "Connection checked. Mailbox > Show Activity has the details".into();
             }
+            Event::DraftSaved { key, raw, result, .. } => self.draft_saved(key, raw, result),
             Event::Sent { id, result, .. } => self.sent(id, result),
             Event::Exported { mailbox, result, .. } => match result {
                 Ok(messages) => {
@@ -1377,6 +1509,9 @@ impl MailWindow {
     /// A message went out, or failed. One sent at once (`id` 0) closes the compose sheet; a queued one is taken off the
     /// books, and a failed one comes back as the sheet it was written in, or waits for another try.
     fn sent(&mut self, id: u64, result: Result<(), String>) {
+        if id == 0 {
+            self.sending = false;
+        }
         let flight = self.in_flight.remove(&id);
         match &result {
             Ok(()) => self.note("A message was sent".to_string()),
@@ -1386,6 +1521,7 @@ impl MailWindow {
             Ok(()) => {
                 if id == 0 {
                     if matches!(self.mail.sheet, Some(Sheet::Compose(_))) {
+                        self.mail.sheet_done = true;
                         self.mail.close_sheet();
                     }
                 } else {
@@ -2084,6 +2220,8 @@ impl MailWindow {
                 self.search_server();
             }
             Some(Sheet::Prompt(prompt)) => self.submit_prompt(ctx, prompt),
+            Some(Sheet::Question(compose)) => self.save_question(&compose),
+            Some(Sheet::Rules(..)) => self.mail.close_sheet(),
             None => {}
         }
     }
@@ -2129,6 +2267,7 @@ impl MailWindow {
                 Err(e) => self.mail.status = e,
             },
             PromptKind::Activity => self.mail.close_sheet(),
+            PromptKind::EditRule(index) => self.submit_edit_rule(index, &prompt.form),
             PromptKind::EditAccount(id) => self.submit_edit_account(ctx, &id, &prompt.form),
             PromptKind::RemoveAccount(id) => self.submit_remove_account(ctx, &id, &prompt.form),
         }
@@ -2291,6 +2430,8 @@ impl MailWindow {
                 return;
             }
         };
+        // a message on its way is done with its draft: the saved copy leaves Drafts
+        self.discard_draft(compose);
         let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
         if let Some((seconds, undoable)) = wait {
             let queued_id = self.mail.queue.new_id();
@@ -2303,6 +2444,7 @@ impl MailWindow {
             } else {
                 self.mail.status = format!("The message will be sent in {}", wait_text(seconds));
             }
+            self.mail.sheet_done = true;
             self.mail.close_sheet();
             return;
         }
@@ -2311,6 +2453,7 @@ impl MailWindow {
             return;
         };
         self.mail.status = "Sending".into();
+        self.sending = true;
         self.jobs += 1;
         let transport = self.transport.clone();
         let from = draft.from.clone();
@@ -2638,10 +2781,14 @@ impl MailWindow {
             crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
             crate::draw::Hit::LoadRemote => self.load_remote(),
+            crate::draw::Hit::Attach if matches!(self.mail.sheet, Some(Sheet::Rules(..))) => self.mail.open_rule(),
             crate::draw::Hit::Attach => self.pick_files(ctx),
+            crate::draw::Hit::EditRule(index) => self.mail.open_rule_editor(index),
             crate::draw::Hit::RemoveAttachment(index) => {
                 if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
                     compose.detach(index);
+                } else if matches!(self.mail.sheet, Some(Sheet::Rules(..))) {
+                    self.remove_rule(index);
                 }
             }
             crate::draw::Hit::FindPrevious => self.step_match(false),
@@ -2678,7 +2825,8 @@ impl MailWindow {
                     }
                 }
             }
-            crate::draw::Hit::Cancel => self.mail.close_sheet(),
+            crate::draw::Hit::Cancel => self.cancel_sheet(),
+            crate::draw::Hit::Discard => self.discard_question(),
             crate::draw::Hit::Primary => self.submit(ctx),
             crate::draw::Hit::None => return false,
         }
