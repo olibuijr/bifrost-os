@@ -38,9 +38,9 @@
     {
       "feature": "Conflict handling",
       "apple": "CKError record-changed keys",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition)",
+      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition); springboard/ui/src/record_sync.rs (Conflict, ConflictPolicy, resolve)",
       "status": "partial",
-      "note": "optimistic concurrency per object, internal to contacts and calendar"
+      "note": "optimistic concurrency per object, internal to contacts and calendar. Checked 2026-10-17: the client model keeps a record-changed conflict with the local and server version and settles it with keep-local, keep-server or merge (server version plus the local changed keys), tests record_sync::tests. Still partial: the If-Match check runs in bifrost-cloud and no app or shell path calls the model yet."
     },
     {
       "feature": "Shared records",
@@ -54,7 +54,7 @@
       "apple": "CKUserIdentity",
       "bifrost": "springboard/sdk/src/cloud_identity.rs (identity_from_me, UserIdentity); ~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (GET /me)",
       "status": "partial",
-      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request."
+      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request. Checked 2026-10-17: nothing to build in BifrOSt until bifrost-cloud has a lookup route; that change belongs to the server repo."
     },
     {
       "feature": "Web auth tokens",
@@ -66,9 +66,9 @@
     {
       "feature": "Privacy: encryption and data export/delete",
       "apple": "encrypted values, access and deletion articles",
-      "bifrost": "springboard/src/shell/backup.rs (encode, decode, create, restore, stage, apply_pending); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs",
+      "bifrost": "springboard/src/shell/backup.rs (encode, decode, create, restore, stage, apply_pending); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs; delete_backups in springboard/src/shell/backup.rs",
       "status": "partial",
-      "note": "The archive format, its checksums, the name rules, restore and the staged restore are tested headless in springboard/tests/parity_sdk-tests-15.rs. Backup is local only and export is a file in the data directory; there is no delete action and the keychain has no iCloud sync (docs/bifrost-ui.md)"
+      "note": "The archive format, its checksums, the name rules, restore and the staged restore are tested headless in springboard/tests/parity_sdk-tests-15.rs. Backup is local only and export is a file in the data directory; there is no delete action and the keychain has no iCloud sync (docs/bifrost-ui.md). Built 2026-10-17: delete_backups removes only the backup-<unix>.sbk archives and keeps the live data; tests shell::backup::tests::delete_removes_only_backup_archives. Still partial: no Settings action yet, and the archive is not encrypted (needs a key decision and an audited AEAD crate)."
     },
     {
       "feature": "Errors",
@@ -82,7 +82,7 @@
       "apple": "app local persistence",
       "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs",
       "status": "partial",
-      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices."
+      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices. Checked 2026-10-17: local by design, no sync to build here."
     }
   ],
   "gaps": [
