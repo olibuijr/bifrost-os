@@ -2166,6 +2166,21 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
   may arrive before the first `configure`; the runtime holds it until the app has a context.
 - Adopted in Notes 1.8.6: every note outside Recently Deleted is indexed (title, first lines, folder as keyword) and
   `continue_activity` opens it with `Notes::show_note`.
+- Adopted in Reminders 1.17.0: each titled reminder is indexed by its title and the first note lines (`search.rs`, the
+  item id is the reminder id). Edits re-index, deletes and cleared titles leave the index; `continue_activity` selects the
+  reminder (`App::show_item`). Checked every 3 s against the store generation.
+- Adopted in Mail 0.14.0: the newest 200 messages of the mailbox on screen are indexed by subject and sender (`index.rs`,
+  id `account/mailbox/uid`, never bodies). Mail Settings "Show in Search" (default on) turns it off and removes the items.
+  `continue_activity` shows the account and mailbox and opens the message.
+- Contacts already indexes its contacts (`services::SearchIndex`); Notes, Reminders, Mail and Contacts are the adopters.
+- Shell per-app grouping: the Search panel shows indexed results in one ranked pass and sections them by the owning app's
+  name (`quicksearch::indexed_groups`, `app_section_title`). Items of an uninstalled app are dropped when the installed
+  list changes (`spotindex::forget_missing`, called from `installed_changed`); an empty list (registry not read yet) keeps
+  every item.
+- Settings > Search store: `<data>/search-prefs.txt` (`shell/search_prefs.rs`) holds the sources the panel does not query
+  (`off <section>`, e.g. `off Files`), the apps whose indexed items are hidden (`app <id>`) and the folders file search
+  leaves out (`exclude <folder>`, Privacy). The panel applies them (`sources_of`, `indexed_groups`, file walk). The
+  Settings page that edits the store is NOT built yet: until it is, the file is edited by hand.
 
 Tests: `bifrost_proto::quicksearch` (wire round trip, packet bound), `bifrost_app::quicksearch` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
@@ -2182,7 +2197,7 @@ found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_ite
 `sourceOptions` has no effect, the search-tool bridge is a gap; not tested on Midget.
 
 Gaps, recorded: the panel does not draw the stored thumbnail yet, and items of an app are searched only while it is installed
-(they are not removed on uninstall). Search of an app's own index is available as `quicksearch::search_items` over the pure
+(their stored items are dropped once the installed list no longer has the app). Search of an app's own index is available as `quicksearch::search_items` over the pure
 query model; `CSSearchableIndexDelegate` re-index requests are `reindex_all_with` / `reindex_identifiers_with`.
 
 ### Completion, errors, batches and extended attributes
