@@ -1308,7 +1308,7 @@ impl Settings {
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
                 HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
-                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, AccessibilityShortcut]
+                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, AccessibilityShortcut, ScreenReaderSpeech]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
             if let Some(id) = id {
@@ -2567,6 +2567,22 @@ impl Settings {
                         self.a11y.hold = k.min(HOLD_MS.len() - 1);
                         self.a11y.save(prefs);
                         self.set_parent_value(ui, "Touch Accommodations", HOLD_MS[self.a11y.hold].0);
+                        vec![]
+                    }
+                    Pick::SpeechRate(k) => {
+                        self.a11y.speech_rate = super::accessibility::SPEECH_RATES[k.min(super::accessibility::SPEECH_RATES.len() - 1)].1;
+                        self.a11y.save(prefs);
+                        vec![]
+                    }
+                    Pick::SpeechPitch(k) => {
+                        self.a11y.speech_pitch = super::accessibility::SPEECH_PITCHES[k.min(super::accessibility::SPEECH_PITCHES.len() - 1)].1;
+                        self.a11y.save(prefs);
+                        vec![]
+                    }
+                    Pick::SpeechVoice(k) => {
+                        self.a11y.speech_voice = super::accessibility::SPEECH_VOICES[k.min(super::accessibility::SPEECH_VOICES.len() - 1)].1.to_string();
+                        self.a11y.save(prefs);
+                        self.set_parent_value(ui, "Speech", super::accessibility::SPEECH_VOICES[super::pages::speech_voice_index(&self.a11y.speech_voice)].0);
                         vec![]
                     }
                     Pick::AccessibilityShortcut(k) => {

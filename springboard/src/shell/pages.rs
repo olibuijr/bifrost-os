@@ -3,7 +3,7 @@
 //! row does. Rendering and hit testing live in `list`.
 
 use super::accessibility::shortcut::Feature;
-use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
+use super::accessibility::{AccessibilitySettings, HOLD_MS, SPEECH_PITCHES, SPEECH_RATES, SPEECH_VOICES, ZOOMS};
 use super::battery::{self, Graph};
 use super::desktop_dock::Position;
 use super::icons::Icon;
@@ -80,6 +80,8 @@ pub enum PageId {
     TouchHold,
     /// Accessibility › Accessibility Shortcut: the feature Option+Cmd+F5 switches
     AccessibilityShortcut,
+    /// Accessibility › Screen Reader › Speech: rate, pitch and voice
+    ScreenReaderSpeech,
     /// Display & Brightness › Interface Scale (desktop only)
     InterfaceScale,
     Appearance,
@@ -181,6 +183,8 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Screen Reader > Speech: rate, pitch and voice (`a11y_speech_*`)
+    ScreenReaderSpeech,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -248,6 +252,10 @@ pub enum Pick {
     TouchHold(usize),
     /// Accessibility > Accessibility Shortcut: the n-th of `accessibility::SHORTCUT_CHOICES` (0 is None)
     AccessibilityShortcut(usize),
+    /// Screen Reader > Speech: the n-th of `accessibility::SPEECH_RATES`, `SPEECH_PITCHES`, `SPEECH_VOICES`
+    SpeechRate(usize),
+    SpeechPitch(usize),
+    SpeechVoice(usize),
     /// 0 is Auto, n the n-th of `layout::SCALE_CHOICES`
     InterfaceScale(usize),
     /// Displays > Appearance: 0 Light, 1 Dark, 2 Auto
@@ -1313,6 +1321,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Dim Flashing Lights").switch(a.dim_flashing_lights, Action::Toggle(Toggle::DimFlashingLights)),
                         Item::new("Guided Access").switch(a.guided_access, Action::Toggle(Toggle::GuidedAccess)),
                         Item::new("Screen Reader").switch(a.screen_reader, Action::Toggle(Toggle::ScreenReader)),
+                        Item::new("Speech").value(SPEECH_VOICES[speech_voice_index(&a.speech_voice)].0).link(PageId::ScreenReaderSpeech),
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
@@ -1332,6 +1341,21 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 ],
             )
         }
+        PageId::ScreenReaderSpeech => page(
+            "Speech",
+            false,
+            vec![
+                Group::new(SPEECH_RATES.iter().enumerate().map(|(i, (l, wpm))| Item::new(*l).check(*wpm == m.a11y.speech_rate, Action::Pick(Pick::SpeechRate(i)))).collect())
+                    .header("SPEAKING RATE")
+                    .footer("How fast the screen reader speaks."),
+                Group::new(SPEECH_PITCHES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == m.a11y.speech_pitch, Action::Pick(Pick::SpeechPitch(i)))).collect())
+                    .header("PITCH")
+                    .footer("A higher pitch sounds lighter."),
+                Group::new(SPEECH_VOICES.iter().enumerate().map(|(i, (l, v))| Item::new(*l).check(*v == m.a11y.speech_voice, Action::Pick(Pick::SpeechVoice(i)))).collect())
+                    .header("VOICE")
+                    .footer("Needs the espeak-ng speech engine. Without it the screen reader stays silent and shows the text."),
+            ],
+        ),
         PageId::DisplayZoom => page("Display Zoom", false, vec![Group::new(ZOOMS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.zoom, Action::Pick(Pick::DisplayZoom(i)))).collect()).header("VIEW")]),
         PageId::Appearance => appearance_page(m, &DeskPrefs::default()),
         PageId::HotCorners => hot_corners_page(&DeskPrefs::default()),
@@ -1378,6 +1402,11 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `location_page::spec`, which reads the prefs and the location answers
         PageId::LocationServices => page("Location Services", false, vec![]),
     }
+}
+
+/// The index of the `SPEECH_VOICES` choice for an engine voice name; an unknown name shows as the default voice (0).
+pub fn speech_voice_index(voice: &str) -> usize {
+    SPEECH_VOICES.iter().position(|(_, v)| *v == voice).unwrap_or(0)
 }
 
 /// The value the Accessibility Shortcut row shows: the features it switches, or None.
@@ -1750,6 +1779,13 @@ mod tests {
         assert_eq!(battery_level(&info), "64%", "a desktop with a battery shows it");
     }
     use crate::shell::{Network, SavedNetwork};
+
+    #[test]
+    fn the_speech_voice_row_names_the_saved_voice_and_falls_back_to_the_default() {
+        assert_eq!(speech_voice_index(""), 0, "the engine's default voice");
+        assert_eq!(super::super::accessibility::SPEECH_VOICES[speech_voice_index("is")].0, "Icelandic");
+        assert_eq!(speech_voice_index("no-such-voice"), 0, "an unknown saved voice shows as the default");
+    }
 
     fn info() -> Info {
         Info {

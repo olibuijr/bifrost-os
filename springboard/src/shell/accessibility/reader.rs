@@ -26,7 +26,7 @@ use crate::shell::axmap::item_role;
 use crate::shell::desk::full_size;
 #[cfg(feature = "desktop-wayland")]
 use crate::shell::desktop_bar::menu_spans;
-use crate::shell::list::Spec;
+use crate::shell::list::{Accessory, Spec};
 use crate::shell::ui::LINK;
 use crate::shell::{AppId, Effect, Event, Shell};
 use bifrost_proto::AnnouncePriority;
@@ -142,7 +142,14 @@ pub fn page_elements(spec: &Spec, rect: &dyn Fn(usize, usize) -> Option<Rect>) -
     let mut map = Map::new();
     for (g, group) in spec.groups.iter().enumerate() {
         for (i, item) in group.items.iter().enumerate() {
-            let (role, value) = item_role(item);
+            let (mut role, mut value) = item_role(item);
+            // a trailing pop-up button is read as one (its chosen label is the value), not as a list choice
+            if item.accessory == Accessory::Popup {
+                role = "popup";
+                if let Some(p) = item.popup.as_ref().and_then(|p| p.choices.get(p.selected)) {
+                    value = p.clone();
+                }
+            }
             let enabled = item.tappable() || role == "text";
             map.add("settings", role, &item.label, &value, enabled, rect(g, i), "");
         }
@@ -450,6 +457,26 @@ mod tests {
         r.set_sounds(true);
         r.step(&els, true);
         assert_eq!(r.take_earcons(), vec![Earcon::Focus]);
+    }
+
+    #[test]
+    fn a_pop_up_row_is_read_as_a_pop_up_button_with_its_choice() {
+        use crate::shell::list::{Group, Item, Spec};
+        use crate::shell::pages::{Action, Pick, PageId};
+        let spec = Spec {
+            id: PageId::Accessibility,
+            title: "Accessibility".into(),
+            large: false,
+            groups: vec![Group::new(vec![
+                Item::new("Speech").popup(vec!["System Default".into(), "Icelandic".into()], 1, Action::Pick(Pick::SpeechVoice(3))),
+                Item::new("Display Zoom").link(PageId::DisplayZoom),
+            ])],
+        };
+        let els = page_elements(&spec, &|_: usize, _: usize| None::<Rect>);
+        assert_eq!(els[0].role, "popup");
+        assert_eq!(speech(&els[0]), "pop-up button, Speech, Icelandic", "the chosen label is the value");
+        assert!(els[0].enabled, "a pop-up row opens its menu, so it can be pressed");
+        assert_eq!(els[1].role, "page", "a row that opens a page keeps its button role");
     }
 
     #[test]

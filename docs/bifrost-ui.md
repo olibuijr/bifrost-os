@@ -236,6 +236,35 @@ empty page, rotor change, press and unavailable press (`cue`, `take_earcons`; `s
 Status: partial. The cues are synthesised stand-ins, not the original sounds, and the sound player does not drain
 `take_earcons` yet (it lives in `bin/shell.rs`). The parity matrix holds no earcon rows to flip.
 
+### Screen reader speech, reader roles and Spoken Content
+
+Accessibility round, partial. What is built:
+
+- **Speech settings.** Settings > Accessibility > Vision > Speech opens a page with three pop-up choices: Speaking Rate
+  (Slow 140, Normal 180, Fast 240 words a minute), Pitch (Low 30, Normal 50, High 70) and Voice (System Default,
+  English (US) `en-us`, English (UK) `en-gb`, Icelandic `is`). They are saved as `a11y_speech_rate`,
+  `a11y_speech_pitch` and `a11y_speech_voice` (`accessibility::SPEECH_RATES`, `SPEECH_PITCHES`, `SPEECH_VOICES`). Loading
+  clamps the rate to 80 to 450 and the pitch to 0 to 99, and drops a voice name that is not a plain word.
+- **Speaking.** `accessibility/speech.rs` `args(text, &Config)` builds the espeak-ng arguments `-s rate -p pitch [-v voice]
+  -- text`. `Shell::speech_config` reads the open Settings window's values, else the saved ones, and the banner's announcement
+  path passes them to `Speaker::configure` before each utterance. The reader and the announcements share this speaker, so
+  the speech service (`services/speech.rs`, for apps) keeps its own rate and voice.
+- **Reader roles.** A Settings pop-up row (`Accessory::Popup`) is a `popup` element: spoken "pop-up button, Speech, Icelandic",
+  in the Controls rotor. `walk::spoken_kind` has `sheet`, `panel` and `dialog` words. Extra windows of the front app are
+  `window` elements already (`walk::window`). The AT-SPI role map (`axmap::item_role`) is unchanged, so Orca still sees the
+  pop-up row as a choice.
+- **Not built.** Help viewer, assistant panel and permission sheets are not walked for their content (only their windows).
+  Speak Selection (Option+Esc) and Speak Items Under the Pointer need a selection source and a pointer-hover option; neither
+  exists. Speech on the Midget is not verified.
+- **Display options.** Reduce Motion, Reduce Transparency and Increase Contrast are already read by the shell's motion
+  (`anim_ms`, desk, switcher, jiggle), material (`vibrancy.rs`, `glass.rs`, Control Centre, menu bar, Spotlight) and colour
+  (`ui.rs` separators and material borders, `appearance.rs` contrast) code. Nothing new was wired.
+- **Zoom.** Full Screen and Picture in Picture (`accessibility/zoom.rs`) are a presenter transform (`bare/wayland.rs`
+  `set_zoom`); the rows in `docs/parity-matrix/data/accessibility.json` were corrected to say so.
+- Tests: `accessibility/speech.rs` (args, clamp, configure), `accessibility/mod.rs` (speech prefs round trip and fallback,
+  choices inside the engine range), `accessibility/walk.rs` (pop-up, sheet, panel, dialog and window words),
+  `accessibility/reader.rs` (a pop-up row through `page_elements`), `shell/pages.rs` (speech voice row).
+
 ### Accessibility actions, rotors and display options
 
 `bifrost_ui::ax::AccessibilityElement` has the rest of the action set: `accessibility_perform_show_menu`, `_cancel`,

@@ -31,6 +31,12 @@ pub const ZOOMS: [(&str, f32); 2] = [("Standard", 1.0), ("Larger", 1.15)];
 pub const HOLD_MS: [(&str, u32); 5] = [("Off", 0), ("0.5 s", 500), ("1 s", 1000), ("1.5 s", 1500), ("2 s", 2000)];
 /// Reduce Motion: an open, close or switch becomes a cross-fade this long.
 pub const REDUCED_MS: f64 = 150.0;
+/// Screen Reader speaking rate choices, in words per minute (the engine's `-s` option).
+pub const SPEECH_RATES: [(&str, u32); 3] = [("Slow", 140), ("Normal", 180), ("Fast", 240)];
+/// Screen Reader pitch choices (the engine's `-p` option, 0 to 99).
+pub const SPEECH_PITCHES: [(&str, u32); 3] = [("Low", 30), ("Normal", 50), ("High", 70)];
+/// Screen Reader voice choices: the label and the engine voice name (empty is the engine's default voice).
+pub const SPEECH_VOICES: [(&str, &str); 4] = [("System Default", ""), ("English (US)", "en-us"), ("English (UK)", "en-gb"), ("Icelandic", "is")];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessibilitySettings {
@@ -54,10 +60,16 @@ pub struct AccessibilitySettings {
     pub cursor_size: f32,
     /// the features Option+Cmd+F5 switches, chosen in the Accessibility Shortcut panel (`shortcut::PREF`), panel order
     pub shortcut: Vec<shortcut::Feature>,
+    /// Screen Reader speaking rate in words per minute, from `speech::MIN_RATE` to `speech::MAX_RATE` (`SPEECH_RATES` offers three)
+    pub speech_rate: u32,
+    /// Screen Reader pitch, 0 to `speech::MAX_PITCH` (`SPEECH_PITCHES` offers three)
+    pub speech_pitch: u32,
+    /// Screen Reader voice: an engine voice name from `SPEECH_VOICES`, or empty for the engine's default
+    pub speech_voice: String,
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -78,6 +90,9 @@ impl AccessibilitySettings {
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
+            speech_rate: p.get_parsed::<u32>("a11y_speech_rate").map_or(d.speech_rate, |v| v.clamp(speech::MIN_RATE, speech::MAX_RATE)),
+            speech_pitch: p.get_parsed::<u32>("a11y_speech_pitch").map_or(d.speech_pitch, |v| v.min(speech::MAX_PITCH)),
+            speech_voice: p.get("a11y_speech_voice").filter(|v| v.is_empty() || bifrost_core::speech_engine::voice_name_ok(v)).unwrap_or("").to_string(),
         }
     }
 
@@ -96,6 +111,9 @@ impl AccessibilitySettings {
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
+            ("a11y_speech_rate", &self.speech_rate.to_string()),
+            ("a11y_speech_pitch", &self.speech_pitch.to_string()),
+            ("a11y_speech_voice", &self.speech_voice),
         ]);
         if let Err(e) = result {
             eprintln!("springboard: settings.ini: {e}");
@@ -108,6 +126,11 @@ impl AccessibilitySettings {
 
     pub fn hold_ms(&self) -> u32 {
         HOLD_MS[self.hold.min(HOLD_MS.len() - 1)].1
+    }
+
+    /// The voice the Screen Reader speaks with: rate, pitch and voice from Settings.
+    pub fn speech_config(&self) -> speech::Config {
+        speech::Config { rate: self.speech_rate, pitch: self.speech_pitch, voice: self.speech_voice.clone() }
     }
 
     /// The pointer's scale: 1x at Normal, 2x at Large (the Cursor Size slider).
@@ -148,6 +171,38 @@ mod tests {
         assert_eq!(AccessibilitySettings::load(&p), a);
         assert_eq!(a.hold_ms(), 1500);
         assert!((a.zoom_factor() - 1.15).abs() < 1e-6);
+    }
+
+    #[test]
+    fn speech_rate_pitch_and_voice_round_trip_and_fall_back() {
+        let mut p = Prefs::memory();
+        let a = AccessibilitySettings { speech_rate: 240, speech_pitch: 70, speech_voice: "is".into(), ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!((b.speech_rate, b.speech_pitch, b.speech_voice.as_str()), (240, 70, "is"));
+        assert_eq!(b.speech_config(), speech::Config { rate: 240, pitch: 70, voice: "is".into() });
+        // out-of-range rate and pitch are clamped, a voice that is not a plain word is dropped
+        p.set("a11y_speech_rate", "9000").unwrap();
+        p.set("a11y_speech_pitch", "500").unwrap();
+        p.set("a11y_speech_voice", "-bad voice").unwrap();
+        let c = AccessibilitySettings::load(&p);
+        assert_eq!((c.speech_rate, c.speech_pitch, c.speech_voice.as_str()), (speech::MAX_RATE, speech::MAX_PITCH, ""));
+        // a missing key keeps the default: 180 words a minute, pitch 50, the engine's own voice
+        let d = AccessibilitySettings::load(&Prefs::memory());
+        assert_eq!(d.speech_config(), speech::Config::default());
+    }
+
+    #[test]
+    fn every_speech_choice_is_inside_the_engine_range() {
+        for (_, r) in SPEECH_RATES {
+            assert!((speech::MIN_RATE..=speech::MAX_RATE).contains(&r));
+        }
+        for (_, p) in SPEECH_PITCHES {
+            assert!(p <= speech::MAX_PITCH);
+        }
+        for (_, v) in SPEECH_VOICES {
+            assert!(v.is_empty() || bifrost_core::speech_engine::voice_name_ok(v));
+        }
     }
 
     #[test]

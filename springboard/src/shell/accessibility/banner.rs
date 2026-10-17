@@ -7,6 +7,7 @@
 
 use crate::gfx::Surface;
 use crate::shell::ui::{Weight, MAC_CALLOUT_PT, WHITE};
+use super::AccessibilitySettings;
 use crate::shell::Shell;
 use bifrost_proto::AnnouncePriority;
 use bifrost_render::gfx::pack;
@@ -65,6 +66,11 @@ impl Banner {
 }
 
 impl Shell {
+    /// The Screen Reader's speech settings: the open Settings window's values, else the saved ones.
+    pub(in crate::shell) fn speech_config(&self) -> super::speech::Config {
+        self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone()).speech_config()
+    }
+
     /// Moves the announcements the apps posted since the last tick into the banner queue, then advances the banner.
     pub(in crate::shell) fn announce_tick(&mut self, t: f64) {
         for host in self.ext.iter_mut().flatten() {
@@ -77,6 +83,9 @@ impl Shell {
         if self.screen_reader_on() {
             if started {
                 if let Some(text) = self.announce.shown().map(str::to_string) {
+                    // rate, pitch and voice follow Settings > Accessibility > Screen Reader
+                    let config = self.speech_config();
+                    self.speech.configure(config);
                     self.speech.say(&text);
                 }
             }
