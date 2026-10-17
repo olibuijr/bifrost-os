@@ -997,10 +997,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/speech.rs",
+   "bifrost": "springboard/src/shell/pages.rs; springboard/src/shell/settings.rs; springboard/src/shell/accessibility/speech.rs; springboard/src/shell/accessibility/banner.rs",
    "status": "partial",
-   "note": "has: screen reader speech through espeak-ng at a fixed rate; missing: voice and rate settings page",
-   "rea": []
+   "note": "The Speech page (Accessibility > Screen Reader > Speech) sets the rate, pitch and voice (pages.rs ScreenReaderSpeech, Pick::SpeechRate/Pitch/Voice); the saved config reaches the speaker (banner.rs speech_config). Earlier note said the page was missing; it was not.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    }
+   ],
+   "ready_note": "Speech settings: the page, the saved rate, pitch and voice, and the speaker config are in the shell. Voice output needs an installed espeak-ng on the device."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Spotlight.prefPane",
