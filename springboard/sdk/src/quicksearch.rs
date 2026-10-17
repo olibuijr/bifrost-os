@@ -10,6 +10,7 @@ use crate::locale::Locale;
 use crate::proto::quicksearch::{SearchableItem, DELETE_ALL, DELETE_DOMAINS, DELETE_IDS, MAX_DOMAIN, MAX_ID, MAX_VALUES};
 use crate::proto::ToShell;
 use crate::Ctx;
+use bifrost_core::json::Json;
 
 /// A custom attribute: an app-defined key and value. Its value is folded into the item's keywords when indexed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -439,6 +440,8 @@ pub struct FoundItem {
 pub struct CSSearchQuery {
     query_string: String,
     limit: usize,
+    /// the named index to search, or None for the default index
+    index: Option<String>,
 }
 
 /// The most items one query asks the shell for (the shell caps it too).
@@ -446,12 +449,18 @@ pub const SEARCH_QUERY_DEFAULT_LIMIT: usize = 10;
 
 impl CSSearchQuery {
     pub fn new(query_string: &str) -> Self {
-        CSSearchQuery { query_string: query_string.to_string(), limit: SEARCH_QUERY_DEFAULT_LIMIT }
+        CSSearchQuery { query_string: query_string.to_string(), limit: SEARCH_QUERY_DEFAULT_LIMIT, index: None }
     }
 
     /// The most items to return.
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit = limit.max(1);
+        self
+    }
+
+    /// Searches the named index `name` of this app (see [`NamedSearchableIndex`]) instead of the default one.
+    pub fn in_index(mut self, name: &str) -> Self {
+        self.index = Some(name.to_string());
         self
     }
 
@@ -461,7 +470,83 @@ impl CSSearchQuery {
         if self.query_string.trim().is_empty() {
             return Err(SearchQueryError::EmptyQueryString);
         }
-        Ok(crate::search_ranking::search(ctx, &self.query_string, self.limit))
+        Ok(match &self.index {
+            Some(name) => crate::search_ranking::search_named(ctx, name, &self.query_string, self.limit),
+            None => crate::search_ranking::search(ctx, &self.query_string, self.limit),
+        })
+    }
+}
+
+/// `CSSearchableIndex(name:protectionClass:)`: a named index of this app, kept apart from the default one. Its items are
+/// searched with [`CSSearchQuery::in_index`]. Other apps do not see them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedSearchableIndex {
+    description: IndexDescription,
+}
+
+impl NamedSearchableIndex {
+    /// The named index `name` with its protection class. Refuses a name the shell cannot use.
+    pub fn new(name: &str, protection: Option<ProtectionClass>) -> Result<Self, IndexNameError> {
+        let mut description = IndexDescription::new(name)?;
+        description.protection_class = protection;
+        Ok(NamedSearchableIndex { description })
+    }
+
+    /// The index name.
+    pub fn name(&self) -> &str {
+        &self.description.name
+    }
+
+    /// `indexSearchableItems` on this index. Items that fail [`IndexError::check`] are not sent; their positions and
+    /// reasons are returned. The shell keeps the expiry of each item it is sent.
+    pub fn index_searchable_items(&self, ctx: &Ctx, items: &[CSSearchableItem]) -> Vec<(usize, IndexError)> {
+        let locale = Locale::current();
+        let mut refused = Vec::new();
+        let mut wire: Vec<Json> = Vec::new();
+        for (pos, i) in items.iter().enumerate() {
+            if let Err(e) = IndexError::check(i) {
+                refused.push((pos, e));
+                continue;
+            }
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            let mut obj = vec![
+                ("id".to_string(), Json::Str(i.unique_identifier.clone())),
+                ("domain".to_string(), Json::Str(i.domain_identifier.clone())),
+                ("title".to_string(), Json::Str(title)),
+                ("desc".to_string(), Json::Str(i.attribute_set.content_description.clone())),
+                ("keywords".to_string(), Json::Arr(keywords.into_iter().map(Json::Str).collect())),
+            ];
+            if let Some(at) = i.expiration_date {
+                obj.push(("expires".to_string(), Json::Num(at.max(0) as f64)));
+            }
+            wire.push(Json::Obj(obj));
+        }
+        for chunk in wire.chunks(MAX_ITEMS) {
+            let _ = crate::search_ranking::index_named(ctx, self.name(), self.description.protection_class, chunk.to_vec());
+        }
+        refused
+    }
+
+    /// `deleteSearchableItems(withIdentifiers:)` on this index.
+    pub fn delete_searchable_items(&self, ctx: &Ctx, identifiers: &[&str]) {
+        let values: Vec<String> = identifiers.iter().map(|s| s.to_string()).collect();
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "ids", &values);
+    }
+
+    /// `deleteSearchableItems(withDomainIdentifiers:)` on this index.
+    pub fn delete_searchable_items_with_domain_identifiers(&self, ctx: &Ctx, domains: &[&str]) {
+        let values: Vec<String> = domains.iter().map(|s| s.to_string()).collect();
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "domains", &values);
+    }
+
+    /// `deleteAllSearchableItems` on this index; the index stays.
+    pub fn delete_all_searchable_items(&self, ctx: &Ctx) {
+        let _ = crate::search_ranking::delete_named(ctx, self.name(), "all", &[]);
+    }
+
+    /// `deleteIndex`: removes this index and its items.
+    pub fn delete_index(&self, ctx: &Ctx) {
+        let _ = crate::search_ranking::delete_named_index(ctx, self.name());
     }
 }
 
@@ -820,5 +905,60 @@ mod tests {
         assert_eq!(items[0], FoundItem { unique_identifier: "n1".into(), domain_identifier: "notes".into(), title: "Milk".into(), content_type: None });
         assert_eq!(items[1].content_type.as_deref(), Some("com.adobe.pdf"));
         assert!(found_items(&bifrost_core::json::Json::Null).is_empty());
+    }
+
+    #[test]
+    fn a_named_index_sends_its_items_with_the_protection_class_and_expiry() {
+        let c = ctx();
+        let index = NamedSearchableIndex::new("archive", Some(ProtectionClass::Complete)).unwrap();
+        assert_eq!(index.name(), "archive");
+        let timed = item("t1").expiration_date(1_800_000_000);
+        let refused = index.index_searchable_items(&c, &[timed, item("")]);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[0] else { panic!("no index call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "index_named");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("index").and_then(|v| v.as_str()), Some("archive"));
+        assert_eq!(body.get("protection").and_then(|v| v.as_str()), Some("complete"));
+        let items = body.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].get("id").and_then(|v| v.as_str()), Some("t1"));
+        assert_eq!(items[0].get("expires").and_then(|v| v.as_u64()), Some(1_800_000_000));
+    }
+
+    #[test]
+    fn a_named_index_refuses_a_bad_name_and_a_query_can_target_it() {
+        assert_eq!(NamedSearchableIndex::new("a/b", None).unwrap_err(), IndexNameError::BadCharacter('/'));
+        let c = ctx();
+        CSSearchQuery::new("milk").in_index("archive").start(&c).unwrap();
+        let sent = c.take_sent();
+        let ToShell::ServiceCall { method, body, .. } = &sent[0] else { panic!("no search call") };
+        assert_eq!(method.as_str(), "search_named");
+        let body = bifrost_core::json::parse(body).unwrap();
+        assert_eq!(body.get("index").and_then(|v| v.as_str()), Some("archive"));
+        assert_eq!(body.get("query").and_then(|v| v.as_str()), Some("milk"));
+    }
+
+    #[test]
+    fn deleting_from_a_named_index_names_the_index_and_the_kind() {
+        let c = ctx();
+        let index = NamedSearchableIndex::new("archive", None).unwrap();
+        index.delete_searchable_items(&c, &["a"]);
+        index.delete_all_searchable_items(&c);
+        index.delete_index(&c);
+        let sent = c.take_sent();
+        let methods: Vec<String> = sent
+            .iter()
+            .map(|m| match m {
+                ToShell::ServiceCall { method, body, .. } => format!("{method} {body}"),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert!(methods[0].starts_with("delete_named ") && methods[0].contains("\"kind\":\"ids\""));
+        assert!(methods[1].contains("\"kind\":\"all\""));
+        assert!(methods[2].starts_with("delete_named_index "));
     }
 }
