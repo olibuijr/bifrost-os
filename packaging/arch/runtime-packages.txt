@@ -91,6 +91,8 @@ openbsd-netcat
 openldap
 patch
 pcsc-tools
+ccid
+nftables
 perl
 picocom
 plocate

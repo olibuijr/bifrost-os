@@ -77,6 +77,8 @@ pub mod focus_filter;
 pub mod notify_bus;
 pub mod speech;
 pub mod recognizer;
+pub mod smartcards;
+pub mod app_firewall;
 pub mod screenshot;
 pub mod launch_services;
 pub mod mail_compose;
@@ -173,6 +175,8 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(notify_bus::NotifyBus::default()),
         Box::new(speech::Speech::default()),
         Box::new(recognizer::Recognizer::new(recognizer::user_data_dir())),
+        Box::new(smartcards::SmartCards::new(smartcards::data_dir())),
+        Box::new(app_firewall::AppFirewall::new(smartcards::data_dir())),
         Box::new(screenshot::ScreenshotService::default()),
         Box::new(launch_services::LaunchServices),
         Box::new(mail_compose::MailCompose),
