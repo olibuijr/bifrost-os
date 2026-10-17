@@ -4,7 +4,7 @@
 //! (`input_text`, `handle`, `commit_composition`, `composed_string`, `cancel_composition`) and talks to the
 //! app's text field through `TextClient` (`set_marked_text`, `insert_text`). A `Composer` is the small state
 //! machine behind one method: `hangul` (Korean 2-set), `telex` (Vietnamese Telex and VNI), `kana_typing` (JIS kana
-//! board), `han` (pinyin), `zhuyin` (bopomofo), `indic` (Tamil and Devanagari phonetic) and `ainu` (Ainu katakana). `gojuon` is the 50-on palette
+//! board), `han` (pinyin), `zhuyin` (bopomofo), `jyutping` (Cantonese), `indic` (Tamil and Devanagari phonetic) and `ainu` (Ainu katakana). `gojuon` is the 50-on palette
 //! grid and `plugins` reads plugin descriptors that name a built-in engine.
 //!
 //! Ranges count characters, not UTF-16 units. Not wired into `kb_input.rs` yet: that is a follow-up, the
@@ -15,6 +15,7 @@ pub mod gojuon;
 pub mod han;
 pub mod hangul;
 pub mod indic;
+pub mod jyutping;
 pub mod kana_typing;
 pub mod plugins;
 pub mod telex;
@@ -175,8 +176,9 @@ pub const ZHUYIN: &str = "bifrost.inputmethod.TCIM.Zhuyin";
 pub const TAMIL_PHONETIC: &str = "bifrost.inputmethod.TamilIM.Phonetic";
 pub const DEVANAGARI_PHONETIC: &str = "bifrost.inputmethod.TransliterationIM.Devanagari";
 pub const AINU_KATAKANA: &str = "bifrost.inputmethod.Ainu.Katakana";
+pub const JYUTPING: &str = "bifrost.inputmethod.TYIM.Jyutping";
 
-const SOURCES: [InputSource; 9] = [
+const SOURCES: [InputSource; 10] = [
     InputSource { id: KOREAN_2SET, localized_name: "2-Set Korean", language: "ko" },
     InputSource { id: VIETNAMESE_TELEX, localized_name: "Vietnamese Telex", language: "vi" },
     InputSource { id: VIETNAMESE_VNI, localized_name: "Vietnamese VNI", language: "vi" },
@@ -186,6 +188,7 @@ const SOURCES: [InputSource; 9] = [
     InputSource { id: TAMIL_PHONETIC, localized_name: "Tamil Phonetic", language: "ta" },
     InputSource { id: DEVANAGARI_PHONETIC, localized_name: "Devanagari Phonetic", language: "hi" },
     InputSource { id: AINU_KATAKANA, localized_name: "Ainu Katakana", language: "ain" },
+    InputSource { id: JYUTPING, localized_name: "Cantonese Jyutping", language: "yue-Hant" },
 ];
 
 /// The composing sources this module provides.
@@ -205,6 +208,7 @@ pub fn new_controller(id: &str) -> Option<Box<dyn InputController>> {
         TAMIL_PHONETIC => Some(Box::new(ComposingController::new(indic::IndicComposer::new(&indic::TAMIL)))),
         DEVANAGARI_PHONETIC => Some(Box::new(ComposingController::new(indic::IndicComposer::new(&indic::DEVANAGARI)))),
         AINU_KATAKANA => Some(Box::new(ComposingController::new(ainu::AinuComposer::default()))),
+        JYUTPING => Some(Box::new(ComposingController::new(jyutping::JyutpingComposer::default()))),
         _ => None,
     }
 }
@@ -254,7 +258,7 @@ mod tests {
 
     #[test]
     fn sources_are_listed_and_buildable() {
-        assert_eq!(sources().len(), 9);
+        assert_eq!(sources().len(), 10);
         for s in sources() {
             assert!(new_controller(s.id).is_some(), "{}", s.id);
         }
