@@ -1,7 +1,8 @@
 //! The 50-on palette: the hiragana chart in gojuon order, the grid a Japanese palette shows so a person can pick a kana
 //! by its row (consonant) and column (vowel). Rows follow the chart: the vowel row, then k, s, t, n, h, m, y, r and w,
 //! with ん on its own at the end. Cells the chart leaves empty are `None`. Pure model: it draws nothing and inserts
-//! nothing; the palette view and the insertion go through the shell's text input.
+//! nothing. `cell_rect` and `layout` give the cell geometry the palette view draws into; the view itself and the
+//! insertion through the shell's text input are not wired yet.
 
 /// The vowel of each column, in chart order.
 pub const COLUMNS: [char; 5] = ['a', 'i', 'u', 'e', 'o'];
@@ -51,9 +52,69 @@ pub fn cell_at(x: f32, y: f32, width: f32, height: f32) -> Option<char> {
     ROWS[row].1[col]
 }
 
+/// The rectangle `(x, y, w, h)` of the cell at (`row`, `col`) in a palette `width` by `height` pixels, on the same grid
+/// `cell_at` hits. None when the palette is empty, the cell is off the grid, or the chart leaves it empty.
+pub fn cell_rect(row: usize, col: usize, width: f32, height: f32) -> Option<(f32, f32, f32, f32)> {
+    if !(width > 0.0 && height > 0.0) {
+        return None;
+    }
+    let rows = ROWS.len() + 1;
+    if col >= COLUMNS.len() || row >= rows {
+        return None;
+    }
+    if row == ROWS.len() && col != 0 {
+        return None;
+    }
+    if row < ROWS.len() && ROWS[row].1[col].is_none() {
+        return None;
+    }
+    let (cw, ch) = (width / COLUMNS.len() as f32, height / rows as f32);
+    Some((col as f32 * cw, row as f32 * ch, cw, ch))
+}
+
+/// Every kana on the palette with its cell rectangle, in chart order, ん last: the shape the palette view draws.
+pub fn layout(width: f32, height: f32) -> Vec<(char, (f32, f32, f32, f32))> {
+    let mut out = Vec::new();
+    for (r, (_, cells)) in ROWS.iter().enumerate() {
+        for (c, cell) in cells.iter().enumerate() {
+            if let (Some(kana), Some(rect)) = (cell, cell_rect(r, c, width, height)) {
+                out.push((*kana, rect));
+            }
+        }
+    }
+    if let Some(rect) = cell_rect(ROWS.len(), 0, width, height) {
+        out.push((NASAL, rect));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cell_rects_follow_the_grid_and_skip_empty_cells() {
+        let (w, h) = (500.0, 1100.0);
+        assert_eq!(cell_rect(0, 0, w, h), Some((0.0, 0.0, 100.0, 100.0)));
+        assert_eq!(cell_rect(1, 2, w, h), Some((200.0, 100.0, 100.0, 100.0)), "row k, column u");
+        assert_eq!(cell_rect(10, 0, w, h), Some((0.0, 1000.0, 100.0, 100.0)), "ん under column a");
+        assert_eq!(cell_rect(7, 1, w, h), None, "y row has no yi");
+        assert_eq!(cell_rect(10, 1, w, h), None, "nothing else sits on the last row");
+        assert_eq!(cell_rect(11, 0, w, h), None, "past the last row");
+        assert_eq!(cell_rect(0, 5, w, h), None, "past the last column");
+        assert_eq!(cell_rect(0, 0, 0.0, h), None, "an empty palette has no cells");
+    }
+
+    #[test]
+    fn the_layout_places_every_kana_where_a_point_hits_it() {
+        let (w, h) = (500.0, 1100.0);
+        let cells = layout(w, h);
+        assert_eq!(cells.len(), all().len());
+        for (kana, (x, y, cw, ch)) in cells {
+            assert_eq!(cell_at(x + cw / 2.0, y + ch / 2.0, w, h), Some(kana), "centre of {kana}");
+        }
+        assert!(layout(0.0, h).is_empty());
+    }
 
     #[test]
     fn the_chart_holds_forty_six_kana() {
