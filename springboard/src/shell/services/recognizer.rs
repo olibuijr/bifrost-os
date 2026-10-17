@@ -17,6 +17,11 @@
 //! - `download` `{}` fetches the model in a thread once consent is granted; replies `{started}`. Progress is in `model`.
 //!
 //! Refusals are errors: no consent, no model, a non-English locale, or no pipeline program installed.
+//!
+//! Voice Control: while the `voice_control` preference is `1` the shell holds a recognition of its own (the app id
+//! [`SYSTEM_APP`]) when no app has one, runs every final transcript through `Shell::voice_press` ("press Save") and
+//! hands the resulting effects to the next shell tick. It needs the same consent and model as dictation, never takes
+//! the microphone from an app, and retries a refused start only every [`VOICE_RETRY_S`] seconds.
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_ui::whisper::{
@@ -30,6 +35,12 @@ use std::sync::{Arc, Mutex};
 
 /// The name the service is registered under.
 pub const SERVICE: &str = "speech_recognizer";
+/// The app id of the shell's own Voice Control recognition. It is not an installed app, so it is never reaped as gone.
+pub const SYSTEM_APP: &str = "system.voice_control";
+/// The preference (`1` or `0`) that turns Voice Control on.
+pub const VOICE_CONTROL_PREF: &str = "voice_control";
+/// Seconds to wait before starting Voice Control again after a refusal or an ended pipeline.
+pub const VOICE_RETRY_S: f64 = 30.0;
 
 unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
@@ -167,6 +178,8 @@ pub struct Recognizer {
     fetcher: Arc<dyn Fetcher>,
     session: Option<Session>,
     next: u32,
+    /// the earliest time Voice Control may try to start again
+    voice_retry_at: f64,
 }
 
 /// What Settings shows for the model.
@@ -294,7 +307,36 @@ impl Recognizer {
     }
 
     fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
-        Recognizer { data_dir, spawner, fetcher, session: None, next: 1 }
+        Recognizer { data_dir, spawner, fetcher, session: None, next: 1, voice_retry_at: f64::NEG_INFINITY }
+    }
+
+    /// One step of the shell's Voice Control recognition at time `t`: starts it when `wanted` and nothing else holds
+    /// the microphone, stops it when no longer wanted or when consent was withdrawn, and returns the final
+    /// transcripts heard since the last step. Hypotheses are never returned.
+    fn voice_step(&mut self, wanted: bool, t: f64) -> Vec<Transcript> {
+        let mine = self.session.as_ref().is_some_and(|s| s.app == SYSTEM_APP);
+        if !wanted || (mine && !consent_of(&self.data_dir).is_granted()) {
+            if mine {
+                self.stop_session();
+            }
+            return Vec::new();
+        }
+        if !mine {
+            if self.session.is_some() || t < self.voice_retry_at {
+                return Vec::new();
+            }
+            if self.handle(SYSTEM_APP, "start", &Json::Null).is_err() {
+                self.voice_retry_at = t + VOICE_RETRY_S;
+                return Vec::new();
+            }
+        }
+        let Some(session) = self.session.as_mut().filter(|s| s.app == SYSTEM_APP) else { return Vec::new() };
+        let heard: Vec<Transcript> = session.pipeline.take_lines().iter().filter_map(|l| parse_transcript_line(l)).filter(|t| t.is_final).collect();
+        if session.pipeline.finished() {
+            self.session = None;
+            self.voice_retry_at = t + VOICE_RETRY_S;
+        }
+        heard
     }
 
     fn installed(&self) -> bool {
@@ -402,13 +444,19 @@ impl SystemService for Recognizer {
         self.handle(app_id, method, params)
     }
 
-    fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let running = |app: &str| {
-            crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()))
+            app == SYSTEM_APP || crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()))
         };
         let gone = self.session.as_ref().filter(|s| !running(&s.app)).is_some();
         if gone {
             self.stop_session();
+        }
+        let wanted = shell.prefs.get(VOICE_CONTROL_PREF) == Some("1");
+        for heard in self.voice_step(wanted, t) {
+            if let Some(Ok((_, fx))) = shell.voice_press(&heard, t) {
+                shell.voice_fx.extend(fx);
+            }
         }
         Vec::new()
     }
@@ -678,5 +726,71 @@ mod tests {
         assert!(!model_state(&root).installed);
         assert!(!model_state(&root).granted, "removing the model withdraws consent");
         let _ = std::fs::remove_dir_all(&root);
+    }
+    #[test]
+    fn voice_control_starts_its_own_recognition_and_returns_final_transcripts_only() {
+        let mut r = rig(true, true);
+        assert!(r.rec.voice_step(false, 1.0).is_empty(), "off means nothing starts");
+        assert!(r.log.lock().unwrap().argvs.is_empty());
+        *r.lines.lock().unwrap() = vec![
+            "whisper0: {text=\"press sa\", is-final=(boolean)false}".to_string(),
+            "whisper0: {text=\"press Save\", is-final=(boolean)true}".to_string(),
+        ];
+        let heard = r.rec.voice_step(true, 2.0);
+        assert_eq!(r.log.lock().unwrap().argvs.len(), 1, "one pipeline was started");
+        assert_eq!(heard, vec![Transcript { text: "press Save".into(), is_final: true }]);
+        assert!(r.rec.voice_step(true, 3.0).is_empty(), "the running recognition is kept, not restarted");
+        assert_eq!(r.log.lock().unwrap().argvs.len(), 1);
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn voice_control_stops_when_switched_off_or_consent_is_withdrawn() {
+        let mut r = rig(true, true);
+        r.rec.voice_step(true, 1.0);
+        assert!(r.rec.session.is_some());
+        r.rec.voice_step(false, 2.0);
+        assert!(r.rec.session.is_none());
+        assert_eq!(r.log.lock().unwrap().kills, 1);
+        r.rec.voice_step(true, 100.0);
+        write_consent(&r.root, Consent::default()).unwrap();
+        r.rec.voice_step(true, 101.0);
+        assert!(r.rec.session.is_none(), "withdrawn consent ends it on the next step");
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn voice_control_never_takes_the_microphone_from_an_app_and_waits_after_a_refusal() {
+        let mut r = rig(true, true);
+        r.rec.handle("is.x.notes", "start", &Json::Null).unwrap();
+        assert!(r.rec.voice_step(true, 1.0).is_empty());
+        assert_eq!(r.log.lock().unwrap().argvs.len(), 1, "the app keeps its pipeline");
+        assert_eq!(r.rec.session.as_ref().map(|s| s.app.as_str()), Some("is.x.notes"));
+        let _ = std::fs::remove_dir_all(&r.root);
+
+        let mut refused = rig(false, true);
+        assert!(refused.rec.voice_step(true, 10.0).is_empty(), "no model: the start is refused");
+        assert!(refused.log.lock().unwrap().argvs.is_empty());
+        std::fs::write(model_path(&refused.root), b"model").unwrap();
+        refused.rec.voice_step(true, 20.0);
+        assert!(refused.rec.session.is_none(), "inside the retry window nothing is tried");
+        refused.rec.voice_step(true, 10.0 + VOICE_RETRY_S);
+        assert!(refused.rec.session.is_some(), "after the window it starts");
+        let _ = std::fs::remove_dir_all(&refused.root);
+    }
+
+    #[test]
+    fn an_ended_voice_control_pipeline_is_restarted_after_the_wait() {
+        let mut r = rig(true, true);
+        r.rec.voice_step(true, 1.0);
+        r.finished.store(true, Ordering::SeqCst);
+        r.rec.voice_step(true, 2.0);
+        assert!(r.rec.session.is_none());
+        r.finished.store(false, Ordering::SeqCst);
+        r.rec.voice_step(true, 3.0);
+        assert!(r.rec.session.is_none(), "not before the wait is over");
+        r.rec.voice_step(true, 2.0 + VOICE_RETRY_S);
+        assert!(r.rec.session.is_some());
+        let _ = std::fs::remove_dir_all(&r.root);
     }
 }

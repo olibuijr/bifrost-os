@@ -3,8 +3,9 @@
 //! Pure parser. The whisper recognizer (`bifrost_ui::whisper`) reports a transcript; only a final one is a command, and a
 //! hypothesis the element may still revise is ignored. A command is a verb and a name: "press Save", "click Save" or
 //! "tap Save" presses the element called Save, the same way `ax press` does. The shell glue is `Shell::voice_press`,
-//! which resolves the name in the element map. Starting and stopping the recognizer session for Voice Control is not
-//! built yet, so nothing feeds this parser on a device.
+//! which resolves the name in the element map. The recognizer service (`services::recognizer`) feeds this parser while
+//! the `voice_control` preference is `1`: it holds the session, and the effects a press returns go out with the next
+//! shell tick. Settings has no switch for the preference yet.
 
 use crate::shell::{Effect, Shell};
 use bifrost_ui::whisper::Transcript;
@@ -38,7 +39,6 @@ impl Shell {
     /// Runs a final transcript as a Voice Control command. None when the transcript is not a command; otherwise the
     /// result of pressing the named element (its address and effects, or why it could not be pressed), as `ax press`
     /// answers it.
-    #[cfg_attr(not(test), allow(dead_code))] // not wired yet: no Voice Control session starts the recognizer
     pub(in crate::shell) fn voice_press(&mut self, transcript: &Transcript, t: f64) -> Option<Result<(String, Vec<Effect>), String>> {
         match parse(transcript)? {
             Command::Press(name) => Some(self.ax_press(&name, t)),
