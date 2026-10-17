@@ -17,6 +17,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+/// How long a run waits for its app to start (an intent call blocks until the app answers).
+const RUN_WAIT: Duration = Duration::from_secs(8);
+
 /// Parameter name that carries the new file's name to the intent.
 pub const FILE_PARAM: &str = "file";
 
@@ -207,6 +210,20 @@ impl Watcher {
             runs.extend(self.registry.on_listing(&folder, &list_names(&folder)));
         }
         runs
+    }
+}
+
+impl super::Shell {
+    /// Starts the runs for new files in the attached folders. Each run is its own thread, because an intent call blocks
+    /// while its app starts.
+    pub(super) fn folder_actions_tick(&mut self) {
+        for run in self.folder_actions.poll(Instant::now()) {
+            std::thread::spawn(move || {
+                if let Err(e) = super::intents::run_with(&run.app_id, &run.intent_id, &[(FILE_PARAM, run.file.as_str())], RUN_WAIT) {
+                    eprintln!("springboard: folder action {}: {e}", run.intent_id);
+                }
+            });
+        }
     }
 }
 
