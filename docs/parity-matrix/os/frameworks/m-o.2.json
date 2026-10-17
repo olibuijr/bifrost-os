@@ -2401,11 +2401,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/import.rs",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/html.rs, springboard/apps/notes-desktop/src/notes/mod.rs (Share as HTML)",
    "status": "partial",
    "note": "HTML is converted to the Markdown a note is stored in; exporting a note as HTML is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::html::tests"
+    }
+   ],
+   "ready_note": "A note exports as a standalone HTML page (Share as HTML). Headings, paragraphs, lists, checklists, quotes, code and inline emphasis come from the editor's own Markdown rules, all text is escaped, and the page has its own stylesheet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesPreviewKit.framework",
@@ -3153,11 +3162,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/textedit-desktop/src/docx.rs",
+   "bifrost": "springboard/apps/textedit-desktop/src/office.rs, springboard/apps/textedit-desktop/src/document.rs (xlsx and pptx open as text)",
    "status": "partial",
    "note": "docx.rs reads and writes the .docx text subset in TextEdit (runs, paragraphs, lists). Not built: spreadsheet and presentation import, shape and table style import (OAShapeTypes.zip, DefaultTableStyles.zip) and the .xls reader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "office::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "docx::tests"
+    }
+   ],
+   "ready_note": "Spreadsheets (.xlsx: sheets as tab-separated rows with shared strings resolved) and presentations (.pptx: slide paragraphs) open in TextEdit as plain text. Still open, as the row notes: shape and table style import, and formulas and cell formats, which are not read."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OmniSearch.framework",
