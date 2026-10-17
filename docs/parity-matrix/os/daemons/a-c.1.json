@@ -169,7 +169,26 @@
    "status": "partial",
    "note": "rule: accessibility models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    }
+   ],
+   "ready_note": "Accessibility models (AX tree, braille output, live captions) are built and tested. The visual agent's job is served by them."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AddressBook.SourceSync.plist",
@@ -186,9 +205,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/contacts.rs",
-   "status": "partial",
-   "note": "rule: contacts model; Contacts app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Syncs contact accounts (Apple account and other remote sources) through Apple's account services. BifrOSt has no account sync; the local contact store is springboard/sdk/src/contacts.rs.",
    "rea": [],
    "method": "rule"
   },
@@ -453,7 +472,26 @@
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet::tests"
+    }
+   ],
+   "ready_note": "Bluetooth service, browser and OBEX packet models over the Linux stack are built and tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.BiomeAgent.plist",
@@ -621,7 +659,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust evaluation and local authentication models are built and tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.CoreLocationAgent.plist",
@@ -640,7 +697,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/core_location.rs",
    "status": "partial",
-   "note": "rule: location model; the shell has no location service yet",
+   "note": "The location model exists (sdk core_location.rs, tested). The shell has no location service that feeds it and no per-app authorisation prompt yet.",
    "rea": [],
    "method": "rule"
   },
@@ -661,7 +718,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "note": "Keychain, trust and local authentication models exist. No smart-card or hardware token driver is present, so token extensions have no counterpart yet.",
    "rea": [],
    "method": "rule"
   },
@@ -997,7 +1054,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/disks.rs",
    "status": "partial",
-   "note": "The shell handles disk attach and mount in-process and posts volume mount notices on the notify bus. There is no prompt for unreadable or unsupported disks and no separate filesystem UI agent.",
+   "note": "The shell handles disk attach and mount in-process and posts volume mount notices on the notify bus. There is no prompt for unreadable or unsupported disks: the disk model carries no filesystem type to classify it by.",
    "rea": [],
    "method": "audit"
   },
@@ -1067,11 +1124,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/sdk/src/spellcheck.rs",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/render/src/fontprefs.rs",
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontprefs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "fontprefs probe validates a font file before it is listed or used (sfnt or collection header, required tables); tests cover it."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FontWorker.plist",
@@ -1203,7 +1274,21 @@
    "status": "partial",
    "note": "rule: HID and game controller models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    }
+   ],
+   "ready_note": "HID device and game controller models are built and tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.KeyboardAccessAgent.plist",
@@ -1272,7 +1357,7 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
    "status": "partial",
-   "note": "Note links (notes://note/<id>) are built and parsed; note_url.rs now has its own tests. No backlink indicator and no linked-notes panel exist.",
+   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks; tests note_url::tests). No backlink indicator is drawn and no linked-notes panel exists yet.",
    "rea": [],
    "method": "audit"
   },
@@ -1295,7 +1380,21 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ],
+   "ready_note": "Local authentication model and the trust checks its prompts use are built and tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.MENotificationAgent.plist",
@@ -1596,7 +1695,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
    "status": "partial",
-   "note": "rule: colour profile and display models",
+   "note": "Colour profile and display models exist (icc.rs, displays.rs). No on-screen display for brightness or volume is drawn by the shell yet.",
    "rea": [],
    "method": "rule"
   },
@@ -1617,7 +1716,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/pip_window.rs",
    "status": "partial",
-   "note": "The picture-in-picture controller and window placement exist as tested pure state. The shell does not yet draw the floating window or host it as a separate process.",
+   "note": "The picture-in-picture controller and window placement exist as tested pure state (ui/src/pip_window.rs). The shell does not yet draw the floating window or host it as a separate process.",
    "rea": [],
    "method": "audit"
   },
@@ -1640,7 +1739,16 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "install_log::tests"
+    }
+   ],
+   "ready_note": "The updated service keeps the install log that the install status is read from; its tests cover the log."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.PlatformSSOUIAgent.plist",
@@ -1848,11 +1956,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/screentime/mod.rs",
+   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/usage.rs, springboard/src/shell/screentime/config.rs",
    "status": "partial",
    "note": "Screen Time usage and limits in the shell",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::"
+    }
+   ],
+   "ready_note": "Screen Time usage, limits, shield and page models in the shell are tested (screentime submodules)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ScreenTimeSettingsAgent.plist",
@@ -1954,7 +2071,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models are built and tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.Siri.agent.plist",
@@ -2117,7 +2248,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
    "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "note": "Disk claim, approval and unmount/eject planning are built (bifrost_core::disk_session, sdk disk_arbitration). The planned commands are not run yet; they need the privileged helper, which is untested on Midget.",
    "rea": [],
    "method": "rule"
   },
@@ -2138,7 +2269,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
    "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "note": "Disk description and mount-state notices are built (bifrost_core::disk_session). Running the planned unmount and eject commands from the UI needs the privileged helper, which is untested on Midget.",
    "rea": [],
    "method": "rule"
   },

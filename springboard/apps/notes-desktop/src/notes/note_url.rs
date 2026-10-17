@@ -18,6 +18,29 @@ pub fn note_id(url: &str) -> Option<&str> {
     valid.then_some(id)
 }
 
+/// Every note id that `text` links to, in the order the links appear and without repeats. The id after a link is the
+/// run of letters, digits and dashes that follows the prefix, so `[title](notes://note/abc)` links to `abc`. Text
+/// with no note link gives an empty list.
+pub fn linked_ids(text: &str) -> Vec<&str> {
+    let mut out: Vec<&str> = Vec::new();
+    let mut rest = text;
+    while let Some(at) = rest.find(PREFIX) {
+        let body = &rest[at + PREFIX.len()..];
+        let end = body.find(|c: char| !(c.is_ascii_alphanumeric() || c == '-')).unwrap_or(body.len());
+        let id = &body[..end];
+        if !id.is_empty() && !out.contains(&id) {
+            out.push(id);
+        }
+        rest = &body[end..];
+    }
+    out
+}
+
+/// The ids of the notes whose text links to `target`, in the order given. A note never lists itself.
+pub fn backlinks<'a>(notes: &[(&'a str, &str)], target: &str) -> Vec<&'a str> {
+    notes.iter().filter(|(id, body)| *id != target && linked_ids(body).contains(&target)).map(|(id, _)| *id).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,5 +65,30 @@ mod tests {
         assert_eq!(note_id("notes://note/abc?x=1"), None, "a query is not part of the id");
         assert_eq!(note_id("notes://note/ab c"), None);
         assert_eq!(note_id("notes://folder/abc"), None);
+    }
+
+    #[test]
+    fn linked_ids_finds_each_link_once_in_order() {
+        let text = "see notes://note/abc and [again](notes://note/abc), then notes://note/x-9.";
+        assert_eq!(linked_ids(text), vec!["abc", "x-9"]);
+    }
+
+    #[test]
+    fn text_without_a_note_link_has_no_ids() {
+        assert!(linked_ids("plain text, https://example.com/abc").is_empty());
+        assert!(linked_ids("notes://note/").is_empty());
+        assert!(linked_ids("notes://folder/abc").is_empty());
+    }
+
+    #[test]
+    fn backlinks_lists_the_notes_that_link_to_the_target_without_itself() {
+        let notes = [
+            ("a", "links to notes://note/t"),
+            ("t", "links to itself notes://note/t"),
+            ("b", "nothing here"),
+            ("c", "[t](notes://note/t) and more"),
+        ];
+        assert_eq!(backlinks(&notes, "t"), vec!["a", "c"]);
+        assert!(backlinks(&notes, "b").is_empty());
     }
 }
