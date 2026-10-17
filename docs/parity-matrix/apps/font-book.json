@@ -11,9 +11,9 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes",
    "status": "partial",
-   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs::begin_install; springboard/apps/fontbook-desktop/src/validate.rs::check (collection tests in validate.rs)",
-   "note": "Install preview with Install/Cancel and validation for .ttf and .otf files. Validate File accepts .ttc collections and checks their first face with a warning; install still refuses .ttc, and Type 1 and suitcases are refused.",
-   "wire": "Show an install preview with an Install button before model::install; extend validate.rs to collections"
+   "bifrost": "springboard/apps/fontbook-desktop/src/main.rs::begin_install; springboard/apps/fontbook-desktop/src/model.rs::install (INSTALLABLE); springboard/apps/fontbook-desktop/src/validate.rs::check; springboard/render/src/fontprefs.rs::probe (a collection lists its first face)",
+   "note": "Install preview with Install/Cancel for .ttf, .otf and .ttc files; validation checks each file and a collection's first face. A .ttc installs and lists under its first face's family (host tests only). Type 1 and suitcases are still refused. Not checked on Midget.",
+   "wire": "Check on Midget: install a .ttc from Add Fonts and see it in the list; then add Type 1 support."
   },
   {
    "feature": "App URL scheme",
@@ -30,7 +30,7 @@
    "apple": "File > Add Fonts",
    "status": "partial",
    "bifrost": "springboard/apps/fontbook-desktop/src/main.rs::main_menu; springboard/apps/fontbook-desktop/src/main.rs::menu_action",
-   "note": "Font > Add Fonts... (Cmd+O) opens the SDK open panel into the install preview; the shell owns the File menu, so the command sits in the Font menu; panel needs lab check",
+   "note": "Font > Add Fonts... (Cmd+O) opens the SDK open panel (ttf, otf, ttc) into the install preview; the shell owns the File menu, so the command sits in the Font menu; panel needs lab check",
    "wire": "Add File > Add Fonts (cmd+o) with the SDK open panel calling install main.rs:99"
   },
   {
@@ -39,7 +39,7 @@
    "apple": "File > Remove",
    "status": "parity",
    "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:111",
-   "note": "Button in the preview; user installs only",
+   "note": "Button in the preview; user installs only. Install and removal rebuild the user's font cache (fontprefs::refresh_user_cache).",
    "wire": ""
   },
   {
