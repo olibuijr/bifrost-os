@@ -68,6 +68,7 @@ impl Files {
             e.kind,
         );
         tag_dots(s, ui, &self.tag_index, &e.path, w - 452., y + 11.);
+        self.paint_badges(ui, s, &e.path, self.side() + 18. + indent + SPACE_XL - 2., y + 14.);
         let name_w = (w - 480. - 48. - indent - self.side()).max(40.);
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: (self.side() + 46. + indent), y: y + 3., w: name_w + 10., h: 26. }, "", true);

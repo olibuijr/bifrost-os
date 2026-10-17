@@ -20,6 +20,8 @@ impl Files {
         }
         self.revision += 1;
         self.path = path.clone();
+        // the extensions that watch the folder hear that it is shown
+        self.ext.borrow_mut().show(&path);
         self.loading = true;
         self.error = None;
         self.notice = None;

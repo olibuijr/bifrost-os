@@ -1,3 +1,7 @@
+## 1.31.0 — 2026-10-17
+
+- File-manager sync extensions: an installed app that declares `file_manager_folders` in its manifest is hosted for those folders (`extensions.rs`, `bifrost_app::file_manager_sync`). Files tells it which folder is shown, draws the badges it returns on the icon, list and column items, adds its rows to the item and folder shortcut menus and sends the chosen row back. It is asked through its control socket on a worker thread, so a slow or missing extension never stalls the window, and nothing outside its declared folders is sent. The extension app has to be running.
+
 ## 1.30.0 — 2026-10-17
 
 - New Window (Cmd+N, and New Window in the empty-area menu) opens a second Files window at the home folder, with its own folder view.

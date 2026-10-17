@@ -42,6 +42,7 @@ impl Files {
         }
         self.paint_entry_icon(ui, s, e, icon_x, y, self.grid_icon(), true);
         tag_dots(s, ui, &self.tag_index, &e.path, x + 4., y + 2.);
+        self.paint_badges(ui, s, &e.path, icon_x + self.grid_icon() - 2., y + self.grid_icon() - 12.);
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: x + 2., y: label_y - 2., w: self.grid_w() - 4., h: 22. }, "", true);
         } else {
