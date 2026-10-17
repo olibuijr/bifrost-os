@@ -861,6 +861,7 @@ pub mod clip_buffer;
 pub mod recording;
 pub mod script;
 pub mod writing_assist;
+pub mod proofread;
 pub mod vcard;
 pub mod contact_book;
 pub mod contact_address;
