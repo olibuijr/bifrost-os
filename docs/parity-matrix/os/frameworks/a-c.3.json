@@ -153,11 +153,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/search_card_provider.rs; springboard/src/shell/quicksearch.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "Result cards for system search: apps publish cards (title, subtitle, id) and the shell ranks and shows the ones that match the query (search_card_provider, quicksearch). Cards that Apple's servers send down for web and Siri answers (the bundle's Base.js renderer) are n/a.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_card_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Result cards for system search: apps publish cards (title, subtitle, id) and the shell ranks and shows the ones that match the query (search_card_provider, quicksearch). Cards that Apple's servers send down for web and Siri answers (the bundle's Base.js renderer) are n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CascadeEngine.framework",
@@ -175,8 +189,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: an Apple on-device intelligence engine. The bundle holds only a binary, Info.plist and version.plist (no resources, XPC service or plug-in) and no other bundle in the index hosts it, so it has no user-visible function BifrOSt could mirror; Apple ML runtimes are not mirrored. Judged from the name and the empty bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -217,8 +231,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: the Mac Catalyst runtime that lets iOS UIKit apps run on the Mac. Catalyst and iOS-compatibility shims are not mirrored; BifrOSt apps are native. The bundle is a binary with Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -259,8 +273,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: the Centauri stack manages firmware for an Apple hardware coprocessor (boot, patch bays, controller, diagnostics). The bundle is a binary with Info.plist and version.plist only. Apple hardware firmware management has no counterpart on BifrOSt targets.",
    "rea": [],
    "method": "assessed"
   },
@@ -280,8 +294,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: firmware patch bay of the Centauri Apple hardware coprocessor stack (see Centauri); bundle is a binary with Info.plist and version.plist only. Apple hardware firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -301,8 +315,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: firmware patch bay of the Centauri Apple hardware coprocessor stack (see Centauri); bundle is a binary with Info.plist and version.plist only. Apple hardware firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -322,8 +336,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: boots the Centauri Apple hardware coprocessor firmware (see Centauri); bundle is a binary with Info.plist and version.plist only. Apple hardware firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -343,8 +357,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: host-side controller of the Centauri Apple hardware coprocessor (see Centauri); bundle is a binary with Info.plist and version.plist only. Apple hardware firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -364,8 +378,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: diagnostics for the Centauri Apple hardware coprocessor (see Centauri), an Apple diagnostics tool; bundle is a binary with Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -436,8 +450,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: an Apple device-to-device signalling framework (by name an acoustic chirp used for nearby-device proximity). The bundle is a binary with Info.plist only, and the only other index hit is an unrelated ringtone file. Apple-only proximity protocol with no open equivalent. Judged from the name and the empty bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -456,11 +470,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs; springboard/ui/src/timeline.rs; springboard/ui/src/relevance.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries and one localisation table for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The widget timeline daemon's job (the bundle's Support/chronod): apps hand the shell dated timelines with a reload policy and relevance, the shell shows the current entry and asks the app for a new timeline when the reload date passes (shell service widgets_timeline over bifrost-ui timeline and relevance). The accessory authorization dialog strings are Apple hardware accessory pairing and n/a.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "relevance::tests"
+    }
+   ],
+   "ready_note": "The widget timeline daemon's job (the bundle's Support/chronod): apps hand the shell dated timelines with a reload policy and relevance, the shell shows the current entry and asks the app for a new timeline when the reload date passes (shell service widgets_timeline over bifrost-ui timeline and relevance). The accessory authorization dialog strings are Apple hardware accessory pairing and n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ChronoKit.framework",
@@ -477,11 +510,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/timeline.rs; springboard/ui/src/live_activity.rs; springboard/ui/src/widget_config.rs; springboard/ui/src/widget_link.rs; springboard/ui/src/widget_search.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle and its iOS-support copy, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The widget and live-activity kit models: timelines and reload policy, live activity life cycle, widget configuration, deep links and the widget search view, all in bifrost-ui. The iOS-support copy of this bundle is n/a.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_search::tests"
+    }
+   ],
+   "ready_note": "The widget and live-activity kit models: timelines and reload policy, live activity life cycle, widget configuration, deep links and the widget search view, all in bifrost-ui. The iOS-support copy of this bundle is n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ChronoServices.framework",
@@ -498,11 +560,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The service side of widgets and live activities (reload, remove, current, search, start/update/end activity) is the shell's widgets_timeline system service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "The service side of widgets and live activities (reload, remove, current, search, start/update/end activity) is the shell's widgets_timeline system service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ChronoUIServices.framework",
@@ -519,11 +590,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/widgetgallery.rs; springboard/src/shell/notify/lockwidgets.rs; springboard/src/shell/services/widgets_timeline.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle and its iOS-support copy, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The UI side of widgets: the widget gallery for adding and arranging widgets, the lock-screen widgets and the Notification Centre widget area that draws the current entries. The iOS-support copy of this bundle is n/a.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::widgetgallery::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::lockwidgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "The UI side of widgets: the widget gallery for adding and arranging widgets, the lock-screen widgets and the Notification Centre widget area that draws the current entries. The iOS-support copy of this bundle is n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ChunkingLibrary.framework",
@@ -540,11 +630,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/text_chunks.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "Built this wave: text_chunks cuts a document into bounded passages for indexing and embedding (sentence and paragraph aware, CJK full-width marks, optional overlap, word and character fallbacks). Role inferred from the name (a text chunker) since the bundle holds only a binary and Info.plist.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "text_chunks::tests"
+    }
+   ],
+   "ready_note": "Built this wave: text_chunks cuts a document into bounded passages for indexing and embedding (sentence and paragraph aware, CJK full-width marks, optional overlap, word and character fallbacks). Role inferred from the name (a text chunker) since the bundle holds only a binary and Info.plist."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CiderAudioServer.framework",
@@ -562,8 +661,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: the audio-server shim for the iOS-app-on-Mac compatibility layer (Cider). iOS and Catalyst compatibility shims are not mirrored; BifrOSt apps use the native audio server (springboard/audio). The bundle is a binary with Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -646,8 +745,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: private information retrieval and homomorphic-encryption ML against Apple servers. The bundle carries an allow-list.plist of permitted server-assisted lookups; BifrOSt makes no third-party lookups, so server-assisted encrypted ML is not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -708,11 +807,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs; springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::intent::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "The Clock app declares its own intents: world-clock-time (time in a World Clock city or here) and next-alarm, both searchable shortcuts, on the App Intents layer in bifrost-app (clock::intent tests, intents tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ClockMenuExtraPreferences.framework",
@@ -729,11 +842,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/menu_extras.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings.rs; springboard/src/shell/desktop_bar.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The menu bar clock's options (24-hour time, show date, show weekday, seconds, flashing separator) are ClockStyle in bifrost-ui menu_extras, set on the Date & Time settings page (pages.rs, settings.rs) and drawn by the menu bar (desktop_bar.rs). Showing seconds and the flashing separator are modelled but not drawn yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu_extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    }
+   ],
+   "ready_note": "The menu bar clock's options (24-hour time, show date, show weekday, seconds, flashing separator) are ClockStyle in bifrost-ui menu_extras, set on the Date & Time settings page (pages.rs, settings.rs) and drawn by the menu bar (desktop_bar.rs). Showing seconds and the flashing separator are modelled but not drawn yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ClockUIFramework.framework",
@@ -750,11 +877,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/mod.rs; springboard/apps/clock-desktop/src/clock/world.rs; springboard/apps/clock-desktop/src/clock/stopwatch.rs; springboard/src/shell/clock/",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "The Clock UI building blocks: analog and digital faces on the World Clock cards, alarm cards, stopwatch with laps and timers, in the Clock app (bifrost-clock) over the shell's clock engine (tz, alarm, timer).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::world::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::stopwatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::tz::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::timer::tests"
+    }
+   ],
+   "ready_note": "The Clock UI building blocks: analog and digital faces on the World Clock cards, alarm cards, stopwatch with laps and timers, in the Clock app (bifrost-clock) over the shell's clock engine (tz, alarm, timer)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ClothPhysics.framework",
@@ -771,11 +927,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/cloth.rs; springboard/ui/src/physics3d.rs",
    "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "note": "Built this wave: cloth is a Verlet cloth solver on the CPU (structural, shear and bend links, pins, gravity, wind, ground plane, mesh triangles) beside the rigid-body world in physics3d. The reference ships GPU kernels (ClothPhysicsKernels.metallib); a GPU path is not built and the CPU solver serves the same scenes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cloth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics3d::tests"
+    }
+   ],
+   "ready_note": "Built this wave: cloth is a Verlet cloth solver on the CPU (structural, shear and bend links, pins, gravity, wind, ground plane, mesh triangles) beside the rigid-body world in physics3d. The reference ships GPU kernels (ClothPhysicsKernels.metallib); a GPU path is not built and the CPU solver serves the same scenes."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CloudAsset.framework",
@@ -898,8 +1068,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "n/a: Apple's cloud document sync core (the shared engine of its cloud-backed apps) talking to Apple's cloud servers. Apple accounts and cloud storage are not mirrored; BifrOSt Cloud has its own HTTP sync. The bundle is a binary with Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -982,8 +1152,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "status": "n/a",
+   "note": "n/a: client code for Apple's CloudKit service, which stores records on Apple's servers under an Apple account. BifrOSt does not mirror Apple accounts or cloud; its own sync is bifrost-cloud over ETag/If-Match HTTP. The public CloudKit row tracks the app-facing record API gap.",
    "rea": [],
    "method": "assessed"
   },
@@ -1003,8 +1173,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "status": "n/a",
+   "note": "n/a: the protobuf wire definitions for Apple's CloudKit server protocol; Apple-only cloud protocol with no open equivalent. See CloudKitCode.",
    "rea": [],
    "method": "assessed"
   },
@@ -1024,8 +1194,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "status": "n/a",
+   "note": "n/a: the CloudKit background daemon that talks to Apple's cloud servers under an Apple account. Apple accounts and cloud are not mirrored. See CloudKitCode.",
    "rea": [],
    "method": "assessed"
   },
@@ -1045,8 +1215,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "status": "n/a",
+   "note": "n/a: the CloudKit layer that syncs a record store between a user's devices through Apple's cloud servers. Apple accounts and cloud are not mirrored. See CloudKitCode.",
    "rea": [],
    "method": "assessed"
   },
