@@ -1,13 +1,15 @@
 //! `bifrost-audiod`: parse args, lock memory, drop to the `audio` user when started as root (keeping CAP_SYS_NICE),
 //! open the control socket and run the server loop until SIGTERM or SIGINT. Owner: task 05; drivers: task 24.
 //!
-//! Drivers: `--drivers LIST` (or `BIFROST_AUDIO_DRIVERS`), a comma list of `alsa`, `loopback` and `null`, default
-//! `alsa,loopback`. Devices are objects `1000 + index` in that order (each driver's enumeration order), so the
-//! hardware comes first. `null` adds one stereo device on a clock that never moves, for tests.
+//! Drivers: `--drivers LIST` (or `BIFROST_AUDIO_DRIVERS`), a comma list of `alsa`, `loopback`, `plugin` and `null`,
+//! default `alsa,loopback,plugin`. Devices are objects `1000 + index` in that order (each driver's enumeration order), so the
+//! hardware comes first. `plugin` publishes the virtual devices described by the `*.vdev` files of
+//! `BIFROST_AUDIO_PLUGIN_DIR` (default `/etc/bifrost/audio/plugins`). `null` adds one stereo device on a clock that never moves, for tests.
 
 use bifrost_audio_alsa::AlsaDriver;
 use bifrost_audio_driver::loopback::LoopbackDriver;
 use bifrost_audio_driver::null::NullDriver;
+use bifrost_audio_driver::plugin::{PluginDriver, PLUGIN_DIR};
 use bifrost_audio_driver::Driver;
 use bifrost_audiod::control::{default_socket, listen, serve, CoreConfig, NoObjects, ServerCore};
 use bifrost_audiod::io::log;
@@ -17,12 +19,13 @@ use std::sync::atomic::AtomicBool;
 const CAP_SYS_NICE: u32 = 23;
 
 /// The drivers when neither `--drivers` nor `BIFROST_AUDIO_DRIVERS` names any.
-const DEFAULT_DRIVERS: &str = "alsa,loopback";
+const DEFAULT_DRIVERS: &str = "alsa,loopback,plugin";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DriverKind {
     Alsa,
     Loopback,
+    Plugin,
     Null,
 }
 
@@ -33,8 +36,9 @@ fn parse_drivers(list: &str) -> Result<Vec<DriverKind>, String> {
         let k = match name {
             "alsa" => DriverKind::Alsa,
             "loopback" => DriverKind::Loopback,
+            "plugin" => DriverKind::Plugin,
             "null" => DriverKind::Null,
-            other => return Err(format!("unknown driver {other} (alsa, loopback, null)")),
+            other => return Err(format!("unknown driver {other} (alsa, loopback, plugin, null)")),
         };
         if !out.contains(&k) {
             out.push(k);
@@ -50,6 +54,16 @@ fn make_driver(k: DriverKind) -> Box<dyn Driver> {
     match k {
         DriverKind::Alsa => Box::new(AlsaDriver::new()),
         DriverKind::Loopback => Box::new(LoopbackDriver::realtime()),
+        DriverKind::Plugin => {
+            let dir = std::env::var("BIFROST_AUDIO_PLUGIN_DIR").unwrap_or_else(|_| PLUGIN_DIR.into());
+            let mut driver = PluginDriver::realtime();
+            let published = driver.load_dir(std::path::Path::new(&dir));
+            log("driver", &format!("plugin: {published} virtual devices from {dir}"));
+            for (file, why) in driver.refused() {
+                log("driver", &format!("plugin: {file} refused: {why}"));
+            }
+            Box::new(driver)
+        }
         DriverKind::Null => Box::new(NullDriver::new(vec![NullDriver::stereo("null:0", 48_000.0)])),
     }
 }
@@ -153,7 +167,7 @@ fn main() {
             "--socket" => socket = args.next().unwrap_or(socket),
             "--drivers" => driver_list = args.next().unwrap_or(driver_list),
             "-h" | "--help" => {
-                println!("bifrost-audiod [--socket PATH] [--drivers alsa,loopback,null]");
+                println!("bifrost-audiod [--socket PATH] [--drivers alsa,loopback,plugin,null]");
                 return;
             }
             other => {
@@ -206,7 +220,7 @@ mod tests {
 
     #[test]
     fn the_default_puts_the_hardware_first() {
-        assert_eq!(parse_drivers(DEFAULT_DRIVERS), Ok(vec![DriverKind::Alsa, DriverKind::Loopback]));
+        assert_eq!(parse_drivers(DEFAULT_DRIVERS), Ok(vec![DriverKind::Alsa, DriverKind::Loopback, DriverKind::Plugin]));
     }
 
     #[test]
