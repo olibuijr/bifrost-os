@@ -10,7 +10,7 @@
 
 use super::display_services::require_screen_recording;
 use super::privacy_permissions;
-use super::{Event, Shell, SystemService};
+use super::{app_pid, Event, Shell, SystemService};
 use crate::gfx::{Image, Surface};
 use bifrost_core::json::Json;
 use bifrost_ui::capture_config::StreamConfig;
@@ -63,6 +63,16 @@ pub fn file_stem(app_id: &str) -> String {
     }
 }
 
+/// Removes the streams whose app is no longer running (`running` is false for it) and returns their app ids, sorted.
+fn stop_exited(active: &mut HashMap<String, Active>, running: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut gone: Vec<String> = active.keys().filter(|app| !running(app)).cloned().collect();
+    gone.sort();
+    for app in &gone {
+        active.remove(app);
+    }
+    gone
+}
+
 pub fn kind_name(kind: FrameKind) -> &'static str {
     match kind {
         FrameKind::Fresh => "fresh",
@@ -104,6 +114,10 @@ impl SystemService for ScreenStreamService {
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let now = t / 1000.0;
+        // a stream ends with its app: an app that is no longer running loses its stream
+        for app in stop_exited(&mut self.active, |app| app_pid(shell, app).is_some()) {
+            eprintln!("springboard: screen stream {app} ended with its app");
+        }
         let mut due: Vec<String> = self.active.iter().filter(|(_, a)| a.stream.is_due(now)).map(|(app, _)| app.clone()).collect();
         if due.is_empty() {
             return Vec::new();
@@ -170,6 +184,20 @@ mod tests {
         assert_eq!(file_stem("is.olibuijr.mail"), "is.olibuijr.mail");
         assert_eq!(file_stem("../etc/passwd"), ".._etc_passwd");
         assert_eq!(file_stem(""), "app");
+    }
+
+    #[test]
+    fn a_stream_ends_when_its_app_stops_running() {
+        let mut access = bifrost_ui::capture_access::CaptureAccess::new();
+        access.request(bifrost_ui::capture_access::Media::Screen, true);
+        let stream = || ScreenStream::start(&access, StreamConfig::default(), 0.0).unwrap();
+        let mut active = HashMap::new();
+        active.insert("is.a".to_string(), Active { stream: stream(), hash: None, path: None });
+        active.insert("is.b".to_string(), Active { stream: stream(), hash: None, path: None });
+        let gone = stop_exited(&mut active, |app| app == "is.b");
+        assert_eq!(gone, vec!["is.a".to_string()]);
+        assert!(active.contains_key("is.b") && !active.contains_key("is.a"));
+        assert!(stop_exited(&mut active, |_| true).is_empty());
     }
 
     #[test]
