@@ -567,9 +567,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/src/shell/store/coordination.rs",
    "status": "partial",
-   "note": "Open. The install coordination proxy for app installs is not built; springboard/updated handles OS update offers only.",
+   "note": "Built 2026-10-17: the install queue, one live install per app and the owner-or-root authorisation check, in springboard/src/shell/store/coordination.rs (tests shell::store::coordination::tests), with phase and byte progress events. Gap: the store's start() does not route installs through the queue yet, so downloads still start directly; springboard/updated still handles only OS update offers.",
    "rea": [],
    "method": "rule"
   },
@@ -588,9 +588,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/src/shell/store/coordination.rs",
    "status": "partial",
-   "note": "Open. The install coordinator for app installs is not built; springboard/updated handles OS update offers only.",
+   "note": "Built 2026-10-17: the install queue, one live install per app and the owner-or-root authorisation check, in springboard/src/shell/store/coordination.rs (tests shell::store::coordination::tests), with phase and byte progress events. Gap: the store's start() does not route installs through the queue yet, so downloads still start directly; springboard/updated still handles only OS update offers.",
    "rea": [],
    "method": "rule"
   },
