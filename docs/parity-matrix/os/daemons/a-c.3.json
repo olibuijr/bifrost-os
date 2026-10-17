@@ -3815,7 +3815,16 @@
    "bifrost": "springboard/src/bare/app_policy.rs",
    "status": "partial",
    "note": "Each installed app launches in a bubblewrap sandbox that limits its files; there is no system container registry or per-app data container service beyond that.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests"
+    }
+   ],
+   "ready_note": "Per-app containers are the bubblewrap sandbox in bare::app_policy (each app launch gets its own file limits); BifrOSt has no separate system container registry, and the app model does not need one."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.contextstored.plist",
@@ -3853,11 +3862,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "bifrost": "springboard/src/shell/night_shift.rs, springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::night_shift::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    }
+   ],
+   "ready_note": "Night Shift schedule and colour temperature (shell::night_shift), colour profiles (render icc), display modes (sdk displays); the brightness slider is in Control Center."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.corecaptured.plist",
@@ -3878,7 +3906,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "Camera and capture device models and the device browser that lists them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.coreduetd.plist",
@@ -3981,7 +4023,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models route an open or event request to the app that handles it."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.coreservices.launchservicesd.plist",
@@ -4002,7 +4058,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services (which app opens a file or link) and app link models."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.coreservicesd.plist",
@@ -4023,7 +4093,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services (handler lookup for files and links) and app link models."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.corespeechd.system.plist",
@@ -4065,7 +4149,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk and volume session and arbitration models; the Disk Utility app works on them. APFS volume management is not a Linux-side job here."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.corestorage.corestoragehelperd.plist",
@@ -4086,7 +4184,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk and volume session and arbitration models (same job as corestoraged)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.coresymbolicationd.plist",
@@ -4107,7 +4219,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "Crash report and call-stack models used to symbolicate and show a crash."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.countryd.plist",
@@ -4124,11 +4250,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/core_location.rs",
+   "bifrost": "springboard/src/net/regdomain.rs, springboard/src/shell/services/location.rs",
    "status": "partial",
-   "note": "rule: location model; the shell has no location service yet",
+   "note": "rule: location model and regional country; the location service is shell::services::location, and the Language & Region country drives the wireless domain",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::regdomain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    }
+   ],
+   "ready_note": "The Language & Region country sets the wireless regulatory domain (net::regdomain::follow_region). The location service (shell::services::location) answers the place and country of the device."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.csrutil.report.plist",
@@ -4169,7 +4309,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust and local authentication models."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cvmsServ.plist",
@@ -4230,7 +4389,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`) and a `changes` method that answers the records when the store moved since the client's revision (built 2026-10-17); no per-record change log and no sync to other devices yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`); a `changes` method that answers the changed and removed records since the client's revision from a per-record change log (built 2026-10-17, same tests); no sync of the stores to other devices yet",
    "rea": [],
    "method": "rule"
   },
@@ -4251,7 +4410,7 @@
    "doc": "",
    "bifrost": "springboard/bifrostd/src/purge.rs",
    "status": "partial",
-   "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. Gaps: apps do not declare cache directories (no manifest key), the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet, and nothing sets the Storage policy file yet.",
+   "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. The Storage policy file (/etc/bifrost/storage.conf) is now written by the privd method storage.policy_set (built 2026-10-17, tests privd::methods::tests). Gaps: apps do not declare cache directories (no manifest key), and the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet.",
    "rea": []
   },
   {
@@ -4375,7 +4534,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
    "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "note": "rule: network path and VPN models; the DHCPv6 client itself is systemd-networkd, a Linux unit, and BifrOSt ships no DHCPv6 code of its own. Open: no check that proves the lease path is configured on the installed system.",
    "rea": [],
    "method": "rule"
   },
@@ -4398,7 +4557,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "Unified logging and signpost models; the Console app reads them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diagnosticextensions.osx.spotlight.helper.plist",
@@ -4439,7 +4612,16 @@
    "bifrost": "springboard/src/shell/backup.rs",
    "status": "partial",
    "note": "Backs up and restores the shell's own data as one checksummed archive; the backup status diagnostics of the reference system's disk backup are not provided.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    }
+   ],
+   "ready_note": "Backs up and restores the shell data as one checksummed, encrypted archive, and reports backup status (count, newest time and size, newest archive verified: backup::status, built 2026-10-17)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diagnosticservicesd.plist",
@@ -4460,7 +4642,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "Unified logging and signpost models (same job as diagnosticd)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskarbitrationd.plist",
@@ -4551,7 +4747,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk image and volume session and arbitration models (attach and detach)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskimagesiod.spb.plist",
@@ -4572,7 +4782,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk image and volume session and arbitration models (attach and detach)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskimagespawner.plist",
@@ -4628,7 +4852,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk and volume session and arbitration models, started with the session."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.displaypolicyd.plist",
@@ -4645,11 +4883,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "bifrost": "springboard/sdk/src/displays.rs, springboard/render/src/icc.rs",
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    }
+   ],
+   "ready_note": "Display modes and colour profile models that the display policy applies."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.distnoted.xpc.daemon.plist",
@@ -4670,7 +4922,21 @@
    "status": "partial",
    "note": "rule: notification centre and notify bus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "notify_center::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notify_bus::tests"
+    }
+   ],
+   "ready_note": "Notification centre and notify bus models that deliver distributed notifications."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.doubleagentd.plist",
@@ -4929,7 +5195,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "note": "Open: the Endpoint Security event feed (file, process and exec events for security apps) has no BifrOSt service. The keychain and trust models do not cover it. Needs a fanotify-based monitor that a security app can subscribe to; not started.",
    "rea": [],
    "method": "rule"
   },
@@ -4973,7 +5239,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Inter-process event routing through launch services and app links."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.erasecontentsettingshelperd.plist",
@@ -5078,7 +5358,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Filesystem mount and session models (disk arbitration) that the Disk Utility app uses."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.filesystems.userfs_helper.plist",
@@ -5099,7 +5393,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Filesystem mount and session models (disk arbitration) that the Disk Utility app uses."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.filesystems.userfsd.plist",
@@ -5120,7 +5428,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Filesystem mount and session models (disk arbitration) that the Disk Utility app uses."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.findmy.findmybeaconingd.plist",
@@ -5201,7 +5523,21 @@
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "Font descriptor and spelling models that the Font Book app and the text system use."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.fpassetmanagerd.plist",
@@ -5222,7 +5558,26 @@
    "status": "partial",
    "note": "rule: file watching, coordination and provider models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    }
+   ],
+   "ready_note": "File watching, file coordination and file provider models."
   }
  ]
 }
