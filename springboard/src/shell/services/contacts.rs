@@ -26,6 +26,7 @@
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
 use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
+use crate::shell::contactchanges;
 use crate::shell::contactgroups;
 use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
@@ -410,6 +411,13 @@ impl SystemService for Contacts {
                 let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
                 let (reply, next) = apply_save(app_id, params, &book)?;
                 contactstore::save(&path, &next).map_err(|e| e.to_string())?;
+                let changes = contactchanges::diff(&book, &next);
+                if !changes.is_empty() {
+                    let log_path = contactchanges::path_for(&path);
+                    let mut log = contactchanges::load(&log_path);
+                    log.append(&changes);
+                    contactchanges::save(&log_path, &log).map_err(|e| e.to_string())?;
+                }
                 // A deleted contact leaves every group it was in.
                 let mut groups = contactgroups::load(&groups_path);
                 let stale: Vec<u64> = groups
@@ -428,6 +436,30 @@ impl SystemService for Contacts {
             "fetch" if reads(app_id) => {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
+            }
+            "changes" => {
+                if !reads(app_id) {
+                    return Err("contacts access is not granted".into());
+                }
+                let token = params.get("token").and_then(Json::as_u64).unwrap_or(0);
+                let log = contactchanges::load(&contactchanges::path_for(&path));
+                let access = access_of(app_id);
+                let rows: Vec<Json> = log
+                    .since(token)?
+                    .into_iter()
+                    .filter(|e| access.can_read(e.id))
+                    .map(|e| {
+                        Json::Obj(vec![
+                            ("seq".into(), Json::Num(e.seq as f64)),
+                            ("kind".into(), Json::Str(e.kind.name().into())),
+                            ("id".into(), Json::Num(e.id as f64)),
+                        ])
+                    })
+                    .collect();
+                Ok(Json::Obj(vec![
+                    ("token".into(), Json::Num(log.last_seq as f64)),
+                    ("changes".into(), Json::Arr(rows)),
+                ]))
             }
             "groups" | "group_members" | "group_add" | "group_remove" | "group_add_member" | "group_remove_member" => {
                 let mut groups: Groups = contactgroups::load(&groups_path);
