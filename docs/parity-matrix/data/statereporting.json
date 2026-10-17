@@ -19,7 +19,7 @@
       "apple": "ReportableMetadata, ReportableMetadataValue, ReportableMetadata(), ReportableMetadataKey(_:), ReportableMetadataIgnored()",
       "bifrost": "springboard/ui/src/state_report.rs (no macro)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no metadata dictionary type and no derive or macro equivalent"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no metadata dictionary type and no derive or macro equivalent Refreshed 2026-10-17: the dictionary type exists (ui/src/state_report.rs: Dictionary, MetadataValue; tests in that module); still no derive or macro that attaches a struct's fields."
     },
     {
       "feature": "Crash capture and crash log entries",
@@ -47,7 +47,7 @@
       "apple": "OSSignposter (interval and event marks shown beside state transitions)",
       "bifrost": "springboard/core/src/signpost.rs, springboard/sdk/src/log.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md states no OSSignposter exists yet"
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md states no OSSignposter exists yet Refreshed 2026-10-17: sdk/src/signpost.rs (Signposter, interval and event pairing; tests signpost::tests) exists, so the no-signposter statement is stale."
     },
     {
       "feature": "MetricKit delivery of state-aggregated metrics",
@@ -58,10 +58,9 @@
     }
   ],
   "gaps": [
-    "No app-facing StateReporter: apps cannot declare domains or report state transitions.",
-    "No reportable-metadata type or derive macro for attaching structured values to reports.",
-    "No signposter (OSSignposter equivalent) for marking intervals and events in traces.",
+    "No derive or macro attaches a struct's fields to reportable metadata; the dictionary type exists (ui/src/state_report.rs).",
     "Crash logs are not linked to app state; a crash carries only a signature and file path (springboard/src/shell/diag.rs).",
-    "No app-facing metric payload delivered to the developer comparable to MetricKit."
+    "No app-facing metric payload delivered to the developer comparable to MetricKit.",
+    "State reports are queued in memory (ui/src/state_report.rs, exposed as bifrost_app state_reporting) but no transport delivers them to the shell or to a developer yet."
   ]
 }

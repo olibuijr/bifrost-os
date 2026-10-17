@@ -426,7 +426,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metalkit.json",
    "status": "partial",
-   "note": "from SDK matrix metalkit.json",
+   "note": "from SDK matrix metalkit.json Refreshed 2026-10-17: not ready. The mesh model is in bifrost-ui (ui/src/mesh.rs) but is not re-exported and has no draw path. Still open: the app-facing GPU view and per-frame delegate, a device and drawable handle, a texture object, and an SDK binding for the presenter. See data/metalkit.json gaps.",
    "rea": [],
    "method": "assessed"
   },

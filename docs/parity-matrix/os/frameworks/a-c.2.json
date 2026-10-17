@@ -2915,7 +2915,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/audio-toolbox.json",
    "status": "partial",
-   "note": "private framework, owner AudioToolbox; from SDK matrix audio-toolbox.json",
+   "note": "private framework, owner AudioToolbox; from SDK matrix audio-toolbox.json Refreshed 2026-10-17: not ready. See data/audio-toolbox.json gaps.",
    "rea": [],
    "method": "assessed"
   },

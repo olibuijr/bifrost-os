@@ -107,7 +107,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/screen-saver.json",
    "status": "partial",
-   "note": "from SDK matrix screen-saver.json",
+   "note": "from SDK matrix screen-saver.json Refreshed 2026-10-17: not ready; open items are in data/screen-saver.json gaps.",
    "rea": [],
    "method": "assessed"
   },
@@ -577,7 +577,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/statereporting.json",
    "status": "partial",
-   "note": "from SDK matrix statereporting.json",
+   "note": "from SDK matrix statereporting.json Refreshed 2026-10-17: not ready. The SDK has a state reporter and a signposter (bifrost_ui::state_report, sdk signpost). Still open: reports are not delivered to the shell or a developer, no derive macro attaches metadata, crash logs are not linked to app state, and the analytics page has no SDK extension point. See data/statereporting.json gaps.",
    "rea": [],
    "method": "assessed"
   },
@@ -745,7 +745,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/symbols.json",
    "status": "partial",
-   "note": "from SDK matrix symbols.json",
+   "note": "from SDK matrix symbols.json Refreshed 2026-10-17: not ready; open items are in data/symbols.json gaps.",
    "rea": [],
    "method": "assessed"
   },
