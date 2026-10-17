@@ -1337,7 +1337,7 @@ impl Settings {
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
                 HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
-                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, AccessibilityShortcut, ScreenReaderSpeech]
+                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, DwellControl, AccessibilityShortcut, ScreenReaderSpeech]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
             if let Some(id) = id {
@@ -2603,6 +2603,12 @@ impl Settings {
                         self.a11y.hold = k.min(HOLD_MS.len() - 1);
                         self.a11y.save(prefs);
                         self.set_parent_value(ui, "Touch Accommodations", HOLD_MS[self.a11y.hold].0);
+                        vec![]
+                    }
+                    Pick::Dwell(k) => {
+                        self.a11y.dwell = k.min(super::accessibility::dwell::DELAYS_MS.len() - 1);
+                        self.a11y.save(prefs);
+                        self.set_parent_value(ui, "Dwell Control", super::accessibility::dwell::DELAYS_MS[self.a11y.dwell].0);
                         vec![]
                     }
                     Pick::SpeechRate(k) => {

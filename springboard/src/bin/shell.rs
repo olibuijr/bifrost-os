@@ -400,6 +400,8 @@ fn run() -> std::io::Result<()> {
     let mut cursor_dim = (w, h);
     let mut last_motion = f64::NEG_INFINITY;
     let mut last_pointer = ((0.0f32, 0.0f32), false);
+    // Dwell Control: a pointer that rests for the chosen delay is clicked where it rests (the delay comes from Settings)
+    let mut dwell = springboard::shell::accessibility::dwell::DwellClick::new(0, springboard::shell::accessibility::dwell::DEFAULT_RADIUS);
     // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
     // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
     let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite(), 1.0);
@@ -580,6 +582,19 @@ fn run() -> std::io::Result<()> {
         if pointer_now != last_pointer {
             last_pointer = pointer_now;
             last_motion = t;
+        }
+        // Dwell Control: the delay follows Settings, and a pointer resting for it (no button held) clicks once in place
+        let dwell_ms = springboard::shell::accessibility::dwell_delay_ms();
+        if dwell.delay_ms() != dwell_ms {
+            dwell.set_delay_ms(dwell_ms);
+        }
+        if dwell.enabled() && inputs.has_pointer() && !inputs.is_down() {
+            let (px, py) = inputs.pointer();
+            let sample = springboard::shell::accessibility::dwell::Sample { t_ms: t.max(0.0) as u64, x: px, y: py };
+            if let Some((x, y)) = dwell.feed(sample) {
+                events.push(input::Event::Down { x, y, t });
+                events.push(input::Event::Up { x, y, t });
+            }
         }
         if hw_cursor {
             // a rotated screen takes the pointer off the plane (its frames show no cursor, as before)
