@@ -739,11 +739,32 @@ pub struct Bundle {
     tables: Vec<HashMap<String, String>>,
 }
 
+/// The `.lproj` folder names to try for a locale, most specific first: the language with its region
+/// (`is_IS`, `en_GB`), the language alone, then `en`. Duplicates are dropped, so `en_US` gives `en_US`, `en`.
+pub fn lproj_candidates(locale: &Locale) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(region) = locale.region.as_deref().filter(|r| !r.is_empty()) {
+        out.push(format!("{}_{}", locale.language, region));
+    }
+    out.push(locale.language.clone());
+    out.push("en".to_string());
+    let mut seen = Vec::new();
+    out.retain(|c| {
+        if seen.contains(c) {
+            false
+        } else {
+            seen.push(c.clone());
+            true
+        }
+    });
+    out
+}
+
 impl Bundle {
-    /// Reads `<dir>/<lang>.lproj/Localizable.strings` for the locale's language, then `en` as fallback.
+    /// Reads `<dir>/<name>.lproj/Localizable.strings` for each `lproj_candidates` name, most specific first.
     pub fn load(dir: &Path, locale: &Locale) -> Self {
         let mut tables = vec![];
-        for lang in [locale.language.as_str(), "en"] {
+        for lang in lproj_candidates(locale) {
             if let Ok(t) = std::fs::read_to_string(dir.join(format!("{lang}.lproj/Localizable.strings"))) {
                 tables.push(parse_strings(&t));
             }
@@ -922,6 +943,25 @@ mod tests {
         set_main_bundle(b);
         assert_eq!(crate::localized!("Open", "menu"), "Opna");
         assert_eq!(crate::localized!("Nope", ""), "Nope");
+    }
+
+    #[test]
+    fn a_region_table_wins_over_the_language_table_which_wins_over_en() {
+        assert_eq!(lproj_candidates(&Locale::new("en_GB")), vec!["en_GB", "en"]);
+        assert_eq!(lproj_candidates(&Locale::new("is_IS")), vec!["is_IS", "is", "en"]);
+        assert_eq!(lproj_candidates(&Locale::new("en")), vec!["en"]);
+        let dir = tempfile::tempdir().unwrap();
+        for (name, body) in [
+            ("en.lproj", "\"Open\" = \"Open\"; \"Close\" = \"Close\";"),
+            ("en_GB.lproj", "\"Open\" = \"Open (UK)\";"),
+        ] {
+            std::fs::create_dir(dir.path().join(name)).unwrap();
+            std::fs::write(dir.path().join(name).join("Localizable.strings"), body).unwrap();
+        }
+        let b = Bundle::load(dir.path(), &Locale::new("en_GB"));
+        assert_eq!(b.string("Open"), "Open (UK)");
+        assert_eq!(b.string("Close"), "Close", "a key the region table lacks comes from en");
+        assert_eq!(b.string("Missing"), "Missing");
     }
 
     #[test]
