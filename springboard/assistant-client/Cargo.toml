@@ -1,0 +1,16 @@
+[package]
+name = "bifrost-assistant-client"
+version = "0.1.0"
+edition = "2021"
+description = "Anthropic Messages client shared by the Assistant app and the shell"
+
+[lib]
+name = "assistant_client"
+path = "src/lib.rs"
+
+[dependencies]
+bifrost-core = { path = "../core" }
+# blocking HTTPS for the shell's intent calls (same TLS stack as the shell's deildu and browser code)
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-graviola = "0.4"
+webpki-roots = "1.0"
