@@ -523,6 +523,53 @@ pub fn pinned_publisher_keys(dir: &Path) -> Vec<Vec<u8>> {
     keys
 }
 
+/// The signature policy for a downloaded package. With no publisher key pinned, nothing can be checked and the
+/// package passes on its checksum alone (packaging signs only when a publisher key is configured). Once any key is
+/// pinned, a package needs a detached signature that one of them verifies, and an unsigned package is refused.
+pub fn check_package_policy(pinned: &[Vec<u8>], bytes: &[u8], signature: Option<&[u8]>) -> Result<(), String> {
+    if pinned.is_empty() {
+        return Ok(());
+    }
+    let Some(signature) = signature else {
+        return Err("signature check failed; the package is unsigned and publisher keys are pinned".into());
+    };
+    if pinned.iter().any(|k| package_signature_is_valid(bytes, signature, k)) {
+        Ok(())
+    } else {
+        Err("signature check failed; package discarded".into())
+    }
+}
+
+/// Signs `bytes` with an ML-DSA-65 publisher secret key and returns the detached signature that
+/// [`package_signature_is_valid`] checks. `rnd` is the 32-byte signing randomness.
+pub fn sign_package(secret_key: &[u8], bytes: &[u8], rnd: &[u8; 32]) -> Result<Vec<u8>, String> {
+    bifrost_core::mldsa::sign(bifrost_core::mldsa::Params::MlDsa65, secret_key, bytes, PACKAGE_SIGNATURE_CONTEXT, rnd).map_err(|e| format!("signing failed: {e:?}"))
+}
+
+/// Makes a publisher key pair from a 32-byte `seed` and writes `<name>.pub` (to pin under [`PINNED_PUBLISHER_KEYS`])
+/// and `<name>.key` (the secret, mode 0600) into `dir`.
+pub fn write_publisher_key(dir: &Path, name: &str, seed: &[u8; 32]) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let pair = bifrost_core::mldsa::keygen(bifrost_core::mldsa::Params::MlDsa65, seed);
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{name}.pub")), &pair.public_key).map_err(|e| e.to_string())?;
+    let mut key = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(dir.join(format!("{name}.key"))).map_err(|e| e.to_string())?;
+    key.write_all(&pair.secret_key).map_err(|e| e.to_string())
+}
+
+/// Applies the pinned-key policy to the downloaded package at `part`: the detached signature is fetched from
+/// `<url>.sig` only when a key is pinned.
+fn enforce_signature_policy(keys_dir: &Path, part: &Path, url: &str) -> Result<(), String> {
+    let pinned = pinned_publisher_keys(keys_dir);
+    if pinned.is_empty() {
+        return Ok(());
+    }
+    let bytes = std::fs::read(part).map_err(|e| e.to_string())?;
+    let signature = super::net::get(&format!("{url}.sig"), 16 * 1024).ok();
+    check_package_policy(&pinned, &bytes, signature.as_deref())
+}
+
 /// Installs the (already verified) package `r` holds: the archive is indexed and
 /// unpacked straight from where it is, never loaded whole.
 fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
@@ -606,10 +653,11 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         if got != sha256.to_ascii_lowercase() {
             return Err("checksum mismatch; package discarded".to_string());
         }
+        enforce_signature_policy(Path::new(PINNED_PUBLISHER_KEYS), &part, url)?;
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
         install_archive(root, &mut file, shell)
     });
-    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch")) {let _ = std::fs::remove_file(&part);}
+    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed")) {let _ = std::fs::remove_file(&part);}
     result
 }
 
@@ -904,6 +952,54 @@ pub mod tests {
         let app = install_package_signed(&root, &bytes, &sum(&bytes), &sig, &keys, "0.1.0").unwrap();
         assert_eq!(app.id, "is.olibuijr.calc");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_signature_policy_is_open_until_a_key_is_pinned_then_strict() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let bytes = pkg(MANIFEST);
+        let publisher = keygen(Params::MlDsa65, &[3u8; 32]);
+        let other = keygen(Params::MlDsa65, &[4u8; 32]);
+        let sig = sign_package(&publisher.secret_key, &bytes, &[0u8; 32]).unwrap();
+        assert_eq!(check_package_policy(&[], &bytes, None), Ok(()), "no key pinned: the checksum alone decides");
+        let pinned = vec![other.public_key.clone(), publisher.public_key.clone()];
+        assert_eq!(check_package_policy(&pinned, &bytes, Some(&sig)), Ok(()));
+        assert!(check_package_policy(&pinned, &bytes, None).unwrap_err().contains("unsigned"), "a pinned key makes a signature mandatory");
+        assert!(check_package_policy(&[other.public_key.clone()], &bytes, Some(&sig)).is_err(), "signed by an unknown publisher");
+        let mut edited = bytes.clone();
+        edited[20] ^= 1;
+        assert!(check_package_policy(&pinned, &edited, Some(&sig)).is_err(), "bytes changed after signing");
+    }
+
+    #[test]
+    fn a_written_publisher_key_signs_packages_the_pinned_key_accepts() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("publisher-keygen");
+        write_publisher_key(&dir, "release", &[6u8; 32]).unwrap();
+        assert!(write_publisher_key(&dir, "release", &[6u8; 32]).is_err(), "an existing secret key is never overwritten");
+        assert_eq!(std::fs::metadata(dir.join("release.key")).unwrap().permissions().mode() & 0o777, 0o600);
+        let pinned = pinned_publisher_keys(&dir);
+        assert_eq!(pinned.len(), 1, "the .pub file is pinnable and the .key file is not");
+        let bytes = pkg(MANIFEST);
+        let sig = sign_package(&std::fs::read(dir.join("release.key")).unwrap(), &bytes, &[1u8; 32]).unwrap();
+        assert_eq!(check_package_policy(&pinned, &bytes, Some(&sig)), Ok(()));
+        assert!(sign_package(b"short", &bytes, &[1u8; 32]).is_err(), "a malformed secret key");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_unsigned_download_is_refused_when_a_key_is_pinned() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let dir = scratch("policy-keys");
+        let none = scratch("policy-nokeys");
+        let part = dir.join("pkg.part");
+        std::fs::write(&part, pkg(MANIFEST)).unwrap();
+        assert_eq!(enforce_signature_policy(&none.join("missing"), &part, "http://127.0.0.1:9/p.aap"), Ok(()), "no key pinned");
+        std::fs::write(dir.join("pub.pub"), keygen(Params::MlDsa65, &[8u8; 32]).public_key).unwrap();
+        let err = enforce_signature_policy(&dir, &part, "http://127.0.0.1:9/p.aap").unwrap_err();
+        assert!(err.contains("signature check failed"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(none);
     }
 
     #[test]
