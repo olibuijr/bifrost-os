@@ -5310,3 +5310,15 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   `springboard/src/shell/preview_panel.rs` uses the same helpers, so both show the same words in the same places.
 - **Local authentication view (`bifrost_app::view::local_auth_view`)**: `LocalAuthenticationView` shows the biometric state as a disc and
   sends its action when tapped; the state changes only through `send`. No caller found. Parity row: `local-authentication-embedded-ui.json`.
+
+### Private framework settle wave (slice p04, 2026-10-17)
+
+- **Word model and CJK splitter (`bifrost_ui::word_model`)**: `WordModel` counts words and word pairs of text the user types
+  and predicts completions and the next word; it saves as text and nothing leaves the device. `Lexicon` with `segment` and
+  `split_words` splits Chinese, Japanese and Korean text by the lowest-cost path through a word list. No word list is shipped yet, so
+  unknown characters stand alone (kana and Hangul runs stay whole). Thai, Lao, Khmer and Myanmar are not split. No caller yet. Parity
+  row: CVNLP (OS frameworks).
+- **Text chunks (`bifrost_ui::text_chunks`)**: `chunk_ranges` and `chunks` cut a document into passages of at most N characters on
+  sentence boundaries with an optional overlap. No caller yet. Parity row: ChunkingLibrary.
+- **Cloth (`bifrost_ui::cloth`)**: `Cloth` is a CPU Verlet cloth sheet with pins, gravity, wind, a ground plane and mesh triangles.
+  No GPU path. No caller yet. Parity row: ClothPhysics.

@@ -4709,8 +4709,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary, plist or string is extracted, and no BifrOSt code or package maps to it.",
+   "status": "n/a",
+   "note": "n/a: Apple's networking-metrics client for its own servers. The reference index holds only the binary, Info.plist, version.plist and a FeatureFlags/Domain/C2.plist feature-flag domain, which marks a server-driven telemetry client. BifrOSt sends no telemetry.",
    "rea": [],
    "method": "assessed"
   },
@@ -4871,11 +4871,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/v4l2.rs:187 (probe); springboard/src/media/v4l2.rs:221 (struct Device); springboard/src/shell/camera/mod.rs:77",
+   "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs; springboard/ui/src/video_device.rs; springboard/ui/src/capture_session.rs; springboard/sdk/src/av_capture_session.rs",
    "status": "partial",
    "note": "V4L2 webcam probing and capture serve the Camera app. There is no capture session API for apps and no device discovery beyond V4L2 nodes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "video_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "av_capture_session::tests"
+    }
+   ],
+   "ready_note": "Camera capture: V4L2 device discovery and streaming (media::v4l2), the Camera app on top of it (shell::camera), the device and stream-plan model (bifrost-ui video_device) and the app-facing capture session (bifrost-app av_capture_session, built on bifrost-ui capture_session). The per-hardware tuning folders in the reference bundle (one per Apple Mac model) are Apple hardware data and n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMCaptureCore.framework",
@@ -4892,11 +4916,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/v4l2.rs:221 (struct Device); springboard/src/shell/camera/mod.rs:77",
+   "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs; springboard/ui/src/video_device.rs; springboard/sdk/src/av_capture_session.rs",
    "status": "partial",
    "note": "Webcam capture through V4L2 runs in the shell. Sessions and sample buffers are not exposed to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "video_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "av_capture_session::tests"
+    }
+   ],
+   "ready_note": "The core of capture (device list, formats, buffers, stream plan, session state) is media::v4l2 plus bifrost-ui video_device, exposed to apps by bifrost-app av_capture_session; the Camera app runs on it. Internal split of the capture component covered by the CMCapture row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMCaptureDevice.framework",
@@ -5098,8 +5141,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary or plist is extracted, and no BifrOSt code or package maps to it.",
+   "status": "n/a",
+   "note": "n/a: a shim over Apple's private on-device ML and analytics runtime (CPML). The bundle is only a binary with Info.plist and version.plist (no resources, no XPC service, no plug-in), so it has no user-visible function of its own; ML model and analytics plumbing is not mirrored. Judged from the name and the empty bundle.",
    "rea": [],
    "method": "assessed"
   },
@@ -5119,8 +5162,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary or plist is extracted, and no BifrOSt code or package maps to it.",
+   "status": "n/a",
+   "note": "n/a: Apple's closed-loop power and thermal management service for Apple silicon. The bundle is a binary with Info.plist and version.plist only; Apple silicon power and thermal internals have no counterpart on x86_64 and aarch64 Linux, where the kernel governors and thermal zones do the job.",
    "rea": [],
    "method": "assessed"
   },
@@ -5232,11 +5275,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/linalg.rs",
    "status": "os",
-   "note": "Investigated: the reference files index lists no resource, launch item or plist for this framework and its binary is in the shared library cache this host cannot extract, so its job (a matrix-math layer for vision, by the name alone) is not confirmed.",
+   "note": "A matrix-math layer (by its name, for vision and image maths): 4x4 matrices, vectors and quaternions plus dense Cholesky and LU solves in bifrost-ui linalg, with tensor products in graph.rs. The reference bundle carries no resource that says more.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    }
+   ],
+   "ready_note": "A matrix-math layer (by its name, for vision and image maths): 4x4 matrices, vectors and quaternions plus dense Cholesky and LU solves in bifrost-ui linalg, with tensor products in graph.rs. The reference bundle carries no resource that says more."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CVNLP.framework",
@@ -5253,11 +5305,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/word_model.rs; springboard/core/src/spellcheck.rs; springboard/ui/src/script.rs",
    "status": "gap",
    "note": "Ships word language models for European languages and segmentation models for Chinese, Japanese and Korean, which predictive text and word splitting need; build predictive text on the text input path, starting from springboard/sdk/src/spellcheck.rs. Built 2026-10-17: prefix completion for predictive text in bifrost_core::spellcheck (SpellChecker::completions, Dictionary::completions; learned words first, then dictionary words, shortest first); tests completion_tests. Still open: the word language models for European languages and the segmentation models for Chinese, Japanese and Korean.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "word_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::completion_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "script::tests"
+    }
+   ],
+   "ready_note": "Built this wave: word_model has a unigram and bigram WordModel (completions and next-word prediction trained only on the user's own text, saved as text) and a Lexicon with a lowest-cost word splitter for Chinese, Japanese and Korean (segment, split_words), next to the spell checker's prefix completions and script detection. The splitter needs a word list loaded with Lexicon::load_text; BifrOSt ships no CJK word list yet, so until one is packaged unknown characters fall back to single characters (kana and Hangul runs stay whole)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CacheDelete.framework",
@@ -5309,11 +5380,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/cache_purge.rs; springboard/src/shell/storage.rs; springboard/render/src/cache.rs",
    "status": "os",
-   "note": "Investigated: the reference files index has no resource, launch item or plist for this framework, so the name (a cache manager, by the name alone) is not confirmed.",
+   "note": "By its name a cache manager: BifrOSt plans which per-app caches to clear least recently used first when free space runs low (core cache_purge, storage guard in shell::storage) and keeps the rendered-text cache within a budget (render cache). The reference bundle holds only a binary and Info.plist, so the role is inferred from the name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "cache_purge::execute_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cache::tests"
+    }
+   ],
+   "ready_note": "By its name a cache manager: BifrOSt plans which per-app caches to clear least recently used first when free space runs low (core cache_purge, storage guard in shell::storage) and keeps the rendered-text cache within a budget (render cache). The reference bundle holds only a binary and Info.plist, so the role is inferred from the name."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalDAV.framework",
@@ -5732,8 +5822,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated: the reference files index has no resource, launch item or plist for this internal framework, and its binary is in the shared library cache this host cannot extract, so its role beyond the public calendar UI is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: the UIKit-based internal Calendar UI that the Catalyst build of the Calendar app links. BifrOSt's Calendar is a native app (calendar-desktop), so a UIKit shim has no counterpart. The bundle is a binary with Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -6001,11 +6091,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/convert.rs",
+   "bifrost": "springboard/src/media/convert.rs; springboard/src/shell/camera/mod.rs",
    "status": "partial",
    "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced. Built 2026-10-17: the live preview is white-balanced with gains smoothed across frames (convert::Smoothed, test the_preview_gains_move_gradually_toward_the_scene), and photos are balanced (save_capture). Still open: sensor colour tuning, which needs per-sensor data no BifrOSt driver reads.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::convert::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::tests"
+    }
+   ],
+   "ready_note": "NV12 to RGBA with a selectable matrix, gray-world white balance with gains smoothed across frames for the live preview, and balanced photos (media::convert tests). Per-sensor colour calibration needs factory data from Apple camera modules that no V4L2 driver exposes, so that part is n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CampoMarkdown.framework",
