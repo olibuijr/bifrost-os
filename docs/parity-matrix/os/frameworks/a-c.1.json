@@ -5947,7 +5947,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests). Still open: no use counts are recorded to feed it, and no surface draws it; build both on springboard/src/shell/quick_actions.rs.",
+   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests); use counts per app and action (shell quick_actions::Usage, tests quick_actions::tests), and the Dock menu lists the most used quick actions first. Still open: no system surface draws the suggestions, and the Do Not Disturb, Handoff and casting actions do not exist yet.",
    "rea": [],
    "method": "assessed"
   },

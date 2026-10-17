@@ -4,10 +4,11 @@
 //! picks. It takes every touch while it is up; Close or Escape hides it. Pure geometry and paging live here; the shell
 //! wiring is in `Shell::char_viewer_*`.
 //!
-//! The last tab is Symbols (`SYMBOLS`): the symbol emoji the emoji font draws. Text-presentation symbols (arrows, math,
-//! currency signs) need a text font the emoji catalogue does not carry, so they are not here yet.
+//! The Symbols tab (`SYMBOLS`) is the symbol emoji the emoji font draws. The last tab is Text Symbols (`TEXT_SYMBOLS`):
+//! arrows, math, currency and punctuation marks in text presentation. Those glyphs are drawn with the UI text font, not
+//! the emoji font, and a pick copies or types the same character.
 //!
-//! Not yet: a search field over the catalogue, recent emoji, and the text symbol sets.
+//! Not yet: a search field over the catalogue, and recent emoji.
 
 use super::keyboard::Out;
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
@@ -25,12 +26,24 @@ pub const SYMBOLS: Category = Category {
     ],
 };
 
-/// Number of tabs: the emoji categories, then Symbols.
-pub fn tab_count() -> usize {
+/// Text-presentation symbols, drawn with the UI text font: arrows, math, currency and punctuation marks.
+pub const TEXT_SYMBOLS: &[&str] = &[
+    "←", "↑", "→", "↓", "↔", "↕", "⇐", "⇑", "⇒", "⇓", "⇔", "↩", "↪", "↰", "↱", "↲", "↳", "↺", "↻", "±", "×", "÷", "≠", "≈",
+    "≤", "≥", "∞", "√", "∑", "∏", "∫", "∂", "∆", "∇", "∈", "∉", "∩", "∪", "⊂", "⊃", "∀", "∃", "∅", "∴", "∝", "°", "€", "£",
+    "¥", "$", "¢", "₹", "₩", "₿", "₽", "₺", "₪", "₫", "₴", "₦", "₡", "₵", "§", "¶", "†", "‡", "•", "′", "″", "‰", "©",
+];
+
+/// The Text Symbols tab: after the Symbols tab, the last one.
+pub fn text_tab() -> usize {
     CATEGORIES.len() + 1
 }
 
-/// The emoji on tab `tab`, empty past the last tab.
+/// Number of tabs: the emoji categories, then Symbols, then Text Symbols.
+pub fn tab_count() -> usize {
+    text_tab() + 1
+}
+
+/// The emoji on tab `tab`, empty past the last tab. The Text Symbols tab has no emoji (see `tab_items`).
 fn tab_emoji(tab: usize) -> &'static [&'static str] {
     match CATEGORIES.get(tab) {
         Some(c) => c.emoji,
@@ -44,9 +57,13 @@ fn tab_icon(tab: usize) -> &'static str {
     match CATEGORIES.get(tab) {
         Some(c) => c.icon,
         None if tab == CATEGORIES.len() => SYMBOLS.icon,
+        None if tab == text_tab() => TEXT_ICON,
         None => "",
     }
 }
+
+/// The Text Symbols tab's icon: an emoji, because tab icons are drawn with the emoji font.
+const TEXT_ICON: &str = "🔢";
 
 /// Emoji per row and rows per page: one page is a 10 by 5 grid.
 const COLS: usize = 10;
@@ -108,9 +125,18 @@ impl CharacterViewer {
         self.page
     }
 
-    /// The emoji of the open tab, in display order.
+    /// The emoji of the open tab, in display order (the text symbols on the Text Symbols tab).
     pub fn tab_items(&self) -> &'static [&'static str] {
-        tab_emoji(self.tab)
+        if self.is_text_tab() {
+            TEXT_SYMBOLS
+        } else {
+            tab_emoji(self.tab)
+        }
+    }
+
+    /// Whether the open tab holds text-presentation symbols, drawn with the text font rather than the emoji font.
+    pub fn is_text_tab(&self) -> bool {
+        self.tab == text_tab()
     }
 
     /// The pages in the open tab (at least one, so an empty tab still shows a page).
@@ -233,7 +259,10 @@ impl CharacterViewer {
 
         for (i, e) in self.page_items().iter().enumerate() {
             let (cx, cy, cw, ch) = Self::cell_rect(ui, w, h, i);
-            if let Some(img) = crate::emoji::render(e, ui.pt(GLYPH_PT)) {
+            if self.is_text_tab() {
+                let g = ui.text(e, GLYPH_PT, Weight::Regular, WHITE);
+                s.blit_colored(&g, (cx + (cw - g.w as f32) / 2.0) as i32, (cy + (ch - g.h as f32) / 2.0) as i32, LABEL.now(), 255);
+            } else if let Some(img) = crate::emoji::render(e, ui.pt(GLYPH_PT)) {
                 s.blit(&img, (cx + (cw - img.w as f32) / 2.0) as i32, (cy + (ch - img.h as f32) / 2.0) as i32, 255, 255);
             }
         }
@@ -349,13 +378,37 @@ mod tests {
     }
 
     #[test]
-    fn the_symbols_tab_is_last_and_shows_the_symbol_set() {
+    fn the_symbols_tab_is_after_the_categories_and_shows_the_symbol_set() {
         let mut v = CharacterViewer::new();
-        v.select_tab(tab_count() - 1);
+        v.select_tab(CATEGORIES.len());
         assert_eq!(v.tab(), CATEGORIES.len());
         assert_eq!(v.tab_items(), SYMBOLS.emoji);
+        assert!(!v.is_text_tab());
         assert!(!v.tab_items().is_empty());
         assert_eq!(v.page_items().len(), v.tab_items().len().min(PER_PAGE));
+    }
+
+    #[test]
+    fn the_text_symbols_tab_is_last_and_holds_text_presentation_symbols() {
+        let mut v = CharacterViewer::new();
+        v.select_tab(tab_count() - 1);
+        assert_eq!(v.tab(), text_tab());
+        assert!(v.is_text_tab());
+        assert_eq!(v.tab_items(), TEXT_SYMBOLS);
+        for want in ["→", "≠", "€", "₿"] {
+            assert!(TEXT_SYMBOLS.contains(&want), "{want} is on the Text Symbols tab");
+        }
+        assert!(!TEXT_SYMBOLS.iter().any(|s| SYMBOLS.emoji.contains(s)), "no symbol is listed twice across tabs");
+        assert!(v.pages() >= 1);
+        assert_eq!(v.page_items().len(), TEXT_SYMBOLS.len().min(PER_PAGE));
+    }
+
+    #[test]
+    fn text_symbols_are_single_characters_without_emoji_presentation() {
+        for s in TEXT_SYMBOLS {
+            assert_eq!(s.chars().count(), 1, "{s} is one character");
+            assert!(!s.contains('\u{fe0f}'), "{s} keeps text presentation");
+        }
     }
 
     #[test]
