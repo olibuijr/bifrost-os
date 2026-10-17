@@ -10,9 +10,10 @@
 //! // in App::service_event: manager.handle_event(service, event, body, &mut delegate)
 //! ```
 //! The person decides authorization (Settings > Privacy > App Permissions > Location); an app that has not been
-//! answered reads `NotDetermined`. There is no GPS hardware: a location comes from a manual location the person set,
-//! or from an IP lookup that is off by default, so `horizontal_accuracy` is 100 m or about 25 km, and `altitude` is
-//! always `None`. Heading, regions and beacons are not provided. Decoding is pure, so everything here is testable
+//! answered reads `NotDetermined`. There is no GPS hardware and no network lookup: a location is the fixed location the
+//! person set, so `horizontal_accuracy` is 100 m. An app without Precise Location gets the coordinates moved to a
+//! grid of about 3 km (accuracy about 3 km), and the global Location Services switch off denies every app. `altitude`
+//! is always `None`. Heading, regions and beacons are not provided. Decoding is pure, so everything here is testable
 //! without a shell.
 pub use crate::controls::location_auth::{AuthorizationStatus, LocationError};
 use crate::privacy_permissions;
