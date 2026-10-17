@@ -79,6 +79,7 @@ pub mod earcon;
 pub mod ui_sounds;
 pub mod hwkeys;
 pub mod backup;
+pub mod migration;
 pub mod backup_page;
 pub mod timemachine;
 pub mod md;
