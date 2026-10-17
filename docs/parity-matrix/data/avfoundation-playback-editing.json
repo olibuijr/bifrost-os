@@ -17,9 +17,9 @@
   {
    "feature": "Media assets (AVAsset, tracks, metadata)",
    "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem",
-   "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork); springboard/ui/src/av_asset.rs (asset load of duration and tracks from WAV)",
+   "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs, springboard/src/media/metadata.rs, springboard/src/media/chapters.rs, springboard/src/media/audiofile.rs (write_tags); wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork); springboard/ui/src/av_asset.rs (asset load of duration and tracks from WAV)",
    "status": "partial",
-   "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Round sprint10/6: asset object with duration and tracks (WAV) in bifrost_ui::av_asset; partial, needs a Midget check."
+   "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Round sprint10/6: asset object with duration and tracks (WAV) in bifrost_ui::av_asset; partial, needs a Midget check. Chapters are read (ID3 CHAP and CTOC, MP4 chpl and QuickTime chapter track) into Tags::chapters, and tags are written back for MP3 (ID3v2.4) and M4A (ilst, with chunk offset fix-up); both are unit-tested, not yet run on Midget. The SDK asset object does not expose chapters or writing yet."
   },
   {
    "feature": "Media reading and writing",

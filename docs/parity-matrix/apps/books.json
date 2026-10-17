@@ -272,9 +272,9 @@
    "area": "view",
    "apple": "Audiobooks section",
    "status": "gap",
-   "bifrost": "springboard/src/svc.rs:269 (audio service client seek_ms, the shell's playback path); springboard/src/media/audiofile.rs:105 (format_of: the shell decodes m4b and mp3); springboard/src/media/codec.rs:39 (m4b maps to the MP4 demuxer)",
-   "note": "Not built. The shell's audio service already decodes m4b and mp3 and seeks (svc.rs seek_ms), so playback is possible, but Books has no Audiobooks collection, no player bar and no chapter list: the shell's MP4 demuxer does not read the chapter atoms (no chpl parser under springboard/src/media), so a chapter list needs a parser first.",
-   "wire": "Add an Audiobooks collection to the Books sidebar that lists m4b and mp3 files from the library folders; play, pause and seek them through the audio service (bifrost_app::audio::Client); add a chapter parser for MP4 chpl atoms, then the chapter list."
+   "bifrost": "springboard/src/svc.rs:269 (audio service client seek_ms, the shell's playback path); springboard/src/media/audiofile.rs:105 (format_of: the shell decodes m4b and mp3); springboard/src/media/codec.rs:39 (m4b maps to the MP4 demuxer); springboard/src/media/chapters.rs (chapter reader: Nero chpl and QuickTime chapter track for MP4, ID3 CHAP and CTOC for MP3)",
+   "note": "Not built as a Books collection. The chapter reader exists now (Tags::chapters, read through audiofile::read_tags), so an m4b's chapter list is available to the app. Still missing: the Audiobooks collection, the player bar and the chapter list UI. Playback is possible through the audio service (svc.rs seek_ms).",
+   "wire": "Add an Audiobooks collection to the Books sidebar that lists m4b and mp3 files from the library folders; show read_tags(path).chapters; play, pause and seek through the audio service (bifrost_app::audio::Client)."
   },
   {
    "feature": "Book and audiobook store",

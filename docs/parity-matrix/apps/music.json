@@ -100,9 +100,9 @@
    "area": "panel",
    "apple": "Song > Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/info.rs::Info",
-   "note": "Song > Get Info and a song's ... menu open a page that edits Title, Artist and Album. The edits are kept by path in info.txt and laid over the tags at each scan. The audio files are not written, and artwork and lyrics cannot be edited yet.",
-   "wire": "Write the edited tags into the files (needs a tag writer in the media crate); then artwork and lyrics"
+   "bifrost": "springboard/apps/music-desktop/src/music/info.rs::Info; springboard/src/media/audiofile.rs::write_tags (tag writer: ID3v2.4 for MP3 and ADTS, ilst for M4A, atomic write)",
+   "note": "Song > Get Info and a song's ... menu open a page that edits Title, Artist and Album. Each edit is kept by path in info.txt, laid over the tags at each scan, and written into the song's file through the tag writer (MP3, ADTS, M4A). The writer covers title, artist, album, album artist, track, year, lyrics and cover. Known gap: an MP3 rewrite drops ID3 frames the model does not hold (genre, comment). Files with chapters and FLAC/WAV keep the sidecar edit only. Artwork and lyrics cannot be edited in the sheet yet.",
+   "wire": "Add artwork and lyrics fields to the Get Info sheet; keep non-model ID3 frames (genre, comment) when rewriting an MP3 tag; add CHAP output to the ID3 writer so chaptered files can be edited."
   },
   {
    "feature": "Favourite songs",
