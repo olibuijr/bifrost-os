@@ -280,7 +280,8 @@ mod tests {
         for bad in ["", "/etc", "../x", "a/../b", "a//b", "./a", "a\nb"] {
             assert!(parse(SCAN_TO_FOLDER, &obj(&[("folder", bad)])).is_err(), "{bad:?}");
         }
-        assert!(parse(SCAN_TO_FOLDER, &obj(&[("folder", &"a".repeat(FOLDER_MAX + 1))])).is_err());
+        let long = "a".repeat(FOLDER_MAX + 1);
+        assert!(parse(SCAN_TO_FOLDER, &obj(&[("folder", long.as_str())])).is_err());
         assert!(parse(SCAN_TO_FOLDER, &obj(&[])).is_err(), "the folder is required");
     }
 
