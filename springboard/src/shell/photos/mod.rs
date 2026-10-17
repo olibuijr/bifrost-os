@@ -19,6 +19,7 @@ pub mod export;
 pub mod folders;
 pub mod grid;
 pub mod import;
+pub mod libraries;
 pub mod library;
 pub mod link;
 pub mod memories;
@@ -37,6 +38,8 @@ mod commands_tests;
 mod adjust_tests;
 #[cfg(test)]
 mod favorites_tests;
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod selection_tests;
 #[cfg(test)]
@@ -633,6 +636,9 @@ impl Photos {
     /// (the first is ours and receives screenshots and the trash), `offset`
     /// is the local zone's offset from UTC in seconds.
     pub fn new(ui: &Ui, w: i32, h: i32, data: PathBuf, dirs: Vec<PathBuf>, offset: i32) -> std::io::Result<Self> {
+        // the library chosen last, when its folder still exists, replaces the default one
+        let prefs = Prefs::load(data.join(PREFS_FILE));
+        let dirs = libraries::remembered(&prefs).filter(|p| p.is_dir()).map_or(dirs, |lib| vec![lib]);
         let pictures = dirs.first().cloned().unwrap_or_else(|| data.join("Pictures"));
         std::fs::create_dir_all(&pictures)?;
         let mut p = Photos {
@@ -706,7 +712,7 @@ impl Photos {
             viewer: None,
             slideshow: None,
             sheet: None,
-            prefs: Prefs::load(data.join(PREFS_FILE)),
+            prefs,
             text: TextCache::default(),
             pressed: None,
             scrolling: false,
@@ -1209,6 +1215,35 @@ impl Photos {
             }
         }
         self.trash.retain(|p| !gone.contains(&p.path));
+    }
+
+    /// Makes `dir` the library Photos shows: the folder is created when missing, the choice is remembered for the
+    /// next launch, and the pictures in it are scanned. False, with the library kept, when the folder cannot be made
+    /// or the choice cannot be saved.
+    pub fn switch_library(&mut self, ui: &Ui, dir: PathBuf) -> bool {
+        if std::fs::create_dir_all(&dir).is_err() {
+            return false;
+        }
+        let mut list = libraries::decode(&self.prefs);
+        libraries::remember(&mut list, &dir);
+        let writes = libraries::writes(&list, &dir);
+        let pairs: Vec<(&str, &str)> = writes.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let mut next = self.prefs.clone();
+        if next.set_many(&pairs).is_err() {
+            return false;
+        }
+        self.prefs = next;
+        self.pictures = dir.clone();
+        self.dirs = vec![dir];
+        // what the old library showed does not carry over
+        self.viewer = None;
+        self.selection = Selection::default();
+        self.anchor = None;
+        self.all.clear();
+        self.trash.clear();
+        self.rebuild(ui);
+        self.rescan();
+        true
     }
 
     /// Writes one setting; false (and the old value kept) if it cannot be saved.

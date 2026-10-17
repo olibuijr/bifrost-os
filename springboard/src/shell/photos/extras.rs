@@ -312,6 +312,10 @@ impl Photos {
                 meta::parse_taken(text, self.offset, unix_now(), current).is_none().then_some("That is not a date or a time. Try 2026-10-04 14:30.")
             }
             Purpose::ImportFolder => (!Path::new(text.trim()).is_dir()).then_some("That folder does not exist."),
+            Purpose::SwitchLibrary => {
+                let path = Path::new(text.trim());
+                (text.trim().is_empty() || !path.is_absolute() || path.is_file()).then_some("Type the full path of a folder, such as /home/you/Pictures.")
+            }
             Purpose::SmartRules(_) => meta::Query::parse(text, self.offset, unix_now()).is_empty().then_some("Add at least one rule, such as #beach or is:favorite."),
             _ => None,
         }
@@ -396,6 +400,11 @@ impl Photos {
             Purpose::SmartRules(slot) => {
                 self.write_many("Smart Album Rules", vec![(format!("sa.{slot}.q"), text.trim().to_string())]);
                 self.rebuild(ui);
+            }
+            Purpose::SwitchLibrary => {
+                if !self.switch_library(ui, PathBuf::from(text.trim())) {
+                    self.note = Some(("The library cannot be opened.".to_string(), self.now + NOTE_MS * 20.0));
+                }
             }
             Purpose::ImportFolder => {
                 let (from, into) = (PathBuf::from(text.trim()), self.pictures.clone());

@@ -4383,6 +4383,8 @@ impl Shell {
 
     /// Creates the Photos app on first use, or rescans its folders.
     fn ensure_photos(&mut self) {
+        // Image > Edit With lists the apps from the registry, which the menus read without building it
+        self.ensure_defaults();
         match &mut self.photos {
             Some(p) => p.rescan(),
             None => {

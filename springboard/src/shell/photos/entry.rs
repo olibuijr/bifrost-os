@@ -27,6 +27,8 @@ pub enum Purpose {
     AddKeyword,
     /// the folder to copy pictures from
     ImportFolder,
+    /// the folder of the library to show (created when missing)
+    SwitchLibrary,
     /// the name of a new smart album, which keeps the search in force as its rules (slot of the album)
     SmartName(u8),
     /// the rules of the smart album in this slot
@@ -47,6 +49,7 @@ impl Purpose {
             Purpose::RenameKeyword(_) => "Rename Keyword",
             Purpose::AddKeyword => "Add Keyword",
             Purpose::ImportFolder => "Import",
+            Purpose::SwitchLibrary => "Open Library",
             Purpose::SmartName(_) => "New Smart Album",
             Purpose::SmartRules(_) => "Smart Album Rules",
         }
@@ -65,6 +68,7 @@ impl Purpose {
             Purpose::RenameKeyword(_) => "New name",
             Purpose::AddKeyword => "Keyword",
             Purpose::ImportFolder => "/path/to/folder",
+            Purpose::SwitchLibrary => "/path/to/library",
             Purpose::SmartName(_) => "Album name",
             Purpose::SmartRules(_) => "#beach is:favorite kind:png",
         }
@@ -81,6 +85,7 @@ impl Purpose {
             Purpose::RenameKeyword(_) => "Photos with the new name already keep one copy. An empty name deletes the keyword.",
             Purpose::AddKeyword => "Added to every selected photo.",
             Purpose::ImportFolder => "Pictures are copied into Pictures; the originals stay where they are.",
+            Purpose::SwitchLibrary => "Shows the pictures in this folder. A folder that does not exist is created.",
             Purpose::SmartName(_) => "The album keeps the rules of your search and lists every photo that matches them.",
             Purpose::SmartRules(_) => "Words match names, albums, dates and keywords. #beach, is:favorite, is:edited, kind:png, rating:3.",
         }
@@ -90,7 +95,7 @@ impl Purpose {
     pub fn max(&self) -> usize {
         match self {
             Purpose::Caption => super::meta::MAX_CAPTION,
-            Purpose::Search | Purpose::ImportFolder | Purpose::SmartRules(_) => 200,
+            Purpose::Search | Purpose::ImportFolder | Purpose::SwitchLibrary | Purpose::SmartRules(_) => 200,
             Purpose::Keywords => 400,
             Purpose::TakenAt => 40,
             _ => super::meta::MAX_TEXT,
@@ -210,7 +215,7 @@ mod tests {
     use super::*;
     use crate::shell::tests::ui;
 
-    const EVERY: [Purpose; 12] = [
+    const EVERY: [Purpose; 13] = [
         Purpose::Search,
         Purpose::RenameAlbum(0),
         Purpose::Title,
@@ -220,6 +225,7 @@ mod tests {
         Purpose::TakenAt,
         Purpose::AddKeyword,
         Purpose::ImportFolder,
+        Purpose::SwitchLibrary,
         Purpose::SmartName(0),
         Purpose::SmartRules(0),
         Purpose::RenameKeyword(String::new()),
