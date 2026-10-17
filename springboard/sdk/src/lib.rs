@@ -311,6 +311,7 @@ pub mod network_connection;
 pub mod network_listener;
 pub mod network_group;
 pub mod avahi_publish;
+pub mod tls_client;
 pub mod network_browser;
 pub mod route_discovery;
 pub mod http_cookies;
