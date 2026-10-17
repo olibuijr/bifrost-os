@@ -202,7 +202,9 @@ Valid starting       Expires              Service principal\n\
 
     fn cache(text: &str) -> CacheName {
         let mut s = Krb5Settings::new();
-        s.set_ccache_name(text).unwrap().unwrap()
+        // The setter returns the cache it replaces (None on a fresh settings), so read the new one back.
+        s.set_ccache_name(text).unwrap();
+        s.ccache().cloned().unwrap()
     }
 
     #[test]
