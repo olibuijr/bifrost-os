@@ -70,6 +70,9 @@ mod glue {
                         for (text, priority) in std::mem::take(&mut h.announcements) {
                             bridge.announce(slot as u8, &text, priority);
                         }
+                        for (id, note) in std::mem::take(&mut h.ax_notes) {
+                            bridge.notify(slot as u8, id, note);
+                        }
                     }
                     for r in bridge.drain() {
                         if let Some(Some(h)) = ext.get_mut(r.slot as usize) {

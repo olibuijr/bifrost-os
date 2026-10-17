@@ -1,12 +1,37 @@
 //! Wire types for the accessibility text attributes. Tags `0x210` to `0x212`:
 //! `ToShell::AxText` 0x210 (selection, caret and visible range per text element), `ToShell::AxMeta` 0x211
-//! (`accessibilityTitle` and `accessibilityHelp`), `ToShell::Announce` 0x212 (the announcement-requested accessibility notification).
+//! (`accessibilityTitle` and `accessibilityHelp`), `ToShell::Announce` 0x212 (the announcement-requested accessibility notification),
+//! `ToShell::AxNotify` 0x214 (the notifications `Accessibility.post(element:notification:)` queued, per element).
 //! Lists hold at most `MAX_ENTRIES`; strings are cut on encode and refused when longer on decode.
 
 use super::{str_, u32_, DecodeError, Reader, ToShell};
-use bifrost_ui::ax::{AxMeta, AxText, Priority};
+use bifrost_ui::ax::{AxMeta, AxNotification, AxText, Priority};
 
 pub const MAX_ENTRIES: usize = 32;
+/// Most notifications in one `AxNotify` packet.
+pub const MAX_NOTES: usize = 64;
+
+/// The wire code of a notification: its position in `AxNotification`'s declaration order.
+fn note_code(n: AxNotification) -> u8 {
+    match n {
+        AxNotification::FocusedUIElementChanged => 0,
+        AxNotification::ValueChanged => 1,
+        AxNotification::LayoutChanged => 2,
+        AxNotification::SelectedChildrenChanged => 3,
+        AxNotification::ElementDestroyed => 4,
+    }
+}
+
+fn note_from_code(c: u8) -> Option<AxNotification> {
+    Some(match c {
+        0 => AxNotification::FocusedUIElementChanged,
+        1 => AxNotification::ValueChanged,
+        2 => AxNotification::LayoutChanged,
+        3 => AxNotification::SelectedChildrenChanged,
+        4 => AxNotification::ElementDestroyed,
+        _ => return None,
+    })
+}
 pub const MAX_META: usize = 160;
 pub const MAX_ANNOUNCE: usize = 512;
 
@@ -57,6 +82,16 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             b.push(*priority as u8);
             str_(b, cut(text, MAX_ANNOUNCE));
         }
+        ToShell::AxNotify(list) => {
+            u32_(b, 0x214);
+            let n = list.len().min(MAX_NOTES);
+            u32_(b, n as u32);
+            for (id, note) in &list[..n] {
+                u32_(b, *id as u32);
+                u32_(b, (*id >> 32) as u32);
+                b.push(note_code(*note));
+            }
+        }
         _ => {}
     }
 }
@@ -100,6 +135,18 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             let priority = Priority::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?;
             ToShell::Announce { priority, text: get(r, MAX_ANNOUNCE)? }
         }
+        0x214 => {
+            let n = r.u32()? as usize;
+            if n > MAX_NOTES {
+                return Err(DecodeError::BadValue);
+            }
+            let mut list = Vec::with_capacity(n);
+            for _ in 0..n {
+                let id = r.u32()? as u64 | ((r.u32()? as u64) << 32);
+                list.push((id, note_from_code(r.u8()?).ok_or(DecodeError::BadValue)?));
+            }
+            ToShell::AxNotify(list)
+        }
         t => return Err(DecodeError::UnknownTag(t)),
     })
 }
@@ -117,6 +164,17 @@ mod tests {
         assert_eq!(ToShell::decode(&ToShell::AxText(list.clone()).encode()), Ok(ToShell::AxText(list)));
         let bad = vec![AxText { id: 1, caret: 0, sel_start: 5, sel_end: 2, vis_start: 0, vis_end: 0, secure: false, len: 5 }];
         assert_eq!(ToShell::decode(&ToShell::AxText(bad).encode()), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn ax_notify_round_trips_and_refuses_an_unknown_code() {
+        let list = vec![(1 << 40 | 7, AxNotification::ValueChanged), (3, AxNotification::ElementDestroyed)];
+        let m = ToShell::AxNotify(list.clone());
+        assert_eq!(ToShell::decode(&m.encode()), Ok(ToShell::AxNotify(list)));
+        let mut bad = ToShell::AxNotify(vec![(1, AxNotification::LayoutChanged)]).encode();
+        let last = bad.len() - 1;
+        bad[last] = 9;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]
