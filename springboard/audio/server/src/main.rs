@@ -2,7 +2,7 @@
 //! open the control socket and run the server loop until SIGTERM or SIGINT. Owner: task 05; drivers: task 24.
 //!
 //! Drivers: `--drivers LIST` (or `BIFROST_AUDIO_DRIVERS`), a comma list of `alsa`, `loopback`, `plugin` and `null`,
-//! default `alsa,loopback,plugin`. Devices are objects `1000 + index` in that order (each driver's enumeration order), so the
+//! default `alsa,loopback` (`plugin` is opt-in until it is verified on hardware). Devices are objects `1000 + index` in that order (each driver's enumeration order), so the
 //! hardware comes first. `plugin` publishes the virtual devices described by the `*.vdev` files of
 //! `BIFROST_AUDIO_PLUGIN_DIR` (default `/etc/bifrost/audio/plugins`). `null` adds one stereo device on a clock that never moves, for tests.
 
@@ -19,7 +19,7 @@ use std::sync::atomic::AtomicBool;
 const CAP_SYS_NICE: u32 = 23;
 
 /// The drivers when neither `--drivers` nor `BIFROST_AUDIO_DRIVERS` names any.
-const DEFAULT_DRIVERS: &str = "alsa,loopback,plugin";
+const DEFAULT_DRIVERS: &str = "alsa,loopback";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DriverKind {

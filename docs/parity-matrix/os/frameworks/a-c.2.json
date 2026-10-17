@@ -1676,23 +1676,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/translation.rs; springboard/ui/src/translation.rs; springboard/sdk/src/translation_popover.rs",
    "status": "gap",
-   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation), and now GlossaryTranslator: it translates running text from a language pack's phrases by longest-phrase match, keeps punctuation and spacing, carries capitals over, passes unknown words through, and refuses a text where fewer than half the words matched. It is a phrase-pack engine, not a neural model, so quality depends on the pack; no language pack data ships yet, so Icelandic and English need packs (<source>-<target>.tsv) to be installed.",
+   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation), and now GlossaryTranslator: it translates running text from a language pack's phrases by longest-phrase match, keeps punctuation and spacing, carries capitals over, passes unknown words through, and refuses a text where fewer than half the words matched. It is a phrase-pack engine, not a neural model, so quality depends on the pack; no language pack data ships yet, so Icelandic and English need packs (<source>-<target>.tsv) to be installed. Lead 2026-10-17: not ready: no language-pack data ships, so nothing translates out of the box.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation::glossary_tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation::tests"
-    }
-   ],
-   "ready_note": "sdk::translation has the session API, pack loader and the glossary engine, all tested; language pack data is not shipped, so a user needs packs installed before anything translates."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ApplicationFirewall.framework",
@@ -2558,28 +2544,9 @@
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/switch_panels.rs; springboard/src/shell/accessibility/switch_scan.rs; springboard/ui/src/switch_scan.rs",
    "status": "gap",
-   "note": "Switch Control support. BifrOSt has the scanning models (ui::switch_scan with auto and manual steps; shell::accessibility::switch_scan with next and select presses) and now a panel template text format (shell::accessibility::switch_panels): panels of labelled buttons with actions, built-in System and Media panels, parse with line errors and a round trip; a PanelScanner that moves the highlight and answers a select with the action to perform; and the key bindings for the two switches. Not wired: the shell input loop does not yet feed key events to a scanner or draw the highlight.",
+   "note": "Switch Control support. BifrOSt has the scanning models (ui::switch_scan with auto and manual steps; shell::accessibility::switch_scan with next and select presses) and now a panel template text format (shell::accessibility::switch_panels): panels of labelled buttons with actions, built-in System and Media panels, parse with line errors and a round trip; a PanelScanner that moves the highlight and answers a select with the action to perform; and the key bindings for the two switches. Not wired: the shell input loop does not yet feed key events to a scanner or draw the highlight. Lead 2026-10-17: not ready: the shell input loop does not use the switch panels yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::accessibility::switch_panels::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::accessibility::switch_scan::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "switch_scan::tests"
-    }
-   ],
-   "ready_note": "The template format, panel scanner, key bindings and scan models are built and tested as pure models; the shell input loop does not call them yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AsyncAlgorithmsInternal.framework",
@@ -2675,23 +2642,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/attribute_graph.rs; springboard/sdk/src/observable.rs; springboard/ui/src/observe.rs",
    "status": "partial",
-   "note": "Dependency graph for incremental updates. ui::attribute_graph has inputs and rules with automatically recorded dependencies (that follow what a rule reads), lazy recomputation, dirty marking that stops where a result did not change, and an evaluation counter; observable values and observation tracking are in sdk::observable and ui::observe. The shell's view bodies are not yet computed through the graph.",
+   "note": "Dependency graph for incremental updates. ui::attribute_graph has inputs and rules with automatically recorded dependencies (that follow what a rule reads), lazy recomputation, dirty marking that stops where a result did not change, and an evaluation counter; observable values and observation tracking are in sdk::observable and ui::observe. The shell's view bodies are not yet computed through the graph. Lead 2026-10-17: not ready: view drawing does not use the attribute graph yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "attribute_graph::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "observable::tests"
-    }
-   ],
-   "ready_note": "The graph is built and tested (diamond, cut-off, laziness, dynamic dependencies, list of rows); view drawing does not use it yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioAccessoryAssetManagement.framework",
@@ -2815,28 +2768,9 @@
    "doc": "",
    "bifrost": "springboard/audio/engine/src/analysis.rs; springboard/ui/src/fourier.rs; springboard/audio/engine/src/graph.rs (tap nodes)",
    "status": "partial",
-   "note": "Level and spectrum analysis. audio::engine::analysis measures peak, RMS and eight octave bands (Hann-windowed Goertzel) and an AnalysisHub publishes the newest measurement of each tap to its subscribers, with a one-line text form to send over a socket; ui::fourier has the FFT and DFT, and the engine's tap nodes copy audio out of the graph. Not wired: the daemon does not yet feed taps into the hub or expose it on the control socket.",
+   "note": "Level and spectrum analysis. audio::engine::analysis measures peak, RMS and eight octave bands (Hann-windowed Goertzel) and an AnalysisHub publishes the newest measurement of each tap to its subscribers, with a one-line text form to send over a socket; ui::fourier has the FFT and DFT, and the engine's tap nodes copy audio out of the graph. Not wired: the daemon does not yet feed taps into the hub or expose it on the control socket. Lead 2026-10-17: not ready: audiod does not call the new policy/engine code yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-engine",
-     "filter": "analysis::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "fourier::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-engine",
-     "filter": "graph::tests"
-    }
-   ],
-   "ready_note": "The analyser and the hub are built and tested; connecting taps to the hub on the control socket is not done."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioDSPGraph.framework",
@@ -2855,23 +2789,9 @@
    "doc": "",
    "bifrost": "springboard/audio/policy/src/dsp.rs; springboard/audio/engine/src/graph.rs",
    "status": "partial",
-   "note": "System-wide DSP graph. audio::policy::dsp assigns processing stages (gain, equaliser, compressor, noise gate, delay, limiter) to each device, adds per-application stages, orders a limiter last, sums the added latency and saves and loads the whole configuration; the render-side node graph with format-checked connections and a cycle check is audio::engine::graph. Not wired: audiod does not yet load the plan or run the stages on a device path.",
+   "note": "System-wide DSP graph. audio::policy::dsp assigns processing stages (gain, equaliser, compressor, noise gate, delay, limiter) to each device, adds per-application stages, orders a limiter last, sums the added latency and saves and loads the whole configuration; the render-side node graph with format-checked connections and a cycle check is audio::engine::graph. Not wired: audiod does not yet load the plan or run the stages on a device path. Lead 2026-10-17: not ready: audiod does not call the new policy/engine code yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-policy",
-     "filter": "dsp::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-engine",
-     "filter": "graph::tests"
-    }
-   ],
-   "ready_note": "The system graph model is built and tested; the audio thread does not run the planned stages yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioDSPManager.framework",
@@ -2890,28 +2810,9 @@
    "doc": "",
    "bifrost": "springboard/audio/policy/src/dsp.rs; springboard/audio/units/src/host.rs; springboard/audio/units/src/registry.rs",
    "status": "partial",
-   "note": "DSP stage manager. audio::policy::dsp decides which stages run for each device and each application stream: disabled stages drop out, a session category bypasses the stages that colour the signal (a recording session bypasses the equaliser, compressor, delay and limiter of the microphone chain), and chains are validated when set; hosting and registration of processing units is audio::units. Not wired: audiod does not yet ask the manager for a plan.",
+   "note": "DSP stage manager. audio::policy::dsp decides which stages run for each device and each application stream: disabled stages drop out, a session category bypasses the stages that colour the signal (a recording session bypasses the equaliser, compressor, delay and limiter of the microphone chain), and chains are validated when set; hosting and registration of processing units is audio::units. Not wired: audiod does not yet ask the manager for a plan. Lead 2026-10-17: not ready: audiod does not call the new policy/engine code yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-policy",
-     "filter": "dsp::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-units",
-     "filter": "host::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-units",
-     "filter": "registry::tests"
-    }
-   ],
-   "ready_note": "The manager's decisions are built and tested; the daemon does not consult it yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioPasscode.framework",
@@ -2972,23 +2873,9 @@
    "doc": "",
    "bifrost": "springboard/audio/policy/src/clients.rs; springboard/audio/policy/src/volume.rs; springboard/audio/hal/src/lib.rs",
    "status": "partial",
-   "note": "Applications of the audio server. audio::policy::clients keeps one process object per client (the application id from Hello, the pid from the socket credentials, an object id that is never reused, the streams running in each direction) and answers which applications are playing or recording; per-app volume is audio::policy::volume and the client library over the control socket is audio::hal. Not wired: the daemon's control loop does not yet feed the registry.",
+   "note": "Applications of the audio server. audio::policy::clients keeps one process object per client (the application id from Hello, the pid from the socket credentials, an object id that is never reused, the streams running in each direction) and answers which applications are playing or recording; per-app volume is audio::policy::volume and the client library over the control socket is audio::hal. Not wired: the daemon's control loop does not yet feed the registry. Lead 2026-10-17: not ready: audiod does not call the new policy/engine code yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-policy",
-     "filter": "clients::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-policy",
-     "filter": "volume::tests"
-    }
-   ],
-   "ready_note": "The application registry is built and tested; the control loop does not feed it yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriver.framework",
@@ -3047,18 +2934,9 @@
    "doc": "",
    "bifrost": "springboard/audio/driver/src/transport.rs; springboard/audio/shm/src/lib.rs",
    "status": "partial",
-   "note": "Transports. audio::driver::transport gives the device transports a type (pci, usb, hdmi, bluetooth, network, virtual, aggregate) with hot-plug, wireless and hardware properties, and a CompositeDriver that serves devices from several providers by uid ownership, so a driver other than ALSA plugs in; the shared-memory transport between the server and its clients (activation records, rings, zero timestamps) is audio::shm. Not wired: audiod's ServerCore still takes a plain driver list instead of a CompositeDriver.",
+   "note": "Transports. audio::driver::transport gives the device transports a type (pci, usb, hdmi, bluetooth, network, virtual, aggregate) with hot-plug, wireless and hardware properties, and a CompositeDriver that serves devices from several providers by uid ownership, so a driver other than ALSA plugs in; the shared-memory transport between the server and its clients (activation records, rings, zero timestamps) is audio::shm. Not wired: audiod's ServerCore still takes a plain driver list instead of a CompositeDriver. Lead 2026-10-17: not ready: audiod does not use the composite transport yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-driver",
-     "filter": "transport::tests"
-    }
-   ],
-   "ready_note": "The transport types and the composite provider driver are built and tested; audiod does not use the composite yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriverTransports_IOA2.framework",
@@ -3077,23 +2955,9 @@
    "doc": "",
    "bifrost": "springboard/audio/alsa/src/lib.rs (ALSA driver over the kernel uapi)",
    "status": "partial",
-   "note": "Device transport goes through ALSA over the kernel uapi. Gap: there is no IOAudio-family user-client transport, which is not needed on this OS.",
+   "note": "Device transport goes through ALSA over the kernel uapi. Gap: there is no IOAudio-family user-client transport, which is not needed on this OS. Lead 2026-10-17: not ready: audiod does not use the composite transport yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-alsa",
-     "filter": "driver::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-alsa",
-     "filter": "pcm::tests"
-    }
-   ],
-   "ready_note": "Device transport over the ALSA driver (driver and pcm tests). The IOAudio user-client transport is an Apple kernel-extension family and is not needed on this OS (n/a for that part)."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriverTransports_IOP.framework",
@@ -3112,23 +2976,9 @@
    "doc": "",
    "bifrost": "springboard/audio/driver/src/transport.rs; springboard/audio/driver/src/lib.rs (DeviceIo trait)",
    "status": "partial",
-   "note": "Provider-based device IO. Any Driver is a provider; audio::driver::transport::CompositeDriver routes enumerate, open, controls, set_control and events to the provider that owns a uid (ALSA, loopback, the plug-in driver, or a future network or Bluetooth driver), refuses a uid two providers publish and re-enumerates when a device appears. Not wired: audiod does not use the composite yet.",
+   "note": "Provider-based device IO. Any Driver is a provider; audio::driver::transport::CompositeDriver routes enumerate, open, controls, set_control and events to the provider that owns a uid (ALSA, loopback, the plug-in driver, or a future network or Bluetooth driver), refuses a uid two providers publish and re-enumerates when a device appears. Not wired: audiod does not use the composite yet. Lead 2026-10-17: not ready: audiod does not use the composite transport yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-driver",
-     "filter": "transport::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-driver",
-     "filter": "plugin::tests"
-    }
-   ],
-   "ready_note": "Provider routing is built and tested; audiod does not use the composite yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioSession.framework",
@@ -3147,23 +2997,9 @@
    "doc": "",
    "bifrost": "springboard/audio/policy/src/sessions.rs; springboard/sdk/src/audio_session.rs",
    "status": "partial",
-   "note": "Audio sessions. The SDK models categories, activation, interruptions and route changes for apps (sdk::audio_session), and audio::policy::sessions enforces them for the server: a category allows only its directions, activating a session that does not mix interrupts the others that do not mix (pause) and ending it resumes them, a session can duck the others, and the mixer gain follows. Not wired: audiod does not yet call the arbiter when streams are created (the policy daemon loop is not attached to the HAL client yet).",
+   "note": "Audio sessions. The SDK models categories, activation, interruptions and route changes for apps (sdk::audio_session), and audio::policy::sessions enforces them for the server: a category allows only its directions, activating a session that does not mix interrupts the others that do not mix (pause) and ending it resumes them, a session can duck the others, and the mixer gain follows. Not wired: audiod does not yet call the arbiter when streams are created (the policy daemon loop is not attached to the HAL client yet). Lead 2026-10-17: not ready: audiod does not call the new policy/engine code yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-audio-policy",
-     "filter": "sessions::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "audio_session::tests"
-    }
-   ],
-   "ready_note": "The enforcement arbiter is built and tested; the daemon does not call it yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioSessionServer.framework",
