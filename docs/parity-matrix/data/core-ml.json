@@ -12,7 +12,7 @@
       "apple": "MLModel, MLModelAsset, MLModelError",
       "bifrost": "springboard/ui/src/ml_model.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API loads a compiled model or runs a prediction"
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API loads a compiled model or runs a prediction Built 2026-10-17: bifrost_app::core_ml re-exports Model, AnalysisRuntime and the feature provider types for apps, so an app can load a model and run a prediction in the SDK (sdk/src/core_ml.rs, tests core_ml::tests). Wiring into a shell app is still open."
     },
     {
       "feature": "Model inputs and outputs",
@@ -33,7 +33,7 @@
       "apple": "MLComputeDevice, MLCPUComputeDevice, MLGPUComputeDevice, MLNeuralEngineComputeDevice, MLComputePlan, MLComputePolicy",
       "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform"
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform Built 2026-10-17: bifrost_app::core_ml::model_device places every MLComputePolicy on the CPU, the only device model work uses (tests core_ml::tests::every_policy_places_model_work_on_the_cpu)."
     },
     {
       "feature": "Stateful models",
