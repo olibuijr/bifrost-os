@@ -418,6 +418,8 @@ pub mod maps;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
+/// Main-thread run loop timer queue (`RunLoop`): the non-`Send` scheduler that `debounce` and `throttle` use.
+pub mod run_loop;
 pub mod async_publisher;
 pub mod object_graph;
 pub mod ndarray;
