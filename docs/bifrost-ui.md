@@ -3273,6 +3273,36 @@ smooths lux readings and maps light to a brightness fraction, but no sensor read
 `bifrost_ui::route_prediction::suggest` ranks known audio destinations by use count and recency; the picker has no
 persisted history or integration yet. These remain partial; see `docs/parity/os-gaps-03.md`.
 
+## Unary file system module (FSKit `FSUnaryFileSystem`, `bifrost_app::fs_module`, `bifrost_app::fuse`)
+
+FSKit lets an app extension ship a file system module that runs in user space and is mounted by the system. Linux has
+FUSE in the kernel, so the module side can be built without a C dependency: `bifrost_app::fuse` speaks the kernel
+protocol (`include/uapi/linux/fuse.h`, 7.31 and later) over `/dev/fuse` as pure encode and decode, and
+`bifrost_app::fuse_mount` mounts the session through the `fusermount3` helper (the helper opens `/dev/fuse` and passes
+it back over a socket pair with `SCM_RIGHTS`, as libfuse does), then serves it on the calling thread.
+
+Decisions:
+- The app implements `fs_module::UnaryFileSystem` for one volume: `lookup`, `attributes`, `read_directory`, `read`,
+  `parent`, optional `statistics`. Item identifiers are the FUSE node ids (the root is `ROOT_ITEM` = 1). This is the
+  FSVolume and FSItem model, named in BifrOSt style.
+- `fs_module::Dispatcher` answers the kernel's requests for that volume: `handle(bytes) -> Option<reply bytes>`, with
+  no reply for FORGET and INTERRUPT. It adds "." and ".." to READDIR and resumes a listing by entry position.
+- Read only. Opens for writing get EROFS; unknown opcodes get ENOSYS. Attribute and lookup answers are cached for one
+  second by the kernel.
+- The wire structs are `#[repr(C)]` with the uapi layout; `const` asserts pin their sizes (88-byte attributes,
+  128-byte entries, 40-byte READ arguments, and so on).
+
+Gaps, stated rather than skipped:
+- Read only. No write, create, rename, or attribute change operations (WRITE, SETATTR, MKDIR, UNLINK and the rest).
+- No shell mount service and no grant check: nothing mounts an app's module on the user's behalf, and the grant broker
+  (`docbroker.rs`) does not yet cover a module's resource. Mounted volumes do not appear in the file panel sidebar.
+- No `mount(2)` path (needs `CAP_SYS_ADMIN`); no optional FUSE features are negotiated, so no splice, writeback cache
+  or async reads.
+- No probe-then-mount step and no resource kinds beyond the path the app hands over (no block device, no generic URL).
+- Written without building or running (owner rule). The protocol module has host tests from byte buffers
+  (`fuse::tests`, `fs_module::tests`); `fuse_mount` has no test because it needs a mount. Parity needs a Midget check
+  with a real mount before the row can be `parity`.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the
