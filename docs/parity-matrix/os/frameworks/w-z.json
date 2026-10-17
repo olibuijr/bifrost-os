@@ -124,8 +124,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Support code for Apple Wallet and payment passes; BifrOSt has no Wallet or Apple Pay service.",
    "rea": [],
    "method": "assessed"
   },
@@ -148,7 +148,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper selection and day/night schedule in springboard/src/shell/wallpaper_schedule.rs and wallpaper_page.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperAnalytics.framework",
@@ -166,8 +175,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Analytics for wallpaper use; BifrOSt does not mirror analytics collection.",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +196,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper extension points are not offered; BifrOSt wallpapers are image files chosen in springboard/src/shell/wallpaper_page.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -208,8 +217,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper selection and cover fit are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs; no SDK wallpaper API.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +238,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper changes go through the shell's wallpaper page and schedule; there is no wallpaper service process.",
    "rea": [],
    "method": "assessed"
   },
@@ -253,7 +262,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Wallpaper picker page in springboard/src/shell/wallpaper_page.rs (grid, cover fit, dimming) is the Settings wallpaper UI; its unit tests run on the VM."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperTypes.framework",
@@ -271,8 +289,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Wallpaper kinds are represented by the shell's file-based wallpaper list in springboard/src/shell/wallpaper_page.rs; no typed SDK model.",
    "rea": [],
    "method": "assessed"
   },
@@ -292,8 +310,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Watch companion lists; BifrOSt has no watch companion.",
    "rea": [],
    "method": "assessed"
   },
@@ -313,8 +331,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Process watchdog is systemd: RuntimeWatchdogSec and RebootWatchdogSec in /etc/systemd/system.conf.d/bifrost-watchdog.conf (springboard/src/installer/plan.rs); no app-facing client API.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +352,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Watchdog service registration is systemd unit management; BifrOSt sets watchdog timeouts in the system manager, with no app-facing API.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +373,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Analytics for weather use; BifrOSt does not mirror analytics collection.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +394,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Forecast model and parsing live in springboard/src/shell/weather/data.rs and the Weather app; no SDK weather module.",
    "rea": [],
    "method": "assessed"
   },
@@ -397,8 +415,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "No weather daemon; the shell fetches forecasts in springboard/src/shell/weather/data.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -421,7 +439,16 @@
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast fetch and parsing in springboard/src/shell/weather/data.rs, used by the Weather app; data comes from Open-Meteo, not the Apple service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherFoundation.framework",
@@ -439,8 +466,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Forecast data types live in springboard/src/shell/weather/data.rs; no SDK API for other apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -460,8 +487,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Weather glyphs and icons are in springboard/src/shell/weather/glyph.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -565,8 +592,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "First-run setup in springboard/src/setup.rs covers the BifrOSt setup steps; Apple's onboarding screens and their flows are not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -586,8 +613,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Health wellness UI for wearables; BifrOSt has no wearable health data.",
    "rea": [],
    "method": "assessed"
   },
@@ -607,8 +634,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-internal Wi-Fi analytics; BifrOSt does not collect Wi-Fi telemetry, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -628,8 +655,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-account Wi-Fi network sync across devices; BifrOSt has no iCloud-style sync service for Wi-Fi profiles.",
    "rea": [],
    "method": "assessed"
   },
@@ -694,7 +721,21 @@
    "status": "os",
    "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wifi_page::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "nmcli --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Wi-Fi settings page (springboard/src/shell/wifi_page.rs) over NetworkManager (nmcli), the Arch networkmanager package the installer enables."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiVelocity.framework",
@@ -712,8 +753,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "n/a",
+   "note": "Apple-internal Wi-Fi performance tuning service with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -733,8 +774,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Widget state is kept by the shell (springboard/src/shell/widgets/mod.rs, today.rs); no app-facing observation API.",
    "rea": [],
    "method": "assessed"
   },
@@ -754,8 +795,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Widgets are drawn by the shell (springboard/src/shell/widgets/mod.rs); apps cannot supply widget rendering.",
    "rea": [],
    "method": "assessed"
   },
@@ -775,8 +816,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Window placement and tiling live in the shell (springboard/src/shell/desk.rs, desk_occlusion.rs); no app-facing API.",
    "rea": [],
    "method": "assessed"
   },
@@ -796,8 +837,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "partial",
+   "note": "Window management is in the shell (springboard/src/shell/desk.rs); apps get their own toplevels, and there is no app-facing window manager API.",
    "rea": [],
    "method": "assessed"
   },
@@ -1048,8 +1089,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Intelligence writing assistance; BifrOSt has no OS-level writing model service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1069,8 +1110,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Intelligence writing assistance UI; BifrOSt has no OS-level writing model service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1111,8 +1152,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode UI automation internals; BifrOSt drives apps through its control sockets and MCP tools.",
    "rea": [],
    "method": "assessed"
   },
@@ -1132,8 +1173,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode test bootstrap internals; BifrOSt tests run with cargo test.",
    "rea": [],
    "method": "assessed"
   },
@@ -1153,8 +1194,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode test-runner internals; BifrOSt tests run with cargo test.",
    "rea": [],
    "method": "assessed"
   },
