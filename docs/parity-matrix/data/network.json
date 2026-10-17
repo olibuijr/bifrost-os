@@ -38,9 +38,9 @@
     {
       "feature": "Multicast groups",
       "apple": "NWConnectionGroup",
-      "bifrost": "springboard/ui/src/multicast.rs (MulticastMembership); springboard/src/net/share.rs (join_multicast_v4)",
+      "bifrost": "springboard/ui/src/multicast.rs (MulticastMembership); springboard/sdk/src/network_group.rs (ConnectionGroup); springboard/src/net/share.rs (join_multicast_v4)",
       "status": "partial",
-      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group."
+      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group. Built 2026-10-17: sdk network_group::ConnectionGroup binds a UDP socket, joins and leaves IPv4 groups through the membership model (invalid joins refused before the socket), sends to a group, receives without blocking, and sets TTL and loopback; tests network_group::tests. Gap: std::net has no SO_REUSEADDR, so two groups cannot share one port on a host; not checked on Midget."
     },
     {
       "feature": "Custom Ethernet frames",
