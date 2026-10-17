@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-10-17
+
+- Add the location purpose string to the manifest (`[privacy] location`). Location requests without it are refused.
+
 ## 0.5.1 — 2026-10-14
 
 - Clamp the location accuracy ring to the current map viewport instead of a fixed 2000 pt size.
