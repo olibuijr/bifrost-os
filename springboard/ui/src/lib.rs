@@ -679,6 +679,7 @@ pub mod column_summary;
 pub mod searchquery;
 pub mod searchindex;
 pub mod searchstore;
+pub mod mdimport;
 pub mod usersearch;
 pub mod spotlight_tool;
 pub mod index_client;
