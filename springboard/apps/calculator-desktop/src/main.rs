@@ -12,6 +12,7 @@ mod history;
 mod icon;
 mod paste;
 mod programmer;
+mod rates;
 mod rpn;
 mod sci;
 mod tape;
@@ -28,11 +29,16 @@ use std::path::Path;
 
 struct CalculatorApp {
     calc: Option<calc::Calculator>,
+    /// The currency rates: the cached copy, and a daily check in the background.
+    rates: Option<rates::Service>,
     /// Window > Always on Top: the window stays above the other windows.
     floating: bool,
     /// Copies sent to the shell's pasteboard that have not been answered yet: (request, number).
     copies: Vec<(u32, String)>,
 }
+
+/// How often a running rates check is looked at, in milliseconds.
+const RATES_POLL_MS: f64 = 250.0;
 
 /// How many unanswered copies are kept; the oldest is dropped beyond this.
 const MAX_PENDING_COPIES: usize = 16;
@@ -59,7 +65,13 @@ impl App for CalculatorApp {
         let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
         match &mut self.calc {
             Some(c) => c.set_size(w, h),
-            None => self.calc = Some(calc::Calculator::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone())),
+            None => {
+                let service = rates::Service::start(&ctx.data_dir, rates::today());
+                let mut calc = calc::Calculator::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone());
+                calc.set_rates(service.rates(), service.pending());
+                self.calc = Some(calc);
+                self.rates = Some(service);
+            }
         }
     }
 
@@ -181,11 +193,25 @@ impl App for CalculatorApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        self.calc.as_mut().is_some_and(|c| c.tick(&ctx.ui, t))
+        // a finished rates check replaces the copy in use and redraws the Convert panel
+        let mut changed = false;
+        if let (Some(service), Some(calc)) = (&mut self.rates, &mut self.calc) {
+            if service.poll() {
+                calc.set_rates(service.rates(), service.pending());
+                changed = true;
+            }
+        }
+        self.calc.as_mut().is_some_and(|c| c.tick(&ctx.ui, t)) || changed
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.calc.as_ref().and_then(|c| c.next_wake(t))
+        let calc = self.calc.as_ref().and_then(|c| c.next_wake(t));
+        // while a check runs, look again soon so the result shows without input
+        let rates = self.rates.as_ref().filter(|s| s.pending()).map(|_| t + RATES_POLL_MS);
+        match (calc, rates) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
@@ -225,5 +251,5 @@ pub fn test_ui() -> bifrost_app::Ui {
 }
 
 fn main() {
-    bifrost_app::run(CalculatorApp { calc: None, floating: false, copies: Vec::new() });
+    bifrost_app::run(CalculatorApp { calc: None, rates: None, floating: false, copies: Vec::new() });
 }

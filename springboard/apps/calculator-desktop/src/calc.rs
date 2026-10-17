@@ -3,7 +3,7 @@
 //! clipboard copy/paste and Icelandic decimal-comma formatting.
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
-use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_LARGE_TITLE_PT};
+use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEGMENT_ON, SEPARATOR_C, WHITE};
 use bifrost_app::controls::prefs_layout::m;
@@ -15,7 +15,8 @@ use bifrost_app::widgets;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::{clipboard, Event, TextCache};
 use crate::chrome;
-use crate::convert::{Category, Converter};
+use crate::convert::{self, Category, Converter};
+use crate::rates::Rates;
 use crate::copy_service::CopyRequest;
 use crate::engine::{Engine, Key, Operator};
 use crate::eval::Angle;
@@ -98,6 +99,8 @@ const CATEGORY_H_PT: f32 = 26.0;
 /// Category segments per row; the thirteen categories take two rows.
 const CATEGORY_COLS: usize = 7;
 const UNITS_H_PT: f32 = 26.0;
+/// The rates line under the units, shown for Currency only.
+const RATES_NOTE_H_PT: f32 = 16.0;
 
 fn category_rows() -> usize {
     (Category::ALL.len() + CATEGORY_COLS - 1) / CATEGORY_COLS
@@ -300,6 +303,9 @@ pub struct Calculator {
     cache_style: (u32, u32, bool),
     /// Convert mode while set; the keypad then enters a conversion instead of a calculation.
     convert: Option<Converter>,
+    /// The day's currency rates (None until a copy is loaded) and whether a check for new ones is running.
+    rates: Option<Rates>,
+    rates_pending: bool,
     /// The last Copy, waiting for the app to send it to the shell's pasteboard (taken with `take_copy`).
     copy_request: Option<CopyRequest>,
     /// Programmer mode while set (the keypad enters integers in a base on a fixed-size word).
@@ -364,6 +370,8 @@ impl Calculator {
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
             convert: None,
+            rates: None,
+            rates_pending: false,
             copy_request: None,
             programmer: None,
             rpn: Rpn::default(),
@@ -433,7 +441,9 @@ impl Calculator {
 
     fn layout(&self, ui: &Ui) -> Layout {
         let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
-        let extra = self.strip_h(ui) + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 };
+        let extra = self.strip_h(ui)
+            + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 }
+            + if self.convert_is_currency() { ui.pt(RATES_NOTE_H_PT) } else { 0.0 };
         let available = bottom - ui.pt(DISPLAY_AND_KEYS_RESERVE_PT) - extra;
         if self.wide(ui) {
             let gap = ui.pt(SPACE_S);
@@ -828,6 +838,20 @@ impl Calculator {
     }
 
     /// The From unit, the Swap control and the To unit, left to right, across the keypad's width.
+    fn convert_is_currency(&self) -> bool {
+        self.convert.as_ref().is_some_and(|c| c.category == Category::Currency)
+    }
+
+    /// Hands the day's currency rates to the calculator and to an open Convert panel.
+    pub fn set_rates(&mut self, rates: Option<Rates>, pending: bool) {
+        self.rates = rates;
+        self.rates_pending = pending;
+        if let Some(conv) = &mut self.convert {
+            conv.rates = self.rates.clone();
+        }
+        self.dirty = true;
+    }
+
     fn unit_rects(&self, ui: &Ui) -> [(f32, f32, f32, f32); 3] {
         let l = self.layout(ui);
         let gap = ui.pt(SPACE_M);
@@ -875,6 +899,13 @@ impl Calculator {
             self.label(s, ui, &title, MAC_CALLOUT_PT, LABEL.now(), rect);
         }
         let [from, swap, to] = self.unit_rects(ui);
+        if conv.category == Category::Currency {
+            let note = convert::rates_note(conv.rates.as_ref(), self.rates_pending);
+            let (x, w) = (l.x, l.width);
+            let y = ui.pt(units_top_pt() + UNITS_H_PT + 2.0);
+            let note = ui.fit(&note, MAC_FOOTNOTE_PT, w);
+            self.label(s, ui, &note, MAC_FOOTNOTE_PT, LABEL_2.now(), (x, y, w, ui.pt(RATES_NOTE_H_PT)));
+        }
         let from_text = ui.fit(&format!("From: {}", conv.from_unit().name), MAC_BODY_PT, from.2 - ui.pt(SPACE_L));
         s.fill_rrect(RectF::new(from.0, from.1, from.2, from.3), capsule(from.2, from.3), utility());
         self.label(s, ui, &from_text, MAC_BODY_PT, LABEL.now(), from);
@@ -1231,7 +1262,7 @@ impl Calculator {
             Target::Mode(mode) => self.set_mode(mode),
             Target::Key(i) => self.press_index(ui, i),
             Target::Backspace => self.press_basic(ui, Key::Backspace),
-            Target::ShowConvert => self.convert = Some(Converter::default()),
+            Target::ShowConvert => self.convert = Some(Converter { rates: self.rates.clone(), ..Converter::default() }),
             Target::LeaveConvert => self.convert = None,
             Target::Category(index) => {
                 if let (Some(conv), Some(category)) = (self.convert.as_mut(), Category::ALL.get(index)) {
