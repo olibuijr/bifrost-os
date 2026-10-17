@@ -10,7 +10,7 @@ use bifrost_core::json::Json;
 use bifrost_maps::geocode::{Geocoder, DEFAULT_BASE};
 use bifrost_maps::net::{Live, Net, Offline};
 use bifrost_maps::source::user_agent;
-use bifrost_maps::state::{Act, MENU_COLLECTIONS};
+use bifrost_maps::state::{Act, Shared, SharedData, MENU_COLLECTIONS};
 use bifrost_maps::units::UnitsSetting;
 use bifrost_maps::window::Window;
 use bifrost_maps::rpc;
@@ -39,6 +39,8 @@ struct MapsApp {
     w: Option<Window>,
     /// the windows the person opened, front to back of the app's registry; each one has its own map state
     extra: Vec<ExtraWindow>,
+    /// the data every window shares (library, pins, units, areas), made when the first window is configured
+    shared: Option<SharedData>,
     net: Arc<dyn Net>,
     kb: bool,
     path_request: Option<u32>,
@@ -83,7 +85,7 @@ fn go_items(w: &Window) -> Vec<AppMenuItem> {
         AppMenuItem::submenu("Add Place to Collection"),
     ];
     for i in 0..MENU_COLLECTIONS {
-        let title = w.maps.library.collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
+        let title = w.maps.lib().collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
         items.push(sub(item(w, Act::AddToCollection(i), &title, "")));
     }
     items.push(AppMenuItem::separator());
@@ -106,7 +108,8 @@ impl MapsApp {
         let Ok(id) = ctx.open_window(WindowSpec::new("Maps", pw, ph)) else { return false };
         let pt = ctx.ui.pt(1.0);
         let px = ((pw * pt) as i32, (ph * pt) as i32);
-        let win = Window::new(&ctx.ui, px.0, px.1, ctx.data_dir.clone(), VERSION, self.net.clone());
+        let Some(shared) = self.shared.clone() else { return false };
+        let win = Window::with_shared(&ctx.ui, px.0, px.1, ctx.data_dir.clone(), VERSION, self.net.clone(), shared);
         self.extra.push(ExtraWindow { id, win, px });
         true
     }
@@ -123,7 +126,9 @@ impl App for MapsApp {
         match &mut self.w {
             Some(win) => win.set_size(w, h),
             None => {
-                self.w = Some(Window::new(&ctx.ui, w, h, ctx.data_dir.clone(), VERSION, self.net.clone()));
+                let shared = Shared::open(&ctx.data_dir);
+                self.shared = Some(shared.clone());
+                self.w = Some(Window::with_shared(&ctx.ui, w, h, ctx.data_dir.clone(), VERSION, self.net.clone(), shared));
                 self.path_request = Some(network_path::request_path(ctx));
                 dock_tile::set_menu(ctx, &[MenuItem { id: DOCK_NEW_WINDOW, title: "New Window".into(), enabled: true }]);
             }
@@ -343,7 +348,7 @@ impl App for MapsApp {
 }
 
 fn main() {
-    bifrost_app::run(MapsApp { w: None, extra: Vec::new(), net: net(), kb: false, path_request: None });
+    bifrost_app::run(MapsApp { w: None, extra: Vec::new(), shared: None, net: net(), kb: false, path_request: None });
 }
 
 #[cfg(test)]

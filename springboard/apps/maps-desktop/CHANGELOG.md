@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 — 2026-10-17
+
+- One shared store for every window: the saved places, the pins, the units setting and the offline areas are held once for the app (`state::Shared`) and saved from there. Two windows no longer overwrite each other's favorites and pins. The camera, the card and open sheets stay per window.
+- The view and map type saved in settings.json are the last window's, so a restart reopens the view of the window that saved last.
+
 ## 0.6.0 — 2026-10-17
 
 - File > New Window (Cmd+N) and the Dock menu's New Window open another Maps window. Each window has its own map state (view, pins, route, card); the window's own map and card take touches. Keys, the menu bar and the toolbar still act on the main window.

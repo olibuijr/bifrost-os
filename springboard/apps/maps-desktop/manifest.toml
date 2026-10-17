@@ -1,6 +1,6 @@
 id = "is.olibuijr.maps.desktop"
 name = "Maps"
-version = "0.6.0"
+version = "0.6.1"
 exec = "bifrost-maps"
 icon = "icon.png"
 min_shell = "0.4.84"

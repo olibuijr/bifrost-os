@@ -18,7 +18,51 @@ use crate::units::{format_distance, format_duration, DistanceUnits, UnitsSetting
 use crate::view::{MapView, Pins};
 use bifrost_app::controls::TextField;
 use bifrost_core::json::{self, Json};
+use std::cell::{Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
+
+/// The data every window of the app shares: the saved places (library), the pins, the units setting and the offline
+/// areas. The app holds one copy and every window works on it, and it is saved from here, so two windows cannot
+/// overwrite each other's data. Per-window state (the camera, the card, open sheets) stays in `Maps`.
+pub struct Shared {
+    pub library: Library,
+    pub pins: Pins,
+    pub units_setting: UnitsSetting,
+    pub areas: Areas,
+    root: PathBuf,
+}
+
+/// The shared data, held by every window of the app.
+pub type SharedData = Rc<RefCell<Shared>>;
+
+impl Shared {
+    /// Loads the shared data from the app's data folder: the library, the areas, and the pins and units in settings.json.
+    pub fn open(root: &Path) -> SharedData {
+        let settings = std::fs::read_to_string(root.join("settings.json")).ok().and_then(|t| json::parse(&t).ok());
+        let s = settings.as_ref();
+        let mut pins = Pins::default();
+        if let Some(list) = s.and_then(|j| j.get("pins")).and_then(Json::as_array) {
+            for p in list {
+                if let (Some(la), Some(lo)) = (p.get("lat").and_then(Json::number), p.get("lon").and_then(Json::number)) {
+                    let _ = pins.add(&p.str_field("label").unwrap_or_default(), la, lo);
+                }
+            }
+        }
+        let units_setting = UnitsSetting::from_key(&s.and_then(|j| j.str_field("units")).unwrap_or_default());
+        Rc::new(RefCell::new(Shared { library: store::load(root), pins, units_setting, areas: areas::load(root), root: root.to_path_buf() }))
+    }
+
+    /// Writes the saved places.
+    pub fn save_library(&self) {
+        let _ = store::save(&self.root, &self.library);
+    }
+
+    /// Writes the offline areas.
+    pub fn save_areas(&self) {
+        let _ = areas::save(&self.root, &self.areas);
+    }
+}
 
 /// Reykjavik, until the person has moved the map.
 pub const START: (f64, f64, f64) = (64.1466, -21.9426, 11.0);
@@ -208,12 +252,11 @@ pub struct Suggestion {
 
 pub struct Maps {
     root: PathBuf,
+    /// the data every window shares (library, pins, units, areas); see `Shared`
+    shared: SharedData,
     pub view: MapView,
-    pub pins: Pins,
     pub map_type: MapType,
-    pub units_setting: UnitsSetting,
     pub region_metric: bool,
-    pub library: Library,
     pub panel: Panel,
     pub query: TextField,
     suggestor: Suggestor,
@@ -232,8 +275,6 @@ pub struct Maps {
     pub tracks: Vec<(String, Vec<(f64, f64)>)>,
     pub offline_area: Option<OfflineArea>,
     pub progress: Option<(usize, usize)>,
-    /// the areas kept offline, listed in the Download Map card
-    pub areas: Areas,
     /// the area being downloaded, added to `areas` when it finishes
     pending_area: Option<SavedArea>,
     /// the collection whose places show on the map
@@ -268,20 +309,18 @@ pub fn region_is_metric() -> bool {
 }
 
 impl Maps {
+    /// A map state with its own shared data, opened from the data folder (one window, or a test).
     pub fn new(root: &Path, version: &str, width: f64, height: f64) -> Maps {
+        Maps::with_shared(root, version, width, height, Shared::open(root))
+    }
+
+    /// A window's map state over the app's shared data. Every window of the app is given the same `shared`.
+    pub fn with_shared(root: &Path, version: &str, width: f64, height: f64, shared: SharedData) -> Maps {
         let settings = std::fs::read_to_string(root.join("settings.json")).ok().and_then(|t| json::parse(&t).ok());
         let s = settings.as_ref();
         let num = |k: &str| s.and_then(|j| j.get(k)).and_then(Json::number);
         let text = |k: &str| s.and_then(|j| j.str_field(k)).unwrap_or_default();
         let (lat, lon, zoom) = (num("lat").unwrap_or(START.0), num("lon").unwrap_or(START.1), num("zoom").unwrap_or(START.2));
-        let mut pins = Pins::default();
-        if let Some(list) = s.and_then(|j| j.get("pins")).and_then(Json::as_array) {
-            for p in list {
-                if let (Some(la), Some(lo)) = (p.get("lat").and_then(Json::number), p.get("lon").and_then(Json::number)) {
-                    let _ = pins.add(&p.str_field("label").unwrap_or_default(), la, lo);
-                }
-            }
-        }
         let geocoder_base = Some(text("geocoder_url")).filter(|u| !u.is_empty()).unwrap_or_else(|| DEFAULT_BASE.to_string());
         let geocoder = Geocoder::new(&geocoder_base, &user_agent(version)).or_else(|_| Geocoder::new(DEFAULT_BASE, &user_agent(version))).expect("the default geocoder is valid");
         let routing = Some(text("routing_url")).filter(|u| !u.is_empty());
@@ -292,12 +331,10 @@ impl Maps {
         let show_traffic = traffic.is_some() && matches!(s.and_then(|j| j.get("traffic")), Some(Json::Bool(true)));
         Maps {
             root: root.to_path_buf(),
+            shared,
             view: MapView::new(lat, lon, zoom, width, height),
-            pins,
             map_type: MapType::from_key(&text("map_type")),
-            units_setting: UnitsSetting::from_key(&text("units")),
             region_metric: region_is_metric(),
-            library: store::load(root),
             panel: Panel::None,
             query: TextField::new(),
             suggestor: Suggestor::default(),
@@ -315,7 +352,6 @@ impl Maps {
             tracks: Vec::new(),
             offline_area: None,
             progress: None,
-            areas: areas::load(root),
             pending_area: None,
             shown_collection: None,
             note: None,
@@ -334,6 +370,38 @@ impl Maps {
             version: version.to_string(),
             dirty_settings: false,
         }
+    }
+
+    /// The saved places, shared by every window. Do not hold the borrow across a call into `Maps`.
+    pub fn lib(&self) -> Ref<'_, Library> {
+        Ref::map(self.shared.borrow(), |s| &s.library)
+    }
+
+    pub fn lib_mut(&self) -> RefMut<'_, Library> {
+        RefMut::map(self.shared.borrow_mut(), |s| &mut s.library)
+    }
+
+    /// The pins, shared by every window.
+    pub fn pins(&self) -> Ref<'_, Pins> {
+        Ref::map(self.shared.borrow(), |s| &s.pins)
+    }
+
+    pub fn pins_mut(&self) -> RefMut<'_, Pins> {
+        RefMut::map(self.shared.borrow_mut(), |s| &mut s.pins)
+    }
+
+    /// The offline areas, shared by every window.
+    pub fn areas(&self) -> Ref<'_, Areas> {
+        Ref::map(self.shared.borrow(), |s| &s.areas)
+    }
+
+    pub fn areas_mut(&self) -> RefMut<'_, Areas> {
+        RefMut::map(self.shared.borrow_mut(), |s| &mut s.areas)
+    }
+
+    /// The Units setting, shared by every window.
+    pub fn units_setting(&self) -> UnitsSetting {
+        self.shared.borrow().units_setting
     }
 
     pub fn root(&self) -> &Path {
@@ -368,22 +436,27 @@ impl Maps {
 
     /// Writes the settings and the saved places when they changed.
     pub fn persist(&mut self) {
-        let _ = store::save(&self.root, &self.library);
+        self.shared.borrow().save_library();
         if !self.dirty_settings {
             return;
         }
         self.dirty_settings = false;
         let (lat, lon) = self.view.centre();
-        let pins = Json::Arr(
-            self.pins
-                .items()
-                .iter()
-                .map(|p| Json::Obj(vec![("label".into(), Json::Str(p.label.clone())), ("lat".into(), Json::Num(p.lat)), ("lon".into(), Json::Num(p.lon))]))
-                .collect(),
-        );
+        let (pins, units) = {
+            let shared = self.shared.borrow();
+            let pins = Json::Arr(
+                shared
+                    .pins
+                    .items()
+                    .iter()
+                    .map(|p| Json::Obj(vec![("label".into(), Json::Str(p.label.clone())), ("lat".into(), Json::Num(p.lat)), ("lon".into(), Json::Num(p.lon))]))
+                    .collect(),
+            );
+            (pins, shared.units_setting.key().to_string())
+        };
         let mut fields = vec![
             ("map_type".to_string(), Json::Str(self.map_type.key().into())),
-            ("units".to_string(), Json::Str(self.units_setting.key().into())),
+            ("units".to_string(), Json::Str(units)),
             ("lat".to_string(), Json::Num(lat)),
             ("lon".to_string(), Json::Num(lon)),
             ("zoom".to_string(), Json::Num(self.view.zoom())),
@@ -408,7 +481,7 @@ impl Maps {
     // ---- units ----
 
     pub fn units(&self) -> DistanceUnits {
-        self.units_setting.resolve(self.region_metric)
+        self.units_setting().resolve(self.region_metric)
     }
 
     pub fn distance_text(&self, metres: f64) -> String {
@@ -493,7 +566,7 @@ impl Maps {
             let name = links::coordinates_text(lat, lon);
             out.push(Suggestion { title: name.clone(), subtitle: "Coordinates".into(), place: Place::new(&name, lat, lon), local: true });
         }
-        let saved = self.library.all_places();
+        let saved = self.lib().all_places();
         for p in route::search_offline(&saved, q, 3) {
             out.push(Suggestion { title: p.title().to_string(), subtitle: "Saved place".into(), place: p.clone(), local: true });
         }
@@ -521,7 +594,7 @@ impl Maps {
         if self.view.zoom() < PLACE_ZOOM - 1.0 {
             self.view.set_zoom(PLACE_ZOOM);
         }
-        self.library.add_recent(Saved::new(&place.name, place.lat, place.lon));
+        self.lib_mut().add_recent(Saved::new(&place.name, place.lat, place.lon));
         self.selected = Some(place);
         self.selected_pin = None;
         self.panel = Panel::Place;
@@ -553,16 +626,16 @@ impl Maps {
     /// Drop Pin at a position (the context menu of the map): the pin is added and its card opens.
     pub fn drop_pin_at(&mut self, lat: f64, lon: f64) {
         let label = "Dropped Pin";
-        if self.pins.add(label, lat, lon).is_err() {
+        if self.pins_mut().add(label, lat, lon).is_err() {
             return;
         }
-        let i = self.pins.items().len() - 1;
+        let i = self.pins().items().len() - 1;
         self.select_pin(i);
         self.touch_settings();
     }
 
     fn select_pin(&mut self, i: usize) {
-        let Some(p) = self.pins.items().get(i).cloned() else { return };
+        let Some(p) = self.pins().items().get(i).cloned() else { return };
         self.selected = Some(Place::new(&p.label, p.lat, p.lon));
         self.selected_pin = Some(i);
         self.panel = Panel::Place;
@@ -593,14 +666,14 @@ impl Maps {
             Act::ToggleFavorite => has_place,
             Act::CopyLink | Act::CopyCoordinates | Act::Share => true,
             Act::RemovePin => self.selected_pin.is_some(),
-            Act::GoHome => self.library.home.is_some(),
-            Act::GoWork => self.library.work.is_some(),
+            Act::GoHome => self.lib().home.is_some(),
+            Act::GoWork => self.lib().work.is_some(),
             Act::MeasureUndo | Act::MeasureClear => !self.measure.points().is_empty(),
             Act::PickRoute(i) => i < self.routes.len(),
-            Act::AddToCollection(i) => has_place && i < self.library.collections.len(),
+            Act::AddToCollection(i) => has_place && i < self.lib().collections.len(),
             Act::StartDownload => self.offline_area.is_some_and(|a| a.count().1) && self.progress.is_none(),
-            Act::DeleteArea(i) => i < self.areas.list.len(),
-            Act::ClearRecents => !self.library.recents.is_empty(),
+            Act::DeleteArea(i) => i < self.areas().list.len(),
+            Act::ClearRecents => !self.lib().recents.is_empty(),
             Act::StartNavigation => self.panel == Panel::Directions && self.current_route().is_some_and(|r| nav::can_follow(r, self.profile)),
             Act::EndNavigation => self.nav.is_some(),
             _ => true,
@@ -611,10 +684,10 @@ impl Maps {
         match act {
             Act::ToggleTraffic => self.show_traffic,
             Act::MapType(m) => self.map_type == m,
-            Act::Units(u) => self.units_setting == u,
+            Act::Units(u) => self.units_setting() == u,
             Act::Measure => self.panel == Panel::Measure,
             Act::Profile(p) => self.profile == p,
-            Act::ToggleFavorite => self.selected.as_ref().is_some_and(|p| self.library.is_favorite(p.lat, p.lon)),
+            Act::ToggleFavorite => self.selected.as_ref().is_some_and(|p| self.lib().is_favorite(p.lat, p.lon)),
             _ => false,
         }
     }
@@ -634,7 +707,7 @@ impl Maps {
                 }
             }
             Act::Units(u) => {
-                self.units_setting = u;
+                self.shared.borrow_mut().units_setting = u;
                 self.touch_settings();
             }
             Act::Search => return vec![Effect::FocusSearch],
@@ -648,7 +721,7 @@ impl Maps {
             }
             Act::RemovePin => {
                 if let Some(i) = self.selected_pin.take() {
-                    self.pins.remove(i);
+                    self.pins_mut().remove(i);
                     self.selected = None;
                     self.panel = Panel::None;
                     self.touch_settings();
@@ -688,10 +761,12 @@ impl Maps {
                 return vec![Effect::CancelDownload];
             }
             Act::DeleteArea(i) => {
-                if let Some(gone) = self.areas.remove(i) {
+                let removed = self.areas_mut().remove(i);
+                if let Some(gone) = removed {
                     let cache = TileCache::new(&self.root, &gone.source_key);
-                    areas::delete_tiles(&cache, &self.areas.orphans(&gone));
-                    let _ = areas::save(&self.root, &self.areas);
+                    let orphans = self.areas().orphans(&gone);
+                    areas::delete_tiles(&cache, &orphans);
+                    self.shared.borrow().save_areas();
                     self.note = Some(format!("Removed {}", gone.name));
                 }
             }
@@ -721,26 +796,28 @@ impl Maps {
             Act::ToggleFavorite => {
                 if let Some(p) = &self.selected {
                     let saved = Saved::new(&p.name, p.lat, p.lon);
-                    self.library.toggle_favorite(saved);
+                    self.lib_mut().toggle_favorite(saved);
                 }
             }
             Act::SetHome => {
                 let (name, (lat, lon)) = self.target();
                 let full = self.selected.as_ref().map_or(name, |p| p.name.clone());
-                self.library.set_home(Some(Saved::new(&full, lat, lon)));
+                self.lib_mut().set_home(Some(Saved::new(&full, lat, lon)));
             }
             Act::SetWork => {
                 let (name, (lat, lon)) = self.target();
                 let full = self.selected.as_ref().map_or(name, |p| p.name.clone());
-                self.library.set_work(Some(Saved::new(&full, lat, lon)));
+                self.lib_mut().set_work(Some(Saved::new(&full, lat, lon)));
             }
             Act::GoHome => {
-                if let Some(h) = self.library.home.clone() {
+                let home = self.lib().home.clone();
+                if let Some(h) = home {
                     self.show_place(h.to_place());
                 }
             }
             Act::GoWork => {
-                if let Some(w) = self.library.work.clone() {
+                let work = self.lib().work.clone();
+                if let Some(w) = work {
                     self.show_place(w.to_place());
                 }
             }
@@ -757,21 +834,22 @@ impl Maps {
             Act::NewCollection => {
                 let name = (1..)
                     .map(|n| format!("Collection {n}"))
-                    .find(|n| !self.library.collections.iter().any(|c| c.name.eq_ignore_ascii_case(n)))
+                    .find(|n| !self.lib().collections.iter().any(|c| c.name.eq_ignore_ascii_case(n)))
                     .unwrap_or_else(|| "Collection".to_string());
-                if let Ok(i) = self.library.new_collection(&name) {
+                let made = self.lib_mut().new_collection(&name);
+                if let Ok(i) = made {
                     if let Some(p) = &self.selected {
-                        self.library.add_to_collection(i, Saved::new(&p.name, p.lat, p.lon));
+                        self.lib_mut().add_to_collection(i, Saved::new(&p.name, p.lat, p.lon));
                     }
                 }
             }
             Act::AddToCollection(i) => {
                 if let Some(p) = &self.selected {
-                    self.library.add_to_collection(i, Saved::new(&p.name, p.lat, p.lon));
+                    self.lib_mut().add_to_collection(i, Saved::new(&p.name, p.lat, p.lon));
                 }
             }
             Act::OpenGpx => return vec![Effect::OpenGpx],
-            Act::ClearRecents => self.library.clear_recents(),
+            Act::ClearRecents => self.lib_mut().clear_recents(),
             Act::Locate => {
                 self.locating = true;
                 self.note = Some("Finding your location\u{2026}".to_string());
@@ -821,8 +899,10 @@ impl Maps {
 
     /// Shows a saved collection's places on the map.
     pub fn show_collection(&mut self, index: usize) {
-        let Some(c) = self.library.collections.get(index) else { return };
-        let pts: Vec<(f64, f64)> = c.places.iter().map(|p| (p.lat, p.lon)).collect();
+        let pts: Vec<(f64, f64)> = match self.lib().collections.get(index) {
+            Some(c) => c.places.iter().map(|p| (p.lat, p.lon)).collect(),
+            None => return,
+        };
         self.shown_collection = Some(index);
         if !pts.is_empty() {
             self.view.fit(&pts, 80.0);
@@ -835,7 +915,8 @@ impl Maps {
     fn open_directions(&mut self) -> Vec<Effect> {
         let (name, to) = self.target();
         // the start: one the person chose, else where they are, else Home, else the middle of the map
-        let from = match (&self.library.home, self.route_from.as_ref(), self.here) {
+        let home = self.lib().home.clone();
+        let from = match (&home, self.route_from.as_ref(), self.here) {
             (_, Some(f), _) if f.1 != to => f.clone(),
             (_, _, Some(h)) if (h.lat, h.lon) != to => ("Current location".to_string(), (h.lat, h.lon)),
             (Some(h), _, _) if (h.lat, h.lon) != to => (h.title().to_string(), (h.lat, h.lon)),
@@ -1135,7 +1216,7 @@ impl Maps {
             return Err("the file has no waypoints or tracks".into());
         }
         for (name, lat, lon) in &g.waypoints {
-            let _ = self.pins.add(name, *lat, *lon);
+            let _ = self.pins_mut().add(name, *lat, *lon);
         }
         let mut km = 0.0;
         for (name, pts) in &g.tracks {
@@ -1217,8 +1298,8 @@ impl Maps {
     pub fn download_done(&mut self) {
         self.progress = None;
         if let Some(entry) = self.pending_area.take() {
-            self.areas.add(entry);
-            let _ = areas::save(&self.root, &self.areas);
+            self.areas_mut().add(entry);
+            self.shared.borrow().save_areas();
         }
         self.note = Some("The area is saved for offline use".to_string());
     }
@@ -1338,7 +1419,7 @@ mod tests {
     #[test]
     fn saved_places_are_suggested_before_the_geocoder_ones() {
         let mut m = maps("saved");
-        m.library.toggle_favorite(Saved::new("Hallgrimskirkja, Reykjavik", 64.1417, -21.9266));
+        m.lib_mut().toggle_favorite(Saved::new("Hallgrimskirkja, Reykjavik", 64.1417, -21.9266));
         type_query(&mut m, "hallgrims", 0);
         m.search_done("hallgrims", Ok(vec![Place::new("Hallgrimskirkja, Reykjavik", 64.1417, -21.9266), Place::new("Hallgrims Street", 65.0, -20.0)]));
         let s = m.suggestions();
@@ -1353,7 +1434,7 @@ mod tests {
         m.choose(Place::new("Perlan, Reykjavik", 64.1295, -21.9186));
         assert_eq!(m.panel, Panel::Place);
         assert_eq!(m.view.zoom(), PLACE_ZOOM);
-        assert_eq!(m.library.recents[0].title(), "Perlan");
+        assert_eq!(m.lib().recents[0].title(), "Perlan");
     }
 
     #[test]
@@ -1369,18 +1450,18 @@ mod tests {
     fn dropping_a_pin_selects_it_and_remove_pin_takes_it_away() {
         let mut m = maps("pin");
         m.drop_pin_at(64.2, -21.8);
-        assert_eq!(m.pins.items().len(), 1);
+        assert_eq!(m.pins().items().len(), 1);
         assert_eq!(m.selected_pin, Some(0));
         assert_eq!(m.panel, Panel::Place);
         m.act(Act::RemovePin, 0);
-        assert!(m.pins.items().is_empty());
+        assert!(m.pins().items().is_empty());
         assert_eq!(m.panel, Panel::None);
     }
 
     #[test]
     fn tapping_a_pin_opens_its_card() {
         let mut m = maps("tappin");
-        m.pins.add("Camp", 64.5, -21.5).unwrap();
+        m.pins_mut().add("Camp", 64.5, -21.5).unwrap();
         m.tap(64.5, -21.5, Some(0));
         assert_eq!(m.selected.as_ref().unwrap().name, "Camp");
         assert!(m.can(Act::RemovePin));
@@ -1399,11 +1480,11 @@ mod tests {
             m.persist();
         }
         let m = Maps::new(&root, "1.0.0", 800.0, 600.0);
-        assert_eq!(m.pins.items().len(), 1);
+        assert_eq!(m.pins().items().len(), 1);
         assert_eq!(m.map_type, MapType::Satellite);
-        assert_eq!(m.units_setting, UnitsSetting::Miles);
+        assert_eq!(m.units_setting(), UnitsSetting::Miles);
         assert!((m.view.centre().0 - 65.0).abs() < 1e-6);
-        assert_eq!(m.library.favorites.len(), 1);
+        assert_eq!(m.lib().favorites.len(), 1);
     }
 
     #[test]
@@ -1431,7 +1512,7 @@ mod tests {
         m.act(Act::NewCollection, 0);
         assert!(m.can(Act::AddToCollection(0)));
         m.act(Act::AddToCollection(0), 0);
-        assert_eq!(m.library.collections[0].places.len(), 1, "a place is kept once");
+        assert_eq!(m.lib().collections[0].places.len(), 1, "a place is kept once");
         assert!(Act::AddToCollection(MENU_COLLECTIONS - 1).menu_id().is_some());
     }
 
@@ -1514,13 +1595,13 @@ mod tests {
         let mut m = maps("coll");
         m.choose(Place::new("Perlan", 64.1295, -21.9186));
         m.act(Act::NewCollection, 0);
-        assert_eq!(m.library.collections[0].name, "Collection 1");
-        assert_eq!(m.library.collections[0].places.len(), 1);
+        assert_eq!(m.lib().collections[0].name, "Collection 1");
+        assert_eq!(m.lib().collections[0].places.len(), 1);
         m.act(Act::NewCollection, 0);
-        assert_eq!(m.library.collections[1].name, "Collection 2");
+        assert_eq!(m.lib().collections[1].name, "Collection 2");
         m.choose(Place::new("Harpa", 64.15, -21.93));
         m.act(Act::AddToCollection(1), 0);
-        assert_eq!(m.library.collections[1].places.len(), 2);
+        assert_eq!(m.lib().collections[1].places.len(), 2);
         m.show_collection(1);
         assert_eq!(m.shown_collection, Some(1));
     }
@@ -1597,13 +1678,13 @@ mod tests {
         m.act(Act::Download, 0);
         m.act(Act::StartDownload, 0);
         m.download_done();
-        assert_eq!(m.areas.list.len(), 1);
-        assert!(m.areas.list[0].tiles > 0);
+        assert_eq!(m.areas().list.len(), 1);
+        assert!(m.areas().list[0].tiles > 0);
         assert!(m.can(Act::DeleteArea(0)) && !m.can(Act::DeleteArea(1)));
         let again = Maps::new(m.root(), "1.0.0", 800.0, 600.0);
-        assert_eq!(again.areas.list.len(), 1, "the list is saved");
+        assert_eq!(again.areas().list.len(), 1, "the list is saved");
         m.act(Act::DeleteArea(0), 0);
-        assert!(m.areas.list.is_empty());
+        assert!(m.areas().list.is_empty());
     }
 
     #[test]
@@ -1613,7 +1694,7 @@ mod tests {
         m.act(Act::StartDownload, 0);
         m.act(Act::CancelDownload, 0);
         m.download_done();
-        assert!(m.areas.list.is_empty());
+        assert!(m.areas().list.is_empty());
     }
 
     #[test]
@@ -1632,7 +1713,7 @@ mod tests {
             <trk><name>Walk</name><trkseg><trkpt lat="64.1" lon="-21.9"/><trkpt lat="64.2" lon="-21.8"/></trkseg></trk></gpx>"#;
         let summary = m.gpx_loaded(text).unwrap();
         assert!(summary.contains("1 waypoint") && summary.contains("1 track"), "{summary}");
-        assert_eq!(m.pins.items().len(), 1);
+        assert_eq!(m.pins().items().len(), 1);
         assert_eq!(m.tracks.len(), 1);
         assert!(m.gpx_loaded("<gpx></gpx>").is_err());
         assert!(m.gpx_loaded("not xml at all").is_err());
@@ -1742,7 +1823,7 @@ mod tests {
     #[test]
     fn directions_start_from_the_current_location_when_it_is_known() {
         let mut m = maps("here-origin");
-        m.library.set_home(Some(Saved::new("Home", 64.2, -21.8)));
+        m.lib_mut().set_home(Some(Saved::new("Home", 64.2, -21.8)));
         m.position_update(fix((64.14, -21.9)), 0);
         m.choose(Place::new("Perlan", 64.1295, -21.9186));
         m.act(Act::Directions, 0);
@@ -1966,5 +2047,32 @@ mod tests {
         assert_eq!(fx.first(), Some(&Effect::TrackLocation(false)));
         assert!(matches!(fx.get(1), Some(Effect::Route { .. })));
         assert!(m.nav.is_none());
+    }
+
+    #[test]
+    fn two_windows_keep_each_others_favorites_and_pins() {
+        let root = std::env::temp_dir().join(format!("maps-shared-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let shared = Shared::open(&root);
+        let mut a = Maps::with_shared(&root, "test", 800.0, 600.0, shared.clone());
+        let mut b = Maps::with_shared(&root, "test", 800.0, 600.0, shared.clone());
+        a.lib_mut().toggle_favorite(Saved::new("Alpha, Reykjavik", 64.1, -21.9));
+        a.pins_mut().add("Alpha pin", 64.1, -21.9).unwrap();
+        a.touch_settings();
+        a.persist();
+        b.lib_mut().toggle_favorite(Saved::new("Beta, Akureyri", 65.7, -18.1));
+        b.pins_mut().add("Beta pin", 65.7, -18.1).unwrap();
+        b.touch_settings();
+        b.persist();
+        // the first window saves again after the second one: its save must not drop the second window's places
+        a.persist();
+        // a reload from disk, as a restarted app would do, sees both windows' places and pins
+        let reloaded = Maps::new(&root, "test", 800.0, 600.0);
+        assert_eq!(reloaded.lib().favorites.len(), 2);
+        assert!(reloaded.lib().is_favorite(64.1, -21.9));
+        assert!(reloaded.lib().is_favorite(65.7, -18.1));
+        assert_eq!(reloaded.pins().items().len(), 2);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
