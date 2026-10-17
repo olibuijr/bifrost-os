@@ -110,13 +110,18 @@ fn request(app_id: &str, has_permission: bool) -> Status {
     })
 }
 
-/// The pixel size read from the head of the picture file; 0 x 0 when it cannot be read.
+/// The pixel size read from the head of the file: the picture's header, or for a movie the first video track's `moov`
+/// (a movie with its `moov` box after the first `HEADER_BYTES` reports 0 x 0). 0 x 0 when it cannot be read.
 fn pixel_size(p: &Photo) -> (usize, usize) {
     use std::io::Read;
     let Ok(f) = std::fs::File::open(&p.path) else { return (0, 0) };
     let mut head = Vec::new();
     if f.take(HEADER_BYTES).read_to_end(&mut head).is_err() {
         return (0, 0);
+    }
+    let name = p.path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    if kind_for_name(name).is_video() {
+        return photo_media::movie_pixel_size(&head).unwrap_or((0, 0));
     }
     imageio::pixel_size(&head).unwrap_or((0, 0))
 }

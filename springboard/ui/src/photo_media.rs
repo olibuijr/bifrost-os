@@ -157,6 +157,33 @@ pub fn quicktime_content_id(movie: &[u8]) -> Option<String> {
     None
 }
 
+/// The pixel size of a QuickTime or MP4 movie: the picture size of its first video track (`moov/trak` whose `mdia/hdlr`
+/// is `vide`, with a non-zero size in `tkhd`). None when the movie has no such track in the bytes given. A movie whose
+/// `moov` box comes after the bytes given (not faststart) has none.
+pub fn movie_pixel_size(movie: &[u8]) -> Option<(usize, usize)> {
+    let moov = find_box(movie, b"moov")?;
+    boxes(moov).into_iter().filter(|(kind, _)| kind == b"trak").find_map(|(_, trak)| {
+        let handler = find_box(find_box(trak, b"mdia")?, b"hdlr")?.get(8..12)?;
+        if handler != b"vide" {
+            return None;
+        }
+        track_size(trak)
+    })
+}
+
+/// The picture size of one track from its `tkhd`: the width and height are 16.16 fixed-point numbers at the end of
+/// the box. A version 1 box has 64-bit times, so its fields are wider.
+fn track_size(trak: &[u8]) -> Option<(usize, usize)> {
+    let tkhd = find_box(trak, b"tkhd")?;
+    // version and flags, the times, the track id, a reserved word and the duration
+    let fields = if *tkhd.first()? == 1 { 4 + 8 + 8 + 4 + 4 + 8 } else { 4 + 4 + 4 + 4 + 4 + 4 };
+    // reserved (8), layer, alternate group, volume and reserved (2 each), then the 36-byte matrix
+    let at = fields + 8 + 8 + 36;
+    let width = u32::from_be_bytes(tkhd.get(at..at + 4)?.try_into().ok()?) >> 16;
+    let height = u32::from_be_bytes(tkhd.get(at + 4..at + 8)?.try_into().ok()?) >> 16;
+    (width > 0 && height > 0).then_some((width as usize, height as usize))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,6 +257,49 @@ mod tests {
             Item { name: "IMG_7.mov".into(), content_id: clip },
         ];
         assert_eq!(pair_moving(&items), vec![Pair { still: 0, movie: 1 }]);
+    }
+
+    /// A track with a `tkhd` of the given version and picture size, and a handler of the given type.
+    fn track(version: u8, handler: &[u8; 4], width: u32, height: u32) -> Vec<u8> {
+        let mut tkhd = vec![version, 0, 0, 7];
+        let times = if version == 1 { 8 + 8 + 4 + 4 + 8 } else { 4 + 4 + 4 + 4 + 4 };
+        tkhd.extend(std::iter::repeat(0).take(times));
+        tkhd.extend(std::iter::repeat(0).take(8 + 8 + 36));
+        tkhd.extend_from_slice(&(width << 16).to_be_bytes());
+        tkhd.extend_from_slice(&(height << 16).to_be_bytes());
+        let mut hdlr = vec![0; 8];
+        hdlr.extend_from_slice(handler);
+        let mut mdia = boxed(b"hdlr", &hdlr);
+        mdia = boxed(b"mdia", &mdia);
+        let mut body = boxed(b"tkhd", &tkhd);
+        body.extend_from_slice(&mdia);
+        boxed(b"trak", &body)
+    }
+
+    /// A movie made of the given tracks in `moov`.
+    fn movie_with(tracks: &[Vec<u8>]) -> Vec<u8> {
+        let mut moov_body = Vec::new();
+        for t in tracks {
+            moov_body.extend_from_slice(t);
+        }
+        boxed(b"moov", &moov_body)
+    }
+
+    #[test]
+    fn the_movie_size_is_the_first_video_track() {
+        let sound = track(0, b"soun", 0, 0);
+        let picture = track(0, b"vide", 1920, 1080);
+        assert_eq!(movie_pixel_size(&movie_with(&[sound, picture])), Some((1920, 1080)));
+        let wide = track(1, b"vide", 3840, 2160);
+        assert_eq!(movie_pixel_size(&movie_with(&[wide])), Some((3840, 2160)), "a version 1 header");
+    }
+
+    #[test]
+    fn a_movie_without_a_picture_or_a_moov_has_no_size() {
+        assert_eq!(movie_pixel_size(&movie_with(&[track(0, b"soun", 0, 0)])), None);
+        assert_eq!(movie_pixel_size(&movie_with(&[track(0, b"vide", 0, 0)])), None, "a zero size");
+        assert_eq!(movie_pixel_size(&boxed(b"ftyp", b"qt  \0\0\0\0")), None, "no moov in these bytes");
+        assert_eq!(movie_pixel_size(b"garbage"), None);
     }
 
     fn item(name: &str, id: Option<&str>) -> Item {
