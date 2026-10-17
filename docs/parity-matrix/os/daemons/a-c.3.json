@@ -102,8 +102,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs, springboard/src/shell/services/accessibility_display.rs",
+   "ready_note": "The accessibility models (ax, captions, braille cell translation) run in the shell, and the braille service answers translation requests. The only part not built is a Braille display driver, which needs hardware.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accessibility_display::tests"
+    }
+   ],
    "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "rea": [],
    "method": "rule"
@@ -160,7 +189,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/disks.rs",
    "status": "partial",
-   "note": "disk attach handling; no general USB attach notice; built on arm; not yet verified on Midget",
+   "note": "disk attach handling; a removable disk that appears posts a USB Disk Connected notice in Settings (built 2026-10-17, tests shell::services::disks::tests); built on arm; not yet verified on Midget",
    "rea": [],
    "method": "heuristic"
   },
@@ -221,8 +250,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/usernotif.rs",
+   "bifrost": "springboard/src/shell/usernotif.rs, springboard/src/shell/notify/store.rs, springboard/src/shell/notify/schedule.rs",
+   "ready_note": "Delivery, storage and scheduling of notifications run in the shell (usernotif.rs, notify/store.rs, notify/schedule.rs). Push delivery through the reference push service is an Apple service BifrOSt does not have, so it is not part of this row.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::schedule::tests"
+    }
+   ],
    "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
    "rea": [],
    "method": "audit"
@@ -1932,8 +1980,22 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/notify/permission.rs",
+   "bifrost": "springboard/src/shell/notify/permission.rs, springboard/src/shell/permission_sheet.rs",
+   "ready_note": "Notification permission requests are answered by the shell (notify/permission.rs) and shown as shell sheets (permission_sheet.rs). There is no separate process, which is a design choice, not a missing job.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::permission::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    }
+   ],
    "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
    "rea": [],
    "method": "audit"
@@ -3264,7 +3326,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; the `domains` service shares text values per app and per first-party suite, synchronised on write; numbers, flags and data are not served yet",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are not served yet",
    "rea": [],
    "method": "rule"
   },
@@ -3974,7 +4036,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, in memory for the shell's lifetime; no file backend, no sync and no shared stores yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); no sync and no shared stores yet",
    "rea": [],
    "method": "rule"
   },

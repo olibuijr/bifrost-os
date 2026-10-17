@@ -3,13 +3,13 @@
 //! reads and writes its own domain, named by its app id. A shared suite (the `UserDefaults(suiteName:)` case) is named
 //! by the caller and is open to first-party apps only, so a third-party app cannot read a suite another app uses.
 //!
-//! Values are text only in this first version. The model also holds numbers, flags and data; a method for those is
-//! not built yet, and the reads of such values answer an error rather than a wrong value.
+//! Values are text, flags (JSON booleans) and numbers (JSON numbers; a whole number is stored as an integer, any
+//! other as a double). Data is not served yet: a read of stored data answers an error rather than a wrong value.
 //!
 //! Methods (JSON parameters, `key` required):
-//! - `get {key, suite?}` answers `{value}`: the text, or `null` when unset. An app's own domain falls back to the
-//!   global domain, as `CFPreferencesCopyAppValue` does.
-//! - `set {key, value, suite?}` writes the text and synchronises at once, answering `{saved}`.
+//! - `get {key, suite?}` answers `{value}`: the text, flag or number, or `null` when unset. An app's own domain falls
+//!   back to the global domain, as `CFPreferencesCopyAppValue` does.
+//! - `set {key, value, suite?}` writes the text, flag or number and synchronises at once, answering `{saved}`.
 //! - `remove {key, suite?}` deletes the key and synchronises, answering `{saved}`.
 //!
 //! The folder is `<apphost root>/domains`.
@@ -68,13 +68,23 @@ pub fn answer(root: &Path, app_id: &str, suite: Option<&str>, method: &str, para
             let value = match found {
                 None => Json::Null,
                 Some(Value::Str(s)) => Json::Str(s),
-                Some(_) => return Err(format!("{key} is not text; this service reads text only")),
+                Some(Value::Bool(b)) => Json::Bool(b),
+                Some(Value::Int(i)) => Json::Num(i as f64),
+                Some(Value::Double(d)) => Json::Num(d),
+                Some(_) => return Err(format!("{key} holds data; this service reads text, flags and numbers only")),
             };
             Ok(Json::Obj(vec![("value".into(), value)]))
         }
         "set" => {
-            let text = params.str_field("value").ok_or("value must be a string")?;
-            store.set_value(&key, Some(Value::Str(text)), domain, CURRENT_USER, ANY_HOST);
+            let stored = match params.get("value") {
+                Some(Json::Str(s)) => Value::Str(s.clone()),
+                Some(Json::Bool(b)) => Value::Bool(*b),
+                Some(Json::Num(n)) if !n.is_finite() => return Err("value must be a finite number".into()),
+                Some(Json::Num(n)) if n.fract() == 0.0 && n.abs() < 9.0e15 => Value::Int(*n as i64),
+                Some(Json::Num(n)) => Value::Double(*n),
+                _ => return Err("value must be a string, a flag or a number".into()),
+            };
+            store.set_value(&key, Some(stored), domain, CURRENT_USER, ANY_HOST);
             Ok(Json::Obj(vec![("saved".into(), Json::Bool(store.app_synchronize(domain)))]))
         }
         "remove" => {
@@ -123,6 +133,19 @@ mod tests {
         assert_eq!(get(&root, "app.two", Some("group.shared"), "count"), Json::Str("3".into()));
         answer(&root, "app.two", Some("group.shared"), "remove", &obj(vec![("key", Json::Str("count".into()))])).unwrap();
         assert_eq!(get(&root, "app.one", Some("group.shared"), "count"), Json::Null);
+    }
+
+    #[test]
+    fn flags_and_numbers_round_trip_with_their_type() {
+        let root = scratch("typed");
+        let set_json = |key: &str, v: Json| answer(&root, "app.one", None, "set", &obj(vec![("key", Json::Str(key.into())), ("value", v)])).unwrap();
+        set_json("enabled", Json::Bool(true));
+        set_json("count", Json::Num(7.0));
+        set_json("ratio", Json::Num(0.25));
+        assert_eq!(get(&root, "app.one", None, "enabled"), Json::Bool(true));
+        assert_eq!(get(&root, "app.one", None, "count"), Json::Num(7.0));
+        assert_eq!(get(&root, "app.one", None, "ratio"), Json::Num(0.25));
+        assert!(answer(&root, "app.one", None, "set", &obj(vec![("key", Json::Str("n".into())), ("value", Json::Null)])).is_err());
     }
 
     #[test]
