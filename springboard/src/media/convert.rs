@@ -202,6 +202,39 @@ pub fn apply_gains(img: &mut Image, gains: Gains) {
     }
 }
 
+/// White-balance gains that follow a scene across frames. Each frame moves them a fraction of the way toward that frame's
+/// gray-world gains, so a live preview does not flicker from frame to frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Smoothed {
+    gains: Gains,
+}
+
+impl Smoothed {
+    /// The share of the way each frame moves the gains toward its own.
+    pub const RATE: f32 = 0.1;
+
+    /// The gains now in force.
+    pub fn gains(&self) -> Gains {
+        self.gains
+    }
+
+    /// Takes one frame into account and returns the gains to apply to it. A frame with no opaque colour leaves the
+    /// gains where they are.
+    pub fn update(&mut self, img: &Image) -> Gains {
+        if let Some(target) = gray_world_gains(img) {
+            let toward = |from: f32, to: f32| from + (to - from) * Self::RATE;
+            self.gains = Gains { r: toward(self.gains.r, target.r), g: toward(self.gains.g, target.g), b: toward(self.gains.b, target.b) };
+        }
+        self.gains
+    }
+}
+
+impl Default for Smoothed {
+    fn default() -> Self {
+        Smoothed { gains: Gains { r: 1.0, g: 1.0, b: 1.0 } }
+    }
+}
+
 /// Gray-world white balance of a frame in place. Returns the gains used, or `None` when the frame was left as it was.
 pub fn white_balance(img: &mut Image) -> Option<Gains> {
     let gains = gray_world_gains(img)?;
@@ -254,6 +287,27 @@ mod tests {
         assert_eq!(white_balance(&mut black), None);
         let mut clear = frame(vec![0; 4]);
         assert_eq!(white_balance(&mut clear), None);
+    }
+
+    #[test]
+    fn the_preview_gains_move_gradually_toward_the_scene() {
+        let yellow = frame(vec![opaque(200, 200, 100); 16]);
+        let mut s = Smoothed::default();
+        let first = s.update(&yellow);
+        assert!(first.b > 1.0 && first.b < 1.667, "one frame moves the gains only part of the way: {first:?}");
+        for _ in 0..200 {
+            s.update(&yellow);
+        }
+        let settled = s.gains();
+        assert!((settled.b - 1.667).abs() < 0.01, "the gains settle on the scene's: {settled:?}");
+    }
+
+    #[test]
+    fn a_frame_with_no_opaque_colour_keeps_the_gains() {
+        let mut s = Smoothed::default();
+        s.update(&frame(vec![opaque(200, 200, 100); 4]));
+        let before = s.gains();
+        assert_eq!(s.update(&frame(vec![0; 4])), before);
     }
 
     #[test]
