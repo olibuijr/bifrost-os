@@ -525,7 +525,21 @@
    "status": "partial",
    "note": "The ruby and ruby-rake Arch packages in the runtime list provide the interpreter, rake and the standard library, so Ruby programs run as ordinary processes. The reference bundle is Ruby 2.6. No SDK surface is needed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ruby --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "rake --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ruby and ruby-rake from the runtime list; Ruby programs run as ordinary processes. No SDK surface."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PAImaging.framework",
@@ -714,7 +728,21 @@
    "status": "partial",
    "note": "System updates and installs go through pacman, which the shell calls and reports as a source. Not covered: a package installer format (.pkg), the install-script service the reference runs in its XPC helper, and install receipts.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "pacman --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update"
+    }
+   ],
+   "ready_note": "System updates and installs go through pacman (shell/pacman_update.rs). No .pkg installer format, install-script service or receipts."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PackageUIKit.framework",
@@ -756,7 +784,16 @@
    "status": "partial",
    "note": "Partial: a read-only firewall view in the sysinfo app (Firewall category, firewall_rows) shows the nftables or iptables rules that are loaded and says when none are. Not built: any settings page or rule writes, so the user cannot change the packet filter from BifrOSt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-sysinfo",
+     "filter": "firewall_is_empty"
+    }
+   ],
+   "ready_note": "Read-only firewall view in the sysinfo app (firewall_rows) lists loaded nftables/iptables rules. No rule writes or settings page."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PacketParser.framework",
@@ -798,7 +835,16 @@
    "status": "partial",
    "note": "User-space crash reports from systemd-coredump, read through coredumpctl, appear in the Console diagnostics view. Not covered: kernel panic capture, which needs a kdump setup that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "diagnostics::"
+    }
+   ],
+   "ready_note": "systemd-coredump reports read via coredumpctl appear in the Console diagnostics view. Kernel panic capture is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PanicProcessingSupport.framework",
@@ -840,7 +886,16 @@
    "status": "partial",
    "note": "The home screen composes its wallpaper as a view in the scene, with a blurred dock backdrop. Not covered: the separate renderer service the reference runs in its XPC helper, and dynamic wallpapers.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "scene::"
+    }
+   ],
+   "ready_note": "Home screen composes its wallpaper as a scene view with a blurred dock backdrop (scene.rs, 6 tests). Dynamic wallpapers are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ParavirtualizedANE.framework",
@@ -1092,7 +1147,20 @@
    "status": "partial",
    "note": "Local password checks at login use pam_unix with a faillock lockout after 5 failures for 300 seconds. Not covered: a directory password server, password policy for accounts managed elsewhere, and password reset flows.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "grep -q pam_faillock.so /etc/pam.d/bifrost-login",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/etc/pam.d/bifrost-login"
+    }
+   ],
+   "ready_note": "Local password checks use pam_unix with pam_faillock (deny 5, 300 s) in /etc/pam.d/bifrost-login. Directory servers and reset flows are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PaymentUI.framework",
@@ -1239,7 +1307,16 @@
    "status": "partial",
    "note": "The Contacts app keeps the people records (names, groups and details) in contacts.rs. Not covered: person suggestions and the people picker used by other apps' share sheets.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "contacts::"
+    }
+   ],
+   "ready_note": "Contacts app keeps names, groups and details in contacts.rs (48 tests). Person suggestions and the share-sheet picker are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PeopleSuggester.framework",
@@ -1281,7 +1358,16 @@
    "status": "partial",
    "note": "The contact card and its detail rows are in details.rs. Not covered: the people picker and person cards that the reference shows in other apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "details::"
+    }
+   ],
+   "ready_note": "Contact card and detail rows in details.rs (12 tests). The cross-app people picker is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PerfPowerMetricMonitor.framework",
@@ -1344,7 +1430,16 @@
    "status": "partial",
    "note": "Host counters are read in host.rs: meminfo, zram and zswap usage, and vmstat paging. Not covered: power and battery metrics and the reference's service reader interface.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "host::"
+    }
+   ],
+   "ready_note": "Host counters (meminfo, zram/zswap, vmstat) are read in core host.rs. Power and battery metrics are in other files."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PerformanceAnalysis.framework",
@@ -1386,7 +1481,21 @@
    "status": "partial",
    "note": "Profile switching goes through power-profiles-daemon (powerprofilesctl set) and the interaction clock boost is in boost.rs. Not covered: a control surface for the reference's clock and thermal limits.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::boost"
+    },
+    {
+     "kind": "cmd",
+     "run": "powerprofilesctl --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Profile switching via power-profiles-daemon and the interaction clock boost in boost.rs (9 tests). No thermal control surface."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PerformanceTrace.framework",
@@ -1722,7 +1831,16 @@
    "status": "partial",
    "note": "The PhotoKit surface for the library, fetches and thumbnails is in photo_library.rs, and the Photos app reads it through springboard/src/shell/photos/library.rs. The reference's shared photo database and cloud sync are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::"
+    }
+   ],
+   "ready_note": "PhotoKit library surface, fetches and thumbnails in sdk photo_library.rs, read by the Photos app. No shared photo database or cloud sync."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoFoundationLegacy.framework",
@@ -1743,7 +1861,16 @@
    "status": "partial",
    "note": "The legacy Photos foundation (version 12.0) is covered by the same PhotoKit model in photo_library.rs. The migration of an older library format is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::"
+    }
+   ],
+   "ready_note": "Legacy photo foundation covered by the same PhotoKit model in photo_library.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoImaging.framework",
@@ -2310,7 +2437,16 @@
    "status": "partial",
    "note": "Bundle com.apple.zeolite.Planks is the reference Dock's tile layer. desktop_dock.rs keeps the Dock choices, tile progress and attention bounce, and dock_stack.rs adds the Downloads stack; Dock magnification is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock"
+    }
+   ],
+   "ready_note": "Dock tile layer: choices, tile progress and attention bounce in desktop_dock.rs, Downloads stack in dock_stack.rs. Dock magnification is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PlatformSSO.framework",
@@ -2415,7 +2551,16 @@
    "status": "partial",
    "note": "Extension points, extension identities and the manifest of enabled extensions are modelled in extension.rs, and the matching registry lives in bifrost_ui::extension.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "extension::"
+    }
+   ],
+   "ready_note": "Extension points, identities and the enabled-extension manifest are modelled in sdk extension.rs, matched by bifrost_ui::extension."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PlugInKitDaemon.framework",
@@ -2436,7 +2581,16 @@
    "status": "partial",
    "note": "extension_process.rs keeps the process table, one process per extension and host key, and its connections are in memory only. The reference daemon's persisted enablement state is not modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "extension_process::"
+    }
+   ],
+   "ready_note": "Process table with one process per extension and host key (extension_process.rs). Enablement state is in memory only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PnROnDeviceFramework.framework",
@@ -2499,7 +2653,16 @@
    "status": "partial",
    "note": "Feed parsing is in feed.rs and the podcast model in podcasts.rs. The reference's store catalogue and cloud sync are not part of BifrOSt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-podcasts",
+     "filter": "feed::"
+    }
+   ],
+   "ready_note": "Feed parsing in the Podcasts app (feed.rs, 13 tests). The store catalogue and cloud sync are not part of BifrOSt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PodcastsKit.framework",
@@ -2520,7 +2683,16 @@
    "status": "partial",
    "note": "The library behind the Podcasts app is in podcasts.rs. Playback and chapters are in media.rs and chapters.rs; the Podcasts app has no SDK surface of its own.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-podcasts",
+     "filter": "podcasts::"
+    }
+   ],
+   "ready_note": "Podcast library in podcasts.rs; playback and chapters in media.rs and chapters.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PoirotAnalytics.framework",
@@ -2814,7 +2986,21 @@
    "status": "partial",
    "note": "Battery level history: the shell samples the battery every five minutes and charts 24 hours in Settings. The reference's on-device power-log telemetry database and its collectors are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_sources"
+    }
+   ],
+   "ready_note": "Battery level history sampled every five minutes and charted for 24 hours (battery.rs), with power_sources in the SDK. No on-device power-log database."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PowerUI.framework",
@@ -2835,7 +3021,21 @@
    "status": "partial",
    "note": "Battery readout and time estimates in the shell and the Battery settings page. The reference's learned time-to-empty model is not shipped, so estimates come from the kernel's supply readings.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "power_supply"
+    }
+   ],
+   "ready_note": "Battery readout and time estimates from kernel supply readings (power_supply.rs) and the Battery settings page. No learned time-to-empty model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PowerlogControl.framework",
@@ -3024,7 +3224,16 @@
    "status": "partial",
    "note": "The shell's Quick Look service covers file previews. The reference shell kit also hosts developer preview windows, which BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "services::quick_look"
+    }
+   ],
+   "ready_note": "Shell Quick Look service covers file previews (quick_look.rs). Developer preview windows are not shipped."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PreviewsFoundationOS.framework",
@@ -3297,7 +3506,26 @@
    "status": "partial",
    "note": "Print model with paper, orientation and page options, print panel plug-ins and CUPS submission. Gap: the reference's printer-tool service and its paper, slot and finishing tables are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "print::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "print_panel::"
+    }
+   ],
+   "ready_note": "Print model (paper, orientation, page options), print panel plug-ins and CUPS submission. The reference printer-tool service and paper tables are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PrintingPrivate.framework",
@@ -3318,7 +3546,26 @@
    "status": "partial",
    "note": "CUPS and IPP printer discovery and job submission, and the Print & Scan settings page. Gap: the reference's printer-info and PDF plug-in bundles are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ipp::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::print_scan_page"
+    }
+   ],
+   "ready_note": "CUPS and IPP discovery and job submission, and the Print & Scan settings page. Printer-info and PDF plug-in bundles are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PrivacyPolicy.framework",
@@ -4368,7 +4615,16 @@
    "status": "partial",
    "note": "Parses search-panel text into filters that the shell search applies. Not covered: the reference generative query functions and free-form natural-language intent parsing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex"
+    }
+   ],
+   "ready_note": "Search-panel text is parsed into filters (parse_query in spotindex.rs, 23 tests). Natural-language intent parsing is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/QueryUnderstanding.framework",
@@ -4851,7 +5107,15 @@
    "status": "partial",
    "note": "Rolls the installer-defined Btrfs root back after a bad update, from the recovery subvolume. Gap: there is no separate recovery operating system to boot into, and the shell Recovery button only writes a mark.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-rollback.service"
+    }
+   ],
+   "ready_note": "Rolls the installer-defined Btrfs root back after a bad update from the recovery subvolume. No separate recovery OS; the shell Recovery button only writes a mark."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ReflectionInternal.framework",
@@ -4935,7 +5199,21 @@
    "status": "partial",
    "note": "Reminder lists, tags, alerts and due dates work in the reminders app on the shared calendar store. Not covered: a separate reminder database and cloud sync.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "model::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar_store::"
+    }
+   ],
+   "ready_note": "Reminder lists, tags, alerts and due dates on the shared calendar store. No separate reminder database or cloud sync."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ReminderKitInternal.framework",
@@ -5292,7 +5570,16 @@
    "status": "partial",
    "note": "The local update path is covered: the update agent checks, downloads and installs system packages, and the recovery guard gates base-system upgrades. Updates pushed by a managed-device server are not built, and the framework's exact role is inferred from its name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": ""
+    }
+   ],
+   "ready_note": "Local update path: the updated agent checks, downloads and installs packages and the recovery guard gates base upgrades. Managed-device pushes are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteTextInput.framework",
