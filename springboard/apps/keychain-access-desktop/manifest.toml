@@ -1,0 +1,12 @@
+id = "is.olibuijr.keychain-access.desktop"
+name = "Keychain Access"
+version = "0.1.0"
+exec = "bifrost-keychain-access"
+min_shell = "0.4.84"
+summary = "Browse the keychain items of the groups this app may read, and delete one. Secrets are never shown."
+category = "Utilities"
+kind = "system-app"
+architecture = "x86_64-linux"
+permissions = ["keychain"]
+keychain_groups = ["is.bifrost.passwords", "is.bifrost.account"]
+window = "full-size"
