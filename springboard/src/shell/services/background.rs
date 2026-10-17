@@ -1,5 +1,5 @@
 //! Background App Refresh: the shell runs an app's deferred tasks while the app has no window open, as the reference
-//! `BGTaskScheduler` does. The app declares its task identifiers in `manifest.toml`
+//! platform's task scheduler does. The app declares its task identifiers in `manifest.toml`
 //! (`[background] tasks = ["com.x.refresh"]`), submits requests through the SDK (`bifrost_app::background_tasks`), and
 //! this service runs them.
 //!
