@@ -318,6 +318,10 @@ pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
 pub mod udev;
+/// Scripting object model: a dictionary of classes, properties and element arrays, and a `Target` that reads and writes
+/// properties by path, finds elements, keeps the last error and tells a delegate about each failure. The model is
+/// `bifrost_ui::scripting`, with its tests there.
+pub use bifrost_ui::scripting;
 pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
