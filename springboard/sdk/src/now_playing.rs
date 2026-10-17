@@ -6,6 +6,9 @@
 //! When the user taps play, pause, previous, next or seek on the tile, the shell sends a `command` event to the app
 //! (`App::service_event`); decode it with [`command_from_event`] and check it against the session before acting.
 //!
+//! Up Next: [`publish_with_queue`] also sends the app's queue of [`QueueEntry`] values. When the user picks an entry
+//! in Control Center, the shell sends a `queue_select` event; decode it with [`queue_pick`] to get the entry's index.
+//!
 //! Artwork: [`Artwork`] is an identifier with the image sizes the item can supply. [`Artwork::choose`] picks the size to
 //! load for a target, [`aspect_fit`] sizes it inside a box and [`request_pixels`] turns points and the display scale into
 //! the pixel size passed to the artwork provider. Artwork does not reach the shell yet.
@@ -140,9 +143,64 @@ pub fn publish_body(session: &MediaSession) -> Option<Json> {
     Some(Json::Obj(fields))
 }
 
+/// One entry of an app's Up Next queue. An entry the app cannot play now is listed by the shell but cannot be picked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueEntry {
+    pub title: String,
+    pub artist: Option<String>,
+    pub playable: bool,
+}
+
+impl QueueEntry {
+    /// A playable entry with a title and no artist.
+    pub fn new(title: impl Into<String>) -> QueueEntry {
+        QueueEntry { title: title.into(), artist: None, playable: true }
+    }
+}
+
+/// The `queue` field of a publish body: one object per entry, in queue order.
+pub fn queue_json(queue: &[QueueEntry]) -> Json {
+    Json::Arr(
+        queue
+            .iter()
+            .map(|entry| {
+                let mut fields = vec![("title".to_string(), Json::Str(entry.title.clone()))];
+                if let Some(artist) = &entry.artist {
+                    fields.push(("artist".to_string(), Json::Str(artist.clone())));
+                }
+                fields.push(("playable".to_string(), Json::Bool(entry.playable)));
+                Json::Obj(fields)
+            })
+            .collect(),
+    )
+}
+
+/// The `publish` body for a session with its Up Next queue. `None` without content.
+pub fn publish_queue_body(session: &MediaSession, queue: &[QueueEntry]) -> Option<Json> {
+    let mut body = publish_body(session)?;
+    if let Json::Obj(fields) = &mut body {
+        fields.push(("queue".to_string(), queue_json(queue)));
+    }
+    Some(body)
+}
+
 /// Publishes the session to Control Center. Returns the request id, or `None` when the session has no content.
 pub fn publish(ctx: &Ctx, session: &MediaSession) -> Option<u32> {
     Some(service::call(ctx, SERVICE, "publish", &publish_body(session)?))
+}
+
+/// Publishes the session with its Up Next queue. Returns the request id, or `None` when the session has no content.
+pub fn publish_with_queue(ctx: &Ctx, session: &MediaSession, queue: &[QueueEntry]) -> Option<u32> {
+    Some(service::call(ctx, SERVICE, "publish", &publish_queue_body(session, queue)?))
+}
+
+/// The index of the Up Next entry the user picked, from a `queue_select` event. None for any other event.
+pub fn queue_pick(service: &str, event: &str, body: &Json) -> Option<usize> {
+    if service != SERVICE || event != COMMAND_EVENT || body.str_field("command").as_deref() != Some("queue_select") {
+        return None;
+    }
+    let index = body.get("index").and_then(Json::number)?;
+    (index.is_finite() && index >= 0.0 && index.fract() == 0.0).then_some(index as usize)
 }
 
 /// Withdraws the app's session from Control Center. Returns the request id.
@@ -191,6 +249,25 @@ mod tests {
         let body = publish_body(&s).unwrap();
         assert_eq!(body.get("live"), Some(&Json::Bool(true)));
         assert!(body.get("duration_ms").is_none());
+    }
+
+    #[test]
+    fn a_queue_publishes_with_the_session_and_a_pick_decodes_to_its_index() {
+        let queue = [QueueEntry { title: "Next".into(), artist: Some("Band".into()), playable: true }, QueueEntry { title: "Gone".into(), artist: None, playable: false }];
+        let body = publish_queue_body(&session(), &queue).expect("a body");
+        let entries = body.get("queue").and_then(Json::as_array).expect("a queue");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].str_field("artist").as_deref(), Some("Band"));
+        assert!(entries[1].str_field("artist").is_none());
+        assert_eq!(entries[1].get("playable"), Some(&Json::Bool(false)));
+        assert!(publish_queue_body(&MediaSession::new("main").unwrap(), &queue).is_none(), "no content, no publish");
+        let pick = bifrost_core::json::parse(r#"{"command":"queue_select","index":1}"#).unwrap();
+        assert_eq!(queue_pick(SERVICE, COMMAND_EVENT, &pick), Some(1));
+        assert_eq!(queue_pick("dock", COMMAND_EVENT, &pick), None, "another service");
+        let play = bifrost_core::json::parse(r#"{"command":"play"}"#).unwrap();
+        assert_eq!(queue_pick(SERVICE, COMMAND_EVENT, &play), None, "another command");
+        let negative = bifrost_core::json::parse(r#"{"command":"queue_select","index":-1}"#).unwrap();
+        assert_eq!(queue_pick(SERVICE, COMMAND_EVENT, &negative), None, "not an index");
     }
 
     #[test]
