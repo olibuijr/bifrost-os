@@ -1,12 +1,16 @@
-//! The `local_auth` service: `LAContext` evaluation backed by the account password.
+//! The `local_auth` service: `LAContext` evaluation backed by the account password, typed into the shell's own sheet.
 //!
 //! Methods (params are a JSON object):
 //! - `can_evaluate {policy}` returns `{ok}` or `{ok: false, error}`. The biometrics policy is always
 //!   `biometry_not_available`; `device_owner_authentication` needs an account password (a login backend).
-//! - `evaluate {policy, reason, password?, cancel?}` returns `{ok: true}` when the password is right,
-//!   `{ok: false, error: "user_cancel"}` when `cancel` is true, and otherwise `{ok: false, error}`. Without a
-//!   `password` the reply is `{ok: false, error: "not_interactive", prompt: true}`: the password sheet that would
-//!   collect it is not drawn yet, so the caller supplies the password itself (honest stub, see docs/bifrost-ui.md).
+//! - `evaluate {policy, reason, cancel?}` returns `{ok: true}` when the person typed the right password, or
+//!   `{ok: false, error}` otherwise. The password never reaches the app: the shell draws a password sheet with
+//!   `reason` (see `shell/auth_sheet.rs`) and checks what the person types through the login backend. The first call
+//!   for an app queues the sheet and answers `{ok: false, error: "pending", pending: true}`; the app calls again and
+//!   gets the answer once the person has answered the sheet. `cancel: true` answers `user_cancel` without a sheet.
+//! - `device_state {}` returns `{ok, biometry_type, passcode_set}` (see `device_state_reply`).
+//! - `answer {app, password?, cancel?}` is the shell's own call that records what the sheet found. An app cannot make
+//!   it: an app's id is never empty, and only the shell calls with an empty id.
 //!
 //! The password is verified by the login backend, read-only. Five failures in a row lock the service per app for the
 //! retry time the backend reports, or 30 seconds; a locked attempt is `authentication_failed` without asking the
@@ -14,7 +18,8 @@
 use super::{Shell, SystemService};
 use bifrost_core::biometry as bio;
 use bifrost_core::json::Json;
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, VecDeque};
 
 /// Failures in a row after which an app is locked out.
 pub const MAX_FAILURES: u32 = 5;
@@ -60,6 +65,78 @@ pub enum Check {
     NoPassword,
 }
 
+/// A request for the password sheet: the app that asked and the reason the sheet shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Request {
+    pub app: String,
+    pub reason: String,
+}
+
+/// Requests waiting behind the sheet on screen. A request past this is refused; the app asks again later.
+pub const MAX_QUEUED: usize = 8;
+
+/// What the password sheet works from: the requests in turn, the one on screen and the answers apps have not taken.
+/// Every service call and every shell tick runs on the shell thread, so one thread-local copy is the whole state.
+#[derive(Default)]
+struct SheetState {
+    queue: VecDeque<Request>,
+    shown: Option<Request>,
+    answers: BTreeMap<String, Result<(), Failure>>,
+}
+
+thread_local! {
+    static SHEET: RefCell<SheetState> = RefCell::new(SheetState::default());
+}
+
+/// Queues a sheet for `app`. Returns false when the queue is full.
+pub fn queue(app: &str, reason: &str) -> bool {
+    SHEET.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.queue.len() >= MAX_QUEUED {
+            return false;
+        }
+        s.queue.push_back(Request { app: app.into(), reason: reason.into() });
+        true
+    })
+}
+
+/// Whether `app` has a sheet queued or on screen, so its next call waits instead of queuing another.
+pub fn is_waiting(app: &str) -> bool {
+    SHEET.with(|s| {
+        let s = s.borrow();
+        s.queue.iter().any(|r| r.app == app) || s.shown.as_ref().is_some_and(|r| r.app == app)
+    })
+}
+
+/// The next request the shell should draw, when no sheet is on screen. The request then counts as shown.
+pub fn take_request() -> Option<Request> {
+    SHEET.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.shown.is_some() {
+            return None;
+        }
+        let next = s.queue.pop_front()?;
+        s.shown = Some(next.clone());
+        Some(next)
+    })
+}
+
+/// Records the sheet's answer for `app` and takes it off the screen. The app's next call returns the answer once.
+pub fn finish(app: &str, answer: Result<(), Failure>) {
+    SHEET.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.shown.as_ref().is_some_and(|r| r.app == app) {
+            s.shown = None;
+        }
+        s.answers.insert(app.into(), answer);
+    })
+}
+
+/// The answer the sheet recorded for `app`, if the app has not taken it yet.
+pub fn take_result(app: &str) -> Option<Result<(), Failure>> {
+    SHEET.with(|s| s.borrow_mut().answers.remove(app))
+}
+
 #[derive(Default)]
 pub struct LocalAuth {
     fails: BTreeMap<String, (u32, f64)>,
@@ -70,6 +147,11 @@ fn reply(r: Result<(), Failure>) -> Json {
         Ok(()) => Json::Obj(vec![("ok".into(), Json::Bool(true))]),
         Err(e) => Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str(e.wire().into()))]),
     }
+}
+
+/// The reply while the sheet is up: the app calls again.
+fn pending_reply() -> Json {
+    Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("pending".into())), ("pending".into(), Json::Bool(true))])
 }
 
 fn policy(params: &Json) -> Result<Policy, String> {
@@ -170,24 +252,40 @@ impl SystemService for LocalAuth {
                 if matches!(params.get("cancel"), Some(Json::Bool(true))) {
                     return Ok(reply(Err(Failure::UserCancel)));
                 }
-                let Some(password) = params.get("password").and_then(Json::as_str) else {
-                    return Ok(Json::Obj(vec![
-                        ("ok".into(), Json::Bool(false)),
-                        ("error".into(), Json::Str(Failure::NotInteractive.wire().into())),
-                        ("prompt".into(), Json::Bool(true)),
-                    ]));
+                if let Some(answer) = take_result(app_id) {
+                    return Ok(reply(answer));
+                }
+                if !is_waiting(app_id) {
+                    let reason = params.get("reason").and_then(Json::as_str).unwrap_or("");
+                    if !queue(app_id, reason) {
+                        return Ok(reply(Err(Failure::SystemCancel)));
+                    }
+                }
+                Ok(pending_reply())
+            }
+            "answer" => {
+                // only the shell answers the sheet: an app's id is never empty
+                if !app_id.is_empty() {
+                    return Err("local_auth: answer is the shell's".into());
+                }
+                let app = params.get("app").and_then(Json::as_str).unwrap_or("").to_string();
+                let answer = if matches!(params.get("cancel"), Some(Json::Bool(true))) {
+                    Err(Failure::UserCancel)
+                } else {
+                    let password = params.get("password").and_then(Json::as_str).unwrap_or("").to_string();
+                    let backend = shell.login_backend.clone();
+                    self.verify(&app, t, || match backend {
+                        None => Check::NoPassword,
+                        Some(b) => match b.authenticate(&password) {
+                            Reply::Ok(_) => Check::Right,
+                            Reply::Wrong { retry_secs } | Reply::LockedOut { retry_secs } => Check::Wrong { retry_secs },
+                            Reply::NoPassword => Check::NoPassword,
+                            Reply::Unavailable => Check::Unavailable,
+                        },
+                    })
                 };
-                let backend = shell.login_backend.clone();
-                let r = self.verify(app_id, t, || match backend {
-                    None => Check::NoPassword,
-                    Some(b) => match b.authenticate(password) {
-                        Reply::Ok(_) => Check::Right,
-                        Reply::Wrong { retry_secs } | Reply::LockedOut { retry_secs } => Check::Wrong { retry_secs },
-                        Reply::NoPassword => Check::NoPassword,
-                        Reply::Unavailable => Check::Unavailable,
-                    },
-                });
-                Ok(reply(r))
+                finish(&app, answer);
+                Ok(Json::Obj(vec![("ok".into(), Json::Bool(true))]))
             }
             "device_state" => Ok(device_state_reply(shell.login_backend.is_some())),
             other => Err(format!("local_auth: unknown method {other}")),
@@ -208,6 +306,27 @@ mod tests {
         assert_eq!(LocalAuth::can_evaluate(Policy::Biometrics, true), Err(Failure::BiometryNotAvailable));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, true), Ok(()));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, false), Err(Failure::PasscodeNotSet));
+    }
+
+    #[test]
+    fn a_request_waits_for_the_sheet_and_its_answer_is_taken_once() {
+        assert!(queue("app.sheet", "Reveal the password"));
+        assert!(is_waiting("app.sheet"));
+        let shown = take_request().expect("the first request is shown");
+        assert_eq!(shown, Request { app: "app.sheet".into(), reason: "Reveal the password".into() });
+        assert!(take_request().is_none(), "one sheet at a time");
+        assert!(is_waiting("app.sheet"), "the app still waits while its sheet is on screen");
+        finish("app.sheet", Err(Failure::UserCancel));
+        assert!(!is_waiting("app.sheet"));
+        assert_eq!(take_result("app.sheet"), Some(Err(Failure::UserCancel)));
+        assert_eq!(take_result("app.sheet"), None);
+    }
+
+    #[test]
+    fn the_pending_reply_says_the_app_should_call_again() {
+        let r = pending_reply();
+        assert_eq!(r.get("pending"), Some(&Json::Bool(true)));
+        assert_eq!(r.get("error").and_then(Json::as_str), Some("pending"));
     }
 
     #[test]

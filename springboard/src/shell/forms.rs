@@ -39,6 +39,9 @@ pub enum Purpose {
     /// Bluetooth pairing: the PIN (up to 16 characters) or the six-digit passkey `addr` asks for. Not kept; it is
     /// sent to the radio as `Cmd::AnswerPairing`.
     BluetoothPairing { addr: String, passkey: bool },
+    /// the password an app asked for through the `local_auth` service (the sheet is `auth_sheet.rs`); the typed text
+    /// goes to the service's answer and is never stored or sent to the app
+    AppAuthentication { app: String },
 }
 
 /// What the sheet shows.
@@ -207,6 +210,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
         Purpose::AccountEmail => crate::cloud_account::normalize_email(text).is_ok(),
         Purpose::AccountPassword { .. } => !text.is_empty(),
+        Purpose::AppAuthentication { .. } => !text.is_empty(),
         Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
         Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
         Purpose::BluetoothPairing { passkey: true, .. } => bifrost_core::bt_pairing::validate_passkey(text).is_ok(),

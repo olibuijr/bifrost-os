@@ -107,6 +107,7 @@ pub mod list;
 pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
+mod auth_sheet;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -741,6 +742,10 @@ pub struct Shell {
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
+    auth_sheet: Option<auth_sheet::AuthSheet>,
+    /// the shell clock as of the last frame, for the sheet's lockout timing
+    auth_clock: f64,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
@@ -1053,6 +1058,8 @@ impl Shell {
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            auth_sheet: None,
+            auth_clock: 0.0,
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
@@ -1444,6 +1451,11 @@ impl Shell {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return None,
         };
+        // the app's password sheet is the top-most modal: it takes every touch until it is answered
+        if self.auth_showing() {
+            self.auth_touch(x, y, matches!(ev, Event::Up(..)));
+            return Some(vec![]);
+        }
         if let Some(fx) = self.share_modal(ev) {
             return Some(fx);
         }
@@ -3373,6 +3385,7 @@ impl Shell {
         effects.extend(self.low_battery_tick(t));
         self.announce_tick(t);
         self.permission_tick(t);
+        self.auth_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -3750,7 +3763,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.auth_showing() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3762,6 +3775,9 @@ impl Shell {
             }
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
+            }
+            if self.auth_showing() {
+                self.auth_draw(s, t);
             }
             if let Some(a) = &self.crash_alert {
                 a.draw(s, &self.ui, self.w, self.h);
@@ -3808,7 +3824,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3829,7 +3845,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
