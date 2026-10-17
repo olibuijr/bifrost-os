@@ -314,11 +314,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs, springboard/src/shell/auth_sheet.rs, springboard/core/src/biometry.rs",
    "status": "partial",
    "note": "from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    }
+   ],
+   "ready_note": "The shell's local_auth service decides the policy checks and draws the password sheet (checked on the host). Biometry is absent by design: the device has no sensor, so the model reports none."
   },
   {
    "id": "path:/System/Library/Frameworks/LocalAuthenticationEmbeddedUI.framework",
@@ -1443,11 +1467,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/core/src/biometry.rs, springboard/src/shell/services/local_auth.rs",
    "status": "partial",
    "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "biometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "The biometry device model (resolve, DomainState) and the policy check the shell service runs through it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationCoreUI.framework",
@@ -1464,11 +1502,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/ui/src/auth_prompt.rs",
    "status": "partial",
    "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_prompt::tests"
+    }
+   ],
+   "ready_note": "The password sheet the shell draws for an app's evaluate call, and the attempt model it follows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalAuthenticationCredentialServices.framework",
@@ -1527,11 +1579,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/forms.rs",
    "status": "partial",
    "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    }
+   ],
+   "ready_note": "The password sheet (reason, one secure field, Cancel and Continue), answered through the login backend."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalFederatedSearch.framework",

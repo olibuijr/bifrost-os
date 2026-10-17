@@ -223,7 +223,7 @@ struct Loads {
     crashes: Loaded<Vec<super::diag::CrashEntry>>,
     latest_backup: Loaded<Option<u64>>,
     logins: Loaded<Vec<crate::credentials::Login>>,
-    accounts: Loaded<Vec<bifrost_ui::internet_accounts::Account>>,
+    accounts: Loaded<(Vec<bifrost_ui::internet_accounts::Account>, bifrost_ui::account_store::Contents)>,
     users: Loaded<super::users_page::View>,
     sharing: Loaded<super::sharing_page::View>,
     printers: Loaded<super::print_scan_page::View>,
@@ -673,7 +673,7 @@ impl Settings {
                 let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
                 super::passwords_page::spec(&super::passwords_page::PageState { logins: &self.loads.logins.value, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
             }
-            PageId::InternetAccounts => super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &self.loads.accounts.value, note: &self.ia_note }),
+            PageId::InternetAccounts => super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &self.loads.accounts.value.0, store: &self.loads.accounts.value.1, note: &self.ia_note }),
             PageId::Account => super::account_page::spec(&super::account_page::PageState {
                 view: self.loads.account_view.get(),
                 note: &self.account_note,

@@ -161,6 +161,22 @@ pub fn decode_reply(reply: &Json) -> Result<(), LAError> {
     Err(reply.get("error").and_then(Json::as_str).and_then(LAError::from_wire).unwrap_or(LAError::AuthenticationFailed))
 }
 
+/// Whether a shell reply is the password sheet still being answered. The shell answers `{ok: false, error: "pending",
+/// pending: true}` while the person has the sheet; the app calls `evaluate` again and gets the answer then.
+pub fn is_pending(reply: &Json) -> bool {
+    matches!(reply.get("pending"), Some(Json::Bool(true)))
+}
+
+/// Decodes a shell reply the way [`decode_reply`] does, but reports a pending reply as `None` so the caller calls
+/// again instead of failing.
+pub fn decode_evaluation(reply: &Json) -> Option<Result<(), LAError>> {
+    if is_pending(reply) {
+        None
+    } else {
+        Some(decode_reply(reply))
+    }
+}
+
 /// `LAContext`. Times are seconds since any fixed epoch the caller uses.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LAContext {
@@ -258,6 +274,15 @@ mod tests {
         for t in [BiometryType::None, BiometryType::TouchID, BiometryType::FaceID, BiometryType::OpticID] {
             assert_eq!(BiometryType::from_wire(t.wire()), t);
         }
+    }
+
+    #[test]
+    fn a_pending_reply_is_not_an_answer() {
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("pending".into())), ("pending".into(), Json::Bool(true))]);
+        assert!(is_pending(&pending));
+        assert_eq!(decode_evaluation(&pending), None);
+        assert_eq!(decode_evaluation(&ok()), Some(Ok(())));
+        assert_eq!(decode_evaluation(&err("user_cancel")), Some(Err(LAError::UserCancel)));
     }
 
     #[test]

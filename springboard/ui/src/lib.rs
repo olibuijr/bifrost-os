@@ -855,6 +855,7 @@ pub mod vcard;
 pub mod contact_book;
 pub mod contact_address;
 pub mod contact_vcard;
+pub mod account_store;
 pub mod internet_accounts;
 pub mod contact_groups;
 pub mod contact_changes;
