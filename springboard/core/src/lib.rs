@@ -56,6 +56,7 @@ pub mod rumble;
 pub mod force_effect;
 pub mod ff_escape;
 pub mod haptic_request;
+pub mod haptic_sequence;
 pub mod password_verify;
 pub mod migrate;
 pub mod occlusion;

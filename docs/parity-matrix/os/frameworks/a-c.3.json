@@ -3316,11 +3316,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/haptic_request.rs; springboard/core/src/force_effect.rs",
+   "bifrost": "springboard/core/src/haptic_request.rs; springboard/core/src/force_effect.rs; springboard/core/src/haptic_sequence.rs",
    "status": "partial",
-   "note": "Rate-limited pulse requests and force-feedback effects for wheels and joysticks exist. Authoring of haptic patterns is missing, and the touchpad actuator the reference system uses has no counterpart on this hardware.",
+   "note": "Rate-limited pulse requests and force-feedback effects for wheels and joysticks exist. Haptic pattern authoring is built as timed sequences of pulses (core haptic_sequence.rs). The touchpad actuator the reference system uses has no counterpart on this hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "haptic_sequence::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "haptic_request::tests"
+    }
+   ],
+   "ready_note": "Pulse requests with throttling, force-feedback effects and timed pulse sequences (haptic_sequence and haptic_request tests). The touchpad actuator has no counterpart on this hardware."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreIDCred.framework",
