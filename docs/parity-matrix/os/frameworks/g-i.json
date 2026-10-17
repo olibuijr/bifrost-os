@@ -3175,18 +3175,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "os",
-   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI.",
+   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "usb_approval::tests"
-    }
-   ],
-   "ready_note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMKit.framework",
@@ -3205,18 +3196,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "os",
-   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI.",
+   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "usb_approval::tests"
-    }
-   ],
-   "ready_note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMUI.framework",
@@ -3235,18 +3217,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "gap",
-   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core.",
+   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core. Lead 2026-10-17: not ready: the shell does not yet call the arrival flow on a udev USB event or draw the approval sheet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "usb_approval::tests"
-    }
-   ],
-   "ready_note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HMFoundation.framework",
