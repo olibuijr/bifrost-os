@@ -6,6 +6,8 @@
 
 use std::fmt;
 
+use crate::proto::ToShell;
+
 /// The id of a created sound. Ids start at 1 and are never reused after `dispose`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SoundId(u32);
@@ -82,6 +84,16 @@ pub const ALERT_NAMES: [&str; 18] = [
     "Bell", "Chime", "Pulse", "Tick", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi",
     "Submarine", "Tink",
 ];
+
+/// Asks the shell to play the built-in alert sound `name` (one of `ALERT_NAMES`) once, on the sound-effects role. Used
+/// for an app's own alerts, such as a device sound. Returns false, and sends nothing, for a name that is not built in.
+pub fn play_named(ctx: &crate::Ctx, name: &str) -> bool {
+    if !ALERT_NAMES.contains(&name) {
+        return false;
+    }
+    ctx.send_to_shell(ToShell::PlaySystemSound { name: name.to_string() });
+    true
+}
 
 /// The sounds of one app: created sounds by id, the request waiting for the audio service, and the sound it has
 /// taken.

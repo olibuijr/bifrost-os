@@ -48,6 +48,9 @@ impl Delegate for Fixes {
     }
 }
 
+/// The alert tone a device plays when the owner asks for a sound.
+const DEVICE_SOUND: &str = "Bell";
+
 /// How often a sharing device checks whether a report is due, in milliseconds.
 const REPORT_TICK_MS: f64 = 60_000.0;
 
@@ -192,7 +195,10 @@ impl LocateWindow {
                 ctx.log("locate: device registered");
             }
             Event::Locate => self.locate_asked = true,
-            Event::PlaySound => {}
+            Event::PlaySound => {
+                // the alert tone a lost device sounds; the worker acknowledges the command itself
+                bifrost_app::system_sound::play_named(ctx, DEVICE_SOUND);
+            }
             Event::Devices(mut list) => {
                 self.open_devices(&mut list);
                 self.panel.apply_list(&list);

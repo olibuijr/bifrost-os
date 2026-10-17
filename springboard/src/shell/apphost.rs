@@ -1846,6 +1846,7 @@ impl Shell {
                         h.send(&ToApp::KeychainReply { request, status, value });
                     }
                     ToShell::OpenUrl { url } => open_url=Some(url),
+                    ToShell::PlaySystemSound { name } => queue_system_sound(name),
                     r @ ToShell::Share { .. } if fg == Some(slot as u8) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => rich_msgs.push((slot as u8, r)),
@@ -2572,4 +2573,26 @@ mod service_manifest_tests {
         let m = Manifest::parse("id = \"a.b\"\nname = \"X\"\nexec = \"x\"\n").unwrap();
         assert!(m.services.is_empty());
     }
+}
+
+/// The sounds apps asked for since the shell's audio worker last looked, in order. Each is an alert tone name.
+static SYSTEM_SOUNDS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// At most this many sounds wait for one frame; the rest are dropped so an app cannot flood the audio worker.
+const MAX_SYSTEM_SOUNDS: usize = 4;
+
+/// Queues an app's system sound when the name is one of the shell's alert tones.
+fn queue_system_sound(name: String) {
+    if !super::options::ALERT_SOUNDS.contains(&name.as_str()) {
+        return;
+    }
+    let mut queue = SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner());
+    if queue.len() < MAX_SYSTEM_SOUNDS {
+        queue.push(name);
+    }
+}
+
+/// Takes the queued system sounds. The shell's frame loop plays each one on the sound-effects role.
+pub fn take_system_sounds() -> Vec<String> {
+    std::mem::take(&mut *SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner()))
 }
