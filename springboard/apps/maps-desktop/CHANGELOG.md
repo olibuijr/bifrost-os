@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-10-17
+
+- Keys, the menu bar, the toolbar and the Go and File menus act on the focused window. A touch on a window (the main one or a New Window) gives it the focus; closing the focused window gives it back to the main window. The GPX file opens into the window that asked for it.
+
 ## 0.6.1 — 2026-10-17
 
 - One shared store for every window: the saved places, the pins, the units setting and the offline areas are held once for the app (`state::Shared`) and saved from there. Two windows no longer overwrite each other's favorites and pins. The camera, the card and open sheets stay per window.
