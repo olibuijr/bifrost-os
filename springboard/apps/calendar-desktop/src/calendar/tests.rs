@@ -192,7 +192,8 @@ fn touch_add_edit_delete_and_reload() {
     assert_eq!(store::load(&temp.file()).unwrap(), c.events);
     // Open the event from its day cell, select the next day, switch all-day, and save.
     let id = c.events[0].id;
-    tap_event(&mut c, &ui, id, 500.0);
+    // a single tap only selects; the editor opens in its window on a double-click (covered by the month-cell test)
+    c.open(&ui, Some(id));
     assert!(c.editor.is_some());
     tap_row(&mut c, &ui, Target::Toggle(Slot::Start), 713.0, 560.0);
     tap_row(&mut c, &ui, Target::DateStep(0), 713.0, 600.0);
@@ -202,7 +203,7 @@ fn touch_add_edit_delete_and_reload() {
     assert!(c.events[0].all_day);
     let reopened = new(&ui, temp.file());
     assert_eq!(reopened.events, c.events);
-    tap_event(&mut c, &ui, id, 900.0);
+    c.open(&ui, Some(id));
     tap_row(&mut c, &ui, Target::Delete, 384.0, 1000.0);
     assert!(c.events.is_empty());
     assert!(store::load(&temp.file()).unwrap().is_empty());
@@ -301,6 +302,10 @@ fn a_month_cell_lists_its_events_and_a_click_opens_one() {
     assert!(more > 0 && shown.len() + more == 20, "the cell ends in \"n more\"");
     let first = shown[0].id;
     tap_event(&mut c, &ui, first, 0.0);
+    assert_eq!(c.take_open_request(), None, "one tap only selects the event");
+    tap_event(&mut c, &ui, first, 100.0);
+    assert_eq!(c.take_open_request(), Some(first), "a double-click asks for its editor window");
+    c.open(&ui, Some(first));
     assert_eq!(c.editor.as_ref().map(|d| d.event.id), Some(first));
     c.activate(&ui, Target::Cancel, 100.0);
     // the toolbar's segmented group switches the view; the header's capsules step it
@@ -1073,7 +1078,7 @@ fn a_press_that_moves_at_once_still_scrolls() {
 }
 
 #[test]
-fn a_quick_tap_on_an_event_in_the_week_still_opens_it() {
+fn a_quick_tap_on_an_event_in_the_week_selects_it_and_a_double_tap_opens_it() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
@@ -1082,7 +1087,11 @@ fn a_quick_tap_on_an_event_in_the_week_still_opens_it() {
     c.touch(&ui, Event::Down(x, y), 0.0);
     c.touch(&ui, Event::Up(x, y), 50.0);
     assert!(c.drag.is_none());
-    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 1));
+    assert!(c.editor.is_none());
+    assert_eq!(c.picked, Some(1));
+    c.touch(&ui, Event::Down(x, y), 200.0);
+    c.touch(&ui, Event::Up(x, y), 250.0);
+    assert_eq!(c.take_open_request(), Some(1));
 }
 
 #[test]
