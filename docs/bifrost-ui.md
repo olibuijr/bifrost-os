@@ -3542,6 +3542,18 @@ Gaps, stated rather than skipped:
   (`fuse::tests`, `fs_module::tests`); `fuse_mount` has no test because it needs a mount. Parity needs a Midget check
   with a real mount before the row can be `parity`.
 
+## Assistant system service (`springboard/src/shell/assistant.rs`, OS daemon `com.apple.Siri.agent`)
+
+Status: partial. Built and tested as pure logic; not yet wired into the desktop.
+
+- Settings (`assistant.*` prefs): `enabled` (off), `shortcut` (`meta-shift-a`, Cmd+Shift+A; Cmd+Space is Search, Ctrl+Space the input source, Ctrl+Option+Space reader activation, so none is reused), `backend` (`off`; the only other choice is `anthropic`, the API `assistant-desktop` already speaks), `history` (off: earlier turns are neither kept nor sent), and `assistant.app.<id>` per-app access to intents (off for every app).
+- Catalogue: `assistant::build` takes the installed apps' `[[intent]]` tables and keeps only allowed apps. Ids must be safe (letters, digits, `-`, `_`), a title is required, parameter specs must be `name:type` (`?` optional), descriptions are cut at 300 characters. Only these entries are sent.
+- Protocol: the request carries the catalogue in the system prompt and asks for one JSON object: `{"answer":...}` or `{"app","intent","params","summary"}`. `parse_reply` returns `Reply::Answer` (plain text is an answer too) or `Reply::Intent`, and refuses unknown apps, intents or parameter names, and missing required parameters.
+- Gate: an intent is only proposed as a card ("Create note 'Groceries' in Notes?", `card_text`). `Gate::confirm` hands the call out once; `execute` runs it through `intents::run_with`, the same path as Search's Shortcuts. Nothing runs on proposal.
+- Speech: `speech_engine` looks for `whisper-cli` or `vosk-transcriber` on `PATH`. Without one the mic button is hidden. No engine is installed on the image yet, so the mic is hidden.
+
+Not built yet: the Cmd+Shift+A `Shortcut` variant in `hwkeys.rs` and the panel that draws over the desktop (translucent material like Spotlight), the Settings > Assistant page (`pages.rs`), the `assistant` service registration, and the HTTPS transport in the shell (today only `assistant-desktop` talks to the API; the request and reply code here is the shared shape to move into a crate when the transport lands).
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the

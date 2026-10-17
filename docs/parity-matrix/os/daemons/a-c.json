@@ -1741,8 +1741,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "the Assistant app is not an equivalent voice assistant service",
+   "status": "partial",
+   "note": "shell assistant service (springboard/src/shell/assistant.rs): settings, per-app intent catalogue, backend reply protocol and confirmation gate are built and unit-tested; the Cmd+Shift+A panel, the Settings > Assistant page, the HTTPS transport and speech input (no local engine yet) are not wired",
    "rea": [],
    "method": "heuristic"
   },
