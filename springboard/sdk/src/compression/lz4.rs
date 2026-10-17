@@ -1,0 +1,447 @@
+//! LZ4 for apps, written from the public LZ4 block and frame format specifications.
+//!
+//! Three layers:
+//! - the LZ4 block format (sequences of literals and matches, 64 KiB offsets, minimum match 4);
+//! - the buffer framing the compression API uses for LZ4: `bv41` compressed blocks, `bv4-` stored
+//!   blocks and a `bv4$` end marker (magic, then little-endian sizes, then the payload);
+//! - the LZ4 frame format (magic 0x184D2204, FLG and BD descriptors, xxHash32 header checksum,
+//!   optional block and content checksums), exposed as `encode_frame` and `decode_frame`.
+//!
+//! The encoder is a greedy matcher with a hash table over 4-byte windows. It follows the end rules
+//! of the block format: the last 5 bytes are always literals, and the last match starts at least
+//! 12 bytes before the end of the block.
+
+use super::Error;
+
+/// Minimum match length of the block format.
+const MIN_MATCH: usize = 4;
+/// Largest back-reference distance, the 64 KiB window.
+const MAX_OFFSET: usize = 65535;
+/// A match must start at or before `len - MF_LIMIT`.
+const MF_LIMIT: usize = 12;
+/// The last `LAST_LITERALS` bytes of a block are always literals.
+const LAST_LITERALS: usize = 5;
+const HASH_BITS: u32 = 16;
+/// Input is split into blocks of this size for the buffer framing (the frame's 64 KiB block size).
+const CHUNK: usize = 65536;
+
+const BV4_COMPRESSED: &[u8; 4] = b"bv41";
+const BV4_STORED: &[u8; 4] = b"bv4-";
+const BV4_END: &[u8; 4] = b"bv4$";
+
+const FRAME_MAGIC: u32 = 0x184D_2204;
+
+fn read_u32(src: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes([src[at], src[at + 1], src[at + 2], src[at + 3]])
+}
+
+fn hash4(v: u32) -> usize {
+    (v.wrapping_mul(2_654_435_761) >> (32 - HASH_BITS)) as usize
+}
+
+/// Appends `n` as the extra length bytes that follow a nibble of 15.
+fn push_length_extension(out: &mut Vec<u8>, mut n: usize) {
+    while n >= 255 {
+        out.push(255);
+        n -= 255;
+    }
+    out.push(n as u8);
+}
+
+/// Encodes one LZ4 block. The result is never empty: an empty input becomes a single zero token.
+pub fn encode_block(src: &[u8]) -> Vec<u8> {
+    let n = src.len();
+    let mut out = Vec::with_capacity(n / 2 + 16);
+    let mut anchor = 0;
+    let mut table = vec![usize::MAX; 1 << HASH_BITS];
+    // matches may only start while i <= mf_limit; a block shorter than MF_LIMIT has no matches
+    let mf_limit = n.checked_sub(MF_LIMIT);
+    let mut i = 0;
+    if let Some(mf_limit) = mf_limit {
+        while i <= mf_limit {
+            let seq = read_u32(src, i);
+            let h = hash4(seq);
+            let cand = table[h];
+            table[h] = i;
+            if cand != usize::MAX && i - cand <= MAX_OFFSET && read_u32(src, cand) == seq {
+                // extend the match; it may not reach into the last LAST_LITERALS bytes
+                let limit = n - LAST_LITERALS;
+                let mut len = MIN_MATCH;
+                while i + len < limit && src[cand + len] == src[i + len] {
+                    len += 1;
+                }
+                emit_sequence(&mut out, &src[anchor..i], Some((i - cand, len)));
+                i += len;
+                anchor = i;
+            } else {
+                i += 1;
+            }
+        }
+    }
+    emit_sequence(&mut out, &src[anchor..], None);
+    out
+}
+
+/// Writes one sequence: the token, literal and match length extensions, the literals, and
+/// (when there is a match) the 16-bit little-endian offset and the match length extension.
+fn emit_sequence(out: &mut Vec<u8>, literals: &[u8], found: Option<(usize, usize)>) {
+    let lit_len = literals.len();
+    let match_part = found.map(|(offset, len)| (offset, len - MIN_MATCH));
+    let lit_nibble = lit_len.min(15) as u8;
+    let match_nibble = match_part.map_or(0, |(_, m)| m.min(15) as u8);
+    out.push((lit_nibble << 4) | match_nibble);
+    if lit_len >= 15 {
+        push_length_extension(out, lit_len - 15);
+    }
+    out.extend_from_slice(literals);
+    if let Some((offset, m)) = match_part {
+        out.extend_from_slice(&(offset as u16).to_le_bytes());
+        if m >= 15 {
+            push_length_extension(out, m - 15);
+        }
+    }
+}
+
+/// Decodes one LZ4 block, refusing any output longer than `limit`. Offsets of 0 or beyond the
+/// output produced so far are rejected, and a block that ends before its final literal sequence
+/// is `Truncated`.
+pub fn decode_block(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut i = 0;
+    loop {
+        if i >= src.len() {
+            return Err(Error::Truncated);
+        }
+        let token = src[i];
+        i += 1;
+        let mut lit = (token >> 4) as usize;
+        if lit == 15 {
+            lit += read_extension(src, &mut i)?;
+        }
+        let end = i.checked_add(lit).ok_or(Error::InvalidData)?;
+        if end > src.len() {
+            return Err(Error::Truncated);
+        }
+        if out.len() + lit > limit {
+            return Err(Error::TooBig);
+        }
+        out.extend_from_slice(&src[i..end]);
+        i = end;
+        if i == src.len() {
+            // the last sequence carries literals only
+            return Ok(out);
+        }
+        if i + 2 > src.len() {
+            return Err(Error::Truncated);
+        }
+        let offset = u16::from_le_bytes([src[i], src[i + 1]]) as usize;
+        i += 2;
+        if offset == 0 || offset > out.len() {
+            return Err(Error::InvalidData);
+        }
+        let mut m = (token & 0x0f) as usize;
+        if m == 15 {
+            m += read_extension(src, &mut i)?;
+        }
+        let m = m + MIN_MATCH;
+        if out.len() + m > limit {
+            return Err(Error::TooBig);
+        }
+        // byte by byte, because the source and destination may overlap
+        let start = out.len() - offset;
+        for k in 0..m {
+            let b = out[start + k];
+            out.push(b);
+        }
+    }
+}
+
+/// Reads the extra length bytes after a nibble of 15, returning their sum.
+fn read_extension(src: &[u8], i: &mut usize) -> Result<usize, Error> {
+    let mut total = 0usize;
+    loop {
+        let b = *src.get(*i).ok_or(Error::Truncated)?;
+        *i += 1;
+        total = total.checked_add(b as usize).ok_or(Error::InvalidData)?;
+        if b != 255 {
+            return Ok(total);
+        }
+    }
+}
+
+/// Compresses `src` into the buffer framing: `bv41` blocks for compressible 64 KiB chunks, `bv4-`
+/// stored blocks for the rest, and a `bv4$` end marker.
+pub fn encode_buffer(src: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(src.len() / 2 + 16);
+    for chunk in src.chunks(CHUNK) {
+        let packed = encode_block(chunk);
+        if packed.len() < chunk.len() {
+            out.extend_from_slice(BV4_COMPRESSED);
+            out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+            out.extend_from_slice(&(packed.len() as u32).to_le_bytes());
+            out.extend_from_slice(&packed);
+        } else {
+            out.extend_from_slice(BV4_STORED);
+            out.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+            out.extend_from_slice(chunk);
+        }
+    }
+    out.extend_from_slice(BV4_END);
+    out
+}
+
+/// Decompresses the buffer framing, refusing output larger than `limit`. A block whose decoded
+/// size does not match its header is `InvalidData`; a missing end marker is `Truncated`.
+pub fn decode_buffer(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut pos = 0;
+    loop {
+        let magic = src.get(pos..pos + 4).ok_or(Error::Truncated)?;
+        pos += 4;
+        if magic == BV4_END {
+            return Ok(out);
+        } else if magic == BV4_STORED {
+            let size = read_size(src, &mut pos)?;
+            if out.len() + size > limit {
+                return Err(Error::TooBig);
+            }
+            let raw = src.get(pos..pos + size).ok_or(Error::Truncated)?;
+            out.extend_from_slice(raw);
+            pos += size;
+        } else if magic == BV4_COMPRESSED {
+            let decoded = read_size(src, &mut pos)?;
+            let encoded = read_size(src, &mut pos)?;
+            if out.len() + decoded > limit {
+                return Err(Error::TooBig);
+            }
+            let payload = src.get(pos..pos + encoded).ok_or(Error::Truncated)?;
+            let block = decode_block(payload, decoded).map_err(|e| match e {
+                Error::TooBig => Error::InvalidData,
+                other => other,
+            })?;
+            if block.len() != decoded {
+                return Err(Error::InvalidData);
+            }
+            out.extend_from_slice(&block);
+            pos += encoded;
+        } else {
+            return Err(Error::InvalidData);
+        }
+    }
+}
+
+fn read_size(src: &[u8], pos: &mut usize) -> Result<usize, Error> {
+    let bytes = src.get(*pos..*pos + 4).ok_or(Error::Truncated)?;
+    *pos += 4;
+    Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize)
+}
+
+/// xxHash32 (public algorithm specification), used for the frame checksums.
+pub fn xxh32(input: &[u8], seed: u32) -> u32 {
+    const P1: u32 = 2_654_435_761;
+    const P2: u32 = 2_246_822_519;
+    const P3: u32 = 3_266_489_917;
+    const P4: u32 = 668_265_263;
+    const P5: u32 = 374_761_393;
+    fn round(acc: u32, lane: u32) -> u32 {
+        acc.wrapping_add(lane.wrapping_mul(P2)).rotate_left(13).wrapping_mul(P1)
+    }
+    let len = input.len();
+    let mut p = 0;
+    let mut h: u32;
+    if len >= 16 {
+        let mut v1 = seed.wrapping_add(P1).wrapping_add(P2);
+        let mut v2 = seed.wrapping_add(P2);
+        let mut v3 = seed;
+        let mut v4 = seed.wrapping_sub(P1);
+        while p + 16 <= len {
+            v1 = round(v1, read_u32(input, p));
+            v2 = round(v2, read_u32(input, p + 4));
+            v3 = round(v3, read_u32(input, p + 8));
+            v4 = round(v4, read_u32(input, p + 12));
+            p += 16;
+        }
+        h = v1.rotate_left(1).wrapping_add(v2.rotate_left(7)).wrapping_add(v3.rotate_left(12)).wrapping_add(v4.rotate_left(18));
+    } else {
+        h = seed.wrapping_add(P5);
+    }
+    h = h.wrapping_add(len as u32);
+    while p + 4 <= len {
+        h = h.wrapping_add(read_u32(input, p).wrapping_mul(P3)).rotate_left(17).wrapping_mul(P4);
+        p += 4;
+    }
+    while p < len {
+        h = h.wrapping_add((input[p] as u32).wrapping_mul(P5)).rotate_left(11).wrapping_mul(P1);
+        p += 1;
+    }
+    h ^= h >> 15;
+    h = h.wrapping_mul(P2);
+    h ^= h >> 13;
+    h = h.wrapping_mul(P3);
+    h ^= h >> 16;
+    h
+}
+
+/// Encodes an LZ4 frame: version 1, block independence, 64 KiB blocks, a content checksum, and a
+/// stored block whenever compression does not make the chunk smaller. Blocks carry no checksum.
+pub fn encode_frame(src: &[u8]) -> Vec<u8> {
+    let flg: u8 = 0x40 | 0x20 | 0x04; // version 01, block independence, content checksum
+    let bd: u8 = 0x40; // block maximum size id 4 (64 KiB)
+    let mut out = Vec::with_capacity(src.len() / 2 + 32);
+    out.extend_from_slice(&FRAME_MAGIC.to_le_bytes());
+    out.push(flg);
+    out.push(bd);
+    out.push(header_checksum(flg, bd));
+    for chunk in src.chunks(CHUNK) {
+        let packed = encode_block(chunk);
+        if packed.len() < chunk.len() {
+            out.extend_from_slice(&(packed.len() as u32).to_le_bytes());
+            out.extend_from_slice(&packed);
+        } else {
+            out.extend_from_slice(&((chunk.len() as u32) | 0x8000_0000).to_le_bytes());
+            out.extend_from_slice(chunk);
+        }
+    }
+    out.extend_from_slice(&0u32.to_le_bytes()); // end mark
+    out.extend_from_slice(&xxh32(src, 0).to_le_bytes());
+    out
+}
+
+fn header_checksum(flg: u8, bd: u8) -> u8 {
+    ((xxh32(&[flg, bd], 0) >> 8) & 0xff) as u8
+}
+
+/// Decodes an LZ4 frame, refusing output larger than `limit`. Frames with a dictionary ID, a
+/// reserved bit, an unknown version or block size, a bad header or block checksum, or trailing
+/// bytes after the content checksum are `InvalidData`.
+pub fn decode_frame(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+    if src.len() < 7 {
+        return Err(Error::Truncated);
+    }
+    if read_u32(src, 0) != FRAME_MAGIC {
+        return Err(Error::InvalidData);
+    }
+    let flg = src[4];
+    let bd = src[5];
+    if flg >> 6 != 1 || flg & 0x03 != 0 || bd & 0x8f != 0 {
+        return Err(Error::InvalidData);
+    }
+    let block_max = match (bd >> 4) & 0x07 {
+        4 => 65536,
+        5 => 262_144,
+        6 => 1_048_576,
+        7 => 4_194_304,
+        _ => return Err(Error::InvalidData),
+    };
+    let content_size_flag = flg & 0x08 != 0;
+    let block_checksum_flag = flg & 0x10 != 0;
+    let content_checksum_flag = flg & 0x04 != 0;
+    let mut pos = 6;
+    if content_size_flag {
+        pos += 8;
+    }
+    let hc = *src.get(pos).ok_or(Error::Truncated)?;
+    if hc != header_checksum(flg, bd) {
+        return Err(Error::InvalidData);
+    }
+    pos += 1;
+    let mut out: Vec<u8> = Vec::new();
+    loop {
+        let raw = src.get(pos..pos + 4).ok_or(Error::Truncated)?;
+        let word = u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+        pos += 4;
+        if word == 0 {
+            break;
+        }
+        let stored = word & 0x8000_0000 != 0;
+        let size = (word & 0x7fff_ffff) as usize;
+        if size > block_max {
+            return Err(Error::InvalidData);
+        }
+        let data = src.get(pos..pos + size).ok_or(Error::Truncated)?;
+        pos += size;
+        if block_checksum_flag {
+            let sum = src.get(pos..pos + 4).ok_or(Error::Truncated)?;
+            if u32::from_le_bytes([sum[0], sum[1], sum[2], sum[3]]) != xxh32(data, 0) {
+                return Err(Error::InvalidData);
+            }
+            pos += 4;
+        }
+        if stored {
+            if out.len() + size > limit {
+                return Err(Error::TooBig);
+            }
+            out.extend_from_slice(data);
+        } else {
+            let remaining = limit - out.len();
+            let block = decode_block(data, remaining.min(block_max))?;
+            out.extend_from_slice(&block);
+        }
+    }
+    if content_checksum_flag {
+        let sum = src.get(pos..pos + 4).ok_or(Error::Truncated)?;
+        if u32::from_le_bytes([sum[0], sum[1], sum[2], sum[3]]) != xxh32(&out, 0) {
+            return Err(Error::InvalidData);
+        }
+        pos += 4;
+    }
+    if pos != src.len() {
+        return Err(Error::InvalidData);
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xxh32_of_empty_input_with_seed_zero() {
+        assert_eq!(xxh32(b"", 0), 0x02CC_5D05);
+    }
+
+    #[test]
+    fn literal_only_short_input_is_one_token_and_the_bytes() {
+        // under 13 bytes there is no match, so the block is a single literal sequence
+        let enc = encode_block(b"abc");
+        assert_eq!(enc, vec![0x30, b'a', b'b', b'c']);
+        assert_eq!(decode_block(&enc, 16).unwrap(), b"abc".to_vec());
+    }
+
+    #[test]
+    fn block_round_trip_repetitive_input_is_smaller() {
+        let data = vec![b'a'; 1000];
+        let enc = encode_block(&data);
+        assert!(enc.len() < 40);
+        assert_eq!(decode_block(&enc, 1000).unwrap(), data);
+    }
+
+    #[test]
+    fn decoder_rejects_zero_and_out_of_range_offsets() {
+        // token 0x10: one literal 'a', then a match with offset 0
+        assert_eq!(decode_block(&[0x10, b'a', 0x00, 0x00], 100), Err(Error::InvalidData));
+        // offset 5 with only one byte of output so far
+        assert_eq!(decode_block(&[0x10, b'a', 0x05, 0x00], 100), Err(Error::InvalidData));
+    }
+
+    #[test]
+    fn decoder_reports_truncation_and_honours_the_limit() {
+        // literal run longer than the input
+        assert_eq!(decode_block(&[0x50, b'a'], 100), Err(Error::Truncated));
+        // a block that stops right after a match
+        assert_eq!(decode_block(&[0x10, b'a', 0x01, 0x00], 100), Err(Error::Truncated));
+        let data = vec![b'z'; 500];
+        let enc = encode_block(&data);
+        assert_eq!(decode_block(&enc, 100), Err(Error::TooBig));
+    }
+
+    #[test]
+    fn length_extensions_round_trip() {
+        // 300 literals then a 300-byte match, so both nibbles overflow into extension bytes
+        let mut data: Vec<u8> = (0..300u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 24) as u8).collect();
+        let copy = data.clone();
+        data.extend_from_slice(&copy);
+        let enc = encode_block(&data);
+        assert_eq!(decode_block(&enc, data.len()).unwrap(), data);
+    }
+}

@@ -5,14 +5,15 @@
 //! The codecs are DEFLATE (RFC 1951) and the zlib wrapper (RFC 1950). The encoder is greedy LZ77 with
 //! dynamic Huffman blocks, chosen by a [`Level`] (the chain depth of the match search). It can also
 //! split large inputs over several threads (`encode_buffer_threaded`). Algorithm cases this build has
-//! no codec for (Brotli, LZ4, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference
-//! shape, and they fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a
-//! BifrOSt addition.
+//! no codec for (Brotli, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference
+//! shape, and they fail with `Error::Unsupported`. LZ4 is in `lz4` (block and buffer framing, and the
+//! LZ4 frame format). `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a BifrOSt addition.
 //!
 //! Streams and filters buffer their input and run the one-shot codec when they are finalized, so no
 //! output appears before `finalize`. Output is still delivered in chunks of the requested size.
 
 mod dynamic;
+pub mod lz4;
 
 use springboard::pngenc::adler32;
 use bifrost_render::cg::pdf::inflate;
@@ -37,7 +38,7 @@ pub enum Algorithm {
 impl Algorithm {
     /// True for the algorithms this build can encode and decode.
     pub fn is_supported(self) -> bool {
-        matches!(self, Algorithm::Zlib | Algorithm::Deflate)
+        matches!(self, Algorithm::Zlib | Algorithm::Deflate | Algorithm::Lz4)
     }
 }
 
@@ -119,6 +120,8 @@ pub fn encode_buffer_threaded(algorithm: Algorithm, src: &[u8], level: Level, th
             Ok(out)
         }
         Algorithm::Deflate => Ok(dynamic::encode_threaded(src, level, threads)),
+        // LZ4 has no level or thread option; the level and thread count are ignored
+        Algorithm::Lz4 => Ok(lz4::encode_buffer(src)),
         other => Err(Error::Unsupported(other)),
     }
 }
@@ -154,6 +157,7 @@ pub fn decode_buffer_limited(algorithm: Algorithm, src: &[u8], limit: usize) -> 
             inflate::inflate_limited(&src[2..], limit).map_err(Error::from)
         }
         Algorithm::Deflate => inflate::inflate_limited(src, limit).map_err(Error::from),
+        Algorithm::Lz4 => lz4::decode_buffer(src, limit),
         other => Err(Error::Unsupported(other)),
     }
 }
@@ -374,7 +378,8 @@ mod tests {
         assert_eq!(decode_buffer_limited(Algorithm::Deflate, &enc, 10), Err(Error::TooBig));
         assert_eq!(decode_buffer_limited(Algorithm::Deflate, &enc, 100).unwrap(), vec![0u8; 100]);
         assert_eq!(encode_buffer(Algorithm::Lzfse, b"x"), Err(Error::Unsupported(Algorithm::Lzfse)));
-        assert!(!Algorithm::Lz4.is_supported());
+        assert!(Algorithm::Lz4.is_supported());
+        assert!(!Algorithm::Lzma.is_supported());
     }
 
     #[test]

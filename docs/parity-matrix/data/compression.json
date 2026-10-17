@@ -4,7 +4,7 @@
   "macos_since": "10.11",
   "status": "partial",
   "bifrost": "springboard/sdk/src/compression.rs (encode_buffer, encode_buffer_threaded, decode_buffer, decode_buffer_limited, Stream, InputFilter, OutputFilter), springboard/sdk/src/compression/dynamic.rs (Level, encode, encode_threaded), springboard/render/src/cg/pdf/inflate.rs (inflate, zlib), springboard/src/files/zip.rs (create, extract), springboard/src/pngenc.rs (zlib_stored)",
-  "summary": "BifrOSt has DEFLATE and zlib encoding and decoding for apps through bifrost_app::compression, with a dynamic-Huffman encoder at three levels and an optional thread count for large inputs, and streams and filters that run on finalize. It has no LZFSE, LZ4, LZMA or Brotli codecs, no incremental codec state, and no compression for the Files app zip writer or the PNG writer.",
+  "summary": "BifrOSt has DEFLATE and zlib encoding and decoding for apps through bifrost_app::compression, with a dynamic-Huffman encoder at three levels and an optional thread count for large inputs, and streams and filters that run on finalize. It has LZ4 (block and buffer framing, and the LZ4 frame format) but no LZFSE, LZMA or Brotli codecs, no incremental codec state, and no compression for the Files app zip writer or the PNG writer.",
   "rea_evidence": "ev_cb330756976058e533cab29baea93a36094946c5054a4d4b6a5c84ce6503354e",
   "features": [
     {
@@ -24,9 +24,9 @@
     {
       "feature": "Algorithm selection",
       "apple": "compression_algorithm, Algorithm (LZFSE, LZ4, LZ4_RAW, LZMA, ZLIB)",
-      "bifrost": "springboard/sdk/src/compression.rs (Algorithm); springboard/sdk/tests/parity_sdk-tests-20.rs",
+      "bifrost": "springboard/sdk/src/compression.rs (Algorithm); springboard/sdk/src/compression/lz4.rs (LZ4 block, bv41/bv4-/bv4$ buffer framing, LZ4 frame, xxHash32); springboard/sdk/tests/parity_sdk-tests-20.rs; springboard/sdk/tests/compression_lz4.rs",
       "status": "partial",
-      "note": "Algorithm cases exist for LZFSE, LZ4, LZBITMAP, LZMA and Brotli but fail with Unsupported; Zlib and Deflate are implemented. Tests: parity_sdk-tests-20 only_zlib_and_raw_deflate_are_supported, unsupported_algorithms_are_named_in_every_buffer_and_stream_entry_point; parity_sdk-tests-04 unsupported_algorithms_fail_in_every_entry_point. Not yet verified on Midget."
+      "note": "LZ4 is implemented (greedy block encoder, bounds-checked decoder, bv41/bv4-/bv4$ buffer framing, LZ4 frame helper with xxHash32). LZFSE, LZBITMAP, LZMA and Brotli are still unsupported and fail with Unsupported. Zlib, raw Deflate and LZ4 are wired through encode_buffer, decode_buffer_limited, Stream and the filters. Tests: parity_sdk-tests-20 zlib_raw_deflate_and_lz4_are_supported, unsupported_algorithms_are_named_in_every_buffer_and_stream_entry_point; parity_sdk-tests-04 unsupported_algorithms_fail_in_every_entry_point; compression_lz4 (host unit tests, not yet run). Not yet verified on Midget."
     },
     {
       "feature": "Multiple-step stream compression",
@@ -100,7 +100,7 @@
     }
   ],
   "gaps": [
-    "No LZFSE, LZ4, LZ4_RAW, LZMA or Brotli codec in either direction",
+    "No LZFSE, LZ4_RAW, LZMA or Brotli codec in either direction (LZ4 block and frame are implemented)",
     "No incremental stream state (init, process, destroy): streams buffer their input and run on finalize",
     "DEFLATE encoder has no lazy matching; output is larger than zlib at the same level",
     "PNG writer stores uncompressed zlib blocks (springboard/src/pngenc.rs:31), not deflate-compressed",

@@ -2847,6 +2847,14 @@ All four are host-tested only; rows stay `partial` until checked on Midget.
 - Multi-pass: `FrameSilo` (`add_sample`, `for_each_sample`), `MultiPassStorage` (`set`, `get`, `close`, `to_bytes` / `from_bytes`), and `set_multi_pass`, `begin_pass`, `end_pass` (true when another pass is wanted).
 - Frame processing: `FrameProcessor` trait, `FrameProcessorSession` (start, process, end) and `SuperResolutionScaler` (integer upscale); `set_frame_processor` runs it before encoding.
 
+## Compression: algorithm selection (`bifrost_app::compression`, `bifrost_app::compression::lz4`)
+
+- `Algorithm::Lz4` works in `encode_buffer` / `decode_buffer` / `decode_buffer_limited`, `Stream` and the input and output filters, the same way Zlib and Deflate do. The buffer form is the `bv41` (compressed, with decoded and encoded sizes), `bv4-` (stored) and `bv4$` (end marker) framing, in 64 KiB chunks.
+- `compression::lz4::encode_frame` / `decode_frame` are the LZ4 frame format (magic, FLG and BD, xxHash32 header checksum, block and content checksums). `xxh32` is exposed too.
+- The encoder is a greedy hash-table matcher with a 64 KiB window, minimum match 4, the last 5 bytes as literals, and the last match starting at least 12 bytes before the end. The decoder is bounds-checked and rejects zero or out-of-range offsets, truncation, and output over the limit with `Error::TooBig`.
+- Still `Unsupported`: LZFSE, LZBITMAP, LZMA, Brotli. `Algorithm::is_supported` is the source of truth.
+- Status: host unit tests and `springboard/sdk/tests/compression_lz4.rs` written, not yet run (the build round is pending). Not yet exercised on Midget. The parity row stays `partial`.
+
 ## Core Audio: aggregate devices, process objects, process taps (`bifrost_app::audio_aggregate`, `bifrost_app::audio_process`)
 
 Apple reference: `AudioHardwareCreateAggregateDevice` and the `kAudioAggregateDevice*Key` dictionary,
