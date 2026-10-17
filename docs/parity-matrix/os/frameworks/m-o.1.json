@@ -291,11 +291,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-player.json",
+   "bifrost": "springboard/src/shell/music/nowplaying.rs, springboard/src/shell/music/system.rs, springboard/src/shell/music/icons.rs, springboard/src/shell/audiosvc.rs, springboard/src/shell/pickers.rs, springboard/ui/src/media_picker.rs, springboard/ui/src/media_feedback.rs",
    "status": "partial",
    "note": "from SDK matrix media-player.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::system::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the lock-card like, dislike, bookmark and rating controls (sent to the owner through set_toggle and set_rating) and the media picker drawing. Not verified on Midget. App-facing library queries, remote command handlers and a picker sheet remain gaps."
   },
   {
    "id": "path:/System/Library/Frameworks/MediaToolbox.framework",
