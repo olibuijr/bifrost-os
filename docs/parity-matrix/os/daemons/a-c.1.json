@@ -1843,9 +1843,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/volume_hud.rs, springboard/ui/src/osd.rs",
+   "bifrost": "springboard/src/shell/volume_hud.rs, springboard/ui/src/osd.rs, springboard/src/shell/hwkeys.rs, springboard/src/bare/power.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "The volume key HUD (level bar, headset glyph, route name, 1.5 s hold then fade) is drawn by the shell; the OSD model for volume, brightness and keyboard brightness is in bifrost-ui osd.rs. Brightness has the Control Center slider; the compositor owns brightness keys on a PC.",
+   "note": "The key HUD (level bar, 1.5 s hold then fade) is drawn by the shell for the volume (speaker or headset glyph, route name), the screen brightness (sun glyph) and the keyboard backlight (keyboard glyph), all from the OSD levels in bifrost-ui osd.rs. The brightness keys (224, 225) and the keyboard backlight keys (229, 230) step the level by 1/16 (the LED's own steps for the backlight), show the HUD on every screen except under Control Center, whose slider moves instead, and never wake a dark screen. The panel level goes through the existing Brightness effect (backlight or monitor DDC/CI); the backlight goes to /sys/class/leds/*kbd_backlight. The HUD for mute, eject and other keys of the reference helper is not drawn.",
    "rea": [],
    "method": "rule",
    "ready": true,
@@ -1864,9 +1864,24 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::tests::volume_keys_work_in_apps_and_with_the_screen_off_without_waking_it"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::brightness_keys"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::keyboard_backlight_keys"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power::tests"
     }
    ],
-   "ready_note": "Volume keys step the level and show the HUD on every screen (shell tests); osd::tests cover the shared hold and fade model"
+   "ready_note": "The brightness and keyboard backlight keys step the level and show the same HUD as the volume keys (shell::tests::brightness_keys_step_the_panel_and_show_the_same_hud_as_volume, brightness_keys_leave_a_dark_screen_and_the_control_center_alone, keyboard_backlight_keys_need_a_backlight_and_use_its_steps; volume_hud::tests::brightness_levels_draw_their_own_glyphs); the key codes reach hw_brightness_key from the input loop in bin/shell.rs"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.PIPAgent.plist",
@@ -2966,11 +2981,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs",
+   "bifrost": "springboard/src/shell/live_captions.rs, springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Partial: on-device live speech to text exists for apps (speech_recognizer service, whisper element, consent first) and caption preferences exist (ui captions.rs). Missing for this row: a system-wide Live Captions feature, that is capture of the system audio output (a pulse monitor or pipewire sink capture source in whisper.rs pipeline_argv) and a caption overlay with a Settings switch.",
+   "note": "Live Captions: Settings > Accessibility > Live Captions (a11y_live_captions, off by default) makes the shell start a caption pipeline through the speech_recognizer service (captions_start, shell-only): the same local whisper model as dictation fed from the monitor of the default output (pulsesrc device=@DEFAULT_MONITOR@, or pipewiresrc with stream.capture.sink), so it hears what the computer plays and not the room. The shell polls it every 250 ms and draws the newest two lines on a plate at the bottom centre, which holds 5 s after the last words and fades. Consent and the model come from Keyboard > Dictation; without them the plate says so once and nothing is captured. English only. Not done: the native audio server's pulse compatibility layer reports no monitor sources, so the capture needs the PipeWire or PulseAudio stack; stored caption profiles (ui captions.rs) are not wired to Settings, so the look is the model's default; no caption of a call or of the microphone; no transcript export.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::live_captions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests::live_captions_round_trips_and_is_off_by_default"
+    }
+   ],
+   "ready_note": "The Accessibility switch (prefs) starts the system-audio caption pipeline, polled words reach the plate that the frame draws and damages, a refusal or a dark screen captures nothing, and only the shell may use the system-audio source (shell::live_captions::tests, services::recognizer::tests::captions_*, whisper::tests::system_audio_is_the_monitor_of_the_default_output)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.MotionTrackingAgent.plist",
@@ -3223,11 +3262,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/app_firewall.rs, springboard/src/shell/services/app_firewall.rs",
+   "bifrost": "springboard/core/src/app_firewall.rs, springboard/src/shell/services/app_firewall.rs, springboard/src/shell/firewall_sheet.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "Partial: per-app incoming connection choices (allow, block, ask when none is remembered) are kept and carried out. Built 2026-10-17: the app_firewall service saves app-firewall.conf, builds the nftables ruleset (core app_firewall.rs) and loads it with nft -f - at start and after each change (nftables is in runtime-packages.txt). Missing: the on-screen question for an app that starts listening, and a Settings page for the choices.",
+   "note": "Per-app incoming connection choices (allow, block, ask when none is remembered) are kept and carried out: the app_firewall service saves app-firewall.conf, builds the nftables ruleset (core app_firewall.rs) and loads it with nft -f - (nftables is in runtime-packages.txt). The shell now asks: every 4 s it matches the listening sockets in /proc/net/{tcp,tcp6,udp,udp6} (non-loopback; UDP below the ephemeral range) with the sockets each hosted app and its child processes hold open, and for an app with no choice shows an Allow or Deny card (Deny is the default; an app is asked once per run and the answer is saved with the service). A blocked app's new ports are blocked without asking again. Settings > Network > Firewall lists each remembered app with Allow, Block and Forget This Choice. Not done: apps the shell did not start (a terminal program, a foreign Wayland client) are not asked, and the firewall page cannot add an app or edit its ports by hand.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::app_firewall::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::firewall_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_desktop_network_page_links_to_the_firewall"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::the_firewall_page_hands_the_shell_each_change"
+    }
+   ],
+   "ready_note": "An app that starts listening is asked on a card whose answer is saved through the app_firewall service and loaded as rules, a blocked app's new port is blocked silently, and the Network > Firewall page changes or forgets each choice (shell::firewall_sheet::tests, settings::tests::the_firewall_page_hands_the_shell_each_change)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.amp.mediasharingd.plist",

@@ -100,10 +100,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/mail-desktop/src/imap.rs, springboard/apps/mail-desktop/src/smtp.rs, springboard/apps/mail-desktop/src/sync.rs",
+   "bifrost": "springboard/apps/mail-desktop/src/background.rs, springboard/apps/mail-desktop/src/main.rs, springboard/apps/mail-desktop/manifest.toml, springboard/apps/mail-desktop/src/imap.rs, springboard/apps/mail-desktop/src/smtp.rs, springboard/apps/mail-desktop/src/sync.rs",
    "status": "partial",
-   "note": "Partial: mail sync over IMAP and SMTP, IDLE watchers and the outbox run while the Mail app is open. Missing: mail check while the app is closed. The shell background service can launch an app hidden for a task (manifest [background], sdk background_tasks), but Mail does not declare one and its passwords come from Passwords through window requests, so a headless refresh needs the account and credential path split out of MailWindow.",
-   "rea": []
+   "note": "Mail sync over IMAP and SMTP, IDLE watchers and the outbox run while the Mail app is open. While it is closed, Mail declares a refresh task (manifest [background] tasks) and asks the shell for one every 15 minutes; when the shell starts the app hidden for it, Mail asks Passwords for each mail account's password, lists every inbox on its own thread with the existing session code, posts a New Mail notification for each unread message newer than the last check (muted conversations excepted; the id is the window's, so a message is shown once) and keeps the baseline in mail-baseline.txt. The first check of an account only sets its baseline. The shell limits it: 30 s a run, 8 runs a day, none in Low Power Mode or with Background App Refresh off, so mail can arrive up to a few hours late while the app is closed; only the inbox is checked, and the hidden launch still builds the window, which lists the inbox again.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "tests::a_refresh_task_checks_the_inbox_posts_new_mail_and_asks_for_the_next_check"
+    }
+   ],
+   "ready_note": "A refresh task started by the shell makes Mail fetch the passwords, list each inbox over the IMAP session code, notify for new unread mail, save the baseline, report the task done and ask for the next one (the bin test and background::tests::a_check_over_a_server_announces_the_unread_arrival_once)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.enhancedloggingd.plist",
