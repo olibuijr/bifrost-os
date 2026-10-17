@@ -64,7 +64,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: chmod installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "chmod --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils chmod; --version only, no mode change"
   },
   {
    "id": "path:/bin/cp",
@@ -106,7 +115,15 @@
    "status": "partial",
    "note": "provided by Arch package tcsh; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/csh"
+    }
+   ],
+   "ready_note": "tcsh package ships csh"
   },
   {
    "id": "path:/sbin/apfs_unlockfv",
@@ -358,7 +375,16 @@
    "status": "partial",
    "note": "provided by Arch package sox; not yet verified on Midget. soxi prints the same file facts (format, rate, channels, duration) in its own layout",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "soxi --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "sox soxi prints the same audio file facts; output layout differs"
   },
   {
    "id": "path:/usr/bin/afktool",
@@ -400,7 +426,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: aplay installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "aplay --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "alsa-utils aplay plays audio files (renamed command)"
   },
   {
    "id": "path:/usr/bin/afscexpand",
@@ -442,7 +477,15 @@
    "status": "partial",
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/agentxtrap"
+    }
+   ],
+   "ready_note": "net-snmp agentxtrap"
   },
   {
    "id": "path:/usr/bin/alias",
@@ -463,7 +506,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: alias installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "bash -c 'alias -p'",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "bash alias builtin, the shell BifrOSt uses"
   },
   {
    "id": "path:/usr/bin/app-sso",
@@ -547,7 +599,15 @@
    "status": "partial",
    "note": "provided by Arch package man-db; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/apropos"
+    }
+   ],
+   "ready_note": "man-db apropos"
   },
   {
    "id": "path:/usr/bin/arch",
@@ -568,7 +628,16 @@
    "status": "partial",
    "note": "provided by Arch package coreutils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "arch --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils arch"
   },
   {
    "id": "path:/usr/bin/archiveutil",
@@ -631,7 +700,15 @@
    "status": "partial",
    "note": "provided by Arch package at; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/at"
+    }
+   ],
+   "ready_note": "at package"
   },
   {
    "id": "path:/usr/bin/atos",
@@ -1030,7 +1107,15 @@
    "status": "partial",
    "note": "provided by Arch package at; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/batch"
+    }
+   ],
+   "ready_note": "at package batch"
   },
   {
    "id": "path:/usr/bin/bc",
@@ -1051,7 +1136,16 @@
    "status": "partial",
    "note": "provided by Arch package bc; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "bc --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "GNU bc"
   },
   {
    "id": "path:/usr/bin/binhex",
@@ -1261,7 +1355,16 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "bundle --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ruby bundler, shipped with the ruby package"
   },
   {
    "id": "path:/usr/bin/bundler",
@@ -1282,7 +1385,16 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "bundler --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ruby bundler, shipped with the ruby package"
   },
   {
    "id": "path:/usr/bin/bunzip2",
@@ -1324,7 +1436,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: bzdiff installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bzdiff"
+    }
+   ],
+   "ready_note": "bzip2 package script"
   },
   {
    "id": "path:/usr/bin/bzegrep",
@@ -1366,7 +1486,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: bzgrep installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bzgrep"
+    }
+   ],
+   "ready_note": "bzip2 package script"
   },
   {
    "id": "path:/usr/bin/bzip2recover",
@@ -1387,7 +1515,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: bzip2recover installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bzip2recover"
+    }
+   ],
+   "ready_note": "bzip2 package"
   },
   {
    "id": "path:/usr/bin/bzmore",
@@ -1429,7 +1565,21 @@
    "status": "partial",
    "note": "implemented in springboard/cmd (caffeinate.rs) on systemd-inhibit blocks; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "caffeinate --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "caffeinate::tests"
+    }
+   ],
+   "ready_note": "bifrost-cmd caffeinate: holds a systemd-inhibit lock; help and parser tests"
   },
   {
    "id": "path:/usr/bin/cal",
@@ -1492,7 +1642,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cancel"
+    }
+   ],
+   "ready_note": "CUPS cancel"
   },
   {
    "id": "path:/usr/bin/cap_mkdb",
@@ -1660,7 +1818,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: clear installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/clear"
+    }
+   ],
+   "ready_note": "ncurses clear"
   },
   {
    "id": "path:/usr/bin/cmp",
@@ -1828,7 +1994,15 @@
    "status": "partial",
    "note": "provided by Arch package ncompress; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/compress"
+    }
+   ],
+   "ready_note": "ncompress package"
   },
   {
    "id": "path:/usr/bin/compression_tool",
@@ -1870,7 +2044,15 @@
    "status": "partial",
    "note": "provided by Arch package perl; not yet verified on Midget. the Perl Config helper from the perl package",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/config_data"
+    }
+   ],
+   "ready_note": "perl package Config helper"
   },
   {
    "id": "path:/usr/bin/corelist",
@@ -1912,7 +2094,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: cpan installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/cpan"
+    }
+   ],
+   "ready_note": "perl package cpan"
   },
   {
    "id": "path:/usr/bin/cpio",
@@ -1933,7 +2123,16 @@
    "status": "partial",
    "note": "provided by Arch package cpio; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "cpio --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "GNU cpio"
   },
   {
    "id": "path:/usr/bin/cpu_profiler.d",
@@ -2080,7 +2279,15 @@
    "status": "partial",
    "note": "provided by Arch package cronie; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/crontab"
+    }
+   ],
+   "ready_note": "cronie crontab"
   },
   {
    "id": "path:/usr/bin/csfdiagnose",
@@ -2227,7 +2434,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupstestppd"
+    }
+   ],
+   "ready_note": "CUPS cupstestppd"
   },
   {
    "id": "path:/usr/bin/curl",
@@ -4075,7 +4290,15 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ab"
+    }
+   ],
+   "ready_note": "apache package ab"
   },
   {
    "id": "path:/usr/sbin/ac",
@@ -4159,7 +4382,15 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/apachectl"
+    }
+   ],
+   "ready_note": "apache package apachectl"
   },
   {
    "id": "path:/usr/sbin/appsleepd",
@@ -4600,7 +4831,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsaccept"
+    }
+   ],
+   "ready_note": "CUPS cupsaccept"
   },
   {
    "id": "path:/usr/sbin/cupsctl",
@@ -4621,7 +4860,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsctl"
+    }
+   ],
+   "ready_note": "CUPS cupsctl"
   },
   {
    "id": "path:/usr/sbin/cupsd",
@@ -4663,7 +4910,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsfilter"
+    }
+   ],
+   "ready_note": "CUPS cupsfilter"
   }
  ]
 }
