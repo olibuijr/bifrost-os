@@ -93,6 +93,7 @@ pub mod dnssd_ref;
 pub mod ref_assets;
 pub mod oid;
 pub mod cbor;
+pub mod protobuf;
 pub mod codereq;
 pub mod codesign_events;
 pub mod security_event;

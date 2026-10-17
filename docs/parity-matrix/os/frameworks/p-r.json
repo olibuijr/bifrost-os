@@ -4591,11 +4591,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/protobuf.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Built 2026-10-17: field extraction from raw protocol buffer data (Message getters and describe) in springboard/core/src/protobuf.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "protobuf::tests"
+    }
+   ],
+   "ready_note": "Extracting fields from serialized protobuf data is Message::parse with the typed getters (varint, sint, string, message, packed_varints) and the schema-less describe() raw dump in springboard/core/src/protobuf.rs; tests protobuf::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProtocolBuffer.framework",
@@ -4612,11 +4621,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/protobuf.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Built 2026-10-17: clean-room protocol buffer wire codec in springboard/core/src/protobuf.rs. Not built: schema compilation or generated message types; callers read fields by number.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "protobuf::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: springboard/core/src/protobuf.rs is a std-only protocol buffer wire codec: varints (ten-byte limit), zigzag, the four live wire types, a Writer, a bounded Message reader with typed getters, repeated, packed and nested fields, and hostile-input refusal (truncation, bad keys, depth, lengths). Tests protobuf::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PrototypeTools.framework",
@@ -4634,8 +4652,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal prototyping and tuning tool (live-tweakable prototype settings for Apple's own design builds). The index shows only a bare framework with an en.lproj; no user or app feature, nothing to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -4655,8 +4673,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index holds only localized resources for this framework and no SDK owner matched, so its purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-device proximity (Continuity: unlock and setup between nearby Apple devices over Apple's proprietary UWB/BLE exchange). The index holds only localized strings and an Info.plist; AEBProximityHID in AppleBluetoothRemote.kext is the Apple remote hardware side. BifrOSt has no such protocol to speak.",
    "rea": [],
    "method": "assessed"
   },
@@ -4717,11 +4735,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/chart.rs; springboard/ui/src/chart_marks.rs; springboard/ui/src/chart_content.rs; springboard/sdk/src/quick_look.rs",
    "status": "os",
-   "note": "Reference index shows only Resources and a code signature, so the purpose is not confirmed; the name suggests chart previews for file viewing, which BifrOSt does not render yet.",
+   "note": "Charts shown in Quick Look previews: covered by the shared chart kit (scales, marks, content).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_marks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_content::tests"
+    }
+   ],
+   "ready_note": "Chart drawing for Quick Look data previews is the shared chart model: scales, axis ticks, bins and sectors (chart.rs), marks (chart_marks.rs) and chart content (chart_content.rs); Quick Look hosts it via sdk quick_look.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/QOSToolkit.framework",
@@ -4739,8 +4776,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index shows one localization and no other resources, so the purpose is not confirmed from the reference tree.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal quality-of-service test toolkit for the network stack (probes and reports for Apple's QoS marking and Wi-Fi/cellular service classes). Index: a bare framework with localized strings only; no user or app API. Linux handles QoS in the kernel (tc, DSCP via socket options) and BifrOSt exposes the Link Conditioner model in sdk/link_conditioner.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -4760,8 +4797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index shows a Resources/Networks folder but not what it configures, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple ML model pack: Resources/Networks holds an espresso net (anmd-model.espresso.net/.shape), a compiled MIL model and a 4.4 MB weights .bin plus a metallib for Apple GPU inference. Trained Apple models are not mirrored; BifrOSt runs its own open models.",
    "rea": [],
    "method": "assessed"
   },
@@ -4810,11 +4847,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/searchquery.rs; springboard/ui/src/quicksearch_query.rs; springboard/ui/src/metaquery.rs",
    "status": "os",
-   "note": "Reference index shows only Resources and a code signature; the name suggests query understanding for assistant search, which is not confirmed.",
+   "note": "Query parsing and matching for search: covered by the shared search query models; Apple's per-language ML query assets are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchquery::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "quicksearch_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "metaquery::tests"
+    }
+   ],
+   "ready_note": "Turning a typed query into structured matching is done by the shared query models: word and phrase queries with prefix matching and ranking (searchquery.rs), the attribute query language with operators and modifiers (quicksearch_query.rs) and metadata predicates (metaquery.rs). The reference's per-language assets (UnifiedAssetFramework memoryCreation.QueryUnderstanding plists) are Apple ML language data and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/QuickLookGeneration.framework",
@@ -5287,8 +5343,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index shows only Resources and a code signature, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple cloud-account sync client (RE Sync keeps account-bound data in step across a user's Apple devices through Apple's servers). Index: a bare framework (stub symlinks and _CodeSignature only), referenced by no other bundle. BifrOSt syncs through its own record_sync/cloud_records on BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -5392,8 +5448,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index shows only Resources and a code signature; the name suggests fast delivery of system resources, which is not confirmed, so the purpose is recorded as unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple CDN delivery of resources (downloads fast-track assets from Apple-hosted servers). Index: a bare framework with no resources. BifrOSt ships assets through its own packages and update channel (assetpack, background_download), not an Apple service.",
    "rea": [],
    "method": "assessed"
   },
@@ -5518,8 +5574,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference index shows only Resources, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal UI performance test framework (automated scroll and animation benchmarks run from Apple's test harness; its sibling RecapPerformanceTesting also ships an iOSSupport copy). Apple internal test tooling; BifrOSt benchmarks run through tools/bench.py.",
    "rea": [],
    "method": "assessed"
   },
@@ -5539,8 +5595,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name suggests performance tests for the Recap framework; the reference tree does not confirm it, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal performance-testing harness (sibling of Recap, with an iOSSupport Catalyst copy). Index: Info.plist and version.plist only. Apple internal test tooling; BifrOSt benchmarks run through tools/bench.py.",
    "rea": [],
    "method": "assessed"
   },
@@ -5559,11 +5615,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/perf_counters.rs; springboard/ui/src/counter_sample.rs",
    "status": "os",
-   "note": "Reference index shows only Resources, so the purpose is not confirmed.",
+   "note": "Performance counter access and analysis through Linux perf (sdk/perf_counters.rs); Apple-silicon counter tables are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "perf_counters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "counter_sample::tests"
+    }
+   ],
+   "ready_note": "Reading hardware and software performance counters and measuring work between two points is perf_counters.rs (Linux perf stat, counters the machine lacks come back as None) and counter_sample.rs. The reference's Analysis JSON (bottleneck, characteristics, metrics) is keyed to Apple CPU counters and is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RecoveryOS.framework",
@@ -5610,8 +5680,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Internal framework with no resources in the reference index, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal Swift/Objective-C runtime reflection support (inspecting object layouts for Apple's tooling). Index: a bare framework. BifrOSt apps are Rust with no Objective-C or Swift runtime to reflect on.",
    "rea": [],
    "method": "assessed"
   },
@@ -5666,8 +5736,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name suggests relative pointer or motion input; the reference index shows only a PlugIns folder, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple hardware: relative motion between Apple devices and accessories (Tempest, UWB/IMU fusion for AirPods and nearby devices); the index shows a TempestDiagnosticExtension.appex diagnostic plug-in. No equivalent hardware or data source on Arch.",
    "rea": [],
    "method": "assessed"
   },
@@ -5721,11 +5791,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs; springboard/apps/reminders-desktop/src/store.rs; springboard/apps/reminders-desktop/src/organize.rs; springboard/apps/reminders-desktop/src/repeat.rs; springboard/apps/reminders-desktop/src/quick.rs",
    "status": "os",
-   "note": "Internal half of the reminder framework with no resources in the reference index, so its purpose beyond ReminderKit is not confirmed.",
+   "note": "Reminders data layer (lists, smart lists, subtasks, repeat, grocery categories, store) covered by the Reminders app; cloud sync and Apple's grocery model files are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "organize::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "repeat::tests"
+    }
+   ],
+   "ready_note": "The reminder data layer is the Reminders app's own: lists, smart lists, subtasks, repeat rules, undoable deletion and grocery sections (model.rs, organize.rs, repeat.rs), quick-add parsing (quick.rs) and the atomic store (store.rs). The reference's CloudKit sync and its grocery ML factor files are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ReminderKitUI.framework",
@@ -5742,11 +5836,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/reminders-desktop/src/view.rs",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs; springboard/apps/reminders-desktop/src/view.rs; springboard/apps/reminders-desktop/src/chrome.rs; springboard/apps/reminders-desktop/src/model.rs",
    "status": "partial",
    "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference reminder editor components.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "app::actions_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The reminder list, detail editor (title, notes, URL, date, time, repeat, early alert, flag, priority, subtasks, location) and swipe actions are the Reminders app's own views (app.rs, view.rs, chrome.rs); tests drive them through the same touch and keyboard paths."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemindersAppIntents.framework",
@@ -5763,11 +5871,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs; springboard/apps/reminders-desktop/src/scripting.rs; springboard/apps/reminders-desktop/manifest.toml",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "app::actions_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "scripting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "The Reminders app declares seven intents in its manifest (Add Reminder, Create List Item, Add Quick Reminder, Create List, Open List, Open Smart List, Search Reminders), runs them through perform_intent in main.rs (tests in app::actions_tests) and answers the scripting commands (scripting.rs); the shell lists and runs manifest intents (shell/intents.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemindersIntentsFramework.framework",
@@ -5784,11 +5911,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs; springboard/src/shell/intents.rs; springboard/ui/src/intent_resolve.rs",
    "status": "os",
    "note": "Reminder intents for voice assistants and automation; BifrOSt reminder intents are not wired, so no owner was verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "app::actions_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "The voice-and-typed-request side of Reminders (create a reminder or list, open a list, search) is the same manifest intents, resolved from typed or spoken parameters (intent_resolve.rs) and run by the shell on the app's control socket (shell/intents.rs); the app performs them in main.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemindersUICore.framework",
@@ -5805,11 +5951,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/reminders-desktop/src/view.rs",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs; springboard/apps/reminders-desktop/src/view.rs; springboard/apps/reminders-desktop/src/chrome.rs; springboard/apps/reminders-desktop/src/model.rs",
    "status": "partial",
    "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference shared UI core components.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "app::actions_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The shared UI pieces under the Reminders views (list rows with completion circle and subtask indent, date and time pickers, repeat and alert editors, smart-list grid) are the Reminders app's own drawing and input code (view.rs, chrome.rs, app.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteCompositorServices.framework",
@@ -5827,8 +5987,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name suggests remote compositing of another machine's surfaces; the reference index shows no resources, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: visionOS Compositor Services: lets an app render immersive content that a remote host compositor shows on Apple Vision hardware (default.metallib 37 MB of Apple GPU shaders, localized prompt strings). Apple spatial hardware path; BifrOSt has its own window server and no headset.",
    "rea": [],
    "method": "assessed"
   },
@@ -5869,8 +6029,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name suggests on-device machine learning inference on a remote device; the reference index shows no resources, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-device offload of Core ML inference (runs a model on a paired Apple device or Apple-hosted runtime). Index: a bare framework with Info.plist and version.plist only. BifrOSt runs models in-process through ml_runtime/core_ml and keeps inference local.",
    "rea": [],
    "method": "assessed"
   },
@@ -5890,8 +6050,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name suggests HID input from a remote device; the reference index shows no resources, so the purpose is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple Continuity input forwarding (HID events from a nearby Apple device or accessory delivered over Apple's proprietary link, as in Universal Control and iPhone Mirroring). Index: bare framework, Info.plist only. BifrOSt handles local HID in hid_devices/hid_virtual and remote desktops over its screen-sharing app.",
    "rea": [],
    "method": "assessed"
   },
@@ -6016,8 +6176,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index lists resource files for this bundle and no binary (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: iOS/visionOS developer-device pairing (pairs a Mac with an iPhone, iPad or Apple TV for Xcode and CoreDevice, with a 6 MB code plus a Localizable.loctable of pairing prompts). Apple-only device tooling with no Linux or BifrOSt peer.",
    "rea": [],
    "method": "assessed"
   },
@@ -6037,8 +6197,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary or header is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Remote Service Discovery for Apple mobile devices: the RemoteXPC handshake that lists the services of a connected iPhone or iPad. Apple-only protocol with no open equivalent; index shows a bare framework.",
    "rea": [],
    "method": "assessed"
   },
@@ -6087,11 +6247,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/imsession.rs; springboard/ui/src/imroute.rs; springboard/src/shell/input_methods",
    "status": "os",
    "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imsession::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "imroute::tests"
+    }
+   ],
+   "ready_note": "Text input between an app and the separate input-method process (client session, marked text, candidates, commit and cancel, and key routing to the provider) is imsession.rs and imroute.rs, with the shell-side bridge in shell/input_methods and fcitx_bridge.rs. Remote keyboards over Apple's Continuity link are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteUI.framework",
@@ -6109,8 +6283,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index lists only localized resources for this bundle, the binary is not extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Apple server-driven UI: renders Apple account and iCloud setup pages from XML sent by Apple servers (modal-webview.xml, Assets.car, Localizable.loctable). Serves Apple accounts and cloud; BifrOSt account pages are its own (account_page.rs, bifrost-cloud).",
    "rea": [],
    "method": "assessed"
   },
@@ -6130,8 +6304,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: RemoteXPC: XPC carried over the network to Apple mobile devices (the transport under CoreDevice and Remote Service Discovery). Apple-only protocol; BifrOSt IPC is local sockets and its own control protocol. Index: bare framework.",
    "rea": [],
    "method": "assessed"
   },
@@ -6150,11 +6324,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/display_list.rs; springboard/render/src/effect_chain.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/src/shader.rs",
    "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "note": "Render engine covered by the display list, effect chain and bifrost-gpu pipeline/shader code; Apple's metallib shader archives are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "display_list::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "effect_chain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "pipeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "shader::tests"
+    }
+   ],
+   "ready_note": "The GPU 2D/3D render engine behind view drawing is BifrOSt's own Vulkan stack: recorded display lists with damage and culling (display_list.rs), filter chains (effect_chain.rs) and the Metal-shaped bifrost-gpu pipelines and shaders. The reference's compiled shader archives (archive.metallib, default.metallib) are Apple GPU code and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ReplayKitMacHelper.framework",
@@ -6171,11 +6369,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/replaykit.json",
+   "bifrost": "springboard/ui/src/broadcast.rs; springboard/ui/src/clip_buffer.rs; springboard/ui/src/media_trim.rs",
    "status": "partial",
    "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "broadcast_"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "clip_buffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_trim::tests"
+    }
+   ],
+   "ready_note": "The helper only hosts ReplayKit's two macOS extension UIs: the broadcast activity picker and the video editor. Those jobs are broadcast.rs (service picker, ingest check, start, pause, resume and finish lifecycle, tests in ui/tests/parity_sdk-gaps-01.rs), clip_buffer.rs (the clip model) and media_trim.rs (trim). Actual screen video capture and encoding stays tracked on the ReplayKit row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ReplicatorCore.framework",
@@ -6193,8 +6410,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders and one support folder, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Apple cloud replication daemon: the framework ships Support/replicatord (268 KB) and splits into Core, Dependencies, Engine and Services frameworks that replicate account-bound data to and from Apple's servers. Apple cloud; BifrOSt replicates through record_sync/cloud_records on BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6214,8 +6431,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Dependency layer of the Apple cloud replication stack (Replicator Core/Engine/Services; daemon replicatord). Bare framework with Info.plist only. Apple cloud; BifrOSt replicates through record_sync/cloud_records on BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6235,8 +6452,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Engine layer of the Apple cloud replication stack (Replicator Core/Dependencies/Services; daemon replicatord). Bare framework with Info.plist only. Apple cloud; BifrOSt replicates through record_sync/cloud_records on BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6256,8 +6473,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Services layer of the Apple cloud replication stack (Replicator Core/Dependencies/Engine; daemon replicatord). Bare framework with Info.plist only. Apple cloud; BifrOSt replicates through record_sync/cloud_records on BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -6319,8 +6536,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Apple Siri/Apple Intelligence response presentation (the index links it with the Siri home-automation dialog catalog CompletionResponseUILabels.cat and an AskToTestResponseUIExtension.appex). Apple's cloud-backed assistant UI; BifrOSt's assistant has its own panel (assistant_panel.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -6340,8 +6557,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index lists resource files and no binary, and the name points at device restore but the job is not confirmed; BifrOSt's own rollback is packaging/arch/recovery/guard.rs. Left os.",
+   "status": "n/a",
+   "note": "n/a: Apple device restore: Apple Software Restore (ASRLocalizable.loctable, 1.3 MB of restore prompts) for erasing and reinstalling iOS and Apple-silicon devices from Apple-signed firmware. Apple firmware and servers; BifrOSt recovery is its own installer and recovery phase flow.",
    "rea": [],
    "method": "assessed"
   },
