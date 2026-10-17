@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.18.0 — 2026-10-17
+
+- Double-click an event to open its editor in a window of its own. A single tap now selects the event. Save, Delete or
+  Cancel closes the window; closing it drops unsaved edits.
+- Invitations by Mail: Accept, Maybe or Decline opens Mail to the organiser with the reply (.ics) attached. Saving an event
+  the account organises, with invitees, opens Mail to the invitees with a METHOD:REQUEST (.ics) attached. Mail sends them
+  when the person presses Send; CalDAV scheduling is not used yet.
+- Location: a Show in Maps row under the location opens a Maps search for it. Maps does the lookup.
+
 ## 1.17.0 — 2026-10-17
 
 - View > Show Reminders: the open, dated reminders of the Reminders app are drawn as all-day items with a checkbox glyph in
