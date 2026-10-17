@@ -435,9 +435,14 @@ impl UpNext {
     }
 }
 
-/// The Up Next button at the top right of the Now Playing card (x, y, w, h in px).
-fn up_next_button((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
-    (x + w - ui.pt(DK_PAD_PT + 66.0), y + ui.pt(10.0), ui.pt(60.0), ui.pt(20.0))
+impl Shell {
+    /// The Up Next button at the top right of the Now Playing card (x, y, w, h in px). Its width follows its label, and
+    /// the card's title is cut short of it (see `draw_media_tile`), so nothing overlaps at any card width.
+    fn up_next_button(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+        let ui = &self.ui;
+        let bw = self.measure_chrome("Up Next", 12.0, Weight::Semibold) + ui.pt(8.0);
+        (x + w - ui.pt(DK_PAD_PT) - bw, y + ui.pt(10.0), bw, ui.pt(20.0))
+    }
 }
 
 /// The Sound module's output menu: its panel and one row per output (`bifrost_ui::route_picker`).
@@ -1529,6 +1534,17 @@ mod tests {
     use crate::gfx::Surface;
 
     #[test]
+    fn the_up_next_button_stays_inside_the_card_at_any_width() {
+        let sh = shell();
+        for w in [60.0_f32, 140.0, 320.0, 900.0] {
+            let card = (100.0, 100.0, w, 80.0);
+            let (bx, _, bw, _) = sh.up_next_button(card);
+            assert!(bx >= card.0, "the button starts inside the card at width {w}");
+            assert!(bx + bw <= card.0 + card.2, "the button ends inside the card at width {w}");
+        }
+    }
+
+    #[test]
     fn up_next_picks_a_playable_entry_only() {
         use super::super::services::now_playing::QueueItem;
         let item = |title: &str, playable: bool| QueueItem { title: title.into(), artist: String::new(), playable };
@@ -2075,8 +2091,9 @@ impl Shell {
         draw_scaled(s, &icons::placeholder(64, 0.0), r, ui.pt(5.0), alpha);
         let title = session.content().map_or("Now Playing".to_string(), |c| c.title.clone());
         let artist = session.content().map(|c| c.subtitle()).unwrap_or_default();
-        let text_w = ui.pt(130.0);
         let tx = (x + ui.pt(14.0) + size + ui.pt(10.0)) as i32;
+        // the text runs up to the Up Next button, whatever the card's width
+        let text_w = (self.up_next_button(rect).0 - ui.pt(8.0) - tx as f32).max(0.0);
         let title = self.fit_chrome(&title, 15.0, text_w);
         let artist = self.fit_chrome(&artist, 13.0, text_w);
         self.label(&title, 15.0, Weight::Semibold, WHITE, |im| s.blit(im, tx, (y + ui.pt(16.0)) as i32, 255, alpha));
@@ -2232,7 +2249,7 @@ impl Shell {
         let at = |x: f32, y: f32| tiles.iter().copied().find(|&(_, r)| inside(r, x, y));
         match ev {
             Event::Down(x, y) => match at(x, y) {
-                Some((Tile::MediaPlay, r)) if inside(up_next_button(r, &self.ui), x, y) => {
+                Some((Tile::MediaPlay, r)) if inside(self.up_next_button(r), x, y) => {
                     let row_h = self.ui.pt(super::list::ROW_PT);
                     let items = now_playing::up_next();
                     let panel_w = r.2;
@@ -2354,7 +2371,7 @@ impl Shell {
                 Tile::MediaPlay => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
-                    let (bx, by, _, _) = up_next_button((x, y, w, h), ui);
+                    let (bx, by, _, _) = self.up_next_button((x, y, w, h));
                     self.label("Up Next", 12.0, Weight::Semibold, SYSTEM_BLUE, |im| s.blit(im, bx as i32, by as i32, 255, alpha));
                 }
                 _ => {
