@@ -119,6 +119,87 @@ impl Sha3 {
     }
 }
 
+/// Absorbs one full rate block (`block.len()` bytes, a multiple of 8) into the sponge and permutes it.
+fn absorb_block(state: &mut [u64; 25], block: &[u8]) {
+    for (i, lane) in block.chunks_exact(8).enumerate() {
+        let mut l = [0u8; 8];
+        l.copy_from_slice(lane);
+        state[i] ^= u64::from_le_bytes(l);
+    }
+    keccak_f(state);
+}
+
+/// SHAKE128 or SHAKE256 (FIPS 202): the extendable-output functions on the same sponge, with the 0x1F domain suffix.
+/// Absorb with [`Shake::update`], then read any number of bytes with [`Shake::squeeze`]. Input after the first
+/// squeeze is not allowed.
+#[derive(Clone)]
+pub struct Shake {
+    state: [u64; 25],
+    buf: [u8; 200],
+    fill: usize,
+    rate: usize,
+    squeezing: bool,
+    pos: usize,
+}
+
+impl Shake {
+    fn with(rate: usize) -> Self {
+        Shake { state: [0; 25], buf: [0; 200], fill: 0, rate, squeezing: false, pos: 0 }
+    }
+
+    /// SHAKE128: rate 168 bytes.
+    pub fn new_128() -> Self {
+        Self::with(168)
+    }
+
+    /// SHAKE256: rate 136 bytes.
+    pub fn new_256() -> Self {
+        Self::with(136)
+    }
+
+    pub fn update(&mut self, mut data: &[u8]) {
+        debug_assert!(!self.squeezing, "SHAKE input after output");
+        while !data.is_empty() {
+            let n = (self.rate - self.fill).min(data.len());
+            self.buf[self.fill..self.fill + n].copy_from_slice(&data[..n]);
+            self.fill += n;
+            data = &data[n..];
+            if self.fill == self.rate {
+                absorb_block(&mut self.state, &self.buf[..self.rate]);
+                self.fill = 0;
+            }
+        }
+    }
+
+    /// Pads the partial block with the SHAKE suffix (0x1F, then 0x80 in the last rate byte) and absorbs it.
+    fn pad(&mut self) {
+        for b in self.buf[self.fill..self.rate].iter_mut() {
+            *b = 0;
+        }
+        self.buf[self.fill] = 0x1f;
+        self.buf[self.rate - 1] |= 0x80;
+        absorb_block(&mut self.state, &self.buf[..self.rate]);
+        self.squeezing = true;
+        self.pos = 0;
+    }
+
+    /// Fills `out` with the next bytes of the output stream. Calls can be split at any point: the result is the same
+    /// as one call for the whole length.
+    pub fn squeeze(&mut self, out: &mut [u8]) {
+        if !self.squeezing {
+            self.pad();
+        }
+        for b in out.iter_mut() {
+            if self.pos == self.rate {
+                keccak_f(&mut self.state);
+                self.pos = 0;
+            }
+            *b = (self.state[self.pos / 8] >> (8 * (self.pos % 8))) as u8;
+            self.pos += 1;
+        }
+    }
+}
+
 /// SHA3-256 of `data` in one call.
 pub fn sha3_256(data: &[u8]) -> [u8; 32] {
     let mut s = Sha3::new_256();
@@ -196,6 +277,38 @@ mod tests {
         s.update(&data[..100]);
         s.update(&data[100..]);
         assert_eq!(s.finish(), sha3_256(&data).to_vec());
+    }
+
+    #[test]
+    fn shake_split_squeeze_matches_one_call() {
+        // 400 bytes spans more than two SHAKE128 rates (168) and one SHAKE256 rate (136)
+        for make in [Shake::new_128, Shake::new_256] {
+            let mut whole = make();
+            whole.update(b"ML-KEM seed material");
+            let mut all = vec![0u8; 400];
+            whole.squeeze(&mut all);
+
+            let mut parts = make();
+            parts.update(b"ML-KEM ");
+            parts.update(b"seed material");
+            let mut got = Vec::new();
+            for n in [1usize, 7, 168, 200, 24] {
+                let mut chunk = vec![0u8; n];
+                parts.squeeze(&mut chunk);
+                got.extend_from_slice(&chunk);
+            }
+            assert_eq!(got, all[..got.len()].to_vec());
+        }
+    }
+
+    #[test]
+    fn shake128_and_shake256_differ() {
+        let mut a = Shake::new_128();
+        let mut b = Shake::new_256();
+        let (mut x, mut y) = ([0u8; 32], [0u8; 32]);
+        a.squeeze(&mut x);
+        b.squeeze(&mut y);
+        assert_ne!(x, y);
     }
 
     #[test]
