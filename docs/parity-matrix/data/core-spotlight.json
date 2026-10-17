@@ -3,8 +3,8 @@
  "doc": "https://developer.apple.com/documentation/corespotlight",
  "macos_since": "10.13",
  "status": "partial",
- "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet, UserActivity), springboard/src/shell/spotindex.rs (per-app on-disk index and search), springboard/src/shell/quicksearch.rs (Search panel, Documents section), springboard/proto/src/quicksearch.rs (wire messages)",
- "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents. A query, suggestion and assistant search tool exist as host-tested models over the same matching. None of the query, delegate, extension or tool models is wired to the shell or SDK yet, and index extensions and the Foundation pipeline types are not built.",
+ "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet, UserActivity), springboard/src/shell/spotindex.rs (per-app on-disk index and search), springboard/src/shell/quicksearch.rs (Search panel, Documents section), springboard/proto/src/quicksearch.rs (wire messages); springboard/ui/src/search_rank.rs (tokenizer, BM25 hybrid ranker, merging runtime)",
+ "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents, ordered by a hybrid ranker (BM25 over title and text, title match, indexing recency, local open counts; the semantic term is a hook with no local model yet). A runtime that queries several sources with a deadline is built but not yet wired to the panel. A query, suggestion and assistant search tool exist as host-tested models over the same matching. None of the query, delegate, extension or tool models is wired to the shell or SDK yet, and index extensions and the Foundation pipeline types are not built.",
  "rea_evidence": "ev_4438bf59535e4bd6ba0ca70598c6a17e34d2cbccb6b6a1ca563a4e22a50cb41b",
  "features": [
   {
@@ -68,7 +68,7 @@
    "apple": "CSUserQuery, CSUserQueryContext, CSSuggestion, Building a search interface for your app",
    "bifrost": "springboard/src/shell/quicksearch.rs:273 (Documents group in the system Search panel); springboard/src/shell/quicksearch.rs:829 (suggestions_shown, the app-launch suggestions row); wired: springboard/src/shell/quicksearch.rs (Documents group); springboard/src/shell/spotindex.rs (parse_query, time_phrase, kind_word); springboard/ui/src/quicksearch_query.rs (host-tested model, not wired to the shell or SDK yet; verify on Midget for parity).",
    "status": "partial",
-   "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: quicksearch_query::UserQuery, UserQueryContext, Suggestion: ranked results and title suggestions. Added springboard/ui/src/usersearch.rs (run_user_query, UserQueryContext, CSSuggestion): ranked items plus completions of the last word. Not yet reached through a shell service; suggestions are plain text."
+   "note": "the system Search panel shows indexed items from all apps; apps have no search field or completion suggestions API that uses the index Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Added: quicksearch_query::UserQuery, UserQueryContext, Suggestion: ranked results and title suggestions. Added springboard/ui/src/usersearch.rs (run_user_query, UserQueryContext, CSSuggestion): ranked items plus completions of the last word. Not yet reached through a shell service; suggestions are plain text. Documents are ranked by bifrost_ui::search_rank (BM25, title match, recency, open counts); the semantic term is a hook with no local model."
   },
   {
    "feature": "Opening a search result",
@@ -118,6 +118,7 @@
   "No index client delegate and no index extensions for on-demand regeneration (CSSearchableIndexDelegate, CSIndexExtensionRequestHandler, CSImportExtension).",
   "No index descriptions or protection classes; the shell index is a single JSON file per app with oldest-first eviction at 1000 items.",
   "The shell index does not acknowledge calls, so remoteConnectionError is never raised and the shell's own oldest-first eviction is not visible to the SDK ledger.",
-  "The Foundation models search tool is a model only: SpotlightSearchTool is not offered to the assistant app, and the pipeline types (SearchSource, CustomStage, SearchResultsTable and the rest) are not modelled."
+  "The Foundation models search tool is a model only: SpotlightSearchTool is not offered to the assistant app, and the pipeline types (SearchSource, CustomStage, SearchResultsTable and the rest) are not modelled.",
+  "The search runtime (bifrost_ui::search_rank::run, deadline and sections across sources) is not yet used by the Search panel, and the open counts and BM25 are not yet applied to apps, settings, contacts or files."
  ]
 }
