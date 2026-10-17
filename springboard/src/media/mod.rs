@@ -63,6 +63,8 @@ pub mod v4l2;
 pub mod speaker;
 pub mod audioplayer;
 pub mod timestretch;
+/// Choice models for the video player's pickers: playback speed and subtitle track.
+pub mod pickers;
 pub mod queue;
 #[cfg(target_os = "linux")]
 pub mod player;
