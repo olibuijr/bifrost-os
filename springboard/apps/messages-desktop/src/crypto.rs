@@ -11,7 +11,10 @@
 use crate::protocol::{self, Body, Ciphertext, Event, ToDevice};
 use bifrost_core::json::{self, Json};
 use std::collections::HashMap;
-use vodozemac::megolm::{GroupSession, InboundGroupSession, MegolmMessage, SessionConfig as MegolmConfig, SessionKey};
+use vodozemac::megolm::{
+    GroupSession, GroupSessionPickle, InboundGroupSession, InboundGroupSessionPickle, MegolmMessage, SessionConfig as MegolmConfig,
+    SessionKey,
+};
 use vodozemac::olm::{Account, AccountPickle, OlmMessage, Session, SessionConfig as OlmConfig};
 use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature};
 
@@ -108,15 +111,55 @@ impl Machine {
         self.dirty = true;
     }
 
-    /// The encrypted pickles of the Olm and Megolm sessions, as a sessions item (one record per line; see
-    /// [`Machine::load_sessions`]). `None` when there are none.
-    fn sessions_blob(&self, _key: &[u8; 32]) -> Option<String> {
-        None
+    /// The Megolm sessions, encrypted with `key`, as the sessions item: one record per line, `out` for an outbound
+    /// session (room, created time, message count, members, pickle) and `in` for an inbound one (room, session id,
+    /// pickle). `None` when there are none. The Olm sessions are not kept: they only carry room keys, which are sent
+    /// again at rotation and for new devices.
+    fn sessions_blob(&self, key: &[u8; 32]) -> Option<String> {
+        if self.outbound.is_empty() && self.inbound.is_empty() {
+            return None;
+        }
+        let mut lines = Vec::new();
+        for (room, (session, state)) in &self.outbound {
+            lines.push(format!(
+                "out\t{room}\t{}\t{}\t{}\t{}",
+                state.created_ms,
+                state.messages,
+                state.members.join(","),
+                session.pickle().encrypt(key)
+            ));
+        }
+        for ((room, session_id), session) in &self.inbound {
+            lines.push(format!("in\t{room}\t{session_id}\t{}", session.pickle().encrypt(key)));
+        }
+        Some(lines.join("\n"))
     }
 
-    /// Restores the sessions a [`Machine::sessions_blob`] wrote. Returns how many were restored.
-    pub fn load_sessions(&mut self, _key: &[u8; 32], _blob: &str) -> Result<usize, String> {
-        Ok(0)
+    /// Restores the sessions a [`Machine::sessions_blob`] wrote. Returns how many records were read.
+    pub fn load_sessions(&mut self, key: &[u8; 32], blob: &str) -> Result<usize, String> {
+        let mut loaded = 0;
+        for line in blob.lines() {
+            let fields: Vec<&str> = line.split('\t').collect();
+            match fields.as_slice() {
+                ["out", room, created, messages, members, pickle] => {
+                    let session = GroupSession::from_pickle(GroupSessionPickle::from_encrypted(pickle, key).map_err(|e| e.to_string())?);
+                    let state = Outbound {
+                        created_ms: created.parse().map_err(|_| "a session record is damaged".to_string())?,
+                        messages: messages.parse().map_err(|_| "a session record is damaged".to_string())?,
+                        members: members.split(',').filter(|m| !m.is_empty()).map(String::from).collect(),
+                    };
+                    self.outbound.insert(room.to_string(), (session, state));
+                }
+                ["in", room, session_id, pickle] => {
+                    let session =
+                        InboundGroupSession::from_pickle(InboundGroupSessionPickle::from_encrypted(pickle, key).map_err(|e| e.to_string())?);
+                    self.inbound.insert((room.to_string(), session_id.to_string()), session);
+                }
+                _ => continue,
+            }
+            loaded += 1;
+        }
+        Ok(loaded)
     }
 
     /// The state to write to the keychain, when it changed since the last call and a pickle key is set. The items are
@@ -727,6 +770,22 @@ mod tests {
         assert_eq!(back.identity(), (curve, ed));
         assert!(parse_key_item("not a key").is_none());
         assert!(parse_device_item("no newline").is_none());
+    }
+
+    #[test]
+    fn megolm_sessions_survive_a_save_and_a_restore() {
+        let key = [5u8; 32];
+        let mut m = Machine::new("@a:x", "DEVA");
+        m.set_pickle_key(key);
+        m.prepare_room("!r:x", &members(&["@a:x"]), 42);
+        let blob = m.sessions_blob(&key).expect("an outbound session");
+        let mut back = Machine::new("@a:x", "DEVA");
+        assert_eq!(back.load_sessions(&key, &blob), Ok(1));
+        let text = protocol::obj(vec![("msgtype", protocol::text("m.text")), ("body", protocol::text("kept"))]);
+        let a = m.encrypt_room_event("!r:x", "m.room.message", &text).unwrap();
+        let b = back.encrypt_room_event("!r:x", "m.room.message", &text).unwrap();
+        assert_eq!(a.str_field("session_id"), b.str_field("session_id"), "the restored session is the same room key");
+        assert!(Machine::new("@a:x", "DEVA").load_sessions(&[6u8; 32], &blob).is_err(), "the wrong key does not open them");
     }
 
     #[test]
