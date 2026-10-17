@@ -249,6 +249,11 @@ impl Client {
         r.str_field("id").ok_or(ClientError { code: "internal".into(), message: "reply has no app id".into() })
     }
 
+    /// Asks privd to remove the package `name` with pacman. privd refuses the shell and the base system.
+    pub fn package_remove(&self, name: &str) -> Result<(), ClientError> {
+        self.call_timeout("package.remove", vec![("name", privd::s(name))], Duration::from_secs(600)).map(|_| ())
+    }
+
     pub fn store_uninstall(&self, id: &str) -> Result<(), ClientError> {
         self.call("store.uninstall", vec![("id", privd::s(id))]).map(|_| ())
     }
@@ -314,6 +319,7 @@ mod tests {
         let u = c.update_check().unwrap();
         assert_eq!((u.installed.as_deref(), u.version.as_deref(), u.size), (Some("1-1"), Some("2-1"), 9));
         assert_eq!(c.store_uninstall("x").unwrap_err().code, "bad_params");
+        assert_eq!(c.package_remove("base").unwrap_err().code, "bad_params");
         set_token(None);
         assert_eq!(Client::remote(dir.join("missing.sock")).ping().unwrap_err().code, "unavailable");
     }
