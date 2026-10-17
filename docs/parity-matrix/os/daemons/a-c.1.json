@@ -801,7 +801,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs. shell/dwell.rs is an older, unused copy of the model. Needs a Midget check before it counts as parity.",
+   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs (the old duplicate shell/dwell.rs was removed). Needs a Midget check before it counts as parity.",
    "rea": [],
    "method": "heuristic",
    "ready": true,
