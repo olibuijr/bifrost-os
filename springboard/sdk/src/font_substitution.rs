@@ -15,6 +15,7 @@ pub enum FamilyClass {
     GrotesqueSans,
     GeometricSans,
     HumanistSans,
+    WideHumanist,
     DidoneSerif,
     TransitionalSerif,
     Slab,
@@ -42,12 +43,13 @@ impl FamilyClass {
         match self {
             FamilyClass::GrotesqueSans => &["Inter", "Geist", "Source Sans 3"],
             FamilyClass::GeometricSans => &["Outfit", "Poppins", "Geist", "Inter"],
-            FamilyClass::HumanistSans => &["Source Sans 3", "IBM Plex Sans", "Inter"],
+            FamilyClass::HumanistSans => &["Source Sans 3", "IBM Plex Sans", "Inter", "Lato"],
+            FamilyClass::WideHumanist => &["DejaVu Sans", "Source Sans 3", "Inter"],
             FamilyClass::DidoneSerif => &["Playfair Display", "Noto Serif", "Source Serif 4"],
             FamilyClass::TransitionalSerif => &["Noto Serif", "Source Serif 4", "Libre Baskerville"],
             FamilyClass::Slab => &["Roboto Slab", "Zilla Slab", "Noto Serif"],
             FamilyClass::Script => &["Pacifico", "Caveat", "Dancing Script"],
-            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code"],
+            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code", "DejaVu Sans Mono"],
             FamilyClass::Rounded => &["Nunito", "Quicksand", "M PLUS Rounded 1c", "Inter"],
             FamilyClass::CjkGothic => &["Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK KR"],
             FamilyClass::CjkMincho => &["Noto Serif CJK JP", "Noto Serif CJK SC", "Noto Serif CJK TC", "Noto Serif CJK KR"],
@@ -83,16 +85,17 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("din alternate", GrotesqueSans), ("din condensed", GrotesqueSans), ("avenir next condensed", GrotesqueSans),
     // geometric sans
     ("avenir", GeometricSans), ("avenir next", GeometricSans), ("futura", GeometricSans), ("gill sans", GeometricSans),
-    ("century gothic", GeometricSans), ("optima", GeometricSans), ("trebuchet ms", GeometricSans), ("copperplate", GeometricSans),
+    ("century gothic", GeometricSans), ("optima", GeometricSans), ("copperplate", GeometricSans),
     ("didot sans", GeometricSans), ("kohinoor devanagari", GeometricSans), ("kohinoor bangla", GeometricSans),
     // humanist sans
-    ("lucida grande", HumanistSans), ("lucida sans", HumanistSans), ("verdana", HumanistSans), ("tahoma", HumanistSans),
+    ("lucida grande", HumanistSans), ("lucida sans", HumanistSans), ("trebuchet ms", HumanistSans), ("stone sans", HumanistSans),
+    ("verdana", WideHumanist), ("tahoma", WideHumanist),
     ("calibri", HumanistSans), ("segoe ui", HumanistSans), ("geneva", HumanistSans), ("myriad pro", HumanistSans),
     ("frutiger", HumanistSans), ("candara", HumanistSans), ("corbel", HumanistSans), ("noteworthy", HumanistSans),
     ("pt sans", HumanistSans), ("al bayan", HumanistSans), ("damascus", HumanistSans),
     ("geeza pro", HumanistSans), ("kefa", HumanistSans), ("mshtakan", HumanistSans), ("nadeem", HumanistSans),
     // didone and display serif
-    ("didot", DidoneSerif), ("bodoni 72", DidoneSerif), ("bodoni 72 oldstyle", DidoneSerif), ("bodoni 72 smallcaps", DidoneSerif),
+    ("didot", DidoneSerif), ("trattatello", DidoneSerif), ("bodoni 72", DidoneSerif), ("bodoni 72 oldstyle", DidoneSerif), ("bodoni 72 smallcaps", DidoneSerif),
     ("bodoni mt", DidoneSerif), ("new york", DidoneSerif), ("playfair display", DidoneSerif),
     // transitional and old-style serif
     ("times", TransitionalSerif), ("times new roman", TransitionalSerif), ("georgia", TransitionalSerif),
@@ -110,7 +113,7 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("marker felt", Script), ("segoe script", Script), ("lucida handwriting", Script), ("party let", Script),
     ("papyrus", Script), ("blackmoor let", Script),
     // monospaced
-    ("sf mono", Monospaced), ("menlo", Monospaced), ("monaco", Monospaced), ("courier", Monospaced),
+    ("sf mono", Monospaced), ("menlo", Monospaced), ("monaco", Monospaced), ("spotmono", Monospaced), ("courier", Monospaced),
     ("courier new", Monospaced), ("consolas", Monospaced), ("andale mono", Monospaced), ("lucida console", Monospaced),
     ("liberation mono", Monospaced), ("cousine", Monospaced), ("dejavu sans mono", Monospaced), ("osaka-mono", Monospaced),
     // rounded
@@ -132,7 +135,7 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("nanumscript", CjkGothic), ("bmdohyeon-regular", CjkGothic), ("bmhanna11yrs-regular", CjkGothic),
     ("bmhannaair-regular", CjkGothic), ("bmhannapro-regular", CjkGothic), ("bmjua-regular", CjkGothic),
     ("bmkiranghaerang-regular", CjkGothic), ("baoli", CjkGothic), ("weibeisc-bold", CjkGothic), ("weibeitc-bold", CjkGothic),
-    ("xingkai", CjkGothic), ("wawasc-regular", CjkGothic), ("wawatc-regular", CjkGothic), ("yuppysc-regular", CjkGothic),
+    ("xingkai", CjkKai), ("wawasc-regular", CjkGothic), ("wawatc-regular", CjkGothic), ("yuppysc-regular", CjkGothic),
     ("yuppytc-regular", CjkGothic),
     // CJK mincho (serif)
     ("hiragino mincho pro", CjkMincho), ("hiragino mincho pron", CjkMincho), ("ヒラギノ明朝 pro", CjkMincho),
@@ -267,6 +270,24 @@ mod tests {
         assert_eq!(substitute("Futura")[0], "Outfit");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
+    }
+
+    #[test]
+    fn packaged_open_substitutes_resolve_by_class() {
+        // Reference faces closed with packaged open substitutes (ttf-dejavu, ttf-lato, noto-fonts, noto-fonts-cjk).
+        for name in ["Verdana", "Tahoma"] {
+            assert_eq!(class_of_family(name), Some(WideHumanist), "{name}");
+            assert_eq!(substitute(name)[0], "DejaVu Sans");
+        }
+        for name in ["Trebuchet MS", "Stone Sans"] {
+            assert_eq!(class_of_family(name), Some(HumanistSans), "{name}");
+            assert!(substitute(name).contains(&"Lato"));
+        }
+        assert_eq!(class_of_family("Trattatello"), Some(DidoneSerif));
+        assert_eq!(class_of_family("SpotMono"), Some(Monospaced));
+        assert!(substitute("SpotMono").contains(&"DejaVu Sans Mono"));
+        assert_eq!(class_of_family("SimSong"), Some(CjkMincho));
+        assert_eq!(class_of_family("Xingkai"), Some(CjkKai));
     }
 
     #[test]
