@@ -151,6 +151,8 @@ pub enum PageId {
     GroupDetail,
     /// Keyboard > Modifier Keys: what Caps Lock, Control, Option and Command do (see `kb_input`)
     ModifierKeys,
+    /// Settings > one app's panes: the installed app at this slot (see `settings_panes::spec`)
+    AppPanes(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -459,6 +461,8 @@ pub enum Action {
     Location(super::location_page::Edit),
     /// Settings > Assistant: a switch, the backend, or an app's access to its intents (see `assistant_page::Edit`)
     Assistant(super::assistant_page::Edit),
+    /// Settings > an app's pane: ask the app in this slot to open the pane with this id (`settings_panes::open`)
+    AppPane(usize, String),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -1464,6 +1468,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
         // built by `permissions_page`, which reads the installed apps and their answers
         PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
+        PageId::AppPanes(slot) => super::settings_panes::spec(slot),
         // built by `location_page::spec`, which reads the prefs and the location answers
         PageId::LocationServices => page("Location Services", false, vec![]),
     }
