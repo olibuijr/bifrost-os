@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-BoldItalic.otf",
@@ -64,7 +72,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-HeavyItalic.otf",
@@ -106,7 +122,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-LightItalic.otf",
@@ -148,7 +172,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-MediumItalic.otf",
@@ -190,7 +222,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-RegularItalic.otf",
@@ -232,7 +272,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-SemiboldItalic.otf",
@@ -274,7 +322,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMonoItalic-Terminal.ttf",
@@ -313,8 +369,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +390,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +411,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +432,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -397,8 +453,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -545,7 +601,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCamera resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -566,7 +622,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCompact resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -587,7 +643,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCompactItalic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -608,7 +664,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCompactRounded resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -736,7 +792,15 @@
    "status": "partial",
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUI.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's system UI font SFUI.ttf (Inter, variable wght and opsz, OFL) is required by the ISO build as the default system font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSItalic.ttf",
@@ -778,7 +842,15 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+    }
+   ],
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMonoItalic.ttf",
@@ -818,7 +890,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFNSRounded resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1595,7 +1667,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Savoye LET resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1616,7 +1688,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Seravek resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1658,7 +1730,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SignPainter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1679,7 +1751,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Silom resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1742,7 +1814,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Skia resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1763,7 +1835,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SnellRoundhand resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1784,7 +1856,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Songti resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1826,7 +1898,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SuperClarendon resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1868,7 +1940,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFSymbolsNeededByCoreMedia-Semibold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1933,7 +2005,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ScreenshotWindow shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/screenshotWindow-top.pdf",
@@ -1954,7 +2035,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ScreenshotWindow shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Scancardium_2.0.ttf",
@@ -1973,7 +2063,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Scancardium_2.0 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1994,7 +2084,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Spendcardium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2015,7 +2105,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Santa Fe LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2036,7 +2126,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchemeBold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2057,7 +2147,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchoolHouse Cursive B resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2078,7 +2168,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SchoolHouse Printed A resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2099,7 +2189,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Somer resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2120,7 +2210,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Stone Sans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2141,7 +2231,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Synchro LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2309,7 +2399,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SauberScript resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2351,7 +2441,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SimSong resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2414,7 +2504,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2435,7 +2525,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2456,7 +2546,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SF-Cash-Text-Condensed-Semibold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2477,7 +2567,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCash-Chiseled resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2498,7 +2588,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFCash-Plain resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2542,7 +2632,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'scroll-page' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SearchRangeWithinSameElement.aiff",
@@ -2563,7 +2662,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'search-range' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.aiff",
@@ -2584,7 +2692,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'secure-character' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.caf",
@@ -2605,7 +2722,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'secure-character' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Select.aiff",
@@ -2626,7 +2752,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'select' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SingleClick.aiff",
@@ -2647,7 +2782,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'single-click' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringBack.aiff",
@@ -2668,7 +2812,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'spring-back' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringForward.aiff",
@@ -2689,7 +2842,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'spring-forward' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeDouble.aiff",
@@ -2710,7 +2872,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-double' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeMultiple.aiff",
@@ -2731,7 +2902,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-multiple' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeSingle.aiff",
@@ -2752,7 +2932,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'style-change-single' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/Sounds/Sosumi.aiff",
@@ -2773,7 +2962,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/Library/Sounds/Submarine.aiff",
@@ -2794,7 +2992,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Pulse tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/UIKitCore.framework/Versions/A/Resources/SFProRoundedStatusBar.ttf",
@@ -2813,7 +3020,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "SFProRoundedStatusBar resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   }

@@ -125,7 +125,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Zapfino resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -148,7 +148,15 @@
    "status": "partial",
    "note": "open equivalent D050000L (gsfonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    }
+   ],
+   "ready_note": "URW D050000L (gsfonts) is the Dingbats face that stands in for ZapfDingbats; glyph coverage is not identical."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Yaziji.ttc",
@@ -209,7 +217,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "WawaSC-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -230,7 +238,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "WawaTC-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -251,7 +259,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "WeibeiSC-Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -272,7 +280,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "WeibeiTC-Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -293,7 +301,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Xingkai resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -314,7 +322,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Yu Gothic Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -335,7 +343,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Yu Gothic Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -356,7 +364,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "YuMincho resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -377,7 +385,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Yuanti resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -398,7 +406,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "YuppySC-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -419,7 +427,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "YuppyTC-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -442,7 +450,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'web-area-loaded' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WebPageLoaded.aiff",
@@ -463,7 +480,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'web-page-loaded' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WindowActivated.aiff",
@@ -484,7 +510,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'window-activated' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBack.aiff",
@@ -505,7 +540,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'wrap-back' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBackHard.aiff",
@@ -526,7 +570,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'wrap-back-hard' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBoundary.aiff",
@@ -547,7 +600,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'wrap-boundary' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapForward.aiff",
@@ -568,7 +630,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'wrap-forward' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapForwardHard.aiff",
@@ -589,7 +660,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'wrap-forward-hard' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineBreakpoint.aiff",
@@ -610,7 +690,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'line-breakpoint' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineError.aiff",
@@ -631,7 +720,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'line-error' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineWarning.aiff",
@@ -652,7 +750,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'line-warning' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/Versions/A/Resources/WorkflowGlyphs.ttf",
@@ -671,7 +778,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "WorkflowGlyphs resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   }

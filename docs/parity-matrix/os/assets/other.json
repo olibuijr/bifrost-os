@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ヒラギノ丸ゴ ProN W4 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -41,7 +41,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ヒラギノ明朝 ProN resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -272,7 +272,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "儷宋 Pro resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -293,7 +293,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "儷黑 Pro resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -314,7 +314,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "华文仿宋 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -335,7 +335,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "华文细黑 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -356,7 +356,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "华文黑体 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   }
