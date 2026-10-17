@@ -3,8 +3,9 @@
 //! cell. Pixels are premultiplied RGBA packed in a `u32` (red in the low byte), like `gfx::Image`,
 //! and the output has the size of the input. Cell geometry and the mirroring are this model's own;
 //! the reference cell shapes are not reproduced exactly.
-use crate::distortion_filters::warp;
+use crate::distortion_filters::{sample, warp};
 use crate::gfx::Image;
+use crate::perspective::{homography, map_point, Point};
 
 fn fin(v: f32, d: f32) -> f32 {
     if v.is_finite() { v } else { d }
@@ -60,6 +61,30 @@ pub fn parallelogram_tile(img: &Image, center: (f32, f32), angle: f32, acute: f3
         let (fu, fv) = (a - a.floor(), b - b.floor());
         to_pixel(img, fu, fv)
     })
+}
+
+/// `CIPerspectiveTile`: the image is laid onto the quadrilateral `quad` (top left, top right, bottom
+/// right, bottom left of the output) with a perspective transform, and that picture repeats over the
+/// plane, so the quad shows one copy and the space around it shows the repeats. Output pixels are
+/// computed by inverse mapping: each pixel centre is sent back into the image, wrapped modulo its
+/// size, and bilinearly sampled. `None` when the quad is degenerate or the image is empty.
+pub fn perspective_tile(img: &Image, quad: [Point; 4]) -> Option<Image> {
+    if img.w == 0 || img.h == 0 {
+        return None;
+    }
+    let (w, h) = (img.w as f32, img.h as f32);
+    let rect = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)];
+    // From output back to the image rectangle: the inverse of the mapping rect -> quad.
+    let inverse = homography(quad, rect)?;
+    let mut out = Image::new(img.w, img.h);
+    for y in 0..img.h {
+        for x in 0..img.w {
+            if let Some((u, v)) = map_point(&inverse, (x as f32 + 0.5, y as f32 + 0.5)) {
+                out.px[y * img.w + x] = sample(img, u.rem_euclid(w), v.rem_euclid(h));
+            }
+        }
+    }
+    Some(out)
 }
 
 #[cfg(test)]
@@ -136,6 +161,38 @@ mod tests {
         let i = gradient(6, 6);
         assert_eq!(parallelogram_tile(&i, (0.0, 0.0), 0.0, 0.0, 4.0), i);
         assert_eq!(parallelogram_tile(&i, (0.0, 0.0), 0.0, 1.0, -2.0), i);
+    }
+
+    #[test]
+    fn the_identity_quad_gives_the_image_back() {
+        let i = gradient(8, 6);
+        let quad = [(0.0, 0.0), (8.0, 0.0), (8.0, 6.0), (0.0, 6.0)];
+        let o = perspective_tile(&i, quad).unwrap();
+        assert!(o.px.iter().zip(&i.px).all(|(&a, &b)| near(a, b)));
+    }
+
+    #[test]
+    fn shifting_the_quad_by_a_width_repeats_the_picture() {
+        // Moving the quad one image width to the right shows the same picture after wrapping.
+        let i = gradient(8, 6);
+        let quad = [(8.0, 0.0), (16.0, 0.0), (16.0, 6.0), (8.0, 6.0)];
+        let o = perspective_tile(&i, quad).unwrap();
+        assert!(o.px.iter().zip(&i.px).all(|(&a, &b)| near(a, b)));
+    }
+
+    #[test]
+    fn a_flat_image_stays_flat_inside_the_quad() {
+        let i = flat(8, 6, 0xff33_6699);
+        let quad = [(0.0, 0.0), (8.0, 0.0), (8.0, 6.0), (0.0, 6.0)];
+        let o = perspective_tile(&i, quad).unwrap();
+        assert!(o.px.iter().all(|&p| p == 0xff33_6699));
+    }
+
+    #[test]
+    fn a_degenerate_quad_or_empty_image_is_refused() {
+        let i = gradient(4, 4);
+        assert!(perspective_tile(&i, [(1.0, 1.0); 4]).is_none());
+        assert!(perspective_tile(&Image::new(0, 0), [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]).is_none());
     }
 
     #[test]
