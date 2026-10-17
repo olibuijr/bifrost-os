@@ -50,7 +50,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -432,6 +432,8 @@ impl Shell {
                 if self.info.battery_present {rows.push(Row::label(format!("Battery {}%{}",self.info.battery,if self.info.charging {", charging"} else {""})));}
                 let base=rows.len();if let Some(n)=&self.info.desktop_network {for p in &n.power_profiles {rows.push(Row::action(format!("{} {}",if n.power==*p{"✓"}else{" "},match p.as_str(){"performance"=>"Performance","power-saver"=>"Low Power",_=>"Balanced"}),Action::Power(p.clone())));}}
                 if rows.len()==base {rows.push(Row::label("Power profiles unavailable"));}
+                // Low Power Mode is a switch of its own (Settings > Battery and the low-battery alert turn it on too).
+                rows.push(Row::action(format!("{} Low Power Mode",if self.low_power(){"✓"}else{" "}),Action::LowPowerMode(!self.low_power())));
                 rows.push(Row::action("Lock Screen",Action::Lock));rows.push(Row::action("Restart",Action::Halt(super::power_menu::PowerAction::Restart)));rows.push(Row::action("Shut Down",Action::Halt(super::power_menu::PowerAction::Off)));rows
             },
         }
@@ -668,6 +670,7 @@ impl Shell {
                     Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
                     Action::RecordStop=>self.recording_stop_from_menu(),
                     Action::GameModeOff=>{self.game_mode_turn_off();}
+                    Action::LowPowerMode(on)=>self.set_low_power(on),
                     Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
                     Action::PhotoEditWith(key)=>self.photo_edit_with_viewed(&key,t),
                     Action::HelpItem(menu,i)=>{if let Some(a)=self.plain_rows(menu).get(i).and_then(|r|r.action.clone()) {effects.extend(self.run_menu_action(a,t));}},
