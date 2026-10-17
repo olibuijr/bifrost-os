@@ -3,7 +3,6 @@
 //! temporary "ignore limit" grants. `Config::block` is the single policy
 //! decision; Settings itself is never blocked.
 
-use super::super::notify::schedule::Schedule;
 use super::super::prefs::Prefs;
 use super::super::AppId;
 use super::usage::{day_of, key, minute_of};
@@ -33,20 +32,8 @@ pub enum Ignore {
     Today,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Downtime {
-    pub on: bool,
-    /// minutes after midnight
-    pub start: u16,
-    pub end: u16,
-}
-
-impl Downtime {
-    /// The same daily window as a notification `Schedule` (the one place that knows it may cross midnight).
-    pub fn schedule(&self) -> Schedule {
-        Schedule { enabled: self.on, start: self.start, end: self.end }
-    }
-}
+/// The Downtime window. One copy lives in the UI model (`os_services::time_limits`), which the shell uses as-is.
+pub use bifrost_ui::os_services::time_limits::Downtime;
 
 /// The Screen Time preferences as stored on disk.
 #[derive(Clone, Debug, Default)]
@@ -152,7 +139,7 @@ impl Config {
         if app == AppId::Settings || unix <= 0 || self.ignored(app, unix, offset) {
             return None;
         }
-        if self.downtime().schedule().active(minute_of(unix, offset)) && !self.allowed(app) {
+        if self.downtime().active(minute_of(unix, offset)) && !self.allowed(app) {
             return Some(Reason::Downtime);
         }
         match self.limit_mins(app) {
@@ -213,13 +200,13 @@ mod tests {
 
     #[test]
     fn downtime_window_may_cross_midnight() {
-        let d = Downtime { on: true, start: 22 * 60, end: 7 * 60 };
-        assert!(d.schedule().active(23 * 60) && d.schedule().active(0) && d.schedule().active(6 * 60 + 59));
-        assert!(!d.schedule().active(7 * 60) && !d.schedule().active(12 * 60));
-        let day = Downtime { on: true, start: 9 * 60, end: 17 * 60 };
-        assert!(day.schedule().active(9 * 60) && !day.schedule().active(17 * 60));
-        assert!(!Downtime { on: false, ..d }.schedule().active(23 * 60));
-        assert!(!Downtime { on: true, start: 5, end: 5 }.schedule().active(5));
+        let d = Downtime::new(true, 22 * 60, 7 * 60).unwrap();
+        assert!(d.active(23 * 60) && d.active(0) && d.active(6 * 60 + 59));
+        assert!(!d.active(7 * 60) && !d.active(12 * 60));
+        let day = Downtime::new(true, 9 * 60, 17 * 60).unwrap();
+        assert!(day.active(9 * 60) && !day.active(17 * 60));
+        assert!(!Downtime { on: false, ..d }.active(23 * 60));
+        assert!(!Downtime::new(true, 5, 5).unwrap().active(5));
     }
 
     #[test]
