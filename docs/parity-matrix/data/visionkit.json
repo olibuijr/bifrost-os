@@ -54,7 +54,7 @@
       "apple": "VNDocumentCameraViewController, VNDocumentCameraViewControllerDelegate, VNDocumentCameraScan",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs."
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs. Built 2026-10-17: bifrost_app::document_scan exposes DocumentScan and the page geometry, and flatten warps a camera frame's RGBA pixels onto a page by nearest-pixel inverse mapping (tests document_scan::tests). The Camera app still has no page mode and no corner detection, so the scan is not reachable from a user action yet."
     },
     {
       "feature": "Stabilised camera region of interest",

@@ -232,6 +232,7 @@ pub mod session_assertion;
 pub mod image_analysis;
 pub mod core_ml;
 pub mod language_model;
+pub mod document_scan;
 pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;
