@@ -2054,6 +2054,31 @@ mod tests {
     }
 
     #[test]
+    fn the_menu_bar_page_has_one_switch_per_control_and_follows_the_saved_choice() {
+        use crate::shell::options::MenuExtra;
+        let info = info();
+        let mut opts = Options::default();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["CPU Usage", "Memory Usage", "Battery", "Wi-Fi and Network", "Control Center"]);
+        assert!(s.groups[0].items.iter().all(|i| i.accessory == Accessory::Switch(true)), "every control shows by default");
+        assert_eq!(s.groups[0].items[2].action, Action::Toggle(Toggle::MenuExtra(MenuExtra::Battery)));
+        opts.menu_extras = MenuExtra::Battery.bit() | MenuExtra::ControlCenter.bit();
+        let s = spec(PageId::MenuBar, &model(&info, &opts));
+        let on: Vec<bool> = s.groups[0].items.iter().map(|i| i.accessory == Accessory::Switch(true)).collect();
+        assert_eq!(on, [false, false, true, false, true]);
+    }
+
+    #[test]
+    fn the_control_centre_page_lists_the_controls_it_holds() {
+        let (info, opts) = (info(), Options::default());
+        let s = spec(PageId::ControlCentre, &model(&info, &opts));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Brightness", "Volume", "Wi-Fi", "Screen Lock", "Focus"]);
+        assert_eq!(s.groups[0].items[4].value, "Off");
+    }
+
+    #[test]
     fn root_lists_the_bifrost_sections_with_live_values() {
         let (info, opts) = (info(), Options::default());
         let s = spec(PageId::Root, &model(&info, &opts));
