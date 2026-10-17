@@ -85,6 +85,21 @@ pub struct NotifRequest {
     pub relevance_milli: u16,
 }
 
+/// `UNNotificationTrigger` of a scheduled request, sent with `ToShell::NotifySchedule`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotifTrigger {
+    /// `UNTimeIntervalNotificationTrigger`: after `seconds`, and every `seconds` when `repeats` (at least 60 then)
+    Interval { seconds: u32, repeats: bool },
+    /// `UNCalendarNotificationTrigger`: local `hour` (0..=23) and `minute` (0..=59) on the weekdays in `weekdays`, a bit
+    /// set with bit 0 = Sunday .. bit 6 = Saturday (0 = every day); repeating or once
+    Calendar { hour: u8, minute: u8, weekdays: u8, repeats: bool },
+}
+
+/// The longest interval, in seconds: its millisecond delay must fit a `u32` (about 49 days).
+pub const MAX_NOTIF_INTERVAL_SECS: u32 = 4_294_967;
+/// The shortest interval a repeating interval trigger may name, in seconds.
+pub const MIN_NOTIF_REPEAT_SECS: u32 = 60;
+
 /// The answer to `ToShell::NotifyRequest` (`add(_:withCompletionHandler:)`'s error).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotifStatus {
@@ -453,6 +468,45 @@ fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
     Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli })
 }
 
+/// A trigger: kind 0 is an interval (seconds u32, repeats), kind 1 a calendar (hour, minute, weekdays, repeats).
+fn put_trigger(b: &mut Vec<u8>, t: &NotifTrigger) {
+    match *t {
+        NotifTrigger::Interval { seconds, repeats } => {
+            b.push(0);
+            u32_(b, seconds);
+            b.push(u8::from(repeats));
+        }
+        NotifTrigger::Calendar { hour, minute, weekdays, repeats } => {
+            b.push(1);
+            b.extend_from_slice(&[hour, minute, weekdays, u8::from(repeats)]);
+        }
+    }
+}
+
+fn get_trigger(r: &mut Reader) -> Result<NotifTrigger, DecodeError> {
+    match r.u8()? {
+        0 => {
+            let seconds = r.u32()?;
+            let repeats = flag(r)?;
+            if !(1..=MAX_NOTIF_INTERVAL_SECS).contains(&seconds) || (repeats && seconds < MIN_NOTIF_REPEAT_SECS) {
+                return Err(DecodeError::BadValue);
+            }
+            Ok(NotifTrigger::Interval { seconds, repeats })
+        }
+        1 => {
+            let hour = r.u8()?;
+            let minute = r.u8()?;
+            let weekdays = r.u8()?;
+            let repeats = flag(r)?;
+            if hour > 23 || minute > 59 || weekdays & !0x7f != 0 {
+                return Err(DecodeError::BadValue);
+            }
+            Ok(NotifTrigger::Calendar { hour, minute, weekdays, repeats })
+        }
+        _ => Err(DecodeError::BadValue),
+    }
+}
+
 fn put_payload(b: &mut Vec<u8>, p: &Payload) {
     match p {
         Payload::Text(s) => {
@@ -559,8 +613,13 @@ pub(crate) mod tag {
     pub const NOTIFY_QUERY: u32 = 0x143;
     pub const NOTIFY_SETTINGS: u32 = 0x14a;
     pub const NOTIFY_AUTHORIZE: u32 = 0x14b;
+<<<<<<< HEAD
     pub const NOTIFY_PRESENT_REPLY: u32 = 0x14c;
     pub const NOTIFY_PRESENT_DELEGATE: u32 = 0x14d;
+||||||| c2b708986
+=======
+    pub const NOTIFY_SCHEDULE: u32 = 0x14e;
+>>>>>>> worktree-agent-ab1d49c0cdbfd05b4
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -742,6 +801,7 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, *request);
             b.push(*options);
         }
+<<<<<<< HEAD
         ToShell::NotifyPresentDelegate { enabled } => {
             u32_(b, tag::NOTIFY_PRESENT_DELEGATE);
             b.push(*enabled as u8);
@@ -751,6 +811,15 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, *token);
             b.push(*options);
         }
+||||||| c2b708986
+=======
+        ToShell::NotifySchedule { request, req, trigger } => {
+            u32_(b, tag::NOTIFY_SCHEDULE);
+            u32_(b, *request);
+            put_request(b, req);
+            put_trigger(b, trigger);
+        }
+>>>>>>> worktree-agent-ab1d49c0cdbfd05b4
         ToShell::DistPost { name, user_info } => {
             u32_(b, tag::DIST_POST);
             put_dist(b, name, user_info);
@@ -817,6 +886,7 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             }
             ToShell::NotifyAuthorize { request, options }
         }
+<<<<<<< HEAD
         tag::NOTIFY_PRESENT_DELEGATE => ToShell::NotifyPresentDelegate { enabled: flag(r)? },
         tag::NOTIFY_PRESENT_REPLY => {
             let (token, options) = (r.u32()?, r.u8()?);
@@ -825,6 +895,15 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             }
             ToShell::NotifyPresentReply { token, options }
         }
+||||||| c2b708986
+=======
+        tag::NOTIFY_SCHEDULE => {
+            let request = r.u32()?;
+            let req = get_request(r)?;
+            let trigger = get_trigger(r)?;
+            ToShell::NotifySchedule { request, req, trigger }
+        }
+>>>>>>> worktree-agent-ab1d49c0cdbfd05b4
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
             ToShell::DistPost { name, user_info }
@@ -982,6 +1061,33 @@ mod tests {
         let last = bytes.len() - 1;
         bytes[last] = 2;
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_schedule_round_trips_both_triggers() {
+        let req = NotifRequest { id: "s1".into(), title: "Standup".into(), body: "9:15".into(), ..Default::default() };
+        shell_rt(ToShell::NotifySchedule { request: 7, req: req.clone(), trigger: NotifTrigger::Calendar { hour: 9, minute: 15, weekdays: 0b0111_1100, repeats: true } });
+        shell_rt(ToShell::NotifySchedule { request: 8, req: req.clone(), trigger: NotifTrigger::Calendar { hour: 23, minute: 59, weekdays: 0, repeats: false } });
+        shell_rt(ToShell::NotifySchedule { request: 9, req: req.clone(), trigger: NotifTrigger::Interval { seconds: 90, repeats: false } });
+        shell_rt(ToShell::NotifySchedule { request: 10, req, trigger: NotifTrigger::Interval { seconds: 60, repeats: true } });
+    }
+
+    #[test]
+    fn notification_schedule_rejects_bad_triggers() {
+        let req = NotifRequest { id: "s1".into(), ..Default::default() };
+        let bad = |trigger: NotifTrigger| ToShell::NotifySchedule { request: 1, req: req.clone(), trigger }.encode();
+        // the trigger is the end of the packet: a calendar ends in hour, minute, weekdays, repeats
+        let mut hour = bad(NotifTrigger::Calendar { hour: 9, minute: 15, weekdays: 2, repeats: false });
+        let n = hour.len();
+        hour[n - 4] = 24;
+        assert_eq!(ToShell::decode(&hour), Err(DecodeError::BadValue));
+        let mut weekday = bad(NotifTrigger::Calendar { hour: 9, minute: 15, weekdays: 2, repeats: false });
+        let n = weekday.len();
+        weekday[n - 2] = 0x80;
+        assert_eq!(ToShell::decode(&weekday), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&bad(NotifTrigger::Interval { seconds: 0, repeats: false })), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&bad(NotifTrigger::Interval { seconds: 30, repeats: true })), Err(DecodeError::BadValue));
+        assert_eq!(ToShell::decode(&bad(NotifTrigger::Interval { seconds: MAX_NOTIF_INTERVAL_SECS + 1, repeats: false })), Err(DecodeError::BadValue));
     }
 
     #[test]

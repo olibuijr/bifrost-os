@@ -338,10 +338,13 @@ dependencies = [
  "bifrost-proto",
  "bifrost-render",
  "bifrost-ui",
+ "rustls",
+ "rustls-graviola",
  "springboard",
  "tempfile",
  "wayland-client",
  "wayland-protocols",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -744,6 +747,7 @@ name = "bifrost-keyboard"
 version = "1.1.4"
 dependencies = [
  "bifrost-app",
+ "bifrost-core",
  "springboard",
 ]
 

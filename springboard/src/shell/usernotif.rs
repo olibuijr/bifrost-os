@@ -6,6 +6,8 @@
 //! Identity is always the app id of the connection, never anything in the message.
 
 use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+use crate::shell::clock::alarm::Alarm;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 
@@ -76,14 +78,30 @@ pub enum Added {
     Refused(NotifStatus),
 }
 
+/// A calendar-trigger request waiting for its next time. It is kept here, with the interval requests, so the wire path
+/// and the `notification-schedule` service share one pending list; the service saves and restores it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Calendar {
+    pub app: String,
+    pub req: NotifRequest,
+    pub alarm: Alarm,
+    pub repeats: bool,
+    /// Unix time (s) of the next delivery
+    pub due: i64,
+}
+
 #[derive(Default)]
 pub struct Registry {
     categories: HashMap<String, Vec<NotifCategory>>,
     pending: Vec<Pending>,
+    /// the calendar-trigger requests of every app (see `Calendar`)
+    pub calendars: Vec<Calendar>,
     delivered: Vec<Delivered>,
     queued: Vec<(String, ToApp)>,
     /// requests that wait for the first-time alert of their app: app, slot, request id, request
     held: Vec<(String, u8, u32, NotifRequest)>,
+    /// scheduled requests that wait for the first-time alert of their app: app, slot, request id, request, trigger
+    held_schedules: Vec<(String, u8, u32, NotifRequest, NotifTrigger)>,
     /// `requestAuthorization` calls that wait for the first-time alert of their app: app, slot, request id, options
     auth_held: Vec<(String, u8, u32, u8)>,
     /// What each app was granted, as `NOTIF_AUTH_*` bits (provisional included); 0 is a denial. Saved to `granted_path`.
@@ -264,6 +282,17 @@ impl Registry {
         mine.into_iter().map(|(_, slot, request, req)| (slot, request, req)).collect()
     }
 
+    pub fn hold_schedule(&mut self, app: &str, slot: u8, request: u32, req: NotifRequest, trigger: NotifTrigger) {
+        self.held_schedules.push((app.to_string(), slot, request, req, trigger));
+    }
+
+    /// The app's scheduled requests that waited for its answer, oldest first, as (slot, request id, request, trigger).
+    pub fn take_held_schedules(&mut self, app: &str) -> Vec<(u8, u32, NotifRequest, NotifTrigger)> {
+        let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.held_schedules).into_iter().partition(|(a, ..)| a == app);
+        self.held_schedules = rest;
+        mine.into_iter().map(|(_, slot, request, req, trigger)| (slot, request, req, trigger)).collect()
+    }
+
     pub fn hold_authorization(&mut self, app: &str, slot: u8, request: u32, options: u8) {
         self.auth_held.push((app.to_string(), slot, request, options));
     }
@@ -420,6 +449,7 @@ impl super::Shell {
                 let status = if posting { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
                 self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
             }
+            ToShell::NotifyRemove { delivered: false, ids } if permitted => self.usernotif_remove_pending(&app, &ids),
             ToShell::NotifyRemove { delivered, ids } if permitted => {
                 for id in self.usernotif.remove(&app, delivered, &ids) {
                     self.notify_remove(id);
@@ -427,8 +457,18 @@ impl super::Shell {
             }
             ToShell::NotifyQuery { request, delivered } if permitted => {
                 self.usernotif_prune();
-                let ids = self.usernotif.list(&app, delivered);
+                let ids = if delivered { self.usernotif.list(&app, true) } else { self.usernotif_pending(&app) };
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
+            }
+            // the first scheduled request of an app that was never asked waits for the first-time alert, as a request does
+            ToShell::NotifySchedule { request, req, trigger } if permitted && !self.usernotif_decided(slot, &app) => {
+                self.usernotif.hold_schedule(&app, slot, request, req, trigger);
+                self.usernotif_ask_first_time(super::AppId::External(slot), &name);
+            }
+            ToShell::NotifySchedule { request, req, trigger } => {
+                let posting = permitted && self.usernotif.granted(&app).is_none_or(|bits| bits != 0);
+                let status = if posting { self.usernotif_schedule(&app, req, trigger, t) } else { NotifStatus::NotPermitted };
+                self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
             }
             ToShell::NotifyAuthorize { request, options } => self.usernotif_authorize(slot, &app, &name, request, options, permitted),
             ToShell::NotifyPresentDelegate { enabled } => self.usernotif.set_presenter(&app, enabled),
@@ -446,6 +486,57 @@ impl super::Shell {
             }
             _ => {}
         }
+    }
+
+    /// Schedules a request of a permitted app on a calendar or interval trigger (`ToShell::NotifySchedule`, and the
+    /// `add` method of `notification-schedule`). An identifier replaces the pending request of either kind. The
+    /// returned status is the one the app gets.
+    pub(super) fn usernotif_schedule(&mut self, app: &str, req: NotifRequest, trigger: NotifTrigger, t: f64) -> NotifStatus {
+        if let Some(status) = self.usernotif.check(app, &req) {
+            return status;
+        }
+        let id = req.id.clone();
+        self.usernotif.calendars.retain(|c| !(c.app == app && c.req.id == id));
+        self.usernotif.remove(app, false, std::slice::from_ref(&id));
+        if self.usernotif_pending(app).len() >= MAX_PENDING {
+            return NotifStatus::Full;
+        }
+        match trigger {
+            NotifTrigger::Interval { seconds, repeats } => {
+                let delay_ms = seconds.saturating_mul(1000);
+                match self.usernotif.add(app, NotifRequest { delay_ms, repeats, ..req }, t) {
+                    Added::Scheduled => NotifStatus::Ok,
+                    Added::Refused(status) => status,
+                    Added::Deliver { .. } => NotifStatus::Param,
+                }
+            }
+            NotifTrigger::Calendar { hour, minute, weekdays, repeats } => {
+                let now = self.wall.now(t);
+                let offset = super::clock::offset_fn(None, self.wall.offset);
+                let alarm = Alarm { repeat: weekdays, ..Alarm::new(u32::from(hour), u32::from(minute)) };
+                match alarm.regular_fire(now, &offset) {
+                    Some(due) => {
+                        self.usernotif.calendars.push(Calendar { app: app.to_string(), req, alarm, repeats, due });
+                        NotifStatus::Ok
+                    }
+                    None => NotifStatus::Param,
+                }
+            }
+        }
+    }
+
+    /// The pending identifiers of both kinds: the interval ones, then the calendar ones, in the order they were added.
+    pub(super) fn usernotif_pending(&self, app: &str) -> Vec<String> {
+        let mut ids = self.usernotif.list(app, false);
+        ids.extend(self.usernotif.calendars.iter().filter(|c| c.app == app).map(|c| c.req.id.clone()));
+        ids
+    }
+
+    /// `removePendingNotificationRequests`: removes the pending requests of both kinds named by `ids`; empty removes all.
+    pub(super) fn usernotif_remove_pending(&mut self, app: &str, ids: &[String]) {
+        let hit = |id: &str| ids.is_empty() || ids.iter().any(|i| i == id);
+        self.usernotif.calendars.retain(|c| !(c.app == app && hit(&c.req.id)));
+        self.usernotif.remove(app, false, ids);
     }
 
     /// Adds a request of a permitted app: it is delivered now, scheduled, or refused. Returns the status for the app.
@@ -545,6 +636,10 @@ impl super::Shell {
         let Some(app) = super::apphost::installed().get(slot as usize).map(|p| p.manifest.id.clone()) else { return };
         for (slot, request, req) in self.usernotif.take_held(&app) {
             let status = if allowed { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
+            self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
+        }
+        for (slot, request, req, trigger) in self.usernotif.take_held_schedules(&app) {
+            let status = if allowed { self.usernotif_schedule(&app, req, trigger, t) } else { NotifStatus::NotPermitted };
             self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
         }
         // the grant is the union of what the waiting requests asked for; a request held for a notification alone

@@ -2,7 +2,7 @@
 //! in-memory context (`Ctx::testing`): what the app sends to the shell is collected by `take_sent`, and the trigger,
 //! presentation, authorization, sound and attachment rules are plain functions. No shell, no display, no network.
 
-use bifrost_app::proto::{Configure, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, ToShell, NOTIF_DEFAULT_ACTION};
+use bifrost_app::proto::{Configure, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, NotifTrigger, TextInput, ToShell, NOTIF_DEFAULT_ACTION};
 use bifrost_app::usernotif::{
     self, Attachment, AuthorizationOptions, AuthorizationStatus, AuthorizationStore, CalendarTrigger, DateComponents, Decision, Event, InterruptionLevel,
     IntervalTrigger, PresentationOptions, Request, Response, Setting, Settings, Sound,
@@ -138,6 +138,15 @@ fn headless_remove_pending_without_identifiers_asks_for_all_of_them() {
     let ctx = testing_ctx();
     usernotif::remove_pending(&ctx, &[]);
     assert_eq!(ctx.take_sent(), vec![ToShell::NotifyRemove { delivered: false, ids: vec![] }]);
+}
+
+#[test]
+fn headless_a_scheduled_request_sends_its_trigger_with_its_content() {
+    let ctx = testing_ctx();
+    let trigger = NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0b10, repeats: true };
+    let request = usernotif::schedule(&ctx, Request::new("morning", "Morning"), trigger);
+    let req = NotifRequest { id: "morning".into(), title: "Morning".into(), ..Default::default() };
+    assert_eq!(ctx.take_sent(), vec![ToShell::NotifySchedule { request, req, trigger }]);
 }
 
 #[test]
