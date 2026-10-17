@@ -280,6 +280,11 @@ impl HelpIndex {
         self.apps.get(app).map(String::as_str)
     }
 
+    /// The installed books as (app id, app name), in app id order (the Help viewer's book popup).
+    pub fn books(&self) -> Vec<(&str, &str)> {
+        self.apps.iter().map(|(a, n)| (a.as_str(), n.as_str())).collect()
+    }
+
     /// The pages of one app's book, in file order (the table of contents).
     pub fn pages_of(&self, app: &str) -> Vec<&Page> {
         self.pages.iter().filter(|p| p.app == app).collect()
