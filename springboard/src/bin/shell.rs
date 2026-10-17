@@ -329,6 +329,10 @@ fn run() -> std::io::Result<()> {
     let wallpaper = springboard::first_frame_cache::wallpaper().map_or(wallpaper, |i| View { w: i.w, h: i.h, px: &i.px[..] });
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
+    // the stills of the dynamic wallpaper, in index order (the day is cut into one slice per still)
+    let dynamic_stills: Vec<String> = springboard::shell::prefs::Prefs::load(format!("{dir}/wallpapers/index.ini")).entries().map(|(id, _)| id.to_string()).collect();
+    // wallpaper changes the info tick asks for; they join the next turn's effects
+    let mut dynamic_fx: Vec<Effect> = Vec::new();
     // the help index reads every installed help book; built on a worker so the first frame is not held up
     std::thread::spawn(|| springboard::shell::helpbook::with_index(std::path::Path::new(springboard::shell::store::install::ROOT), |_| ()));
     shell.set_route(router.route(), vol.level(), false, 0.0);
@@ -687,6 +691,7 @@ fn run() -> std::io::Result<()> {
             eprintln!("springboard: input {events:?}");
         }
         let mut effects = chrome_fx;
+        effects.append(&mut dynamic_fx);
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             let (active,resumed)=disp.wayland_activity();
@@ -1299,6 +1304,15 @@ fn run() -> std::io::Result<()> {
             if m != night_mult {
                 night_mult = m;
                 shell.force_full_redraw();
+            }
+            // dynamic wallpaper (`wallpaper_dynamic=1` in settings.ini): the packed stills change with the time of day
+            if prefs.get("wallpaper_dynamic") == Some("1") {
+                let minute = springboard::shell::notify::schedule::Schedule::minute_of_day(unix, offset) as u32;
+                if let Some(id) = springboard::shell::wallpaper_schedule::still_at(&dynamic_stills, minute) {
+                    if id != current_wallpaper {
+                        dynamic_fx.push(Effect::Wallpaper(id.to_string()));
+                    }
+                }
             }
         }
         {

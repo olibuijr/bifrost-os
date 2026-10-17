@@ -670,8 +670,8 @@
    "role": "Picker thumbnail or asset catalogue of a wallpaper extension",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail or asset catalogue of the legacy wallpaper extension (the picker previews of its pictures). BifrOSt builds its own picker previews from its packed stills (wallpaper_page cover_fit over wallpapers/index.ini), so this catalogue has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
