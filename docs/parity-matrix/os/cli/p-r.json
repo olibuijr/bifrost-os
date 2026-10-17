@@ -3352,11 +3352,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/sync",
+   "bifrost": "springboard/cmd/src/bin/purge.rs; springboard/cmd/src/purge.rs",
    "status": "partial",
-   "note": "sync flushes file buffers only; macOS purge drops the memory caches, which needs root and drop_caches (not wired)",
+   "note": "sync flushes file buffers only; macOS purge drops the memory caches, which needs root and drop_caches (not wired) Built 2026-10-17: purge flushes buffers then drops the page cache, dentries and inodes (purge::tests). Root is still needed to write drop_caches.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "purge::tests"
+    }
+   ],
+   "ready_note": "purge flushes file buffers then writes 3 to drop_caches; permission errors are reported (purge::tests)."
   },
   {
    "id": "path:/usr/sbin/pwd_mkdb",

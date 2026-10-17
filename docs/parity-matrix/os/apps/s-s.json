@@ -64,7 +64,26 @@
    "status": "partial",
    "note": "Sticky Notes app: coloured notes with text and persistence",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "rtf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stickies",
+     "filter": "layout::tests"
+    }
+   ],
+   "ready_note": "Stickies app: note store, rich text, layout and persistence covered by the crate's tests."
   },
   {
    "id": "path:/System/Applications/Stocks.app",
@@ -85,7 +104,31 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "data::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "feed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-stocks",
+     "filter": "store::tests"
+    }
+   ],
+   "ready_note": "Stocks app: watchlist model, quote data, feed and store covered by the crate's tests; Midget check pending."
   },
   {
    "id": "path:/System/Applications/System Settings.app",
@@ -144,11 +187,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/screenshot-desktop",
+   "bifrost": "springboard/apps/screenshot-desktop; springboard/src/shell/screenshot.rs",
    "status": "partial",
    "note": "screenshot crate (naming, options) plus the shell capture tool in springboard/src/shell/screenshot.rs; no standalone app window",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-screenshot",
+     "filter": "naming::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screenshot",
+     "filter": "options::tests"
+    }
+   ],
+   "ready_note": "Screenshot crate naming and options covered by tests; the shell capture tool is the app's capture path."
   },
   {
    "id": "path:/System/Applications/Utilities/Script Editor.app",
@@ -169,7 +226,26 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-script-editor",
+     "filter": "buffer::tests"
+    }
+   ],
+   "ready_note": "Script Editor: documents, runner (result pane source) and buffer covered by the crate's tests; Midget check pending."
   },
   {
    "id": "path:/System/Applications/Utilities/System Information.app",
@@ -188,7 +264,7 @@
    "doc": "",
    "bifrost": "springboard/apps/sysinfo-desktop",
    "status": "partial",
-   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; lacks Save report and per-bus detail panes",
+   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; Save Report As Text, Rich Text and JSON exist (export.rs); lacks per-bus detail panes",
    "rea": [],
    "method": "assessed"
   }
