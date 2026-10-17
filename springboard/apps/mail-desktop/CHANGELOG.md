@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0 — 2026-10-17
+
+- Core Search finds the subjects and senders of the newest messages of the mailbox on screen (up to 200). Bodies are never indexed. Mail Settings "Show in Search" (on by default) turns it off and removes what was indexed. A result opens the message.
+
 ## 0.13.0 — 2026-10-17
 
 Viewer windows:

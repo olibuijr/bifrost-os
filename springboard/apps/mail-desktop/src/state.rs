@@ -1302,6 +1302,7 @@ impl Mail {
                 Field::yes_no("Bold unread messages", self.prefs.bold_unread),
                 Field::yes_no("Load remote content", self.prefs.remote_content),
                 Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
+                Field::yes_no("Show in Search", self.prefs.show_in_search),
             ],
         );
         Ok(())
@@ -1416,6 +1417,9 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Signature above the quoted text") {
             self.prefs.signature_above_quote = is_yes(form.value("Signature above the quoted text"));
+        }
+        if form.fields.iter().any(|f| f.label == "Show in Search") {
+            self.prefs.show_in_search = is_yes(form.value("Show in Search"));
         }
         Ok(())
     }
