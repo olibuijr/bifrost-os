@@ -2129,6 +2129,14 @@ mod tests {
     }
 
     #[test]
+    fn control_tables_reach_the_manifest_for_control_center() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[control]]\nkind = \"toggle\"\ntitle = \"Quiet Hours\"\nsymbol = \"moon\"\nintent = \"set-quiet\"\n").unwrap();
+        assert_eq!(m.controls.len(), 1);
+        assert_eq!((m.controls[0].title.as_str(), m.controls[0].intent.as_str()), ("Quiet Hours", "set-quiet"));
+        assert_eq!(m.name, "Notes", "a control table does not change the app keys");
+    }
+
+    #[test]
     fn intent_tables_do_not_leak_into_the_app_keys() {
         let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nparams = [\"text:string\", \"due:date?\"]\n\n[other]\nname = \"ignored\"\n").unwrap();
         assert_eq!((m.id.as_str(), m.name.as_str()), ("a.b", "Notes"));
