@@ -49,6 +49,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             _ => Err(PErr::bad("empty_trash_after_30_days must be a boolean")),
         },
         "network.dns_set" => network_dns_set(p),
+        "dhcp6.serve" => dhcp6_serve(p),
         "startup_disk.list" => startup_disk_list(),
         "startup_disk.set" => startup_disk_set(p),
         "locale.set" => set_locale(str_param(p, "lang")?, str_param(p, "region")?),
@@ -254,6 +255,45 @@ pub fn dns_text(servers: &[String]) -> String {
 
 /// Writes the DNS servers (`network.dns_set`, a list of addresses; an empty list removes the drop-in) and has
 /// systemd-resolved reload them. Every address is checked before any file is touched.
+/// Starts or stops the DHCPv6 server on one interface (`dhcp6.serve`): `interface`, `on`, and for `on` the segment's
+/// `prefix` (a /64 network address) and optional `dns` list. The settings are checked by `bifrost_core::dhcp6_server`
+/// before anything is written; the configuration goes under `/run/bifrost/dhcp6` and `bifrost-dhcp6@<interface>` runs it.
+fn dhcp6_serve(p: &Json) -> Result<Json, PErr> {
+    use bifrost_core::dhcp6_server::{valid_interface, Dhcp6Server, RUN_DIR};
+    let interface = str_param(p, "interface")?;
+    if !valid_interface(interface) {
+        return Err(PErr::bad("interface is not a valid interface name"));
+    }
+    let on = match p.get("on") {
+        Some(Json::Bool(b)) => *b,
+        _ => return Err(PErr::bad("on must be a boolean")),
+    };
+    let unit = format!("bifrost-dhcp6@{interface}.service");
+    if !on {
+        run("systemctl", &["stop", &unit])?;
+        match std::fs::remove_file(format!("{RUN_DIR}/{interface}.conf")) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(PErr::internal(e.to_string())),
+        }
+        return Ok(obj(vec![("interface", s(interface)), ("on", Json::Bool(false))]));
+    }
+    let prefix = str_param(p, "prefix")?.parse().map_err(|_| PErr::bad("prefix must be an IPv6 address"))?;
+    let mut server = Dhcp6Server::new(interface, prefix).map_err(|e| PErr::bad(format!("{e:?}")))?;
+    if let Some(list) = p.get("dns") {
+        let items = list.as_array().ok_or_else(|| PErr::bad("dns must be a list"))?;
+        for item in items {
+            let addr = item.as_str().and_then(|a| a.parse().ok()).ok_or_else(|| PErr::bad("each dns entry must be an IPv6 address"))?;
+            server.dns.push(addr);
+        }
+    }
+    let conf = server.dnsmasq_conf().map_err(|e| PErr::bad(format!("{e:?}")))?;
+    std::fs::create_dir_all(RUN_DIR).map_err(|e| PErr::internal(e.to_string()))?;
+    write_nofollow(&server.conf_path(), &conf).map_err(|e| PErr::internal(e.to_string()))?;
+    run("systemctl", &["restart", &unit])?;
+    Ok(obj(vec![("interface", s(interface)), ("on", Json::Bool(true))]))
+}
+
 /// The firmware boot table, from `efibootmgr` (`startup_disk.list`): the entries in boot order with the current, next and
 /// default one marked.
 fn startup_disk_table() -> Result<bifrost_core::startup_disk::BootTable, PErr> {
@@ -358,6 +398,17 @@ mod tests {
         assert_eq!(dns(Json::Arr((0..5).map(|_| s("1.1.1.1")).collect())).unwrap_err().code, "bad_params");
         assert_eq!(dns(s("1.1.1.1")).unwrap_err().code, "bad_params");
         assert_eq!(call("network.dns_set", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
+
+    #[test]
+    fn dhcp6_serve_refuses_bad_settings_before_any_file_or_command() {
+        let serve = |f: Vec<(&str, Json)>| call("dhcp6.serve", &obj(f)).unwrap_err().code;
+        assert_eq!(serve(vec![("interface", s("eth0\ninterface=lo")), ("on", Json::Bool(true))]), "bad_params");
+        assert_eq!(serve(vec![("interface", s("eth1"))]), "bad_params");
+        assert_eq!(serve(vec![("interface", s("eth1")), ("on", Json::Bool(true))]), "bad_params", "no prefix");
+        assert_eq!(serve(vec![("interface", s("eth1")), ("on", Json::Bool(true)), ("prefix", s("fd00::5"))]), "bad_params");
+        assert_eq!(serve(vec![("interface", s("eth1")), ("on", Json::Bool(true)), ("prefix", s("fd00::")), ("dns", s("fd00::1"))]), "bad_params");
+        assert_eq!(serve(vec![("interface", s("eth1")), ("on", Json::Bool(true)), ("prefix", s("fd00::")), ("dns", Json::Arr(vec![s("fe80::1")]))]), "bad_params");
     }
 
     #[test]

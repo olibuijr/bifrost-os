@@ -60,6 +60,8 @@ package_bifrost_files() {
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
   install -Dm644 "$here/springboard.service" "$pkgdir/usr/lib/systemd/system/springboard.service"
   # Printer Sharing: the LPD listener for the cups-lpd that the cups package ships (off until Sharing turns it on)
+  # DHCPv6 for a shared segment: privd writes /run/bifrost/dhcp6/<interface>.conf and starts this unit (dnsmasq)
+  install -Dm644 "$here/bifrost-dhcp6@.service" "$pkgdir/usr/lib/systemd/system/bifrost-dhcp6@.service"
   install -Dm644 "$here/cups-lpd.socket" "$pkgdir/usr/lib/systemd/system/cups-lpd.socket"
   install -Dm644 "$here/cups-lpd@.service" "$pkgdir/usr/lib/systemd/system/cups-lpd@.service"
   # login round: root helper, PAM service, privd socket group (the user-session migration is a later stage)
