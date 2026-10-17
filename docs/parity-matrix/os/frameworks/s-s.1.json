@@ -39,11 +39,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/scenekit.json",
+   "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix scenekit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "raster3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "primitives3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "particle_system3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "morph_skin::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_audio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shader_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The 3D scene graph with cameras, lights, constraints, geometry, skinning and morphing, rigid body physics, particles, positional audio, OBJ import, hit testing, a shader library and a CPU triangle rasteriser, all under bifrost_app::framework_kits::scenekit. Host tests only. Not covered: a GPU renderer for scenes in app windows; Apple deprecated this framework."
   },
   {
    "id": "path:/System/Library/Frameworks/ScreenCaptureKit.framework",
@@ -105,11 +174,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-saver.json",
+   "bifrost": "springboard/sdk/src/screen_saver.rs, springboard/sdk/src/idle_watch.rs, springboard/sdk/src/defaults.rs, springboard/src/shell/screensaver.rs, springboard/ui/src/screensaver.rs, springboard/core/src/idle_monitor.rs, springboard/render/src/gamma_fade.rs, springboard/core/src/sleep_assertions.rs",
    "status": "partial",
    "note": "from SDK matrix screen-saver.json Refreshed 2026-10-17: not ready; open items are in data/screen-saver.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_saver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "idle_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screensaver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "screensaver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "idle_monitor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gamma_fade::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sleep_assertions::tests"
+    }
+   ],
+   "ready_note": "The saver view lifecycle and runner (bifrost_app::screen_saver), preference storage (defaults), idle detection (IdleWatch and core idle_monitor), the shell saver window and the gamma fade. Host tests only. Not covered: loading third-party saver bundles."
   },
   {
    "id": "path:/System/Library/Frameworks/ScreenTime.framework",
@@ -181,11 +294,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/scripting-bridge.json",
+   "bifrost": "springboard/sdk/src/script_target.rs, springboard/sdk/src/workspace.rs, springboard/sdk/src/control.rs, springboard/ui/src/scripting.rs, springboard/sdk/src/script_value.rs, springboard/sdk/src/script_syntax.rs, springboard/sdk/src/script_export.rs",
    "status": "partial",
    "note": "from SDK matrix scripting-bridge.json Built 2026-10-17: the scripting object model (get, set, elements, last error, error delegate) is exposed to apps as sdk scripting. Still open: no running app is attached to it, and launch flags are not exposed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_target::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workspace::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scripting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_value::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_syntax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "script_export::tests"
+    }
+   ],
+   "ready_note": "Apps attach to a running scriptable app and read and set its properties and element arrays with last-error reporting through the app control socket (bifrost_app::{script_target, control, scripting, script_value}); launch and activate through workspace. Host tests only. Not covered: generated client proxies from dictionaries."
   },
   {
    "id": "path:/System/Library/Frameworks/SecureConfigDB.framework",
@@ -223,11 +375,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/security.json",
+   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/keychain_query.rs, springboard/sdk/src/keychain_protection.rs, springboard/sdk/src/local_auth.rs, springboard/sdk/src/entropy.rs, springboard/sdk/src/digest.rs, springboard/sdk/src/autofill.rs, springboard/sdk/src/security_status.rs, springboard/ui/src/trust.rs, springboard/ui/src/access_control.rs, springboard/ui/src/one_time_code.rs, springboard/core/src/code_seal.rs, springboard/src/keychain.rs",
    "status": "partial",
    "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms. Refreshed 2026-10-17: Still open: certificate trust has no DER parsing or client-certificate types, update manifests are unsigned, and Authorization Services is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_protection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "entropy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "digest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "security_status::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "access_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "one_time_code::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "code_seal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Keychain items with queries and at-rest protection, local authentication, randomization, digests, one-time codes, trust evaluation, access control and code sealing: bifrost_app::{keychain, keychain_query, keychain_protection, local_auth, entropy, digest, autofill, security_status} over the shell keychain service. Host tests only. Not covered: DER certificate parsing, key and certificate keychain classes."
   },
   {
    "id": "path:/System/Library/Frameworks/SecurityFoundation.framework",
@@ -274,11 +495,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/security-interface.json",
+   "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix security-interface.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "certificate_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "certificate_trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "identity_chooser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "keychain_save::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "keychain_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The certificate panel and view, the trust editor, the choose-identity panel and the keychain save and settings panels, as models under bifrost_app::framework_kits::security_interface. Host tests only. Not covered: the shell drawing the panels."
   },
   {
    "id": "path:/System/Library/Frameworks/SecurityUI.framework",
@@ -367,11 +627,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/service-management.json",
+   "bifrost": "springboard/sdk/src/service_management.rs, springboard/sdk/src/service_bundle.rs, springboard/src/shell/login_items_page.rs, springboard/src/shell/extras.rs, springboard/src/shell/services/login_items_approval.rs",
    "status": "partial",
    "note": "from SDK matrix service-management.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_management::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_bundle::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "login_items_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "login_items_approval::tests"
+    }
+   ],
+   "ready_note": "Login item registration, status and approval for the main app and bundled helpers (bifrost_app::{service_management, service_bundle}) and the Login Items settings page. Host tests only. Not covered: starting launch agents and daemons from the bundle."
   },
   {
    "id": "path:/System/Library/Frameworks/SharedWithYou.framework",
@@ -451,11 +740,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/social.json",
+   "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/social_account.rs, springboard/sdk/src/social_oauth2.rs, springboard/sdk/src/accounts.rs, springboard/sdk/src/multipart.rs, springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs, springboard/ui/src/compose.rs",
    "status": "partial",
    "note": "from SDK matrix social.json Built 2026-10-17: OAuth 2 token model in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests); compose sheet editing and sign-in still open.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_account::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "social_oauth2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "multipart::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "compose_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compose::tests"
+    }
+   ],
+   "ready_note": "Compose sheet and service availability, multipart post bodies, signed service requests with account credentials and OAuth 2 token refresh: bifrost_app::{social, social_account, social_oauth2, accounts} with the shell compose sheet. Host tests only. Not covered: a sign-in flow in the shell; the compose sheet copies the draft until an account is added."
   },
   {
    "id": "path:/System/Library/Frameworks/SoundAnalysis.framework",
@@ -472,11 +805,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/sound-analysis.json",
+   "bifrost": "springboard/ui/src/sound_classify.rs, springboard/ui/src/sound_analyzer.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix sound-analysis.json Refreshed 2026-10-17: not ready, remaining: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path | No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream | No analysis of audio files: springboard/src/media/audiofile.rs decodes files only | No result types for time-ranged classifications with confidences, and no observer delivery to apps",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_classify::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_analyzer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "File and stream analysis requests with windows, overlap, top candidates, results, observers and errors (bifrost_app::framework_kits::sound_analysis); a classifier is supplied by the app as a function, so any model can plug in. Host tests only. Not covered: a built-in label set and a live audio input stream for apps."
   },
   {
    "id": "path:/System/Library/Frameworks/SpatialPreview.framework",
@@ -554,11 +906,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/spritekit.json",
+   "bifrost": "springboard/ui/src/scene_loop.rs, springboard/ui/src/sk_action.rs, springboard/ui/src/sk_atlas.rs, springboard/ui/src/sk_tilemap.rs, springboard/ui/src/tilemap.rs, springboard/ui/src/scene2d.rs, springboard/ui/src/physics.rs, springboard/ui/src/emitter.rs, springboard/ui/src/node_constraint.rs, springboard/ui/src/warp.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix spritekit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene_loop::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_action::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_atlas::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_tilemap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tilemap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene2d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "node_constraint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "warp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The 2D scene loop, actions, texture atlases, tile maps, rigid bodies and joints, particle emitters, node constraints and warp geometry, under bifrost_app::framework_kits::spritekit. Host tests only. Not covered: GPU shader nodes bound to app nodes."
   },
   {
    "id": "path:/System/Library/Frameworks/StateReporting.framework",
@@ -575,11 +986,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/statereporting.json",
+   "bifrost": "springboard/ui/src/state_report.rs, springboard/sdk/src/crash_report.rs, springboard/core/src/log.rs, springboard/core/src/signpost.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs",
    "status": "partial",
    "note": "from SDK matrix statereporting.json Refreshed 2026-10-17: not ready. The SDK has a state reporter and a signposter (bifrost_ui::state_report, sdk signpost). Still open: reports are not delivered to the shell or a developer, no derive macro attaches metadata, crash logs are not linked to app state, and the analytics page has no SDK extension point. See data/statereporting.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "state_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::triage_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diag::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "diagnostics_page::tests"
+    }
+   ],
+   "ready_note": "State reporters with domains, transitions and reportable metadata (bifrost_app::state_reporting), crash records, unified logging and signposts; reports stay on the device and are shown in the Diagnostics settings page (no developer upload by design). Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/StickerFoundation.framework",
@@ -638,11 +1083,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/storekit.json",
+   "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs, springboard/ui/src/offer.rs, springboard/ui/src/promotion.rs, springboard/ui/src/product.rs, springboard/ui/src/jws.rs, springboard/sdk/src/store_receipt.rs, springboard/sdk/src/app_transaction.rs, springboard/sdk/src/review.rs, springboard/sdk/src/testing.rs, springboard/src/shell/store/products.rs, springboard/src/shell/store/install.rs",
    "status": "partial",
    "note": "from SDK matrix storekit.json Built 2026-10-17: StoreSession scripted store for purchase tests (sdk testing.rs, testing::store_session_tests). Still open: subscriptions, offers, JWS verification, review prompt UI. Refreshed 2026-10-17 (still open): No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists; No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json; No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.; No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend; No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt; Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "purchase::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "entitlement::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "subscription::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "offer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "promotion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "product::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "jws::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "store_receipt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_transaction::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "review::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "testing::store_session_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "products::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "install::tests"
+    }
+   ],
+   "ready_note": "Products, purchases, entitlements, subscriptions, offers, promoted purchases, signed receipt verification, app transactions and review prompts for the BifrOSt App Store: bifrost_app::{product, purchase, entitlement, subscription, promotion, store_receipt, app_transaction, review} with the StoreSession test double and the shell store catalogue and checked installs. Host tests only. Not covered: a payment backend (no paid apps yet); the Apple-service parts (storefront, ad attribution, external purchase) are intentionally absent."
   },
   {
    "id": "path:/System/Library/Frameworks/SuggestedActions.framework",
@@ -680,11 +1194,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "bifrost": "springboard/ui/src/model_schema.rs, springboard/ui/src/model_store.rs, springboard/ui/src/relations.rs, springboard/ui/src/history.rs, springboard/ui/src/data_store.rs, springboard/ui/src/record_sync.rs, springboard/ui/src/undo.rs, springboard/sdk/src/observable.rs, springboard/sdk/src/document.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "From SDK matrix swiftdata.json. Open: no shared model container or context for apps; no predicate fetch over persistent records; no live fetched results; no uniqueness or relationship constraints in the app stores; no iCloud sync.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "relations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "history::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "data_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "undo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "restoration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "Model schema (unique, indexes, transient), the record store with predicate fetch, relations and delete rules, change history, pluggable data stores, record sync, undo, observation and document persistence (bifrost_app::framework_kits::swiftdata plus observable, document, restoration). Host tests only. Not covered: a derive macro for model types."
   },
   {
    "id": "path:/System/Library/Frameworks/SwiftUI.framework",
@@ -701,11 +1274,125 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/view/animation.rs, springboard/sdk/src/view/scroll.rs, springboard/sdk/src/layout.rs, springboard/sdk/src/view/autolayout.rs, springboard/sdk/src/widgets.rs, springboard/sdk/src/document.rs, springboard/sdk/src/observable.rs, springboard/ui/src/nav.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/table.rs, springboard/ui/src/collection.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/split.rs, springboard/ui/src/sheet.rs, springboard/ui/src/menu.rs, springboard/ui/src/gesture.rs, springboard/ui/src/focus.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/ax.rs",
    "status": "partial",
    "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "animation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scroll::physics_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autolayout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nav::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "environment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preferences::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "table::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "collection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sidebar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "split::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "focus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layout_protocol::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::settable_tests"
+    }
+   ],
+   "ready_note": "The retained view kit does the framework's job for BifrOSt apps: bifrost_app::view (stacks, forms, scroll views, animation), layout, widgets, documents and observable data, with navigation, environment, preferences, tables, lists, sidebars, split views, sheets, menus, gestures, focus, custom layout and accessibility from bifrost_ui. It is imperative rather than a declarative View protocol. Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/SwiftUICore.framework",
@@ -722,11 +1409,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/layout.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/gesture.rs, springboard/ui/src/ax.rs, springboard/sdk/src/observable.rs",
    "status": "partial",
    "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "environment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preferences::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layout_protocol::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::settable_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    }
+   ],
+   "ready_note": "Core split of SwiftUI (view fundamentals, environment, preferences, layout, gestures, accessibility, observation), implemented by the same view kit as the SwiftUI row: bifrost_app::{view, layout, observable} and bifrost_ui::{environment, preferences, stack, layout_protocol, gesture, ax}. Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/Symbols.framework",
@@ -743,11 +1479,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/symbols.json",
+   "bifrost": "springboard/ui/src/symbol_effect.rs, springboard/ui/src/symbol_layers.rs, springboard/sdk/src/glyphs.rs, springboard/sdk/src/glyph_draw.rs, springboard/render/src/symbols.rs, springboard/render/src/sdf_glyphs.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix symbols.json Refreshed 2026-10-17: not ready; open items are in data/symbols.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_effect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyph_draw::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "symbols::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "sdf_glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "Named glyph lookup and drawing (bifrost_app::{glyphs, glyph_draw}), symbol effects (appear, disappear, bounce, pulse, scale, breathe, rotate, wiggle, replace transitions) with repeat and speed options, and weights, scales and rendering layers, under bifrost_app::framework_kits::symbols. Host tests only. Not covered: the full licensed catalogue; the glyph set is BifrOSt's own."
   },
   {
    "id": "path:/System/Library/Frameworks/SyncServices.framework",
@@ -825,11 +1600,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system-configuration.json",
+   "bifrost": "springboard/sdk/src/reachability_flags.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/wifi_status.rs, springboard/sdk/src/wlan_events.rs, springboard/core/src/network_sets.rs, springboard/core/src/pref_session.rs, springboard/core/src/host_name.rs, springboard/core/src/tunnel.rs, springboard/core/src/proxy.rs, springboard/core/src/console_user.rs, springboard/core/src/vlan_plan.rs",
    "status": "partial",
    "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks. Built 2026-10-17: reachability callbacks for a host or address (sdk reachability_watch, tests reachability_watch::tests): a watch reports its flags only when a path change alters them. Still open: IPv4 and IPv6 configuration from apps, network sets.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "reachability_flags::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_status::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "network_sets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pref_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "host_name::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "tunnel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "proxy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "console_user::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vlan_plan::tests"
+    }
+   ],
+   "ready_note": "Reachability of hosts, network path and interface changes, Wi-Fi status, services, sets and locations, the preferences session, computer and host names, tunnel control, proxies, console user and VLAN planning: bifrost_app::{reachability_flags, network_path, wifi_status, wlan_events} over bifrost_core. Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/SystemExtensions.framework",

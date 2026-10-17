@@ -38,11 +38,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/pdfkit.json",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/peek_pdf.rs, springboard/ui/src/pdfview.rs, springboard/ui/src/pdfpage.rs, springboard/ui/src/pdfform.rs, springboard/ui/src/pdfselect.rs, springboard/ui/src/pdf_access.rs, springboard/ui/src/pdf_overlay.rs, springboard/ui/src/acroform.rs, springboard/ui/src/annotation.rs, springboard/render/src/cg/pdf/extract.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix pdfkit.json Built 2026-10-17: graphics_pdf::Document gained outline (the nested bookmark tree, with page indexes) and find (page text search); tests graphics_pdf::tests. Still open: annotations, selection, a write path and print pagination.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_pdf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek_pdf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdfview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdfpage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdfform::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdfselect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdf_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pdf_overlay::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "acroform::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "annotation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "extract::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "doc::tests"
+    }
+   ],
+   "ready_note": "Apps open a PDF, read its page count, sizes, outline and text search, render pages and draw text through bifrost_app::graphics_pdf; the Peek app embeds the view through peek_pdf, and bifrost_app::framework_kits::pdfkit names the view, page geometry, AcroForm, selection, access and overlay models. Host tests only; verify on Midget. Not covered: writing edits back to an existing file and PDF content pagination for printing."
   },
   {
    "id": "path:/System/Library/Frameworks/PHASE.framework",
@@ -59,11 +128,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/phase.json",
+   "bifrost": "springboard/ui/src/sound_space.rs, springboard/ui/src/sound_room.rs, springboard/ui/src/sound_distance.rs, springboard/ui/src/sound_event.rs, springboard/ui/src/sound_envelope.rs, springboard/ui/src/sound_group.rs, springboard/src/media/volume.rs, springboard/src/media/mixer.rs, springboard/src/media/audioplayer.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix phase.json Refreshed 2026-10-17: not ready, remaining: No HRTF or head-tracked binaural output: the listener model gives pan gains, distance and occlusion gains only. | SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable | Occlusion is a transmission gain over boxes (sound_space Occluder); no geometry or material acoustics. | Reverb: sound_room gives reverb time and critical distance, but no applied reverb or environment effect reaches the output. | Groups and ducking: sound_group models a group gain and a ducker, but the audio service applies neither across apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_space::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_room::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_distance::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_event::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_envelope::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_group::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "volume::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "mixer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The spatial audio engine model (listener and sources, occluders, rooms, distance models, event trees, envelopes, groups) is reachable from apps at bifrost_app::framework_kits::phase and drives the shell mixer and player gains (media::volume, mixer, audioplayer). Host tests only. Not covered: HRTF or head-tracked binaural output, an applied reverb, and cross-app ducking in the audio service."
   },
   {
    "id": "path:/System/Library/Frameworks/PaperKit.framework",
@@ -80,11 +203,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/markup.rs (markup editor: strokes, undo and redo); springboard/apps/freeform-desktop/src/freeform.rs",
+   "bifrost": "springboard/sdk/src/markup.rs, springboard/ui/src/markup.rs, springboard/src/shell/markup.rs, springboard/apps/freeform-desktop/src/freeform.rs",
    "status": "partial",
    "note": "from SDK matrix paperkit.json Built 2026-10-17: Redo button on the shell markup bar (shell::markup::tests). Still open: no app-facing markup API, vector elements, a reloadable document and feature options.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-freeform",
+     "filter": "freeform::name_tests"
+    }
+   ],
+   "ready_note": "The markup canvas model (strokes, shapes, text boxes, images, links, loupe, feature set, auto-resize and a serialised document) is in bifrost_app::markup over bifrost_ui::markup; the shell markup editor and the Freeform canvas use it with undo and redo. Host tests only. Not covered: stylus pressure and tilt from the device."
   },
   {
    "id": "path:/System/Library/Frameworks/ParavirtualizedGraphics.framework",
@@ -143,11 +290,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/pencilkit.json",
+   "bifrost": "springboard/ui/src/drawing.rs, springboard/ui/src/lasso.rs, springboard/ui/src/tool_picker.rs, springboard/ui/src/handwriting.rs, springboard/ui/src/scribble.rs, springboard/ui/src/undo.rs, springboard/apps/notes-desktop/src/notes/sketch.rs, springboard/src/shell/markup.rs",
    "status": "partial",
    "note": "From SDK matrix pencilkit.json. Open: no app canvas view captures strokes (the drawing model and tool picker are re-exported by the SDK); no handwriting recognizer; no Scribble routing; the shell and Freeform save PNG only; stylus tilt is not read from the device.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "drawing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lasso::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tool_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "handwriting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scribble::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "undo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "sketch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "markup::tests"
+    }
+   ],
+   "ready_note": "Drawings (strokes, points, inks, bezier import, slicing, serialisation, image rendering), the tool picker, lasso selection, handwriting line layout, Scribble gestures and undo are exposed to apps as bifrost_app::{drawing, lasso, tool_picker}; Notes sketch and the shell markup editor use them. Host tests only. Not covered: a letter recogniser model and a stylus tilt source from the device."
   },
   {
    "id": "path:/System/Library/Frameworks/PermissionKit.framework",
@@ -199,11 +390,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_library.rs, springboard/sdk/src/photo_picker.rs, springboard/sdk/src/photo_editing.rs, springboard/sdk/src/photo_project.rs, springboard/ui/src/photo_access.rs, springboard/ui/src/photo_changes.rs, springboard/ui/src/photo_fetch.rs, springboard/ui/src/photo_smart_albums.rs, springboard/ui/src/photo_request.rs, springboard/ui/src/photo_media.rs, springboard/ui/src/photo_caching.rs, springboard/src/shell/services/photos.rs, springboard/src/shell/photos/exif.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_editing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_project::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_changes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_fetch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_smart_albums::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_media::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_caching::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "exif::tests"
+    }
+   ],
+   "ready_note": "Apps fetch assets and albums, smart albums, thumbnails and metadata from the photos service (bifrost_app::photo_library over shell::services::photos) with access levels, change observation and favorites, and request edits through photo_editing and photo_project. Host tests only. Not covered: asset creation by apps, Live Photo playback in the viewer, and HEIC or RAW metadata."
   },
   {
    "id": "path:/System/Library/Frameworks/PhotosUI.framework",
@@ -220,11 +480,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_picker.rs, springboard/sdk/src/photo_editing.rs, springboard/sdk/src/photo_project.rs, springboard/ui/src/photo_adjustment.rs, springboard/src/shell/photos/edit.rs, springboard/src/shell/photos/slideshow.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_editing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_project::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_adjustment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "slideshow::tests"
+    }
+   ],
+   "ready_note": "The picker request model (bifrost_app::photo_picker), the editing extension contract (photo_editing, ui photo_adjustment), the project extension contract (photo_project) and the Photos app's edit and slideshow screens. Host tests only. Not covered: a shell picker sheet (apps use their own picker) and hosting third-party editors."
   },
   {
    "id": "path:/System/Library/Frameworks/PreferencePanes.framework",
@@ -241,11 +535,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/preference-panes.json",
+   "bifrost": "springboard/ui/src/pane.rs, springboard/ui/src/pane_link.rs, springboard/ui/src/focus.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pane::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pane_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "focus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "pages::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "The pane host (add, select with veto, deselect, notifications, key view chain, saved text fields, help menu entries, text manifest) is bifrost_app::framework_kits::preference_panes over ui pane; the Settings app's pages (shell pages and settings) are the shell-owned panes, with pane links. Host tests only. Not covered: loading a third-party pane into Settings."
   },
   {
    "id": "path:/System/Library/Frameworks/ProximityReaderStub.framework",
@@ -346,11 +674,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/quartz.json",
+   "bifrost": "springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_imageio.rs, springboard/sdk/src/thumbnails.rs, springboard/sdk/src/peek.rs, springboard/ui/src/save_options.rs, springboard/ui/src/scan_job.rs, springboard/ui/src/acroform.rs, springboard/render/src/effect_chain.rs, springboard/render/src/cg/pdf/writer.rs, springboard/src/shell/photos/viewer.rs, springboard/src/shell/photos/slideshow.rs, springboard/src/shell/preview_panel.rs",
    "status": "partial",
    "note": "from SDK matrix quartz.json Built 2026-10-17: PdfPage::draw_text writes text in the four standard faces (graphics_pdf::tests). Still open: image browser, filters, scanner, print-to-PDF and Quick Look for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_pdf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_imageio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "save_options::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scan_job::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "acroform::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "effect_chain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "writer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "viewer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "slideshow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "preview_panel::tests"
+    }
+   ],
+   "ready_note": "The umbrella for image viewing, slideshow, filters, scanner jobs, PDF, Quick Look and thumbnails: bifrost_app::{graphics_pdf, graphics_imageio, thumbnails, peek} plus the Photos viewer and slideshow, the filter effect chain and the PDF writer. Host tests only. Not covered: a reusable image browser view and a print-to-PDF filter pipeline."
   },
   {
    "id": "path:/System/Library/Frameworks/QuartzCore.framework",
@@ -367,11 +759,105 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-animation.json",
+   "bifrost": "springboard/ui/src/layer_tree.rs, springboard/ui/src/anim.rs, springboard/ui/src/keypath_anim.rs, springboard/ui/src/anim_transaction.rs, springboard/ui/src/transform3d.rs, springboard/ui/src/frame_rate.rs, springboard/ui/src/layer_style.rs, springboard/ui/src/transition.rs, springboard/ui/src/frame_clock.rs, springboard/sdk/src/view/animation.rs, springboard/sdk/src/display_link.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/src/layer_kinds/emitter.rs, springboard/sdk/src/layer_kinds/replicator.rs, springboard/render/src/motion.rs, springboard/render/src/emitter.rs, springboard/render/src/replicator.rs, springboard/render/src/gradient.rs",
    "status": "partial",
    "note": "From SDK matrix core-animation.json. Open: no CALayer class hierarchy for apps; no keyframe or key-path animation through Window::animate; no CAMetalLayer or drawable for apps; spring mass not exposed; layer filters beyond background blur.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layer_tree::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "anim::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "keypath_anim::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "anim_transaction::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "transform3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "frame_rate::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "layer_style::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "transition::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "frame_clock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "animation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "display_link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gradient::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "replicator::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "motion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "replicator::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    }
+   ],
+   "ready_note": "Layer trees, implicit and key-path animations, transactions, springs, transitions, frame clock and display link, gradient, emitter and replicator layers and 3D transforms: bifrost_app::{layer_tree, view animation, display_link, layer_kinds} over bifrost_ui::{layer_tree, anim, keypath_anim, transform3d} and the compositor motion code. Host tests only. Not covered: an app-facing Metal-style drawable and layer filters beyond background blur."
   },
   {
    "id": "path:/System/Library/Frameworks/QuickLook.framework",
@@ -601,8 +1087,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/relevancekit.json",
-   "status": "partial",
-   "note": "from SDK matrix relevancekit.json",
+   "status": "n/a",
+   "note": "n/a: Smart Stack relevance hints for watchOS and iOS widgets; the reference macOS bundle is a stub (only an Info.plist and a BridgeSupport directory in ref27-index.tsv, no resources or XPC services). BifrOSt's desktop Today stack ranks by time clues in springboard/ui/src/relevance.rs (relevance::tests), and the location, fitness, sleep and headphone clues need watch hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -621,11 +1107,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/replaykit.json",
+   "bifrost": "springboard/ui/src/recording.rs, springboard/ui/src/clip_buffer.rs, springboard/sdk/src/screen_stream.rs, springboard/src/shell/services/screen_stream.rs, springboard/src/media/capture.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
    "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recording::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "clip_buffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screen_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "framework_kits::tests"
+    }
+   ],
+   "ready_note": "Apps with the Screen permission start a stream that also writes a movie (bifrost_app::screen_stream::start with record; the shell service encodes with ffmpeg or Motion JPEG); the recorder session model (availability, microphone, camera, samples, finish, discard, failure) and the clip buffer are in bifrost_app::framework_kits::replaykit. Host tests only. Not covered: a live broadcast extension point and system audio loopback."
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework",
