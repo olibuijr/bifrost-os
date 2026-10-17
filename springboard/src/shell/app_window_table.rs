@@ -20,6 +20,8 @@ pub struct ExtraWindow {
     pub title: String,
     pub w: f32,
     pub h: f32,
+    /// The window floats above the app's normal windows (`ToShell::WindowLevelOf`); a new window is normal.
+    pub floating: bool,
 }
 
 /// Why a window request was refused.
@@ -59,7 +61,7 @@ impl WindowTable {
         if self.of_app(app).len() >= MAX_PER_APP {
             return Err(TableError::TooMany);
         }
-        let window = ExtraWindow { app: app.to_string(), id, title: title.to_string(), w, h };
+        let window = ExtraWindow { app: app.to_string(), id, title: title.to_string(), w, h, floating: false };
         let at = self.windows.iter().position(|x| x.app == app).unwrap_or(self.windows.len());
         self.windows.insert(at, window);
         Ok(())
@@ -98,6 +100,25 @@ impl WindowTable {
         self.windows[index].w = w;
         self.windows[index].h = h;
         Ok(())
+    }
+
+    /// Sets whether a window floats. False when the window is not open (or is the main window, id 0).
+    pub fn set_floating(&mut self, app: &str, id: u32, floating: bool) -> bool {
+        if id == 0 {
+            return false;
+        }
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].floating = floating;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The ids of one app's windows that float, front to back.
+    pub fn floating_ids(&self, app: &str) -> Vec<u32> {
+        self.of_app(app).iter().filter(|w| w.floating).map(|w| w.id).collect()
     }
 
     /// Raises a window to the front of its app's windows. False when the window is not open.
@@ -197,6 +218,21 @@ mod tests {
         assert_eq!(gone.len(), 1);
         assert!(t.of_app("a").is_empty());
         assert_eq!(ids(&t, "b"), vec![1]);
+    }
+
+    #[test]
+    fn a_window_floats_only_once_it_is_set_and_the_main_window_is_refused() {
+        let mut t = WindowTable::new();
+        t.open("calc", 1, "CPU", 300.0, 200.0).unwrap();
+        t.open("calc", 2, "Other", 300.0, 200.0).unwrap();
+        assert!(t.floating_ids("calc").is_empty(), "a new window is normal");
+        assert!(t.set_floating("calc", 1, true));
+        assert_eq!(t.floating_ids("calc"), vec![1]);
+        assert!(!t.set_floating("calc", 0, true), "the main window is not in the table");
+        assert!(!t.set_floating("calc", 9, true), "an unknown window is not set");
+        assert!(!t.set_floating("other", 1, true), "windows of another app do not mix");
+        assert!(t.set_floating("calc", 1, false));
+        assert!(t.floating_ids("calc").is_empty());
     }
 
     #[test]

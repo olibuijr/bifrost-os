@@ -46,6 +46,13 @@ pub fn set_level(ctx: &Ctx, level: Level) {
     ctx.send_to_shell(crate::proto::ToShell::WindowLevel(level));
 }
 
+/// Stacks one of this app's extra windows (opened with `Ctx::open_window`) at `level`, so a floating window stays above
+/// the normal windows while the app's main window stays where it is. The main window uses [`set_level`]. The shell
+/// keeps the level for as long as the window is open.
+pub fn set_window_level(ctx: &Ctx, window: crate::app_windows::WindowId, level: Level) {
+    ctx.send_to_shell(crate::proto::ToShell::WindowLevelOf { id: window.0, level });
+}
+
 pub fn decode_list(result: &Result<Json, String>) -> Result<Vec<WindowInfo>, String> {
     Ok(list_from_json(result.as_ref().map_err(|e| e.clone())?))
 }
@@ -107,6 +114,13 @@ mod tests {
         set_level(&ctx, Level::Floating);
         set_level(&ctx, Level::Normal);
         assert_eq!(ctx.take_sent(), vec![crate::proto::ToShell::WindowLevel(Level::Floating), crate::proto::ToShell::WindowLevel(Level::Normal)]);
+    }
+
+    #[test]
+    fn set_window_level_sends_the_level_of_one_extra_window() {
+        let ctx = crate::runtime::test_ctx();
+        set_window_level(&ctx, crate::app_windows::WindowId(2), Level::Floating);
+        assert_eq!(ctx.take_sent(), vec![crate::proto::ToShell::WindowLevelOf { id: 2, level: Level::Floating }]);
     }
 
     #[test]
