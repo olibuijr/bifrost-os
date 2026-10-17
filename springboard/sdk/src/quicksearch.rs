@@ -212,16 +212,30 @@ pub struct CSSearchableItem {
     pub attribute_set: CSSearchableItemAttributeSet,
     /// `expirationDate`: seconds since the Unix epoch after which the item is dropped; `None` keeps it
     pub expiration_date: Option<i64>,
+    /// `hideInSpotlight`: the item stays indexed but the shell leaves it out of search results
+    pub hide_in_spotlight: bool,
 }
 
 impl CSSearchableItem {
     pub fn new(unique_identifier: &str, domain_identifier: &str, attribute_set: CSSearchableItemAttributeSet) -> Self {
-        CSSearchableItem { unique_identifier: unique_identifier.into(), domain_identifier: domain_identifier.into(), attribute_set, expiration_date: None }
+        CSSearchableItem {
+            unique_identifier: unique_identifier.into(),
+            domain_identifier: domain_identifier.into(),
+            attribute_set,
+            expiration_date: None,
+            hide_in_spotlight: false,
+        }
     }
 
     /// Sets `expirationDate`.
     pub fn expiration_date(mut self, secs: i64) -> Self {
         self.expiration_date = Some(secs);
+        self
+    }
+
+    /// Sets `hideInSpotlight`: the item is indexed but not shown in search results.
+    pub fn hide_in_spotlight(mut self) -> Self {
+        self.hide_in_spotlight = true;
         self
     }
 
