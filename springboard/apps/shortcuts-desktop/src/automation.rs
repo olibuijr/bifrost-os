@@ -139,6 +139,22 @@ pub fn title_of(id: &str) -> String {
     declared().into_iter().find(|i| i.id == id).map(|i| i.title).unwrap_or_else(|| id.to_string())
 }
 
+/// The shortcut intents of the installed apps (`[[intent]]` with `shortcut = true` and no required parameter), read
+/// from their manifests under `root`. No app is launched: this is the list Search offers too.
+pub fn app_intents(root: &std::path::Path) -> Vec<springboard::shell::intents::AppShortcut> {
+    springboard::shell::intents::runnable_shortcuts(&springboard::shell::apphost::scan(root))
+}
+
+/// Runs intent `intent_id` of another installed app over its control socket and returns its dialog. The shell starts
+/// apps, not this one, so an app that is not open gives a reason instead of being started. The call is a local socket
+/// round trip; the app answers at once.
+pub fn run_app_intent(app_id: &str, app_name: &str, intent_id: &str) -> Result<Option<String>, String> {
+    if !springboard::shell::intents::socket_path(app_id).exists() {
+        return Err(format!("{app_name} is not open. Open it, then run this again."));
+    }
+    springboard::shell::intents::run(app_id, intent_id, std::time::Duration::ZERO).map_err(|e| format!("{app_name} did not run: {e}"))
+}
+
 /// Resolves the `shortcut` parameter to an index into `list`.
 fn resolve(list: &[Shortcut], params: &Json) -> Result<usize, RpcError> {
     let candidates: Vec<ir::Candidate> =
@@ -619,5 +635,30 @@ mod tests {
         let s = two_saves()[0].clone();
         assert_eq!(Planner::new().plan(s.clone()), plan_text(&s));
         assert_eq!(Planner::default().plan(two_saves()[1].clone()), Err("has no actions".to_string()));
+    }
+
+    #[test]
+    fn app_intents_lists_the_shortcut_intents_of_installed_apps() {
+        let root = std::env::temp_dir().join(format!("shortcuts-app-intents-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let d = root.join("apps/is.o.notes/current");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(
+            d.join("manifest.toml"),
+            "id = \"is.o.notes\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nshortcut = true\nparams = [\"text:string\"]\n",
+        )
+        .unwrap();
+        std::fs::write(d.join("x"), b"ELF").unwrap();
+        let found = app_intents(&root);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].app_id.as_str(), found[0].app_name.as_str(), found[0].intent.id.as_str()), ("is.o.notes", "Notes", "new-note"));
+        assert!(app_intents(&root.join("missing")).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_app_that_is_not_open_gives_a_reason_instead_of_running() {
+        let err = run_app_intent(&format!("is.test.not-open-{}", std::process::id()), "Notes", "new-note").unwrap_err();
+        assert_eq!(err, "Notes is not open. Open it, then run this again.");
     }
 }

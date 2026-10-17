@@ -24,6 +24,7 @@ use springboard::shortcuts::{Action, Daily, Shortcut, FOLDERS, GLYPHS, KINDS, MA
 use bifrost_app::proto::LoginStatus as Status;
 use bifrost_app::intents::Snippet;
 use bifrost_core::json::Json;
+use springboard::shell::intents::AppShortcut;
 use std::path::PathBuf;
 
 /// The result panel's width (points) and the most step rows it shows before "and N more".
@@ -136,6 +137,8 @@ enum Target {
     Pick(usize),
     /// An intent in the Intents section of the action library: runs it on the shortcut in front.
     Intent(usize),
+    /// An intent another installed app declares in the action library's "From Apps" section: opens that app and runs it.
+    AppIntent(usize),
     Color(usize),
     Glyph(usize),
     Delete,
@@ -297,6 +300,10 @@ pub struct Shortcuts {
     login_request: Option<bool>,
     /// the intents the last taps asked to run, oldest first, with their parameters
     intent_requests: Vec<(String, Json)>,
+    /// the shortcut intents of the installed apps, as the shell lists them (the library's "From Apps" section)
+    app_intents: Vec<AppShortcut>,
+    /// the other apps' intents the last taps asked to run, as (app id, app name, intent id), oldest first
+    app_intent_requests: Vec<(String, String, String)>,
     /// the result panel of the last intent run that had a snippet, if it is still showing
     result: Option<ResultPanel>,
     /// the search text of the toolbar's field
@@ -357,6 +364,8 @@ impl Shortcuts {
             login: None,
             login_request: None,
             intent_requests: Vec::new(),
+            app_intents: Vec::new(),
+            app_intent_requests: Vec::new(),
             result: None,
             query: TextField::new(),
             field: TextField::new(),
@@ -456,6 +465,17 @@ impl Shortcuts {
     /// their parameters.
     pub fn take_intent_requests(&mut self) -> Vec<(String, Json)> {
         std::mem::take(&mut self.intent_requests)
+    }
+
+    /// Replaces the other apps' shortcut intents the action library lists. Called when the installed apps change.
+    pub fn set_app_intents(&mut self, list: Vec<AppShortcut>) {
+        self.app_intents = list;
+        self.dirty = true;
+    }
+
+    /// The other apps' intents the last taps asked to run, oldest first, as (app id, app name, intent id).
+    pub fn take_app_intent_requests(&mut self) -> Vec<(String, String, String)> {
+        std::mem::take(&mut self.app_intent_requests)
     }
 
     /// The export the last tap or menu asked for, once: the suggested file name and the text to write.
@@ -845,7 +865,22 @@ impl Shortcuts {
                     cells.push(Cell { target: None, rect: note, look: Look::Note(intent.description.clone()) });
                     y += ui.pt(SPACE_XXXL);
                 }
-                if kinds.is_empty() && declared.iter().all(|i| !self.fits(&i.title)) {
+                // the shortcut intents of the other installed apps, as Search lists them
+                let others: Vec<usize> = (0..self.app_intents.len()).filter(|&k| self.app_intent_fits(&self.app_intents[k])).collect();
+                let none_from_apps = others.is_empty();
+                if !others.is_empty() {
+                    y += ui.pt(SPACE_L);
+                    cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("From Apps".into()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
+                for k in others {
+                    let a = &self.app_intents[k];
+                    self.row(ui, &mut cells, &mut y, &a.intent.title, &a.app_name, LABEL.now(), ROW_POS_FIRST | ROW_POS_LAST, Some(Target::AppIntent(k)));
+                    let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
+                    cells.push(Cell { target: None, rect: note, look: Look::Note(a.intent.description.clone()) });
+                    y += ui.pt(SPACE_XXXL);
+                }
+                if kinds.is_empty() && declared.iter().all(|i| !self.fits(&i.title)) && none_from_apps {
                     let note = (m + ui.pt(SPACE_L), y, w - 2.0 * ui.pt(SPACE_L), ui.pt(SPACE_XXXL));
                     cells.push(Cell { target: None, rect: note, look: Look::Note(format!("No actions match \"{}\".", &*self.query)) });
                     y += ui.pt(SPACE_XXXL);
@@ -971,6 +1006,11 @@ impl Shortcuts {
     fn fits(&self, text: &str) -> bool {
         let q = self.query.trim().to_lowercase();
         q.is_empty() || text.to_lowercase().contains(&q)
+    }
+
+    /// Whether another app's intent passes the search: its title or its app's name contains the text.
+    fn app_intent_fits(&self, a: &AppShortcut) -> bool {
+        self.fits(&a.intent.title) || self.fits(&a.app_name)
     }
 
     /// Whether a starter passes the search: its name, its line or its heading contains the text.
@@ -1391,6 +1431,11 @@ impl Shortcuts {
                     self.intent_requests.push((intent.id.clone(), Json::Obj(Vec::new())));
                 }
             }
+            Target::AppIntent(k) => {
+                if let Some(a) = self.app_intents.get(k) {
+                    self.app_intent_requests.push((a.app_id.clone(), a.app_name.clone(), a.intent.id.clone()));
+                }
+            }
             Target::ResultRun => {
                 // the follow-on runs the intent the result opened, with the parameters it named
                 if let Some(follow) = self.result.take().and_then(|p| p.follow) {
@@ -1635,6 +1680,7 @@ impl Shortcuts {
                                 Some(
                                     Target::Pick(_)
                                         | Target::Intent(_)
+                                        | Target::AppIntent(_)
                                         | Target::Starter(_)
                                         | Target::Duplicate
                                         | Target::Export
@@ -2451,5 +2497,23 @@ mod tests {
             _ => None,
         }).collect();
         assert_eq!(headings, vec!["Focus", "Everyday", "Tools"]);
+    }
+
+    #[test]
+    fn an_intent_of_another_app_is_listed_in_the_library_and_asks_for_a_run() {
+        use springboard::shell::intents::ManifestIntent;
+        let mut w = window("app-intents");
+        w.set_app_intents(vec![AppShortcut {
+            app_id: "is.o.notes".into(),
+            app_name: "Notes".into(),
+            intent: ManifestIntent { id: "new-note".into(), title: "New Note".into(), description: "Makes a note.".into(), shortcut: true, params: Vec::new() },
+        }]);
+        w.view = View::Picker(0);
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| matches!(c.target, Some(Target::AppIntent(0)))), "the library lists the other app's intent");
+        assert!(cells.iter().any(|c| matches!(&c.look, Look::Header(t) if t == "From Apps")));
+        w.activate(Target::AppIntent(0));
+        assert_eq!(w.take_app_intent_requests(), vec![("is.o.notes".to_string(), "Notes".to_string(), "new-note".to_string())]);
+        assert!(w.take_app_intent_requests().is_empty(), "a request is taken once");
     }
 }
