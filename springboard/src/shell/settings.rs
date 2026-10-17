@@ -3607,7 +3607,8 @@ mod tests {
         let root = st.list().unwrap();
         let (g, i) = root.find("Wi-Fi").unwrap();
         assert_eq!(root.item(g, i).value, "Off");
-        assert_eq!(root.item(0, 0).accessory, super::super::list::Accessory::Switch(true));
+        // group 0 is the BifrOSt Account row, so the Airplane Mode switch is the first row of group 1
+        assert_eq!(root.item(1, 0).accessory, super::super::list::Accessory::Switch(true));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Airplane Mode"), vec![Effect::Wifi(WifiAction::Enable(true))]);
         assert_eq!(st.list().unwrap().item(g, i).value, "Home");
     }

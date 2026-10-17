@@ -169,7 +169,8 @@ mod tests {
     #[test]
     fn steppers_hit_the_minus_and_plus_at_the_right_edge() {
         assert_eq!(stepper_dir(CHAR_SPACING, 300.0, 320.0), 1);
-        assert_eq!(stepper_dir(CHAR_SPACING, 280.0, 320.0), -1);
+        assert_eq!(stepper_dir(CHAR_SPACING, 280.0, 320.0), 1, "the right 48 pt is +");
+        assert_eq!(stepper_dir(CHAR_SPACING, 250.0, 320.0), -1, "the 48 pt just left of it is -");
         assert_eq!(stepper_dir(CHAR_SPACING, 200.0, 320.0), 0);
         assert_eq!(stepper_dir(BOLD_BRIGHT, 300.0, 320.0), 0, "a toggle row has no steppers");
         assert_eq!(stepper_dir(WELL_FIRST, 300.0, 320.0), 0, "a well row has no steppers");
