@@ -728,6 +728,13 @@ mod tests {
     }
 
     #[test]
+    fn every_internet_accounts_kind_is_a_builtin_type() {
+        for kind in bifrost_ui::internet_accounts::Kind::ALL {
+            assert!(BUILTIN_TYPES.iter().any(|(id, _)| *id == kind.account_type()), "{kind:?} has no builtin type");
+        }
+    }
+
+    #[test]
     fn credential_items_are_named_per_account() {
         assert_eq!(CREDENTIAL_SERVICE, "bifrost.accounts");
         assert_eq!(credential_account("mail-1"), "credential:mail-1");

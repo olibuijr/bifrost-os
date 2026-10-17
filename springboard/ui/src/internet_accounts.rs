@@ -54,6 +54,16 @@ impl Kind {
         }
     }
 
+    /// The account type this kind is saved under in the accounts store. The identifiers are the system types the SDK
+    /// registers (`bifrost_app::accounts::BUILTIN_TYPES`), so an app that reads the store finds the same type names.
+    pub fn account_type(self) -> &'static str {
+        match self {
+            Kind::Mail => "bifrost.mail",
+            Kind::CalDav => "bifrost.caldav",
+            Kind::CardDav => "bifrost.carddav",
+        }
+    }
+
     /// The services an account of this kind can feed, in the order the pane lists them.
     pub fn services(self) -> &'static [Service] {
         match self {
@@ -459,6 +469,13 @@ pub fn serving(accounts: &[Account], service: Service) -> Vec<&Account> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_kind_has_its_own_account_type_name() {
+        let names: Vec<&str> = Kind::ALL.iter().map(|k| k.account_type()).collect();
+        assert_eq!(names, vec!["bifrost.mail", "bifrost.caldav", "bifrost.carddav"]);
+        assert!(names.iter().all(|n| n.starts_with("bifrost.")));
+    }
 
     fn mail() -> Account {
         Account {
