@@ -27,6 +27,7 @@ pub mod switch_panels;
 pub mod switch_scan;
 pub mod tree;
 pub mod voice_control;
+pub mod voice_overlay;
 pub mod walk;
 pub mod zoom;
 
@@ -59,6 +60,9 @@ pub struct AccessibilitySettings {
     pub guided_access: bool,
     /// Screen Reader: a keyboard cursor walks the visible Settings page and speaks each element (`reader`).
     pub screen_reader: bool,
+    /// Voice Control: the shell listens (on device, with the dictation model) and runs spoken commands (`voice_control`). Stored
+    /// under the key the recognizer service reads (`services::recognizer::VOICE_CONTROL_PREF`).
+    pub voice_control: bool,
     /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
     pub sticky_keys: bool,
     /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
@@ -82,7 +86,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, voice_control: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -100,6 +104,7 @@ impl AccessibilitySettings {
             dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
+            voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
             dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
@@ -125,6 +130,7 @@ impl AccessibilitySettings {
             ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
+            (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_sticky_keys", flag(self.sticky_keys)),
             ("a11y_dwell", &self.dwell.to_string()),
             ("a11y_slow_keys", &self.slow.to_string()),

@@ -196,6 +196,8 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Voice Control (`voice_control`)
+    VoiceControl,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
@@ -1390,6 +1392,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
+                    Group::new(vec![Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl))])
+                        .header("SPEECH")
+                        .footer("Say \"show numbers\", \"show names\" or \"show grid\" to label what is on screen, then \"press 3\" or \"press Save\". Listening happens on this computer with the Dictation speech model, and your speech is never uploaded."),
                     Group::new(vec![
                         Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
                         Item::new("Mouse Keys").switch(a.mouse_keys, Action::Toggle(Toggle::MouseKeys)),

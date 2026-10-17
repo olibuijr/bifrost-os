@@ -797,6 +797,8 @@ pub struct Shell {
     speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
     reader: accessibility::reader::Reader,
+    /// the Voice Control label or grid overlay (`accessibility::voice_overlay`)
+    voice_overlay: accessibility::voice_overlay::VoiceOverlay,
     /// the line for a Braille display: what the screen reader last spoke, translated (`accessibility::braille_out`)
     braille: accessibility::braille_out::BrailleLine,
     /// the popup earcons (a desktop menu or the power menu opening or closing), queued while the reader is on (`earcon`)
@@ -1121,6 +1123,7 @@ impl Shell {
             guided: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
+            voice_overlay: Default::default(),
             braille: Default::default(),
             popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
@@ -3312,6 +3315,7 @@ impl Shell {
         self.metrics_tick(t);
         let mut fx = self.tick_inner(t);
         fx.append(&mut self.voice_fx);
+        fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx
     }
@@ -3720,7 +3724,7 @@ impl Shell {
         if self.notify_damage_all() {
             damage.all();
         }
-        if self.announce_damage() || self.reader_damage() {
+        if self.announce_damage() || self.reader_damage() || self.voice_overlay_damage() {
             damage.all();
         }
         // the preview panel is drawn over the whole desktop: a change repaints the frame
@@ -3957,6 +3961,7 @@ impl Shell {
         self.draw_announce(s);
         self.draw_paste_progress(s, t);
         self.draw_reader(s);
+        self.draw_voice_overlay(s);
         if self.dnd.session.is_some() {
             damage.all();
             self.dnd_draw(s);

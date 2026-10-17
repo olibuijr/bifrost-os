@@ -1277,6 +1277,11 @@ impl Settings {
         self.stack.iter().map(|e| e.id).collect()
     }
 
+    /// The split layout's sidebar list, if the window is wide enough for one.
+    pub fn sidebar_list(&self) -> Option<&ListPage> {
+        self.sidebar.as_ref()
+    }
+
     /// The top page's list, if it is one.
     pub fn list(&self) -> Option<&ListPage> {
         match &self.stack.last()?.view {
@@ -3026,6 +3031,7 @@ impl Settings {
             Toggle::DimFlashingLights => flip(&mut self.a11y.dim_flashing_lights),
             Toggle::GuidedAccess => flip(&mut self.a11y.guided_access),
             Toggle::ScreenReader => flip(&mut self.a11y.screen_reader),
+            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
             Toggle::AutoTime => {

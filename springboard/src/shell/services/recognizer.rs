@@ -454,8 +454,14 @@ impl SystemService for Recognizer {
         }
         let wanted = shell.prefs.get(VOICE_CONTROL_PREF) == Some("1");
         for heard in self.voice_step(wanted, t) {
-            if let Some(Ok((_, fx))) = shell.voice_press(&heard, t) {
-                shell.voice_fx.extend(fx);
+            match shell.voice_press(&heard, t) {
+                Some(Ok((_, fx))) => shell.voice_fx.extend(fx),
+                // a command that could not run says why on the announcement banner
+                Some(Err(why)) => {
+                    shell.announce.post(&why, bifrost_proto::AnnouncePriority::High);
+                    shell.dirty = true;
+                }
+                None => {}
             }
         }
         Vec::new()
@@ -777,6 +783,28 @@ mod tests {
         refused.rec.voice_step(true, 10.0 + VOICE_RETRY_S);
         assert!(refused.rec.session.is_some(), "after the window it starts");
         let _ = std::fs::remove_dir_all(&refused.root);
+    }
+
+    #[test]
+    fn a_spoken_overlay_command_reaches_the_shell_through_the_service_tick() {
+        let mut r = rig(true, true);
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.prefs.set(VOICE_CONTROL_PREF, "1").unwrap();
+        *r.lines.lock().unwrap() = vec![
+            "whisper0: {text=\"show num\", is-final=(boolean)false}".to_string(),
+            "whisper0: {text=\"show numbers\", is-final=(boolean)true}".to_string(),
+        ];
+        r.rec.tick(&mut sh, 1.0);
+        assert_eq!(sh.voice_overlay_shown(), Some(bifrost_ui::voice_commands::Overlay::Numbers), "the final transcript ran, the hypothesis did not");
+        *r.lines.lock().unwrap() = vec!["whisper0: {text=\"press 99\", is-final=(boolean)true}".to_string()];
+        r.rec.tick(&mut sh, 2.0);
+        sh.announce.tick(2.0);
+        assert!(sh.announce.shown().is_some_and(|t| t.contains("99")), "a command that cannot run says why");
+        sh.prefs.set(VOICE_CONTROL_PREF, "0").unwrap();
+        r.rec.tick(&mut sh, 3.0);
+        assert!(r.rec.session.is_none(), "switching Voice Control off in Settings ends the recognition");
+        assert_eq!(sh.voice_overlay_shown(), None);
+        let _ = std::fs::remove_dir_all(&r.root);
     }
 
     #[test]
