@@ -47,6 +47,9 @@ pub fn seed() -> u64 {
     nanos | 1
 }
 
+/// Pointer moves [`TestWindow::swipe`] sends between its endpoints.
+pub const SWIPE_STEPS: u32 = 12;
+
 /// `XCUIApplication` for one window: the SDK [`Window`], your model and a loaded [`Ui`] (SFUI font, scale 1).
 pub struct TestWindow<S: Responder = NoApp> {
     pub window: Window<S>,
@@ -76,6 +79,21 @@ impl<S: Responder> TestWindow<S> {
         let u = self.window.event(&ViewEvent::Pointer(Event::Up(x, y)), &mut self.model);
         d || u
     }
+    /// `XCUICoordinate.tap()`: pointer down and up at window point (x, y) through the hit test; true when handled.
+    pub fn tap(&mut self, x: f32, y: f32) -> bool {
+        self.click(x, y)
+    }
+    /// `XCUICoordinate.press(forDuration:thenDragTo:)`-style swipe: pointer down at `from`, [`SWIPE_STEPS`] moves
+    /// along the straight line, then up at `to`. True when any view handled one of those events.
+    pub fn swipe(&mut self, from: (f32, f32), to: (f32, f32)) -> bool {
+        let mut handled = self.window.event(&ViewEvent::Pointer(Event::Down(from.0, from.1)), &mut self.model);
+        for i in 1..=SWIPE_STEPS {
+            let t = i as f32 / SWIPE_STEPS as f32;
+            let (x, y) = (from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+            handled |= self.window.event(&ViewEvent::Pointer(Event::Move(x, y)), &mut self.model);
+        }
+        handled | self.window.event(&ViewEvent::Pointer(Event::Up(to.0, to.1)), &mut self.model)
+    }
     /// A key event to the first responder.
     pub fn key(&mut self, k: KeyInput) -> bool {
         self.window.event(&ViewEvent::Key(k), &mut self.model)
@@ -83,6 +101,12 @@ impl<S: Responder> TestWindow<S> {
     /// Types `s` into the first responder.
     pub fn type_text(&mut self, s: &str) -> bool {
         self.key(KeyInput::Text(s.into()))
+    }
+    /// `XCUIElement.typeText`: taps the centre of the element with this role and label, then types `s`.
+    /// False when no such element exists or the tap was not handled.
+    pub fn type_into(&mut self, role: Role, label: &str, s: &str) -> bool {
+        let Some(mut el) = self.element(role, label) else { return false };
+        el.click() && self.type_text(s)
     }
     /// Resizes the window (points) and lays out again.
     pub fn resize(&mut self, w: u32, h: u32) {
