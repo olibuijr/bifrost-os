@@ -20,9 +20,38 @@
    "doc": "",
    "bifrost": "springboard/apps/weather-desktop",
    "status": "partial",
-   "note": "Weather app",
+   "note": "Weather app (weather-desktop 1.8.0): forecasts, insights, control, notifications and services are built with tests",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "weather::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "insights::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "notify::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "control::tests"
+    }
+   ],
+   "ready_note": "covers: the Weather app (springboard/apps/weather-desktop)"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Wireless Diagnostics.app",
@@ -41,9 +70,28 @@
    "doc": "",
    "bifrost": "springboard/apps/wireless-diagnostics-desktop",
    "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "note": "new app (Team H, 0.1.2): Wi-Fi link readings with a live signal chart, nearby network scan and diagnostics report; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wireless-diagnostics",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wireless-diagnostics",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wireless-diagnostics",
+     "filter": "draw::tests"
+    }
+   ],
+   "ready_note": "covers: the Wi-Fi link reading, signal chart, nearby scan and report (springboard/apps/wireless-diagnostics-desktop)"
   }
  ]
 }

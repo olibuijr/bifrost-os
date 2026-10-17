@@ -86,10 +86,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/clock/timer.rs",
+   "bifrost": "springboard/src/shell/clock/timer.rs, springboard/sdk/src/system_intents.rs",
    "status": "partial",
-   "note": "has: Clock timer; missing: App Intents declarations",
-   "rea": []
+   "note": "has: Clock timer; App Intent for starting a timer declared (sdk system_intents, intent.timer_start); the shell does not serve it yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    }
+   ],
+   "ready_note": "covers: the timer start App Intent declaration (sdk system_intents::timer_intents)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Touch ID & Password.appex",
@@ -189,10 +198,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/sdk/src/system_intents.rs",
    "status": "partial",
-   "note": "has: Reduce Transparency under Accessibility; missing: App Intents declarations",
-   "rea": []
+   "note": "has: Reduce Transparency under Accessibility; App Intent for setting it declared (sdk system_intents, intent.set_reduce_transparency); the shell does not serve it yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    }
+   ],
+   "ready_note": "covers: the Reduce Transparency App Intent declaration (sdk system_intents::setting_intents)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroups.appex",

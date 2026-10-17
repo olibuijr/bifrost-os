@@ -71,7 +71,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/character_viewer.rs",
    "status": "partial",
-   "note": "existing character viewer (emoji catalogue); symbol tabs not yet",
+   "note": "existing character viewer (emoji catalogue) with a Symbols tab of symbol emoji (character_viewer SYMBOLS); text symbol sets (arrows, math, currency) and the search field are still open",
    "rea": [],
    "method": "manual"
   },
