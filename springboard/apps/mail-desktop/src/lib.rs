@@ -4,6 +4,7 @@
 
 pub mod accounts;
 pub mod attachments;
+pub mod background;
 pub mod body;
 pub mod category;
 pub mod codec;

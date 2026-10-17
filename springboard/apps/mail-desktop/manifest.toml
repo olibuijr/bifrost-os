@@ -12,3 +12,6 @@ permissions = ["storage", "network", "keychain", "notifications", "documents"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
 schemes = ["mailto"]
+
+[background]
+tasks = ["is.olibuijr.mail.desktop.refresh"]
