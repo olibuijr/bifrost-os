@@ -9,6 +9,7 @@ use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_calendar::calendar::archive;
 use bifrost_calendar::calendar::extras;
 use bifrost_calendar::calendar::subscribe::{self, Fetcher};
@@ -16,6 +17,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::prefs::{self, Setting};
+use bifrost_calendar::calendar::window::{self, EDITOR_HEIGHT, EDITOR_WIDTH};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
@@ -349,33 +351,8 @@ impl App for CalendarApp {
             return true;
         }
         if let Input::Key(key) = &ev {
-            if let Some((code, mods)) = key.as_chord() {
-                let now = bifrost_app::proto::sys::now_ms();
-                return match &mut self.cal {
-                    Some(app) => app.chord(&ctx.ui, code, mods, now),
-                    None => false,
-                };
-            }
-            if *key == KeyInput::Code(1) {
-                let now = bifrost_app::proto::sys::now_ms();
-                return match &mut self.cal {
-                    Some(app) => app.escape(&ctx.ui, now),
-                    None => false,
-                };
-            }
-            let out = match key {
-                KeyInput::Text(text) => Out::Text(text.clone()),
-                KeyInput::Code(8) => Out::Backspace,
-                KeyInput::Code(13) => Out::Enter,
-                KeyInput::Code(9) => Out::Named("Tab"),
-                KeyInput::Code(37) => Out::Named("Left"),
-                KeyInput::Code(38) => Out::Named("Up"),
-                KeyInput::Code(39) => Out::Named("Right"),
-                KeyInput::Code(40) => Out::Named("Down"),
-                _ => return false,
-            };
-            if let Some(app) = &mut self.cal { app.key(&ctx.ui, out, bifrost_app::proto::sys::now_ms()); return true; }
-            return false;
+            let Some(c) = &mut self.cal else { return false };
+            return key_input(c, ctx, key);
         }
         let (Some(c), Input::Touch { kind, x, y, t, .. }) = (&mut self.cal, ev) else { return false };
         let e = match kind {
@@ -385,6 +362,7 @@ impl App for CalendarApp {
         };
         c.touch(&ctx.ui, e, t);
         share_copy(c, ctx);
+        self.open_event_window(ctx);
         true
     }
 
@@ -533,6 +511,113 @@ impl App for CalendarApp {
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
+    }
+
+    /// An editor window draws its event's editor at the window's size (`window.rs`); the main window draws as before.
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        if let Some(c) = &mut self.cal {
+            c.draw_pane(window.0, s, &ctx.ui, t);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+
+    /// Input for an editor window goes to its editor; the main window gets `event`.
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        let Some(c) = &mut self.cal else { return false };
+        let Some((used, open)) = c.with_pane(window.0, |c| pane_input(c, ctx, ev)) else { return false };
+        if !open {
+            // the editor closed (Save, Delete or Cancel): its window goes too
+            let _ = ctx.close_window(window);
+        }
+        used
+    }
+
+    /// The shell closed an editor window: its unsaved edits are dropped, as Cancel drops them.
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        if let Some(c) = &mut self.cal {
+            c.drop_pane(window.0);
+        }
+        true
+    }
+}
+
+impl CalendarApp {
+    /// Opens the editor of an event that was double-clicked, in a window of its own. An event whose editor is already
+    /// open in a window is not opened again.
+    fn open_event_window(&mut self, ctx: &Ctx) {
+        let Some(c) = &mut self.cal else { return };
+        let Some(id) = c.take_open_request() else { return };
+        if c.editing_in_window(id) {
+            return;
+        }
+        let Some(title) = c.event_title(id) else { return };
+        match ctx.open_window(WindowSpec::new(&window::window_title(&title), EDITOR_WIDTH, EDITOR_HEIGHT)) {
+            Ok(window) => {
+                if !c.open_pane(&ctx.ui, window.0, id) {
+                    let _ = ctx.close_window(window);
+                }
+            }
+            Err(_) => c.show_error("The event could not be opened in a window."),
+        }
+    }
+}
+
+/// A key for the calendar or an editor: a chord, Escape, or a text or navigation key for the focused field.
+fn key_input(c: &mut calendar::Calendar, ctx: &Ctx, key: &KeyInput) -> bool {
+    let now = bifrost_app::proto::sys::now_ms();
+    if let Some((code, mods)) = key.as_chord() {
+        return c.chord(&ctx.ui, code, mods, now);
+    }
+    if *key == KeyInput::Code(1) {
+        return c.escape(&ctx.ui, now);
+    }
+    let out = match key {
+        KeyInput::Text(text) => Out::Text(text.clone()),
+        KeyInput::Code(8) => Out::Backspace,
+        KeyInput::Code(13) => Out::Enter,
+        KeyInput::Code(9) => Out::Named("Tab"),
+        KeyInput::Code(37) => Out::Named("Left"),
+        KeyInput::Code(38) => Out::Named("Up"),
+        KeyInput::Code(39) => Out::Named("Right"),
+        KeyInput::Code(40) => Out::Named("Down"),
+        _ => return false,
+    };
+    c.key(&ctx.ui, out, now);
+    true
+}
+
+/// Input for an editor window: a key, an edit command, or a touch (its position is in points, the calendar lays out in
+/// pixels).
+fn pane_input(c: &mut calendar::Calendar, ctx: &Ctx, ev: Input) -> bool {
+    match ev {
+        Input::Key(key) => key_input(c, ctx, &key),
+        Input::Command(cmd) => {
+            let text = ctx.pasteboard_string();
+            let done = c.edit_command(&ctx.ui, cmd, text.as_deref(), bifrost_app::proto::sys::now_ms());
+            share_copy(c, ctx);
+            done
+        }
+        Input::Touch { kind, x, y, t, .. } => {
+            let k = ctx.ui.s;
+            let (x, y) = (x * k, y * k);
+            let e = match kind {
+                TouchKind::Down => Event::Down(x, y),
+                TouchKind::Move => Event::Move(x, y),
+                TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
+            };
+            c.touch(&ctx.ui, e, t);
+            share_copy(c, ctx);
+            true
+        }
+        _ => false,
     }
 }
 

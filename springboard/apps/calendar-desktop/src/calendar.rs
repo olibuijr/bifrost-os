@@ -30,6 +30,7 @@ pub mod search;
 pub use springboard::shell::calendar::{store, Date};
 pub mod subscribe;
 pub mod timeview;
+pub mod window;
 
 use bifrost_app::layout::top_inset;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_XL, SPACE_XS, SPACE_XXS};
@@ -45,7 +46,7 @@ use springboard::shell::ui::{centred, home_zone, Ui, Weight, WHITE};
 use bifrost_app::kit::colors;
 use bifrost_app::controls::calendar_participant::Participant;
 use bifrost_app::kit::ui::{CARD_BG, LABEL, LABEL_2, LABEL_3, SEPARATOR_C};
-use bifrost_app::kit::ui::{MAC_TITLE2_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::MAC_TITLE2_PT;
 use springboard::shell::Event;
 use bifrost_app::controls::calendar_store_changes::StoreChangeHub;
 use springboard::deildu::scroll::Scroller;
@@ -270,6 +271,11 @@ pub struct Calendar {
     subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
+    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the last
+    /// tap on an event with its time (a second tap in time is a double-click).
+    panes: Vec<window::Pane>,
+    open_request: Option<u64>,
+    last_tap: Option<(u64, f64)>,
     labels: TextCache,
     scroll: Scroller,
     pressed: Option<Target>,
@@ -328,12 +334,7 @@ impl Calendar {
             }
         };
         let today = today(wall, wall.at);
-        let fields = [("Title", MAC_TITLE3_PT), ("Location", MAC_BODY_PT), ("Notes", MAC_BODY_PT)]
-            .map(|(p, pt)| {
-                let mut f = TextField::new(ui, p, pt, false, 160);
-                f.focused = false;
-                f
-            });
+        let fields = window::new_fields(ui);
         let prefs = prefs::Prefs::load(&path);
         let subs = subscribe::load(&path);
         let mut extras = extras::Extras::load(&path);
@@ -383,6 +384,9 @@ impl Calendar {
             overlay_version: 0,
             subs,
             fields,
+            panes: Vec::new(),
+            open_request: None,
+            last_tap: None,
             labels: TextCache::default(),
             scroll: Scroller::new(),
             pressed: None,
@@ -1287,6 +1291,13 @@ impl Calendar {
                 };
                 if tap {
                     if let Some(target) = pressed.filter(|p| Some(*p) == self.hit(ui, x, y)) {
+                        // an event is selected by a tap and opened in its own window by a double-click (`window.rs`)
+                        if let Target::Row(id) = target {
+                            if !overlay::is_overlay(id) && self.editor.is_none() {
+                                self.tap_event(id, t);
+                                return;
+                            }
+                        }
                         self.activate(ui, target, t);
                     }
                 }
