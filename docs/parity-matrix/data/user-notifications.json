@@ -33,14 +33,14 @@
    "apple": "UNNotificationCategory, UNNotificationAction, UNTextInputNotificationAction",
    "bifrost": "springboard/proto/src/rich.rs (NotifCategory, NotifAction, TextInput), springboard/sdk/src/usernotif.rs (set_categories), docs/bifrost-ui.md section 'User notifications'",
    "status": "parity",
-   "note": "Buttons, destructive and foreground actions and text-input actions with a placeholder are covered (up to 16 categories of 10 actions). Action icons, category options (custom dismiss action, hidden preview) and the dismiss-action callback are not."
+   "note": "Buttons, destructive and foreground actions and text-input actions with a placeholder are covered (up to 16 categories of 10 actions). Action icons, category options (custom dismiss action, hidden preview) and the dismiss-action callback are not. Built 2026-10-17: the custom dismiss option (NOTIF_CATEGORY_CUSTOM_DISMISS) sends NOTIF_DISMISS_ACTION when the user clears a notification of that category from the notification UI, now or at the next start of the app; the hidden-preview options (show title, show subtitle) decide what shows while previews are hidden; action icons are carried on the wire and by NotifAction::with_icon. Gap: cards do not draw action buttons yet, so an icon is not on screen. Tests: proto notification_category_options_round_trip_and_reject_unknown_bits and notification_action_icons_round_trip, shell usernotif::tests::hidden_previews_keep_only_what_the_category_asks_for and prune_returns_what_it_forgot_with_its_request."
   },
   {
    "feature": "UNNotificationRequest and UNMutableNotificationContent",
    "apple": "UNNotificationRequest, UNMutableNotificationContent (title, subtitle, body, threadIdentifier, categoryIdentifier, badge, sound)",
    "bifrost": "springboard/sdk/src/usernotif.rs (Request builder), springboard/proto/src/rich.rs:55 (NotifRequest); springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
    "status": "partial",
-   "note": "Title, subtitle, body, thread, category, badge, sound, userInfo, interruption level and relevance score are built and tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs, which checks the request sent to the shell. No launch image. Delivery does not yet play the sound."
+   "note": "Title, subtitle, body, thread, category, badge, sound, userInfo, interruption level and relevance score are built and tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs, which checks the request sent to the shell. No launch image. Delivery does not yet play the sound. Built 2026-10-17: attachments (up to 10 PNG paths in the app's data directory, the first one drawn as a thumbnail on the card; proto notification_attachments_are_bounded, SDK attachments_are_absolute_png_paths_and_bounded, shell notify::list::tests::an_attachment_shows_as_a_thumbnail_unless_previews_are_hidden). Sounds per request are still not played on delivery."
   },
   {
    "feature": "Notification triggers",
