@@ -48,6 +48,22 @@ pub fn clean(text: &str) -> String {
     joined.chars().take(MAX_CHARS).collect()
 }
 
+/// How much punctuation the engine reads aloud (Settings > Accessibility > Screen Reader > Speech > Punctuation).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Punctuation {
+    /// Punctuation marks are not named; the engine only pauses at them.
+    #[default]
+    Off,
+    /// The symbols that change what a text means are named (@ # $ % & * + = < > / \ | ^ ~ _ and brackets), not the marks of
+    /// ordinary sentences.
+    Symbols,
+    /// Every punctuation mark is named.
+    All,
+}
+
+/// The characters `Punctuation::Symbols` names (the engine's `--punct=` list).
+pub const SYMBOLS: &str = "@#$%&*+=<>/\\|^~_[]{}";
+
 /// The voice the screen reader speaks with, from Settings > Accessibility > Screen Reader.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
@@ -57,22 +73,29 @@ pub struct Config {
     pub pitch: u32,
     /// an engine voice name; empty for the engine's default voice
     pub voice: String,
+    /// how much punctuation is named
+    pub punctuation: Punctuation,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { rate: 180, pitch: 50, voice: String::new() }
+        Config { rate: 180, pitch: 50, voice: String::new(), punctuation: Punctuation::Off }
     }
 }
 
-/// The engine's arguments for `text` under `config`: the rate, the pitch, the voice when one is set, then `--` and the text,
-/// so text that starts with a dash is not an option. Out-of-range values are clamped; a voice name that is not a plain word
+/// The engine's arguments for `text` under `config`: the rate, the pitch, the voice when one is set, the punctuation to name
+/// when any is, then `--` and the text, so text that starts with a dash is not an option. Out-of-range values are clamped; a voice name that is not a plain word
 /// is left out.
 pub fn args(text: &str, config: &Config) -> Vec<String> {
     let mut out = vec!["-s".to_string(), config.rate.clamp(MIN_RATE, MAX_RATE).to_string(), "-p".to_string(), config.pitch.min(MAX_PITCH).to_string()];
     if bifrost_core::speech_engine::voice_name_ok(&config.voice) {
         out.push("-v".to_string());
         out.push(config.voice.clone());
+    }
+    match config.punctuation {
+        Punctuation::Off => {}
+        Punctuation::Symbols => out.push(format!("--punct={SYMBOLS}")),
+        Punctuation::All => out.push("--punct".to_string()),
     }
     out.push("--".to_string());
     out.push(clean(text));
@@ -170,13 +193,36 @@ mod tests {
 
     #[test]
     fn args_carry_the_chosen_rate_pitch_and_voice() {
-        let c = Config { rate: 240, pitch: 70, voice: "is".into() };
+        let c = Config { rate: 240, pitch: 70, voice: "is".into(), ..Config::default() };
         assert_eq!(args("Halló", &c), vec!["-s", "240", "-p", "70", "-v", "is", "--", "Halló"]);
     }
 
     #[test]
+    fn punctuation_is_named_only_when_asked_for() {
+        let off = args("a, b", &Config::default());
+        assert!(!off.iter().any(|a| a.starts_with("--punct")), "off: the engine's own behaviour");
+        let symbols = args("a@b", &Config { punctuation: Punctuation::Symbols, ..Config::default() });
+        assert_eq!(symbols, vec!["-s".to_string(), "180".into(), "-p".into(), "50".into(), format!("--punct={SYMBOLS}"), "--".into(), "a@b".into()]);
+        let all = args("a, b", &Config { punctuation: Punctuation::All, ..Config::default() });
+        assert_eq!(all, vec!["-s", "180", "-p", "50", "--punct", "--", "a, b"], "all: the bare option names every mark");
+        // the option comes before the separator, so text that looks like one cannot turn it on
+        let text = args("--punct", &Config::default());
+        assert_eq!(text, vec!["-s", "180", "-p", "50", "--", "--punct"]);
+    }
+
+    #[test]
+    fn the_symbols_list_has_no_ordinary_sentence_marks() {
+        for mark in ['.', ',', '?', '!', ':', ';', '\'', '"'] {
+            assert!(!SYMBOLS.contains(mark), "{mark}");
+        }
+        for mark in ['@', '#', '$', '%', '/', '\\'] {
+            assert!(SYMBOLS.contains(mark), "{mark}");
+        }
+    }
+
+    #[test]
     fn args_clamp_the_rate_and_pitch_and_drop_a_bad_voice() {
-        let c = Config { rate: 10, pitch: 500, voice: "-x y".into() };
+        let c = Config { rate: 10, pitch: 500, voice: "-x y".into(), ..Config::default() };
         assert_eq!(args("hi", &c), vec!["-s", "80", "-p", "99", "--", "hi"]);
         let fast = Config { rate: 9000, ..Config::default() };
         assert_eq!(args("hi", &fast)[1], "450");
@@ -186,7 +232,7 @@ mod tests {
     fn configure_replaces_the_voice_for_the_next_utterance() {
         let mut s = Speaker::default();
         assert_eq!(s.config(), &Config::default());
-        s.configure(Config { rate: 140, pitch: 30, voice: "en-gb".into() });
+        s.configure(Config { rate: 140, pitch: 30, voice: "en-gb".into(), ..Config::default() });
         assert_eq!(s.config().rate, 140);
         assert_eq!(s.config().voice, "en-gb");
     }

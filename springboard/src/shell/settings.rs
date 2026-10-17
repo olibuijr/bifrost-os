@@ -2739,6 +2739,11 @@ impl Settings {
                         self.a11y.save(prefs);
                         vec![]
                     }
+                    Pick::SpeechPunctuation(k) => {
+                        self.a11y.speech_punctuation = k.min(super::accessibility::SPEECH_PUNCTUATION.len() - 1);
+                        self.a11y.save(prefs);
+                        vec![]
+                    }
                     Pick::SpeechVoice(k) => {
                         self.a11y.speech_voice = super::accessibility::SPEECH_VOICES[k.min(super::accessibility::SPEECH_VOICES.len() - 1)].1.to_string();
                         self.a11y.save(prefs);
@@ -3012,6 +3017,8 @@ impl Settings {
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
+            Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
+            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"

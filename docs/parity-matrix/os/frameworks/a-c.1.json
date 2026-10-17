@@ -3213,9 +3213,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/audio_unit_settings.rs (enable flags, run order, Settings rows, allocate_chain); springboard/ui/src/audio_extension.rs (manifest, registry, render session) and springboard/ui/src/plugin_host.rs (instances, parameters)",
+   "bifrost": "springboard/ui/src/audio_unit_settings.rs (enable flags, run order, rows, allocate_chain); springboard/ui/src/audio_extension.rs (manifest, registry, render session); springboard/ui/src/plugin_host.rs; springboard/audio/units/src (the audio-unit engine: three built-in units, in-process and out-of-process hosts)",
    "status": "gap",
-   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). springboard/ui/src/audio_extension.rs (manifest, registry, render session) and springboard/ui/src/plugin_host.rs (instances, parameters) are models with no install or list surface; no plug-in is loaded and no Settings page is drawn. Build the pane on plugin_host.rs. Built 2026-10-17: AudioUnitSettings model (enabled flags, run order, rows for the list, the chain the host allocates); tests audio_unit_settings::tests. Built 2026-10-17: allocate_chain builds the enabled processors in run order through the registry and releases them if one fails; tests audio_unit_settings::tests::allocate_chain_*. Still open: the Settings page is not drawn, and the host does not yet call allocate_chain.",
+   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). Not settled ready, because it has nothing to manage: no plug-in source exists. bifrost-audio-units has three built-in units (gain, biquad filter, test synth) and a host for units, but no loader for third-party binaries (LV2, CLAP or a vendor format), no key in app manifests by which an app declares an audio unit, and nothing that calls allocate_chain. Built so far, with tests: the AudioUnitSettings model (enable flags, run order, rows, allocate_chain) and the ExtensionRegistry and manifest checks. In order, what is missing: an audio-unit declaration in app manifests, a plug-in loader on the existing out-of-process host (audio/units remote.rs), and then the Settings page over AudioUnitSettings. The page alone would list nothing a person installed.",
    "rea": [],
    "method": "assessed"
   },
@@ -4017,9 +4017,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "docs/parity-matrix/data/accessibility.json; springboard/src/shell/accessibility/speech.rs; springboard/src/shell/accessibility/mod.rs; springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: no shared support module beyond the Accessibility settings.",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json. Built 2026-10-17: Screen Reader punctuation (speech::Punctuation None, Some, All, chosen in Settings > Accessibility > Screen Reader > Speech and passed to the engine as --punct; tests shell::accessibility::speech::tests, shell::accessibility::tests, shell::pages::tests). Not settled ready, because the framework's two named apps are not built: Live Captions (needs the audio the computer plays fed to the whisper pipeline, which today captures the microphone only, and a caption window) and Live Speech (a type-to-speak window with saved phrases: no app exists, and Settings lists have no text field to host one). Each is an app of its own, beyond a row's worth of work. The reference's Chinese and Japanese word-description data is vendor data and is not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -4128,11 +4128,85 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "springboard/src/shell/accessibility/voice_control.rs; springboard/src/shell/accessibility/switch_scan.rs; springboard/src/shell/accessibility/reader.rs; springboard/src/shell/accessibility/banner.rs; springboard/src/shell/accessibility/shortcut_panel.rs; springboard/src/shell/services/recognizer.rs; springboard/src/shell/hwkeys.rs; springboard/src/shell/pages.rs; springboard/ui/src/voice_commands.rs; springboard/ui/src/switch_scan.rs",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Built 2026-10-17: Voice Control press commands (shell::accessibility::voice_control: a final transcript \"press|click|tap <name>\" runs through Shell::voice_press as ax press; tests voice_control::tests and shell::tests::voice_control_presses_the_named_element_only_for_a_final_command) and the Switch Control scan model (shell::accessibility::switch_scan: next, select, wrap, resize; tests switch_scan::tests). Not covered yet: no recognizer session starts for Voice Control, no switch input drives the scan, and no Switch Control or Voice Control UI. Built 2026-10-17: Switch Control presses map onto the scan (switch_scan::switch_from_event, Scan::press; tests switch_scan::tests). Still not wired to switch hardware.",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json. Built 2026-10-17: Switch Control (the reader cursor without speech) and Voice Control (a recognition in the speech_recognizer service run as press commands), both switches in Settings > Accessibility > Touch.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::banner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::shortcut_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::voice_control"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::switching_voice_control"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::a_refused_recognition"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::switch_control"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_commands::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "switch_scan::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: Switch Control and Voice Control are switches in Settings > Accessibility > Touch. Switch Control turns on the screen reader's keyboard cursor and focus ring without the speech: Ctrl+Alt+Right and Left move the highlight, Ctrl+Alt+Space selects (hwkeys, reader_active). Voice Control keeps one recognition running in the speech_recognizer service while it is on (Shell::voice_control_tick), polls it and runs each final 'press|click|tap <name>' through the element map; a refusal (no consent, model not installed) is announced once and retried later. The rest of the UI the framework hosts is the reader ring, the announcement banner, the shortcut panel, Display Zoom and AssistiveTouch (the other Accessibility rows). Not built: a switch device other than the keyboard, timed auto-scanning, and voice commands beyond pressing a named element. Voice Control is English only and needs the dictation model and consent."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityUIService.framework",

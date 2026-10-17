@@ -30,6 +30,14 @@ use std::sync::{Arc, Mutex};
 
 /// The name the service is registered under.
 pub const SERVICE: &str = "speech_recognizer";
+/// Clients of the shell's own (Voice Control) are named with this prefix; no installed app has such a name.
+pub const SHELL_CLIENT_PREFIX: &str = "shell:";
+
+/// Whether a session whose client is `app` has lost it: the app is not running. A client of the shell itself (Voice Control)
+/// is no app and stays.
+fn orphaned(app: &str, running: impl Fn(&str) -> bool) -> bool {
+    !app.starts_with(SHELL_CLIENT_PREFIX) && !running(app)
+}
 
 unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
@@ -406,7 +414,7 @@ impl SystemService for Recognizer {
         let running = |app: &str| {
             crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()))
         };
-        let gone = self.session.as_ref().filter(|s| !running(&s.app)).is_some();
+        let gone = self.session.as_ref().is_some_and(|s| orphaned(&s.app, &running));
         if gone {
             self.stop_session();
         }
@@ -521,6 +529,13 @@ mod tests {
     fn text_of(reply: &Result<Json, String>, index: usize) -> String {
         let list = reply.as_ref().unwrap().get("transcripts").and_then(Json::as_array).unwrap();
         list[index].str_field("text").unwrap()
+    }
+
+    #[test]
+    fn a_session_of_the_shell_is_not_ended_for_want_of_an_app() {
+        assert!(orphaned("is.example.app", |_| false), "the app quit");
+        assert!(!orphaned("is.example.app", |_| true), "the app runs");
+        assert!(!orphaned("shell:voice-control", |_| false), "Voice Control is the shell's own client");
     }
 
     #[test]

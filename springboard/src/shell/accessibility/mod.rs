@@ -40,6 +40,8 @@ pub const REDUCED_MS: f64 = 150.0;
 pub const SPEECH_RATES: [(&str, u32); 3] = [("Slow", 140), ("Normal", 180), ("Fast", 240)];
 /// Screen Reader pitch choices (the engine's `-p` option, 0 to 99).
 pub const SPEECH_PITCHES: [(&str, u32); 3] = [("Low", 30), ("Normal", 50), ("High", 70)];
+/// Screen Reader punctuation choices: how much punctuation the voice names.
+pub const SPEECH_PUNCTUATION: [(&str, speech::Punctuation); 3] = [("None", speech::Punctuation::Off), ("Some", speech::Punctuation::Symbols), ("All", speech::Punctuation::All)];
 /// Screen Reader voice choices: the label and the engine voice name (empty is the engine's default voice).
 pub const SPEECH_VOICES: [(&str, &str); 4] = [("System Default", ""), ("English (US)", "en-us"), ("English (UK)", "en-gb"), ("Icelandic", "is")];
 
@@ -67,6 +69,10 @@ pub struct AccessibilitySettings {
     pub slow: usize,
     /// Mouse Keys: the number keypad moves the pointer and the 5 key clicks (`mouse_keys`, read by the input loop).
     pub mouse_keys: bool,
+    /// Switch Control: the keyboard cursor of the screen reader steps through the screen and selects without speech (`reader`).
+    pub switch_control: bool,
+    /// Voice Control: spoken commands such as "press Save" run against the element map (`voice_control`).
+    pub voice_control: bool,
     /// Vehicle Motion Cues: dots at the screen edge follow the motion of a moving vehicle (`motion_cues`). Off until chosen.
     pub motion_cues: bool,
     /// index into `HOLD_MS`
@@ -81,10 +87,12 @@ pub struct AccessibilitySettings {
     pub speech_pitch: u32,
     /// Screen Reader voice: an engine voice name from `SPEECH_VOICES`, or empty for the engine's default
     pub speech_voice: String,
+    /// Screen Reader punctuation: an index into `SPEECH_PUNCTUATION` (0, None, keeps the engine's own behaviour)
+    pub speech_punctuation: usize,
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0 };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -107,12 +115,15 @@ impl AccessibilitySettings {
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
             mouse_keys: flag("a11y_mouse_keys", d.mouse_keys),
             motion_cues: flag("a11y_motion_cues", d.motion_cues),
+            switch_control: flag("a11y_switch_control", d.switch_control),
+            voice_control: flag("a11y_voice_control", d.voice_control),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
             speech_rate: p.get_parsed::<u32>("a11y_speech_rate").map_or(d.speech_rate, |v| v.clamp(speech::MIN_RATE, speech::MAX_RATE)),
             speech_pitch: p.get_parsed::<u32>("a11y_speech_pitch").map_or(d.speech_pitch, |v| v.min(speech::MAX_PITCH)),
             speech_voice: p.get("a11y_speech_voice").filter(|v| v.is_empty() || bifrost_core::speech_engine::voice_name_ok(v)).unwrap_or("").to_string(),
+            speech_punctuation: index("a11y_speech_punctuation", SPEECH_PUNCTUATION.len()).unwrap_or(d.speech_punctuation),
         }
     }
 
@@ -133,12 +144,15 @@ impl AccessibilitySettings {
             ("a11y_slow_keys", &self.slow.to_string()),
             ("a11y_mouse_keys", flag(self.mouse_keys)),
             ("a11y_motion_cues", flag(self.motion_cues)),
+            ("a11y_switch_control", flag(self.switch_control)),
+            ("a11y_voice_control", flag(self.voice_control)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
             ("a11y_speech_rate", &self.speech_rate.to_string()),
             ("a11y_speech_pitch", &self.speech_pitch.to_string()),
             ("a11y_speech_voice", &self.speech_voice),
+            ("a11y_speech_punctuation", &self.speech_punctuation.to_string()),
         ]);
         if let Err(e) = result {
             eprintln!("springboard: settings.ini: {e}");
@@ -165,7 +179,7 @@ impl AccessibilitySettings {
 
     /// The voice the Screen Reader speaks with: rate, pitch and voice from Settings.
     pub fn speech_config(&self) -> speech::Config {
-        speech::Config { rate: self.speech_rate, pitch: self.speech_pitch, voice: self.speech_voice.clone() }
+        speech::Config { rate: self.speech_rate, pitch: self.speech_pitch, voice: self.speech_voice.clone(), punctuation: SPEECH_PUNCTUATION[self.speech_punctuation.min(SPEECH_PUNCTUATION.len() - 1)].1 }
     }
 
     /// The pointer's scale: 1x at Normal, 2x at Large (the Cursor Size slider).
@@ -268,6 +282,21 @@ mod tests {
     }
 
     #[test]
+    fn switch_control_and_voice_control_round_trip_and_are_off_by_default() {
+        let mut p = Prefs::memory();
+        let d = AccessibilitySettings::load(&p);
+        assert!(!d.switch_control && !d.voice_control);
+        let a = AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() };
+        a.save(&mut p);
+        assert_eq!(AccessibilitySettings::load(&p), a);
+        assert_eq!((p.get("a11y_switch_control"), p.get("a11y_voice_control")), (Some("1"), Some("1")));
+        let only_voice = AccessibilitySettings { voice_control: true, ..Default::default() };
+        only_voice.save(&mut p);
+        let back = AccessibilitySettings::load(&p);
+        assert!(back.voice_control && !back.switch_control, "each switch has its own key");
+    }
+
+    #[test]
     fn mouse_keys_round_trips_and_is_off_by_default() {
         let mut p = Prefs::memory();
         assert!(!AccessibilitySettings::load(&p).mouse_keys);
@@ -304,13 +333,26 @@ mod tests {
     }
 
     #[test]
+    fn speech_punctuation_round_trips_and_defaults_to_none() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).speech_config().punctuation, speech::Punctuation::Off);
+        let a = AccessibilitySettings { speech_punctuation: 2, ..Default::default() };
+        a.save(&mut p);
+        assert_eq!(AccessibilitySettings::load(&p).speech_config().punctuation, speech::Punctuation::All);
+        let some = AccessibilitySettings { speech_punctuation: 1, ..Default::default() };
+        assert_eq!(some.speech_config().punctuation, speech::Punctuation::Symbols);
+        p.set("a11y_speech_punctuation", "9").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).speech_punctuation, 0, "an index past the last choice keeps the default");
+    }
+
+    #[test]
     fn speech_rate_pitch_and_voice_round_trip_and_fall_back() {
         let mut p = Prefs::memory();
         let a = AccessibilitySettings { speech_rate: 240, speech_pitch: 70, speech_voice: "is".into(), ..Default::default() };
         a.save(&mut p);
         let b = AccessibilitySettings::load(&p);
         assert_eq!((b.speech_rate, b.speech_pitch, b.speech_voice.as_str()), (240, 70, "is"));
-        assert_eq!(b.speech_config(), speech::Config { rate: 240, pitch: 70, voice: "is".into() });
+        assert_eq!(b.speech_config(), speech::Config { rate: 240, pitch: 70, voice: "is".into(), punctuation: speech::Punctuation::Off });
         // out-of-range rate and pitch are clamped, a voice that is not a plain word is dropped
         p.set("a11y_speech_rate", "9000").unwrap();
         p.set("a11y_speech_pitch", "500").unwrap();

@@ -622,6 +622,8 @@ pub struct Shell {
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
+    /// Voice Control's recognition in the `speech_recognizer` service (`accessibility::voice_control`)
+    voice: accessibility::voice_control::Session,
     /// Vehicle Motion Cues: the accelerometer feed and the dots, created when the setting is first switched on
     motion_cues: Option<accessibility::motion_cues::MotionCuesFeed>,
     /// an app hiding the status bar and home indicator
@@ -933,6 +935,7 @@ impl Shell {
         let mut sh = Shell {
             assistive_touch: assistive_touch::AssistiveTouch::new(&ui, w, h),
             motion_cues: None,
+            voice: Default::default(),
             w,
             h,
             dock_bg: dock_background(wallpaper, &layout),
@@ -3470,6 +3473,7 @@ impl Shell {
             }
         }
         let mut effects = cc_fx;
+        effects.extend(self.voice_control_tick(t));
         let typing_on_hardware = self.desk_active();
         if let Some(p) = &mut self.photos {
             if self.screen == Screen::App(AppId::Photos) {

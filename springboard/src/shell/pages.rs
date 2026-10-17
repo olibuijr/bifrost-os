@@ -3,7 +3,7 @@
 //! row does. Rendering and hit testing live in `list`.
 
 use super::accessibility::shortcut::Feature;
-use super::accessibility::{AccessibilitySettings, HOLD_MS, SPEECH_PITCHES, SPEECH_RATES, SPEECH_VOICES, ZOOMS};
+use super::accessibility::{AccessibilitySettings, HOLD_MS, SPEECH_PITCHES, SPEECH_PUNCTUATION, SPEECH_RATES, SPEECH_VOICES, ZOOMS};
 use super::accessibility::dwell::DELAYS_MS as DWELL_MS;
 use super::slow_keys::DELAYS_MS as SLOW_MS;
 use super::battery::{self, Graph};
@@ -200,6 +200,10 @@ pub enum Toggle {
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
+    /// Accessibility > Touch > Switch Control: the keyboard steps a highlight through the screen and selects (`a11y.switch_control`)
+    SwitchControl,
+    /// Accessibility > Touch > Voice Control: spoken commands press what they name (`a11y.voice_control`)
+    VoiceControl,
     /// Accessibility > Motion > Show Vehicle Motion Cues: dots at the screen edge follow the accelerometer (`a11y.motion_cues`)
     MotionCues,
     AutoTime,
@@ -288,6 +292,8 @@ pub enum Pick {
     SpeechRate(usize),
     SpeechPitch(usize),
     SpeechVoice(usize),
+    /// Screen Reader > Speech > Punctuation: an index into `SPEECH_PUNCTUATION`
+    SpeechPunctuation(usize),
     /// 0 is Auto, n the n-th of `layout::SCALE_CHOICES`
     InterfaceScale(usize),
     /// Displays > Appearance: 0 Light, 1 Dark, 2 Auto
@@ -1419,9 +1425,11 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
                         Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
                         Item::new("Dwell Control").value(DWELL_MS[a.dwell.min(DWELL_MS.len() - 1)].0).link(PageId::DwellControl),
+                        Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl)),
+                        Item::new("Voice Control").switch(a.voice_control, Action::Toggle(Toggle::VoiceControl)),
                     ])
                     .header("TOUCH")
-                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
+                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\"."),
                 ],
             )
         }
@@ -1438,6 +1446,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(SPEECH_VOICES.iter().enumerate().map(|(i, (l, v))| Item::new(*l).check(*v == m.a11y.speech_voice, Action::Pick(Pick::SpeechVoice(i)))).collect())
                     .header("VOICE")
                     .footer("Needs the espeak-ng speech engine. Without it the screen reader stays silent and shows the text."),
+                Group::new(SPEECH_PUNCTUATION.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.speech_punctuation.min(SPEECH_PUNCTUATION.len() - 1), Action::Pick(Pick::SpeechPunctuation(i)))).collect())
+                    .header("PUNCTUATION")
+                    .footer("None only pauses at punctuation. Some names symbols such as @ and #. All names every mark."),
             ],
         ),
         PageId::DisplayZoom => page("Display Zoom", false, vec![Group::new(ZOOMS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.zoom, Action::Pick(Pick::DisplayZoom(i)))).collect()).header("VIEW")]),
@@ -2176,6 +2187,45 @@ mod tests {
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
         assert_eq!(s.groups[1].items.len(), 1, "no light sensor, no automatic brightness switch");
+    }
+
+    #[test]
+    fn the_speech_page_offers_the_punctuation_levels_and_checks_the_chosen_one() {
+        let opts = Options::default();
+        let info = info();
+        let groups = |a: &AccessibilitySettings| {
+            let m = Model { a11y: a, ..model(&info, &opts) };
+            spec(PageId::ScreenReaderSpeech, &m).groups
+        };
+        let off = groups(&AccessibilitySettings::default());
+        let punct = off.iter().find(|g| g.header.as_deref() == Some("PUNCTUATION")).expect("the Punctuation group");
+        let labels: Vec<&str> = punct.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["None", "Some", "All"]);
+        assert_eq!(punct.items[0].accessory, Accessory::Check(true));
+        assert_eq!(punct.items[2].action, Action::Pick(Pick::SpeechPunctuation(2)));
+        let all = groups(&AccessibilitySettings { speech_punctuation: 2, ..Default::default() });
+        let punct = all.iter().find(|g| g.header.as_deref() == Some("PUNCTUATION")).unwrap();
+        assert_eq!((punct.items[0].accessory.clone(), punct.items[2].accessory.clone()), (Accessory::Check(false), Accessory::Check(true)));
+    }
+
+    #[test]
+    fn the_touch_group_has_the_switch_control_and_voice_control_switches() {
+        let opts = Options::default();
+        let info = info();
+        let touch_rows = |a: &AccessibilitySettings| -> Vec<(String, Accessory, Action)> {
+            let m = Model { a11y: a, ..model(&info, &opts) };
+            let s = spec(PageId::Accessibility, &m);
+            let group = s.groups.iter().find(|g| g.header.as_deref() == Some("TOUCH")).expect("the Touch group");
+            group.items.iter().map(|i| (i.label.clone(), i.accessory.clone(), i.action.clone())).collect()
+        };
+        let off = touch_rows(&AccessibilitySettings::default());
+        let find = |rows: &[(String, Accessory, Action)], name: &str| rows.iter().find(|r| r.0 == name).cloned().expect(name);
+        assert_eq!(find(&off, "Switch Control").1, Accessory::Switch(false));
+        assert_eq!(find(&off, "Voice Control").2, Action::Toggle(Toggle::VoiceControl));
+        let on = touch_rows(&AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() });
+        assert_eq!(find(&on, "Switch Control").1, Accessory::Switch(true));
+        assert_eq!(find(&on, "Voice Control").1, Accessory::Switch(true));
+        assert_eq!(find(&on, "Switch Control").2, Action::Toggle(Toggle::SwitchControl));
     }
 
     #[test]
