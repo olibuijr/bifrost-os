@@ -3916,28 +3916,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/net_probe.rs, springboard/core/src/net_path.rs",
    "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no Settings page runs the probe yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "net_diagnostic::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "net_probe::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "net_path::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: the diagnosing engine is sdk net_probe, which probes the link (interface state), the address, the name and the TCP connection on this computer in order, stops at the first failure and gives it to net_diagnostic for the words; core net_path models the path the shell watches. Host tests cover the probe order, skipped stages, address literals and the link and address parsing. Nothing is sent to a diagnostics service. No Settings page runs it yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SymptomReporter.framework",
@@ -4428,28 +4409,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/launch_policy.rs, springboard/core/src/quarantine.rs, springboard/core/src/codereq.rs",
    "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no launch path consults the assessment yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "launch_policy::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "quarantine::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "codereq::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: the policy that decides whether a program may run (the Allow apps from setting, the downloaded-from-the-internet question on first launch, Open Anyway per program and per code hash, blocking of changed code) is core launch_policy, built on the quarantine record and the code requirement model. It is a pure assessment with host tests; BifrOSt does not sign code yet and no launch path hands it a received executable, so the shell does not consult it today."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemStatus.framework",
@@ -4603,23 +4565,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/wake_schedule.rs, springboard/core/src/sleep_assertions.rs, springboard/src/privd/methods.rs",
    "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no Settings page schedules wake or power-on yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "wake_schedule::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "sleep_assertions::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: core wake_schedule (repeating power-on and wake times, the next moment with a local offset, the real-time clock alarm text and its validation, the ACPI wake device table and wake reasons) and the root method power.wake_alarm in bifrost-privd that arms /sys/class/rtc/rtc0/wakealarm after the check. core sleep_assertions covers the apps that keep the machine awake. Not yet wired: a Settings page for the schedule."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/shared_cache_page_prewarming.framework",

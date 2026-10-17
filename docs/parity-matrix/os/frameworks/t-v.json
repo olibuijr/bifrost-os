@@ -1276,28 +1276,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/core/src/spellcheck.rs",
    "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no app opens the writing assistant on a text view yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "proofread::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "writing_assist::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "spellcheck::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: ui proofread, an on-device rule-based proofreader (repeated words, extra spaces, space before punctuation, missing space after a comma, capital after a full stop, a and an, lone i) that offers its findings to the writing_assist Session, which applies and drops them safely; core spellcheck covers misspellings. The reference ships a neural grammar model (gecmodel); BifrOSt has no model, so rewriting and stylistic suggestions are not offered, and the rules beyond spacing run for English only. No app opens the assistant on a text view yet."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextComposerRuntime.framework",
@@ -2630,28 +2611,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_engine.rs, springboard/ui/src/translation.rs",
    "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no translation pair packages ship, so nothing translates out of the box.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation_engine::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "translation::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: translation on this computer. Language availability and sessions (ui translation, sdk translation) with on-device phrase packs, and now sdk translation_engine: the rule-based apertium program over the pairs installed on the computer (pair discovery in either code spelling, availability, unknown-word marks removed) and a Chain that tries the phrase packs first. No neural engine is in the Arch repositories and no language pair package is in the runtime set, so only the phrase packs and pairs the person installs translate; there is no download service by design."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TranslationInference.framework",
