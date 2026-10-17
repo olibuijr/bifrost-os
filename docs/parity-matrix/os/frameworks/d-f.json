@@ -6073,28 +6073,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs",
    "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Open: Files does not host extensions or draw badges yet.",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Open: Files does not host extensions or draw badges yet. Lead 2026-10-17: not ready: the file-manager extension API has no process host or badge drawing yet.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "file_manager_sync::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "fswatch::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "file_coordination::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: SyncExtension, SyncController and SyncHost give the Files app an extension point: observed folders with paired begin and end calls, badge registration and per-item badges limited to the observed folders, shortcut menus for items, folder background, sidebar and toolbar, and toolbar buttons (file_manager_sync tests). Directory watching and coordination are fswatch and file_coordination. Open: the Files app does not host an extension process or draw the badges yet, and there is no enable screen in Settings."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FlexMusicKit.framework",

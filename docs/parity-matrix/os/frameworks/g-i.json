@@ -2452,28 +2452,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/local_model.rs; springboard/sdk/src/language_model.rs; springboard/ui/src/model_provider.rs",
    "status": "gap",
-   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider. Built 2026-10-17 (wave 12): LocalModelProvider in springboard/sdk/src/local_model.rs, a loopback-only provider for the local engine (tests local_model::tests). Open: streaming and a packaged engine.",
+   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider. Built 2026-10-17 (wave 12): LocalModelProvider in springboard/sdk/src/local_model.rs, a loopback-only provider for the local engine (tests local_model::tests). Open: streaming and a packaged engine. Lead 2026-10-17: not ready: no on-device engine ships, so on_device_availability() stays Unavailable.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "local_model::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "language_model::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "model_provider::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: LocalModelProvider is a ModelProvider for the local inference engine on a loopback port (OpenAI-compatible chat JSON over HTTP, loopback addresses only so nothing leaves the machine). Sessions, instructions, guided generation, tool calling and the token budget run through run_turn against it; prompted and native tool calls, chunked replies, error statuses and engine availability are tested against a real loopback server (local_model tests). The system still ships no model: on_device_availability stays Unavailable until a packaged engine is installed. Open: token streaming and packaging the engine."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeModelsFoundation.framework",
