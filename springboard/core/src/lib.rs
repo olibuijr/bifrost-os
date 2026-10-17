@@ -165,6 +165,7 @@ pub mod exception_policy;
 pub mod resource_exception;
 pub mod usb_pipe;
 pub mod usb_host;
+pub mod ptp;
 pub mod usb_printer;
 pub mod process_info;
 pub mod serial_line;

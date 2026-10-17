@@ -888,6 +888,7 @@ pub mod graphics_imageio;
 pub mod color_list;
 pub mod image_object;
 pub mod gpu_device;
+pub mod image_capture;
 pub mod drawable_pool;
 pub mod gpu_pass;
 pub mod biquad;
