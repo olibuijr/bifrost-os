@@ -18,8 +18,10 @@
 //!
 //! The store is `<root>/keychain/groups/<group>.kc` (`keychain::Store::open_group`): one file per group, not per app.
 use super::{Event, Shell, SystemService};
+use crate::cloud_session;
 use crate::keychain::{hex, unhex, Error, Store};
 use crate::shell::apphost::{self, Manifest};
+use crate::shell::kinds;
 use bifrost_core::json::Json;
 use bifrost_proto::KeychainOp;
 use std::path::Path;
@@ -64,13 +66,18 @@ impl SystemService for KeychainGroups {
     }
 }
 
-/// The groups an app may use: its `keychain_groups`, but only with the `keychain` permission.
+/// The groups an app may use: its `keychain_groups`, but only with the `keychain` permission. The BifrOSt Account
+/// session group ([`cloud_session::GROUP`]) is further limited to first-party apps ([`first_party`]).
 pub fn groups_of(m: &Manifest) -> Vec<String> {
-    if m.permissions.iter().any(|p| p == "keychain") {
-        m.keychain_groups.clone()
-    } else {
-        Vec::new()
+    if !m.permissions.iter().any(|p| p == "keychain") {
+        return Vec::new();
     }
+    m.keychain_groups.iter().filter(|g| g.as_str() != cloud_session::GROUP || first_party(m)).cloned().collect()
+}
+
+/// First-party: a system app whose id is in the `is.olibuijr.` namespace (the rule the log-store entitlement uses).
+pub fn first_party(m: &Manifest) -> bool {
+    m.id.starts_with("is.olibuijr.") && m.kind == kinds::SYSTEM_APP
 }
 
 /// What one call answered: the reply body, and the `(group, account)` a successful mutation changed.
@@ -271,6 +278,23 @@ mod tests {
         assert_eq!(groups_of(&m), vec!["is.example.g".to_string(), "is.example.h".to_string()]);
         let no_perm = apphost::Manifest::parse(&text.replace("permissions = [\"keychain\"]", "permissions = [\"storage\"]")).unwrap();
         assert!(groups_of(&no_perm).is_empty(), "a group without the keychain permission grants nothing");
+    }
+
+    #[test]
+    fn the_account_group_goes_only_to_first_party_system_apps() {
+        let manifest = |id: &str, kind: &str| {
+            let text = format!("id = \"{id}\"\nname = \"A\"\nexec = \"a\"\nkind = \"{kind}\"\npermissions = [\"keychain\"]\nkeychain_groups = [\"is.bifrost.account\", \"is.example.g\"]\n");
+            apphost::Manifest::parse(&text).unwrap()
+        };
+        let account = cloud_session::GROUP.to_string();
+        let example = "is.example.g".to_string();
+        let locate = manifest("is.olibuijr.locate.desktop", "system-app");
+        assert_eq!(groups_of(&locate), vec![account.clone(), example.clone()], "Locate is first party");
+        let third_party = manifest("com.other.app", "system-app");
+        assert_eq!(groups_of(&third_party), vec![example.clone()], "a third-party app never gets the account group");
+        let plain_app = manifest("is.olibuijr.notes.desktop", "app");
+        assert_eq!(groups_of(&plain_app), vec![example.clone()], "a first-party app that is not a system app does not get it");
+        assert!(first_party(&locate) && !first_party(&third_party) && !first_party(&plain_app));
     }
 
     #[test]
