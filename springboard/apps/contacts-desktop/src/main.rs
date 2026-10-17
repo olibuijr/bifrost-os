@@ -16,6 +16,7 @@ mod services;
 mod smart;
 mod tabular;
 mod textimport;
+mod widget;
 
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::controls::internet_accounts::Service;
@@ -40,9 +41,19 @@ struct ContactsApp {
     dav: bifrost_app::dav_sync::Sync,
     /// The card windows: which contact each extra window shows (`card_windows`).
     cards: card_windows::CardWindows,
+    /// The Birthdays widget timeline last sent to the shell, and when it was last checked (monotonic ms).
+    widget: widget::Widget,
+    widget_checked: f64,
 }
 
 impl ContactsApp {
+    /// Sends the Birthdays widget timeline when it changed (a card changed or the local day rolled over).
+    fn sync_widget(&mut self, ctx: &Ctx, t: f64) {
+        let Some(people) = self.app.as_ref().and_then(|c| c.birthdays()) else { return };
+        let wall = springboard::shell::clock::Wall::sample(t);
+        self.widget.sync(ctx, &people, wall.unix, wall.offset);
+    }
+
     /// Runs after each input: the termination flag, a Copy Contact press (sent to the pasteboard), and the search index
     /// (sent only when a contact changed).
     fn after_input(&mut self, ctx: &Ctx) {
@@ -58,6 +69,7 @@ impl ContactsApp {
         if let Some(all) = c.all_contacts() {
             self.index.sync(ctx, all);
         }
+        self.sync_widget(ctx, 0.0);
         // after the last use of `c`: a card window needs all of `self`
         if let Some(c) = self.app.as_mut() {
             if let Some(id) = c.take_card_edit() {
@@ -116,6 +128,7 @@ impl App for ContactsApp {
         if let Some(all) = self.app.as_ref().and_then(|c| c.all_contacts()) {
             self.index.sync(ctx, all);
         }
+        self.sync_widget(ctx, 0.0);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -253,6 +266,11 @@ impl App for ContactsApp {
                 c.merge_card_texts(&ctx.ui, texts.into_iter().map(Some).collect());
             }
         }
+        // the local day can roll over with no input: check the widget once a minute
+        if t - self.widget_checked > 60_000.0 {
+            self.widget_checked = t;
+            self.sync_widget(ctx, t);
+        }
         self.app.as_mut().is_some_and(|c| c.tick(&ctx.ui, t))
     }
 
@@ -339,5 +357,7 @@ fn main() {
         copies: BTreeMap::new(),
         dav: bifrost_app::dav_sync::Sync::new(Service::Contacts),
         cards: card_windows::CardWindows::new(),
+        widget: Default::default(),
+        widget_checked: f64::NEG_INFINITY,
     });
 }
