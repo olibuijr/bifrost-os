@@ -38,9 +38,9 @@
    "area": "view",
    "apple": "Software group: Accessibility, Applications, Developer, Extensions, Fonts, Frameworks, Installations, Language & Region, Logs, Preference Panes, Printer Software, Profiles, Startup Items, Sync Services",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/probe.rs:1254, springboard/apps/sysinfo-desktop/src/probe.rs:1289",
-   "note": "Installations (the pacman log) and Printer Software (installed PPD drivers) added in 0.6.0. Preference Panes, Accessibility, Developer, Frameworks, Profiles and Sync Services are not built: the shell keeps no pane list and the system has no profile or sync service to read. Check Fonts and Logs on Midget.",
-   "wire": "Add Preference Panes (the pane list lives in the shell), Accessibility, Developer, Frameworks, Installations, Profiles, Printer Software and Sync Services. Check Fonts and Logs on Midget."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/probe.rs (read_pacman_packages, parse_pacman_desc, read_installations); springboard/apps/sysinfo-desktop/src/model.rs (package_item, Category::Installations); springboard/apps/sysinfo-desktop/src/probe.rs:1254, springboard/apps/sysinfo-desktop/src/probe.rs:1289",
+   "note": "Installations lists the installed packages read from the pacman local database (desc files, no pacman run), newest install first, then the package changes from the pacman log (0.9.0). Printer Software (installed PPD drivers) is in place. Preference Panes, Accessibility, Developer, Frameworks, Profiles and Sync Services are not built: the shell keeps no pane list and the system has no profile or sync service to read. Not yet verified on Midget.",
+   "wire": "Add Preference Panes (the pane list lives in the shell), Accessibility, Developer, Frameworks, Profiles and Sync Services. Check Installations and Fonts and Logs on Midget."
   },
   {
    "feature": "Outline sidebar with section headers",
