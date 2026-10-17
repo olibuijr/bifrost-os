@@ -384,7 +384,7 @@
    "doc": "",
    "bifrost": "springboard/gpu/src/lib.rs",
    "status": "partial",
-   "note": "The GPU crate is a Metal-shaped API over Vulkan with render and compute passes, used by the window server and SDK drawing. Apps get no public GPU API, so device, queue and shader access stop at the system layer.",
+   "note": "Checked 2026-10-17: springboard/gpu/Cargo.toml uses ash with the loaded feature, so Vulkan comes from libvulkan.so.1 (vulkan-icd-loader, pacman -Qi). The mesa package ships no Vulkan ICD (no intel_icd or radeon_icd; /usr/share/vulkan/icd.d holds only nvidia_icd.json), and vulkan-intel is not in packaging/arch/runtime-packages.txt. A device therefore depends on a package the runtime list does not name. Apps get no GPU API, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -915,7 +915,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
    "status": "partial",
-   "note": "Mesa is the Arch OpenCL provider path if its build enables the rusticl driver, which is not verified on Midget. Apps get no compute SDK, so this is partial at the system layer only.",
+   "note": "Checked 2026-10-17: pacman -Ql mesa (1:26.2.2-1) lists no rusticl library and no OpenCL vendor file, and /etc/OpenCL/vendors holds only nvidia.icd (opencl-nvidia). No OpenCL provider from the runtime list is verified, so the system layer has no CL driver on Arch as packaged. Apps get no compute SDK. Stays partial; packaging would need a mesa build with rusticl plus its ICD.",
    "rea": [],
    "method": "assessed"
   },
@@ -957,7 +957,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
    "status": "partial",
-   "note": "Mesa supplies the OpenGL and EGL drivers on the Arch runtime. Apps get no GL SDK surface, and the desktop draws through the GPU crate.",
+   "note": "Checked 2026-10-17: springboard/src/gpu/egl.rs dlopens libEGL.so.1 and libGLESv2.so.2 (DESKTOP_LIBS). On the host libEGL.so.1 is owned by libglvnd (pacman -Qo), which dispatches to mesa's libEGL_mesa.so; mesa 1:26.2.2 ships the DRI drivers (/usr/lib/dri) and libgbm. packaging/arch/runtime-packages.txt names only mesa, not libglvnd. Apps get no GL SDK surface, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
