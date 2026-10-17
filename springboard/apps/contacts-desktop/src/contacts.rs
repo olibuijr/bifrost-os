@@ -691,6 +691,10 @@ impl Contacts {
             Ok(contacts) => (contacts, None),
             Err(e) => (vec![], Some(format!("Unable to load contacts: {e}"))),
         };
+        // Cards saved before UIDs existed get one now, and the file keeps it, so the card stays linked to its server copy.
+        if error.is_none() && store::ensure_uids(&mut contacts) {
+            let _ = store::save(&path, &contacts);
+        }
         let (mut extras, values_error) = match extras::load_checked(&path.with_file_name(VALUES_FILE)) {
             Ok(values) => (values, None),
             Err(e) => (Extras::default(), Some(format!("Unable to load contact values: {e}"))),
@@ -792,6 +796,20 @@ impl Contacts {
     pub fn listed(&self) -> Vec<&Contact> {
         self.rows.iter().map(|r| &self.contacts[r.contact]).collect()
     }
+    /// Every saved card as (UID, vCard text), for the Internet Accounts sync to find its edits. Empty when the file did
+    /// not load, so an unreadable file never reads as "every card was deleted".
+    pub fn sync_objects(&self) -> Vec<(String, String)> {
+        if self.load_failed {
+            return Vec::new();
+        }
+        let options = exchange::ExportOptions { notes: true };
+        self.contacts
+            .iter()
+            .filter(|c| !c.uid.is_empty())
+            .map(|c| (c.uid.clone(), exchange::export_with(std::slice::from_ref(c), &self.extras, &self.details, options, exchange::Version::V4)))
+            .collect()
+    }
+
     /// Saved contacts for the search index; independent of the list's filter. `None` when the file did not load, so an
     /// unreadable file never clears what the index holds.
     pub fn all_contacts(&self) -> Option<&[Contact]> {
@@ -1632,6 +1650,11 @@ impl Contacts {
             labels: self.labels_idx,
             notes: self.notes.text().into(),
             favorite: existing.and_then(|id| self.contacts.iter().find(|c| c.id == id)).is_some_and(|c| c.favorite),
+            // an edit keeps the card's UID, so a synced copy stays linked to it
+            uid: match existing.and_then(|id| self.contacts.iter().find(|c| c.id == id)) {
+                Some(old) if !old.uid.is_empty() => old.uid.clone(),
+                _ => store::new_uid(id),
+            },
         };
         if !contact.valid() {
             self.error = Some("Enter a name, company, phone number or email".into());
@@ -2233,6 +2256,7 @@ impl Contacts {
         let mut updated_details = self.details.clone();
         let mut new_ids = BTreeSet::new();
         let (mut added, mut skipped, mut invalid, mut extra, mut unreadable) = (0usize, 0usize, 0usize, 0usize, 0usize);
+        let mut refreshed = 0usize;
         for read in reads {
             let Some(read) = read else {
                 unreadable += 1;
@@ -2241,6 +2265,21 @@ impl Contacts {
             invalid += read.invalid;
             extra += read.extra_values;
             for ((contact, values), card) in read.contacts.into_iter().zip(read.values).zip(read.details) {
+                // a card whose UID is already a contact is that contact read again (a sync): it takes the card's fields
+                // and keeps its id and favourite; its extra values are not read again
+                if !contact.uid.is_empty() {
+                    if let Some(i) = updated.iter().position(|c| c.uid == contact.uid) {
+                        let kept = &updated[i];
+                        let merged = Contact { id: kept.id, favorite: kept.favorite, ..contact };
+                        if merged == *kept {
+                            skipped += 1;
+                        } else {
+                            updated[i] = merged;
+                            refreshed += 1;
+                        }
+                        continue;
+                    }
+                }
                 if dupes::has_duplicate(&updated, &contact) {
                     skipped += 1;
                     continue;
@@ -2249,7 +2288,8 @@ impl Contacts {
                     self.error = Some("Contact limit reached".into());
                     break;
                 };
-                updated.push(Contact { id, ..contact });
+                let uid = if contact.uid.is_empty() { store::new_uid(id) } else { contact.uid.clone() };
+                updated.push(Contact { id, uid, ..contact });
                 for value in values {
                     updated_extras.add(id, value);
                 }
@@ -2259,6 +2299,9 @@ impl Contacts {
             }
         }
         let mut parts = vec![format!("Imported {added} contacts")];
+        if refreshed > 0 {
+            parts.push(format!("updated {refreshed} contacts already in the book"));
+        }
         if skipped > 0 {
             parts.push(format!("skipped {skipped} duplicates"));
         }
@@ -2277,7 +2320,7 @@ impl Contacts {
             summary.push_str(note);
             summary.push('.');
         }
-        if added == 0 {
+        if added == 0 && refreshed == 0 {
             self.status = Some(summary.clone());
             self.dirty = true;
             return summary;
@@ -2770,6 +2813,7 @@ impl Contacts {
             return Err(format!("{} is already in the contacts (id {})", twin.display_name(), twin.id));
         }
         contact.id = store::new_id(&self.contacts).ok_or_else(|| "Contact limit reached".to_string())?;
+        contact.uid = store::new_uid(contact.id);
         let id = contact.id;
         let mut updated = self.contacts.clone();
         updated.push(contact);

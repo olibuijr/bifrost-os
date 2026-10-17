@@ -90,6 +90,9 @@ impl Calendar {
         }
         let from = self.today.shift_days(-DAYS_BEFORE);
         let to = self.today.shift_days(DAYS_AFTER);
+        // a synced event that the server sent again is replaced by that copy, so it is never held twice under one UID
+        let incoming: std::collections::HashSet<&str> = cal.events.iter().map(|e| e.uid.as_str()).collect();
+        self.events.retain(|e| e.uid.is_empty() || !incoming.contains(e.uid.as_str()));
         let added = materialize(&cal.events, from, to, &self.events);
         let mut events = self.events.clone();
         events.extend(added.iter().cloned());
@@ -101,7 +104,8 @@ impl Calendar {
         // Keep what the store cannot hold (rules, alerts) for alerts/export.
         let rp = rich_path(&self.path);
         let mut rich = load_rich(&rp);
-        for e in cal.events.iter().filter(|e| e.rule.is_some() || !e.alarms.is_empty()) {
+        // every imported event keeps its full object, so an edit to a synced event can be written back whole
+        for e in cal.events.iter() {
             rich.events.retain(|r| r.uid != e.uid);
             rich.events.push(e.clone());
         }
@@ -152,7 +156,7 @@ mod tests {
         e
     }
     fn stored(id: u64, date: Date, title: &str) -> CalendarEvent {
-        CalendarEvent { id, date, minute: 540, duration: 60, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 }
+        CalendarEvent { id, date, minute: 540, duration: 60, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() }
     }
 
     #[test]

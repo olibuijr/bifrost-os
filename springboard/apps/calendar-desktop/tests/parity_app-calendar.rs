@@ -29,7 +29,7 @@ fn on(month: u32, day: u32) -> Date {
 }
 
 fn saved(id: u64, on: u32, title: &str) -> CalendarEvent {
-    CalendarEvent { id, date: day(on), minute: 540, duration: 60, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 }
+    CalendarEvent { id, date: day(on), minute: 540, duration: 60, all_day: false, title: title.into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() }
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn a_query_with_neither_words_nor_range_still_matches_nothing() {
 
 #[test]
 fn a_custom_repeat_and_custom_alarms_survive_copy_and_paste() {
-    let e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Gym".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 };
+    let e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Gym".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() };
     let extra = Extra { rrule: Some("FREQ=WEEKLY;BYDAY=MO,WE".into()), alarms: Some(vec![5, 1440]), ..Extra::default() };
     let got = paste(&copy_text(&e, Some(&extra), STAMP), on(10, 12), &[]);
     assert_eq!(got.len(), 1);
@@ -157,7 +157,7 @@ fn a_custom_repeat_and_custom_alarms_survive_copy_and_paste() {
 
 #[test]
 fn a_preset_repeat_and_alert_need_no_extras() {
-    let mut e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Dentist".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 };
+    let mut e = CalendarEvent { id: 1, date: on(10, 5), minute: 600, duration: 45, all_day: false, title: "Dentist".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() };
     e.repeat = 4;
     e.alert = 3;
     let got = paste(&copy_text(&e, None, STAMP), on(10, 5), &[]);

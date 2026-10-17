@@ -23,6 +23,9 @@ pub struct Contact {
     pub address: String,
     /// Label index of the phone, email and address rows (into `LABELS`).
     pub labels: [u8; 3],
+    /// The card's stable UID (the vCard `UID`), kept across edits so a synced copy stays linked to the card. Empty
+    /// until [`ensure_uids`] gives one.
+    pub uid: String,
 }
 
 /// Row labels offered by the edit sheet: phone, email, address.
@@ -69,6 +72,8 @@ impl Contact {
                             .chars()
                             .all(|c| !c.is_control() || matches!(c, '\n' | '\r' | '\t'))
                 })
+            && self.uid.chars().count() <= MAX_VALUE
+            && !self.uid.chars().any(char::is_control)
     }
 }
 
@@ -81,7 +86,7 @@ pub fn parse(text: &str) -> Vec<Contact> {
     let mut ids = HashSet::new();
     for line in lines.take(MAX_ITEMS) {
         let f: Vec<_> = line.split('\t').collect();
-        if !(5..=11).contains(&f.len()) {
+        if !(5..=12).contains(&f.len()) {
             continue;
         }
         let (Ok(id), Some(name), Some(phone), Some(email), Some(notes)) = (
@@ -105,6 +110,7 @@ pub fn parse(text: &str) -> Vec<Contact> {
             labels: [8, 9, 10].map(|i| {
                 f.get(i).and_then(|v| v.parse().ok()).unwrap_or(0)
             }),
+            uid: f.get(11).and_then(|v| unescape(v, MAX_VALUE)).unwrap_or_default(),
         };
         if contact.valid() && ids.insert(id) {
             out.push(contact);
@@ -135,6 +141,27 @@ pub fn search(contacts: &[Contact], query: &str) -> Vec<usize> {
                 .then_some(i)
         })
         .collect()
+}
+
+/// A new UID for a card. It is unique to this device and moment, so it is not reused when an id is.
+pub fn new_uid(id: u64) -> String {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    format!("{:x}-{:x}-{:x}@bifrost", nanos, std::process::id(), id)
+}
+
+/// Gives every card without a UID a new one, and a second card that repeats a UID a new one too. Returns true when
+/// any card changed, so the caller saves the file.
+pub fn ensure_uids(contacts: &mut [Contact]) -> bool {
+    let mut seen = HashSet::new();
+    let mut changed = false;
+    for c in contacts.iter_mut() {
+        if c.uid.is_empty() || !seen.insert(c.uid.clone()) {
+            c.uid = new_uid(c.id);
+            seen.insert(c.uid.clone());
+            changed = true;
+        }
+    }
+    changed
 }
 
 pub fn new_id(contacts: &[Contact]) -> Option<u64> {
@@ -188,7 +215,7 @@ pub fn save(path: &Path, contacts: &[Contact]) -> io::Result<()> {
     let mut text = format!("{HEADER}\n");
     for c in contacts {
         text.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             c.id,
             escape(&c.name),
             escape(&c.phone),
@@ -199,7 +226,8 @@ pub fn save(path: &Path, contacts: &[Contact]) -> io::Result<()> {
             escape(&c.address),
             c.labels[0],
             c.labels[1],
-            c.labels[2]
+            c.labels[2],
+            escape(&c.uid)
         ));
         if text.len() > MAX_BYTES {
             return Err(io::Error::new(
@@ -285,6 +313,44 @@ mod tests {
         assert_eq!(load_checked(&path).unwrap(), vec![good.clone()]);
         assert!(save(&path, &[good.clone(), good]).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+}
+
+#[cfg(test)]
+mod uid_tests {
+    use super::*;
+
+    #[test]
+    fn a_uid_round_trips_and_an_old_row_has_none() {
+        let text = format!("{HEADER}\n1\tAnna\t1\t\t\n2\tBob\t\t\t\t0\tAcme\t\t0\t0\t0\tbob-1@x\n");
+        let c = parse(&text);
+        assert_eq!(c.iter().find(|c| c.id == 1).unwrap().uid, "");
+        assert_eq!(c.iter().find(|c| c.id == 2).unwrap().uid, "bob-1@x");
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("target/test-contacts-uid-{}/c.tsv", std::process::id()));
+        save(&path, &c).unwrap();
+        assert_eq!(load_checked(&path).unwrap(), c);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn ensure_uids_gives_each_card_a_distinct_uid_and_keeps_existing_ones() {
+        let mut cards = vec![
+            Contact { id: 1, name: "A".into(), ..Default::default() },
+            Contact { id: 2, name: "B".into(), uid: "kept@x".into(), ..Default::default() },
+            Contact { id: 3, name: "C".into(), uid: "kept@x".into(), ..Default::default() },
+        ];
+        assert!(ensure_uids(&mut cards));
+        assert!(!cards[0].uid.is_empty() && cards[0].uid.ends_with("@bifrost"));
+        assert_eq!(cards[1].uid, "kept@x", "a UID already given is kept");
+        assert_ne!(cards[2].uid, "kept@x", "a second card with the same UID gets its own");
+        assert_ne!(cards[0].uid, cards[2].uid);
+        assert!(!ensure_uids(&mut cards), "a second pass changes nothing");
+    }
+
+    #[test]
+    fn an_invalid_uid_is_refused() {
+        let c = Contact { id: 1, name: "A".into(), uid: "x\u{7}".into(), ..Default::default() };
+        assert!(!c.valid());
     }
 }
 

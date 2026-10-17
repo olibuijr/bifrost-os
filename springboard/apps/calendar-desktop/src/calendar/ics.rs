@@ -606,6 +606,9 @@ pub fn to_calendar_event(e: &IcsEvent, id: u64) -> Option<CalendarEvent> {
         notes: String::new(),
         repeat: 0,
         alert: 0,
+        // the event keeps the UID of the object it came from, so its edits can be sent back to that account; a repeating
+        // object expands to many events that share one UID, so those are not linked
+        uid: if e.rule.is_some() { String::new() } else { e.uid.clone() },
     };
     ev.valid().then_some(ev)
 }
@@ -758,7 +761,7 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
             location: String::new(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         };
         let ics = from_calendar_event(&e);
         assert_eq!(ics.uid, "7@springboard.tab");
@@ -774,7 +777,7 @@ BEGIN:VEVENT\r\nUID:bad\r\nSUMMARY:No start\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
             location: String::new(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         });
         assert_eq!(all_day.end.date, d(2026, 11, 1));
         all_day.end = all_day.end.add_minutes(3 * 1440);

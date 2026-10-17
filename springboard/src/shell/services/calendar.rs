@@ -169,7 +169,7 @@ mod tests {
             location: "Hall".into(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         }
     }
 

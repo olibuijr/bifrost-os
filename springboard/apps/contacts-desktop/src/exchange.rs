@@ -46,11 +46,13 @@ pub fn import(text: &str) -> Result<Import, String> {
     for block in blocks(text) {
         match normalize(&block) {
             Some((lines, address, card_details)) => {
+                // the card's UID keeps it linked to the same contact when it is read again
+                let uid = lines.iter().find_map(|l| l.strip_prefix("UID:")).map(|u| u.trim().to_string()).unwrap_or_default();
                 for line in lines {
                     normalized.push_str(&line);
                     normalized.push_str("\r\n");
                 }
-                addresses.push((address, card_details));
+                addresses.push((address, card_details, uid));
             }
             None => out.groups += 1,
         }
@@ -61,8 +63,9 @@ pub fn import(text: &str) -> Result<Import, String> {
         vcard::Error::TooLarge => "The file is too large to import".to_string(),
         vcard::Error::Malformed => "A card in the file does not begin and end properly".to_string(),
     })?;
-    for (card, (address, card_details)) in cards.iter().zip(addresses) {
-        let (contact, values, dropped) = contact_of(card, &address);
+    for (card, (address, card_details, uid)) in cards.iter().zip(addresses) {
+        let (mut contact, values, dropped) = contact_of(card, &address);
+        contact.uid = uid;
         out.extra_values += dropped;
         if contact.valid() {
             out.contacts.push(contact);
@@ -107,6 +110,10 @@ pub fn export_with(contacts: &[Contact], values: &Extras, card_details: &Details
             .map(|address| format!("ADR:;;{};;;;", escape(address)))
             .collect();
         added.extend(detail_lines(&own));
+        // the stable UID of the card, so a server copy of it is recognised as this contact
+        if !contact.uid.trim().is_empty() {
+            added.push(format!("UID:{}", escape(contact.uid.trim())));
+        }
         let department = own.get(Detail::Department);
         if !department.is_empty() {
             match lines.iter().position(|line| line.starts_with("ORG:")) {
@@ -360,6 +367,7 @@ fn contact_of(card: &Card, address: &str) -> (Contact, Vec<Extra>, usize) {
         favorite: false,
         company: card.organization.clone(),
         address: address.to_string(),
+        uid: String::new(),
         labels: [phone.map_or(3, |p| phone_index(&p.label)), email.map_or(2, |e| email_index(&e.label)), 2],
     };
     (contact, values, dropped)
@@ -505,6 +513,7 @@ mod headless_vcard_tests {
             favorite: false,
             company: "Analytical".into(),
             address: String::new(),
+            uid: String::new(),
             labels: [0; 3],
         }
     }
@@ -572,6 +581,7 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Friends\r\nMEMBER:urn:uuid:0001\r
             favorite: false,
             company: "Acme".into(),
             address: "Hafnarstræti 1, Reykjavík".into(),
+            uid: String::new(),
             labels: [2, 1, 2],
         }
     }

@@ -62,10 +62,29 @@ enum Job {
 /// text and is not sent again.
 const SYNC_STAMP: &str = "19700101T000000Z";
 
-/// Every event of the calendar as (UID, iCalendar text), for the Internet Accounts sync to find its edits.
+/// The events that came from a synced account, as (UID, iCalendar text), for the Internet Accounts sync to find their
+/// edits. Each is the account's own object (kept whole in the rich store) with the event's current date, time, title,
+/// and location or notes where the event has them.
 fn local_objects(c: &calendar::Calendar) -> Vec<(String, String)> {
     let rich = c.rich_events();
-    rich.events.iter().map(|e| (e.uid.clone(), ics::write_single(e, &rich.timezones, SYNC_STAMP))).collect()
+    c.events()
+        .iter()
+        .filter(|e| !e.uid.is_empty())
+        .filter_map(|e| {
+            let mut object = rich.events.iter().find(|r| r.uid == e.uid)?.clone();
+            object.summary = e.title.clone();
+            object.all_day = e.all_day;
+            object.start = ics::Local::new(e.date, if e.all_day { 0 } else { e.minute });
+            object.end = if e.all_day { object.start.add_minutes(1440) } else { object.start.add_minutes(e.duration as i64) };
+            if !e.location.is_empty() {
+                object.location = e.location.clone();
+            }
+            if !e.notes.is_empty() {
+                object.notes = e.notes.clone();
+            }
+            Some((e.uid.clone(), ics::write_single(&object, &rich.timezones, SYNC_STAMP)))
+        })
+        .collect()
 }
 
 fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {

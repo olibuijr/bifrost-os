@@ -228,6 +228,8 @@ pub struct Camera {
     qr_on: bool,
     qr_result: Option<String>,
     qr_scanned_at: f64,
+    /// the white balance of the live preview, following the scene a frame at a time
+    balance: crate::media::convert::Smoothed,
     /// QR scans run on their own thread; one at a time
     qr_busy: bool,
     qr_tx: Sender<Option<String>>,
@@ -335,6 +337,7 @@ impl Camera {
             qr_on: false,
             qr_result: None,
             qr_scanned_at: f64::MIN,
+            balance: Default::default(),
             qr_busy: false,
             qr_tx,
             qr_rx,
@@ -747,7 +750,10 @@ impl Camera {
                 // convert the whole frame at the matching scale, then cut the crop out of it
                 let (full_w, full_h) = ((pw * frame.width / cw.max(1)).max(1), (ph * frame.height / ch.max(1)).max(1));
                 if let Some(px) = v4l2::to_pixels(&frame, full_w, full_h) {
-                    let full = Image { w: full_w, h: full_h, px };
+                    let mut full = Image { w: full_w, h: full_h, px };
+                    // the preview follows the scene's white balance, smoothed so it does not flicker
+                    let gains = self.balance.update(&full);
+                    crate::media::convert::apply_gains(&mut full, gains);
                     if self.qr_on && !self.qr_busy && t - self.qr_scanned_at >= QR_SCAN_MS {
                         self.qr_scanned_at = t;
                         self.qr_busy = true;

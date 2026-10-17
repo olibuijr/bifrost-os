@@ -247,7 +247,8 @@ impl App for ContactsApp {
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.sync_termination(ctx);
         // Internet Accounts: a finished CardDAV sync merges its cards into the contacts.
-        if let Some(done) = self.dav.poll(ctx, t, bifrost_app::dav_sync::unix_now()) {
+        let objects = |app: &Option<contacts::Contacts>| app.as_ref().map(|c| c.sync_objects()).unwrap_or_default();
+        if let Some(done) = self.dav.poll_local(ctx, t, bifrost_app::dav_sync::unix_now(), &mut || objects(&self.app)) {
             if let (Ok(texts), Some(c)) = (done.result, self.app.as_mut()) {
                 c.merge_card_texts(&ctx.ui, texts.into_iter().map(Some).collect());
             }

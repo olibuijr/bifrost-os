@@ -380,7 +380,7 @@ mod tests {
     }
 
     fn draft(rule: Option<Rule>, alarms: Vec<u32>) -> Draft {
-        let event = CalendarEvent { id: 1, date: d(10, 13), minute: 540, duration: 60, all_day: false, title: "x".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0 };
+        let event = CalendarEvent { id: 1, date: d(10, 13), minute: 540, duration: 60, all_day: false, title: "x".into(), location: String::new(), notes: String::new(), repeat: 0, alert: 0, uid: String::new() };
         Draft {
             event,
             existing: false,

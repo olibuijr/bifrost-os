@@ -2989,7 +2989,26 @@
    "status": "partial",
    "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local. Built 2026-10-17: Outbox in sdk dav_sync.rs queues local Put and Delete writes and flushes them through put_resource and delete_resource, keeping the queue on a transport failure; tests a_flush_sends_the_edits_in_order_and_empties_the_outbox and the two following. Still open: Sync does not hold an outbox yet and Calendar and Contacts do not queue their edits. Built 2026-10-17: dav_sync queues edits to synced items (queue_changes, PUT with the last ETag, DELETE) and flushes the outbox on each sync before reading (Done.writes reports it). Calendar passes its events as iCalendar text (main.rs local_objects), but the calendar store keeps only events with rules or alarms as rich events with their UID, so most synced events are not linked and their edits are not sent yet. Contacts is not wired: the contacts store keeps no UID and exports none, so no card can be linked. Still open: store the UID per event and per contact.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactstore::uid_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::calendar::store::uid_tests"
+    }
+   ],
+   "ready_note": "Synced objects are written back: Contacts and Calendar hand their objects to the sync as (UID, text) when a sync starts (poll_local). A card or event keeps its UID (contactstore uid column, vCard UID, calendar store uid column), a linked object whose text changed goes out as a PUT with its last ETag, a linked object that is gone goes out as a DELETE, and the outbox is flushed before the read. Tested: dav_sync queue and flush tests, UID round trips in the contact and calendar stores. Not sent: objects made here (creation is not done), repeating calendar events (not linked), and fields the app does not model (a server copy's extra properties are dropped on a PUT). Edits made during a sync are replaced by the server's copy on the next read."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreDeviceSelection.framework",
