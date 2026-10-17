@@ -3147,6 +3147,7 @@ impl Shell {
     fn tick_pumped(&mut self, t: f64) -> Vec<Effect> {
         keyboard::pump();
         self.appearance_tick(t);
+        self.sensor_tick(t);
         self.terminal_follow_scheme();
         self.dock_tick(t);
         self.fx_tick(t);
