@@ -152,6 +152,32 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("yuanti", CjkRounded), ("tsukushiamarugothic", CjkRounded), ("tsukushibmarugothic", CjkRounded),
 ];
 
+/// Reference family name (lowercase) to the open face that stands in for it by name, tried before the class's
+/// equivalents. Only packaged faces appear here (noto-fonts, noto-fonts-cjk, ttf-dejavu, gsfonts): P052 is the URW
+/// Palatino clone, the rest are the closest packaged face for the role, and the package row notes which is which.
+const FACES: &[(&str, &str)] = &[
+    ("palatino", "P052"),
+    ("pt sans", "Noto Sans"), ("pt serif", "Noto Serif"), ("pt serif caption", "Noto Serif"), ("pt mono", "DejaVu Sans Mono"),
+    ("papyrus", "Noto Sans"), ("partylet-plain", "Noto Sans"), ("party let", "Noto Sans"), ("phosphate", "Noto Sans"),
+    ("rockwell", "Noto Serif"), ("macintoshskeletal", "Noto Sans"),
+    ("ornanong", "Noto Sans Thai"),
+    ("osaka", "Noto Sans CJK JP"), ("osaka-mono", "DejaVu Sans Mono"), ("osakamono", "DejaVu Sans Mono"),
+    ("ヒラギノ角ゴシック w0", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w1", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w2", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w3", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w4", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w5", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w6", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w7", "Noto Sans CJK JP"),
+    ("ヒラギノ角ゴシック w8", "Noto Sans CJK JP"), ("ヒラギノ角ゴシック w9", "Noto Sans CJK JP"),
+    ("ヒラギノ丸ゴ pron w4", "Noto Sans CJK JP"), ("ヒラギノ明朝 pron", "Noto Serif CJK JP"),
+    ("儷宋 pro", "Noto Serif CJK SC"), ("儷黑 pro", "Noto Sans CJK SC"), ("华文仿宋", "Noto Serif CJK SC"),
+    ("华文细黑", "Noto Sans CJK SC"), ("华文黑体", "Noto Sans CJK SC"),
+];
+
+/// The open face named for `family` in FACES, if any (case and surrounding space ignored).
+pub fn face_of_family(family: &str) -> Option<&'static str> {
+    let key = family.trim().to_lowercase();
+    FACES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f)
+}
+
 /// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
 pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     let key = family.trim().to_lowercase();

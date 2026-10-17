@@ -240,7 +240,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/P052-Roman.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute P052 (gsfonts, AGPL-3.0 with font exception) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTMono.ttc",
@@ -261,7 +274,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera and public domain) for the same role; closest packaged mono; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSans.ttc",
@@ -282,7 +308,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerif.ttc",
@@ -303,7 +342,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerifCaption.ttc",
@@ -324,7 +376,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Papyrus.ttc",
@@ -345,7 +410,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PartyLET-plain.ttf",
@@ -366,7 +444,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Phosphate.ttc",
@@ -387,7 +478,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PlantagenetCherokee.ttf",
@@ -466,7 +570,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; closest packaged face; glyph design differs."
   },
   {
    "id": "path:/System/Library/Frameworks/MapKit.framework/Versions/A/Resources/pcf.otf",
