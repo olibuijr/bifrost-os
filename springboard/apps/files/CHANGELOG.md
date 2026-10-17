@@ -1,3 +1,7 @@
+## 1.28.4 — 2026-10-17
+
+- Ships a help book (`help/`: files basics, organize, get info and archives), indexed by the shell help index for the Help menu and `help://is.olibuijr.files.desktop` links.
+
 ## 1.28.3 — 2026-10-14
 
 - Keep idle wake scheduling event-driven: folder listing and search results use the dispatch-backed `Feed`, and an idle window has no polling deadline. Add regression coverage for the idle deadline and dispatch completion.
