@@ -1361,9 +1361,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/collection.rs",
    "status": "partial",
-   "note": "The card grid model (adaptive columns, hero item, hit-testing) covers the grid layout of the collection view. Not covered: item diffing, cell reuse and the layout engine.",
+   "note": "The card grid model (adaptive columns, hero item, hit-testing) covers the grid layout of the collection view. item_diff (springboard/ui/src/collection.rs) gives the inserts, deletes and moves between two snapshots for a batch update. Not covered: cell reuse and the layout engine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "collection::tests"
+    }
+   ],
+   "ready_note": "Card grid layout, hit-testing and item diffing (collection tests). Cell reuse and the compositional layout engine are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CollectionsInternal.framework",

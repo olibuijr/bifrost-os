@@ -1,6 +1,56 @@
 //! A card grid (`NativeCollectionView` with a compositional layout): adaptive columns from a minimum item width, an
 //! optional full-width hero item first (News Top Stories), fixed-height rows. Pure model: frames and hit-testing.
+//! [`item_diff`] gives the inserts, deletes and moves between two snapshots of the items, as a batch update needs.
 use crate::Rect;
+use std::collections::HashMap;
+use std::hash::Hash;
+
+/// What changed between two snapshots of a collection's items, matched by identity.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ItemDiff {
+    /// Indices in the old snapshot of the items that are gone.
+    pub deleted: Vec<usize>,
+    /// Indices in the new snapshot of the items that are new.
+    pub inserted: Vec<usize>,
+    /// `(old index, new index)` of the surviving items that changed place. The items that keep their relative
+    /// order (the longest such run) are not listed.
+    pub moved: Vec<(usize, usize)>,
+}
+
+/// Diffs two snapshots of a collection. Items are matched by `Eq`; each snapshot must hold each item once.
+/// Quadratic in the number of surviving items, which suits a screenful or two of cards.
+pub fn item_diff<T: Eq + Hash>(old: &[T], new: &[T]) -> ItemDiff {
+    let old_pos: HashMap<&T, usize> = old.iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let new_pos: HashMap<&T, usize> = new.iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let deleted = (0..old.len()).filter(|&i| !new_pos.contains_key(&old[i])).collect();
+    let inserted = (0..new.len()).filter(|&j| !old_pos.contains_key(&new[j])).collect();
+    // The survivors in old order, each with its new index.
+    let kept: Vec<(usize, usize)> = old.iter().enumerate().filter_map(|(i, t)| new_pos.get(t).map(|&j| (i, j))).collect();
+    // The longest run of survivors whose new indices increase: those stay where they are.
+    let n = kept.len();
+    let mut len = vec![1usize; n];
+    let mut prev = vec![usize::MAX; n];
+    for i in 0..n {
+        for k in 0..i {
+            if kept[k].1 < kept[i].1 && len[k] + 1 > len[i] {
+                len[i] = len[k] + 1;
+                prev[i] = k;
+            }
+        }
+    }
+    let mut stays = vec![false; n];
+    if let Some(mut at) = (0..n).max_by_key(|&i| (len[i], std::cmp::Reverse(i))) {
+        loop {
+            stays[at] = true;
+            if prev[at] == usize::MAX {
+                break;
+            }
+            at = prev[at];
+        }
+    }
+    let moved = (0..n).filter(|&k| !stays[k]).map(|k| kept[k]).collect();
+    ItemDiff { deleted, inserted, moved }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CardGrid {
@@ -94,5 +144,31 @@ mod tests {
         assert_eq!(g.hit(B, 4, 0.0, 320.0, 300.0), None, "the gutter");
         assert_eq!(g.content_height(620.0, 0), 0.0);
         assert!(g.frames(B, 0, 0.0).is_empty());
+    }
+
+    #[test]
+    fn an_unchanged_snapshot_has_an_empty_diff() {
+        assert_eq!(item_diff(&["a", "b"], &["a", "b"]), ItemDiff::default());
+    }
+
+    #[test]
+    fn an_insert_and_a_delete_are_reported_by_index() {
+        let inserted = item_diff(&["a", "b", "c"], &["a", "x", "b", "c"]);
+        assert_eq!(inserted, ItemDiff { deleted: vec![], inserted: vec![1], moved: vec![] });
+        let deleted = item_diff(&["a", "b", "c"], &["a", "c"]);
+        assert_eq!(deleted, ItemDiff { deleted: vec![1], inserted: vec![], moved: vec![] });
+    }
+
+    #[test]
+    fn an_item_moved_to_the_end_is_the_only_move() {
+        let d = item_diff(&["a", "b", "c", "d"], &["b", "c", "d", "a"]);
+        assert_eq!(d.moved, vec![(0, 3)], "b, c and d keep their order and stay put");
+        assert!(d.inserted.is_empty() && d.deleted.is_empty());
+    }
+
+    #[test]
+    fn a_new_collection_inserts_everything_and_an_empty_one_deletes_everything() {
+        assert_eq!(item_diff::<u8>(&[], &[1, 2]).inserted, vec![0, 1]);
+        assert_eq!(item_diff(&[1, 2], &[] as &[u8]).deleted, vec![0, 1]);
     }
 }
