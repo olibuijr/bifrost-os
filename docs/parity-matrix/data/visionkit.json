@@ -12,7 +12,7 @@
       "apple": "DataScannerViewController, RecognizedItem (barcode items), DataScannerViewControllerDelegate",
       "bifrost": "springboard/sdk/src/data_scanner.rs (DataScanner over springboard/src/shell/camera/qr.rs)",
       "status": "partial",
-      "note": "Wave 5 (w5-visionkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies."
+      "note": "Wave 5 (w5-visionkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pure-Rust decoder for QR model 2 codes only (versions 1-10, all masks and EC levels), no perspective correction. Used only by the system Camera app; no SDK API for apps and no other barcode symbologies. Built 2026-10-17: DataScanner also reads EAN-13 and Code 39 barcodes from sample rows (bifrost_ui::barcode::decode_row) when a frame has no QR code; the 1D encoders moved to pub render_modules and ean13_modules; tests data_scanner::tests (ean13_barcode_in_the_frame_is_one_item)."
     },
     {
       "feature": "Live text scanning through the camera",
