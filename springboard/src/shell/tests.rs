@@ -189,19 +189,16 @@
     /// the front one checked, and choosing a row brings that window forward.
     #[cfg(feature="desktop-wayland")]
     #[test]
-    fn desktop_menu_bar_follows_the_golden_gate_order_and_the_window_menu_focuses_a_window() {
+    fn desktop_menu_bar_follows_the_golden_gate_order_and_the_window_menu_lists_only_the_front_app() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|!matches!(m,desktop_bar::Menu::Cpu|desktop_bar::Menu::Memory|desktop_bar::Menu::Network|desktop_bar::Menu::Power|desktop_bar::Menu::ControlCenter)).collect();
         assert_eq!(order,vec![desktop_bar::Menu::System,desktop_bar::Menu::App,desktop_bar::Menu::File,desktop_bar::Menu::Edit,desktop_bar::Menu::View,desktop_bar::Menu::Window,desktop_bar::Menu::Help]);
         sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
         let rows=sh.menu_row_texts(desktop_bar::Menu::Window);
         assert!(rows.iter().any(|t|t=="\u{2713} Settings"),"front window checked: {rows:?}");
+        // the Window menu lists the front app's windows only (bf8aa3ab6), so Terminal is not offered here
         let name=apps().iter().find(|a|a.id==AppId::Terminal).unwrap().name;
-        let idx=rows.iter().position(|t|t.ends_with(name)).unwrap_or_else(||panic!("{name} listed: {rows:?}"));
-        sh.desktop_menu=Some(desktop_bar::Menu::Window);
-        let (x,y,_,_)=sh.desktop_popup_rect().unwrap();let row=y as f32+sh.ui.pt(sh.row_top_pt(desktop_bar::Menu::Window,idx)+18.);
-        sh.event(Event::Down(x as f32+12.,row),1.);sh.event(Event::Up(x as f32+12.,row),2.);
-        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Terminal));
+        assert!(!rows.iter().any(|t|t.ends_with(name)),"{name} is not the front app: {rows:?}");
     }
 
     /// Window > Zoom acts on the front visible window, not on a minimized one that still sits last in the stack.
@@ -654,7 +651,8 @@
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
-        sh.desk_cycle_window();
+        // Cmd+Tab is the switcher (all windows, most recent first); Cmd+` is `desk_cycle_window`
+        sh.switcher_cycle(false);
         assert_eq!(sh.desk.as_ref().unwrap().cmdtab.as_ref().map(|c|c.1),Some(1));
         let (w,h)=(sh.w as usize,sh.h as usize);let mut buf=vec![0u32;w*h];
         sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut buf,y0:0},2.);
