@@ -73,7 +73,16 @@
    "status": "partial",
    "note": "app window with a worker thread for device listing and import, alongside shell camera import; lacks scanner support",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-image-capture",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "device listing, import and the worker thread: model::tests. Scanner support needs a scanner (hardware) and is not part of this row."
   },
   {
    "id": "path:/System/Applications/Image Playground.app",

@@ -108,7 +108,16 @@
    "status": "partial",
    "note": "Backup page, the backup settings",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests"
+    }
+   ],
+   "ready_note": "backup settings page: shell::backup_page::tests"
   },
   {
    "id": "path:/System/Applications/Tips.app",
@@ -169,7 +178,16 @@
    "status": "partial",
    "note": "Term (is.olibuijr.term) terminal",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::terminal::tests"
+    }
+   ],
+   "ready_note": "terminal sessions, layout, selection, links and profiles: shell::terminal::tests"
   },
   {
    "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
