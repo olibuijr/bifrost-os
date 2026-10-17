@@ -169,7 +169,16 @@
    "status": "partial",
    "note": "The settings model behind the Settings pages: preference keys such as the appearance and accent keys, and their values. It does not mirror the reference's pane registry or its extension points.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings"
+    }
+   ],
+   "ready_note": "Settings model (shell/settings.rs) with its preference keys and tests; the pane registry is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppSystemSettingsUI.framework",
@@ -190,7 +199,21 @@
    "status": "partial",
    "note": "Settings pages for display, sound, network, accounts and storage, with search over every pane. The reference's payment, messaging and secure element panes are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search"
+    }
+   ],
+   "ready_note": "Settings panes and search over them (shell/settings.rs, shell/settings_search.rs) are tested; payment, messaging and secure element panes are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppUserEvents.framework",
@@ -262,7 +285,26 @@
    "status": "partial",
    "note": "Wi-Fi scan, join, saved networks and power save work through the supplicant and the network service. Apps get no SDK query API for interfaces or networks, and access point mode is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wpa"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wifi_page"
+    }
+   ],
+   "ready_note": "Wi-Fi scan, join, saved networks and power save through the supplicant (net/wifi.rs, net/wpa.rs, shell/wifi_page.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleAccount.framework",
@@ -301,8 +343,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; its name points at an account access view tied to the vendor's cloud identity, so the purpose is not confirmed beyond the name.",
+   "status": "n/a",
+   "note": "Account transparency daemon (appleaccounttransparencyd) for the vendor's cloud account; BifrOSt has no vendor account service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1162,8 +1204,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor NVMe controller driver for the vendor's own storage hardware; BifrOSt uses the Linux nvme driver in the kernel.",
    "rea": [],
    "method": "assessed"
   },
@@ -1312,7 +1354,26 @@
    "status": "partial",
    "note": "Apps can be driven by control-socket calls, intents and AppEvents. A small AppleScript-style language runs in osascript: tell blocks, handlers, variables, try, do shell script and dictionary commands. Not covered: the Script Editor app, the sdef dictionary format (dictionaries live in manifest.toml instead), recording, and the reference object model in full.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript"
+    }
+   ],
+   "ready_note": "Control socket, intents and the osascript command language are built and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleServiceToolkit.framework",
@@ -1375,7 +1436,21 @@
    "status": "partial",
    "note": "The system information app reads hardware, software, firewall and host statistics from the machine. Not covered: the reference's per-category hardware profile and any SDK API for apps to query the same data.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-sysinfo",
+     "filter": "probe"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "host"
+    }
+   ],
+   "ready_note": "Hardware, software and host statistics probes are built and tested; the per-category hardware profile is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleThunderboltRDMADetection.framework",
@@ -2583,7 +2658,16 @@
    "status": "partial",
    "note": "The control-socket protocol between clients and the audio server is defined and shared. Gap: transport code common to drivers is not factored out beyond the shared-memory ABI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-types",
+     "filter": "control"
+    }
+   ],
+   "ready_note": "Control-socket protocol shared by clients and the audio server (audio/types/src/control.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AuthKit.framework",
@@ -4085,7 +4169,16 @@
    "status": "partial",
    "note": "Reads and sets the internal panel backlight through sysfs. External displays and an SDK API for apps are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power"
+    }
+   ],
+   "ready_note": "Internal panel backlight read and set through sysfs (bare/power.rs), tested; external displays are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BubbleKit.framework",
@@ -4271,10 +4364,19 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
+   "status": "partial",
    "note": "Searched the repo for a CBOR codec: no encoder or decoder exists and no CBOR crate is named in the workspace. The reference binary is not extracted.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "cbor"
+    }
+   ],
+   "ready_note": "CBOR (RFC 8949) encoder and bounded decoder in springboard/core/src/cbor.rs, covering all major types with depth limits and tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CDDataAccess.framework",
@@ -4421,7 +4523,16 @@
    "status": "partial",
    "note": "Device discovery and open for V4L2 video nodes work. Device properties and controls of the reference system are not exposed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2"
+    }
+   ],
+   "ready_note": "V4L2 device discovery and open (media/v4l2.rs), tested; device controls are not exposed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMContinuityCaptureCore.framework",
@@ -4806,7 +4917,21 @@
    "status": "partial",
    "note": "A blocking CalDAV and CardDAV client (principal discovery and home-set requests) with account sync for the calendar; not yet verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_client"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync"
+    }
+   ],
+   "ready_note": "CalDAV and CardDAV client and sync (sdk/src/dav_client.rs, dav_sync.rs) are unit tested; lab verification is still pending."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Calculate.framework",
@@ -4827,7 +4952,21 @@
    "status": "partial",
    "note": "Expression evaluation and unit conversion across thirteen categories in the Calculator app; the reference unit tables and their full data set are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calculator",
+     "filter": "eval"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calculator",
+     "filter": "convert"
+    }
+   ],
+   "ready_note": "Expression evaluation and unit conversion (eval.rs, convert.rs) are tested; the reference unit data set is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalculateUI.framework",
@@ -4848,7 +4987,21 @@
    "status": "partial",
    "note": "The Calculator window, its modes and its menus; the reference unit-table localisations are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calculator",
+     "filter": "chrome"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calculator",
+     "filter": "calc"
+    }
+   ],
+   "ready_note": "Calculator window, modes and menus (chrome.rs, calc.rs) are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarDaemon.framework",
@@ -4890,7 +5043,16 @@
    "status": "partial",
    "note": "The write side of the event store (save, remove, commit and reset) is in calendar_store.rs; events persist as an iCalendar file with a sidecar (apps/calendar-desktop/src/calendar/exchange.rs), not in a database.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar_store"
+    }
+   ],
+   "ready_note": "Event store write side (save, remove, commit, reset) in ui/src/calendar_store.rs is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarDraw.framework",
@@ -4962,7 +5124,16 @@
    "status": "partial",
    "note": "The calendar is connected to the shell's services (alarms through notification scheduling and the Up Next feed) in connect.rs; the other reference integration points are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "connect"
+    }
+   ],
+   "ready_note": "Calendar connected to the shell's alarms and Up Next feed (connect.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarLink.framework",
@@ -4983,7 +5154,16 @@
    "status": "partial",
    "note": "The calendar's intents (show a date, show an event, create an event) are served in intents.rs; the other reference calendar actions are not verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "intents"
+    }
+   ],
+   "ready_note": "Calendar intents (show a date, show an event, create an event) in intents.rs, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarMigration.framework",
@@ -5025,7 +5205,21 @@
    "status": "partial",
    "note": "Event alarms are computed in alerts.rs and scheduled as notifications through connect.rs; the reference side-table store for alerts is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "alerts"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "connect"
+    }
+   ],
+   "ready_note": "Event alarms computed in alerts.rs and scheduled as notifications through connect.rs, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarUI.framework",
