@@ -827,10 +827,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "has: pane-opening settings intent catalogue, tested in settings_intents::tests; missing: Search does not list the intents",
-   "rea": []
+   "note": "Settings intents are listed in Search and open their pane (quicksearch settings_intent_rows); not yet verified on Midget.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "Search lists every settings intent as a Shortcuts row (quicksearch settings_intent_rows, called from the shortcut rows) and opens its pane; tested in settings_intents::tests and quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Storage.appex",
