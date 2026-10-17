@@ -11,6 +11,7 @@
 use super::forms::{Prompt, Purpose};
 use super::list::{Group, Item, Spec, Tint};
 use super::pages::{Action, PageId};
+use bifrost_ui::account_store::{self as store, Contents};
 use bifrost_ui::internet_accounts::{self as shared, Account, Kind, Security, Server, Service};
 use std::path::{Path, PathBuf};
 
@@ -28,6 +29,8 @@ pub enum Act {
 /// What the page is built from.
 pub struct PageState<'a> {
     pub accounts: &'a [Account],
+    /// The accounts saved by apps in the accounts store, listed read only under their account types.
+    pub store: &'a Contents,
     /// Why the last change did not happen (empty when nothing failed).
     pub note: &'a str,
 }
@@ -51,6 +54,19 @@ pub fn spec(s: &PageState) -> Spec {
         groups.push(Group::new(rows).header(&a.name).footer(&detail(a)));
         groups.push(Group::new(vec![Item::new("Remove Account").tint(Tint::Red).action(Action::InternetAccounts(Act::Remove { id: a.id.clone() }))]));
     }
+    // the accounts apps saved, under each account type the store holds (read only: an app manages its own)
+    for t in &s.store.types {
+        let saved = s.store.accounts_with_type(&t.identifier);
+        if saved.is_empty() {
+            continue;
+        }
+        let rows: Vec<Item> = saved
+            .iter()
+            .map(|a| Item::new(if a.account_description.is_empty() { a.username.clone() } else { a.account_description.clone() }))
+            .collect();
+        let access = if t.access_granted { "Apps may use these accounts." } else { "Apps may not use these accounts yet." };
+        groups.push(Group::new(rows).header(&t.description).footer(&format!("Saved by apps. {access}")));
+    }
     let adds: Vec<Item> = Kind::ALL.iter().map(|&k| Item::new(k.label()).tint(Tint::Blue).action(Action::InternetAccounts(Act::Add(k)))).collect();
     groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Passwords are saved in Passwords."));
     Spec { id: PageId::InternetAccounts, title: "Internet Accounts".into(), large: false, groups }
@@ -65,9 +81,12 @@ fn detail(a: &Account) -> String {
     format!("{}  ·  {}  ·  {}", a.kind.label(), a.username, place)
 }
 
-/// The accounts in the shared list. An unreadable list shows as none; changes use [`load_for_change`] instead.
-pub fn load() -> Vec<Account> {
-    shared::store_path().and_then(|p| shared::load(&p).ok()).unwrap_or_default()
+/// The accounts in the shared list and in the accounts store. An unreadable file shows as none; changes to the shared
+/// list use [`load_for_change`] instead.
+pub fn load() -> (Vec<Account>, Contents) {
+    let accounts = shared::store_path().and_then(|p| shared::load(&p).ok()).unwrap_or_default();
+    let saved = store::store_path().and_then(|p| store::read(&p).ok()).unwrap_or_default();
+    (accounts, saved)
 }
 
 /// Where the shared list is kept, or why it has no place.
@@ -181,8 +200,29 @@ mod tests {
     }
 
     #[test]
+    fn accounts_apps_saved_are_listed_under_their_type() {
+        use bifrost_ui::account_store::{AccountEntry, TypeEntry};
+        let saved = Contents {
+            next_id: 2,
+            types: vec![TypeEntry { identifier: "bifrost.mail".into(), description: "Mail".into(), access_granted: true }],
+            accounts: vec![AccountEntry {
+                identifier: "account-1".into(),
+                account_type: "bifrost.mail".into(),
+                username: "ann".into(),
+                user_full_name: String::new(),
+                account_description: String::new(),
+            }],
+        };
+        let empty = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
+        let listed = spec(&PageState { accounts: &[], store: &saved, note: "" });
+        assert_eq!(listed.groups.len(), empty.groups.len() + 1, "one group for the one type with accounts");
+        let other_type = Contents { types: saved.types.clone(), ..Contents::default() };
+        assert_eq!(spec(&PageState { accounts: &[], store: &other_type, note: "" }).groups.len(), empty.groups.len(), "a type without accounts adds no group");
+    }
+
+    #[test]
     fn an_empty_list_says_so_and_offers_three_kinds() {
-        let s = spec(&PageState { accounts: &[], note: "" });
+        let s = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
         assert_eq!(s.id, PageId::InternetAccounts);
         assert_eq!(s.title, "Internet Accounts");
         assert_eq!(s.groups[0].items[0].label, "No Accounts");
@@ -195,7 +235,7 @@ mod tests {
     #[test]
     fn a_caldav_account_has_calendar_and_reminder_switches() {
         let accounts = [caldav()];
-        let s = spec(&PageState { accounts: &accounts, note: "" });
+        let s = spec(&PageState { accounts: &accounts, store: &Contents::default(), note: "" });
         let services = &s.groups[0];
         assert_eq!(services.header.as_deref(), Some("dav.example.com"));
         let labels: Vec<&str> = services.items.iter().map(|i| i.label.as_str()).collect();
@@ -207,7 +247,7 @@ mod tests {
 
     #[test]
     fn a_note_shows_first() {
-        let s = spec(&PageState { accounts: &[], note: "The change could not be saved." });
+        let s = spec(&PageState { accounts: &[], store: &Contents::default(), note: "The change could not be saved." });
         assert_eq!(s.groups[0].items[0].label, "The change could not be saved.");
     }
 

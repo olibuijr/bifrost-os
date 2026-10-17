@@ -13,9 +13,9 @@ use crate::error::ErrorCode;
 use crate::keychain::{self, Reply};
 use crate::Ctx;
 use bifrost_core::fsutil;
+use bifrost_ui::account_store::{self, AccountEntry, Contents, TypeEntry};
 use std::ffi::OsString;
 use std::fmt;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -542,7 +542,7 @@ pub fn credential_from_reply(reply: &Reply) -> Result<Credential, AccountError> 
 }
 
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
-pub const SHARED_FILE: &str = "accounts.ini";
+pub const SHARED_FILE: &str = account_store::FILE_NAME;
 
 /// The path of the store the apps share (`$XDG_DATA_HOME/bifrost/accounts.ini`, or under `$HOME/.local/share`).
 pub fn shared_path() -> Option<PathBuf> {
@@ -550,150 +550,58 @@ pub fn shared_path() -> Option<PathBuf> {
 }
 
 fn shared_path_from(xdg_data_home: Option<OsString>, home: Option<OsString>) -> Option<PathBuf> {
-    let base = xdg_data_home
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| home.filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".local/share")))?;
-    Some(base.join("bifrost").join(SHARED_FILE))
+    account_store::path_from(xdg_data_home, home)
 }
 
 fn read_data(path: &Path) -> io::Result<Data> {
-    match fs::read_to_string(path) {
-        Ok(text) => decode(&text),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Data::default()),
-        Err(e) => Err(e),
-    }
+    account_store::read(path).map(from_contents)
 }
 
-const FILE_HEADER: &str = "# BifrOSt account store. Credentials are not written here; the app keeps them in its keychain.\n";
-
-/// Serialises the state. Sections are `[store]`, `[type]` and `[account]`, each followed by `key = value` lines.
-/// Values escape backslash, newline and carriage return, so every value fits on one line.
+/// The file's text for the state; the format lives in `bifrost_ui::account_store`.
 fn encode(data: &Data) -> String {
-    let mut out = String::from(FILE_HEADER);
-    out.push_str(&format!("\n[store]\nnext-id = {}\n", data.next_id));
-    for t in &data.types {
-        out.push_str("\n[type]\n");
-        write_field(&mut out, "identifier", &t.identifier);
-        write_field(&mut out, "description", &t.description);
-        write_field(&mut out, "access-granted", if t.access_granted { "true" } else { "false" });
-    }
-    for a in &data.accounts {
-        out.push_str("\n[account]\n");
-        write_field(&mut out, "id", &a.identifier);
-        write_field(&mut out, "type", &a.account_type);
-        write_field(&mut out, "username", &a.username);
-        write_field(&mut out, "full-name", &a.user_full_name);
-        write_field(&mut out, "description", &a.account_description);
-    }
-    out
+    account_store::encode(&to_contents(data))
 }
 
-fn write_field(out: &mut String, key: &str, value: &str) {
-    out.push_str(key);
-    out.push_str(" = ");
-    for c in value.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            c => out.push(c),
-        }
+fn to_contents(data: &Data) -> Contents {
+    Contents {
+        next_id: data.next_id,
+        types: data
+            .types
+            .iter()
+            .map(|t| TypeEntry { identifier: t.identifier.clone(), description: t.description.clone(), access_granted: t.access_granted })
+            .collect(),
+        // a credential never reaches the file
+        accounts: data
+            .accounts
+            .iter()
+            .map(|a| AccountEntry {
+                identifier: a.identifier.clone(),
+                account_type: a.account_type.clone(),
+                username: a.username.clone(),
+                user_full_name: a.user_full_name.clone(),
+                account_description: a.account_description.clone(),
+            })
+            .collect(),
     }
-    out.push('\n');
 }
 
-fn unescape(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut chars = value.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
+fn from_contents(c: Contents) -> Data {
+    Data {
+        types: c.types.into_iter().map(|t| AccountType { identifier: t.identifier, description: t.description, access_granted: t.access_granted }).collect(),
+        accounts: c
+            .accounts
+            .into_iter()
+            .map(|a| Account {
+                identifier: a.identifier,
+                account_type: a.account_type,
+                username: a.username,
+                user_full_name: a.user_full_name,
+                account_description: a.account_description,
+                credential: None,
+            })
+            .collect(),
+        next_id: c.next_id,
     }
-    out
-}
-
-fn invalid_data() -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, "account store file is malformed")
-}
-
-type Record = (String, Vec<(String, String)>);
-
-/// Splits the text into sections. Comments and blank lines are skipped; a field outside any section is malformed.
-fn records(text: &str) -> io::Result<Vec<Record>> {
-    let mut out: Vec<Record> = Vec::new();
-    for raw in text.lines() {
-        let line = raw.trim_start();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            out.push((name.trim().to_string(), Vec::new()));
-            continue;
-        }
-        let (key, value) = line.split_once('=').ok_or_else(invalid_data)?;
-        let section = out.last_mut().ok_or_else(invalid_data)?;
-        let value = value.strip_prefix(' ').unwrap_or(value);
-        section.1.push((key.trim().to_string(), unescape(value)));
-    }
-    Ok(out)
-}
-
-fn field_of(fields: &[(String, String)], key: &str) -> String {
-    fields.iter().rev().find(|(k, _)| k.as_str() == key).map(|(_, v)| v.clone()).unwrap_or_default()
-}
-
-/// Reads a store file. Unknown sections and keys are skipped, so an older build reads a newer file.
-/// The next identifier is at least one above the highest `account-N` in the file, so a reopened store never reuses one.
-fn decode(text: &str) -> io::Result<Data> {
-    let mut data = Data::default();
-    let mut stored_next = 0u64;
-    let mut highest = 0u64;
-    for (name, fields) in records(text)? {
-        match name.as_str() {
-            "store" => stored_next = field_of(&fields, "next-id").parse().map_err(|_| invalid_data())?,
-            "type" => {
-                let identifier = field_of(&fields, "identifier");
-                if identifier.is_empty() {
-                    return Err(invalid_data());
-                }
-                let access_granted = field_of(&fields, "access-granted") == "true";
-                data.types.push(AccountType { identifier, description: field_of(&fields, "description"), access_granted });
-            }
-            "account" => {
-                let identifier = field_of(&fields, "id");
-                if identifier.is_empty() {
-                    return Err(invalid_data());
-                }
-                if let Some(n) = identifier.strip_prefix("account-").and_then(|n| n.parse::<u64>().ok()) {
-                    highest = highest.max(n);
-                }
-                data.accounts.push(Account {
-                    identifier,
-                    account_type: field_of(&fields, "type"),
-                    username: field_of(&fields, "username"),
-                    user_full_name: field_of(&fields, "full-name"),
-                    account_description: field_of(&fields, "description"),
-                    credential: None,
-                });
-            }
-            _ => {}
-        }
-    }
-    data.next_id = stored_next.max(highest);
-    Ok(data)
 }
 
 /// The answer to a credential renewal (`ACAccountCredentialRenewResult`).
@@ -719,6 +627,7 @@ pub enum RenewOutcome {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::fs;
     use std::rc::Rc;
 
     fn at(secs: u64) -> SystemTime {
