@@ -52,6 +52,9 @@ impl ContactsApp {
             let request = services::copy_contact(ctx, &contact, &extra);
             self.copies.insert(request, services::label(&contact));
         }
+        if let Some(handoff) = c.take_handoff() {
+            services::hand_off(ctx, &handoff);
+        }
         if let Some(all) = c.all_contacts() {
             self.index.sync(ctx, all);
         }

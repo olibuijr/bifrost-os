@@ -14,7 +14,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use bifrost_app::kit::ui::{home_zone, Ui};
 use bifrost_app::kit::{Event, Image, TextCache};
-use crate::{attach, model, organize, quick, repeat, settings, store, zones};
+use crate::{attach, format, model, organize, quick, repeat, settings, store, zones};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -513,6 +513,11 @@ impl Reminders {
     }
 
     /// Every reminder, for the Today widget timeline (`system.rs`).
+    /// The lists in their sidebar order, for the scripting answers (`scripting`).
+    pub fn lists(&self) -> &[model::ListDef] {
+        &self.data.lists
+    }
+
     pub fn items(&self) -> &[model::Reminder] {
         &self.data.items
     }
@@ -717,6 +722,23 @@ impl Reminders {
     }
 
     /// Reminders > Mark All Overdue as Today: one undo step for every reminder moved.
+    /// Whether the notes field of the open form has the focus, which is where Format > Bold and the list commands go.
+    pub fn notes_focused(&self) -> bool {
+        self.has_draft() && self.focus == Some(Field::Notes)
+    }
+
+    /// Format > Bold, Bullet List and Numbered List: the mark goes into the notes of the open form (`format`). The
+    /// notes stay plain Markdown text, and the caret goes to the end of the text.
+    pub fn format_notes(&mut self, ui: &Ui, style: format::Style) -> bool {
+        if !self.notes_focused() {
+            return false;
+        }
+        let (text, _) = format::apply(self.notes.text(), self.notes.selection(), style);
+        self.notes.set_text(ui, &text);
+        self.dirty = true;
+        true
+    }
+
     pub fn mark_overdue_today(&mut self, ui: &Ui) -> bool {
         let mut next = self.data.clone();
         if organize::overdue_to_today(&mut next.items, self.today) == 0 {

@@ -279,6 +279,8 @@ enum Target {
     SearchClear,
     Row(usize),
     Copy(usize),
+    /// A tap on a value row of the card: a phone calls, an email opens Mail, any other value copies.
+    Use(usize),
     CopyContact,
     Favorite,
     Share,
@@ -492,6 +494,19 @@ struct Row {
     section: Option<char>,
 }
 
+/// What a tap on a phone or email value of a card hands to the shell: a `tel:` link, or a new message in Mail.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Handoff {
+    Call(String),
+    Mail(String),
+}
+
+/// The `tel:` link for a phone value: spaces, dashes and brackets are dropped and a leading plus is kept.
+pub fn tel_url(value: &str) -> String {
+    let digits: String = value.chars().filter(|c| c.is_ascii_digit() || *c == '+').collect();
+    format!("tel:{digits}")
+}
+
 /// The detail card, scroll applied, in window points.
 struct CardLayout {
     avatar: (f32, f32, f32),
@@ -605,6 +620,8 @@ pub struct Contacts {
     /// The contact, with its extra values, that a Copy Contact press asked to put on the pasteboard; `main.rs` takes it
     /// with `take_copy`.
     copy_out: Option<(Contact, Vec<Extra>)>,
+    /// The phone or email a card tap asked to hand to the shell; `main.rs` takes it with `take_handoff`.
+    handoff: Option<Handoff>,
     /// The contact whose card asked for its own window (Card > Open in Separate Window, or a double-click on a row);
     /// `main.rs` takes it with `take_card_request`.
     card_req: Option<u64>,
@@ -736,6 +753,7 @@ impl Contacts {
             scroll_list: None,
             share_req: None,
             copy_out: None,
+            handoff: None,
             card_req: None,
             last_row_click: None,
             card_window: false,
@@ -949,6 +967,11 @@ impl Contacts {
     /// The contact the user asked to copy to the pasteboard, if any (taken once).
     pub fn take_copy(&mut self) -> Option<(Contact, Vec<Extra>)> {
         self.copy_out.take()
+    }
+
+    /// The phone or email a card tap asked to hand to the shell, if any (taken once).
+    pub fn take_handoff(&mut self) -> Option<Handoff> {
+        self.handoff.take()
     }
 
     /// Shows a line of feedback in the header, such as the outcome of a copy.
@@ -2808,7 +2831,7 @@ impl Contacts {
             Screen::Detail(_) => {
                 let l = self.card_layout(ui);
                 if let Some(&(k, _)) = l.values.iter().find(|(_, r)| r.contains(x, y)) {
-                    return Some(Target::Copy(k));
+                    return Some(Target::Use(k));
                 }
                 if l.favorite.contains(x, y) {
                     return Some(Target::Favorite);
@@ -3063,6 +3086,26 @@ impl Contacts {
             Target::List => {
                 if matches!(self.screen, Screen::Detail(_)) {
                     self.close_detail(ui);
+                }
+            }
+            Target::Use(k) => {
+                if let Some(c) = self.selected() {
+                    let rows = self.rows_of(c);
+                    let row = rows.get(k);
+                    let value = row.map(|r| r.value.clone()).unwrap_or_default();
+                    let handoff = match row.map(|r| &r.action) {
+                        Some(contact_card::Action::Call) => Some(Handoff::Call(value.clone())),
+                        Some(contact_card::Action::Email) => Some(Handoff::Mail(value.clone())),
+                        _ => None,
+                    };
+                    match handoff {
+                        Some(h) if !value.is_empty() => self.handoff = Some(h),
+                        _ if !value.is_empty() => {
+                            clipboard::set_text(&value);
+                            self.toast_until = Some(t + 2000.0);
+                        }
+                        _ => {}
+                    }
                 }
             }
             Target::Copy(k) => {
@@ -3856,6 +3899,30 @@ mod tests {
 
     fn contact(id: u64, name: &str) -> Contact {
         Contact { id, name: name.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_tap_on_a_phone_or_email_hands_it_off_and_other_values_copy() {
+        let mut ann = contact(1, "Anna As");
+        ann.phone = "555 0100".into();
+        ann.email = "anna@work.is".into();
+        let path = file_with("handoff", &[ann]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path);
+        app.open_detail(&ui, 1);
+        let rows = app.rows_of(app.selected().unwrap());
+        let phone = rows.iter().position(|r| r.action == contact_card::Action::Call).unwrap();
+        let email = rows.iter().position(|r| r.action == contact_card::Action::Email).unwrap();
+        app.activate(&ui, Target::Use(phone), 0.0, 0.0, 0.0);
+        assert_eq!(app.take_handoff(), Some(Handoff::Call("555 0100".into())));
+        app.activate(&ui, Target::Use(email), 0.0, 0.0, 0.0);
+        assert_eq!(app.take_handoff(), Some(Handoff::Mail("anna@work.is".into())));
+        assert!(app.take_handoff().is_none(), "taken once");
+    }
+
+    #[test]
+    fn a_phone_value_becomes_a_tel_link_without_spaces_or_dashes() {
+        assert_eq!(tel_url("+354 555-0100"), "tel:+3545550100");
     }
 
     #[test]

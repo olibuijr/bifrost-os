@@ -1,6 +1,6 @@
 id = "is.olibuijr.reminders.desktop"
 name = "Reminders"
-version = "1.16.0"
+version = "1.17.0"
 exec = "bifrost-reminders"
 icon = "icon.png"
 min_shell = "0.5.7"
@@ -53,3 +53,25 @@ title = "Search Reminders"
 description = "Searches the reminders and shows the results."
 shortcut = false
 params = ["query:string"]
+
+[[script.command]]
+name = "make new reminder"
+event = "reminders.make"
+params = ["name", "due"]
+result = "reminder"
+
+[[script.command]]
+name = "make new list"
+event = "reminders.makelist"
+params = ["name"]
+result = "list"
+
+[[script.class]]
+name = "reminder"
+properties = ["name", "id", "notes", "completed", "flagged", "priority", "due", "list"]
+elements = []
+
+[[script.class]]
+name = "list"
+properties = ["name", "id"]
+elements = []
