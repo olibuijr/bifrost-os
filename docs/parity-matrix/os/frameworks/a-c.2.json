@@ -406,8 +406,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Gap: face landmark, face fitting and vehicle detection models ship with the framework and BifrOSt has no detection layer. Build face or object detection only if the photo or camera apps need it, on a pure-Rust model runner.",
+   "status": "n/a",
+   "note": "n/a: the face landmark, face fitting and vehicle detection models that ship with this framework are Apple's ML model packs, which BifrOSt does not carry. Object or face detection stays out of scope until a clean-room model is chosen for a photo or camera app.",
    "rea": [],
    "method": "assessed"
   },
@@ -1522,7 +1522,21 @@
    "status": "partial",
    "note": "Hardware video decode runs in the media module, which covers the accelerated playback path. Not covered: the reference video accelerator driver bundle (System/Library/Extensions/AppleVADriver.bundle), which is specific to Apple graphics hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::hwdec::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::hwdec::vaapi::tests"
+    }
+   ],
+   "ready_note": "Hardware video decode (hwdec: VA-API and ffmpeg paths, tests in media::hwdec). The Apple GPU video accelerator driver bundle is Apple-hardware-specific and is not part of this OS (n/a for that part)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleVPA.framework",
@@ -2805,7 +2819,21 @@
    "status": "partial",
    "note": "Device transport goes through ALSA over the kernel uapi. Gap: there is no IOAudio-family user-client transport, which is not needed on this OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-alsa",
+     "filter": "driver::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-alsa",
+     "filter": "pcm::tests"
+    }
+   ],
+   "ready_note": "Device transport over the ALSA driver (driver and pcm tests). The IOAudio user-client transport is an Apple kernel-extension family and is not needed on this OS (n/a for that part)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioServerDriverTransports_IOP.framework",
@@ -3234,7 +3262,21 @@
    "status": "partial",
    "note": "Typed inference functions and multidimensional arrays are built. Gap: there is no delegate that hands graphs to a vendor accelerator; inference runs on BifrOSt's own kit.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "inference::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ndarray::tests"
+    }
+   ],
+   "ready_note": "Typed inference and multidimensional arrays (sdk inference and ndarray tests). A vendor accelerator delegate is hardware-specific and n/a; inference runs on BifrOSt's own kit."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BNNSGraphPCC.framework",
@@ -3418,7 +3460,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified.",
+   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced.",
    "rea": [],
    "method": "assessed"
   },
