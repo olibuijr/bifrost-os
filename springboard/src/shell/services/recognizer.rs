@@ -158,14 +158,95 @@ struct Session {
     partial: bool,
 }
 
+/// The model download, shared by the service and Settings. Settings starts it and the service reports it.
+static DOWNLOAD: Mutex<Download> = Mutex::new(Download::Idle);
+
 pub struct Recognizer {
     data_dir: PathBuf,
-    consent: Consent,
     spawner: Box<dyn PipelineSpawner>,
     fetcher: Arc<dyn Fetcher>,
-    download: Arc<Mutex<Download>>,
     session: Option<Session>,
     next: u32,
+}
+
+/// What Settings shows for the model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelView {
+    pub granted: bool,
+    pub installed: bool,
+    pub downloading: bool,
+    /// the reason the last download failed, until the next one starts
+    pub failed: Option<String>,
+}
+
+/// The consent record under `data_dir`. A missing or unreadable record counts as no consent.
+pub fn consent_of(data_dir: &Path) -> Consent {
+    Consent::from_record(&std::fs::read_to_string(consent_path(data_dir)).unwrap_or_default())
+}
+
+fn write_consent(data_dir: &Path, consent: Consent) -> Result<(), String> {
+    std::fs::create_dir_all(data_subdir(data_dir)).map_err(|e| format!("speech recognizer: {e}"))?;
+    std::fs::write(consent_path(data_dir), consent.to_record()).map_err(|e| format!("speech recognizer: {e}"))
+}
+
+/// The model state for Settings.
+pub fn model_state(data_dir: &Path) -> ModelView {
+    let download = DOWNLOAD.lock().map(|d| d.clone()).unwrap_or(Download::Idle);
+    ModelView {
+        granted: consent_of(data_dir).is_granted(),
+        installed: model_path(data_dir).is_file(),
+        downloading: download == Download::Running,
+        failed: match download {
+            Download::Failed(e) => Some(e),
+            _ => None,
+        },
+    }
+}
+
+/// Settings: the person agreed to the download. Records the consent and starts the download in a thread.
+pub fn grant_and_download(data_dir: &Path) -> Result<(), String> {
+    write_consent(data_dir, Consent::from_record("granted"))?;
+    start_download(data_dir, Arc::new(CurlFetcher)).map(|_| ())
+}
+
+/// Settings: removes the model file and withdraws consent. A running recognition ends on its next poll.
+pub fn remove_model(data_dir: &Path) -> Result<(), String> {
+    write_consent(data_dir, Consent::default())?;
+    match std::fs::remove_file(model_path(data_dir)) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("speech model: {e}")),
+    }
+    if let Ok(mut d) = DOWNLOAD.lock() {
+        *d = Download::Idle;
+    }
+    Ok(())
+}
+
+/// Starts the model download when consent is granted and the model is missing. Returns false when nothing started.
+fn start_download(data_dir: &Path, fetcher: Arc<dyn Fetcher>) -> Result<bool, String> {
+    consent_of(data_dir).may_download().map_err(refusal_text)?;
+    if model_path(data_dir).is_file() {
+        return Ok(false);
+    }
+    {
+        let mut d = DOWNLOAD.lock().map_err(|_| "speech model: state unavailable".to_string())?;
+        if *d == Download::Running {
+            return Ok(false);
+        }
+        *d = Download::Running;
+    }
+    let to = model_path(data_dir);
+    std::thread::spawn(move || {
+        let result = fetcher.fetch(MODEL_URL, &to);
+        if let Ok(mut d) = DOWNLOAD.lock() {
+            *d = match result {
+                Ok(()) => Download::Done,
+                Err(e) => Download::Failed(e),
+            };
+        }
+    });
+    Ok(true)
 }
 
 /// The user data directory the model lives in: `$XDG_DATA_HOME/springboard`, else `~/.local/share/springboard`.
@@ -209,20 +290,11 @@ fn poll_json(transcripts: &[Transcript], running: bool) -> Json {
 impl Recognizer {
     /// The service for the user data directory `data_dir`, with the real pipeline and curl.
     pub fn new(data_dir: PathBuf) -> Self {
-        let consent = Consent::from_record(&std::fs::read_to_string(consent_path(&data_dir)).unwrap_or_default());
-        Self::with_parts(data_dir, consent, Box::new(GstSpawner), Arc::new(CurlFetcher))
+        Self::with_parts(data_dir, Box::new(GstSpawner), Arc::new(CurlFetcher))
     }
 
-    fn with_parts(data_dir: PathBuf, consent: Consent, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
-        Recognizer {
-            data_dir,
-            consent,
-            spawner,
-            fetcher,
-            download: Arc::new(Mutex::new(Download::Idle)),
-            session: None,
-            next: 1,
-        }
+    fn with_parts(data_dir: PathBuf, spawner: Box<dyn PipelineSpawner>, fetcher: Arc<dyn Fetcher>) -> Self {
+        Recognizer { data_dir, spawner, fetcher, session: None, next: 1 }
     }
 
     fn installed(&self) -> bool {
@@ -239,12 +311,6 @@ impl Recognizer {
         }
     }
 
-    fn save_consent(&self) -> Result<(), String> {
-        let dir = data_subdir(&self.data_dir);
-        std::fs::create_dir_all(&dir).map_err(|e| format!("speech recognizer: {e}"))?;
-        std::fs::write(consent_path(&self.data_dir), self.consent.to_record()).map_err(|e| format!("speech recognizer: {e}"))
-    }
-
     /// Answers one call from `app`. The shell's [`SystemService::call`] delegates here, so the rules can be tested
     /// without a shell.
     fn handle(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
@@ -255,7 +321,7 @@ impl Recognizer {
                     return Err("speech recognizer: only English is served".to_string());
                 }
                 let partial = matches!(params.get("partial"), Some(Json::Bool(true)));
-                self.consent.may_recognize(self.installed()).map_err(refusal_text)?;
+                consent_of(&self.data_dir).may_recognize(self.installed()).map_err(refusal_text)?;
                 let argv = pipeline_argv(capture(), &model_path(&self.data_dir)).map_err(pipeline_error)?;
                 // start first: when the pipeline cannot start the app keeps what it had
                 let pipeline = self.spawner.start(&argv)?;
@@ -266,6 +332,11 @@ impl Recognizer {
                 Ok(obj(vec![("id", Json::Num(id as f64))]))
             }
             "poll" => {
+                // a withdrawn consent ends the recognition at once
+                if !consent_of(&self.data_dir).is_granted() {
+                    self.stop_session();
+                    return Ok(poll_json(&[], false));
+                }
                 let Some(session) = self.session.as_mut().filter(|s| s.app == app) else {
                     return Ok(poll_json(&[], false));
                 };
@@ -294,11 +365,11 @@ impl Recognizer {
                 Ok(obj(vec![("stopped", Json::Bool(stopped))]))
             }
             "model" => {
-                let downloading = matches!(*self.download.lock().map_err(|_| "speech model: state unavailable")?, Download::Running);
+                let view = model_state(&self.data_dir);
                 Ok(obj(vec![
-                    ("granted", Json::Bool(self.consent.is_granted())),
-                    ("installed", Json::Bool(self.installed())),
-                    ("downloading", Json::Bool(downloading)),
+                    ("granted", Json::Bool(view.granted)),
+                    ("installed", Json::Bool(view.installed)),
+                    ("downloading", Json::Bool(view.downloading)),
                     ("size_bytes", Json::Num(MODEL_SIZE_BYTES as f64)),
                 ]))
             }
@@ -307,37 +378,15 @@ impl Recognizer {
                     Some(Json::Bool(g)) => *g,
                     _ => return Err("speech recognizer: consent needs a granted flag".to_string()),
                 };
-                if granted {
-                    self.consent.grant();
-                } else {
-                    self.consent.revoke();
+                if !granted {
                     self.stop_session();
                 }
-                self.save_consent()?;
+                write_consent(&self.data_dir, Consent::from_record(if granted { "granted" } else { "revoked" }))?;
                 Ok(obj(vec![("granted", Json::Bool(granted))]))
             }
             "download" => {
-                self.consent.may_download().map_err(refusal_text)?;
-                let running = matches!(*self.download.lock().map_err(|_| "speech model: state unavailable")?, Download::Running);
-                if running || self.installed() {
-                    return Ok(obj(vec![("started", Json::Bool(false))]));
-                }
-                if let Ok(mut d) = self.download.lock() {
-                    *d = Download::Running;
-                }
-                let state = Arc::clone(&self.download);
-                let fetcher = Arc::clone(&self.fetcher);
-                let to = model_path(&self.data_dir);
-                std::thread::spawn(move || {
-                    let result = fetcher.fetch(MODEL_URL, &to);
-                    if let Ok(mut d) = state.lock() {
-                        *d = match result {
-                            Ok(()) => Download::Done,
-                            Err(e) => Download::Failed(e),
-                        };
-                    }
-                });
-                Ok(obj(vec![("started", Json::Bool(true))]))
+                let started = start_download(&self.data_dir, Arc::clone(&self.fetcher))?;
+                Ok(obj(vec![("started", Json::Bool(started))]))
             }
             other => Err(format!("speech recognizer: no method {other}")),
         }
@@ -450,12 +499,11 @@ mod tests {
         let log = Arc::new(Mutex::new(Log::default()));
         let lines = Arc::new(Mutex::new(Vec::new()));
         let finished = Arc::new(AtomicBool::new(false));
-        let mut c = Consent::default();
         if consent {
-            c.grant();
+            write_consent(&root, Consent::from_record("granted")).unwrap();
         }
         let spawner = FakeSpawner { log: Arc::clone(&log), lines: Arc::clone(&lines), finished: Arc::clone(&finished) };
-        let rec = Recognizer::with_parts(root.clone(), c, Box::new(spawner), Arc::new(FakeFetcher(Arc::clone(&log))));
+        let rec = Recognizer::with_parts(root.clone(), Box::new(spawner), Arc::new(FakeFetcher(Arc::clone(&log))));
         Rig { rec, log, lines, finished, root }
     }
 
@@ -613,5 +661,22 @@ mod tests {
         }
         assert_eq!(r.log.lock().unwrap().fetches, vec![MODEL_URL.to_string()]);
         let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn settings_sees_consent_and_the_installed_model() {
+        let root = std::env::temp_dir().join(format!("bifrost-recognizer-view-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(data_subdir(&root)).unwrap();
+        assert_eq!(model_state(&root).granted, false);
+        assert_eq!(model_state(&root).installed, false);
+        write_consent(&root, Consent::from_record("granted")).unwrap();
+        std::fs::write(model_path(&root), b"model").unwrap();
+        let view = model_state(&root);
+        assert!(view.granted && view.installed);
+        remove_model(&root).unwrap();
+        assert!(!model_state(&root).installed);
+        assert!(!model_state(&root).granted, "removing the model withdraws consent");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

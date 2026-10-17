@@ -55,6 +55,8 @@ pub enum PageId {
     Keyboard,
     /// Keyboard > Keyboards
     Keyboards,
+    /// Keyboard > Dictation: the on-device speech model, its consent and its removal
+    Dictation,
     /// Keyboard > Text Replacements: shortcuts that expand to a phrase
     TextReplacements,
     Language,
@@ -358,6 +360,10 @@ pub enum Command {
     /// Analytics & Diagnostics: upload the bundle to the update server
     ShareDiagnostics,
     DeleteCrashLogs,
+    /// Keyboard > Dictation: the person agrees to the model download (consent is recorded first)
+    DownloadSpeechModel,
+    /// Keyboard > Dictation: removes the model and withdraws consent
+    RemoveSpeechModel,
     /// Users & Groups: delete an account or a group
     Account(super::users_page::Danger),
     /// a failed change, shown as an alert with OK (its text is the reason)
@@ -1109,6 +1115,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![
                     Item::new("Keyboards").value(super::kb_layouts::summary()).link(PageId::Keyboards),
                     Item::new("Text Replacements").value(super::services::text_services::replacements_summary()).link(PageId::TextReplacements),
+                    Item::new("Dictation").link(PageId::Dictation),
                 ]),
                 Group::new(vec![
                     Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
@@ -1155,6 +1162,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Keyboards",
             false,
             vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one."), Group::new(vec![Item::new("Remember Input Source for Each App").switch(super::kb_layouts::remembers(), Action::Toggle(Toggle::RememberInputSource))]).footer("Each app gets back the keyboard it had when it was last in front.")]),
+        PageId::Dictation => dictation_page(&super::services::recognizer::model_state(&super::services::recognizer::user_data_dir())),
         PageId::TextReplacements => {
             let mut items: Vec<Item> = super::services::text_services::replacement_rows()
                 .iter()
@@ -1407,6 +1415,32 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
 }
 
 /// The index of the `SPEECH_VOICES` choice for an engine voice name; an unknown name shows as the default voice (0).
+/// Keyboard > Dictation: the speech model state, what it needs from the person, and the download or removal.
+pub fn dictation_page(v: &super::services::recognizer::ModelView) -> Spec {
+    let state = if v.downloading {
+        "Downloading…"
+    } else if v.installed {
+        "Installed"
+    } else {
+        "Not Downloaded"
+    };
+    let size = format!("{} MB", bifrost_ui::whisper::MODEL_SIZE_BYTES / 1_000_000);
+    let mut groups = vec![Group::new(vec![Item::new("Speech Model").value(state), Item::new("Size").value(size)])
+        .header("ON-DEVICE DICTATION")
+        .footer("The microphone key dictates text into the focused field. The model runs on this computer, and your speech is never uploaded.")];
+    if v.installed {
+        groups.push(Group::new(vec![Item::new("Remove Speech Model").tint(Tint::Red).action(Action::Run(Command::RemoveSpeechModel))])
+            .footer("Removing it turns dictation off until the model is downloaded again."));
+    } else if !v.downloading {
+        let footer = match &v.failed {
+            Some(e) => e.clone(),
+            None => "Downloading the model needs your consent. It is about 148 MB and comes from the model's public download address; no audio is sent anywhere.".to_string(),
+        };
+        groups.push(Group::new(vec![Item::new("Download Speech Model").tint(Tint::Blue).action(Action::Run(Command::DownloadSpeechModel))]).footer(footer));
+    }
+    page("Dictation", false, groups)
+}
+
 pub fn speech_voice_index(voice: &str) -> usize {
     SPEECH_VOICES.iter().position(|(_, v)| *v == voice).unwrap_or(0)
 }
