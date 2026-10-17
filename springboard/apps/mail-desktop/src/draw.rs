@@ -25,10 +25,10 @@ const BUTTON_W_PT: f32 = 96.0;
 const SIDE_HEAD_PT: f32 = 30.0;
 const SIDE_ROW_PT: f32 = 26.0;
 const ROW_PT: f32 = 58.0;
-const READER_PAD_PT: f32 = 20.0;
-const BODY_LINE_PT: f32 = 18.0;
-const FOOT_LINE_PT: f32 = 15.0;
-const TITLE_LINE_PT: f32 = 28.0;
+pub(crate) const READER_PAD_PT: f32 = 20.0;
+pub(crate) const BODY_LINE_PT: f32 = 18.0;
+pub(crate) const FOOT_LINE_PT: f32 = 15.0;
+pub(crate) const TITLE_LINE_PT: f32 = 28.0;
 const SHEET_W_PT: f32 = 440.0;
 const SHEET_HEAD_PT: f32 = 44.0;
 const SHEET_FOOT_PT: f32 = 60.0;
@@ -365,7 +365,7 @@ pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<Str
 }
 
 /// `text` cut to fit `max` pixels, with `...` where it is cut.
-fn fit(ui: &Ui, text: &str, pt: f32, weight: Weight, max: f32) -> String {
+pub(crate) fn fit(ui: &Ui, text: &str, pt: f32, weight: Weight, max: f32) -> String {
     if ui.measure(text, pt, weight) <= max {
         return text.to_string();
     }
@@ -500,7 +500,7 @@ fn mailbox_title(name: &str) -> &str {
 // text helpers --------------------------------------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-fn put(s: &mut Surface, labels: &mut TextCache, ui: &Ui, text: &str, pt: f32, wt: Weight, color: u32, x: f32, y: f32) {
+pub(crate) fn put(s: &mut Surface, labels: &mut TextCache, ui: &Ui, text: &str, pt: f32, wt: Weight, color: u32, x: f32, y: f32) {
     if text.is_empty() {
         return;
     }

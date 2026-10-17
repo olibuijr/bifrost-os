@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 — 2026-10-17
+
+Viewer windows:
+
+- Double-click on a message row, or File > New Viewer Window, opens the message in a window of its own. The viewer is
+  read-only: it shows the header, the files and the body of the copy the main window fetched, and it scrolls.
+
+Mail links:
+
+- Mail opens `mailto:` links (manifest `schemes = ["mailto"]`). A new message opens with the To, Cc, Bcc, Subject and
+  Body of the link filled in. The SDK call `bifrost_app::mail_compose::compose` hands a draft to the default mail app.
+  Files cannot be handed over yet, so the call refuses a draft with attachments.
+
 ## 0.12.2 — 2026-10-14
 
 - Draw and hit-test the mailbox toolbar and sidebar with the shared Golden Gate widgets.
