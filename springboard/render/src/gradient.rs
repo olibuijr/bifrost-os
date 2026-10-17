@@ -110,6 +110,29 @@ pub fn animated_frame(from: &Ramp, to: &Ramp, width: usize, height: usize, time:
     out
 }
 
+/// Renders a linear gradient over a `w` x `h` pixel grid as opaque RGBA bytes, row-major from the
+/// top-left pixel. Each pixel samples the ramp at its centre, `linear_t(from, to, x + 0.5, y + 0.5)`.
+/// `None` when a side is zero or the byte count would overflow.
+pub fn render_linear_rgba(w: usize, h: usize, from: (f32, f32), to: (f32, f32), ramp: &Ramp) -> Option<Vec<u8>> {
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let len = w.checked_mul(h)?.checked_mul(4)?;
+    let mut out = Vec::with_capacity(len);
+    for y in 0..h {
+        for x in 0..w {
+            let c = ramp.color_at(linear_t(from, to, x as f32 + 0.5, y as f32 + 0.5));
+            out.extend_from_slice(&[to_byte(c.r), to_byte(c.g), to_byte(c.b), 255]);
+        }
+    }
+    Some(out)
+}
+
+/// A colour channel in 0..=1 as a byte, clamped.
+fn to_byte(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +192,35 @@ mod tests {
         assert!(close(linear_t((0.0, 0.0), (10.0, 0.0), -10.0, 0.0), -1.0));
         assert!(close(linear_t((0.0, 0.0), (10.0, 10.0), 10.0, 0.0), 0.5));
         assert_eq!(linear_t((3.0, 3.0), (3.0, 3.0), 9.0, 9.0), 0.0);
+    }
+
+    #[test]
+    fn render_linear_rgba_samples_the_ramp_at_pixel_centres() {
+        let ramp = Ramp::new(&[(0.0, BLACK), (1.0, WHITE)]).unwrap();
+        // two pixels across, the gradient runs left to right over x = 0..2: centres at t = 0.25 and 0.75
+        let px = render_linear_rgba(2, 1, (0.0, 0.0), (2.0, 0.0), &ramp).unwrap();
+        assert_eq!(px, vec![64, 64, 64, 255, 191, 191, 191, 255]);
+    }
+
+    #[test]
+    fn render_linear_rgba_is_row_major_and_opaque() {
+        let ramp = Ramp::new(&[(0.0, BLACK), (1.0, RED)]).unwrap();
+        let px = render_linear_rgba(3, 4, (0.0, 0.0), (0.0, 4.0), &ramp).unwrap();
+        assert_eq!(px.len(), 3 * 4 * 4);
+        assert!(px.chunks(4).all(|p| p[3] == 255));
+        // the last pixel (bottom right) sits at t = 3.5 / 4 = 0.875 along the ramp: red 223, green and blue 0
+        let last = (3 * 4 - 1) * 4;
+        assert_eq!(&px[last..last + 4], &[223, 0, 0, 255]);
+        // the first pixel is at t = 0.5 / 4 = 0.125: red 32
+        assert_eq!(px[0], 32);
+    }
+
+    #[test]
+    fn render_linear_rgba_refuses_empty_or_overflowing_grids() {
+        let ramp = Ramp::new(&[(0.0, BLACK)]).unwrap();
+        assert!(render_linear_rgba(0, 4, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
+        assert!(render_linear_rgba(4, 0, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
+        assert!(render_linear_rgba(usize::MAX, 2, (0.0, 0.0), (1.0, 0.0), &ramp).is_none());
     }
 
     #[test]
