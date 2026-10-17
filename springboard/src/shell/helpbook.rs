@@ -19,8 +19,10 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::SystemTime;
 
-use crate::shell::store::install::parse_manifest;
+use crate::shell::store::install::{apps_dir, parse_manifest};
 
 /// The scheme of help links: `help://app/anchor`, `help://app/page`, `help://app/page#anchor` or `help://app`.
 pub const SCHEME: &str = "help://";
@@ -447,6 +449,28 @@ pub fn search_menu(items: &[MenuItem], query: &str) -> Vec<usize> {
     }
     scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
     scored.into_iter().map(|(_, i)| i).collect()
+}
+
+/// The index the shell shares, with the `installed.json` stamp it was built from.
+static CACHE: Mutex<Option<(Option<SystemTime>, HelpIndex)>> = Mutex::new(None);
+
+/// Runs `f` on the help index of the installed apps under `root` (the built-in books included). Every install,
+/// update and removal rewrites `installed.json`, whichever process does the work, so the index rebuilds when that
+/// file's modification time changes. The shell calls this once at start to build it in the background.
+pub fn with_index<T>(root: &Path, f: impl FnOnce(&HelpIndex) -> T) -> T {
+    let stamp = std::fs::metadata(apps_dir(root).join("installed.json")).and_then(|m| m.modified()).ok();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if cache.as_ref().map(|(s, _)| *s) != Some(stamp) {
+        let mut ix = HelpIndex::new();
+        for problem in ix.rebuild(&apps_dir(root)) {
+            bifrost_core::log::shell_logger("help").notice(problem);
+        }
+        *cache = Some((stamp, ix));
+    }
+    match cache.as_ref() {
+        Some((_, ix)) => f(ix),
+        None => f(&HelpIndex::new()),
+    }
 }
 
 #[cfg(test)]
