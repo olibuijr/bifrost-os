@@ -1872,6 +1872,12 @@ impl Weather {
         } else {
             "None expected in the next 24 hours".to_string()
         };
+        // the coming days with rain, after the 24 hours the note already gives
+        let ahead: Vec<(String, f64)> = f.days.iter().map(|d| (d.label.clone(), d.precip_sum)).collect();
+        let precip_note = match insights::rain_ahead_text(&ahead) {
+            Some(later) => format!("{precip_note}. {later}"),
+            None => precip_note,
+        };
         let visibility = f.hours.first().and_then(|h| h.visibility_m);
         let pressure = f.current.pressure_hpa.or_else(|| f.hours.first().and_then(|h| h.pressure_hpa));
         let (average_value, average_note) = insights::average_text(today.map_or(f.current.temp, |d| d.max), f.average_high, units);

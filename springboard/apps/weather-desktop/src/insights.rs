@@ -233,6 +233,13 @@ pub fn humidity_note(dew_point: Option<f64>, units: Units) -> String {
 }
 
 /// Precipitation: "6.5 mm" or "0.26 in".
+/// The next days (the three after today) with at least 0.05 mm of rain or snow, by their labels: "Rain Tue, Wed ahead".
+/// `days` holds (label, precipitation sum in mm) for each day, today first. None when no coming day has rain.
+pub fn rain_ahead_text(days: &[(String, f64)]) -> Option<String> {
+    let names: Vec<&str> = days.iter().skip(1).take(3).filter(|(_, mm)| *mm >= 0.05).map(|(name, _)| name.as_str()).collect();
+    (!names.is_empty()).then(|| format!("Rain {} ahead", names.join(", ")))
+}
+
 pub fn precipitation_text(mm: f64, units: Units) -> String {
     match units {
         Units::Celsius => format!("{mm:.1} mm"),
@@ -652,6 +659,13 @@ mod tests {
         assert_eq!(humidity_note(Some(4.2), Units::Celsius), "The dew point is 4\u{b0} right now");
         assert_eq!(humidity_note(Some(0.0), Units::Fahrenheit), "The dew point is 32\u{b0} right now");
         assert_eq!(humidity_note(None, Units::Celsius), "Relative humidity");
+    }
+
+    #[test]
+    fn rain_ahead_names_the_next_three_days_with_rain() {
+        let days = vec![("Mon".to_string(), 3.0), ("Tue".into(), 0.0), ("Wed".into(), 1.2), ("Thu".into(), 0.0), ("Fri".into(), 4.0)];
+        assert_eq!(rain_ahead_text(&days).as_deref(), Some("Rain Wed ahead"), "today is left out and Friday is past the three days");
+        assert_eq!(rain_ahead_text(&days[..2]), None, "no coming day has rain");
     }
 
     #[test]
