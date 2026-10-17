@@ -48,6 +48,7 @@ const KEY_LEFTSHIFT: u16 = 42;
 const KEY_RIGHTSHIFT: u16 = 54;
 const KEY_LEFTALT: u16 = 56;
 const KEY_SPACE: u16 = 57;
+const KEY_SLASH: u16 = 53;
 const KEY_RIGHTCTRL: u16 = 97;
 const KEY_RIGHTALT: u16 = 100;
 const KEY_LEFTMETA: u16 = 125;
@@ -205,6 +206,8 @@ pub enum Shortcut {
     ZoomToggle,
     /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
     ZoomStep(bool),
+    /// Shift+Cmd+/: opens the Help menu with its search field ready for typing
+    HelpSearch,
 }
 
 impl Shortcut {
@@ -217,7 +220,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch => return None,
         }))
     }
 }
@@ -376,6 +379,7 @@ impl HwKeys {
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
             KEY_5 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Capture),
+            KEY_SLASH if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::HelpSearch),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -798,6 +802,12 @@ impl Shell {
                 vec![]
             }
             // Shift+Cmd+5 opens the screenshot toolbar; Escape closes it before it goes Back
+            // Shift+Cmd+/ opens the Help menu with its search field focused
+            #[cfg(feature = "desktop-wayland")]
+            Shortcut::HelpSearch if self.desk_active() && !self.is_locked() => {
+                self.help_search_open();
+                vec![]
+            }
             Shortcut::Capture if !self.is_locked() => {
                 self.capture = Some(super::capture::Session::with_prefs(self.capture_prefs));
                 vec![]
@@ -963,6 +973,7 @@ mod tests {
         let mut k = HwKeys::default();
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_5), Some(Shortcut::Capture), "Shift-Cmd-5 opens the toolbar");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_SLASH), Some(Shortcut::HelpSearch), "Shift-Cmd-/ opens the Help search");
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_5), None, "Cmd-5 alone is not a shortcut");
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
         assert_eq!(chord(&mut k, &[KEY_RIGHTMETA], KEY_TAB), Some(Shortcut::AppSwitch));

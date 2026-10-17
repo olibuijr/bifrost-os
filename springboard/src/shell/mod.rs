@@ -737,6 +737,9 @@ pub struct Shell {
     /// Type-to-select state of the open bar menu (`NativeMenu` type-ahead): the kit model keeps the typed prefix.
     #[cfg(feature = "desktop-wayland")]
     desktop_menu_typed:Option<bifrost_ui::menu::Menu>,
+    /// The Help menu's search field: the query typed while the Help menu is open, and the pointer marker.
+    #[cfg(feature = "desktop-wayland")]
+    help_search:desktop_bar::HelpSearch,
     /// Width of the open bar menu, keyed by a hash of its rows and the scale (measuring every title on each pointer move was half the hover cost).
     #[cfg(feature = "desktop-wayland")]
     desktop_menu_width:std::cell::Cell<Option<(u64,usize)>>,
@@ -1014,6 +1017,8 @@ impl Shell {
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_typed:None,
+            #[cfg(feature = "desktop-wayland")]
+            help_search:desktop_bar::HelpSearch::default(),
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_width:std::cell::Cell::new(None),
             #[cfg(feature = "desktop-wayland")]

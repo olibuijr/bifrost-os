@@ -48,12 +48,12 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),HelpItem(Menu,usize),HelpTopic(String,Option<String>)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 #[cfg(feature = "desktop-wayland")]
-pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool}
+pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool}
 /// Row, separator and edge padding of a bar menu, in pt (the HIG groups menu items with separators).
 #[cfg(feature = "desktop-wayland")]
 const MENU_ROW_PT:f32=24.;
@@ -61,6 +61,9 @@ const MENU_ROW_PT:f32=24.;
 const MENU_SEP_PT:f32=11.;
 #[cfg(feature = "desktop-wayland")]
 const MENU_PAD_PT:f32=5.;
+/// Height of the Help menu's search field, in pt.
+#[cfg(feature = "desktop-wayland")]
+const HELP_FIELD_PT:f32=30.;
 /// The gap between the menu bar and an open menu (Golden Gate).
 #[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
@@ -80,13 +83,15 @@ pub(super) fn popup_damage_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach:
 }
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 #[cfg(feature = "desktop-wayland")]
-pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
+pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
 #[cfg(feature = "desktop-wayland")]
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Settings…","cmd+,"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 #[cfg(feature = "desktop-wayland")]
-impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false}}}
+impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false}}}
+#[cfg(feature = "desktop-wayland")]
+impl Row {fn search(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:true,header:false}} fn header(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:true}}}
 /// One row of a Photos menu: its title (with a check mark for a setting that is on), its key equivalent, and its
 /// action when the command can run now (greyed out otherwise).
 #[cfg(feature = "desktop-wayland")]
@@ -273,7 +278,11 @@ impl Shell {
             for ((ax,ay),(bx,by)) in strokes {for k in 0..=8 {let f=k as f32/8.;rect(s,ax+(bx-ax)*f-1.,ay+(by-ay)*f-1.,2.,2.);}}
         }else if label=="ethernet" {s.stroke_rrect(x-7.*p,y-7.*p,14.*p,10.*p,p,p,ink);rect(s,-1.,3.,2.,4.);rect(s,-9.,6.,18.,2.);for dx in [-9.,-1.,7.] {rect(s,dx,6.,2.,4.);}}else{for i in 0..3 {let w=(16-i*5) as f32;rect(s,-w/2.,-6.+i as f32*4.,w,2.);}rect(s,-1.,6.,2.,2.);}
     }
-    pub(super) fn menu_rows(&self,menu:Menu)->Vec<Row> {
+    /// The rows of a bar menu as drawn and navigated. The Help menu starts with its search field; typing replaces
+    /// its items with the grouped results.
+    pub(super) fn menu_rows(&self,menu:Menu)->Vec<Row> {if menu==Menu::Help {self.help_rows()} else {self.plain_rows(menu)}}
+    /// The rows of a bar menu without the Help search. The Help search also searches these.
+    pub(super) fn plain_rows(&self,menu:Menu)->Vec<Row> {
         let mut rows=self.own_menu_rows(menu);
         if self.photos_front(){rows=self.photo_overlay(menu,rows);}
         if let Screen::App(AppId::External(slot))=self.screen {
@@ -281,6 +290,94 @@ impl Shell {
             if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
         }
         rows
+    }
+    /// The Help menu's rows: the search field, then the menu's own items, or while a query is typed the grouped results.
+    fn help_rows(&self)->Vec<Row> {
+        let query=self.help_search.query.clone();
+        let mut rows=vec![Row::search(query.clone())];
+        if query.trim().is_empty() {rows.extend(self.plain_rows(Menu::Help));return rows;}
+        let entries=self.help_entries();
+        let hits:Vec<usize>=help_hits(&entries,&query).iter().filter_map(|(m,r)|entries.iter().position(|e|e.0==*m&&e.1==*r)).collect();
+        let topics=self.help_topics(&query);
+        for group in help_groups(&hits,topics.len()) {
+            rows.push(match group {
+                HelpRow::Header(title)=>Row::header(title),
+                HelpRow::Item(i)=>{let (menu,row,item)=&entries[i];let text=format!("{} \u{203a} {}",item.menu,item.title);if item.enabled {Row::action(text,Action::HelpItem(*menu,*row))} else {Row::label(text)}},
+                HelpRow::Topic(i)=>{let hit=&topics[i];Row::action(format!("{} \u{203a} {}",hit.app_name,hit.title),Action::HelpTopic(hit.app.clone(),hit.anchor.clone()))},
+            });
+        }
+        rows
+    }
+    /// Every menu row the Help search searches, with its menu and its row index in that menu's plain rows: the bar
+    /// menus of the shell and of the app in front.
+    fn help_entries(&self)->Vec<(Menu,usize,helpbook::MenuItem)> {
+        let mut menus:Vec<(Menu,String)>=vec![(Menu::App,self.app_menu_name()),(Menu::File,"File".to_string()),(Menu::Edit,"Edit".to_string())];
+        if self.photos_front(){menus.push((Menu::Image,"Image".to_string()));}
+        menus.extend([(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].map(|(m,t)|(m,t.to_string())));
+        menus.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),m.title.clone())));
+        let mut out=Vec::new();
+        for (menu,title) in &menus {
+            for (i,row) in self.plain_rows(*menu).iter().enumerate() {
+                if row.is_separator()||row.text.trim().is_empty() {continue;}
+                out.push((*menu,i,help_item(title,&row.text,row.action.is_some())));
+            }
+        }
+        out
+    }
+    /// The help topics the Help search finds: the front app's book and the system book.
+    fn help_topics(&self,query:&str)->Vec<helpbook::Hit> {
+        let hits=helpbook::with_index(std::path::Path::new(super::store::install::ROOT),|ix|ix.search(query,64));
+        help_topic_hits(hits,self.help_book_id().as_deref(),8)
+    }
+    /// The help book of the app in front: a hosted app's id, or a built-in app's id (its icon name is its id).
+    fn help_book_id(&self)->Option<String> {
+        match self.screen {
+            Screen::App(AppId::External(slot))=>self.ext.get(slot as usize).and_then(|h|h.as_ref()).map(|h|h.id.clone()),
+            Screen::App(app)=>super::apps().iter().find(|a|a.id==app).map(|a|a.icon.to_string()),
+            _=>None,
+        }
+    }
+    /// True when a point is on the Help menu's search field (a press there keeps the menu open).
+    fn help_field_at(&self,x:f32,y:f32)->bool {
+        let Some((left,top,w,h))=self.desktop_popup_rect() else {return false;};
+        if !(x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32) {return false;}
+        self.menu_row_at(Menu::Help,y-top as f32).is_some_and(|i|self.menu_rows(Menu::Help).get(i).is_some_and(|r|r.search))
+    }
+    /// Keys the Help search takes while the Help menu is open: typing adds to the query, Backspace removes from it, and
+    /// Escape clears a query. None for the keys the menu handles itself (arrows, Return, Escape with no query).
+    fn help_key(&mut self,code:u16)->Option<Vec<Effect>> {
+        match code {
+            14=>{if self.help_search.query.pop().is_some(){self.help_query_changed();}Some(vec![])},
+            1=>{if self.help_search.query.is_empty() {return None;}self.help_reset();self.help_query_changed();Some(vec![])},
+            103|108|105|106|28|96=>None,
+            _=>{let c=super::evkeys::char_for(code,false)?;if c.is_alphanumeric()||c==' ' {self.help_search.query.push(c);self.help_query_changed();Some(vec![])} else {None}},
+        }
+    }
+    /// The query changed: the first result is highlighted, and the pointer marker goes.
+    fn help_query_changed(&mut self) {
+        self.help_search.marker=false;
+        self.desktop_menu_row=None;
+        if !self.help_search.query.trim().is_empty() {if let Some(i)=self.menu_step(Menu::Help,1) {self.desktop_menu_row=Some((Menu::Help,i));}}
+        self.dirty=true;
+    }
+    /// Drops the Help search's query and marker: the menu closed, or the open menu changed.
+    fn help_reset(&mut self) {self.help_search=HelpSearch::default();}
+    /// Shift+Cmd+/ (`hwkeys`): opens the Help menu with its search field ready for typing.
+    pub(super) fn help_search_open(&mut self) {self.help_reset();self.desktop_menu=Some(Menu::Help);self.desktop_menu_row=None;self.dirty=true;}
+    /// The Help search field: a capsule with a magnifier, the query (or its placeholder) and a caret after the query.
+    fn draw_help_field(&self,s:&mut Surface,x:usize,y:usize,w:usize,top:f32,rh:f32,query:&str) {
+        let fx=x as f32+self.ui.pt(8.);let fy=y as f32+self.ui.pt(top+3.);
+        let fw=w as f32-self.ui.pt(16.);let fh=self.ui.pt(rh-6.);
+        s.fill_rrect(fx,fy,fw,fh,fh/2.,super::ui::FIELD_BG.now());
+        if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::Magnifyingglass,self.ui.pt(12.),SECONDARY) {s.blit(&im,(fx+self.ui.pt(9.)) as i32,(fy+fh/2.-im.h as f32/2.) as i32,255,255);}
+        let tx=(fx+self.ui.pt(28.)) as i32;
+        if query.is_empty() {
+            self.label("Search",13.,Weight::Regular,SECONDARY,|im|s.blit(im,tx,(fy+fh/2.-im.h as f32/2.) as i32,255,255));
+        } else {
+            self.label(query,13.,Weight::Regular,LABEL.now(),|im|s.blit(im,tx,(fy+fh/2.-im.h as f32/2.) as i32,255,255));
+            let cx=fx+self.ui.pt(28.)+self.measure_chrome(query,13.,Weight::Regular);
+            s.fill_rect(cx as usize,(fy+self.ui.pt(6.)) as usize,1,(fh-self.ui.pt(12.)).max(1.) as usize,LABEL.now());
+        }
     }
     fn own_menu_rows(&self,menu:Menu)->Vec<Row> {
         match menu {
@@ -418,9 +515,12 @@ impl Shell {
         let lead=16.;
         for (i,row) in rows.iter().enumerate(){let (top,rh)=spans[i];
             if row.sep{s.fill_rect(x+self.ui.pt(12.) as usize,(y as f32+self.ui.pt(top+rh/2.)) as usize,w.saturating_sub(self.ui.pt(24.) as usize),1,super::ui::SEPARATOR_C.now());continue;}
+            if row.search{self.draw_help_field(s,x,y,w,top,rh,&row.text);continue;}
+            if row.header{self.label(&row.text,10.,Weight::Regular,SECONDARY,|im|s.blit(im,x as i32+self.ui.pt(lead) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             let hi=sel==Some(i)&&row.action.is_some();
             if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::MENU_HIGHLIGHT);}
             let mid=y as f32+self.ui.pt(top+rh/2.);
+            if hi&&self.help_search.marker {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(10.),super::ui::MENU_HIGHLIGHT_TEXT) {s.blit(&im,x as i32+self.ui.pt(6.) as i32,(mid-im.h as f32/2.) as i32,255,255);}}
             let ink=if row.action.is_some(){if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{LABEL.now()}}else{SECONDARY};
             if let Some(sym)=row.symbol{if let Some(im)=self.ui.symbols.render(sym,self.ui.pt(15.),ink){s.blit(&im,x as i32+self.ui.pt(lead+7.5) as i32-im.w as i32/2,(mid-im.h as f32/2.) as i32,255,255);}}
             let text_x=(if row.symbol.is_some(){lead+20.}else{lead})+if row.indent{12.}else{0.};
@@ -439,11 +539,12 @@ impl Shell {
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
             Event::Down(x,y) if self.clock_hit(x,y)&&self.desktop_menu.is_none()&&self.desk.is_some()=>{if self.notify.center.is_hidden(){self.open_notification_center(t);}else{self.notify.center.hide();}self.dirty=true;Some(vec![])},
-            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.open_control_center(t);}self.dirty=true;Some(vec![])},
+            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.open_control_center(t);}self.dirty=true;Some(vec![])},
             Event::Down(x,y) if self.desktop_menu.is_some()=>{if !self.desktop_popup_rect().is_some_and(|(left,top,w,h)|x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32){self.desktop_menu=None;self.dirty=true;}Some(vec![])},
             Event::Up(x,y) if self.desktop_menu.is_some()=>{let menu=self.desktop_menu.unwrap();if y<self.desktop_bar_height() as f32{return Some(vec![]);}
+                if self.desktop_menu==Some(Menu::Help)&&self.help_field_at(x,y) {return Some(vec![]);}
                 let action=self.desktop_popup_rect().and_then(|(left,top,w,h)|if x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32 {self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()))}else{None});
-                self.desktop_menu=None;self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
+                self.desktop_menu=None;self.help_reset();self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
             },_=>None,
         }
     }
@@ -456,7 +557,7 @@ impl Shell {
         let width=self.menu_width_measured(rows);self.desktop_menu_width.set(Some((key,width)));width
     }
     fn menu_width_measured(&self,rows:&[Row])->usize {
-        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
+        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().filter(|r|!r.search).map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
         need.max(self.ui.pt(264.)).ceil() as usize
     }
     /// The row under `rel` px below the popup's top edge (separators count as rows, but have no action).
@@ -464,21 +565,21 @@ impl Shell {
     pub(super) fn menu_row_of(&self,menu:Menu)->Option<usize> {self.desktop_menu_row.filter(|(m,_)|*m==menu).map(|(_,i)|i)}
     /// Move the highlight to the next row with an action in direction `dir`, wrapping (Full Keyboard Access, HIG "The menu bar").
     pub(super) fn menu_step(&self,menu:Menu,dir:i32)->Option<usize> {
-        let rows=self.menu_rows(menu);let n=rows.len() as i32;if n==0{return None;}
-        let start=self.menu_row_of(menu).map_or(if dir>0{-1}else{n},|i|i as i32);
-        (1..=n).map(|k|(start+dir*k).rem_euclid(n) as usize).find(|&i|rows[i].action.is_some())
+        let selectable:Vec<bool>=self.menu_rows(menu).iter().map(|r|r.action.is_some()).collect();
+        step_index(&selectable,self.menu_row_of(menu),dir)
     }
     /// Keys while a bar menu is open: Up/Down move, Left/Right switch menus, Return chooses, Esc closes. None when no menu is open.
     pub(super) fn desktop_menu_key(&mut self,code:u16,t:f64)->Option<Vec<Effect>> {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}
         if menu==Menu::Document{self.doc_key(code,t);return Some(vec![]);}
+        if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
         let mut bar=vec![Menu::System,Menu::App];bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,_)|Menu::Custom(i as u8)));bar.extend([Menu::File,Menu::Edit]);if self.photos_front(){bar.push(Menu::Image);}bar.extend([Menu::View,Menu::Window,Menu::Help]);
         self.dirty=true;
         match code {
             103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));}},
-            105|106=>{if let Some(at)=bar.iter().position(|m|*m==menu){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;}},
-            28|96=>{let action=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()));if let Some(action)=action{self.desktop_menu=None;self.desktop_menu_row=None;return Some(self.run_menu_action(action,t));}},
-            1=>{self.desktop_menu=None;self.desktop_menu_row=None;},
+            105|106=>{if let Some(at)=bar.iter().position(|m|*m==menu){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;self.help_reset();}},
+            28|96=>{let action=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()));if let Some(action)=action{self.desktop_menu=None;self.desktop_menu_row=None;self.help_reset();return Some(self.run_menu_action(action,t));}},
+            1=>{self.desktop_menu=None;self.desktop_menu_row=None;self.help_reset();},
             _=>{if let Some(c)=super::evkeys::char_for(code,false).filter(|c|c.is_alphanumeric()){self.menu_type_select(menu,c,t);}},
         }
         Some(vec![])
@@ -497,10 +598,12 @@ impl Shell {
     pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {
         let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Context|Menu::Document){return;}
         if y<self.desktop_bar_height() as f32 {
-            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {if b.0!=menu&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.dirty=true;}}
+            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {if b.0!=menu&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
             return;
         }
         let row=self.desktop_popup_rect().and_then(|(l,t,w,h)|if x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32{self.menu_row_at(menu,y-t as f32)}else{None}).filter(|i|self.menu_rows(menu).get(*i).is_some_and(|r|r.action.is_some()));
+        // a Menu Items result opens the menu it lives in and highlights its item there, with the pointer marker
+        if menu==Menu::Help {if let Some(i)=row {if let Some(Action::HelpItem(target,j))=self.menu_rows(menu).get(i).and_then(|r|r.action.clone()) {if target!=Menu::Help {self.help_reset();self.help_search.marker=true;self.desktop_menu=Some(target);self.desktop_menu_row=Some((target,j));self.dirty=true;return;}}}}
         let new=row.map(|i|(menu,i));if self.desktop_menu_row!=new{self.desktop_menu_row=new;self.dirty=true;}
     }
     /// Carry out a chosen menu row (a click or Return). The menu is already closed.
@@ -546,6 +649,8 @@ impl Shell {
                     Action::RecordStop=>self.recording_stop_from_menu(),
                     Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
                     Action::PhotoEditWith(key)=>self.photo_edit_with_viewed(&key,t),
+                    Action::HelpItem(menu,i)=>{if let Some(a)=self.plain_rows(menu).get(i).and_then(|r|r.action.clone()) {effects.extend(self.run_menu_action(a,t));}},
+                    Action::HelpTopic(app,anchor)=>super::helpbook::open_help(&app,anchor.as_deref()),
                 }effects
     }
     /// Runs a Photos command from a menu row or a key equivalent, and opens the print sheet when it asked for one.
