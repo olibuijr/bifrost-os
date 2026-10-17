@@ -31,6 +31,7 @@ pub mod plutil;
 pub mod pasteboard;
 pub mod ping6;
 pub mod pmset;
+pub mod route;
 pub mod purge;
 pub mod say;
 pub mod shortcuts;
