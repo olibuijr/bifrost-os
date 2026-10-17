@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.12.0 — 2026-10-17
+
+- Add a Run Script step: runs a line of the BifrOSt script language with the previous output as the first item of argv. Notifications from the script are shown; dialogs, other apps and shell commands are refused with a reason.
+
 ## 1.11.3 — 2026-10-14
 
 - Use the shared extra-small spacing token for the shortcut step connector gap.

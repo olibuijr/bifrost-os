@@ -37,6 +37,9 @@ pub const COPY_CHOICES: [&str; 4] = ["Thanks", "Be right back", "On my way", "Se
 pub const FOLDER_CHOICES: [&str; 5] = ["Desktop", "Documents", "Downloads", "Pictures", "Music"];
 /// The commands a "Run Shell Script" step can run.
 pub const SCRIPT_CHOICES: [&str; 4] = ["date", "uptime", "df -h /", "free -h"];
+/// The source a new "Run Script" step starts with: it outputs its input, which the script gets as the first item of
+/// `argv`. Steps are one line, so `\n` stands for a line break (see `script_source`).
+pub const DEFAULT_SCRIPT: &str = "on run argv\\nreturn item 1 of argv\\nend";
 /// The glyphs a tile can show, by symbol name. Index 0 is the plain Shortcuts mark and has no symbol name.
 pub const GLYPHS: [&str; 21] = [
     "", "star", "house", "clock", "music.note", "photo", "film", "envelope", "phone", "calendar", "globe", "bookmark", "flag",
@@ -168,6 +171,8 @@ pub enum Action {
     OpenFolder(String),
     /// runs one of `SCRIPT_CHOICES` in a shell
     RunScript(String),
+    /// runs this BifrOSt script; the previous output is the first item of `argv`, and the script's result is the output
+    Script(String),
     /// outputs this text; `{Name}` stands for a variable and `{Output}` for the previous output
     Text(String),
     /// asks the user this question and outputs the answer
@@ -194,7 +199,7 @@ pub enum Action {
 }
 
 /// The kinds the "Add Action" list offers, in order.
-pub const KINDS: [&str; 21] = [
+pub const KINDS: [&str; 22] = [
     "Set Wi-Fi",
     "Set Low Power Mode",
     "Set Do Not Disturb",
@@ -216,6 +221,7 @@ pub const KINDS: [&str; 21] = [
     "Repeat",
     "Repeat with Each",
     "Stop",
+    "Run Script",
 ];
 
 /// The next or previous of `choices` after `cur` (wrapping). A `cur` that is not one of them counts as the first choice.
@@ -329,6 +335,7 @@ impl Action {
             18 => Action::Repeat(2),
             19 => Action::RepeatEach,
             20 => Action::Stop,
+            21 => Action::Script(DEFAULT_SCRIPT.into()),
             _ => Action::Timer(5),
         }
     }
@@ -357,6 +364,7 @@ impl Action {
             Action::CopyText(_) => KINDS[8],
             Action::OpenFolder(_) => KINDS[9],
             Action::RunScript(_) => KINDS[10],
+            Action::Script(_) => KINDS[21],
             Action::Text(_) => KINDS[11],
             Action::AskInput(_) => KINDS[12],
             Action::GetUrl(_) => KINDS[13],
@@ -391,6 +399,7 @@ impl Action {
             | Action::CopyText(m)
             | Action::OpenFolder(m)
             | Action::RunScript(m)
+            | Action::Script(m)
             | Action::Text(m)
             | Action::AskInput(m)
             | Action::GetUrl(m)
@@ -438,6 +447,7 @@ impl Action {
             | Action::SaveFile(_)
             | Action::ShowResult(_)
             | Action::SetVariable(_)
+            | Action::Script(_)
             | Action::Otherwise
             | Action::EndIf
             | Action::EndRepeat
@@ -457,6 +467,7 @@ impl Action {
                 | Action::SaveFile(_)
                 | Action::ShowResult(_)
                 | Action::SetVariable(_)
+                | Action::Script(_)
                 | Action::Otherwise
                 | Action::EndIf
                 | Action::EndRepeat
@@ -474,7 +485,8 @@ impl Action {
             | Action::GetUrl(t)
             | Action::SaveFile(t)
             | Action::ShowResult(t)
-            | Action::SetVariable(t) => Some(t),
+            | Action::SetVariable(t)
+            | Action::Script(t) => Some(t),
             Action::If(c) => c.text(),
             _ => None,
         }
@@ -484,7 +496,7 @@ impl Action {
     /// `clean_url`). False, and nothing changes, when the step has no free text or nothing is left after cleaning.
     pub fn set_text(&mut self, s: &str) -> bool {
         let (slot, clean): (&mut String, Clean) = match self {
-            Action::Text(t) | Action::AskInput(t) | Action::ShowResult(t) => (t, clean_text as Clean),
+            Action::Text(t) | Action::AskInput(t) | Action::ShowResult(t) | Action::Script(t) => (t, clean_text as Clean),
             Action::GetUrl(t) => (t, clean_url as Clean),
             Action::SaveFile(t) => (t, clean_file as Clean),
             Action::SetVariable(t) => (t, clean_var as Clean),
@@ -524,6 +536,7 @@ impl Action {
             Action::CopyText(m) => format!("copy:{m}"),
             Action::OpenFolder(m) => format!("folder:{m}"),
             Action::RunScript(m) => format!("script:{m}"),
+            Action::Script(t) => format!("osa:{}", esc(t)),
             Action::Text(t) => format!("text:{}", esc(t)),
             Action::AskInput(t) => format!("ask:{}", esc(t)),
             Action::GetUrl(t) => format!("url:{}", esc(t)),
@@ -559,6 +572,7 @@ impl Action {
             "copy" => Action::CopyText(choice(&COPY_CHOICES, v)?),
             "folder" => Action::OpenFolder(choice(&FOLDER_CHOICES, v)?),
             "script" => Action::RunScript(choice(&SCRIPT_CHOICES, v)?),
+            "osa" => Action::Script(free(v, clean_text)?),
             "text" => Action::Text(free(v, clean_text)?),
             "ask" => Action::AskInput(free(v, clean_text)?),
             "url" => Action::GetUrl(free(v, clean_url)?),
@@ -1322,6 +1336,18 @@ mod tests {
         let mut top = Action::Repeat(MAX_REPEAT);
         top.step(true);
         assert_eq!(top, Action::Repeat(MAX_REPEAT));
+    }
+
+    #[test]
+    fn run_script_step_round_trips_and_starts_with_the_pass_through_script() {
+        assert_eq!(Action::of_kind(21).title(), "Run Script");
+        assert_eq!(Action::of_kind(21), Action::Script(DEFAULT_SCRIPT.into()));
+        let step = Action::Script("return item 1 of argv: 50%; done".into());
+        let list = vec![Shortcut::new("Calc", 0, vec![step.clone()])];
+        let back = parse(&serialize(&list));
+        assert_eq!(back[0].actions, vec![step]);
+        assert!(Action::Script("x".into()).text() == Some("x"));
+        assert!(!Action::Script("x".into()).adjustable());
     }
 
     #[test]
