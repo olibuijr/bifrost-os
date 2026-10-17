@@ -87,6 +87,7 @@ const MENU_EXPORT: u32 = 25;
 const MENU_PRINT: u32 = 26;
 const MENU_VALIDATE_FILE: u32 = 27;
 const MENU_EXPORT_FOLDER: u32 = 28;
+const MENU_SMART_ITALIC: u32 = 29;
 /// The library items of the menu: this id plus the library's index in `model::library_names`.
 const MENU_LIBRARY_BASE: u32 = 100;
 
@@ -877,6 +878,7 @@ impl App for FontBookApp {
                 AppMenuItem::new(MENU_SMART_STATIC, "Static Fonts").depth(1),
                 AppMenuItem::new(MENU_SMART_TTF, "TrueType Fonts").depth(1),
                 AppMenuItem::new(MENU_SMART_OTF, "OpenType Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_ITALIC, "Italic Fonts").depth(1),
                 AppMenuItem::new(MENU_SMART_NAME, "Name Contains Search Text").enabled(has_query).depth(1),
                 AppMenuItem::new(MENU_RENAME, "Rename Collection").enabled(collection),
                 AppMenuItem::new(MENU_DELETE, "Delete Collection").enabled(collection),
@@ -929,6 +931,7 @@ impl App for FontBookApp {
             MENU_SMART_STATIC => self.new_smart(&data, Rule::Static),
             MENU_SMART_TTF => self.new_smart(&data, Rule::TrueType),
             MENU_SMART_OTF => self.new_smart(&data, Rule::OpenType),
+            MENU_SMART_ITALIC => self.new_smart(&data, Rule::Italic),
             MENU_SMART_NAME => {
                 let text = self.query.trim().to_string();
                 if !text.is_empty() {

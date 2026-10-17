@@ -9,6 +9,7 @@ use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
+use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
@@ -34,6 +35,10 @@ const MENU_SMALLER: u32 = 14;
 const MENU_ACTUAL_SIZE: u32 = 15;
 const MENU_PRINT: u32 = 16;
 const MENU_OPEN_FOLDER: u32 = 17;
+const MENU_NEW_WINDOW: u32 = 18;
+
+/// The size of a window opened with File > New Window, in points.
+const NEW_WINDOW_PT: (f32, f32) = (480.0, 560.0);
 
 /// Most suggestions listed under the search field.
 const SUGGESTIONS: usize = 12;
@@ -144,6 +149,15 @@ struct DictionaryApp {
     rows_top: f32,
     /// Whether a word has a definition in an enabled dictionary; links in definitions use it.
     known: HashMap<String, bool>,
+    /// The windows opened with File > New Window, in the order they were opened. The main window is `self`.
+    windows: Vec<ExtraWindow>,
+}
+
+/// A window opened with File > New Window. It is a whole lookup of its own (query, answer, history, scope, find), so
+/// Back and Forward in one window never move another.
+struct ExtraWindow {
+    id: WindowId,
+    app: DictionaryApp,
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -173,7 +187,25 @@ impl DictionaryApp {
             drag: None,
             rows_top: 0.0,
             known: HashMap::new(),
+            windows: Vec::new(),
         }
+    }
+
+    /// Opens a window with an empty lookup. It loads the dictionaries and the stored choices the way the main window does.
+    fn open_new_window(&mut self, ctx: &Ctx) -> bool {
+        let (w, h) = NEW_WINDOW_PT;
+        let Ok(id) = ctx.open_window(WindowSpec::new("Dictionary", w, h)) else { return false };
+        let mut app = DictionaryApp::new();
+        app.configure(ctx);
+        self.windows.push(ExtraWindow { id, app });
+        true
+    }
+
+    /// Drops the state of a window the shell or the app closed. Returns true when one was dropped.
+    fn close_extra(&mut self, window: WindowId) -> bool {
+        let before = self.windows.len();
+        self.windows.retain(|e| e.id != window);
+        self.windows.len() != before
     }
 
     /// True when an enabled dictionary defines `word`. The answer is remembered until the dictionary choices change.
@@ -633,7 +665,9 @@ impl DictionaryApp {
             AppMenuItem::new(MENU_SMALLER, "Smaller Text").key("cmd+-").enabled(self.prefs.step > model::MIN_STEP),
             AppMenuItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(self.prefs.step != 0),
         ];
+        let file = vec![AppMenuItem::new(MENU_NEW_WINDOW, "New Window").key("cmd+n")];
         vec![
+            AppMenu { title: "File".into(), items: file },
             AppMenu { title: "Dictionary".into(), items: dictionary },
             AppMenu { title: "Go".into(), items: go },
             AppMenu { title: "View".into(), items: view },
@@ -778,6 +812,7 @@ impl App for DictionaryApp {
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
+            MENU_NEW_WINDOW => self.open_new_window(ctx),
             MENU_LOOK_UP_CLIPBOARD => self.look_up_clipboard(ctx),
             MENU_COPY_DEFINITION => {
                 self.copy_definition(ctx);
@@ -838,16 +873,47 @@ impl App for DictionaryApp {
         Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&format!("{word}: {text}")))
     }
 
-    fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let mut redraw = false;
         if self.scroll.animating() {
             self.scroll.tick(t);
-            return true;
+            redraw = true;
         }
-        false
+        for e in &mut self.windows {
+            redraw |= e.app.tick(ctx, t);
+        }
+        redraw
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.scroll.animating().then_some(t + 16.0)
+        let own = self.scroll.animating().then_some(t + 16.0);
+        self.windows.iter().filter_map(|e| e.app.next_wake(t)).chain(own).reduce(f64::min)
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        // the keyboard, the menus and the clipboard belong to the main window; a window takes its touches
+        let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
+        match ev {
+            Input::Touch { .. } => e.app.event(ctx, ev),
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut bifrost_app::kit::Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        match self.windows.iter_mut().find(|e| e.id == window) {
+            Some(e) => e.app.draw(ctx, s, t),
+            None => Damage::new(s.w, s.h),
+        }
+    }
+
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.close_extra(window)
     }
 
     fn draws_canvas(&self) -> bool {
@@ -1020,4 +1086,34 @@ impl App for DictionaryApp {
 
 fn main() {
     bifrost_app::run(DictionaryApp::new());
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    #[test]
+    fn each_window_keeps_its_own_history() {
+        let mut main = DictionaryApp::new();
+        let mut other = DictionaryApp::new();
+        main.look_up("cat");
+        main.look_up("dog");
+        assert!(main.history.can_back());
+        assert!(!other.history.can_back());
+        other.look_up("ox");
+        assert!(!other.history.can_back(), "one look-up in a window leaves nothing to go back to");
+        assert!(main.history.can_back());
+    }
+
+    #[test]
+    fn a_closed_window_is_dropped_once_and_unknown_ids_change_nothing() {
+        let mut app = DictionaryApp::new();
+        app.windows.push(ExtraWindow { id: WindowId(1), app: DictionaryApp::new() });
+        app.windows.push(ExtraWindow { id: WindowId(2), app: DictionaryApp::new() });
+        assert!(!app.close_extra(WindowId(9)));
+        assert_eq!(app.windows.len(), 2);
+        assert!(app.close_extra(WindowId(1)));
+        assert!(!app.close_extra(WindowId(1)), "a window is removed once");
+        assert_eq!(app.windows.iter().map(|e| e.id).collect::<Vec<_>>(), vec![WindowId(2)]);
+    }
 }

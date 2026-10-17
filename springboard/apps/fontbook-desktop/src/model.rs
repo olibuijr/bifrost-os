@@ -53,6 +53,8 @@ pub enum Rule {
     TrueType,
     /// the file is `.otf`
     OpenType,
+    /// the file is an italic or oblique face (the file name says so)
+    Italic,
     /// the family or file name contains the text (ignoring case)
     NameContains(String),
 }
@@ -66,6 +68,7 @@ impl Rule {
             Rule::Static => "static".to_string(),
             Rule::TrueType => "ttf".to_string(),
             Rule::OpenType => "otf".to_string(),
+            Rule::Italic => "italic".to_string(),
             Rule::NameContains(t) => format!("name:{}", clean(t)),
         }
     }
@@ -78,6 +81,7 @@ impl Rule {
             "static" => Some(Rule::Static),
             "ttf" => Some(Rule::TrueType),
             "otf" => Some(Rule::OpenType),
+            "italic" => Some(Rule::Italic),
             _ => text.strip_prefix("name:").map(clean).filter(|t| !t.is_empty()).map(Rule::NameContains),
         }
     }
@@ -90,6 +94,7 @@ impl Rule {
             Rule::Static => "Static".to_string(),
             Rule::TrueType => "TrueType".to_string(),
             Rule::OpenType => "OpenType".to_string(),
+            Rule::Italic => "Italic".to_string(),
             Rule::NameContains(t) => format!("Name Contains {t}"),
         }
     }
@@ -101,6 +106,10 @@ impl Rule {
             Rule::Static => !f.variable,
             Rule::TrueType => f.path.to_lowercase().ends_with(".ttf"),
             Rule::OpenType => f.path.to_lowercase().ends_with(".otf"),
+            Rule::Italic => {
+                let file = Path::new(&f.path).file_stem().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+                file.contains("italic") || file.contains("oblique")
+            }
             Rule::NameContains(t) => matches_query(f, t),
         }
     }
@@ -845,6 +854,19 @@ mod tests {
         assert!(lib.members("Work").is_none());
         assert!(lib.rename_collection("Office", "OFFICE"), "case-only change is allowed");
         assert_eq!(lib.collection_names(), ["OFFICE", "Play"]);
+    }
+
+    #[test]
+    fn italic_rule_matches_italic_and_oblique_file_names() {
+        let mut lib = sample();
+        let italic = fam("Plex", "/home/u/.local/share/fonts/IBMPlexSans-BoldItalic.ttf", false, false);
+        let oblique = fam("Plex", "/home/u/.local/share/fonts/IBMPlexSans-Oblique.ttf", false, false);
+        let upright = fam("Plex", "/home/u/.local/share/fonts/IBMPlexSans-Bold.ttf", false, false);
+        assert!(Rule::Italic.matches(&italic));
+        assert!(Rule::Italic.matches(&oblique));
+        assert!(!Rule::Italic.matches(&upright));
+        assert_eq!(Rule::parse(&Rule::Italic.to_text()), Some(Rule::Italic));
+        assert!(lib.create_smart("Italics", Rule::Italic));
     }
 
     #[test]
