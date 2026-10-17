@@ -625,6 +625,7 @@ pub mod uttype_declarations;
 pub mod accessible_look;
 pub mod shared_list;
 pub mod recipient_recents;
+pub mod recipient_autocomplete;
 pub mod preview;
 pub mod preview_manifest;
 pub mod preview_view;
