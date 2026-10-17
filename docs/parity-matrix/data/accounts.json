@@ -40,7 +40,7 @@
       "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult",
       "bifrost": "springboard/sdk/src/accounts.rs (AccountStore::renew_credentials)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 26 tests. Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed. Built 2026-10-17: token expiry check: Credential::needs_renewal(now, margin) (OAuth 2 only) and AccountStore::renewal_due(identifier, now, margin), so an app renews before a request fails; tests an_oauth2_credential_needs_renewal_inside_the_margin and renewal_due_checks_the_saved_credential (springboard/sdk/src/accounts.rs)."
     },
     {
       "feature": "Sign-in and account creation prompts",

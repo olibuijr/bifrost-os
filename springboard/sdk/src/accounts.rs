@@ -70,6 +70,15 @@ impl Credential {
         self.expiry_date().is_some_and(|expiry| now >= expiry)
     }
 
+    /// Whether an OAuth 2 credential expires within `margin` of `now`, or has expired, so the app renews it before a
+    /// request fails. An OAuth 1 credential never needs renewal.
+    pub fn needs_renewal(&self, now: SystemTime, margin: Duration) -> bool {
+        match self.expiry_date() {
+            Some(expiry) => now.checked_add(margin).map_or(true, |horizon| horizon >= expiry),
+            None => false,
+        }
+    }
+
     /// The credential as bytes for a keychain item: a tag, then each string as a u32 big-endian length and its bytes,
     /// then (OAuth 2) the expiry as whole seconds since the Unix epoch in a u64 big-endian. Sub-second precision is lost.
     pub fn encode(&self) -> Vec<u8> {
@@ -418,6 +427,12 @@ impl AccountStore {
     pub fn credential(&self, identifier: &str) -> Result<&Credential, AccountError> {
         let account = self.account(identifier).ok_or(AccountError::NotFound)?;
         account.credential.as_ref().ok_or(AccountError::CredentialNotFound)
+    }
+
+    /// Whether a saved account's credential needs renewal within `margin` of `now` (see [`Credential::needs_renewal`]).
+    /// Checks the account (`NotFound`) and its credential (`CredentialNotFound`) first.
+    pub fn renewal_due(&self, identifier: &str, now: SystemTime, margin: Duration) -> Result<bool, AccountError> {
+        Ok(self.credential(identifier)?.needs_renewal(now, margin))
     }
 
     /// `renewCredentials(for:completion:)`: applies the service's answer to a saved account's credential. `Renewed`
@@ -1094,6 +1109,23 @@ mod tests {
         account.credential = Some(Credential::oauth2("old", "r1", at(1_000)));
         let id = store.save(account).unwrap();
         (store, id)
+    }
+
+    #[test]
+    fn an_oauth2_credential_needs_renewal_inside_the_margin() {
+        let c = Credential::oauth2("t", "r", at(1_000));
+        assert!(c.needs_renewal(at(900), Duration::from_secs(100)));
+        assert!(!c.needs_renewal(at(899), Duration::from_secs(100)));
+        assert!(c.needs_renewal(at(1_500), Duration::ZERO), "an expired credential needs renewal");
+        assert!(!Credential::oauth("t", "s").needs_renewal(at(u64::MAX / 4), Duration::from_secs(1)), "OAuth 1 never expires");
+    }
+
+    #[test]
+    fn renewal_due_checks_the_saved_credential() {
+        let (store, id) = renewal_store();
+        assert_eq!(store.renewal_due(&id, at(950), Duration::from_secs(100)), Ok(true));
+        assert_eq!(store.renewal_due(&id, at(800), Duration::from_secs(100)), Ok(false));
+        assert_eq!(store.renewal_due("missing", at(0), Duration::ZERO), Err(AccountError::NotFound));
     }
 
     #[test]
