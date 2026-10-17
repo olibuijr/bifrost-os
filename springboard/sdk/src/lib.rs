@@ -249,6 +249,8 @@ pub mod audio_player_control;
 pub mod now_playing;
 /// Media library queries over the records an app supplies (`bifrost_ui::media_query`).
 pub mod media_library;
+/// The media picker as a list of rows and a footer count (`bifrost_ui::media_picker`); draws nothing.
+pub mod media_picker_view;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
