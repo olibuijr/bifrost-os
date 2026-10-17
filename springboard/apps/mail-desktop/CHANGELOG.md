@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.0 — 2026-10-17
+
+Drafts:
+
+- Drafts go to the server's own Drafts mailbox when it is flagged `\Drafts` (RFC 6154), and to the fixed Drafts name
+  otherwise.
+- Message > Edit Draft (in the Drafts mailbox) reopens a saved draft in a compose sheet with its addresses, subject,
+  text, files and threading headers. Saving it again replaces the saved copy.
+
+HTML mail:
+
+- Inline `cid:` images resolve to the message's own picture parts in the sanitiser. Scripts, forms and event handlers
+  stay removed and remote images stay blocked. The reader does not draw images yet.
+
 ## 0.13.0 — 2026-10-17
 
 Viewer windows:
