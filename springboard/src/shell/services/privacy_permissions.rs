@@ -25,7 +25,7 @@ use bifrost_core::json::Json;
 use bifrost_ui::capture_access::{CaptureAccess, Error, Media, Status};
 use bifrost_ui::location_auth::{AuthorizationStatus, Level, RequestOutcome, UsageDescriptions};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Most sheets waiting behind the one on screen. A request past this is dropped; the app asks again later.
 pub const MAX_QUEUED_PROMPTS: usize = 8;
@@ -34,6 +34,16 @@ thread_local! {
     static STORE: RefCell<BTreeMap<String, CaptureAccess>> = RefCell::new(BTreeMap::new());
     static LOCATION: RefCell<BTreeMap<String, AuthorizationStatus>> = RefCell::new(BTreeMap::new());
     static PROMPTS: RefCell<VecDeque<Prompt>> = RefCell::new(VecDeque::new());
+    /// Apps whose location grant is Allow Once: they lose it when the app quits (see `expire_once`).
+    static ONCE: RefCell<BTreeSet<String>> = RefCell::new(BTreeSet::new());
+}
+
+/// The answer to a location request: Allow Once (until the app quits), Allow While Using App, or Don't Allow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Grant {
+    Once,
+    WhileUsing,
+    Deny,
 }
 
 /// Which permission an app asked for: location, or one capture media type.
@@ -70,6 +80,8 @@ pub struct Prompt {
     pub app_id: String,
     pub app_name: String,
     pub kind: Kind,
+    /// The manifest's `[privacy] location` text, shown on the sheet (empty for media requests).
+    pub purpose: String,
 }
 
 /// Which of the sheet's two permission kinds an answer to `method` needs: a location prompt when the reply is
@@ -86,13 +98,13 @@ pub fn wants_prompt(method: &str, params: &Json, reply: &Json) -> Option<Kind> {
 
 /// Queues a sheet for an app's request. A repeat of a request already waiting is not queued twice, and the queue
 /// holds at most [`MAX_QUEUED_PROMPTS`].
-pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind) {
+pub fn queue_prompt(app_id: &str, app_name: &str, kind: Kind, purpose: &str) {
     PROMPTS.with(|q| {
         let mut q = q.borrow_mut();
         if q.iter().any(|p| p.app_id == app_id && p.kind == kind) || q.len() >= MAX_QUEUED_PROMPTS {
             return;
         }
-        q.push_back(Prompt { app_id: app_id.to_string(), app_name: app_name.to_string(), kind });
+        q.push_back(Prompt { app_id: app_id.to_string(), app_name: app_name.to_string(), kind, purpose: purpose.to_string() });
     });
 }
 
@@ -120,14 +132,53 @@ pub fn take_prompt() -> Option<Prompt> {
 /// Writes the person's answer to a sheet: Allow is `allowed`, Don't Allow is not. The same rules as the Settings
 /// switches apply (a restricted location keeps its status).
 pub fn decide(prompt: &Prompt, allowed: bool) {
+    decide_grant(prompt, if allowed { Grant::WhileUsing } else { Grant::Deny });
+}
+
+/// Writes the person's sheet answer: `grant` for a location request; for a media request only `Deny` refuses and
+/// anything else allows (the media store has no session-only grant).
+pub fn decide_grant(prompt: &Prompt, grant: Grant) {
     match prompt.kind {
         Kind::Location => {
-            set_location_by_user(&prompt.app_id, allowed);
+            set_location_grant(&prompt.app_id, grant);
         }
         Kind::Media(m) => {
-            let _ = set_by_user(&prompt.app_id, m, allowed);
+            let _ = set_by_user(&prompt.app_id, m, grant != Grant::Deny);
         }
     }
+}
+
+/// Writes a location grant. Allow Once and Allow While Using both make the app authorized while in use; Allow Once is
+/// also remembered so `expire_once` can take it back. A restricted app keeps its status.
+pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
+    let current = location_status(app_id);
+    if current == AuthorizationStatus::Restricted {
+        return current;
+    }
+    let next = if grant == Grant::Deny { AuthorizationStatus::Denied } else { AuthorizationStatus::AuthorizedWhenInUse };
+    ONCE.with(|o| {
+        let mut o = o.borrow_mut();
+        if grant == Grant::Once {
+            o.insert(app_id.to_string());
+        } else {
+            o.remove(app_id);
+        }
+    });
+    LOCATION.with(|s| {
+        s.borrow_mut().insert(app_id.to_string(), next);
+    });
+    next
+}
+
+/// Takes back every Allow Once grant whose app is no longer running (`is_running`): the app's location goes back to
+/// not asked, so its next request shows the sheet again. Returns the apps it reset.
+pub fn expire_once(is_running: impl Fn(&str) -> bool) -> Vec<String> {
+    let gone: Vec<String> = ONCE.with(|o| o.borrow().iter().filter(|a| !is_running(a.as_str())).cloned().collect());
+    for app in &gone {
+        ONCE.with(|o| o.borrow_mut().remove(app));
+        LOCATION.with(|s| s.borrow_mut().remove(app));
+    }
+    gone
 }
 
 /// The location status of one app (a new app has not been asked yet).
@@ -138,15 +189,7 @@ pub fn location_status(app_id: &str) -> AuthorizationStatus {
 /// The person's location switch for one app: on allows location while the app is in use, off refuses it. A restricted
 /// app keeps the status it has, so the switch shows the answer that stands.
 pub fn set_location_by_user(app_id: &str, allowed: bool) -> AuthorizationStatus {
-    let current = location_status(app_id);
-    if current == AuthorizationStatus::Restricted {
-        return current;
-    }
-    let next = if allowed { AuthorizationStatus::AuthorizedWhenInUse } else { AuthorizationStatus::Denied };
-    LOCATION.with(|s| {
-        s.borrow_mut().insert(app_id.to_string(), next);
-    });
-    next
+    set_location_grant(app_id, if allowed { Grant::WhileUsing } else { Grant::Deny })
 }
 
 /// The wire name of a location status.
@@ -259,8 +302,9 @@ impl SystemService for PrivacyPermissions {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        let purpose = manifest_location_purpose(app_id);
         if method == "location_request" {
-            location_purpose_gate(&manifest_location_purpose(app_id))?;
+            location_purpose_gate(&purpose)?;
         }
         let reply = answer(app_id, method, params)?;
         if let Some(kind) = wants_prompt(method, params, &reply) {
@@ -268,8 +312,7 @@ impl SystemService for PrivacyPermissions {
                 .iter()
                 .find(|a| a.manifest.id == app_id)
                 .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
-            queue_prompt(app_id, &name, kind);
-        }
+            queue_prompt(app_id, &name, kind, if kind == Kind::Location { purpose.trim() } else { "" });
         Ok(reply)
     }
 }
