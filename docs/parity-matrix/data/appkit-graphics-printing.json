@@ -4,7 +4,7 @@
  "macos_since": "10.0",
  "status": "partial",
  "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs",
- "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. There is no NSImage drawing in the kit, no colour picker that uses colour lists, and no print sheet.",
+ "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. The kit does not yet draw NSImage objects in a tint, no colour picker uses colour lists, and the Page Setup sheet is missing; a shell print sheet with printer, paper, orientation, scale and copies rows exists.",
  "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
  "features": [
   {
@@ -26,7 +26,7 @@
    "apple": "NSPDFImageRep, PDF content in NSImage",
    "bifrost": "springboard/sdk/src/graphics_pdf.rs (open a PDF for pages, size and a rasterised page; writer); springboard/ui/src/pdfpage.rs (page boxes, rotation, aspect-fit); springboard/src/shell/books/engine/pdf/mod.rs",
    "status": "partial",
-   "note": "Apps can open a PDF to read its page count, page sizes and rasterised pages through the SDK, and the page geometry is tested in pdfpage. Gap: text extraction and annotation editing stay in the PDF app, and the Books engine keeps its own parser."
+   "note": "Apps can open a PDF to read its page count, page sizes and rasterised pages through the SDK, and the page geometry is tested in pdfpage. Gap: text extraction and annotation editing stay in the PDF app, and the Books engine keeps its own parser. Refreshed 2026-10-17: SDK access is covered by springboard/sdk/src/graphics_pdf.rs (open, page count and sizes, outline, find, page text); tests graphics_pdf::tests. Still missing: annotation editing, and the Books engine keeps its own parser."
   },
   {
    "feature": "Images and PDF: file and app icons",
@@ -47,7 +47,7 @@
    "apple": "NSBezierPath, NSGradient, NSShadow",
    "bifrost": "springboard/sdk/src/drawing_model.rs (BezierPath, Gradient, ShadowStyle, PageLayout), springboard/render/src/bezier.rs, springboard/render/src/gradient.rs; wired: springboard/ui/src/layer_style.rs (Shadow, used by style.rs); wired: springboard/ui/src/layer_style.rs (Shadow::radius) via springboard/apps/freeform-desktop/src/style.rs (blur_taps, paint_with_blur)",
    "status": "partial",
-   "note": "BezierPath construction, bounds, winding-rule containment, fills, strokes and clipping (pixel-exact on the graphics context), Gradient stops and offsets, ShadowStyle extent and PageLayout pagination are tested headless in sdk/tests/parity_sdk-tests-02.rs (drawing module). Gaps: dash and cap/join styles are stored but not rendered; image representations, colour space lists and the modal print run remain missing; wired into the UI in waves 5 and 6, not yet verified on Midget."
+   "note": "BezierPath construction, bounds, winding-rule containment, fills, strokes and clipping (pixel-exact on the graphics context), Gradient stops and offsets, ShadowStyle extent and PageLayout pagination are tested headless in sdk/tests/parity_sdk-tests-02.rs (drawing module). Gaps: dash and cap/join styles are stored but not rendered; image representations, colour space lists and the modal print run remain missing; wired into the UI in waves 5 and 6, not yet verified on Midget. Refreshed 2026-10-17: the public API is covered by springboard/sdk/src/drawing_model.rs (BezierPath, Gradient, ShadowStyle, PageLayout); tests drawing_model::tests."
   },
   {
    "feature": "Drawing: materials and vibrancy",
@@ -128,10 +128,8 @@
   }
  ],
  "gaps": [
-  "Page layout panel is not built; the shell-drawn print sheet exists (src/shell/print_sheet.rs), but print.rs has no run_modal",
-  "Public Bezier path, gradient and shadow drawing API",
-  "NSImage drawing in the kit, per-codec representation classes and template tinting",
-  "SDK access to PDF rendering (currently inside the Books shell engine)",
+  "Page Setup and accessory views: the shell print sheet has printer, paper, orientation, scale and copies rows, but no page layout panel and no accessory view controllers (print_panel.rs PageSetup is a model only).",
+  "NSImage drawing in the kit: image widgets do not draw an ImageObject in a tint yet (tint_template exists in image_object.rs), and there are no per-codec representation classes (TIFF, GIF, WebP, HEIC).",
   "Colour well and picker modes that use colour lists",
   "User accent colour feeding controlAccentColor; remaining NSColor names",
   "Symbol catalogue beyond the 59 procedural glyphs"

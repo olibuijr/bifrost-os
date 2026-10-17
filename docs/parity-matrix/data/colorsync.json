@@ -12,7 +12,7 @@
       "apple": "ColorSyncTransformCreate, ColorSyncTransformConvert, ColorSyncProfileCreateLink, rendering intents",
       "bifrost": "springboard/render/src/icc_transform.rs (Model, Conversion, Lut3d, cache), springboard/render/src/colorspace.rs, springboard/render/src/icc.rs (MatrixShaper), springboard/render/src/icc_lut.rs, springboard/sdk/src/colorsync.rs",
       "status": "partial",
-      "note": "Profile-to-profile conversion through the D50 PCS: Conversion::new(src, dst, intent, black_point_compensation) runs device to PCS to device, using the A2B and B2A tables of the intent when the profile has them and the matrix-shaper path otherwise. Lut3d bakes a 33-point grid per (source profile, display, intent) and samples it trilinearly; eight tables are cached. Unit tests in render/src/icc_transform.rs cover the sRGB and Display P3 round trip, sRGB red in P3, white preservation, the grey conversion and table-to-direct agreement. Not verified on Midget. No app-facing transform object yet, and CMYK profiles do not convert."
+      "note": "Profile-to-profile conversion through the D50 PCS: Conversion::new(src, dst, intent, black_point_compensation) runs device to PCS to device, using the A2B and B2A tables of the intent when the profile has them and the matrix-shaper path otherwise. Lut3d bakes a 33-point grid per (source profile, display, intent) and samples it trilinearly; eight tables are cached. Unit tests in render/src/icc_transform.rs cover the sRGB and Display P3 round trip, sRGB red in P3, white preservation, the grey conversion and table-to-direct agreement. Not verified on Midget. No app-facing transform object yet, and CMYK profiles do not convert. Built 2026-10-17: ProfileToProfile in springboard/sdk/src/colorsync.rs converts between two ICC profiles under a rendering intent, with black point compensation; tests colorsync::tests. Not yet checked on Midget."
     },
     {
       "feature": "Pixel format and data layout",
@@ -83,7 +83,6 @@
     "CMYK and other non-RGB device profiles do not convert; matrix profiles have no perceptual gamut mapping.",
     "The PDF ICCBased path (springboard/render/src/cg/pdf/image.rs) is drawn by component count and does not use the profile.",
     "No display profile path to the hardware: kms.rs reads gamma_size but loads no vcgt ramp, the EDID profile is not registered as the device profile, and Night Shift does not use the display profile.",
-    "No app-facing profile-to-profile transform: icc_transform is used by image decode only, and bifrost_app::colorsync still exposes only the named-space converter.",
     "No HAGC (SMPTE ST 2094-50) metadata and no tone mapping into a display; the HDR models are not wired into video output.",
     "cg::color::ColorConversionInfo still treats perceptual and saturation as relative; the named-space intents in rendering_intent.rs have no caller outside their tests.",
     "Colour management modules (CMM plug-ins) remain n/a."

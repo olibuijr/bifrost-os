@@ -188,7 +188,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/media-accessibility.json",
    "status": "partial",
-   "note": "from SDK matrix media-accessibility.json",
+   "note": "from SDK matrix media-accessibility.json Refreshed 2026-10-17: flashing-lights dimming is covered (springboard/ui/src/flashing_lights.rs; SDK DisplayOptions.dim_flashing_lights). Still open: caption and audible media preferences as an app API and a settings page, subtitle tracks in the demuxers, and image caption metadata.",
    "rea": [],
    "method": "assessed"
   },
@@ -603,7 +603,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/music-understanding.json",
    "status": "partial",
-   "note": "from SDK matrix music-understanding.json Built 2026-10-17: loudness analysis (integrated, momentary and short-term LUFS) in the SDK, tests loudness::tests and music::tests; instrument activity and source separation are still open.",
+   "note": "from SDK matrix music-understanding.json Built 2026-10-17: loudness analysis (integrated, momentary and short-term LUFS) in the SDK, tests loudness::tests and music::tests; instrument activity and source separation are still open. Refreshed 2026-10-17: rhythm, key, structure and loudness run in the SDK session (springboard/sdk/src/music_understanding.rs, tests music_understanding::tests). Pace is a model the session does not run yet. Still open: instrument activity, source separation, and streaming input.",
    "rea": [],
    "method": "assessed"
   },

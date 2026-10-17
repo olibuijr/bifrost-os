@@ -153,7 +153,6 @@
     "A guest display view that can be placed in a desktop window",
     "Virtio device configuration for app-created guests: storage, network, entropy, memory balloon, serial console",
     "Shared directories and clipboard bridging between host and guest",
-    "Guest audio and USB passthrough",
-    "Documentation note: docs/arch-vm.md does not exist (the doc is docs/arch-x86-vm.md)"
+    "Guest audio and USB passthrough"
   ]
 }
