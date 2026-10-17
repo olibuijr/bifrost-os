@@ -257,6 +257,8 @@ pub enum Toggle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Privacy > Allow Apps From: the index into `launch_gate::SETTINGS`
+    AllowAppsFrom(usize),
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
     /// Settings > Spotlight > Privacy: stop excluding the folder at this index
@@ -433,6 +435,8 @@ pub enum Action {
     Wake(super::wake_page::WakeEdit),
     /// Network > Diagnose: run the connection probes on a worker thread (see `net_diagnose_page`)
     NetDiagnose,
+    /// Privacy > Security: let the program that was blocked open (see `launch_gate`)
+    OpenAnyway,
     /// a Screen Time row: range, limits, Downtime, allowed apps, its passcode
     ScreenTime(super::screentime::page::StEdit),
     /// opens the "Other Network" sheet

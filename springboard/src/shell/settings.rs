@@ -352,6 +352,8 @@ pub struct Settings {
     night_edge: Option<bool>,
     /// the probes Network > Diagnose runs (the system's own; tests swap in a fake)
     net_probe: std::sync::Arc<dyn bifrost_core::net_probe::Probe + Send + Sync>,
+    /// Privacy > Allow Apps From (see `launch_gate`)
+    allow_from: bifrost_core::launch_policy::Setting,
     /// Battery > Schedule: the repeating wake and power-on times
     wake: bifrost_core::wake_schedule::Schedule,
     /// the Schedule entry whose time the time-of-day picker is editing
@@ -576,6 +578,7 @@ impl Settings {
             night: NightShift::load(prefs),
             night_edge: None,
             net_probe: std::sync::Arc::new(bifrost_core::net_probe::SystemProbe::default()),
+            allow_from: prefs.get(super::launch_gate::SETTING_PREF).and_then(bifrost_core::launch_policy::Setting::parse).unwrap_or(bifrost_core::launch_policy::Setting::StoreAndIdentified),
             wake: super::wake_page::load(prefs),
             wake_edge: None,
             alert: None,
@@ -691,6 +694,17 @@ impl Settings {
                 let mut s = spec(id, &self.model());
                 let (host, _) = super::net_diagnose_page::target_of(self.updater.url());
                 s.groups.extend(super::net_diagnose_page::groups(self.loads.net_diag.busy(), self.loads.net_diag.get().and_then(|r| r.as_ref()), &host));
+                s
+            }
+            PageId::Privacy => {
+                let mut s = spec(id, &self.model());
+                let blocked = super::launch_gate::read_blocked(&self.data_dir);
+                let mut extra = super::launch_gate::groups(self.allow_from, blocked.as_ref());
+                // the blocked program comes first, the setting after the page's own rows
+                if blocked.is_some() {
+                    s.groups.insert(0, extra.remove(0));
+                }
+                s.groups.extend(extra);
                 s
             }
             PageId::WakeSchedule => {
@@ -2640,6 +2654,12 @@ impl Settings {
                         self.set_parent_value(ui, "Energy", label);
                         vec![Effect::SystemSleepAfter(self.opts.system_sleep_min)]
                     }
+                    Pick::AllowAppsFrom(k) => {
+                        let (_, setting) = super::launch_gate::SETTINGS[k.min(super::launch_gate::SETTINGS.len() - 1)];
+                        self.allow_from = setting;
+                        let _ = prefs.set(super::launch_gate::SETTING_PREF, setting.label());
+                        vec![]
+                    }
                     Pick::GameMode(k) => {
                         self.opts.game_mode = GAME_MODES[k.min(GAME_MODES.len() - 1)].1;
                         self.opts.save(prefs);
@@ -2924,6 +2944,12 @@ impl Settings {
                 vec![]
             }
             Action::Wake(edit) => self.wake_edit(ui, prefs, edit),
+            Action::OpenAnyway => {
+                // the blocked program is remembered for this code; the page drops the block and says to open it again
+                super::launch_gate::open_anyway(&self.data_dir, prefs);
+                self.rebuild(ui);
+                vec![]
+            }
             Action::NetDiagnose => {
                 if !self.loads.net_diag.busy() {
                     let (host, port) = super::net_diagnose_page::target_of(self.updater.url());
@@ -4220,6 +4246,33 @@ mod tests {
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
+    }
+
+    #[test]
+    fn privacy_offers_open_anyway_for_a_blocked_program_and_the_allow_setting() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        let dir = std::env::temp_dir().join(format!("settings-launch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prog = dir.join("tool");
+        std::fs::write(&prog, "#!/bin/sh\n").unwrap();
+        st.set_data_dir(&dir);
+        tap_row(&mut st, &ui, &mut prefs, "Privacy");
+        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "nothing waits");
+        assert!(st.row_centre(&ui, "Anywhere").is_some());
+        back(&mut st, &ui, &mut prefs);
+        super::super::launch_gate::write_blocked(&dir, &prog, "\"tool\" cannot be opened because its developer cannot be identified.");
+        tap_row(&mut st, &ui, &mut prefs, "Privacy");
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Open Anyway"), vec![]);
+        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "the block is lifted");
+        let remembered = std::fs::read_to_string(dir.join("launch_overrides.txt")).unwrap();
+        assert!(remembered.starts_with(&format!("{}\t", prog.display())), "{remembered:?}");
+        // the setting persists and the check follows the tap
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Anywhere"), vec![]);
+        assert_eq!(prefs.get("allow_apps_from"), Some("anywhere"));
+        assert_eq!(super::super::launch_gate::load_policy(&prefs, &dir).setting(), bifrost_core::launch_policy::Setting::Anywhere);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Probes that answer from a table instead of the network.

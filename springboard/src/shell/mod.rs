@@ -213,6 +213,8 @@ pub mod timeset_page;
 pub mod night_shift;
 pub mod wake_page;
 pub mod net_diagnose_page;
+pub mod launch_gate;
+pub mod launch_alert;
 pub mod notify_page;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;
@@ -790,6 +792,10 @@ pub struct Shell {
     access_sheet: Option<account_access_sheet::AccessSheet>,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
+    /// the "cannot be opened" / "open it?" alert for a downloaded program opened from Files (see `launch_alert.rs`)
+    launch_alert: Option<launch_alert::Alert>,
+    /// how the shell reads a program's quarantine record and starts it (tests replace these)
+    launch_hooks: launch_gate::Hooks,
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
@@ -1118,6 +1124,8 @@ impl Shell {
             auth_clock: 0.0,
             access_sheet: None,
             crash_alert: None,
+            launch_alert: None,
+            launch_hooks: launch_gate::Hooks::default(),
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
             guided: Default::default(),
@@ -1617,6 +1625,15 @@ impl Shell {
             // the crash alert takes every touch until one of its buttons answers it
             if matches!(ev, Event::Up(..)) {
                 self.crash_alert_touch(x, y);
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.launch_alert.is_some() {
+            // the launch alert takes every touch until one of its buttons answers it
+            if matches!(ev, Event::Up(..)) {
+                self.launch_alert_touch(x, y);
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -3106,6 +3123,7 @@ impl Shell {
                             }
                         }
                         files::Request::OpenBook(path) => self.open_book(&path, t),
+                        files::Request::Launch(e) => self.launch_program(&e, t),
                         files::Request::Markup(path) => self.markup_file(&path),
                         files::Request::PlayAudio(e) => {
                             if !self.play_in_music(&e.path, t) {
@@ -3992,7 +4010,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.launch_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4021,6 +4039,9 @@ impl Shell {
                 self.access_draw(s);
             }
             if let Some(a) = &self.crash_alert {
+                a.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(a) = &self.launch_alert {
                 a.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(a) = &self.notify.ask {
@@ -4065,7 +4086,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.launch_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }
@@ -4086,7 +4107,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.launch_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }
@@ -4288,6 +4309,7 @@ impl Shell {
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
             ("crash-alert", self.crash_alert.is_some()),
+            ("launch-alert", self.launch_alert.is_some()),
             ("compose-sheet", self.compose_showing()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),

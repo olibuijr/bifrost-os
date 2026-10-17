@@ -4421,11 +4421,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/launch_policy.rs, springboard/core/src/quarantine.rs, springboard/core/src/codereq.rs",
+   "bifrost": "springboard/core/src/launch_policy.rs, springboard/core/src/quarantine.rs, springboard/core/src/codereq.rs, springboard/src/shell/launch_gate.rs, springboard/src/shell/launch_alert.rs, springboard/src/files/mod.rs, springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no launch path consults the assessment yet.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::launch_gate::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::launch_alert::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "files::tests::a_program_is_handed_to_the_shell_to_assess_only_when_the_shell_asks"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::privacy_offers_open_anyway_for_a_blocked_program_and_the_allow_setting"
+    }
+   ],
+   "ready_note": "Opening a program from the shell's Files (an executable or AppImage-like file) hands it to the shell; one with a download quarantine record (user.bifrost.quarantine) is hashed and assessed by launch_policy: allowed ones start, a blocked one raises the 'cannot be opened' alert with OK and Open Settings, and Settings > Privacy shows Open Anyway for it (remembered per path and code hash in launch_overrides.txt, so replaced code is asked about again) plus the Allow Apps From setting; 'Anywhere' asks with an Open button instead. A program with no record is shown in Files' preview as before. Host tests only; not verified on Midget. The desktop Files app (apps/files, its own process) still hands files to bifrost-apps --open without asking, and BifrOSt does not sign code yet, so every download is unidentified."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemStatus.framework",
