@@ -2,6 +2,8 @@
 //! download, kept out of the shell. The shell tells it which version it runs and what the device is
 //! doing (`Conditions`), and shows the `State` it pushes (badges, Software Update page).
 
+mod assets;
+
 use bifrost_proto::svc;
 use bifrost_proto::svc::update::{Cmd, Evt, Offer, Phase, State};
 use springboard::install_log;
@@ -28,6 +30,8 @@ struct Core {
     subscribers: Vec<UnixStream>,
     /// the last failure written to the install log, so one failure is recorded once
     last_failure: Option<String>,
+    /// background asset pack downloads of the apps (the asset daemon)
+    assets: assets::AssetDaemon,
 }
 
 fn offer(m: &update::Manifest) -> Offer {
@@ -107,6 +111,15 @@ impl Core {
         if self.version.is_empty() {
             return;
         }
+        // the asset daemon runs the apps' queued packs on an unmetered link; no pack source is configured yet,
+        // so a pack that reaches the transfer fails and its attempts are counted
+        if let Some(conditions) = assets::background_conditions(self.wifi, self.low_power) {
+            let day = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / 86_400).unwrap_or(0);
+            self.assets.pass(day, conditions, |app, pack| {
+                eprintln!("updated: asset pack {app}/{pack}: no pack source is configured");
+                false
+            });
+        }
         let now = self.started.elapsed().as_secs_f64();
         let changed = self.ota.tick(now, self.wifi, self.low_power, self.charging, self.auto_download, &self.version.clone(), &self.git.clone());
         self.record_failure();
@@ -162,6 +175,7 @@ fn main() -> std::io::Result<()> {
         started: Instant::now(),
         subscribers: Vec::new(),
         last_failure: None,
+        assets: assets::AssetDaemon::new(),
     }));
     if let Some(parent) = std::path::Path::new(&sock).parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -200,7 +214,7 @@ mod tests {
     }
 
     fn core_in(dir: PathBuf) -> Core {
-        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new(), last_failure: None }
+        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new(), last_failure: None, assets: assets::AssetDaemon::new() }
     }
 
     fn core(name: &str) -> Core {
