@@ -610,8 +610,18 @@ pub struct Contacts {
     card_req: Option<u64>,
     /// The last row press: a second press on the same contact within `DOUBLE_CLICK_MS` opens its card in a window.
     last_row_click: Option<(u64, f64)>,
-    /// True while a card window draws (`draw_card`): the detail pane fills the whole surface.
+    /// True while a card window draws or takes a touch (`draw_card`, `touch_card`): the detail pane fills the surface.
     card_window: bool,
+    /// The size of the card window in points, from its last draw.
+    card_size: (f32, f32),
+    /// A card window's own scroller and press state: its scrolling leaves the main window's detail pane alone.
+    card_scroll: Scroller,
+    card_pressed: Option<Target>,
+    card_scroll_list: Option<bool>,
+    /// The Edit button of a card window was pressed down (its release edits the contact).
+    card_edit_down: bool,
+    /// The contact whose card window asked to edit it (taken once, `take_card_edit`).
+    card_edit: Option<u64>,
     confirm_delete: bool,
     /// A failed load must not turn into an overwrite of unknown data.
     load_failed: bool,
@@ -729,6 +739,12 @@ impl Contacts {
             card_req: None,
             last_row_click: None,
             card_window: false,
+            card_size: (480.0, 560.0),
+            card_scroll: Scroller::new(),
+            card_pressed: None,
+            card_scroll_list: None,
+            card_edit_down: false,
+            card_edit: None,
             confirm_delete: false,
             load_failed,
             extras,
@@ -849,11 +865,85 @@ impl Contacts {
         let saved = (self.w, self.h, self.screen, self.card_window);
         self.w = s.w as f32 / ui.s;
         self.h = s.h as f32 / ui.s;
+        self.card_size = (self.w, self.h);
         self.screen = Screen::Detail(id);
         self.card_window = true;
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         self.draw_detail(s, ui, 0.0);
+        let edit = self.card_edit_rect();
+        self.text(s, ui, "Edit", MAC_BODY_PT, Weight::Regular, LINK, edit.x + SPACE_S, edit.y + edit.h * 0.3);
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
         (self.w, self.h, self.screen, self.card_window) = saved;
+    }
+
+    /// The Edit button at the top right of a card window, in points.
+    fn card_edit_rect(&self) -> Rect {
+        rect(self.card_size.0 - 72.0, 12.0, 60.0, 28.0)
+    }
+
+    /// A touch in a card window showing contact `id`. The card scrolls on its own scroller; a tap on a value copies it, as
+    /// in the main card; Delete is not offered here; Edit asks the main window to edit the contact (`take_card_edit`).
+    /// The main window's screen, scroll and press state are left as they were.
+    pub fn touch_card(&mut self, ui: &Ui, id: u64, ev: Event, t: f64) {
+        let (x, y) = match ev {
+            Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x / ui.s, y / ui.s),
+            _ => return,
+        };
+        let edit = self.card_edit_rect();
+        match ev {
+            Event::Down(..) => {
+                self.card_edit_down = edit.contains(x, y);
+                if self.card_edit_down {
+                    return;
+                }
+            }
+            Event::Up(..) => {
+                if std::mem::take(&mut self.card_edit_down) {
+                    if edit.contains(x, y) {
+                        self.card_edit = Some(id);
+                    }
+                    return;
+                }
+            }
+            _ => {}
+        }
+        // a card has no toolbar: the top band is the card's own area, not the main window's bar buttons
+        if y < UNIFIED_BAR_PT {
+            return;
+        }
+        let saved = (self.w, self.h, self.screen, self.card_window, self.sidebar_shown);
+        self.w = self.card_size.0;
+        self.h = self.card_size.1;
+        self.screen = Screen::Detail(id);
+        self.card_window = true;
+        self.sidebar_shown = false;
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        std::mem::swap(&mut self.pressed, &mut self.card_pressed);
+        std::mem::swap(&mut self.scroll_list, &mut self.card_scroll_list);
+        let blocked = matches!(self.hit(ui, x, y), Some(Target::Delete | Target::ConfirmDelete | Target::CancelDelete));
+        if !blocked {
+            self.touch(ui, ev, t);
+        }
+        // the share sheet is a shell feature, as in the main window
+        let _ = self.take_share();
+        std::mem::swap(&mut self.scroll, &mut self.card_scroll);
+        std::mem::swap(&mut self.pressed, &mut self.card_pressed);
+        std::mem::swap(&mut self.scroll_list, &mut self.card_scroll_list);
+        (self.w, self.h, self.screen, self.card_window, self.sidebar_shown) = saved;
+    }
+
+    /// The contact whose card window asked to be edited, once.
+    pub fn take_card_edit(&mut self) -> Option<u64> {
+        self.card_edit.take()
+    }
+
+    /// Card window > Edit: the main window shows the contact and opens its editor.
+    pub fn edit_from_card(&mut self, ui: &Ui, id: u64) {
+        if self.contacts.iter().any(|c| c.id == id) {
+            self.show_card(ui, id);
+            self.edit_contact(ui, Some(id));
+        }
     }
 
     /// The contact the user asked to copy to the pasteboard, if any (taken once).

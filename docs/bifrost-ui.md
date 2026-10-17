@@ -4216,15 +4216,20 @@ app keeps running. A resize sends `WindowConfigure` in points (`ext_window_resiz
 points (`ext_window_touch`). The Window menu and the Dock's app menu list the windows (`window_menu_name`, `menu_items`) and
 focus one with `desk_focus_extra_window`. Tests: `app_window_table` (`desk_changes`, `menu_items`), `apps` (`AppId` helpers).
 
-Not done: the window-server path (`SPRINGBOARD_WAYLAND` frames and `take_wayland_windows`) has no window ids, so extra windows
-are drawn by the software path only; the Cmd+Tab list does not list them; the accessibility tree and the drop targets of the
-parent app do not cover the windows. The direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false). Tests of
-the desk lifecycle itself are not written yet (the table diff is tested).
+Window server: an extra window has its own frame id, `WINDOW_ID_FLAG | slot << 16 | window id` (`win_id`, `frame_app` is the
+inverse), so it takes the same `SPRINGBOARD_WAYLAND` path as an app's window. A window floats with its app (`is_floating` checks
+the parent), so the window-level path (`take_wayland_windows`) keeps working. Cmd+` (`desk_cycle_window`) walks the front app's
+windows, its extra windows included; Cmd+Tab still lists apps. The Window menu lists only the front app's windows. The screen
+reader lists each window of the front app as a window element (`walk::window`). Not done: the parent app's drop targets and the
+window's own controls are not in the reader tree; the direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false).
+Tests of the desk lifecycle itself are not written yet (the table diff is tested).
 
-Contacts (`springboard/apps/contacts-desktop`, 1.12.0): Card > Open in Separate Window and a double-click on a list row open the
-contact's card in a window (`card_windows.rs`, `main.rs` `open_card_window`), and the window draws the card at its own size
-(`Contacts::draw_card`, `draw_window`); the window's close unbinds it (`window_closed`). Touches in a card window are not routed
-yet (`window_event` is the default), so the card is read-only. The Contacts row stays gap until touches are routed.
+Contacts (`springboard/apps/contacts-desktop`, 1.13.0): Card > Open in Separate Window and a double-click on a list row open the
+contact's card in a window (`card_windows.rs`, `main.rs` `open_card_window`). The window draws the card at its own size
+(`Contacts::draw_card`, `draw_window`) and takes touches (`window_event`, `Contacts::touch_card`): the card scrolls on its own
+scroller, a tap on a value copies it as the main card does (the main card has no call or compose action), and Edit shows the
+contact in the main window and opens its editor (`edit_from_card`). The SDK has no focus call, so the main window is not raised.
+Its close unbinds the card (`window_closed`). The row is partial in `docs/parity-matrix/apps/contacts.json`.
 Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
 
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene

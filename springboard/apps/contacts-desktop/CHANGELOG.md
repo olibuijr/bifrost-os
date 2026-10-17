@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.0 — 2026-10-17
+
+- Card windows take touches: the card scrolls on its own scroller, a tap on a value copies it, and Edit shows the contact in the main window and opens its editor (`touch_card`, `edit_from_card`, `window_event`). Touches do not change the main window's screen.
+
 ## 1.12.0 — 2026-10-17
 
 - Card windows draw: Card > Open in Separate Window and a double-click on a list row open the contact's card in its own window (`Ctx::open_window`, `CardWindows`). The window draws the card at its size (`Contacts::draw_card`, `draw_window`) and its close unbinds the card (`window_closed`). Touches in a card window are not routed yet, so the card is read-only.

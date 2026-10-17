@@ -1,6 +1,6 @@
 id = "is.olibuijr.contacts.desktop"
 name = "Contacts"
-version = "1.12.0"
+version = "1.13.0"
 exec = "bifrost-contacts"
 icon = "icon.png"
 min_shell = "0.4.84"

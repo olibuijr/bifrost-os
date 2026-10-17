@@ -202,10 +202,10 @@
    "feature": "Open card in separate window",
    "area": "menu",
    "apple": "Card > Open in Separate Window; ABContactCardWindowController.nib",
-   "status": "gap",
-   "bifrost": "springboard/sdk/src/app_windows.rs (AppWindows, WindowId, App::window_event, draw_window, window_closed); springboard/apps/contacts-desktop/src/card_windows.rs (CardWindows)",
-   "note": "SDK registry and Contacts card-window model exist (springboard/sdk/src/app_windows.rs, springboard/apps/contacts-desktop/src/card_windows.rs), but the SDK runtime and the shell host only one surface per app, so no second window can appear yet.",
-   "wire": "Once the runtime draws extra windows (App::draw_window via a second toplevel/shm slot), wire Card > Open in Separate Window and double-click to CardWindows::open."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:71 (open_card_window, Ctx::open_window); main.rs:286 (draw_window); main.rs:296 (window_event); main.rs:315 (window_closed); springboard/apps/contacts-desktop/src/contacts.rs:864 (draw_card); contacts.rs:888 (touch_card: scroll, tap copies, Edit); contacts.rs:942 (edit_from_card); contacts.rs:1957 (Card > Open in Separate Window); contacts.rs:3053 (double-click on a row); springboard/apps/contacts-desktop/src/card_windows.rs (CardWindows); springboard/sdk/src/app_windows.rs",
+   "note": "Works end to end on the desk: the shell opens a window per card (ExternalWindow), the app draws the card at its size and takes touches in it. Differences from Apple: a phone or email tap copies the value, as the main card does (Contacts has no call or compose action); the Edit button shows the contact and opens its editor in the main window but cannot raise that window (the SDK has no focus call for the main window). Not verified on Midget or on the host.",
+   "wire": "Check on Midget: open a card from Card > Open in Separate Window and by double-click, scroll it, tap a value, press Edit. Add a focus call so Edit raises the main window."
   },
   {
    "feature": "Show / hide sidebar",
