@@ -118,3 +118,4 @@ imagemagick
 ffmpeg
 gdb
 rdma-core
+espeak-ng
