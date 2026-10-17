@@ -17,3 +17,30 @@ pub fn note_id(url: &str) -> Option<&str> {
     let valid = !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     valid.then_some(id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_built_link_reads_back_to_its_note_id() {
+        let link = note_url("8f2c-01");
+        assert_eq!(link, "notes://note/8f2c-01");
+        assert_eq!(note_id(&link), Some("8f2c-01"));
+    }
+
+    #[test]
+    fn surrounding_space_is_trimmed() {
+        assert_eq!(note_id("  notes://note/abc  "), Some("abc"));
+    }
+
+    #[test]
+    fn other_schemes_paths_and_empty_ids_are_refused() {
+        assert_eq!(note_id("https://example.com/notes://note/abc"), None);
+        assert_eq!(note_id("notes://note/"), None);
+        assert_eq!(note_id("notes://note/abc/def"), None, "a further path segment is not part of the id");
+        assert_eq!(note_id("notes://note/abc?x=1"), None, "a query is not part of the id");
+        assert_eq!(note_id("notes://note/ab c"), None);
+        assert_eq!(note_id("notes://folder/abc"), None);
+    }
+}

@@ -1104,9 +1104,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sticky_keys.rs",
+   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs",
    "status": "partial",
-   "note": "Sticky-keys modifier latch only; not yet wired to the key event path. built on os/team-m-07-daemons; not yet verified on Midget",
+   "note": "Sticky Keys latches are wired into the key path: HwKeys taps them on modifier presses and holds the latched modifiers for the next text key (hwkeys.rs). No Settings switch calls set_sticky_keys yet, so the user cannot turn it on. Slow Keys, Repeat Keys and Mouse Keys are not built.",
    "rea": [],
    "method": "heuristic"
   },
@@ -1127,7 +1127,7 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
    "status": "partial",
-   "note": "Note links (notes://note/<id>) are built and parsed, and the Notes app tests cover them. No backlink indicator and no linked-notes panel exist.",
+   "note": "Note links (notes://note/<id>) are built and parsed; note_url.rs now has its own tests. No backlink indicator and no linked-notes panel exist.",
    "rea": [],
    "method": "audit"
   },

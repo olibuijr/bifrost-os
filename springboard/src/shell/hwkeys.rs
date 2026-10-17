@@ -5,6 +5,7 @@
 //! take as `Out::Named`.
 
 use super::keyboard::Out;
+use super::sticky_keys::{Modifier, StickyKeys};
 use super::desk::Tile;
 use super::photos::commands::PhotoCommand;
 use super::{AppId, Effect, Screen, Shell};
@@ -241,15 +242,68 @@ pub struct HwKeys {
     meta_alone: bool,
     /// The installed keyboard layout: what a key types
     text: Keyboard,
+    /// Sticky Keys: the latches, tapped on modifier presses and taken by the next non-modifier press
+    sticky: StickyKeys,
+    /// The non-modifier key that holds sticky modifiers, and those modifiers; they count as held until it is released
+    sticky_held: Option<(u16, Vec<Modifier>)>,
 }
 
 impl HwKeys {
     /// Forgets every held modifier. Releases that arrive while the screen is
     /// off or the device is gone never reach `key`, so the counters would
-    /// stick and turn plain keys into chords. The keyboard layout is kept.
+    /// stick and turn plain keys into chords. The keyboard layout is kept,
+    /// and Sticky Keys stays on with its latches cleared.
     pub fn reset(&mut self) {
         let layout = self.text.layout();
-        *self = Self { text: Keyboard::new(layout), ..Self::default() };
+        let mut sticky = self.sticky.clone();
+        let on = sticky.enabled();
+        sticky.set_enabled(false);
+        sticky.set_enabled(on);
+        *self = Self { text: Keyboard::new(layout), sticky, ..Self::default() };
+    }
+
+    /// Turns Sticky Keys on or off. Turning it off releases every latch and any modifier a sticky key still holds.
+    pub fn set_sticky_keys(&mut self, on: bool) {
+        self.sticky_release();
+        self.sticky.set_enabled(on);
+    }
+
+    /// Whether Sticky Keys is on.
+    pub fn sticky_keys(&self) -> bool {
+        self.sticky.enabled()
+    }
+
+    /// A non-modifier key goes down: the latched modifiers count as held until that key is released.
+    fn sticky_press(&mut self, code: u16) {
+        self.sticky_release();
+        let mods = self.sticky.take_for_key();
+        if mods.is_empty() {
+            return;
+        }
+        for m in &mods {
+            let n = self.counter(*m);
+            *n = n.saturating_add(1);
+        }
+        self.sticky_held = Some((code, mods));
+    }
+
+    /// The key that held sticky modifiers is released (or another key replaces it): those modifiers drop.
+    fn sticky_release(&mut self) {
+        if let Some((_, mods)) = self.sticky_held.take() {
+            for m in mods {
+                let n = self.counter(m);
+                *n = n.saturating_sub(1);
+            }
+        }
+    }
+
+    fn counter(&mut self, m: Modifier) -> &mut u8 {
+        match m {
+            Modifier::Shift => &mut self.shift,
+            Modifier::Ctrl => &mut self.ctrl,
+            Modifier::Alt => &mut self.alt,
+            Modifier::Super => &mut self.meta,
+        }
     }
 
     /// Sets the keyboard layout (an index into the installer's `LAYOUTS`) that text keys type with.
@@ -280,6 +334,20 @@ impl HwKeys {
     /// `key`, with the key equivalents of the front app taken first: Term's Cmd chords while `term`, and Photos'
     /// commands while `photos`.
     pub fn key_front(&mut self, code: u16, down: bool, term: bool, photos: bool) -> Option<Shortcut> {
+        // Sticky Keys: a modifier press taps its latch; a text key takes the latched modifiers until it is released
+        match Modifier::of_code(code) {
+            Some(m) => {
+                if down {
+                    self.sticky.tap_modifier(m);
+                }
+            }
+            None if down => self.sticky_press(code),
+            None => {
+                if self.sticky_held.as_ref().is_some_and(|(held, _)| *held == code) {
+                    self.sticky_release();
+                }
+            }
+        }
         if code == KEY_RIGHTALT {
             self.altgr = if down { self.altgr.saturating_add(1) } else { self.altgr.saturating_sub(1) };
         }
@@ -1173,4 +1241,74 @@ mod tests {
         k.reset();
         assert_eq!(k.typed(12), Some(Out::Text("ö".into())));
     }
+
+    #[test]
+    fn sticky_shift_capitalises_one_key_then_lets_go() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.key(KEY_A, true);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("A".into())));
+        assert!(k.shift_held(), "the latched shift is held for the key that took it");
+        k.key(KEY_A, false);
+        assert!(!k.shift_held());
+        k.key(KEY_A, true);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("a".into())), "the one-shot latch is spent");
+        k.key(KEY_A, false);
+    }
+
+    #[test]
+    fn sticky_ctrl_locked_by_two_taps_chords_every_key_until_a_third_tap() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        for _ in 0..2 {
+            k.key(KEY_LEFTCTRL, true);
+            k.key(KEY_LEFTCTRL, false);
+        }
+        k.key(KEY_C, true);
+        assert_eq!(k.chord_mods(KEY_C), Some(CHORD_CTRL));
+        k.key(KEY_C, false);
+        k.key(KEY_C, true);
+        assert_eq!(k.chord_mods(KEY_C), Some(CHORD_CTRL), "locked Ctrl stays for the next key");
+        k.key(KEY_C, false);
+        k.key(KEY_LEFTCTRL, true);
+        k.key(KEY_LEFTCTRL, false);
+        k.key(KEY_X, true);
+        assert_eq!(k.chord_mods(KEY_X), None, "the third tap unlocks Ctrl");
+        k.key(KEY_X, false);
+    }
+
+    #[test]
+    fn sticky_keys_off_ignores_taps_and_turning_it_off_releases_latches() {
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTMETA, true);
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_A, true);
+        assert!(!k.mods_held(), "taps do nothing while Sticky Keys is off");
+        k.key(KEY_A, false);
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.set_sticky_keys(false);
+        assert!(!k.sticky_keys());
+        let b: u16 = 48;
+        k.key(b, true);
+        assert!(!k.shift_held());
+        k.key(b, false);
+    }
+
+    #[test]
+    fn reset_keeps_sticky_keys_on_but_clears_latches() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTALT, true);
+        k.key(KEY_LEFTALT, false);
+        k.reset();
+        assert!(k.sticky_keys());
+        k.key(KEY_A, true);
+        assert!(!k.mods_held());
+        k.key(KEY_A, false);
+    }
 }
+

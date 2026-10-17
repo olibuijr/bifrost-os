@@ -1,7 +1,8 @@
 //! Sticky keys: a modifier tapped once latches for the next key press; tapped twice it locks until tapped again.
 //!
-//! Pure state. The keyboard input path asks `take_for_key` when a non-modifier key is pressed and applies the
-//! returned modifiers to that key. Wiring it into the key event path is a separate step.
+//! Pure state. `HwKeys` (`hwkeys.rs`) owns one `StickyKeys`: a modifier key press calls `tap_modifier`, and a
+//! non-modifier key press calls `take_for_key`, which counts the returned modifiers as held until that key is
+//! released. Every shortcut and typing decision then sees them like a physical hold.
 
 /// The modifiers sticky keys can hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,6 +14,29 @@ pub enum Modifier {
 }
 
 const ALL: [Modifier; 4] = [Modifier::Shift, Modifier::Ctrl, Modifier::Alt, Modifier::Super];
+
+impl Modifier {
+    /// The modifier a Linux input key code (evdev `KEY_*`) stands for, both sides of each pair. None for any other key.
+    pub fn of_code(code: u16) -> Option<Modifier> {
+        match code {
+            42 | 54 => Some(Modifier::Shift),
+            29 | 97 => Some(Modifier::Ctrl),
+            56 | 100 => Some(Modifier::Alt),
+            125 | 126 => Some(Modifier::Super),
+            _ => None,
+        }
+    }
+
+    /// The left-hand key code of this modifier (the one the shell synthesises for a latched modifier).
+    pub fn code(self) -> u16 {
+        match self {
+            Modifier::Shift => 42,
+            Modifier::Ctrl => 29,
+            Modifier::Alt => 56,
+            Modifier::Super => 125,
+        }
+    }
+}
 
 /// Where one modifier stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,6 +158,21 @@ mod tests {
         s.tap_modifier(Modifier::Shift);
         assert_eq!(s.latch_of(Modifier::Shift), Latch::Off);
         assert!(s.take_for_key().is_empty());
+    }
+
+    #[test]
+    fn key_codes_map_both_sides_to_one_modifier() {
+        assert_eq!(Modifier::of_code(42), Some(Modifier::Shift));
+        assert_eq!(Modifier::of_code(54), Some(Modifier::Shift));
+        assert_eq!(Modifier::of_code(29), Some(Modifier::Ctrl));
+        assert_eq!(Modifier::of_code(97), Some(Modifier::Ctrl));
+        assert_eq!(Modifier::of_code(56), Some(Modifier::Alt));
+        assert_eq!(Modifier::of_code(100), Some(Modifier::Alt));
+        assert_eq!(Modifier::of_code(126), Some(Modifier::Super));
+        assert_eq!(Modifier::of_code(30), None, "the A key is not a modifier");
+        for m in ALL {
+            assert_eq!(Modifier::of_code(m.code()), Some(m));
+        }
     }
 
     #[test]
