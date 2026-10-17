@@ -108,6 +108,10 @@ impl App for ClockApp {
             return clock::intent::perform(id, params, unix, offset);
         }
         let t = bifrost_proto::sys::now_ms();
+        if id == clock::intent::NEXT_ALARM_INTENT {
+            let next = self.clock.as_ref().and_then(|c| c.next_alarm_text(t));
+            return clock::intent::perform_alarm(id, next);
+        }
         let Some(c) = &mut self.clock else { return Err(intents::failed("Clock is not ready yet")) };
         let (changed, done) = match id {
             "start-stopwatch" => (c.change_stopwatch(t, |s| s.start(t)), "Stopwatch started"),

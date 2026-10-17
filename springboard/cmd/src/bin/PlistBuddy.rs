@@ -15,9 +15,6 @@ fn main() {
         println!("{USAGE}");
         return;
     }
-    if opts.commands.is_empty() {
-        die("PlistBuddy", "interactive mode is not supported; give a command with -c", 1);
-    }
     let Some(file) = opts.file else {
         die("PlistBuddy", "no input file", 1);
     };
@@ -29,6 +26,17 @@ fn main() {
         Ok(root) => root,
         Err(e) => die("PlistBuddy", &format!("{file}: {e}"), 1),
     };
+    if opts.commands.is_empty() {
+        let save = |root: &plist::Plist| {
+            bifrost_core::fsutil::write_atomic(Path::new(&file), plist::to_xml(root)).map_err(|e| format!("{file}: {e}"))
+        };
+        let stdin = std::io::stdin();
+        let mut stdout = std::io::stdout();
+        if let Err(e) = plistbuddy::interactive(&mut root, stdin.lock(), &mut stdout, opts.xml, save) {
+            die("PlistBuddy", &e, 1);
+        }
+        return;
+    }
     let run = match plistbuddy::run(&mut root, &opts.commands, opts.xml) {
         Ok(run) => run,
         Err(e) => die("PlistBuddy", &format!("{file}: {e}"), 1),

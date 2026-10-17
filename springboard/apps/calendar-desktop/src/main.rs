@@ -474,7 +474,8 @@ impl App for CalendarApp {
                         }
                         return true;
                     }
-                    Some(Job::Import) => {}
+                    // a file the shell opens for this app (the .ics type it handles) has no job: it is imported
+                    None | Some(Job::Import) => {}
                     _ => {
                         ctx.release_document(doc.grant);
                         return false;

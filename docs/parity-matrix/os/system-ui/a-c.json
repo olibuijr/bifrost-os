@@ -414,7 +414,7 @@
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
    "status": "partial",
-   "note": "ICS parsing exists; no file-type handler registration yet; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "note": "ICS parsing exists; the manifest declares public.calendar-event. Built 2026-10-17: an .ics file the shell opens goes to the import path (springboard/apps/calendar-desktop/src/main.rs, document()); no test covers the open path. Not yet verified on Midget",
    "rea": []
   },
   {
@@ -708,9 +708,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/clock/alarm.rs; springboard/sdk/src/intents.rs",
+   "bifrost": "springboard/src/shell/clock/alarm.rs; springboard/sdk/src/intents.rs; springboard/apps/clock-desktop/src/clock/intent.rs",
    "status": "partial",
-   "note": "alarms exist; no App Intents exposed for alarms; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "note": "alarms exist; Built 2026-10-17: App Intent next-alarm reports when the next alarm rings (clock::intent::tests). Still missing: an intent that adds or edits an alarm, which needs the clock's RTC wake effect passed back to the shell. Not yet verified on Midget",
    "rea": []
   },
   {
@@ -966,10 +966,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/intents.rs",
+   "bifrost": "springboard/sdk/src/intents.rs; springboard/apps/music-desktop/src/app.rs",
    "status": "partial",
-   "note": "App Intents plumbing exists; no audio intents yet; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "App Intents plumbing exists; Music declares play-pause, next-track and previous-track (the transport of its player). Built 2026-10-17: audio intents in springboard/apps/music-desktop/src/app.rs; tests app::tests. Not yet verified on Midget; no audio-device or audio-session intents yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::tests"
+    }
+   ],
+   "ready_note": "Music's App Intents for play or pause, next and previous track (app::tests)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AudiovisualThumbnailExtension.appex",
@@ -1313,7 +1322,7 @@
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop/src; springboard/sdk/src/intents.rs",
    "status": "partial",
-   "note": "Contacts app exists; no App Intents exposed for contacts yet; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "note": "Contacts declares three App Intents: view-card, create-contact and search-contacts. Built 2026-10-17: no change; the intents have no unit test yet, so the row stays open until one covers them. Not yet verified on Midget",
    "rea": []
   },
   {
