@@ -1,18 +1,21 @@
-//! `textutil`: converts a text document between plain text, HTML and RTF (`textutil -convert FORMAT FILE...`).
+//! `textutil`: converts a text document between plain text, HTML, RTF and the open word processing formats
+//! (`textutil -convert FORMAT FILE...`).
 //!
-//! Supported: `-convert {txt | html | rtf}`, `-output PATH` (one input file), `-stdout` (writes the converted document
-//! to standard output, one input file). The input format comes from the file extension (`.txt`, `.html`, `.htm`,
-//! `.rtf`) or, for other names, from the content (`{\rtf` starts an RTF file, a `<` at the start an HTML file).
-//! Word processing formats (doc, docx, odt, rtfd, webarchive) are refused.
+//! Supported: `-convert {txt | html | rtf | docx | odt}`, `-output PATH` (one input file), `-stdout` (writes the
+//! converted document to standard output, one input file). The input format comes from the file extension (`.txt`,
+//! `.html`, `.htm`, `.rtf`, `.docx`, `.odt`) or, for other names, from the content (`{\rtf` starts an RTF file, a `<`
+//! at the start an HTML file). A `.docx` or `.odt` file is a ZIP package (`bifrost files::zip`): its text is read from
+//! `word/document.xml` or `content.xml`, and the packages written are the smallest valid ones (one body, one
+//! paragraph per line, tabs kept). The old binary `.doc`, `rtfd` and `webarchive` formats are refused.
 //!
-//! The conversion goes through plain text: HTML and RTF keep their text and paragraph breaks, but not their fonts,
-//! colours, images or tables. Gap: no `-info`, `-stdin`, `-encoding` or `-extension` options, and the output is always
+//! The conversion goes through plain text: every format keeps its text and paragraph breaks, but not fonts, colours,
+//! images or tables. Gap: no `-info`, `-stdin`, `-encoding` or `-extension` options, and the output is always
 //! UTF-8 (HTML and RTF output use `\uN` escapes for characters outside ASCII).
 
 use std::io::Write;
 use std::path::Path;
 
-pub const USAGE: &str = "usage: textutil -convert {txt | html | rtf} [-output PATH | -stdout] FILE...";
+pub const USAGE: &str = "usage: textutil -convert {txt | html | rtf | docx | odt} [-output PATH | -stdout] FILE...";
 
 /// The formats the tool reads and writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +23,8 @@ pub enum Format {
     Txt,
     Html,
     Rtf,
+    Docx,
+    Odt,
 }
 
 impl Format {
@@ -29,10 +34,12 @@ impl Format {
             "txt" | "text" => Ok(Format::Txt),
             "html" => Ok(Format::Html),
             "rtf" => Ok(Format::Rtf),
-            "doc" | "docx" | "odt" | "rtfd" | "webarchive" | "wordml" => {
-                Err(format!("format '{s}' is not supported; use txt, html or rtf"))
+            "docx" => Ok(Format::Docx),
+            "odt" => Ok(Format::Odt),
+            "doc" | "rtfd" | "webarchive" | "wordml" => {
+                Err(format!("format '{s}' is not supported; use txt, html, rtf, docx or odt"))
             }
-            _ => Err(format!("unknown format '{s}'; use txt, html or rtf")),
+            _ => Err(format!("unknown format '{s}'; use txt, html, rtf, docx or odt")),
         }
     }
 
@@ -42,6 +49,8 @@ impl Format {
             Format::Txt => "txt",
             Format::Html => "html",
             Format::Rtf => "rtf",
+            Format::Docx => "docx",
+            Format::Odt => "odt",
         }
     }
 }
@@ -107,7 +116,9 @@ pub fn detect(path: &str, data: &str) -> Result<Format, String> {
         "txt" | "text" => return Ok(Format::Txt),
         "html" | "htm" => return Ok(Format::Html),
         "rtf" => return Ok(Format::Rtf),
-        "doc" | "docx" | "odt" | "rtfd" | "webarchive" | "wordml" => {
+        "docx" => return Ok(Format::Docx),
+        "odt" => return Ok(Format::Odt),
+        "doc" | "rtfd" | "webarchive" | "wordml" => {
             return Err(format!("{path}: word processing formats are not supported"));
         }
         _ => {}
@@ -122,34 +133,217 @@ pub fn detect(path: &str, data: &str) -> Result<Format, String> {
     }
 }
 
-/// Converts a document. Text input is copied as it is; HTML and RTF go through their plain text.
+/// Converts a document held as text. Text input is copied as it is; HTML and RTF go through their plain text. The ZIP
+/// package formats are bytes, not text, so they go through [`to_plain`] and [`from_plain`]; here they pass through as
+/// plain text.
 pub fn convert(data: &str, from: Format, to: Format) -> String {
     if from == Format::Txt && to == Format::Txt {
         return data.to_string();
     }
     let text = match from {
-        Format::Txt => data.to_string(),
+        Format::Txt | Format::Docx | Format::Odt => data.to_string(),
         Format::Html => html_to_text(data),
         Format::Rtf => rtf_to_text(data),
     };
     match to {
-        Format::Txt => text,
+        Format::Txt | Format::Docx | Format::Odt => text,
         Format::Html => text_to_html(&text),
         Format::Rtf => text_to_rtf(&text),
     }
+}
+
+/// The largest part of a package that is unpacked, so a crafted file cannot fill memory.
+const MAX_PART: u64 = 64 << 20;
+
+/// The plain text of a document's bytes in format `from`.
+pub fn to_plain(bytes: &[u8], from: Format) -> Result<String, String> {
+    match from {
+        Format::Docx => Ok(docx_xml_to_text(&zip_part(bytes, "word/document.xml")?)),
+        Format::Odt => Ok(odt_xml_to_text(&zip_part(bytes, "content.xml")?)),
+        _ => {
+            let decoded = String::from_utf8_lossy(bytes);
+            let text = decoded.strip_prefix('\u{feff}').unwrap_or(&decoded);
+            Ok(convert(text, from, Format::Txt))
+        }
+    }
+}
+
+/// The bytes of plain text written as format `to`.
+pub fn from_plain(text: &str, to: Format) -> Result<Vec<u8>, String> {
+    match to {
+        Format::Docx => text_to_docx(text),
+        Format::Odt => text_to_odt(text),
+        _ => Ok(convert(text, Format::Txt, to).into_bytes()),
+    }
+}
+
+/// One part of a ZIP package as text.
+fn zip_part(bytes: &[u8], name: &str) -> Result<String, String> {
+    let mut archive = springboard::files::zip::Archive::open(std::io::Cursor::new(bytes)).map_err(|e| format!("not a valid package: {e}"))?;
+    let member = archive
+        .members
+        .iter()
+        .find(|m| m.name == name && !m.is_dir)
+        .cloned()
+        .ok_or_else(|| format!("the package has no {name}"))?;
+    if member.encrypted {
+        return Err("the package is password protected".to_string());
+    }
+    if member.size > MAX_PART {
+        return Err(format!("{name} is too large"));
+    }
+    let data = archive.read(&member).map_err(|e| format!("{name}: {e}"))?;
+    Ok(String::from_utf8_lossy(&data).into_owned())
+}
+
+/// The next tag of `rest` (without its angle brackets) and the text before it; `None` at the end.
+fn next_tag(rest: &str) -> Option<(&str, &str, &str)> {
+    let lt = rest.find('<')?;
+    let after = &rest[lt + 1..];
+    let gt = after.find('>')?;
+    Some((&rest[..lt], &after[..gt], &after[gt + 1..]))
+}
+
+/// The element name in a tag's inner text, and whether it closes (`/w:p`) or is empty (`w:tab/`).
+fn xml_name(tag: &str) -> (&str, bool, bool) {
+    let closing = tag.starts_with('/');
+    let empty = tag.ends_with('/');
+    let name = tag.trim_start_matches('/').split(|c: char| c.is_whitespace() || c == '/').next().unwrap_or("");
+    (name, closing, empty)
+}
+
+/// The text of a `word/document.xml`: the runs of `w:t`, a line break at the end of each paragraph, tabs and breaks.
+pub fn docx_xml_to_text(xml: &str) -> String {
+    let mut out = String::new();
+    let mut rest = xml;
+    while let Some((_, tag, after)) = next_tag(rest) {
+        rest = after;
+        match xml_name(tag) {
+            ("w:t", false, false) => {
+                let end = rest.find("</w:t>").unwrap_or(rest.len());
+                out.push_str(&decode_entities(&rest[..end]));
+                rest = &rest[end..];
+            }
+            ("w:p", true, _) | ("w:p", false, true) => out.push('\n'),
+            ("w:tab", false, _) => out.push('\t'),
+            ("w:br" | "w:cr", false, _) => out.push('\n'),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The text of an OpenDocument `content.xml`: the characters inside paragraphs and headings, a line break at the end
+/// of each, and the space, tab and line-break elements.
+pub fn odt_xml_to_text(xml: &str) -> String {
+    let mut out = String::new();
+    let mut rest = xml;
+    let mut depth = 0usize;
+    while let Some((text, tag, after)) = next_tag(rest) {
+        rest = after;
+        if depth > 0 {
+            out.push_str(&decode_entities(text));
+        }
+        match xml_name(tag) {
+            ("text:p" | "text:h", false, false) => depth += 1,
+            ("text:p" | "text:h", false, true) => out.push('\n'),
+            ("text:p" | "text:h", true, _) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    out.push('\n');
+                }
+            }
+            ("text:tab", false, _) if depth > 0 => out.push('\t'),
+            ("text:line-break", false, _) if depth > 0 => out.push('\n'),
+            ("text:s", false, _) if depth > 0 => {
+                let count = tag.split("text:c=\"").nth(1).and_then(|r| r.split('"').next()).and_then(|n| n.parse::<usize>().ok()).unwrap_or(1);
+                out.push_str(&" ".repeat(count.min(1000)));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+const XML_HEAD: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+
+/// The smallest valid `.docx` holding `text`: one paragraph per line, tabs kept.
+pub fn text_to_docx(text: &str) -> Result<Vec<u8>, String> {
+    let mut body = String::new();
+    for line in text.lines() {
+        if line.is_empty() {
+            body.push_str("<w:p/>");
+            continue;
+        }
+        body.push_str("<w:p>");
+        for (i, part) in line.split('\t').enumerate() {
+            if i > 0 {
+                body.push_str("<w:r><w:tab/></w:r>");
+            }
+            if !part.is_empty() {
+                body.push_str(&format!("<w:r><w:t xml:space=\"preserve\">{}</w:t></w:r>", escape_html(part)));
+            }
+        }
+        body.push_str("</w:p>");
+    }
+    let types = format!("{XML_HEAD}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>");
+    let rels = format!("{XML_HEAD}<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>");
+    let document = format!("{XML_HEAD}<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{body}</w:body></w:document>");
+    let mut zip = springboard::files::zip::Writer::new(Vec::new());
+    for (name, data) in [("[Content_Types].xml", types), ("_rels/.rels", rels), ("word/document.xml", document)] {
+        zip.add_bytes(name, data.as_bytes(), 0).map_err(|e| e.to_string())?;
+    }
+    zip.finish().map_err(|e| e.to_string())
+}
+
+/// The smallest valid `.odt` holding `text`: the stored `mimetype` first, then the manifest and the content.
+pub fn text_to_odt(text: &str) -> Result<Vec<u8>, String> {
+    const MIME: &str = "application/vnd.oasis.opendocument.text";
+    let mut body = String::new();
+    for line in text.lines() {
+        body.push_str("<text:p>");
+        let mut prev_space = true;
+        for c in line.chars() {
+            match c {
+                '\t' => {
+                    body.push_str("<text:tab/>");
+                    prev_space = false;
+                }
+                ' ' if prev_space => body.push_str("<text:s/>"),
+                ' ' => {
+                    body.push(' ');
+                    prev_space = true;
+                }
+                c => {
+                    body.push_str(&escape_html(&c.to_string()));
+                    prev_space = false;
+                }
+            }
+        }
+        body.push_str("</text:p>");
+    }
+    let manifest = format!("{XML_HEAD}<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\"><manifest:file-entry manifest:full-path=\"/\" manifest:media-type=\"{MIME}\"/><manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/></manifest:manifest>");
+    let content = format!("{XML_HEAD}<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" office:version=\"1.2\"><office:body><office:text>{body}</office:text></office:body></office:document-content>");
+    let mut zip = springboard::files::zip::Writer::new(Vec::new());
+    // the type marker must be stored, not deflated, so file-type sniffers can read it at a fixed offset
+    zip.add_stored_stream("mimetype", std::io::Cursor::new(MIME.as_bytes()), MIME.len() as u64, 0, &mut |_| true).map_err(|e| e.to_string())?;
+    zip.add_bytes("META-INF/manifest.xml", manifest.as_bytes(), 0).map_err(|e| e.to_string())?;
+    zip.add_bytes("content.xml", content.as_bytes(), 0).map_err(|e| e.to_string())?;
+    zip.finish().map_err(|e| e.to_string())
 }
 
 /// Converts each input file and writes the result next to it (or to `-output`, or to standard output).
 pub fn run(opts: &Options) -> Result<(), String> {
     for file in &opts.files {
         let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
-        let decoded = String::from_utf8_lossy(&bytes).into_owned();
-        let text: &str = decoded.strip_prefix('\u{feff}').unwrap_or(decoded.as_str());
-        let from = detect(file, text)?;
-        let converted = convert(text, from, opts.format);
+        let decoded = String::from_utf8_lossy(&bytes);
+        let sniffed: &str = decoded.strip_prefix('\u{feff}').unwrap_or(&decoded);
+        let from = detect(file, sniffed)?;
+        let plain = to_plain(&bytes, from).map_err(|e| format!("{file}: {e}"))?;
+        let converted = from_plain(&plain, opts.format)?;
         if opts.stdout {
             let mut out = std::io::stdout().lock();
-            out.write_all(converted.as_bytes()).and_then(|()| out.flush()).map_err(|e| e.to_string())?;
+            out.write_all(&converted).and_then(|()| out.flush()).map_err(|e| e.to_string())?;
             continue;
         }
         let target = match &opts.output {
@@ -527,7 +721,8 @@ mod tests {
     fn parse_refuses_bad_command_lines() {
         assert!(parse(&args(&["a.txt"])).is_err(), "-convert is required");
         assert!(parse(&args(&["-convert", "txt"])).is_err(), "a file is required");
-        assert!(parse(&args(&["-convert", "docx", "a.txt"])).is_err());
+        assert!(parse(&args(&["-convert", "doc", "a.txt"])).is_err());
+        assert!(parse(&args(&["-convert", "rtfd", "a.txt"])).is_err());
         assert!(parse(&args(&["-convert", "txt", "-info", "a.txt"])).is_err());
         assert!(parse(&args(&["-convert", "txt", "-output", "o.txt", "a", "b"])).is_err());
         assert!(parse(&args(&["-convert", "txt", "-stdout", "-output", "o.txt", "a"])).is_err());
@@ -545,7 +740,9 @@ mod tests {
         assert_eq!(detect("x.bin", "{\\rtf1 hi}"), Ok(Format::Rtf));
         assert_eq!(detect("x.bin", "  <p>hi</p>"), Ok(Format::Html));
         assert_eq!(detect("x.bin", "plain"), Ok(Format::Txt));
-        assert!(detect("x.docx", "").is_err());
+        assert!(detect("x.doc", "").is_err());
+        assert_eq!(detect("x.docx", ""), Ok(Format::Docx));
+        assert_eq!(detect("x.ODT", ""), Ok(Format::Odt));
     }
 
     #[test]
@@ -607,6 +804,47 @@ mod tests {
         let rtf = convert("Hi", Format::Txt, Format::Rtf);
         assert_eq!(convert(&rtf, Format::Rtf, Format::Txt), "Hi");
         assert!(convert("Hi", Format::Txt, Format::Html).contains("<p>Hi</p>"));
+    }
+
+    #[test]
+    fn a_docx_round_trips_its_text_paragraphs_tabs_and_escapes() {
+        let text = "Hello & <world>\n\ncol1\tcol2\nCaf\u{e9} \u{20ac}\n";
+        let package = from_plain(text, Format::Docx).unwrap();
+        assert_eq!(&package[..2], b"PK");
+        assert_eq!(to_plain(&package, Format::Docx).unwrap(), text);
+    }
+
+    #[test]
+    fn an_odt_round_trips_spaces_tabs_and_keeps_the_mimetype_first_and_stored() {
+        let text = "a  b\n   lead\ttab & <x>\n";
+        let package = from_plain(text, Format::Odt).unwrap();
+        assert_eq!(to_plain(&package, Format::Odt).unwrap(), text);
+        // the first member is `mimetype`, stored, so its text sits at a fixed offset after the 30-byte header
+        assert_eq!(&package[30..38], b"mimetype");
+        assert_eq!(&package[38..38 + 39], b"application/vnd.oasis.opendocument.text");
+    }
+
+    #[test]
+    fn word_xml_from_other_writers_is_read() {
+        let docx = "<w:document><w:body><w:p><w:pPr/><w:r><w:t>One</w:t></w:r><w:r><w:t xml:space=\"preserve\"> two</w:t></w:r></w:p>\
+<w:p><w:r><w:t>A&amp;B</w:t><w:br/><w:t>next</w:t></w:r></w:p></w:body></w:document>";
+        assert_eq!(docx_xml_to_text(docx), "One two\nA&B\nnext\n");
+        let odt = "<office:text><text:h text:outline-level=\"1\">Title</text:h><text:p>x<text:s text:c=\"3\"/>y<text:line-break/>z</text:p><text:p/></office:text>";
+        assert_eq!(odt_xml_to_text(odt), "Title\nx   y\nz\n\n");
+    }
+
+    #[test]
+    fn a_package_without_the_text_part_or_not_a_package_is_an_error() {
+        assert!(to_plain(b"not a zip", Format::Docx).unwrap_err().contains("not a valid package"));
+        let odt = from_plain("x\n", Format::Odt).unwrap();
+        assert!(to_plain(&odt, Format::Docx).unwrap_err().contains("no word/document.xml"));
+    }
+
+    #[test]
+    fn plain_formats_still_convert_through_the_byte_functions() {
+        assert_eq!(from_plain("Hi\n", Format::Html).unwrap(), convert("Hi\n", Format::Txt, Format::Html).into_bytes());
+        assert_eq!(to_plain(b"\xef\xbb\xbf<p>Hi</p>", Format::Html).unwrap(), "Hi\n");
+        assert_eq!(to_plain(b"keep as is", Format::Txt).unwrap(), "keep as is");
     }
 
     #[test]
