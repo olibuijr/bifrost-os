@@ -20,6 +20,7 @@
 //! service is `springboard/src/shell/services/contacts.rs`, and the model is `bifrost_ui::contact_access` (every
 //! contact, a picked set read-only, or none) with the records in `bifrost_ui::contact_fetch`.
 pub use crate::controls::contact_access::{Choice, Error, Status};
+pub use crate::controls::contact_book::{format_postal_address, PostalAddress};
 pub use crate::controls::contact_fetch::{
     DateComponents, Key, LabeledValue, Record, Value, LABEL_HOME, LABEL_OTHER, LABEL_PHONE_MAIN, LABEL_PHONE_MOBILE,
     LABEL_WORK,
