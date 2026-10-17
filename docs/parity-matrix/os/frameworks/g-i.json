@@ -5587,9 +5587,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/updated/src/install_log.rs",
    "status": "gap",
-   "note": "Failed system and app installs leave no diagnostic report: springboard/updated keeps no install log today. Build an install failure log in springboard/updated that the shell diagnostics page (springboard/src/shell/diagnostics_page.rs) can list.",
+   "note": "springboard/updated writes each failed system update to install-failures.log in the shell data directory (install_log.rs, rotated at 256 KB, tested). Gap: app install failures are not logged yet, and the shell diagnostics page (springboard/src/shell/diagnostics_page.rs) does not list the log yet.",
    "rea": [],
    "method": "assessed"
   },
