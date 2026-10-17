@@ -33,7 +33,7 @@
    "apple": "PHAsset.isFavorite, favorite change requests",
    "bifrost": "springboard/sdk/src/photo_library.rs (PHAsset::decode, is_favorite); springboard/ui/src/photo_request.rs (Request::set_favourite, plan)",
    "status": "partial",
-   "note": "The favourite flag an app reads from an asset record and the favourite change a batch plans are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: an app cannot write a favourite through the SDK, because the SDK has no performChanges call; the shell does the write."
+   "note": "The favourite flag an app reads from an asset record and the favourite change a batch plans are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: an app cannot write a favourite through the SDK, because the SDK has no performChanges call; the shell does the write. Built 2026-10-17: the photos service answers perform, which plans a batch of create, favourite and trash ops and checks it (tests services::photos::tests::a_batch_is_planned_and_nothing_is_written and the two refusal tests). Nothing is written yet and the SDK has no call for it."
   },
   {
    "feature": "Image and thumbnail loading and caching",
