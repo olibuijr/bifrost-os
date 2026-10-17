@@ -401,8 +401,10 @@ impl Shell {
         let now = self.notify.now();
         let Some(n) = self.notify.store.get(id).cloned() else { return };
         let icon = self.notification_icon(app);
-        let alerts = self.app_notif(app).persistent;
-        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, false));
+        let page = self.app_notif(app);
+        // a banner shows once unlocked, so only Never hides its text
+        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, page.previews == 2));
+        let alerts = page.persistent;
         self.notify.banner = Some(Banner::new(id, self.notify.t).persistent(alerts));
     }
 
@@ -427,6 +429,23 @@ impl Shell {
     /// Drops an app's notifications (it was opened, or its group cleared).
     pub(super) fn clear_notifications(&mut self, app: AppId) {
         if self.notify.store.clear_app(app) {
+            self.store_changed();
+        }
+        if self.notify.banner_card.as_ref().is_some_and(|c| c.app == app) {
+            if let Some(b) = &mut self.notify.banner {
+                b.dismiss(self.notify.t);
+            }
+        }
+    }
+
+    /// The thread of lock-screen group `group` (empty when there is none).
+    fn lock_thread(&self, group: usize) -> String {
+        self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).map(|g| g.thread.clone()).unwrap_or_default()
+    }
+
+    /// Clears one stack of an app: the notifications of `app` in `thread` (the Clear button of a group).
+    pub(super) fn clear_group(&mut self, app: AppId, thread: &str) {
+        if self.notify.store.clear_thread(app, thread) {
             self.store_changed();
         }
         if self.notify.banner_card.as_ref().is_some_and(|c| c.app == app) {
@@ -533,6 +552,16 @@ impl Shell {
     }
 
     /// Whether the lock screen hides what notifications and events say: a passcode is set.
+    /// Whether the app's Show Previews setting hides its text in a list of `mode`: Never hides it everywhere,
+    /// When Unlocked hides it on the lock screen and shows it once unlocked (`notify_page::PREVIEWS`).
+    fn previews_hidden(&self, app: AppId, mode: Mode) -> bool {
+        match self.app_notif(app).previews {
+            2 => true,
+            1 => mode == Mode::Lock,
+            _ => false,
+        }
+    }
+
     fn lock_private(&self) -> bool {
         self.screen == Screen::Lock && super::passcode::Lock::required(&self.passcode_path())
     }
@@ -551,7 +580,8 @@ impl Shell {
         let icons = &self.notify.icons;
         let icon = |app: AppId| icons.iter().find(|(a, _)| *a == app).map(|(_, i)| i.clone()).unwrap_or_else(|| Image::new(1, 1));
         let muted: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.notify.store.is_muted(a)).collect();
-        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, private };
+        let hidden: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.previews_hidden(a, mode)).collect();
+        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, hidden: &hidden, private };
         ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts)
     }
 
@@ -561,6 +591,12 @@ impl Shell {
         let playing = self.svc_active();
         let pt = if playing { super::music::nowplaying::LOCK_CARD_Y_PT + super::music::nowplaying::LOCK_CARD_H_PT + MUSIC_GAP_PT } else { LOCK_LIST_TOP_PT };
         self.ui.pt(pt)
+    }
+
+    /// Where the pending requests of `notification-schedule` are saved: beside the notification store, once the
+    /// data directory is set (None before that, so a test shell writes nothing).
+    pub(in crate::shell) fn pending_path(&self) -> Option<std::path::PathBuf> {
+        self.notify.store.path().and_then(|p| p.parent()).map(|dir| dir.join("pending-notifications.ini"))
     }
 
     /// Loads the persisted notifications from `path` and saves there from now on.
@@ -863,10 +899,11 @@ impl Shell {
                 match (tc.horizontal, tc.aim) {
                     (None, Aim::Card { .. }) if tc.base < 0.0 => self.notify.revealed = None,
                     (None, aim) => self.lock_tap(aim, t),
-                    (Some(_), Aim::Card { id, app, whole, .. }) => {
+                    (Some(_), Aim::Card { id, app, whole, group, .. }) => {
                         if -total > cw * CLEAR_FRACTION {
                             if whole {
-                                self.clear_notifications(app);
+                                let thread = self.lock_thread(group);
+                                self.clear_group(app, &thread);
                             } else {
                                 self.clear_notification(id);
                             }
@@ -890,6 +927,7 @@ impl Shell {
     /// A tap that stayed put on `aim`.
     fn lock_tap(&mut self, aim: Aim, t: f64) {
         let group_app = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| g.app);
+        let group_stack = |sh: &Self, i: usize| sh.notify.lock.as_ref().and_then(|l| l.groups.get(i)).map(|g| (g.app, g.thread.clone()));
         match aim {
             Aim::Card { group, app, .. } => {
                 let stacked = self.notify.lock.as_ref().and_then(|l| l.groups.get(group)).is_some_and(|g| g.stacked());
@@ -901,8 +939,8 @@ impl Shell {
                 }
             }
             Aim::Button(Hit::Clear(i)) => {
-                if let Some(app) = group_app(self, i) {
-                    self.clear_notifications(app);
+                if let Some((app, thread)) = group_stack(self, i) {
+                    self.clear_group(app, &thread);
                 }
             }
             Aim::Button(Hit::Mute(i)) => {
@@ -919,12 +957,15 @@ impl Shell {
             Aim::Button(Hit::ClearAll) => self.clear_all_notifications(),
             Aim::Button(Hit::Card { .. }) => {}
             Aim::Revealed(slot) => {
-                if let Some(Aim::Card { id, app, whole, .. }) = self.notify.revealed.take() {
+                if let Some(Aim::Card { id, app, whole, group, .. }) = self.notify.revealed.take() {
                     self.dirty = true;
                     match slot {
                         0 => self.toggle_mute(app),
                         1 => self.open_from_notification(app, t),
-                        _ if whole => self.clear_notifications(app),
+                        _ if whole => {
+                            let thread = self.lock_thread(group);
+                            self.clear_group(app, &thread);
+                        }
                         _ => self.clear_notification(id),
                     }
                 }
@@ -1508,6 +1549,47 @@ mod tests {
             tap(&mut sh, tx, ty, 5000.0);
         }
         assert!(!sh.app_muted(AppId::Settings), "a second tap unmutes");
+    }
+
+    #[test]
+    fn show_previews_decides_what_banners_and_lists_reveal() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let set = |sh: &mut Shell, previews: u8| {
+            let page = AppNotif { previews, ..AppNotif::default() };
+            let _ = sh.prefs.set(&pref_key(AppId::Files), &page.encode());
+        };
+        set(&mut sh, 0);
+        sh.notify(note(AppId::Files, "Always"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private && !sh.previews_hidden(AppId::Files, Mode::Lock));
+        set(&mut sh, 1);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Lock), "When Unlocked hides the text on the lock screen");
+        assert!(!sh.previews_hidden(AppId::Files, Mode::Center), "and shows it once unlocked");
+        sh.notify(note(AppId::Files, "When unlocked"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private);
+        set(&mut sh, 2);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Center));
+        sh.notify.banner = None;
+        sh.notify(note(AppId::Files, "Never"));
+        assert!(sh.notify.banner_card.as_ref().unwrap().private, "Never hides the banner text too");
+    }
+
+    #[test]
+    fn clearing_a_stack_removes_only_its_thread_of_the_app() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let threaded = |thread: &str, title: &str| Notification { thread: thread.into(), ..note(AppId::Files, title) };
+        sh.notify(threaded("chat:1", "hi"));
+        sh.notify(threaded("chat:2", "yo"));
+        sh.notify(threaded("chat:1", "again"));
+        let groups = sh.visible_groups(Mode::Center);
+        assert_eq!(groups.len(), 2, "one stack per thread");
+        assert_eq!(groups[0].thread, "chat:1", "the newest stack first");
+        sh.clear_group(AppId::Files, "chat:1");
+        let left: Vec<&str> = sh.notify.store.groups().iter().flat_map(|g| g.items.iter().map(|n| n.title.as_str())).collect();
+        assert_eq!(left, vec!["yo"]);
     }
 
     #[test]

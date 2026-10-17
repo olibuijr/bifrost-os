@@ -686,6 +686,30 @@ tapped (the banner and center rows do not carry the request id); delivered reque
 restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, location triggers, the `usernotif` (`after_ms`) path's repeating triggers (use `notification_schedule`),
 `willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
 
+### Notification stacks, persistence and Show Previews (parity round)
+
+- **Stacks by thread**: a request's `thread` is kept on the notification (`thread=` in `notifications.ini`). The store
+  groups by (app, thread), newest stack first (`springboard/src/shell/notify/store.rs`, `Store::groups`). Each stack has its own
+  Clear (`Store::clear_thread`, `Shell::clear_group`), the desk column's close control and a whole-stack swipe on the lock
+  screen; Mute, Show Less and the expand tap still act on the app. Tests: `store.rs` (`notifications_stack_per_app_and_thread`,
+  `clear_thread_removes_only_that_stack`), `notify/mod.rs` (`clearing_a_stack_removes_only_its_thread_of_the_app`).
+  Gap: the lock-screen expansion is per app, so two stacks of one app expand together. Clear All and the 50-entry limit are unchanged.
+- **Pending requests across a restart**: `notification-schedule` saves interval and calendar requests to
+  `pending-notifications.ini` beside `notifications.ini` (`services/notification_schedule.rs`, `encode`/`decode`, `restore`,
+  `persist`). Each saved trigger is a Unix time in milliseconds; on the first tick after the data directory is set, a
+  request is put back at the same moment on the new shell clock, so one that passed while the shell was off fires at once.
+  Tests use two shells with a fake wall clock: `pending_requests_survive_a_restart_and_keep_their_trigger_times`,
+  `a_request_whose_time_passed_while_the_shell_was_off_fires_on_the_first_tick`, `a_cleared_request_is_not_saved_again`.
+  Gap: sound, `userInfo` and interruption level are not saved, and delivered requests still are not persisted.
+- **Show Previews** (`Settings > Notifications > <app> > Show Previews`): Always (the default; the passcode still hides text
+  on the lock screen), When Unlocked (hidden on the lock screen, shown once unlocked) and Never (hidden everywhere). A
+  banner's text follows the same rule, since banners only show when unlocked (`Shell::previews_hidden`, `start_banner`).
+  Test: `show_previews_decides_what_banners_and_lists_reveal`, `previews_hidden_per_app_hide_only_that_app_text` (`list.rs`).
+- **Not built**: Focus filters per named Focus. The shell has one Focus (Do Not Disturb), so "allowed apps" is one list
+  (`notify/store.rs` `focus_allowed`); the `focus_filter` service stores app values per Focus name but the shell does not
+  switch between Focus modes. Calendar triggers still carry only hour, minute and weekday over the wire.
+- **Not verified on Midget**: the stacks, the restart and the Show Previews settings are host-tested only.
+
 ### User notifications model (sprint 9)
 
 `bifrost_app::usernotif_model` (re-exported from `usernotif`) is the pure, unit-tested model; the shell wire-up is still to do.
