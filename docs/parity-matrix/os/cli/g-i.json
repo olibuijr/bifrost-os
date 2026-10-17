@@ -68,9 +68,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/bin/ifconfig.rs, springboard/cmd/src/ifconfig.rs",
    "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
+   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Built 2026-10-17: ifconfig lists every interface (flags, MTU, hardware address, IPv6 addresses) from /sys/class/net and /proc/net/if_inet6 (ifconfig::tests). Gap: IPv4 addresses (only netlink carries them) and any change to an interface.",
    "rea": [],
    "method": "assessed"
   },
