@@ -19,7 +19,7 @@
    "apple": "TranslationSession (init(installedSource:target:), translate(_:), translate(batch:), translations(from:), cancel(), prepareTranslation()), translationTask(_:action:), translationTask(source:target:action:)",
    "bifrost": "springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs; wired: springboard/apps/news-desktop/src/wire.rs (translate_article) over springboard/sdk/src/translation.rs and springboard/ui/src/translation.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (translate_notice, LanguageAvailability::check_session)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session type; no way for an app to request a translation between two languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session type; no way for an app to request a translation between two languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Built 2026-10-17: on-device language packs (springboard/sdk/src/translation.rs LanguagePack, parse_pack): a pair is installed when its <source>-<target>.tsv pack file is present, the phrases come from that file, and a missing or malformed pack fails with NotInstalled or InternalError; tests translation::tests::a_pack_file_installs_only_its_own_direction, translation::tests::a_missing_pack_is_not_installed_and_a_broken_one_is_an_internal_error. No neural engine: no Argos or bergamot package is in the Arch repositories (pacman -Ss, 2026-10-17), so the offline engine is the phrase-table pack, not a machine-translation model; packs are not yet installed or shipped on Midget."
   },
   {
    "feature": "Language availability",
@@ -56,6 +56,6 @@
   "No language-pair availability or download-status query (LanguageAvailability).",
   "No translation error model (TranslationError).",
   "Locale data covers only en and is, so even the related localization layer lacks the language pairs a translation feature would need (docs/bifrost-ui.md, Locale gaps).",
-  "No translation engine: the popover model takes results from the caller and no language pack ships"
+  "No neural translation engine: no Argos or bergamot style model is in the Arch repositories, so only the phrase-table language packs (LanguagePack) exist"
  ]
 }

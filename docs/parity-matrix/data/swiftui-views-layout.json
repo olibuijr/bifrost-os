@@ -117,7 +117,7 @@
    "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
    "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
    "status": "partial",
-   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views"
+   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views Built 2026-10-17: TabView selection model (ui tab_selection::TabSelection: select, remove with successor selection, duplicate ids dropped); tests tab_selection::tests in springboard/ui/src/tab_selection.rs. Not yet a TabView view, not wired into the shell or apps."
   },
   {
    "feature": "Scroll views",
@@ -152,8 +152,8 @@
   "Declarative View protocol with body, modifiers and state/binding updates",
   "Style protocols",
   "Layout protocol and ZStack, lazy grids, ViewThatFits",
-  "Shape, Path and Canvas drawing API for apps",
-  "Generic List with swipe actions, TabView, GroupBox, ControlGroup",
+  "Declarative Shape and Canvas views: the drawing API exists imperatively (sdk graphics_context Path and GraphicsContext, ShapeView, ui shape), but no Shape protocol or Canvas view builder in the view tree",
+  "Generic List with swipe actions, GroupBox, ControlGroup (TabView selection is modelled in ui tab_selection; no TabView view yet)",
   "ScrollViewReader and scroll position APIs"
  ]
 }

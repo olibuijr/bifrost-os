@@ -211,7 +211,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "from SDK matrix translation.json",
+   "note": "from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -441,7 +441,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "from SDK matrix visual-intelligence.json",
+   "note": "from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -1845,7 +1845,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json",
+   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -1866,7 +1866,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json",
+   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -1887,7 +1887,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json",
+   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -1908,7 +1908,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json",
+   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -1929,7 +1929,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json",
+   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
    "method": "assessed"
   },
@@ -4059,7 +4059,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -4080,7 +4080,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -4101,7 +4101,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -4122,7 +4122,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -4143,7 +4143,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
    "rea": [],
    "method": "assessed"
   },

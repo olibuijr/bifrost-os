@@ -616,7 +616,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
    "status": "partial",
-   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json",
+   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -5911,7 +5911,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
    "status": "partial",
-   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json",
+   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests).",
    "rea": [],
    "method": "assessed"
   },

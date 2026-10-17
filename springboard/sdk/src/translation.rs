@@ -9,6 +9,7 @@ use bifrost_ui::translation::{language_code, LanguageAvailability};
 pub use bifrost_ui::translation::TranslationError;
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// The domain of [`TranslationError`] in an [`AppError`](crate::error::AppError).
 pub const TRANSLATION_DOMAIN: &str = "bifrost.translation";
@@ -168,6 +169,79 @@ impl Translator for TranslationMemory {
     }
 }
 
+/// File extension of an on-device language pack. A pack holds one pair, named `<source>-<target>.tsv`, with one
+/// `text<TAB>translation` line per phrase. Lines that are blank or start with `#` are ignored.
+pub const PACK_EXTENSION: &str = "tsv";
+
+/// Why a language pack could not be read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PackError {
+    /// The 1-based line that is not `text<TAB>translation`, or has an empty side.
+    Malformed(usize),
+}
+
+/// Parses the phrases of one pack for `source` to `target` into a phrase table.
+pub fn parse_pack(source: &str, target: &str, text: &str) -> Result<TranslationMemory, PackError> {
+    let mut memory = TranslationMemory::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let malformed = PackError::Malformed(index + 1);
+        let (from, to) = line.split_once('\t').ok_or(malformed)?;
+        if from.is_empty() || to.is_empty() {
+            return Err(malformed);
+        }
+        memory.insert(source, target, from, to);
+    }
+    Ok(memory)
+}
+
+/// The on-device language packs in one folder. Nothing is downloaded: a pair is installed when its pack file is
+/// present, and the phrases are read from that file. This is the engine BifrOSt ships offline. A neural engine
+/// (Argos or bergamot style) is not in the Arch repositories, so it is not wired.
+#[derive(Clone, Debug)]
+pub struct LanguagePack {
+    root: PathBuf,
+}
+
+impl LanguagePack {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    /// The pack file for a pair. Locale identifiers are reduced to language codes first.
+    pub fn file_for(&self, source: &str, target: &str) -> PathBuf {
+        let name = format!("{}-{}.{}", language_code(source), language_code(target), PACK_EXTENSION);
+        self.root.join(name)
+    }
+
+    /// The availability for `supported` languages: every ordered pair whose pack file exists is installed.
+    pub fn availability<S: AsRef<str>>(&self, supported: &[S]) -> LanguageAvailability {
+        let mut availability = LanguageAvailability::new(supported);
+        let codes = availability.supported_languages().to_vec();
+        for source in &codes {
+            for target in &codes {
+                if source != target && self.file_for(source, target).is_file() {
+                    availability.install(source, target);
+                }
+            }
+        }
+        availability
+    }
+
+    /// The engine for an installed pair. A missing pack is `NotInstalled`; an unreadable or malformed one is
+    /// `InternalError`, because the phrases cannot be trusted.
+    pub fn engine(&self, source: &str, target: &str) -> Result<TranslationMemory, TranslationError> {
+        let path = self.file_for(source, target);
+        if !path.is_file() {
+            return Err(TranslationError::NotInstalled);
+        }
+        let text = std::fs::read_to_string(&path).map_err(|_| TranslationError::InternalError)?;
+        parse_pack(&language_code(source), &language_code(target), &text).map_err(|_| TranslationError::InternalError)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +348,43 @@ mod tests {
         m.insert("en_GB", "is", "Save", "Vista!");
         assert_eq!(m.len(), 1);
         assert_eq!(m.translate("en", "is", "Save"), Ok("Vista!".to_string()));
+    }
+
+    #[test]
+    fn a_pack_line_is_text_then_tab_then_translation() {
+        let text = "# phrases for en to is\nSave\tVista\n\nOpen\tOpna\n";
+        let m = parse_pack("en_US", "is", text).ok().unwrap();
+        assert_eq!(m.len(), 2);
+        assert_eq!(m.translate("en", "is", "Open"), Ok("Opna".to_string()));
+    }
+
+    #[test]
+    fn a_malformed_pack_line_reports_its_line_number() {
+        assert_eq!(parse_pack("en", "is", "Save\tVista\nno tab here\n").err(), Some(PackError::Malformed(2)));
+        assert_eq!(parse_pack("en", "is", "\tVista\n").err(), Some(PackError::Malformed(1)));
+    }
+
+    #[test]
+    fn a_pack_file_installs_only_its_own_direction() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("en-is.tsv"), "Save\tVista\n").unwrap();
+        let packs = LanguagePack::new(dir.path());
+        assert_eq!(packs.file_for("en_US.UTF-8", "is_IS"), dir.path().join("en-is.tsv"));
+
+        let a = packs.availability(&["en", "is"]);
+        assert!(matches!(a.status("en", "is"), AvailabilityStatus::Installed));
+        assert!(matches!(a.status("is", "en"), AvailabilityStatus::Supported));
+
+        let s = TranslationSession::new(&a, "en", "is", Box::new(packs.engine("en", "is").ok().unwrap())).ok().unwrap();
+        assert_eq!(s.translate("Save"), Ok("Vista".to_string()));
+    }
+
+    #[test]
+    fn a_missing_pack_is_not_installed_and_a_broken_one_is_an_internal_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let packs = LanguagePack::new(dir.path());
+        assert_eq!(packs.engine("en", "is").err(), Some(TranslationError::NotInstalled));
+        std::fs::write(dir.path().join("en-is.tsv"), "broken line\n").unwrap();
+        assert_eq!(packs.engine("en", "is").err(), Some(TranslationError::InternalError));
     }
 }
