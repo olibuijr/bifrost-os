@@ -40,7 +40,7 @@
       "apple": "PDFPage string, attributedString, characterBounds(at:), characterIndex(at:), numberOfCharacters",
       "bifrost": "springboard/render/src/cg/pdf/page.rs (pages, Page, page tree walk with inherited boxes), springboard/render/src/cg/pdf/extract.rs (Extractor, reading order text)",
       "status": "partial",
-      "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs: the_page_tree_walk_inherits_the_media_box_and_reads_the_rotation, a_crop_box_is_reported_for_its_page_and_falls_back_to_the_media_box_elsewhere, text_drawn_on_a_written_page_is_extracted_in_reading_order, an_empty_written_document_has_no_text_pieces. Text is extracted in reading order. No per-character bounds or index lookup."
+      "note": "Headless tests in springboard/render/tests/parity_sdk-tests-03.rs: the_page_tree_walk_inherits_the_media_box_and_reads_the_rotation, a_crop_box_is_reported_for_its_page_and_falls_back_to_the_media_box_elsewhere, text_drawn_on_a_written_page_is_extracted_in_reading_order, an_empty_written_document_has_no_text_pieces. Text is extracted in reading order. No per-character bounds or index lookup. Built 2026-10-17: graphics_pdf::Document::find returns the pages whose text contains a phrase, ignoring case (tests graphics_pdf::tests::find_names_the_pages_whose_text_has_the_phrase)."
     },
     {
       "feature": "PDFPage: rendering and drawing",
@@ -75,7 +75,7 @@
       "apple": "PDFOutline: child(at:), label, destination, action, isOpen",
       "bifrost": "springboard/render/src/cg/pdf/page.rs (outline(): /Outlines flattened into title, destination page and level); springboard/render/src/cg/pdf/outline_tree.rs (outline_tree: nested OutlineNode)",
       "status": "partial",
-      "note": "Headless test the_outline_is_flattened_in_reading_order_with_levels_and_page_targets in springboard/render/tests/parity_sdk-tests-03.rs covers the flattened outline, and springboard/render/tests/parity_sdk-complete-42.rs covers the nested tree built from it. Books builds its table of contents from its own copy in springboard/src/shell/books/engine/pdf/mod.rs, which these tests do not cover. No outline item actions or editing."
+      "note": "Headless test the_outline_is_flattened_in_reading_order_with_levels_and_page_targets in springboard/render/tests/parity_sdk-tests-03.rs covers the flattened outline, and springboard/render/tests/parity_sdk-complete-42.rs covers the nested tree built from it. Books builds its table of contents from its own copy in springboard/src/shell/books/engine/pdf/mod.rs, which these tests do not cover. No outline item actions or editing. Built 2026-10-17: graphics_pdf::Document::outline returns the outline as a nested tree of OutlineEntry with the page index of each entry (tests graphics_pdf::tests::outline_entries_nest_and_name_their_page_indexes)."
     },
     {
       "feature": "Selection and find",
@@ -107,12 +107,11 @@
     }
   ],
   "gaps": [
-    "No app-facing PDF document, page or view API in springboard/sdk/src (PDFDocument, PDFPage, PDFView have no counterpart); the PDF reader is private to the Books app",
+    "No app-facing PDF page or view object in springboard/sdk/src (PDFPage, PDFView have no counterpart). graphics_pdf::Document has open, page count and size, render, outline and find; the PDF reader is otherwise private to the Books app.",
     "No annotation, widget or form-field support (PDFAnnotation, AcroForm)",
     "No page rendering into an app-provided context and no page thumbnails (PDFPage draw, PDFThumbnailView)",
-    "No text selection or find in PDFs (PDFSelection, PDFDocument find); the reader extracts text only",
+    "No text selection in PDFs (PDFSelection); find returns page indexes, not ranges of text.",
     "No write path: Save as PDF copies the original file, so page edits, rotation and password handling cannot be written",
-    "Printing sends the file to CUPS unchanged; page ranges are set in the shell's print sheet (ui print_ranges.rs), but there is no pagination of PDF content (see docs/bifrost-ui.md:1322-1333)",
-    "Outline is read into the Books table of contents only, with no outline tree object for apps"
+    "Printing sends the file to CUPS unchanged; page ranges are set in the shell's print sheet (ui print_ranges.rs), but there is no pagination of PDF content (see docs/bifrost-ui.md:1322-1333)"
   ]
 }

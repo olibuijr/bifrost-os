@@ -70,9 +70,19 @@ pub struct Markup {
     s: f32,
 }
 
+/// Left edges of the Undo, Redo and Cancel buttons, one after another from the margin. Undo starts a pad to the
+/// left of the margin so its text lines up with the margin; each button's text sits `pad` inside its edges.
+fn bar_starts(m: f32, pad: f32, undo_w: f32, redo_w: f32) -> [f32; 3] {
+    let undo = m - pad;
+    let redo = undo + undo_w + 2.0 * pad;
+    let cancel = redo + redo_w + 2.0 * pad;
+    [undo, redo, cancel]
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Hit {
     Undo,
+    Redo,
     Cancel,
     Done,
     Tool(Tool),
@@ -131,10 +141,12 @@ impl Markup {
     fn rects(&self, ui: &Ui) -> Vec<(Hit, Rect)> {
         let m = 16.0 * self.s;
         let mut v = vec![];
-        let (uw, cw, dw) = (ui.measure("Undo", 17.0, Weight::Regular), ui.measure("Cancel", 17.0, Weight::Regular), ui.measure("Done", 17.0, Weight::Semibold));
+        let (uw, rw, cw, dw) = (ui.measure("Undo", 17.0, Weight::Regular), ui.measure("Redo", 17.0, Weight::Regular), ui.measure("Cancel", 17.0, Weight::Regular), ui.measure("Done", 17.0, Weight::Semibold));
         let pad = 12.0 * self.s;
-        v.push((Hit::Undo, self.button(m - pad, uw + 2.0 * pad)));
-        v.push((Hit::Cancel, self.button(m + uw + pad, cw + 2.0 * pad)));
+        let xs = bar_starts(m, pad, uw, rw);
+        v.push((Hit::Undo, self.button(xs[0], uw + 2.0 * pad)));
+        v.push((Hit::Redo, self.button(xs[1], rw + 2.0 * pad)));
+        v.push((Hit::Cancel, self.button(xs[2], cw + 2.0 * pad)));
         v.push((Hit::Done, self.button(self.w as f32 - m - dw - pad, dw + 2.0 * pad)));
         let tray = self.tray();
         let n = TOOLS.len() as i32;
@@ -194,6 +206,7 @@ impl Markup {
                 if let Some(h) = self.pressed.take().filter(|h| self.hit(ui, x, y) == Some(*h)) {
                     match h {
                         Hit::Undo => self.undo(),
+                        Hit::Redo => self.redo(),
                         Hit::Cancel => return Some(Outcome::Cancel),
                         Hit::Done => return Some(Outcome::Done),
                         Hit::Tool(t) => self.tool = t,
@@ -303,13 +316,14 @@ impl Markup {
         for (h, r) in self.rects(ui) {
             let down = self.pressed == Some(h);
             match h {
-                Hit::Undo | Hit::Cancel | Hit::Done => {
+                Hit::Undo | Hit::Redo | Hit::Cancel | Hit::Done => {
                     let (label, weight) = match h {
                         Hit::Undo => ("Undo", Weight::Regular),
+                        Hit::Redo => ("Redo", Weight::Regular),
                         Hit::Cancel => ("Cancel", Weight::Regular),
                         _ => ("Done", Weight::Semibold),
                     };
-                    let dim = h == Hit::Undo && !self.can_undo();
+                    let dim = (h == Hit::Undo && !self.can_undo()) || (h == Hit::Redo && !self.can_redo());
                     let color = if dim { SECONDARY } else { TINT };
                     let img = ui.text(label, 17.0, weight, color);
                     let a = if down { 120 } else { 255 };
@@ -358,6 +372,16 @@ mod tests {
         m.undo();
         assert_eq!(m.canvas.px[10 * 100 + 30], pack(0, 0, 0, 255));
         assert!(!m.can_undo());
+    }
+
+    #[test]
+    fn redo_button_sits_between_undo_and_cancel() {
+        // margin 16, pad 12, Undo and Redo 40 wide: Redo starts where Cancel used to start after Undo (16 + 40 + 12)
+        let xs = bar_starts(16.0, 12.0, 40.0, 40.0);
+        assert_eq!(xs[0], 4.0);
+        assert_eq!(xs[1], 68.0);
+        assert_eq!(xs[2], 132.0);
+        assert!(xs[0] < xs[1] && xs[1] < xs[2]);
     }
 
     #[test]
