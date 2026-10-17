@@ -121,6 +121,7 @@ pub const MENU_PASTE_MATCH: u32 = 75;
 pub const MENU_EXPORT_PDF: u32 = 76;
 pub const MENU_ALL_HEADERS: u32 = 77;
 pub const MENU_IGNORE_FOLLOW_UP: u32 = 78;
+pub const MENU_NEW_VIEWER: u32 = 79;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -280,6 +281,10 @@ pub struct MailWindow {
     pub labels: TextCache,
     /// The wrapped text of the open message, for the width it was laid out at.
     pub laid: Option<crate::draw::Laid>,
+    /// Messages to open in viewer windows; the app takes them with `take_viewers`.
+    viewer_requests: Vec<u32>,
+    /// The last message tapped and when, for the double-click that opens a viewer window.
+    last_tap: Option<(u32, f64)>,
     dirty: bool,
 }
 
@@ -315,6 +320,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
     let mut message = vec![
         AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
+        AppMenuItem::new(MENU_NEW_VIEWER, "New Viewer Window").enabled(open),
         AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
         AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open_has_others(mail)),
         AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
@@ -561,6 +567,8 @@ impl MailWindow {
             press: None,
             labels: TextCache::default(),
             laid: None,
+            viewer_requests: Vec::new(),
+            last_tap: None,
             dirty: true,
         };
         for account in &window.mail.accounts {
@@ -761,7 +769,7 @@ impl MailWindow {
                     }
                     return true;
                 }
-                self.tap(ctx, x, y)
+                self.tap(ctx, x, y, t)
             }
         }
     }
@@ -989,6 +997,42 @@ impl MailWindow {
         }
     }
 
+    /// File > New Viewer Window: the open message goes into a viewer window of its own.
+    fn new_viewer(&mut self) {
+        if let Some(uid) = self.mail.open {
+            self.viewer_requests.push(uid);
+        }
+    }
+
+    /// The messages asked for viewer windows since the last call, copied for the viewers.
+    pub fn take_viewers(&mut self) -> Vec<crate::viewer::Snapshot> {
+        let uids = std::mem::take(&mut self.viewer_requests);
+        uids.into_iter().map(|uid| self.viewer_snapshot(uid)).collect()
+    }
+
+    /// The copy of one message a viewer window shows. `loaded` is false until its body is fetched.
+    pub fn viewer_snapshot(&self, uid: u32) -> crate::viewer::Snapshot {
+        let summary = self.mail.rows.iter().find(|r| r.uid == uid).map(|r| r.summary.clone()).unwrap_or_default();
+        let raw = self.mail.bodies.get(&uid);
+        let body = raw.map(|raw| crate::body::readable(raw)).unwrap_or_default();
+        let files = self
+            .mail
+            .attachments
+            .get(&uid)
+            .map(|files| files.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect())
+            .unwrap_or_default();
+        crate::viewer::Snapshot {
+            uid,
+            subject: summary.subject,
+            from: summary.from,
+            to: summary.to,
+            date: summary.date,
+            body,
+            files,
+            loaded: raw.is_some(),
+        }
+    }
+
     pub fn menu_items(&self) -> Vec<AppMenu> {
         menus(&self.mail, self.undo_pending())
     }
@@ -1028,6 +1072,7 @@ impl MailWindow {
                 self.list_scroll = Scroller::new();
             }
             MENU_PRINT => self.print_open(),
+            MENU_NEW_VIEWER => self.new_viewer(),
             MENU_NEW_MAILBOX => self.mail.open_new_mailbox(),
             MENU_RENAME_MAILBOX => {
                 let _ = self.mail.open_rename_mailbox();
@@ -2510,7 +2555,7 @@ impl MailWindow {
         }
     }
 
-    fn tap(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
+    fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64) -> bool {
         let hit = self.hit(&ctx.ui, x, y);
         match hit {
             crate::draw::Hit::Button(button) => match button {
@@ -2541,7 +2586,16 @@ impl MailWindow {
                 crate::draw::Side::Heading(_) => return false,
                 crate::draw::Side::Add => self.mail.open_setup(),
             },
-            crate::draw::Hit::Message(uid) => self.open_message(uid),
+            crate::draw::Hit::Message(uid) => {
+                // a second tap on the same message within the double-click time opens it in a viewer window
+                let double = matches!(self.last_tap, Some((last, when)) if last == uid && t - when <= crate::viewer::DOUBLE_TAP_SECS);
+                self.last_tap = if double { None } else { Some((uid, t)) };
+                if double {
+                    self.viewer_requests.push(uid);
+                } else {
+                    self.open_message(uid);
+                }
+            }
             crate::draw::Hit::Favorite(index) => self.open_favorite(index),
             crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
