@@ -705,9 +705,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DragShort); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DragShort); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DrawOn.aiff",
@@ -735,9 +740,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawOn); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawOn); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DrawerClosing.aiff",
@@ -765,9 +775,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawerClosing); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawerClosing); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DrawerOpening.aiff",
@@ -795,9 +810,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawerOpening); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (DrawerOpening); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ElementBorder.aiff",
@@ -825,9 +845,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ElementBorder); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ElementBorder); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ElementBorderHit.aiff",
@@ -855,9 +880,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ElementBorderHit); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ElementBorderHit); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Ellipsis.aiff",
@@ -885,9 +915,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Ellipsis); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Ellipsis); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/EmptySpace.aiff",
@@ -915,9 +950,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EmptySpace); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EmptySpace); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/EnterInvisibleArea.aiff",
@@ -945,9 +985,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnterInvisibleArea); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnterInvisibleArea); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/EnterVisibleArea.aiff",
@@ -975,9 +1020,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnterVisibleArea); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnterVisibleArea); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/EnteringMultiSelect.aiff",
@@ -1005,9 +1055,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnteringMultiSelect); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (EnteringMultiSelect); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Error.aiff",
@@ -1035,9 +1090,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Error); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Error); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ExitingMultiSelect.aiff",
@@ -1065,9 +1125,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ExitingMultiSelect); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ExitingMultiSelect); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Focus.aiff",
@@ -1095,9 +1160,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Focus); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Focus); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Focus2.aiff",
@@ -1125,9 +1195,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Focus2); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Focus2); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Forward.aiff",
@@ -1155,9 +1230,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Forward); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Forward); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ForwardThrough.aiff",
@@ -1185,9 +1265,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ForwardThrough); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (ForwardThrough); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/Sounds/Frog.aiff",

@@ -2292,9 +2292,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeEnteredScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeEnteredScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GazeLeftScene.aiff",
@@ -2322,9 +2327,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeLeftScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeLeftScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideProgress.aiff",
@@ -2352,9 +2362,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideProgress); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideProgress); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideSuccess.aiff",
@@ -2382,9 +2397,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideSuccess); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideSuccess); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Hit.aiff",
@@ -2412,9 +2432,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Hit); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Hit); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Indentation.caf",
@@ -2442,9 +2467,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Indentation); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Indentation); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Interactable.aiff",
@@ -2472,9 +2502,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Interactable); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Interactable); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/HopperScript.ttf",

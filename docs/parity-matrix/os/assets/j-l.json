@@ -1472,9 +1472,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVONotSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVONotSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/KBVOSynched.aiff",
@@ -1502,9 +1507,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVOSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVOSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LayoutChanged.aiff",
@@ -1532,9 +1542,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LayoutChanged); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LayoutChanged); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LinkBegin.aiff",
@@ -1562,9 +1577,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkBegin); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkBegin); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LinkEnd.aiff",
@@ -1592,9 +1612,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::ui_sounds::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::system_sound::tests"
     }
    ],
-   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkEnd); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkEnd); the reference recording is not shipped, so timbre differs. Built 2026-10-17. Played through media::system_sound (SoundPlayer::ui_cue) on the sound-effects role."
   }
  ]
 }
