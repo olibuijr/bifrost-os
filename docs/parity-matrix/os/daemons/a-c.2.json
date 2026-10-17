@@ -124,7 +124,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Unified log and signpost models (log.rs, signpost.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ensemble.plist",
@@ -145,7 +159,21 @@
    "status": "partial",
    "note": "rule: nearby and peer session models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Nearby and peer session models (nearby_service.rs, peer_session.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "nearby_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peer_session::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.exchange.exchangesyncd.plist",
@@ -290,7 +318,26 @@
    "status": "partial",
    "note": "rule: file watching, coordination and provider models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "File watching, coordination and provider models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.filevaultd.plist",
@@ -413,7 +460,16 @@
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Font descriptor model (font_descriptor.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.frauddefensed.plist",
@@ -455,7 +511,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Disk arbitration and disk session models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.gamed.plist",
@@ -476,7 +546,21 @@
    "status": "partial",
    "note": "rule: HID and game controller models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Gamepad and HID device models (gamepad_service.rs, hid_devices.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.gamesaved.plist",
@@ -620,7 +704,21 @@
    "status": "partial",
    "note": "rule: Matter commissioning and interaction models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Matter commissioning and interaction models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter_interaction::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.homeenergyd.plist",
@@ -746,7 +844,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Camera and capture device models (camera_device.rs, device_browser.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.icloud.findmydeviced.findmydevice-user-agent.plist",
@@ -975,7 +1087,16 @@
    "status": "partial",
    "note": "rule: input method models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Input method model (input_method.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.imtransferagent.plist",
@@ -1226,7 +1347,21 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Background transfer and asset pack models (url_background.rs, assetpack.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.keyboardservicesd.plist",
@@ -1372,7 +1507,26 @@
    "status": "partial",
    "note": "rule: notification, live activity and focus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Live activity, notification and user notification models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.localizationswitcherd.plist",
@@ -1497,7 +1651,16 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Launch services model (launch_services.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.macos.studentd.plist",
@@ -1601,7 +1764,21 @@
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Snapshot backup and backup exclusion models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mbfloagent.plist",
@@ -1622,7 +1799,21 @@
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Snapshot backup and backup exclusion models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mbuseragent.plist",
@@ -1643,7 +1834,21 @@
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Snapshot backup and backup exclusion models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mdmclient.agent.plist",
@@ -1685,7 +1890,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Search index batch and search index models are covered by their unit tests; Spotlight search runs in the shell.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mdworker.mail.plist",
@@ -1790,7 +2009,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Search index batch and search index models are covered by their unit tests; Spotlight search runs in the shell.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mediaanalysisd.plist",
@@ -1936,7 +2169,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Search index batch and search index models are covered by their unit tests; Spotlight search runs in the shell.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.metadata.mdflagwriter.plist",
@@ -1978,7 +2225,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Search index batch and search index models are covered by their unit tests; Spotlight search runs in the shell.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.metrickitd.plist",
@@ -2144,7 +2405,16 @@
    "status": "partial",
    "note": "rule: translation session model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Translation session model (translation.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.navd.plist",
@@ -2206,7 +2476,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Network path and VPN manager models (network_path.rs, vpn_manager.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.netauth.user.auth.plist",
@@ -2269,7 +2553,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Network path and VPN manager models (network_path.rs, vpn_manager.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.newsd.plist",
@@ -2372,7 +2670,21 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Background transfer and asset pack models (url_background.rs, assetpack.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.parentalcontrols.check.plist",
@@ -2474,7 +2786,16 @@
    "status": "partial",
    "note": "rule: pasteboard model and the shell pasteboard service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Pasteboard model (pasteboard.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pasteboard::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.pbs.plist",
@@ -2495,7 +2816,16 @@
    "status": "partial",
    "note": "rule: pasteboard model and the shell pasteboard service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Pasteboard model (pasteboard.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pasteboard::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.peopled.plist",
@@ -2516,7 +2846,16 @@
    "status": "partial",
    "note": "rule: contacts model; Contacts app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Contacts model (contacts.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.photoanalysisd.plist",
@@ -2578,7 +2917,16 @@
    "status": "partial",
    "note": "rule: extension models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Extension models (ui extensions.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "extensions::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.pluginkit.pkreporter.plist",
@@ -2620,7 +2968,21 @@
    "status": "partial",
    "note": "rule: power and thermal service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Power service and thermal models (power_service.rs, thermal.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "thermal::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.preference.displays.MirrorDisplays.plist",
@@ -2682,7 +3044,21 @@
    "status": "partial",
    "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "CUPS client and IPP models (cups.rs, ipp.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ipp::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.printuitool.agent.plist",
@@ -2703,7 +3079,21 @@
    "status": "partial",
    "note": "rule: CUPS client and IPP models; Print Center app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "CUPS client and IPP models (cups.rs, ipp.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ipp::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.privatecloudcomputed.plist",
@@ -2850,7 +3240,21 @@
    "status": "partial",
    "note": "rule: Quick Look and thumbnail service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Quick Look and thumbnail models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quick_look::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.quicklook.plist",
@@ -2871,7 +3275,21 @@
    "status": "partial",
    "note": "rule: Quick Look and thumbnail service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Quick Look and thumbnail models are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quick_look::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.quicklook.ui.helper.plist",
@@ -2913,7 +3331,21 @@
    "status": "partial",
    "note": "rule: nearby and peer session models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Nearby and peer session models (nearby_service.rs, peer_session.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "nearby_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peer_session::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.rcd.plist",
@@ -2974,7 +3406,21 @@
    "status": "partial",
    "note": "rule: calendar and sync models; Calendar and Reminders apps",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Calendar and sync models (calendar.rs, dav_sync.rs) are covered by their unit tests; Reminders app uses them.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.remotecompositorclientd.plist",
@@ -3138,7 +3584,16 @@
    "status": "partial",
    "note": "role filled by screenshot.rs and screenrec.rs; no separate process; capture UI is in the shell",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "ready_note": "Screenshot capture UI in the shell (shell/screenshot.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screenshot::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.screensharing.MessagesAgent.plist",
@@ -3201,7 +3656,26 @@
    "status": "partial",
    "note": "rule: accessibility models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Accessibility models (ax.rs, braille.rs, captions.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.searchtoold.plist",
@@ -3222,7 +3696,16 @@
    "status": "partial",
    "note": "Search queries answered in the shell; no separate tool daemon",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "ready_note": "Quick search in the shell (shell/quicksearch.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.secd.plist",
@@ -3243,7 +3726,16 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Keychain model (keychain.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.secinitd.plist",
@@ -3764,7 +4256,21 @@
    "status": "partial",
    "note": "rule: speech recognition and synthesis models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Speech recognition and synthesis models (speech_recognizer.rs, ui speech.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.speechmaintenanced.plist",
@@ -3806,7 +4312,16 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Crash report model (crash_report.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.sportsd.plist",
@@ -4264,7 +4779,21 @@
    "status": "partial",
    "note": "rule: defaults and preference domain models; Settings app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Defaults and preference domain models (defaults.rs, pref_domains.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pref_domains::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.talagent.plist",
@@ -4306,7 +4835,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Privacy permission models (privacy_permissions.rs, permission_request.rs) are covered by their unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.telephonyutilities.callservicesd.plist",
@@ -4409,7 +4952,16 @@
    "status": "partial",
    "note": "rule: time zone model; time sync is the Linux timesyncd unit",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Time zone model (time_zone.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "time_zone::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.tipsd.plist",
@@ -4470,7 +5022,16 @@
    "status": "partial",
    "note": "rule: translation session model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Translation session model (translation.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.transparencyStaticKey.plist",
@@ -4554,7 +5115,16 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "ready_note": "Trust model (trust.rs) is covered by its unit tests.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.tvremoted.plist",
