@@ -106,7 +106,15 @@ fn emit_sequence(out: &mut Vec<u8>, literals: &[u8], found: Option<(usize, usize
 /// output produced so far are rejected, and a block that ends before its final literal sequence
 /// is `Truncated`.
 pub fn decode_block(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
-    let mut out: Vec<u8> = Vec::new();
+    let mut out = Vec::new();
+    decode_block_into(&mut out, src, limit)?;
+    Ok(out)
+}
+
+/// Decodes one LZ4 block onto the end of `out`, whose earlier bytes serve as the history: a match
+/// may reach back into the blocks decoded before (linked blocks in a frame, and encoders that keep
+/// their window across buffer blocks). `limit` caps the whole of `out`.
+fn decode_block_into(out: &mut Vec<u8>, src: &[u8], limit: usize) -> Result<(), Error> {
     let mut i = 0;
     loop {
         if i >= src.len() {
@@ -129,7 +137,7 @@ pub fn decode_block(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
         i = end;
         if i == src.len() {
             // the last sequence carries literals only
-            return Ok(out);
+            return Ok(());
         }
         if i + 2 > src.len() {
             return Err(Error::Truncated);
@@ -215,14 +223,14 @@ pub fn decode_buffer(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
                 return Err(Error::TooBig);
             }
             let payload = src.get(pos..pos + encoded).ok_or(Error::Truncated)?;
-            let block = decode_block(payload, decoded).map_err(|e| match e {
+            let start = out.len();
+            decode_block_into(&mut out, payload, start + decoded).map_err(|e| match e {
                 Error::TooBig => Error::InvalidData,
                 other => other,
             })?;
-            if block.len() != decoded {
+            if out.len() - start != decoded {
                 return Err(Error::InvalidData);
             }
-            out.extend_from_slice(&block);
             pos += encoded;
         } else {
             return Err(Error::InvalidData);
@@ -373,9 +381,8 @@ pub fn decode_frame(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
             }
             out.extend_from_slice(data);
         } else {
-            let remaining = limit - out.len();
-            let block = decode_block(data, remaining.min(block_max))?;
-            out.extend_from_slice(&block);
+            let cap = limit.min(out.len() + block_max);
+            decode_block_into(&mut out, data, cap)?;
         }
     }
     if content_checksum_flag {
@@ -433,6 +440,22 @@ mod tests {
         let data = vec![b'z'; 500];
         let enc = encode_block(&data);
         assert_eq!(decode_block(&enc, 100), Err(Error::TooBig));
+    }
+
+    #[test]
+    fn a_buffer_block_may_match_into_the_previous_block() {
+        // block 1 stores "abcdefgh"; block 2 is one match of 8 bytes at offset 8 plus 5 literals
+        let mut src = Vec::new();
+        src.extend_from_slice(BV4_STORED);
+        src.extend_from_slice(&8u32.to_le_bytes());
+        src.extend_from_slice(b"abcdefgh");
+        let block = [0x04, 0x08, 0x00, 0x50, b'v', b'w', b'x', b'y', b'z'];
+        src.extend_from_slice(BV4_COMPRESSED);
+        src.extend_from_slice(&13u32.to_le_bytes());
+        src.extend_from_slice(&(block.len() as u32).to_le_bytes());
+        src.extend_from_slice(&block);
+        src.extend_from_slice(BV4_END);
+        assert_eq!(decode_buffer(&src, 100).unwrap(), b"abcdefghabcdefghvwxyz".to_vec());
     }
 
     #[test]
