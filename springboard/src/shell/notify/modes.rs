@@ -467,4 +467,86 @@ mod tests {
         assert_eq!(again.manual.as_deref(), Some("personal"));
         assert_eq!(again.get("personal").unwrap().apps, vec!["bifrost.music".to_string()]);
     }
+
+    /// The notification side: the clock, the manual choice and delivery, through `Notify`.
+    mod notify_tests {
+        use crate::shell::notify::modes::{ModeSchedule, ALL_DAYS};
+        use crate::shell::notify::{store, Notify};
+        use crate::shell::AppId;
+        use std::path::Path;
+
+        /// Monday 2024-01-01 00:00 UTC
+        const MON: i64 = 1_704_067_200;
+        const HOUR: i64 = 3600;
+
+        /// Sets the clock to `unix` (UTC) and re-reads the schedule.
+        fn clock(n: &mut Notify, unix: i64) {
+            n.set_wall(unix, 0, 0.0);
+            n.refresh_schedule();
+        }
+
+        #[test]
+        fn a_scheduled_mode_follows_the_clock_across_midnight_and_weekdays() {
+            let mut n = Notify::default();
+            n.modes.get_mut("sleep").unwrap().schedule = Some(ModeSchedule { days: 0b001_1111, start: 22 * 60, end: 7 * 60 });
+            clock(&mut n, MON + 23 * HOUR + 1800);
+            assert_eq!(n.active_mode().map(|m| m.id), Some("sleep".to_string()), "Monday 23:30");
+            clock(&mut n, MON + 5 * 86_400 + 6 * HOUR);
+            assert!(n.dnd(), "Saturday 06:00 is still Friday's window");
+            clock(&mut n, MON + 6 * 86_400 + 6 * HOUR);
+            assert!(!n.dnd(), "Sunday 06:00: Saturday is not on");
+            clock(&mut n, MON + 8 * HOUR);
+            assert!(!n.dnd());
+        }
+
+        #[test]
+        fn a_manual_choice_beats_the_schedule_and_turning_off_holds_until_the_window_ends() {
+            let mut n = Notify::default();
+            n.modes.get_mut("sleep").unwrap().schedule = Some(ModeSchedule { days: ALL_DAYS, start: 22 * 60, end: 7 * 60 });
+            clock(&mut n, MON + 23 * HOUR);
+            assert!(n.dnd());
+            assert!(n.set_mode(Some("work")));
+            assert_eq!(n.active_mode().map(|m| m.id), Some("work".to_string()), "a choice by hand wins");
+            assert!(n.set_mode(None));
+            assert!(!n.dnd(), "off inside the window holds");
+            clock(&mut n, MON + 23 * HOUR + 1800);
+            assert!(!n.dnd(), "still inside the window, still held");
+            clock(&mut n, MON + 8 * HOUR);
+            assert!(!n.sched_skip, "the hold ends with the window");
+            clock(&mut n, MON + 23 * HOUR);
+            assert!(n.dnd(), "the next night it is on again");
+        }
+
+        #[test]
+        fn a_mode_lets_only_its_apps_through_and_do_not_disturb_reads_the_store() {
+            let mut n = Notify::default();
+            n.modes.get_mut("work").unwrap().apps = vec![store::app_key(AppId::Files).to_string()];
+            assert!(n.set_mode(Some("work")));
+            assert!(n.delivers(AppId::Files));
+            assert!(!n.delivers(AppId::Settings));
+            assert!(n.set_mode(None));
+            assert!(n.delivers(AppId::Settings));
+            n.store.set_focus_allowed(AppId::Files, true);
+            n.set_dnd(true);
+            assert!(n.delivers(AppId::Files), "Do Not Disturb lets through the apps the store allows");
+            assert!(!n.delivers(AppId::Settings));
+            n.set_dnd(false);
+            assert!(n.delivers(AppId::Settings));
+        }
+
+        #[test]
+        fn a_mode_switched_by_hand_is_saved_next_to_the_notifications() {
+            let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-focus-modes-notify").join(std::process::id().to_string());
+            let notes = dir.join("notifications.ini").to_string_lossy().into_owned();
+            let _ = std::fs::remove_file(dir.join("focus_modes.ini"));
+            let mut n = Notify::default();
+            n.load_modes(&notes);
+            assert!(n.set_mode(Some("personal")));
+            n.save_modes();
+            let mut again = Notify::default();
+            again.load_modes(&notes);
+            assert_eq!(again.modes.manual.as_deref(), Some("personal"));
+            assert_eq!(again.modes.list.len(), 4);
+        }
+    }
 }

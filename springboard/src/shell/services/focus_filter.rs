@@ -30,13 +30,9 @@ pub struct FocusFilterService {
     last: Option<Option<String>>,
 }
 
-/// The Focus that is on now: Do Not Disturb when it is on.
-fn active_focus(shell: &Shell) -> Option<&'static str> {
-    if shell.dnd() {
-        Some(DO_NOT_DISTURB)
-    } else {
-        None
-    }
+/// The Focus that is on now: the name of the Focus mode on (Do Not Disturb, Work, ...), or None when no Focus is on.
+fn active_focus(shell: &Shell) -> Option<String> {
+    shell.notify.active_mode().map(|mode| mode.name)
 }
 
 /// The `focus` name in `params`; it must not be empty.
@@ -109,7 +105,8 @@ impl SystemService for FocusFilterService {
             "current" => {
                 // a copy, so reading never creates an entry for an app that has stored nothing
                 let mut view = self.apps.iter().find(|(a, _)| a == app_id).map(|(_, f)| f.clone()).unwrap_or_default();
-                view.activate(active_focus(shell));
+                let active = active_focus(shell);
+                view.activate(active.as_deref());
                 let focus = view.active().map_or(Json::Null, |f| Json::Str(f.to_string()));
                 let values = context_json(view.current());
                 Ok(Json::Obj(vec![("focus".to_string(), focus), ("values".to_string(), values)]))
@@ -121,14 +118,14 @@ impl SystemService for FocusFilterService {
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
         let active = active_focus(shell);
         for (_, filters) in self.apps.iter_mut() {
-            filters.activate(active);
+            filters.activate(active.as_deref());
         }
-        let before = self.last.replace(active.map(str::to_string));
+        let before = self.last.replace(active.clone());
         match before {
-            Some(prev) if prev.as_deref() != active => self
+            Some(prev) if prev != active => self
                 .apps
                 .iter()
-                .map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active) })
+                .map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active.as_deref()) })
                 .collect(),
             _ => Vec::new(),
         }
@@ -223,6 +220,24 @@ mod tests {
         sh.set_dnd(false);
         let off = svc.tick(&mut sh, 4.0);
         assert_eq!(off.len(), 2);
+        assert_eq!(off[0].body.get("focus"), Some(&Json::Null));
+    }
+
+    #[test]
+    fn a_work_focus_hands_the_apps_its_work_values_and_the_change_is_pushed() {
+        let mut sh = shell();
+        let mut svc = FocusFilterService::default();
+        store(&mut svc, &mut sh, "app.a", r#"{"focus":"Work","values":{"folder":"Projects"}}"#).unwrap();
+        store(&mut svc, &mut sh, "app.a", r#"{"focus":"Do Not Disturb","values":{"mode":"Quiet"}}"#).unwrap();
+        assert!(sh.set_focus_mode(Some("work")));
+        assert!(svc.tick(&mut sh, 0.0).is_empty(), "the first tick records Work");
+        let reply = svc.call(&mut sh, "app.a", "current", &Json::Null, 0.0).unwrap();
+        assert_eq!(reply.str_field("focus").as_deref(), Some("Work"), "the mode's name is the Focus name");
+        let values = reply.get("values").expect("values");
+        assert_eq!(values.str_field("folder").as_deref(), Some("Projects"));
+        assert!(sh.set_focus_mode(None));
+        let off = svc.tick(&mut sh, 1.0);
+        assert_eq!(off.len(), 1);
         assert_eq!(off[0].body.get("focus"), Some(&Json::Null));
     }
 }
