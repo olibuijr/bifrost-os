@@ -250,6 +250,24 @@ pub fn argmax(values: &[f32]) -> Option<usize> {
     best.map(|(i, _)| i)
 }
 
+/// Row-major matrix product C = A * B for A (m x k), B (k x n), giving C (m x n). This is the CPU reference for the
+/// `gpu/shaders/matmul.comp` compute kernel. None when a slice length does not match its dimensions.
+pub fn matmul(a: &[f32], b: &[f32], m: usize, k: usize, n: usize) -> Option<Vec<f32>> {
+    if a.len() != m.checked_mul(k)? || b.len() != k.checked_mul(n)? {
+        return None;
+    }
+    let mut c = vec![0.0f32; m * n];
+    for i in 0..m {
+        for p in 0..k {
+            let av = a[i * k + p];
+            for j in 0..n {
+                c[i * n + j] += av * b[p * n + j];
+            }
+        }
+    }
+    Some(c)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +383,28 @@ mod tests {
         assert_eq!(argmax(&[f32::NAN, -1.0]), Some(1), "NaN is skipped");
         assert_eq!(argmax(&[]), None);
         assert_eq!(argmax(&[f32::NAN]), None);
+    }
+}
+
+#[cfg(test)]
+mod matmul_tests {
+    use super::*;
+
+    #[test]
+    fn two_by_two_times_two_by_one() {
+        // [1 2; 3 4] * [5; 6] = [17; 39]
+        assert_eq!(matmul(&[1.0, 2.0, 3.0, 4.0], &[5.0, 6.0], 2, 2, 1), Some(vec![17.0, 39.0]));
+    }
+
+    #[test]
+    fn identity_keeps_the_matrix() {
+        let a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        assert_eq!(matmul(&a, &[1.0, 0.0, 0.0, 1.0, 0.0, 0.0], 3, 2, 2), Some(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]));
+    }
+
+    #[test]
+    fn mismatched_lengths_are_refused() {
+        assert_eq!(matmul(&[1.0, 2.0, 3.0], &[1.0, 2.0], 2, 2, 1), None);
+        assert_eq!(matmul(&[1.0, 2.0], &[1.0], 1, 2, 1), None);
     }
 }

@@ -173,6 +173,61 @@ impl FrameSession {
     }
 }
 
+/// Knee where the extended-range tone curve starts to roll off, in SDR-white units.
+pub const EDR_KNEE: f64 = 0.8;
+
+/// Tone-maps linear light (1.0 is SDR white) for a display with `headroom` times SDR white. Below the knee the value
+/// passes unchanged; above it the curve has slope 1 at the knee and approaches `headroom` exponentially. None unless
+/// `headroom` is above the knee and `linear` is finite.
+pub fn edr_tone_map(linear: f64, headroom: f64) -> Option<f64> {
+    if !(headroom > EDR_KNEE) || !linear.is_finite() {
+        return None;
+    }
+    let x = linear.max(0.0);
+    if x <= EDR_KNEE {
+        return Some(x);
+    }
+    let span = headroom - EDR_KNEE;
+    Some(EDR_KNEE + span * (1.0 - (-(x - EDR_KNEE) / span).exp()))
+}
+
+/// Exposure weight for a normalised code value z in 0..=1: a hat that trusts mid-tones and ignores clipped shadows
+/// and highlights.
+pub fn hat_weight(z: f32) -> f32 {
+    let z = z.clamp(0.0, 1.0);
+    1.0 - (2.0 * z - 1.0).abs()
+}
+
+/// Merges several exposures of one scene into linear radiance (exposure fusion). `samples[i]` holds the pixel values of
+/// exposure i as code values in 0..=1 and `exposures[i]` is its relative exposure time, which must be positive. Each
+/// sample votes for radiance `z / exposure` with weight `hat_weight(z)`, and the result is the weighted mean per pixel.
+/// A pixel every exposure clipped falls back to the mean of the raw radiances. None when there are no exposures, the
+/// lengths differ, or an exposure is not positive.
+pub fn merge_exposures(samples: &[&[f32]], exposures: &[f32]) -> Option<Vec<f32>> {
+    if samples.is_empty() || samples.len() != exposures.len() {
+        return None;
+    }
+    let len = samples[0].len();
+    if samples.iter().any(|s| s.len() != len) || exposures.iter().any(|e| !(*e > 0.0)) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(len);
+    for px in 0..len {
+        let mut num = 0.0f32;
+        let mut den = 0.0f32;
+        let mut raw = 0.0f32;
+        for (s, e) in samples.iter().zip(exposures) {
+            let z = s[px].clamp(0.0, 1.0);
+            let w = hat_weight(z);
+            num += w * (z / e);
+            den += w;
+            raw += z / e;
+        }
+        out.push(if den > 0.0 { num / den } else { raw / samples.len() as f32 });
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +300,54 @@ mod tests {
         let mut hlg = FrameSession::new(Transfer::Hlg, 25.0).unwrap();
         let m = hlg.push_frame(&[1000.0], false).unwrap();
         assert_eq!(m.max_code, 4095, "1000 nits is the HLG nominal peak");
+    }
+}
+
+#[cfg(test)]
+mod fusion_tests {
+    use super::*;
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-4
+    }
+
+    #[test]
+    fn two_exposures_of_one_radiance_recover_it() {
+        // Radiance 0.4 seen at exposure 1.0 (code 0.4) and at 0.25 (code 0.1): both votes say 0.4.
+        let long = [0.4f32];
+        let short = [0.1f32];
+        let out = merge_exposures(&[&long[..], &short[..]], &[1.0, 0.25]).unwrap();
+        assert!(near(out[0], 0.4), "{}", out[0]);
+    }
+
+    #[test]
+    fn clipped_samples_fall_back_to_the_raw_mean() {
+        let white = [1.0f32];
+        assert!(near(merge_exposures(&[&white[..]], &[1.0]).unwrap()[0], 1.0));
+    }
+
+    #[test]
+    fn bad_inputs_are_refused() {
+        let a = [0.5f32, 0.5];
+        let b = [0.5f32];
+        assert_eq!(merge_exposures(&[], &[]), None);
+        assert_eq!(merge_exposures(&[&a[..], &b[..]], &[1.0, 1.0]), None);
+        assert_eq!(merge_exposures(&[&a[..]], &[0.0]), None);
+    }
+
+    #[test]
+    fn edr_passes_values_below_the_knee_and_rolls_off_above_it() {
+        assert!((edr_tone_map(0.5, 4.0).unwrap() - 0.5).abs() < 1e-9);
+        assert!((edr_tone_map(0.8, 4.0).unwrap() - 0.8).abs() < 1e-9);
+        // Headroom 2, linear 1.0: 0.8 + 1.2 * (1 - e^(-0.2 / 1.2)), about 0.9842.
+        let mid = edr_tone_map(1.0, 2.0).unwrap();
+        assert!(mid > 0.98 && mid < 0.99, "{mid}");
+        assert!((edr_tone_map(100.0, 4.0).unwrap() - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn edr_refuses_headroom_at_or_below_the_knee() {
+        assert_eq!(edr_tone_map(1.0, 0.5), None);
+        assert_eq!(edr_tone_map(f64::NAN, 2.0), None);
     }
 }

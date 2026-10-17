@@ -1096,7 +1096,16 @@
    "status": "partial",
    "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::matmul_tests"
+    }
+   ],
+   "ready_note": "ui::nn::matmul CPU reference (tests nn::matmul_tests) and gpu/shaders/matmul.comp, the compute kernel it mirrors (build.rs compiles it; not wired to a pipeline)"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSRayIntersector.framework/Versions/A/Resources/default.metallib",
@@ -1117,7 +1126,16 @@
    "status": "partial",
    "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::matmul_tests"
+    }
+   ],
+   "ready_note": "ui::nn::matmul CPU reference (tests nn::matmul_tests) and gpu/shaders/matmul.comp, the compute kernel it mirrors (build.rs compiles it; not wired to a pipeline)"
   },
   {
    "id": "path:/System/Library/Frameworks/ParavirtualizedGraphics.framework/Versions/A/Resources/default.metallib",
@@ -1159,7 +1177,16 @@
    "status": "partial",
    "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not. Built 2026-10-17: render::ink::outline, a pressure-sensitive stroke outline; tests render::ink::tests. Still missing: textured ink shaders.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "ink::tests"
+    }
+   ],
+   "ready_note": "render::ink::outline pressure-sensitive stroke outline (tests render::ink::tests); textured ink shaders still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/QuartzCore.framework/Versions/A/Resources/default.metallib",
@@ -1180,7 +1207,16 @@
    "status": "partial",
    "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::edr_tone_map, the EDR extended-range tone curve (tests hdr_frame::fusion_tests); layer masks and layer filters still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/SceneKit.framework/Versions/A/Resources/default.metallib",
@@ -1201,7 +1237,21 @@
    "status": "partial",
    "note": "Material and mesh models exist as pure data, and the 3D scene model draws nothing. There is no 3D rasteriser or PBR shader yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/SpriteKit.framework/Versions/A/Resources/default.metallib",
@@ -1222,7 +1272,16 @@
    "status": "partial",
    "note": "The GPU path draws textured rounded quads and emitter.rs simulates particles; sprite lighting and warp kernels are not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "sprite_light::tests"
+    }
+   ],
+   "ready_note": "render::sprite_light::lit_pixel per-pixel Lambert sprite lighting (tests sprite_light::tests); warp and particle kernels still missing"
   },
   {
    "id": "path:/System/Library/Frameworks/StickerKit.framework/Versions/A/Resources/default.metallib",
@@ -1294,7 +1353,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework/Versions/A/Resources/default.metallib",
@@ -1387,7 +1455,21 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUI.framework/Versions/A/Resources/default.metallib",
@@ -1576,7 +1658,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMImaging.framework/Versions/A/Resources/default.metallib",
@@ -1800,7 +1891,21 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreOCModules.framework/Versions/A/Resources/default.metallib",
@@ -1842,7 +1947,21 @@
    "status": "gap",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/default.metallib",
@@ -1863,7 +1982,21 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE3DGSFoundation.framework/Versions/A/Resources/default.metallib",
@@ -1926,7 +2059,21 @@
    "status": "gap",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/frameRateConversionMetalLib.metallib",
@@ -1947,7 +2094,16 @@
    "status": "partial",
    "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "block_motion::flow_tests"
+    }
+   ],
+   "ready_note": "render::block_motion::lucas_kanade_at dense optical flow at a pixel (tests block_motion::flow_tests); no GPU path"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/Versions/A/Resources/default.metallib",
@@ -2031,7 +2187,16 @@
    "status": "partial",
    "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "block_motion::flow_tests"
+    }
+   ],
+   "ready_note": "render::block_motion::lucas_kanade_at dense optical flow at a pixel (tests block_motion::flow_tests); no GPU path"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/default.metallib",
@@ -2052,7 +2217,21 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUToolsCapture.framework/Versions/A/Resources/default.metallib",
@@ -2136,7 +2315,16 @@
    "status": "partial",
    "note": "HDR transfer curves (PQ, HLG) and per-frame HDR metadata exist as pure code. There is no HDR merge shader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Hydra.framework/Plugins/HydraQLPreviewExtension.appex/Contents/Resources/default.metallib",
@@ -2157,7 +2345,21 @@
    "status": "gap",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework/Versions/A/Resources/default.metallib",
@@ -2241,7 +2443,21 @@
    "status": "gap",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shading::pbr_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "displacement::tests"
+    }
+   ],
+   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/default.metallib",
@@ -2318,7 +2534,16 @@
    "status": "gap",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_frame::fusion_tests"
+    }
+   ],
+   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework/Versions/A/Resources/default.metallib",
