@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.21.0 — 2026-10-17
+
+- Math: `$x^2$` in a note is typeset inline, in place of its source (fractions, roots, scripts, sums and integrals with limits, Greek letters, matrices). A `$$...$$` paragraph is display math, centred on its own line. The source stays in the note file; a formula that does not parse shows as text. Typesetting is in `bifrost-render` `math` (textarea.rs `formula`, md.rs `Style::Math`).
+
 ## 1.20.0 — 2026-10-17
 
 - Collapsible sections: a Title, Heading or Subheading line shows a disclosure chevron. Tapping it folds or unfolds the lines up to the next heading of the same or a higher level; the editor takes no height for hidden lines (textarea.rs `set_hidden`). Format > Collapse Section, Expand Section, Collapse All Sections and Expand All Sections do the same from the keyboard. Folds are saved per note in `.springboard-notes-folds`, and entries of deleted notes are dropped when it is saved. The note text never changes.
