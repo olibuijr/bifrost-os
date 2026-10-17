@@ -5216,8 +5216,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Help book format and index built: an app ships a help/ directory (manifest help = \"help\", Markdown pages with title, keywords and {#anchor} headings) that the shell's help index (springboard/src/shell/helpbook.rs, the helpd counterpart) reads on start; it ranks searches, resolves help://app/anchor links and searches a frontmost app's menu items. Books ship for Files, TextEdit and Settings. Missing: the index is not yet rebuilt on install and update, the Help menu search field and the Help viewer window are not drawn yet, and the Help menu opens no viewer.",
+   "status": "gap",
+   "note": "Help book format and help index built (springboard/src/shell/helpbook.rs): an app ships a help/ directory (manifest help = \"help\", Markdown pages with title, keywords and {#anchor} headings), Files, TextEdit and Settings ship books, and the index rebuilds on start and after every install change. Still missing and so the row stays gap: no Help menu search field and no Help viewer window, so help is not reachable from the UI yet.",
    "rea": []
   },
   {
