@@ -209,7 +209,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/raw_params.rs",
    "status": "partial",
-   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists.",
+   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists. Built 2026-10-17: render::demosaic bilinear Bayer demosaic for the four CFA layouts; tests render::demosaic::tests. Still missing: RAW colour and tone shaders.",
    "rea": [],
    "method": "assessed"
   },
@@ -293,7 +293,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images.",
+   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. Still missing: the animated poster renderer that calls them.",
    "rea": [],
    "method": "assessed"
   },
@@ -356,7 +356,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images.",
+   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. Still missing: the animated wallpaper renderer that calls them.",
    "rea": [],
    "method": "assessed"
   },
@@ -608,7 +608,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/chart_marks.rs (line_path, rectangle_mark)",
    "status": "partial",
-   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn.",
+   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn. Built 2026-10-17: ui::chart_marks::area_fill_alpha (top-to-baseline fill fade) and glow_alpha (glow falloff); tests ui::chart_marks::tests. Not yet called by the chart painter, so the gradient and glow are still not drawn.",
    "rea": [],
    "method": "assessed"
   },
@@ -1157,7 +1157,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/bezier.rs; springboard/render/src/cg/mod.rs",
    "status": "partial",
-   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not.",
+   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not. Built 2026-10-17: render::ink::outline, a pressure-sensitive stroke outline; tests render::ink::tests. Still missing: textured ink shaders.",
    "rea": [],
    "method": "assessed"
   },
