@@ -43,6 +43,8 @@ pub enum Out {
     Hide,
     /// terminal keys: "Escape", "Tab", "Paste", "Up", "Down", "Left", "Right"
     Named(&'static str),
+    /// the microphone key: the app starts or stops on-device dictation
+    Dictate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -784,7 +786,7 @@ impl Keyboard {
                 Some(Out::Enter)
             }
             Kind::Hide => Some(Out::Hide),
-            Kind::Mic => None,
+            Kind::Mic => Some(Out::Dictate),
             Kind::Named(n) => {
                 if matches!(n, "Left" | "Right" | "Up" | "Down") {
                     self.break_word();

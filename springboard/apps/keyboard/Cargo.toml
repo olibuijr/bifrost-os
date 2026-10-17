@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 bifrost-app = { path = "../../sdk" }
 springboard = { path = "../.." }
+bifrost-core = { path = "../../core" }
 
 [dev-dependencies]
 springboard = { path = "../..", features = ["testkit"] }
