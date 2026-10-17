@@ -404,6 +404,8 @@ fn run() -> std::io::Result<()> {
     let mut dwell = springboard::shell::accessibility::dwell::DwellClick::new(0, springboard::shell::accessibility::dwell::DEFAULT_RADIUS);
     // Slow Keys: a key counts only after it has been held for the Settings delay
     let mut slow_keys = springboard::shell::slow_keys::SlowKeys::default();
+    // Mouse Keys: the keypad moves the pointer and the 5 key clicks, so those keys never reach the key path
+    let mut mouse_keys = springboard::shell::mouse_keys::MouseKeys::default();
     // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
     // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
     let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite(), 1.0);
@@ -512,7 +514,7 @@ fn run() -> std::io::Result<()> {
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
         // the pointer's wheel ease and right-click hold, key auto-repeat, Slow Keys acceptance, and the cursor hiding
         let hide_cursor = (inputs.has_pointer() && (cursor.is_shown() || plane.is_shown())).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
-        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(slow_keys.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
+        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(slow_keys.deadline()).chain(mouse_keys.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
         // fixed slots first: touch, keys, display, control; then the shell's
@@ -589,6 +591,38 @@ fn run() -> std::io::Result<()> {
         let dwell_ms = springboard::shell::accessibility::dwell_delay_ms();
         if dwell.delay_ms() != dwell_ms {
             dwell.set_delay_ms(dwell_ms);
+        }
+        // Mouse Keys: keypad keys move or click the pointer (and are swallowed) while the setting is on
+        let mouse_on = springboard::shell::accessibility::mouse_keys();
+        if mouse_keys.enabled() != mouse_on {
+            mouse_keys.set_enabled(mouse_on);
+        }
+        inputs.set_pointer_keys(mouse_keys.enabled());
+        if mouse_keys.enabled() {
+            let mut kept = Vec::with_capacity(events.len());
+            for e in events.drain(..) {
+                let (code, down) = match e {
+                    input::Event::Key { code, down } => (code, down),
+                    _ => {
+                        kept.push(e);
+                        continue;
+                    }
+                };
+                match mouse_keys.press(code, down, t) {
+                    springboard::shell::mouse_keys::Press::Pass => kept.push(e),
+                    springboard::shell::mouse_keys::Press::Consumed => {}
+                    springboard::shell::mouse_keys::Press::Click => {
+                        let (x, y) = inputs.pointer();
+                        kept.push(input::Event::Down { x, y, t });
+                        kept.push(input::Event::Up { x, y, t });
+                    }
+                }
+            }
+            events = kept;
+            let (dx, dy) = mouse_keys.step(t);
+            if dx != 0.0 || dy != 0.0 {
+                inputs.nudge(dx, dy);
+            }
         }
         // Slow Keys: presses wait for the delay and releases of unaccepted presses are dropped, before the key path sees them
         let slow_ms = springboard::shell::accessibility::slow_delay_ms();
