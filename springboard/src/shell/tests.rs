@@ -1907,6 +1907,21 @@
         assert_eq!(sh.run_menu_action(buds, 0.0), vec![Effect::Bluetooth(BtCmd::Disconnect("AA:BB:CC:DD:EE:01".into()))]);
     }
 
+    #[test]
+    fn battery_menu_switches_low_power_mode_on_and_off() {
+        let mut sh = shell();
+        let row = |sh: &Shell, text: &str| sh.menu_rows(desktop_bar::Menu::Power).into_iter().find(|r| r.text == text).and_then(|r| r.action);
+        assert!(sh.menu_row_texts(desktop_bar::Menu::Power).iter().any(|t| t == "  Low Power Mode"), "the Battery menu offers Low Power Mode");
+        assert!(!sh.low_power());
+        let on = row(&sh, "  Low Power Mode").expect("the row acts");
+        sh.run_menu_action(on, 0.0);
+        assert!(sh.low_power(), "the row turns Low Power Mode on");
+        assert!(sh.menu_row_texts(desktop_bar::Menu::Power).iter().any(|t| t == "\u{2713} Low Power Mode"), "checked while on");
+        let off = row(&sh, "\u{2713} Low Power Mode").expect("the checked row acts");
+        sh.run_menu_action(off, 0.0);
+        assert!(!sh.low_power(), "and turns it off again");
+    }
+
     /// Settings window repaint cost at the lab panel's size (`cargo test --profile fast --lib -- --ignored
     /// bench_settings_window_draw --nocapture`). Each frame counts as fresh input, so the window is drawn in full.
     #[test]
