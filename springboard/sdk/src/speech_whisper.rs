@@ -88,7 +88,7 @@ fn body(result: &Result<Json, String>) -> Result<&Json, String> {
 }
 
 fn transcript_of(v: &Json) -> Option<Transcript> {
-    let text = v.str_field("text")?;
+    let text = v.str_field("text").filter(|t| !t.is_empty())?;
     let is_final = matches!(v.get("final"), Some(Json::Bool(true)));
     Some(Transcript { text, is_final })
 }
