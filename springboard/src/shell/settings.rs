@@ -2074,7 +2074,9 @@ impl Settings {
     /// leaves the system as it was, and the shell and apps still use the saved choice).
     fn change_region(&mut self, prefs: &mut Prefs, edit: impl FnOnce(&mut bifrost_ui::region::Region)) {
         let mut r = bifrost_ui::region::current();
+        let before = r.languages.clone();
         edit(&mut r);
+        let languages_changed = r.languages != before;
         let languages = r.languages.join(",");
         let region = r.region.clone();
         let weekday = r.first_weekday.map(|d| d.to_string()).unwrap_or_default();
@@ -2084,6 +2086,12 @@ impl Settings {
         }
         let locale = r.identifier();
         bifrost_ui::region::publish(r);
+        if languages_changed {
+            // Running apps watch this generation (bifrost_sdk::locale::LanguageWatch) and reload their strings.
+            if let Err(e) = bifrost_core::language_generation::announce_language_change(&super::apphost::root()) {
+                eprintln!("springboard: language generation: {e}");
+            }
+        }
         crate::bare::sys::spawn_named("set-locale", move || {
             let _ = crate::privd_client::connect().set_locale(&locale, &locale);
         });
