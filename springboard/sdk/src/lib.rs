@@ -421,6 +421,7 @@ pub mod photo_editing;
 pub mod photo_project;
 pub mod image_blur;
 pub mod image_filter;
+pub mod pixel_filter;
 pub mod image_effects;
 pub mod image_render;
 pub use restoration::RestorableState;
