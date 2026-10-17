@@ -14,6 +14,7 @@
 pub mod control;
 pub mod devices;
 pub mod friends;
+pub mod keys;
 pub mod links;
 pub mod pairing;
 pub mod panel;

@@ -11,6 +11,7 @@ use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 use bifrost_core::json::Json;
 use bifrost_locate::control::{self, ParseError, Request};
+use bifrost_locate::keys::{KeyEvent, Keys};
 use bifrost_locate::panel::{Panel, Row, Section, LOCATION_UNAVAILABLE, ONBOARDING_LINES};
 
 /// The sidebar's width in points.
@@ -44,12 +45,33 @@ pub struct LocateWindow {
     pub panel: Panel,
     /// Control requests waiting for the cloud client to send them (locate, play sound).
     pub outbox: Vec<Request>,
+    /// The account key pair, read from and written to the keychain.
+    pub keys: Keys,
     labels: TextCache,
 }
 
 impl LocateWindow {
     pub fn new(onboarded: bool) -> LocateWindow {
-        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), labels: TextCache::default() }
+        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), labels: TextCache::default() }
+    }
+
+    /// A keychain reply. A key that was just stored is the account key for this device. Returns whether a frame is needed.
+    pub fn on_keychain(&mut self, reply: &bifrost_app::keychain::Reply) -> bool {
+        match self.keys.on_reply(reply) {
+            Some(KeyEvent::Loaded) | Some(KeyEvent::Stored) | Some(KeyEvent::Missing) => true,
+            None => false,
+        }
+    }
+
+    /// Makes sure this device holds an account key while Share My Location is on: the first device to turn it on
+    /// creates the pair. Called after every change of the switch, with a context.
+    pub fn ensure_key(&mut self, ctx: &bifrost_app::Ctx) {
+        if !self.panel.sharing() || self.keys.private().is_some() {
+            return;
+        }
+        if let Ok(random) = bifrost_app::entropy::bytes(32) {
+            self.keys.create(ctx, &random);
+        }
     }
 
     /// The sidebar: one row per section, the selected one highlighted.

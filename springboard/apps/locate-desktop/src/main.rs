@@ -27,6 +27,7 @@ impl App for LocateApp {
         ctx.enable_sudden_termination(); // keeps no unsaved state
         let onboarded = ctx.data_dir.join(ONBOARDED_MARK).exists();
         self.w = window::LocateWindow::new(onboarded);
+        self.w.keys.load(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -46,12 +47,20 @@ impl App for LocateApp {
         }
     }
 
+    fn keychain(&mut self, _ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
+        self.w.on_keychain(&reply)
+    }
+
     fn rpc_methods(&self) -> Vec<&'static str> {
         METHODS.to_vec()
     }
 
-    fn rpc(&mut self, _ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
-        self.w.rpc(method, params)
+    fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        let reply = self.w.rpc(method, params)?;
+        if let Some(ctx) = ctx {
+            self.w.ensure_key(ctx);
+        }
+        Ok(reply)
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
