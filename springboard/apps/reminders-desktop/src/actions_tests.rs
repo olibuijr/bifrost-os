@@ -1016,3 +1016,21 @@ fn a_reminder_holds_four_pictures_and_the_form_must_be_open_to_add_one() {
     app.activate(&ui, Target::Cancel, 2.0);
     cleanup(&path);
 }
+
+#[test]
+fn create_list_item_adds_to_the_named_list_and_add_reminder_keeps_the_default_list() {
+    let (mut app, ui, path) = app("create-list-item");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    let id = app.add_reminder_to_named(&ui, "  Send invoice  ", Some("2030-01-02T09:30"), " work ").unwrap();
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.title.as_str(), r.list), ("Send invoice", 2));
+    assert!(r.due.is_some());
+    assert_eq!(r.time, Some(9 * 60 + 30));
+    assert!(app.add_reminder_to_named(&ui, "Nope", None, "Garden").is_err(), "no list has that name");
+    assert!(app.add_reminder_to_named(&ui, "   ", None, "Work").is_err(), "a blank title is refused");
+    assert!(app.add_reminder_to_named(&ui, "Late", Some("soon"), "Work").is_err(), "a bad due date is refused");
+    app.opts.default_list = Some(2);
+    let plain = app.add_reminder(&ui, "Milk", None).unwrap();
+    assert_eq!(app.data.items.iter().find(|r| r.id == plain).unwrap().list, 2, "add-reminder still uses the default list");
+    cleanup(&path);
+}

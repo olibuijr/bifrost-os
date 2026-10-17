@@ -1074,6 +1074,21 @@ impl Reminders {
     /// The `add-reminder` intent: a reminder in the default list, with an optional due day (`YYYY-MM-DD`, or
     /// `YYYY-MM-DDTHH:MM` for a time). Returns the new reminder's id.
     pub fn add_reminder(&mut self, ui: &Ui, title: &str, due: Option<&str>) -> Result<u64, String> {
+        self.add_reminder_in(ui, title, due, None)
+    }
+
+    /// The `create-list-item` intent: a reminder in the list called `list` (matched without case), with the same
+    /// optional due day as `add-reminder`. Returns the new reminder's id.
+    pub fn add_reminder_to_named(&mut self, ui: &Ui, title: &str, due: Option<&str>, list: &str) -> Result<u64, String> {
+        let wanted = list.trim();
+        let found = self.data.lists.iter().find(|l| l.name.eq_ignore_ascii_case(wanted)).map(|l| l.id);
+        let id = found.ok_or_else(|| format!("there is no list named \"{wanted}\""))?;
+        self.add_reminder_in(ui, title, due, Some(id))
+    }
+
+    /// Adds a reminder to `list`, or to the default list when `list` is `None`. The title and the due date are checked
+    /// first, so a bad one never picks a list.
+    fn add_reminder_in(&mut self, ui: &Ui, title: &str, due: Option<&str>, list: Option<u64>) -> Result<u64, String> {
         let title = clean(title);
         if title.is_empty() {
             return Err("the title is empty".into());
@@ -1086,7 +1101,10 @@ impl Reminders {
             None => (None, None),
         };
         let mut next = self.data.clone();
-        let list = self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id));
+        let list = match list {
+            Some(id) => Some(id),
+            None => self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id)),
+        };
         let Some(list) = list else { return Err("there is no list".into()) };
         let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
         let mut r = Reminder::new(id, title);

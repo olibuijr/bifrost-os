@@ -448,6 +448,10 @@ impl App for RemindersApp {
             Intent::new("add-reminder", "Add Reminder", "Adds a reminder to the default list, with an optional due date.")
                 .param(Param::new("title", "Title", ParamType::String))
                 .param(Param::new("due", "Due", ParamType::Date).optional()),
+            Intent::new("create-list-item", "Create List Item", "Adds a reminder to the named list, with an optional due date.")
+                .param(Param::new("title", "Title", ParamType::String))
+                .param(Param::new("list", "List", ParamType::String))
+                .param(Param::new("due", "Due", ParamType::Date).optional()),
             Intent::new("quick-reminder", "Add Quick Reminder", "Adds a reminder from a line such as \"call mum tomorrow 9am\".")
                 .param(Param::new("text", "Text", ParamType::String)),
             Intent::new("create-list", "Create List", "Creates a new list.").param(Param::new("name", "Name", ParamType::String)),
@@ -462,7 +466,7 @@ impl App for RemindersApp {
     }
 
     fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
-        if !matches!(id, "add-reminder" | "quick-reminder" | "create-list" | "open-list" | "open-smart-list" | "search-reminders") {
+        if !matches!(id, "add-reminder" | "create-list-item" | "quick-reminder" | "create-list" | "open-list" | "open-smart-list" | "search-reminders") {
             return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
         }
         let (Some(ctx), Some(a)) = (ctx, self.app.as_mut()) else { return Err(intents::failed("Reminders is not running yet")) };
@@ -473,6 +477,13 @@ impl App for RemindersApp {
                 let due = params.get("due").and_then(Json::as_str);
                 let id = a.add_reminder(ui, title, due).map_err(intents::failed)?;
                 IntentResult::value(Json::Num(id as f64)).with_dialog(&format!("Added \"{title}\""))
+            }
+            "create-list-item" => {
+                let title = intents::str_param(params, "title")?;
+                let list = intents::str_param(params, "list")?;
+                let due = params.get("due").and_then(Json::as_str);
+                let id = a.add_reminder_to_named(ui, title, due, list).map_err(intents::failed)?;
+                IntentResult::value(Json::Num(id as f64)).with_dialog(&format!("Added \"{title}\" to {}", list.trim()))
             }
             "quick-reminder" => {
                 let text = intents::str_param(params, "text")?;
