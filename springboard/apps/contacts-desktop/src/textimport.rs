@@ -256,6 +256,7 @@ impl Draft {
             favorite: false,
             company: self.company.clone(),
             address: addresses.first().map(|a| a.1.clone()).unwrap_or_default(),
+            uid: String::new(),
             labels: [
                 self.phones.first().map_or(3, |p| index(0, p.0)),
                 self.emails.first().map_or(2, |e| index(1, e.0)),

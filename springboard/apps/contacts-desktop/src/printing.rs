@@ -93,6 +93,7 @@ mod tests {
             notes: "Met at a fair".into(),
             company: "Acme".into(),
             address: "Gata 1, Reykjavik".into(),
+            uid: String::new(),
             labels: [0, 1, 2],
             ..Default::default()
         }

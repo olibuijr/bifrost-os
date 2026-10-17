@@ -178,6 +178,7 @@ mod headless_model_tests {
             favorite: false,
             company: company.into(),
             address: String::new(),
+            uid: String::new(),
             labels: [0; 3],
         }
     }

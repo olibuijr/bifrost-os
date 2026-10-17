@@ -286,6 +286,7 @@ fn contact_of(id: u64, (record, cleared): &(Record, Vec<Key>), base: Option<&Con
         address: field(Key::Address, base.map_or("", |c| &c.address))?,
         notes: field(Key::Note, base.map_or("", |c| &c.notes))?,
         favorite: base.is_some_and(|c| c.favorite),
+        uid: base.map_or_else(|| crate::shell::contactstore::new_uid(id), |c| c.uid.clone()),
         labels: base.map_or([0; 3], |c| c.labels),
     };
     if contact.valid() {
