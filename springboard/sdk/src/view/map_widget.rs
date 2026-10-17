@@ -93,7 +93,7 @@ impl MapWidget {
     /// Where an annotation's pin stands in view points (from the view's top left), or `None` when it is outside the
     /// view.
     pub fn pin_position(&self, item: &MapItem) -> Option<(f32, f32)> {
-        let c = Coordinate::new(item.placemark.lat, item.placemark.lon)?;
+        let c = item.placemark.coordinate;
         let (x, y) = self.map.camera().screen_point(c);
         let cam = self.map.camera();
         (x >= 0.0 && y >= 0.0 && x <= cam.viewport_w && y <= cam.viewport_h).then_some((x as f32, y as f32))
@@ -276,10 +276,10 @@ mod tests {
     #[test]
     fn a_pin_inside_the_view_has_a_position_and_one_outside_has_none() {
         let mut w = widget();
-        let here = MapItem::new(crate::maps::Place { name: "here".into(), lat: 64.1466, lon: -21.9426, details: Default::default() });
+        let here = MapItem::new(bifrost_ui::reverse_lookup::Place { name: "here".into(), region: String::new(), coordinate: Coordinate::new(64.1466, -21.9426).unwrap() });
         let (x, y) = w.pin_position(&here).expect("the centre is inside the view");
         assert!((x - 200.0).abs() < 2.0 && (y - 150.0).abs() < 2.0);
-        let far = MapItem::new(crate::maps::Place { name: "far".into(), lat: -30.0, lon: 100.0, details: Default::default() });
+        let far = MapItem::new(bifrost_ui::reverse_lookup::Place { name: "far".into(), region: String::new(), coordinate: Coordinate::new(-30.0, 100.0).unwrap() });
         assert!(w.pin_position(&far).is_none());
         w.set_annotations(vec![here]);
         assert_eq!(w.annotations().len(), 1);

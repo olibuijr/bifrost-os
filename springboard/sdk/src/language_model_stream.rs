@@ -156,6 +156,7 @@ pub fn availability_text(availability: Availability) -> &'static str {
     match availability {
         Availability::Available => "",
         Availability::Unavailable(Unavailable::NoOnDeviceModel) => "No language model is installed on this computer.",
+        Availability::Unavailable(Unavailable::LocalEngineNotRunning) => "The local language model engine is not running.",
     }
 }
 
