@@ -3906,9 +3906,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/contacts.rs",
+   "bifrost": "springboard/src/shell/services/contacts.rs (split_name); springboard/ui/src/contact_fetch.rs (MiddleName, NameSuffix); springboard/ui/src/contact_vcard.rs",
    "status": "partial",
-   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). Not built: middle and suffix parts, and the bundled frequency and surname tables.",
+   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). The contact fetch layer now has middle_name and name_suffix keys (ui contact_fetch.rs, additive), and the vCard reader already splits middle and suffix parts (contact_vcard.rs). Not built: the store holds one name string, so the shell does not yet split a typed name into middle and suffix, and the bundled frequency and surname tables are missing.",
    "rea": [],
    "method": "assessed"
   },
