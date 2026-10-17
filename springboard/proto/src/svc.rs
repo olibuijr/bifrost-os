@@ -244,6 +244,8 @@ pub mod audio {
         SetVolume(f32),
         /// playback speed, 0.5 to 3.0; audiod time-stretches so the pitch stays put
         SetRate(f32),
+        /// the crossfade between songs in milliseconds (0 is gapless); audiod keeps it until it restarts
+        SetCrossfade(u32),
         SetMuted(bool),
         Stop,
         /// records the microphone into `path` (WAV); one recording at a time, explicit user action only
@@ -279,6 +281,7 @@ pub mod audio {
         pub const RECORD_START: u32 = 16;
         pub const RECORD_STOP: u32 = 17;
         pub const SET_RATE: u32 = 18;
+        pub const SET_CROSSFADE: u32 = 19;
         pub const STATE: u32 = 0x102;
         pub const RECORD: u32 = 0x103;
         pub const RECORD_DONE: u32 = 0x104;
@@ -324,6 +327,7 @@ pub mod audio {
                 Cmd::SetRepeat(r) => Enc::tag(t::SET_REPEAT).u8(*r as u8),
                 Cmd::SetVolume(v) => Enc::tag(t::SET_VOLUME).f32(*v),
                 Cmd::SetRate(r) => Enc::tag(t::SET_RATE).f32(*r),
+                Cmd::SetCrossfade(ms) => Enc::tag(t::SET_CROSSFADE).u32(*ms),
                 Cmd::SetMuted(m) => Enc::tag(t::SET_MUTED).bool(*m),
                 Cmd::Stop => Enc::tag(t::STOP),
                 Cmd::RecordStart { path } => Enc::tag(t::RECORD_START).str(path),
@@ -356,6 +360,7 @@ pub mod audio {
                 t::SET_REPEAT => Cmd::SetRepeat(repeat(d.u8()?)?),
                 t::SET_VOLUME => Cmd::SetVolume(d.f32()?),
                 t::SET_RATE => Cmd::SetRate(d.f32()?),
+                t::SET_CROSSFADE => Cmd::SetCrossfade(d.u32()?),
                 t::SET_MUTED => Cmd::SetMuted(d.bool()?),
                 t::STOP => Cmd::Stop,
                 t::RECORD_START => Cmd::RecordStart { path: d.str()? },
@@ -429,6 +434,7 @@ pub mod audio {
                 Cmd::SetRepeat(Repeat::One),
                 Cmd::SetVolume(0.5),
                 Cmd::SetRate(1.5),
+                Cmd::SetCrossfade(6000),
                 Cmd::RecordStart { path: "/m.wav".into() },
             ];
             for c in cmds {
@@ -470,6 +476,18 @@ pub mod audio {
             assert_eq!(&bytes[bytes.len() - 4..], &1.5f32.to_le_bytes());
             assert_ne!(Cmd::SetRate(1.0).encode(), Cmd::SetVolume(1.0).encode());
             assert_eq!(Cmd::decode(&Enc::tag(t::SET_RATE).done()), Err(DecodeError::Truncated));
+        }
+
+        #[test]
+        fn set_crossfade_round_trips_with_its_own_tag_and_a_little_endian_length() {
+            for ms in [0u32, 2000, 12_000] {
+                assert_eq!(Cmd::decode(&Cmd::SetCrossfade(ms).encode()), Ok(Cmd::SetCrossfade(ms)));
+            }
+            let bytes = Cmd::SetCrossfade(6000).encode();
+            assert_eq!(&bytes[..4], &t::SET_CROSSFADE.to_le_bytes());
+            assert_eq!(&bytes[bytes.len() - 4..], &6000u32.to_le_bytes());
+            assert_ne!(Cmd::SetCrossfade(1).encode(), Cmd::SetRate(1.0).encode());
+            assert_eq!(Cmd::decode(&Enc::tag(t::SET_CROSSFADE).done()), Err(DecodeError::Truncated));
         }
 
         #[test]

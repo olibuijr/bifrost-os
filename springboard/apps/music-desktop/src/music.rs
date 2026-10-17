@@ -358,6 +358,8 @@ pub struct Music {
     rule_edit: Option<(usize, String)>,
     /// ratings, favourites, play counts and the play history, and the logic that counts plays
     stats: Stats,
+    /// the playback settings (crossfade), kept in `playback.txt` of the library store
+    playback: playback::Playback,
     tracker: PlayTracker,
     /// which list the Songs tab shows (all songs, recently added, recently played, favourites)
     scope: Scope,
@@ -505,6 +507,7 @@ impl Music {
             smart_rev: 0,
             rule_edit: None,
             stats: Stats::default(),
+            playback: playback::Playback::default(),
             tracker: PlayTracker::default(),
             scope: Scope::All,
             lyrics: None,
@@ -550,6 +553,9 @@ impl Music {
         self.stats = Stats::open(dir.join("stats.txt"));
         self.folders = Folders::open(dir.join("Playlists").join("folders.txt"));
         self.info = Info::open(dir.join("info.txt"));
+        self.playback = std::fs::read_to_string(dir.join("playback.txt")).map(|t| playback::Playback::parse(&t)).unwrap_or_default();
+        // the audio service keeps the last crossfade it was given until it restarts, so the saved choice is sent again
+        self.player.set_crossfade_ms(self.playback.crossfade_secs * 1000);
         self.smart_rev += 1;
         self.restore = std::fs::read_to_string(dir.join("queue.txt")).ok().and_then(|t| UpNext::from_text(&t));
         self.store = Some(dir);
@@ -1903,6 +1909,7 @@ impl Music {
             descending: self.descending,
             lyrics_shown: self.lyrics_on,
             has_lyrics: self.lyrics.is_some(),
+            crossfade_secs: self.playback.crossfade_secs,
         }
     }
 
@@ -1988,6 +1995,13 @@ impl Music {
                 }
                 self.descending = !self.descending;
                 self.refilter();
+            }
+            Command::Crossfade(secs) => {
+                self.playback = self.playback.with_crossfade(secs);
+                self.player.set_crossfade_ms(self.playback.crossfade_secs * 1000);
+                if let Some(dir) = &self.store {
+                    let _ = std::fs::write(dir.join("playback.txt"), self.playback.to_text());
+                }
             }
             Command::Lyrics => {
                 if self.lyrics.is_some() && !self.is_live() {
@@ -3333,6 +3347,24 @@ mod tests {
         m.run_command(Command::Show(Place::History));
         assert_eq!((m.page(), m.menu_state().place), (Page::History, Place::History));
         assert!(!m.run_command(Command::Import), "the window owns the open panel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_crossfade_choice_is_kept_in_the_menu_state_and_the_library_store() {
+        let dir = folder("crossfade");
+        let mut m = music(&dir);
+        assert_eq!(m.menu_state().crossfade_secs, 0, "gapless until chosen");
+        assert!(m.run_command(Command::Crossfade(6)));
+        assert_eq!(m.menu_state().crossfade_secs, 6);
+        assert!(m.run_command(Command::Crossfade(99)));
+        assert_eq!(m.menu_state().crossfade_secs, 12, "cut to the longest crossfade");
+        m.run_command(Command::Crossfade(4));
+        let saved = std::fs::read_to_string(dir.join("data").join("playback.txt")).expect("the choice is written");
+        assert!(saved.contains("crossfade 4"), "{saved}");
+        // a new session over the same store starts with the saved choice
+        let again = music(&dir);
+        assert_eq!(again.menu_state().crossfade_secs, 4);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

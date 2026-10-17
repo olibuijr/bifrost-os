@@ -87,6 +87,8 @@ pub enum Command {
     MiniPlayer,
     /// Window > Keep MiniPlayer on Top: the MiniPlayer floats above the other windows
     KeepMiniOnTop,
+    /// Controls > Crossfade Songs: one song fades into the next over this many seconds (0 is off)
+    Crossfade(u32),
 }
 
 const IMPORT: u32 = 1;
@@ -110,6 +112,9 @@ const RATE_BASE: u32 = 30;
 const SHOW_BASE: u32 = 40;
 const SORT_BASE: u32 = 60;
 const SORT_DESCENDING: u32 = 70;
+const CROSSFADE_BASE: u32 = 100;
+/// The crossfade lengths the Controls menu offers, in seconds.
+pub const CROSSFADES: [u32; 7] = [0, 2, 4, 6, 8, 10, 12];
 const ADD_TO_BASE: u32 = 1000;
 /// The highest rating a Rate command carries.
 const RATE_MAX: u8 = 5;
@@ -139,6 +144,7 @@ impl Command {
             Command::Show(p) => SHOW_BASE + Place::ALL.iter().position(|q| *q == p).unwrap_or(0) as u32,
             Command::SortBy(k) => SORT_BASE + SortKey::ALL.iter().position(|q| *q == k).unwrap_or(0) as u32,
             Command::SortDescending => SORT_DESCENDING,
+            Command::Crossfade(secs) => CROSSFADE_BASE + secs.min(super::playback::CROSSFADE_MAX_SECS),
             Command::AddTo(i) => ADD_TO_BASE + i as u32,
         }
     }
@@ -172,6 +178,7 @@ impl Command {
             _ if (RATE_BASE..=RATE_BASE + u32::from(RATE_MAX)).contains(&id) => Some(Command::Rate((id - RATE_BASE) as u8)),
             _ if (SHOW_BASE..SHOW_BASE + Place::ALL.len() as u32).contains(&id) => Some(Command::Show(Place::ALL[(id - SHOW_BASE) as usize])),
             _ if (SORT_BASE..SORT_BASE + SortKey::ALL.len() as u32).contains(&id) => Some(Command::SortBy(SortKey::ALL[(id - SORT_BASE) as usize])),
+            _ if (CROSSFADE_BASE..=CROSSFADE_BASE + super::playback::CROSSFADE_MAX_SECS).contains(&id) => Some(Command::Crossfade(id - CROSSFADE_BASE)),
             _ if id >= ADD_TO_BASE => Some(Command::AddTo((id - ADD_TO_BASE) as usize)),
             _ => None,
         }
@@ -200,11 +207,22 @@ pub struct MenuState {
     pub descending: bool,
     pub lyrics_shown: bool,
     pub has_lyrics: bool,
+    /// the crossfade between songs, in seconds (0 is off)
+    pub crossfade_secs: u32,
 }
 
 impl Default for MenuState {
     fn default() -> Self {
-        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, descending: false, lyrics_shown: false, has_lyrics: false }
+        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, descending: false, lyrics_shown: false, has_lyrics: false, crossfade_secs: 0 }
+    }
+}
+
+/// The menu title of a crossfade length: "Off", "2 seconds".
+fn crossfade_title(secs: u32) -> String {
+    if secs == 0 {
+        "Off".into()
+    } else {
+        format!("{secs} seconds")
     }
 }
 
@@ -244,7 +262,7 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
     song_items.push(item(Command::Favourite, "Favourite", "cmd+l").enabled(song).checked(s.favourite));
     song_items.push(AppMenuItem::separator());
     song_items.push(item(Command::GetInfo, "Get Info", "cmd+i").enabled(song));
-    let controls = vec![
+    let mut controls = vec![
         item(Command::PlayPause, if s.playing { "Pause" } else { "Play" }, "").enabled(s.has_track),
         item(Command::Next, "Next", "cmd+right").enabled(s.has_track),
         item(Command::Previous, "Previous", "cmd+left").enabled(s.has_track),
@@ -252,9 +270,14 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
         item(Command::Shuffle, "Shuffle", "").enabled(s.has_track && !s.live).checked(s.shuffle),
         item(Command::Repeat, "Repeat", "").enabled(s.has_track && !s.live).checked(s.repeat),
         AppMenuItem::separator(),
+        AppMenuItem::submenu("Crossfade Songs"),
+    ];
+    controls.extend(CROSSFADES.iter().map(|secs| item(Command::Crossfade(*secs), &crossfade_title(*secs), "").depth(1).checked(*secs == s.crossfade_secs)));
+    controls.extend([
+        AppMenuItem::separator(),
         item(Command::VolumeUp, "Volume Up", "cmd+up").enabled(true),
         item(Command::VolumeDown, "Volume Down", "cmd+down").enabled(true),
-    ];
+    ]);
     let mut view: Vec<AppMenuItem> = Place::ALL.iter().map(|p| item(Command::Show(*p), p.title(), p.key()).checked(*p == s.place)).collect();
     view.insert(5, AppMenuItem::separator());
     view.insert(9, AppMenuItem::separator());
@@ -294,6 +317,7 @@ mod tests {
         cmds.extend(Place::ALL.map(Command::Show));
         cmds.extend(SortKey::ALL.map(Command::SortBy));
         cmds.extend([Command::SortDescending, Command::AddTo(0), Command::AddTo(7), Command::AddTo(250)]);
+        cmds.extend(CROSSFADES.map(Command::Crossfade));
         for c in &cmds {
             assert_eq!(Command::from_id(c.id()), Some(*c), "{c:?}");
         }
@@ -330,7 +354,8 @@ mod tests {
     fn controls_follow_the_transport() {
         let controls = |s: &MenuState| build(s).remove(2).items;
         let idle = controls(&MenuState::default());
-        assert!(idle.iter().filter(|i| i.id != 0 && i.id != VOLUME_UP && i.id != VOLUME_DOWN).all(|i| !i.enabled), "nothing to control without a track");
+        let setting = |id: u32| id == VOLUME_UP || id == VOLUME_DOWN || (CROSSFADE_BASE..=CROSSFADE_BASE + 12).contains(&id);
+        assert!(idle.iter().filter(|i| i.id != 0 && !setting(i.id)).all(|i| !i.enabled), "nothing to control without a track");
         let playing = controls(&full());
         assert_eq!(playing[0].title, "Pause");
         assert!(playing.iter().filter(|i| i.id != 0).all(|i| i.enabled));
@@ -340,6 +365,28 @@ mod tests {
         let paused = controls(&MenuState { playing: false, shuffle: true, repeat: true, ..full() });
         assert_eq!(paused[0].title, "Play");
         assert!(paused.iter().find(|i| i.id == SHUFFLE).unwrap().checked && paused.iter().find(|i| i.id == REPEAT).unwrap().checked);
+    }
+
+    #[test]
+    fn the_controls_menu_offers_the_crossfade_lengths_and_checks_the_one_in_force() {
+        let controls = |s: &MenuState| build(s).remove(2).items;
+        let header = |items: &[AppMenuItem]| items.iter().position(|i| i.submenu && i.title == "Crossfade Songs").expect("the Crossfade Songs submenu");
+        let off = controls(&MenuState::default());
+        let at = header(&off);
+        let rows: Vec<(&str, bool)> = off[at + 1..].iter().take_while(|i| i.depth == 1).map(|i| (i.title.as_str(), i.checked)).collect();
+        assert_eq!(rows, [("Off", true), ("2 seconds", false), ("4 seconds", false), ("6 seconds", false), ("8 seconds", false), ("10 seconds", false), ("12 seconds", false)]);
+        assert!(off[at + 1..].iter().take_while(|i| i.depth == 1).all(|i| i.enabled), "a setting needs no track");
+        let six = controls(&MenuState { crossfade_secs: 6, ..MenuState::default() });
+        let checked: Vec<&str> = six[header(&six) + 1..].iter().take_while(|i| i.depth == 1).filter(|i| i.checked).map(|i| i.title.as_str()).collect();
+        assert_eq!(checked, ["6 seconds"]);
+    }
+
+    #[test]
+    fn a_crossfade_row_carries_its_length_and_reads_back() {
+        assert_eq!(Command::Crossfade(6).id(), CROSSFADE_BASE + 6);
+        assert_eq!(Command::from_id(CROSSFADE_BASE + 12), Some(Command::Crossfade(12)));
+        assert_eq!(Command::from_id(CROSSFADE_BASE + 13), None, "past the longest crossfade is no row");
+        assert_eq!(Command::Crossfade(99).id(), CROSSFADE_BASE + 12, "a longer length is cut to the longest");
     }
 
     #[test]

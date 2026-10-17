@@ -1789,11 +1789,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/crossfade.rs",
+   "bifrost": "springboard/src/media/crossfade_overlap.rs; springboard/src/media/crossfade.rs; springboard/src/media/audioplayer.rs; springboard/proto/src/svc.rs; springboard/audiod/src/main.rs; springboard/src/svc.rs; springboard/apps/music-desktop/src/music/menus.rs; springboard/apps/music-desktop/src/music/playback.rs",
    "status": "partial",
    "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade_overlap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "svc::audio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::menus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: smart transitions between songs. The audio engine holds the end of a song back and mixes the next song's start under it with equal-power gains (crossfade_overlap::Crossfader, wired into audioplayer; the overlap is capped at half a song and off for live stations), audiod takes it as the SetCrossfade command, and Music's Controls > Crossfade Songs menu sends the saved length (playback.txt) when the library store opens and when it changes. Gapless playback stays the default. Not built: the reference's DSP graph and per-song transition styles (beat-matched mixes); only the crossfade is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI.framework",
