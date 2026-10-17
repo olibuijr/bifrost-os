@@ -198,6 +198,7 @@ pub use bifrost_core::daily_metric_report;
 pub mod status_item;
 pub mod share;
 pub mod proxy_settings;
+pub mod system_config_store;
 pub mod oauth_credential;
 pub mod workflow;
 pub use bifrost_ui::print;
