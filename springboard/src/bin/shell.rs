@@ -68,6 +68,25 @@ fn run() -> std::io::Result<()> {
         let installed=install::install_package(&root,&bytes,&hex(&h.finish()),install::shell_version()).map_err(std::io::Error::other)?;
         println!("Installed {} {} from a local package",installed.id,installed.version);return Ok(());
     }
+    if matches!(args.get(1).map(String::as_str), Some("--sign-package" | "--publisher-keygen")) {
+        // publisher tools: springboard --publisher-keygen DIR NAME (writes NAME.pub to pin and NAME.key to keep secret)
+        // and springboard --sign-package NAME.key PKG.aap (writes the detached ML-DSA-65 signature PKG.aap.sig)
+        use std::io::Read;
+        let mut seed = [0u8; 32];
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut seed)?;
+        let arg = |i: usize, what: &str| args.get(i).cloned().ok_or_else(|| std::io::Error::other(format!("missing {what}")));
+        if args[1] == "--publisher-keygen" {
+            let (dir, name) = (arg(2, "DIR")?, arg(3, "NAME")?);
+            springboard::shell::store::install::write_publisher_key(std::path::Path::new(&dir), &name, &seed).map_err(std::io::Error::other)?;
+            println!("wrote {dir}/{name}.pub (pin it under {}) and {dir}/{name}.key (keep it secret)", springboard::shell::store::install::PINNED_PUBLISHER_KEYS);
+        } else {
+            let (key, pkg) = (arg(2, "KEY")?, arg(3, "PKG")?);
+            let sig = springboard::shell::store::install::sign_package(&std::fs::read(&key)?, &std::fs::read(&pkg)?, &seed).map_err(std::io::Error::other)?;
+            std::fs::write(format!("{pkg}.sig"), sig)?;
+            println!("wrote {pkg}.sig");
+        }
+        return Ok(());
+    }
     if args.get(1).map(String::as_str) == Some("--wpa") {
         // one-shot control command, like wpa_cli: springboard --wpa STATUS
         let iface = springboard::net::wifi::wireless_iface(std::path::Path::new("/sys/class/net")).unwrap_or_else(|| springboard::net::wifi::IFACE.to_string());

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import tarfile
 import urllib.request
@@ -109,6 +110,11 @@ def main():
         # a local package for lab testing (`springboard --install-package`), not published
         print(package)
         return
+    key = os.environ.get('BIFROST_PUBLISHER_KEY')
+    if key:
+        # detached ML-DSA-65 signature next to the package (`springboard --sign-package`); the shell checks it when a
+        # publisher key is pinned under /etc/bifrost/publisher-keys
+        run([os.environ.get('BIFROST_SPRINGBOARD', 'springboard'), '--sign-package', key, package])
     run([Path.home() / 'Projects/bifrost-site/tools/publish-app.sh', package])
     print('Published to the PC App Store. Install/update from App Store on Midget.')
 

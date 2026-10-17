@@ -105,7 +105,11 @@ pub enum Kind {
 /// subtype such as Markdown or a PNG picture takes its ancestor's provider. A name with no known type is `Other`.
 pub fn kind_for(file_name: &str) -> Kind {
     let reg = registry();
-    match reg.provider_for(file_name) {
+    kind_of_provider(reg.provider_for(file_name))
+}
+
+fn kind_of_provider(provider: Option<&str>) -> Kind {
+    match provider {
         Some(PICTURES) => Kind::Image,
         Some(TEXT) => Kind::Text,
         Some(PDF) => Kind::Pdf,
@@ -116,12 +120,31 @@ pub fn kind_for(file_name: &str) -> Kind {
     }
 }
 
-/// The preview kind of a path: a directory is a folder, anything else goes by its name ([`kind_for`]).
+/// The preview kind of a file's first bytes (`bifrost_ui::content_sniff`): the type the bytes show, looked up through the
+/// same registry as a name. Bytes that show no known type are `Other`.
+pub fn kind_for_head(head: &[u8]) -> Kind {
+    match bifrost_ui::content_sniff::sniff(head) {
+        Some(type_id) => kind_of_provider(registry().provider_for_type(type_id)),
+        None => Kind::Other,
+    }
+}
+
+/// The preview kind of a path: a directory is a folder, a file goes by its name ([`kind_for`]), and a file whose name
+/// says nothing (no extension, an unknown one) goes by what its first bytes show ([`kind_for_head`]).
 pub fn kind_for_path(path: &Path) -> Kind {
     if path.is_dir() {
         return Kind::Folder;
     }
-    kind_for(path.file_name().and_then(|n| n.to_str()).unwrap_or(""))
+    let by_name = kind_for(path.file_name().and_then(|n| n.to_str()).unwrap_or(""));
+    if by_name != Kind::Other {
+        return by_name;
+    }
+    use std::io::Read;
+    let mut head = Vec::with_capacity(bifrost_ui::content_sniff::SNIFF_LEN);
+    match std::fs::File::open(path).and_then(|f| f.take(bifrost_ui::content_sniff::SNIFF_LEN as u64).read_to_end(&mut head)) {
+        Ok(_) => kind_for_head(&head),
+        Err(_) => Kind::Other,
+    }
 }
 
 /// Folders are summarised from at most this many entries; a larger folder reads "more than".
@@ -1278,6 +1301,26 @@ mod tests {
         assert_eq!(kind_for("face.otf"), Kind::Font);
         assert_eq!(kind_for("archive.zip"), Kind::Other);
         assert_eq!(kind_for("README"), Kind::Other, "no extension, no type");
+    }
+
+    #[test]
+    fn a_file_whose_name_says_nothing_is_previewed_by_what_its_bytes_show() {
+        let dir = std::env::temp_dir().join(format!("ql-sniff-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+        std::fs::write(dir.join("picture"), png).unwrap();
+        std::fs::write(dir.join("README"), b"Plain words, no extension.\n").unwrap();
+        std::fs::write(dir.join("blob.bin"), [0u8, 1, 2, 3, 0, 0, 255, 254]).unwrap();
+        std::fs::write(dir.join("photo.png"), b"not really a png").unwrap();
+        assert_eq!(kind_for_path(&dir.join("picture")), Kind::Image, "PNG signature, no extension");
+        assert_eq!(kind_for_path(&dir.join("README")), Kind::Text, "readable text, no extension");
+        assert_eq!(kind_for_path(&dir.join("blob.bin")), Kind::Other, "bytes with no known signature");
+        assert_eq!(kind_for_path(&dir.join("photo.png")), Kind::Image, "a known extension decides without reading");
+        assert_eq!(kind_for_path(&dir.join("missing")), Kind::Other);
+        assert_eq!(kind_for_head(b"%PDF-1.7\n"), Kind::Pdf);
+        assert_eq!(kind_for_head(b""), Kind::Other);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

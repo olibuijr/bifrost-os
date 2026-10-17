@@ -496,6 +496,8 @@ pub mod audio_box;
 pub mod audio_virtual;
 pub mod speech_recognizer;
 pub mod speech_whisper;
+/// Control-event and notification publishers: the bridge from callbacks to `observable` subjects.
+pub mod control_publisher;
 pub mod media_intents;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;

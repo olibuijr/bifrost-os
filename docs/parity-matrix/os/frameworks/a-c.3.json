@@ -1235,9 +1235,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
-   "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: manages sharing and participants of iCloud (CloudKit) records for Apple accounts. BifrOSt has no Apple account and no CloudKit; its own sync goes through BifrOSt Cloud and CardDAV/CalDAV. The reference index lists only the binary and Info.plist (Versions/A/Resources/Info.plist), no resource that would be a user-visible feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -1487,11 +1487,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/store/install.rs (install_package_signed, check_package_policy, sign_package, write_publisher_key, pinned_publisher_keys), springboard/src/bin/shell.rs (--sign-package, --publisher-keygen), tools/pc-app.py (BIFROST_PUBLISHER_KEY), springboard/core/src/code_seal.rs, springboard/core/src/codereq.rs",
    "status": "gap",
-   "note": "Gap: verifying the signature of app bundles before they run. Built 2026-10-17: install_package_signed (springboard/src/shell/store/install.rs) checks a detached ML-DSA-65 signature from a publisher key over the package bytes before the SHA-256 check and unpack; tests shell::store::install::tests. Still missing: no publisher key is pinned in the shell and the packaging scripts do not sign packages yet. Built 2026-10-17: pinned_publisher_keys(dir) loads the ML-DSA-65 *.pub keys from PINNED_PUBLISHER_KEYS (/etc/bifrost/publisher-keys); tests shell::store::install::tests::pinned_publisher_keys_load_only_well_formed_pub_files. Still missing: the store does not call install_package_signed yet, and no signing tool produces the detached signature.",
+   "note": "Verifying the signature of an app package before it is unpacked. install_download_local fetches <package>.sig and refuses an unsigned or wrongly signed package once a publisher key is pinned under /etc/bifrost/publisher-keys; with no key pinned the checksum alone decides. springboard --publisher-keygen DIR NAME writes the key pair and --sign-package KEY PKG writes PKG.sig; tools/pc-app.py signs a built package when BIFROST_PUBLISHER_KEY is set. Tests: shell::store::install::tests. Not yet done: the site publish script must upload the .sig, and a key must be pinned on the device image.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "code_seal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "mldsa::tests"
+    }
+   ],
+   "ready_note": "Package signatures are verified on every store download: install_download_local calls enforce_signature_policy, which requires a detached ML-DSA-65 signature from a pinned publisher key once any key is in /etc/bifrost/publisher-keys. springboard --publisher-keygen and --sign-package produce the keys and signatures, and tools/pc-app.py signs when BIFROST_PUBLISHER_KEY is set. Resource seals (code_seal) and code requirements (codereq) cover bundle integrity and identity."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Coherence.framework",
@@ -1509,8 +1533,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name alone does not identify a feature, the reference binary was not extracted in this run, and no repo module matches it.",
+   "status": "n/a",
+   "note": "n/a: Apple framework that keeps model objects in sync through CloudKit; the reference index lists its sibling _Coherence_CloudKit_Private.framework, the part that talks to iCloud. BifrOSt has no CloudKit; synchronisation is BifrOSt Cloud and the DAV sync (sdk dav_sync.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -1560,8 +1584,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name suggests internal collection types with no public counterpart; the binary was not inspected because the extraction did not finish, and no repo module maps to it.",
+   "status": "n/a",
+   "note": "n/a: the internal half of the Swift collections library (Deque and ordered containers for Swift code). BifrOSt is Rust and gets VecDeque, BTreeMap and BTreeSet from std; the index lists only Info.plist and version.plist, so there is no resource or service to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1580,11 +1604,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/combine.json",
+   "bifrost": "springboard/sdk/src/control_publisher.rs (ControlEvents, ControlProperty, NotificationHub), springboard/sdk/src/observable.rs",
    "status": "partial",
-   "note": "Refreshed 2026-10-17, still open: Operators beyond map, filter, merge, flatMap, debounce, throttle, combineLatest, scan, compactMap and zip (for example prefix, reduce, drop, collect) receive(on:) and subscribe(on:); schedulers are a main-thread RunLoop and DispatchQueue, and no operator moves a publisher between them Demand and back pressure (Subscribers.Demand); completions and failures exist only on Finite and Future ObservableObject objectWillChange is partial: the aggregate publisher emits after the value has changed (observable_object.rs) Thread-safe publishers (Send) Notification, Timer, URLSession publishers",
+   "note": "The bridge from AppKit-style controls and notifications to the reactive layer. control_publisher.rs gives a publisher per control event (clicked, value changed, editing changed, began, ended), a control property that delivers its value and then only real changes, and a notification hub that routes notify_bus deliveries to a publisher per name. Tests: bifrost_app::control_publisher::tests. Threading and back pressure stay as in observable.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control_publisher::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "async_publisher::tests"
+    }
+   ],
+   "ready_note": "control_publisher bridges control events, control properties and notify_bus notifications into the Combine-style PassthroughSubject and Observable of observable.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CommerceKit.framework",
@@ -1622,11 +1665,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/auth_prompt.rs (AuthPrompt), springboard/sdk/src/authorization.rs (Authorization::grant_after_prompt)",
+   "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/services/local_auth.rs, springboard/ui/src/auth_prompt.rs, springboard/sdk/src/authorization.rs",
    "status": "partial",
-   "note": "Attempts, lockout and the device-owner password prompt state are a pure model; login and unlock check the password through PAM in the privileged helper. Gap: the shell does not draw a reusable authorization sheet for apps, and there is no authorization API. Built 2026-10-17: Authorization::grant_after_prompt grants rights only after an AuthPrompt succeeded, all or nothing; tests bifrost_app::authorization::tests. Still missing: the shell does not draw the sheet for apps.",
+   "note": "Authorization for apps: the local_auth service queues a shell-drawn password sheet (auth_sheet.rs) with the app's reason, checks the password through the login backend so it never reaches the app, and counts attempts with lockout (ui auth_prompt.rs). sdk authorization.rs grants rights all-or-nothing after a successful prompt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_prompt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "authorization::tests"
+    }
+   ],
+   "ready_note": "Apps ask the local_auth service for the device password; the shell draws its own password sheet (auth_sheet.rs), checks the password through PAM, and applies attempts and lockout (auth_prompt.rs). authorization.rs grants rights only after the prompt succeeded."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CommonUtilities.framework",
@@ -1644,8 +1711,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: a generic helper library; the binary was not inspected because the extraction did not finish, and no repo module maps to it.",
+   "status": "n/a",
+   "note": "n/a: a shared helper library of other Apple components; the reference index lists only its binary, Info.plist, version.plist and an InfoPlist.loctable, with no daemon, XPC service, resource or host app. It has no user-visible or app-visible job of its own. BifrOSt keeps its helpers in bifrost-core, and its private API is not a contract to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1821,8 +1888,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name suggests a graph-execution engine for on-device models; the binary was not inspected because the extraction did not finish, and no repo module maps to it.",
+   "status": "n/a",
+   "note": "n/a: execution engine for the graphs of Apple's on-device model runtime; the reference ships it with a PrivacyInfo.xcprivacy and no resource, daemon or UI. The models it runs are Apple ML model packs, which BifrOSt does not carry. BifrOSt's own small model runtime is sdk core_ml.rs over ui ml_model.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1947,8 +2014,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name does not identify a feature; the binary was not inspected because the extraction did not finish, and no repo module maps to it.",
+   "status": "n/a",
+   "note": "n/a: no daemon, XPC service, resource or host app in the reference index (only binary, Info.plist and signature), so it has no observable user or app function to reproduce. The name points at Apple device-to-device connected operation, an Apple-only protocol area BifrOSt does not mirror. The framework's exact job is unconfirmed.",
    "rea": [],
    "method": "assessed"
   },
@@ -1998,8 +2065,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.ConstantClasses) and version were in the reference extract; the reference dyld cache could not be decoded on this host, so no binary or resource was available and the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: runtime support for the compiler's constant objects (the classes behind literal strings, arrays and dictionaries in Objective-C and Swift code). BifrOSt has no Objective-C runtime; the index lists only Info.plist, version.plist and an en.lproj folder.",
    "rea": [],
    "method": "assessed"
   },
@@ -2018,11 +2085,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/sdk/src/dav_sync.rs, springboard/sdk/src/accounts.rs, springboard/ui/src/contact_book.rs (containers), springboard/apps/contacts-desktop/src/main.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Account sources for contacts: CardDAV accounts from Internet Accounts are read by dav_sync and merged into the Contacts file, and contact_book keeps containers with a default one.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_book::tests"
+    }
+   ],
+   "ready_note": "The Contacts app syncs the CardDAV accounts switched on in Internet Accounts (dav_sync), and the store models containers (one per account) with a default container."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsAssistantServices.framework",
@@ -2099,11 +2185,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/recipient_autocomplete.rs, springboard/ui/src/recipient_recents.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Recipient completion for address fields: contacts and the recent recipients merged, ranked and de-duplicated by recipient_autocomplete.rs. Tests: bifrost_ui::recipient_autocomplete::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recipient_autocomplete::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recipient_recents::tests"
+    }
+   ],
+   "ready_note": "recipient_autocomplete::complete merges address-book email addresses with the recent recipients, ranks word-start matches first, favourites first, and never repeats an address."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsAutocompleteUI.framework",
@@ -2120,11 +2220,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/recipient_autocomplete.rs (RecipientField), springboard/ui/src/contact_picker.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "The recipient field behind completion: recipient_autocomplete.rs RecipientField (tokens, suggestion list, highlight, commit and remove keys) and the picker model in contact_picker.rs. The widget that draws it is the caller's.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recipient_autocomplete::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_picker::tests"
+    }
+   ],
+   "ready_note": "RecipientField is the token field model: typed text, suggestion list with arrow-key highlight, commit on return, comma or tab, backspace removes the last recipient. contact_picker is the whole-contact or value picker."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonation.framework",
@@ -2141,11 +2255,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/contact_donation.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Suggested contacts from donations: apps donate a name and one email address or phone number, the store keeps and ranks them, hides people already in the address book, and builds the contact on accept. Local only; text file form for storage.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_donation::tests"
+    }
+   ],
+   "ready_note": "DonationStore keeps people apps donated (name plus an email or phone), suggests those not in the address book, and turns an accepted suggestion into a contact."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsDonationFeedback.framework",
@@ -2162,11 +2285,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/contact_donation.rs (DonationStore::feedback)",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Local feedback on suggested contacts: accept or dismiss, kept as blocked and accepted lists beside the donations (contact_donation.rs). No upload.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_donation::tests"
+    }
+   ],
+   "ready_note": "Feedback is local: accepting ends the suggestion, dismissing blocks the address so later donations of it are refused; a dismissal can be lifted. Nothing is sent anywhere."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsFoundation.framework",
@@ -2183,11 +2315,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/contact_book.rs, springboard/ui/src/contact_fetch.rs, springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_access.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "The shared model layer of Contacts: contact_book (types, store, predicates), contact_fetch (partial records), contact_changes (batched saves and history), contact_access (grants).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_book::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_fetch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_changes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_access::tests"
+    }
+   ],
+   "ready_note": "The Contacts foundation layer (model, partial fetch, batched saves with history, access grants) is split across the bifrost-ui contact_* modules; internal plumbing of the Contacts model BifrOSt implements there."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsMetrics.framework",
@@ -2204,9 +2360,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
-   "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: usage metrics for the Contacts app, an analytics feature. BifrOSt does no telemetry (privacy-first: nothing is measured or sent). The index lists only the binary, Info.plist and version.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -2225,11 +2381,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs, springboard/apps/contacts-desktop/src/archive.rs, springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_book.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Address-book storage: contacts-desktop saves and loads contacts.tsv and its side files, archive.rs bundles them for backup and restore, and contact_changes keeps the history.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "archive::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_changes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The Contacts app persists the address book to its data files (contacts.tsv, details, groups, display settings), backs them up as one archive, and records change history; the reference Core Data store is replaced by those files."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsUICore.framework",
@@ -2246,11 +2426,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/ui/src/contact_card.rs, springboard/ui/src/contact_photo.rs, springboard/ui/src/contact_address.rs, springboard/ui/src/contact_display.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Core views of the contact card: contact_card (rows and actions), contact_photo, contact_address and contact_display models, drawn by the Contacts app.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_photo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_address::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_display::tests"
+    }
+   ],
+   "ready_note": "The card model (rows, kinds, actions), pictures, postal address layout and display defaults used by the Contacts card."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsUIMacHelper.framework",
@@ -2267,11 +2471,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/apps/contacts-desktop/src/card_windows.rs, springboard/apps/contacts-desktop/src/details.rs, springboard/ui/src/contact_picker.rs, springboard/sdk/src/contacts.rs (picker)",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "Desktop contact helpers: card windows per contact (card_windows.rs), card detail fields (details.rs) and the contact picker (ui contact_picker, sdk contacts::picker).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "card_windows::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "details::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The desktop helpers around the contact card: separate card windows, extra card fields, and the picker apps use to ask for a contact."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsWidgetUI.framework",
@@ -2288,11 +2516,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/apps/contacts-desktop/src/widget.rs, springboard/sdk/src/widgets_timeline.rs",
    "status": "partial",
-   "note": "private framework, owner Contacts; from SDK matrix contacts.json",
+   "note": "The Contacts widget: a Birthdays timeline built from the cards' birthdays (today, tomorrow or the next one, with the age when the year is known) and sent with widgets_timeline.reload whenever a card changes or the day rolls over.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Contacts gives Notification Centre a Birthdays widget timeline (one entry per local day for a week) through the widgets_timeline service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContainerManagerCommon.framework",
@@ -2339,11 +2581,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (systemd)",
+   "bifrost": "packaging/arch/bifrost-privd.service (RuntimeDirectory=bifrost), packaging/arch/tmpfiles-bifrost-audio.conf, springboard/core/src/container_layout.rs, springboard/sdk/src/container_migration.rs",
    "status": "partial",
-   "note": "systemd, listed in the runtime package list, creates and owns each daemon's state and cache directories through StateDirectory= and CacheDirectory=. The reference system container classes (systemData, systemGroup, protectedSystem) and their entitlements are not modelled.",
+   "note": "System and app containers: the daemons' directories are created and owned by systemd (RuntimeDirectory= in bifrost-privd.service) and tmpfiles.d (bifrost-audio.conf) under their own unix users; app containers by core container_layout.rs, with format migration in sdk container_migration.rs. The reference's entitlement-based system container classes are replaced by unix users and groups.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "container_migration::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-privd.service"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/tmpfiles.d/bifrost-audio.conf"
+    }
+   ],
+   "ready_note": "System daemons get their directories from systemd (RuntimeDirectory= in bifrost-privd.service, tmpfiles.d for the audio server) with unix users and modes; app containers are created and versioned by container_layout and container_migration."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContainerManagerUser.framework",
@@ -2390,11 +2654,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/content_sniff.rs (sniff; maps signatures to UTType identifiers), springboard/sdk/src/content_kit.rs (identify)",
+   "bifrost": "springboard/ui/src/content_sniff.rs (sniff), springboard/sdk/src/content_kit.rs (identify), springboard/src/shell/preview_panel.rs (kind_for_path, kind_for_head)",
    "status": "partial",
-   "note": "A bounded pure sniffer recognizes common signatures and maps them to the identifiers in uttype.rs, with host integration tests. The ContentKit API was not confirmed from magic.mgc; this is not a magic-database-compatible engine, and no picker or preview consumer calls it yet. Built 2026-10-17: the SDK identify(name, head) sniffs the bytes and lets the file name refine a ZIP container; tests bifrost_app::content_kit::tests. Still missing: no picker or preview consumer calls it.",
+   "note": "Identifying content from bytes: a bounded sniffer maps signatures to UTType identifiers (ui content_sniff.rs), the SDK identify() lets the name refine a ZIP container, and the preview panel falls back to it for files with no known extension. It is not a magic-database-compatible engine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recognizes_binary_signatures_and_shared_containers"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "identifies_tar_and_media_containers_at_their_defined_offsets"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "content_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::preview_panel::tests"
+    }
+   ],
+   "ready_note": "Content type identification from a file's first bytes (content_sniff, sdk identify) is used by the preview panel to preview a file whose name says nothing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContextKit.framework",
@@ -2631,8 +2919,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property list (bundle com.apple.CookingData) was in the reference extract, with no binary or resource, so the data it holds and its purpose are not determined.",
+   "status": "n/a",
+   "note": "n/a: recipe data of the Apple News+ cooking feature; the reference index shows CookingKit.framework and News.app/Contents/PlugIns/CookingAppKitBridge.bundle beside it. It is Apple store content tied to a subscription, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2652,8 +2940,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property list (bundle com.apple.Coordination) was in the reference extract, with no binary or resource, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: no daemon, XPC service, resource or host app in the reference index links it (only the sibling CoordinationCore and InstallCoordination appear by name), so no observable user or app function exists to reproduce. The name points at coordination between Apple devices, an Apple-only protocol area BifrOSt does not mirror. The exact job is unconfirmed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2673,8 +2961,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property list (bundle com.apple.CoordinationCore) was in the reference extract, with no binary or resource, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: the core library of the Coordination framework; the index lists only its binary, Info.plist and signature, with no daemon, resource or host app. See Coordination: an Apple-only device coordination area with no observable function to reproduce; the exact job is unconfirmed.",
    "rea": [],
    "method": "assessed"
   },
@@ -2736,8 +3024,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The reference extract holds no property list, binary or resource for this framework (only its name is listed), so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: a bare dyld-cache stub in the reference index (Versions/A and the CoreALD link only; no Info.plist, resource, daemon or XPC service), next to ALDataTypes.dylib, which is also bare. Nothing about it is user-visible or app-visible. The expansion of its name is unconfirmed, so it is classed as Apple internal plumbing.",
    "rea": [],
    "method": "assessed"
   },
@@ -2757,8 +3045,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property list (bundle com.apple.CoreAUC, version 638.12) was in the reference extract, with no binary or resource, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: the user-space half of Apple's AUC kernel extension for USB audio and video class devices (the index lists System/Library/Extensions/AUC.kext, AppleUSBAudio.kext and the UVC service next to it). On Linux the kernel drivers snd-usb-audio and uvcvideo do that job and are packaged with the kernel; there is no BifrOSt user-space layer to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2781,7 +3069,20 @@
    "status": "partial",
    "note": "ffmpeg, listed in the runtime package list, demuxes AVCHD MPEG-TS streams and decodes their H.264 video. Not verified on Midget, and the framework's camcorder import features are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ffmpeg"
+    },
+    {
+     "kind": "cmd",
+     "run": "ffmpeg -hide_banner -demuxers 2>/dev/null | grep -q mpegts && ffmpeg -hide_banner -decoders 2>/dev/null | grep -q h264",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ffmpeg, in the runtime package list, demuxes AVCHD MPEG-TS streams and decodes their H.264 video; the checks confirm the demuxer and decoder."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreAccessibility.framework",
@@ -2931,11 +3232,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-audio.json",
+   "bifrost": "springboard/audio/policy/src (ducking, defaults, permissions, volume), springboard/sdk/src/audio_session.rs",
    "status": "partial",
-   "note": "private framework, owner CoreAudio; from SDK matrix core-audio.json Refreshed 2026-10-17: Remaining: no app device or stream I/O and no plug-in publication, as for CoreAudio.",
+   "note": "Coordinating audio between clients: bifrost-audio-policy holds the session manager decisions (defaults, ducking, permissions, volume) and sdk audio_session.rs the per-app session interruptions and route changes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "ducking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_session::tests"
+    }
+   ],
+   "ready_note": "The audio session manager decides default devices per role, ducking, microphone and capture permissions and per-app volume (bifrost-audio-policy), and app audio sessions interrupt and resume each other (audio_session.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreAutoLayout.framework",
@@ -2982,11 +3307,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_picker.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_picker.rs, springboard/src/shell/forms.rs (bluetooth_pairing), springboard/src/shell/services/bluetooth_service.rs, springboard/core/src/bt_pairing.rs",
    "status": "partial",
-   "note": "The app-facing Bluetooth device picker exists as a pure model in which the user chooses a device. The picker never pairs a device, and the shell's pairing sheet is not reviewed here.",
+   "note": "Bluetooth UI: the app-facing device picker model (sdk bluetooth_picker.rs) and the shell's pairing prompt for a PIN or six-digit passkey (forms.rs with core bt_pairing validation), driven by bluetooth_service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::forms::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    }
+   ],
+   "ready_note": "The device picker apps use (bluetooth_picker.rs) and the shell's pairing PIN and passkey prompt (forms.rs, bt_pairing.rs) are the UI half of Bluetooth; pairing itself stays in the shell service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreBrightness.framework",
@@ -3102,8 +3451,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property lists (bundle com.apple.CoreCapture) were in the reference extract; the capture daemon is not in the extracted tree, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: Apple driver debug capture (it comes with CoreCaptureDriverKit.framework in the index): kernel and firmware trace capture for wireless and other drivers, used for Apple diagnostics. Diagnostics upload and Apple internal debug tooling are not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -3123,8 +3472,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property list (bundle com.apple.CoreCaptureControl) was in the reference extract, with no binary or resource, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: the control client of CoreCapture, Apple's driver debug capture used for Apple diagnostics (index: Info.plist only beside CoreCapture and CoreCaptureDaemon). Apple internal debug tooling, not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -3144,8 +3493,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Undetermined: the reference index lists only the bundle and its resources, and no binary was in the extracted payload, so its job is not confirmed and no BifrOSt counterpart is identified.",
+   "status": "n/a",
+   "note": "n/a: the daemon side of CoreCapture, Apple's driver debug capture for Apple diagnostics (index: bundle, Info.plist and resources, with CoreCapture and CoreCaptureControl). Apple internal debug tooling, not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -3194,11 +3543,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/blend.rs, springboard/render/src/composite_filters.rs",
    "status": "os",
-   "note": "Undetermined: the reference index lists only the bundle's resource folder and no binary was extracted, so its job is not confirmed and no BifrOSt counterpart is identified.",
+   "note": "Image and layer compositing: blend.rs (blend modes, source-over on premultiplied pixels) and composite_filters.rs (the composite filter set), with the GPU presenter doing the final composition. The exact private API of the reference is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blend::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "composite_filters::tests"
+    }
+   ],
+   "ready_note": "The reference framework ships a GPU compositing shader library (default-cc.metallib); BifrOSt composites layers with the blend modes and composite filters of the render crate (source-over, separable and non-separable blend modes, addition, maximum, minimum)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreDAV.framework",
@@ -3399,11 +3762,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, packaging/arch/runtime-packages.txt (gst-plugin-whisper)",
    "status": "gap",
-   "note": "Nothing does on-device speech-to-text. springboard/ui/src/recognition.rs and recognition_task.rs are result and task models only; no recognizer or dictation service exists in springboard/. Build a local recognition service that takes microphone audio and returns text, for dictation in the Search field and in apps.",
+   "note": "On-device recognition: the speech_recognizer shell service (recognizer.rs) captures the microphone with GStreamer into a local whisper model (ui whisper.rs), with consent and model download in Settings > Keyboard > Dictation; apps call it through sdk speech_whisper. English only for now.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    }
+   ],
+   "ready_note": "On-device speech to text: the speech_recognizer service runs a local whisper pipeline on microphone audio after the person grants consent and installs the model; Settings > Keyboard > Dictation drives it, and apps use sdk speech_whisper. No audio leaves the machine."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreEmoji.framework",

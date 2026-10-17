@@ -816,6 +816,23 @@ impl Contacts {
         (!self.load_failed).then_some(self.contacts.as_slice())
     }
 
+    /// The cards that have a birthday, for the Birthdays widget. `None` when the file did not load, so an unreadable file
+    /// never empties the widget.
+    pub fn birthdays(&self) -> Option<Vec<crate::widget::Person>> {
+        if self.load_failed {
+            return None;
+        }
+        Some(
+            self.contacts
+                .iter()
+                .filter_map(|c| {
+                    let birthday = self.details.of(c.id).get(Detail::Birthday).to_string();
+                    (!birthday.is_empty()).then(|| crate::widget::Person { name: crate::services::label(c), birthday })
+                })
+                .collect(),
+        )
+    }
+
     /// True while a form is open, the contact editor or the smart list editor: its edits are not saved yet.
     pub fn editing(&self) -> bool {
         matches!(self.screen, Screen::Editor(_) | Screen::SmartEditor(_))
