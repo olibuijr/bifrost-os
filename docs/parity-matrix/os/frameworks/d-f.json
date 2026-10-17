@@ -322,7 +322,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/calendar.rs; springboard/ui/src/calendar_store.rs",
    "status": "partial",
-   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built, but the SDK exposes only the read side. Gap: apps cannot write events through the SDK, and account sources such as CalDAV and Exchange are missing.",
+   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Gap: apps cannot edit or delete events through the SDK, and account sources such as Exchange are missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3227,7 +3227,16 @@
    "status": "partial",
    "note": "Mailbox sync over IMAP runs inside the Mail app process. There is no separate mail daemon, and the reference cloud mirroring model is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::tests"
+    }
+   ],
+   "ready_note": "Mailbox sync over IMAP runs in the Mail app process and is covered by springboard/apps/mail-desktop/src/imap.rs host tests. The reference cloud mirroring model is not built and is not part of the main job. Verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmailFoundation.framework",
@@ -3608,7 +3617,16 @@
    "status": "partial",
    "note": "CalDAV account sync for Calendar runs through this sync type when the Calendars service is on. Other external calendar sources and iCal sync schemas are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    }
+   ],
+   "ready_note": "CalDAV account sync for Calendars runs through springboard/sdk/src/dav_sync.rs and is covered by its host tests. Other external calendar sources are outside this framework's main job. Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EventKitUICore.framework",
@@ -3629,7 +3647,21 @@
    "status": "partial",
    "note": "Calendar's event form pickers and its quick event sheet cover event entry. There is no shared event-editing UI kit for other apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "quickentry::tests"
+    }
+   ],
+   "ready_note": "Calendar's event form pickers and quick event sheet (pickers.rs, quickentry.rs) are covered by their host tests. No shared event-editing kit for other apps is a gap. Verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EventMetaDataExtractor.framework",
@@ -4841,7 +4873,16 @@
    "status": "partial",
    "note": "The crash and stall records a feedback logger collects are covered by the SDK diagnostic report module; the logging subsystem itself is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "diagnostic_report::tests"
+    }
+   ],
+   "ready_note": "Crash and stall records: the crash log lines decode to typed reports (panic signature, whole-second UI stall, longest stall) in springboard/sdk/src/diagnostic_report.rs. Host tests only; the logging subsystem itself is not part of this row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FeedbackService.framework",
@@ -4991,8 +5032,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/file-provider.json",
-   "status": "partial",
-   "note": "private framework, owner FileProvider; from SDK matrix file-provider.json",
+   "status": "n/a",
+   "note": "Apple's File Provider telemetry feeds Apple's metrics pipeline; BifrOSt collects no telemetry by design.",
    "rea": [],
    "method": "assessed"
   },
@@ -5540,7 +5581,36 @@
    "status": "partial",
    "note": "The Files app builds the sidebar (Favorites, Locations, Tags), icon, list and column views, the path bar, Trash and tag dots. Gap: the vendor's proximity-sharing view is not built, and the Files app is not compared with this framework one view at a time.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::the_sidebar"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::columns_click"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::the_path_bar"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::emptying_the_trash"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::tags_are_saved"
+    }
+   ],
+   "ready_note": "Files app sidebar, column view, path bar, Trash and tags are covered by host tests in springboard/apps/files/src/main.rs. The vendor proximity-sharing view is Apple-only and not counted. Verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FinderSyncPriv.framework",
