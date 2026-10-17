@@ -40,14 +40,14 @@ impl FamilyClass {
     /// The open families that stand in for the class, preferred first.
     pub fn equivalents(self) -> &'static [&'static str] {
         match self {
-            FamilyClass::GrotesqueSans => &["Inter", "Geist", "Source Sans 3"],
+            FamilyClass::GrotesqueSans => &["Inter", "Geist", "Source Sans 3", "Noto Sans"],
             FamilyClass::GeometricSans => &["Outfit", "Poppins", "Geist", "Inter"],
             FamilyClass::HumanistSans => &["Source Sans 3", "IBM Plex Sans", "Inter"],
             FamilyClass::DidoneSerif => &["Playfair Display", "Noto Serif", "Source Serif 4"],
             FamilyClass::TransitionalSerif => &["Noto Serif", "Source Serif 4", "Libre Baskerville"],
             FamilyClass::Slab => &["Roboto Slab", "Zilla Slab", "Noto Serif"],
             FamilyClass::Script => &["Pacifico", "Caveat", "Dancing Script"],
-            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code"],
+            FamilyClass::Monospaced => &["JetBrains Mono", "Geist Mono", "Source Code Pro", "Fira Code", "Liberation Mono"],
             FamilyClass::Rounded => &["Nunito", "Quicksand", "M PLUS Rounded 1c", "Inter"],
             FamilyClass::CjkGothic => &["Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK KR"],
             FamilyClass::CjkMincho => &["Noto Serif CJK JP", "Noto Serif CJK SC", "Noto Serif CJK TC", "Noto Serif CJK KR"],
@@ -150,6 +150,11 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("hiragino maru gothic pro", CjkRounded), ("hiragino maru gothic pron", CjkRounded), ("ヒラギノ丸ゴ pron", CjkRounded),
     ("ヒラギノ丸ゴ pron w4", CjkRounded), ("ヒラギノ丸ゴ pro", CjkRounded), ("yuanti sc", CjkRounded), ("yuanti tc", CjkRounded),
     ("yuanti", CjkRounded), ("tsukushiamarugothic", CjkRounded), ("tsukushibmarugothic", CjkRounded),
+    // Apple reference faces with an installed open stand-in (noto-fonts, noto-fonts-cjk, ttf-liberation)
+    ("sf ns", GrotesqueSans), ("sf ns mono", Monospaced), ("sf ns rounded", Rounded), ("sf camera", GrotesqueSans),
+    ("proxima nova", GrotesqueSans), ("produkt", GrotesqueSans), ("publico text", TransitionalSerif),
+    ("publico headline", TransitionalSerif), ("stixgeneral", TransitionalSerif), ("stheiti light", CjkGothic),
+    ("stheiti medium", CjkGothic),
 ];
 
 /// The class of a reference family name (case and surrounding space ignored), None when it is not in the table.
@@ -276,6 +281,16 @@ mod tests {
             assert_eq!(*n, n.to_lowercase(), "key {n} must be lowercase");
             assert!(seen.insert(*n), "duplicate key {n}");
         }
+    }
+
+    #[test]
+    fn reference_faces_have_installed_stand_ins() {
+        assert_eq!(class_of_family("SF Camera"), Some(GrotesqueSans));
+        assert_eq!(class_of_family("Publico Text"), Some(TransitionalSerif));
+        assert_eq!(class_of_family("STHeiti Light"), Some(CjkGothic));
+        assert_eq!(class_of_family("SF Mono"), Some(Monospaced));
+        assert_eq!(FamilyClass::GrotesqueSans.equivalents().last(), Some(&"Noto Sans"));
+        assert_eq!(FamilyClass::Monospaced.equivalents().last(), Some(&"Liberation Mono"));
     }
 
     #[test]

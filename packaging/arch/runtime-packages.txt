@@ -135,3 +135,6 @@ v4l-utils
 audit
 mandoc
 davfs2
+inter-font
+ttf-jetbrains-mono
+ttf-nunito
