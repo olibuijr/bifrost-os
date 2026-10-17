@@ -18,6 +18,7 @@ pub mod settings;
 mod chrome;
 mod settings_pane;
 pub mod icon;
+pub mod preview;
 pub mod rpc;
 pub mod sketch;
 pub mod smart;

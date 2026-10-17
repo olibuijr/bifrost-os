@@ -285,6 +285,19 @@ impl App for Files {
     fn id(&self) -> &str {
         "is.olibuijr.files.desktop"
     }
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
+        // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
+        // into its own File menu, and the item needs a selection
+        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
+        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![quick_look] }]
+    }
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        if id != MENU_QUICK_LOOK {
+            return false;
+        }
+        self.quick_look();
+        true
+    }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
         // files from any app can be dropped on the folder listing (`dragout`)

@@ -14,20 +14,33 @@
 use super::thumbnails::Thumbnails;
 use super::{Event, SystemService};
 use crate::gfx::Image;
+use crate::shell::preview_gen::{Exchanger, Generators, Requests, Sockets};
 use crate::shell::Shell;
 use bifrost_core::json::Json;
 use bifrost_proto::peek::{PreviewItem, MAX_ITEMS, MAX_TITLE, MAX_URL};
+use bifrost_ui::preview_manifest::Outcome;
 use bifrost_ui::thumb_service::{ThumbKind, ThumbRequest};
 use std::path::Path;
+use std::sync::Arc;
 
 /// The asker of the panel's thumbnail requests: the shell itself, so the answers come back to this service.
 const PANEL: &str = "shell.quick-look";
 /// The edge of the panel's picture in points. The panel fits the picture into its body.
 const PICTURE_PT: u32 = 512;
 
-#[derive(Default)]
 pub struct PreviewService {
     thumbs: Thumbnails,
+    /// the app generators in flight (see `preview_gen`): a file of a declared type is drawn by its app first
+    requests: Requests,
+    exchanger: Arc<dyn Exchanger>,
+    /// the shell's clock in milliseconds, as of the last call or tick: the generators' deadlines run on it
+    now_ms: u64,
+}
+
+impl Default for PreviewService {
+    fn default() -> Self {
+        PreviewService { thumbs: Thumbnails::default(), requests: Requests::default(), exchanger: Arc::new(Sockets), now_ms: 0 }
+    }
 }
 
 /// The picture a thumbnail answer names, when it is a ready picture the cache can read. None for an icon, a failure or
@@ -72,11 +85,31 @@ impl PreviewService {
     /// once; a pending one comes later as a `ready` or `failed` event (see `tick`).
     fn ask(&mut self, shell: &mut Shell) {
         let Some(file) = shell.quick_look_take_wanted() else { return };
-        let answer = ThumbRequest::new(&file, PICTURE_PT, 1.0, ThumbKind::Thumbnail).map_err(|e| e.to_string()).and_then(|req| self.thumbs.request(PANEL, req));
+        // an app that declared the type draws the picture; the thumbnails service is the fallback (see `fall_back`)
+        if let Some(generator) = shell.quick_look_generator_for(&file) {
+            self.requests.start(Arc::clone(&self.exchanger), &generator, &file, PICTURE_PT, PICTURE_PT, self.now_ms);
+            return;
+        }
+        self.thumbnails(shell, &file);
+    }
+
+    /// Asks the thumbnails service for `file`'s picture: a ready answer is applied at once, a pending one comes later.
+    fn thumbnails(&mut self, shell: &mut Shell, file: &str) {
+        let answer = ThumbRequest::new(file, PICTURE_PT, 1.0, ThumbKind::Thumbnail).map_err(|e| e.to_string()).and_then(|req| self.thumbs.request(PANEL, req));
         match answer {
             Ok(body) if body.str_field("state").as_deref() == Some("pending") => {}
-            Ok(body) => shell.quick_look_thumbnail(&file, picture_of(&body)),
-            Err(_) => shell.quick_look_thumbnail(&file, None),
+            Ok(body) => shell.quick_look_thumbnail(file, picture_of(&body)),
+            Err(_) => shell.quick_look_thumbnail(file, None),
+        }
+    }
+
+    /// A generator could not draw `file` (no answer, an error, a late answer, or an unreadable picture): the built-in
+    /// preview is shown, and for a picture the thumbnails service is asked.
+    fn fall_back(&mut self, shell: &mut Shell, file: &str) {
+        if shell.quick_look_generator_fallback(file) {
+            if let Some(wanted) = shell.quick_look_take_wanted() {
+                self.thumbnails(shell, &wanted);
+            }
         }
     }
 }
@@ -86,10 +119,13 @@ impl SystemService for PreviewService {
         "quick-look"
     }
 
-    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
+        self.now_ms = (t.max(0.0) * 1000.0) as u64;
         match method {
             "show" => {
                 let (items, index) = parse_show(params)?;
+                // the installed apps' declarations are read per opening, so an install or update shows at once
+                shell.quick_look_set_generators(Generators::installed());
                 shell.quick_look_show(app_id, items, index);
                 self.ask(shell);
                 Ok(shell.quick_look_state())
@@ -117,12 +153,23 @@ impl SystemService for PreviewService {
         }
     }
 
-    fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
+        self.now_ms = (t.max(0.0) * 1000.0) as u64;
         // the user's keys step the panel without a call: ask for what the body now waits for
         self.ask(shell);
         for done in self.thumbs.poll().into_iter().filter(|e| e.app.as_deref() == Some(PANEL)) {
             let file = done.body.str_field("file").unwrap_or_default();
             shell.quick_look_thumbnail(&file, picture_of(&done.body));
+        }
+        // the app generators' answers, and the requests whose deadline passed
+        for (file, outcome) in self.requests.poll(self.now_ms) {
+            match outcome {
+                Outcome::Generated(path) => match std::fs::read(Path::new(&path)).ok().and_then(|bytes| crate::cg::imageio::decode(&bytes)) {
+                    Some(picture) => shell.quick_look_thumbnail(&file, Some(picture)),
+                    None => self.fall_back(shell, &file),
+                },
+                Outcome::Generic => self.fall_back(shell, &file),
+            }
         }
         let owner = shell.quick_look_owner().map(str::to_string);
         shell
