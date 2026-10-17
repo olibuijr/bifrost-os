@@ -15,7 +15,7 @@ fn a_pipe_is_a_read_end_and_a_write_end() {
 
 #[test]
 fn a_pipe_round_trips_a_message() {
-    let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+    let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
     writer.write(b"hello").expect("write");
     drop(writer);
     let mut buf = [0u8; 16];

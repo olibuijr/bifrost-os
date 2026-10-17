@@ -35,7 +35,7 @@ pub fn feedback_body(state: &FeedbackState, rating: Option<&RatingCommand>) -> J
             Json::Obj(vec![
                 ("min".to_string(), Json::Num(r.minimum() as f64)),
                 ("max".to_string(), Json::Num(r.maximum() as f64)),
-                ("value".to_string(), Json::Num(r.rating() as f64)),
+                ("value".to_string(), r.rating().map_or(Json::Null, |v| Json::Num(v as f64))),
             ]),
         ));
     }

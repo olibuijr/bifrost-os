@@ -197,8 +197,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let path = store_file(&dir, "com.example.notes").unwrap();
         let mut store = MemoryDataStore::new();
-        put(&mut store, 1, "first").unwrap();
-        put(&mut store, 2, "second").unwrap();
+        put(&mut store, 1.0, "first").unwrap();
+        put(&mut store, 2.0, "second").unwrap();
         persist(&path, &store).unwrap();
         let again = load(&path);
         assert_eq!(again.fetch_count("Note"), 2);
@@ -223,8 +223,8 @@ mod tests {
     #[test]
     fn put_fetch_remove_and_erase() {
         let mut store = MemoryDataStore::new();
-        put(&mut store, 2, "second").unwrap();
-        put(&mut store, 1, "first").unwrap();
+        put(&mut store, 2.0, "second").unwrap();
+        put(&mut store, 1.0, "first").unwrap();
         let all = answer(&mut store, "fetch", &obj(vec![("entity", Json::Str("Note".into()))])).unwrap();
         let rows = all.get("records").and_then(Json::as_array).unwrap();
         assert_eq!(rows.len(), 2);

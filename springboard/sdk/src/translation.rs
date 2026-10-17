@@ -245,6 +245,7 @@ impl LanguagePack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_ui::translation::AvailabilityStatus;
 
     fn installed() -> LanguageAvailability {
         let mut a = LanguageAvailability::new(&["en", "is"]);

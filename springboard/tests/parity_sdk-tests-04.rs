@@ -144,7 +144,7 @@ fn chat_categories() -> Vec<NotifCategory> {
 }
 
 fn answer(action: &str) -> ToApp {
-    ToApp::NotificationAction { id: "m".into(), action: action.into(), text: String::new(), thread: String::new(), category: String::new() }
+    ToApp::NotificationAction { id: "m".into(), action: action.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] }
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn headless_responding_sends_the_action_to_its_app_and_text_only_for_a_text_acti
 
     let (app, msg) = reg.respond(5, "ok", "ignored").expect("the action exists");
     assert_eq!(app, "app.one");
-    let ToApp::NotificationAction { id, action, text, thread, category } = msg else { panic!("an action message") };
+    let ToApp::NotificationAction { id, action, text, thread, category, .. } = msg else { panic!("an action message") };
     assert_eq!((id.as_str(), action.as_str(), text.as_str(), thread.as_str(), category.as_str()), ("m", "ok", "", "t", "reply"));
 
     let (_, typed) = reg.respond(5, "reply", "on my way").expect("the text action exists");

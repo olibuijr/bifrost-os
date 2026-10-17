@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn a_pipe_carries_bytes_from_the_writer_to_the_reader_in_order() {
-        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
         assert_eq!(reader.access(), Access::Read);
         assert_eq!(writer.access(), Access::Write);
         assert_eq!(writer.write(b"abc").expect("write"), 3);
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn a_received_descriptor_keeps_the_access_it_was_given() {
-        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
         let fd = writer.into_owned();
         let mut wrapped = FileDescriptor::from_received(fd, Access::Write);
         assert_eq!(wrapped.access(), Access::Write);
@@ -221,8 +221,8 @@ mod tests {
 
     #[test]
     fn a_duplicated_pipe_end_still_reaches_the_same_pipe() {
-        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
-        let second = writer.duplicate().expect("duplicate the writer");
+        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let mut second = writer.duplicate().expect("duplicate the writer");
         second.write(b"z").expect("write through the copy");
         drop(writer);
         drop(second);

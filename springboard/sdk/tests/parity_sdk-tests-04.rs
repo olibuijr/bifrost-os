@@ -227,7 +227,7 @@ fn headless_a_text_reply_response_carries_the_typed_text() {
 
 #[test]
 fn headless_the_default_action_response_has_no_text_and_differs_from_dismiss() {
-    let e = Event::Response(Response { id: "msg".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new() });
+    let e = Event::Response(Response { id: "msg".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] });
     assert!(matches!(&e, Event::Response(r) if r.action == NOTIF_DEFAULT_ACTION && r.text.is_empty()));
     assert_ne!(NOTIF_DEFAULT_ACTION, bifrost_app::proto::NOTIF_DISMISS_ACTION);
 }

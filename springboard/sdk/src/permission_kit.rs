@@ -31,7 +31,6 @@ pub use bifrost_ui::permission_question::{ButtonState, PermissionButton};
 pub use bifrost_ui::permission_question::{AskCenter, AskError, PermissionQuestion, PermissionResponse, QuestionTopic};
 
 use bifrost_core::json::Json;
-use bifrost_core::permission_request::Question;
 
 /// The service the shell's request channel registers (`springboard/src/shell/services/permission_kit.rs`).
 pub const SERVICE: &str = "permission";
