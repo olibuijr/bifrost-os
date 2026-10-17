@@ -251,6 +251,8 @@ pub mod now_playing;
 pub mod media_library;
 /// The media picker as a list of rows and a footer count (`bifrost_ui::media_picker`); draws nothing.
 pub mod media_picker_view;
+/// Like, dislike, bookmark and rating for the Lock Screen and Control Center (`now_playing` service events).
+pub mod now_playing_feedback;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;

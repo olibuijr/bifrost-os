@@ -103,7 +103,7 @@
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
       "bifrost": "springboard/ui/src/media_feedback.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system Built 2026-10-17: SDK feedback body and like/dislike/bookmark and rate event decoding (bifrost_app::now_playing_feedback); shell side not wired yet. Tests springboard/sdk/src/now_playing_feedback.rs::tests."
     },
     {
       "feature": "Now Playing sessions and focus",
