@@ -976,8 +976,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/mod.rs",
-   "status": "n/a",
-   "note": "n/a: family accounts and remote management run on Apple's family service with Apple IDs. BifrOSt has no equivalent service; the on-device Screen Time limits are the separate ScreenTimeAgent row.",
+   "status": "gap",
+   "note": "n/a: family accounts and remote management run on Apple's family service with Apple IDs. BifrOSt has no equivalent service; the on-device Screen Time limits are the separate ScreenTimeAgent row. Lead 2026-10-17: stays a gap (daemon_map decision): BifrOSt can build its own counterpart (local speech assistant / parental controls).",
    "rea": [],
    "method": "heuristic"
   },
@@ -2122,8 +2122,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "n/a",
-   "note": "rule: Apple speech, on-device model and account service; the reference agent is Apple's Siri service, which BifrOSt does not mirror. BifrOSt's assistant panel (springboard/src/shell/assistant*.rs) is its own feature and runs on no Apple model or account.",
+   "status": "gap",
+   "note": "rule: Apple speech, on-device model and account service; the reference agent is Apple's Siri service, which BifrOSt does not mirror. BifrOSt's assistant panel (springboard/src/shell/assistant*.rs) is its own feature and runs on no Apple model or account. Lead 2026-10-17: stays a gap (daemon_map decision): BifrOSt can build its own counterpart (local speech assistant / parental controls).",
    "rea": [],
    "method": "heuristic"
   },
