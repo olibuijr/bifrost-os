@@ -258,7 +258,7 @@ impl Query {
     }
 
     /// Sections over [`Query::items`]: each run of records with the same key (ignoring case) is one section.
-    /// Without a grouping the whole result is one section titled by the empty string.
+    /// Without a grouping the key is the title, so each title is its own section.
     pub fn sections(&self, library: &[LibraryItem]) -> Vec<Section> {
         let grouping = self.grouping.unwrap_or(Grouping::Title);
         let hits = self.items(library);

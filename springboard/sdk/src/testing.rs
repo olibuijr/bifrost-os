@@ -75,9 +75,12 @@ impl<S: Responder> TestWindow<S> {
     }
     /// Pointer down and up at window point (x, y); true when a view handled it.
     pub fn click(&mut self, x: f32, y: f32) -> bool {
+        // `Window::event` reports whether a frame is needed, which is also true for a click that hits nothing (the
+        // responder resigns). A click counts as handled only when a view is under the point.
+        let hit = self.window.hit_test(x, y).is_some();
         let d = self.window.event(&ViewEvent::Pointer(Event::Down(x, y)), &mut self.model);
         let u = self.window.event(&ViewEvent::Pointer(Event::Up(x, y)), &mut self.model);
-        d || u
+        hit && (d || u)
     }
     /// `XCUICoordinate.tap()`: pointer down and up at window point (x, y) through the hit test; true when handled.
     pub fn tap(&mut self, x: f32, y: f32) -> bool {

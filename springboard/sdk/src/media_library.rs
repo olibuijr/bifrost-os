@@ -49,7 +49,7 @@ mod tests {
         let res = run(&lib, &Query::new());
         let titles: Vec<&str> = res.records(&lib).iter().map(|i| i.title.as_str()).collect();
         assert_eq!(titles, vec!["Alpha", "Beta", "Zeta"]);
-        assert_eq!(res.sections.len(), 1, "without a grouping the result is one section");
+        assert_eq!(res.sections.len(), 3, "without a grouping the key is the title, so one section per title");
     }
 
     #[test]

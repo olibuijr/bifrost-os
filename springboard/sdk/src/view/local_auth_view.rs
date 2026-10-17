@@ -166,7 +166,10 @@ mod tests {
     #[test]
     fn a_lockout_stays_put_until_reset() {
         let mut v = LocalAuthenticationView::new(BiometryKind::Optic, ControlSize::Large, "auth.evaluate");
+        // A lockout is an outcome of an evaluation, so the evaluation starts first (the model ignores it while idle).
+        v.send(AuthEvent::Start);
         v.send(AuthEvent::LockedOut);
+        assert_eq!(v.state(), ViewState::LockedOut);
         assert!(!v.tappable());
         v.fire();
         assert!(v.base.pending.is_empty());

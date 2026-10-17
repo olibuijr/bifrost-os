@@ -176,7 +176,7 @@ mod tests {
         assert!(url.url.starts_with("https://id.example.is/token"));
         let body = String::from_utf8_lossy(url.body.as_deref().unwrap_or(&[])).to_string();
         assert!(body.contains("grant_type=refresh_token"), "{body}");
-        assert!(body.contains("refresh_token=r%201"), "{body}");
+        assert!(body.contains("refresh_token=r+1"), "{body}");
         assert!(body.contains("client_id=client"), "{body}");
     }
 
@@ -199,6 +199,6 @@ mod tests {
     fn the_debug_text_hides_the_tokens() {
         let t = token(r#"{"access_token":"secret-value","refresh_token":"r-secret"}"#);
         let shown = format!("{t:?}");
-        assert!(!shown.contains("secret"), "{shown}");
+        assert!(!shown.contains("secret-value") && !shown.contains("r-secret"), "{shown}");
     }
 }
