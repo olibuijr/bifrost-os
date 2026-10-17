@@ -241,9 +241,9 @@
    "area": "menu",
    "apple": "File > Save (drafts), Mail Drafts mailbox, Autosave",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs (save_draft, discard_draft, draft_saved, save_question, cancel_sheet); springboard/apps/mail-desktop/src/compose_windows.rs (autosave, closed, changed); springboard/apps/mail-desktop/src/sync.rs (draft_job, DRAFTS); springboard/apps/mail-desktop/src/state.rs (Sheet::Question, draft_for_save)",
-   "note": "Closing a message with changes asks Save This Message, Don't Save, or Cancel. Save and the 30-second autosave keep the draft in the Drafts mailbox over IMAP (the mailbox is created when missing, and the older copy with the same Message-ID is replaced); without a signed-in account, or when the server refuses, the draft is kept as a file in the data directory. Sending removes the draft. Don't Save removes the saved copy. A window the shell closes is opened again with the question. Not yet verified on Midget.",
-   "wire": "Open a saved draft from Drafts in a compose window, and check the Drafts mailbox and the autosave on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs (save_draft, discard_draft, draft_saved, save_question, cancel_sheet); springboard/apps/mail-desktop/src/compose_windows.rs (autosave, closed, changed); springboard/apps/mail-desktop/src/sync.rs (draft_job, DRAFTS); springboard/apps/mail-desktop/src/state.rs (Sheet::Question, draft_for_save); springboard/apps/mail-desktop/src/message.rs (draft_of); springboard/apps/mail-desktop/src/imap.rs (drafts_name, is_drafts)",
+   "note": "Closing a message with changes asks Save This Message, Don't Save, or Cancel. Save and the 30-second autosave keep the draft in the Drafts mailbox over IMAP (the server's mailbox flagged \\Drafts (RFC 6154) is used, else the fixed name; it is created when missing, and the older copy with the same Message-ID is replaced); without a signed-in account, or when the server refuses, the draft is kept as a file in the data directory. Message > Edit Draft in the Drafts mailbox reopens the saved copy in a compose sheet (addresses, subject, text, files, threading headers) under its Message-ID, so saving replaces it. The reopened text is plain: the HTML version of a draft is not kept. Sending removes the draft. Don't Save removes the saved copy. A window the shell closes is opened again with the question. Not yet verified on Midget.",
+   "wire": "Check Edit Draft and the special-use Drafts mailbox on Midget (against a server that flags \\Drafts), and keep the HTML version of a draft when reopening it"
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -431,7 +431,7 @@
    "apple": "MessageViewController",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/body.rs:12",
-   "note": "HTML is turned into plain text",
+   "note": "HTML is turned into plain text for the reader. html.rs sanitize_with_parts resolves cid: inline images to the message's own raster parts and keeps blocking remote images, with tests for scripts, forms, event handlers and cid resolution. The reader does not draw images or layout yet, so none of it is visible.",
    "wire": "Render the sanitized HTML (html.rs:37) through the SDK web or rich text view"
   },
   {
@@ -512,7 +512,7 @@
    "apple": "MailTrackingProtection*",
    "status": "partial",
    "bifrost": "springboard/apps/mail-desktop/src/html.rs:37; springboard/apps/mail-desktop/src/draw.rs (privacy note, Hit::LoadRemote); springboard/apps/mail-desktop/src/state.rs (remote_allowed, allow_remote); springboard/apps/mail-desktop/src/prefs.rs (remote_content)",
-   "note": "Remote content is blocked by default (html.rs sanitize counts and drops remote images). The reader shows a privacy note with Load Remote Content for the open message, and Mail Settings has a Load remote content switch (off by default). Nothing is fetched through a proxy. Built on this branch; not yet verified on Midget.",
+   "note": "Remote content is blocked by default (html.rs sanitize counts and drops remote images). The reader shows a privacy note with Load Remote Content for the open message, and Mail Settings has a Load remote content switch (off by default). Load Remote Content does not fetch anything yet: remote images are not loaded through a loader, and the reader draws no images. Nothing is fetched through a proxy. Built on this branch; not yet verified on Midget.",
    "wire": "Route remote content through a privacy proxy and expose the switch in Viewing settings"
   },
   {

@@ -582,6 +582,8 @@ pub struct Mail {
     pub account: usize,
     pub mailboxes: Vec<String>,
     pub mailbox: String,
+    /// The server's Drafts mailbox by special use, from the last listing; `None` until one is read or when none is flagged.
+    pub drafts_mailbox: Option<String>,
     /// The messages of the shown mailbox, newest first.
     pub rows: Vec<Row>,
     /// The UID of the message open in the reader.
@@ -652,6 +654,7 @@ impl Mail {
             account: 0,
             mailboxes: vec![INBOX.to_string()],
             mailbox: INBOX.to_string(),
+            drafts_mailbox: None,
             rows: Vec::new(),
             open: None,
             bodies: HashMap::new(),
@@ -1235,6 +1238,21 @@ impl Mail {
     /// True when remote content may load for message `uid`: Mail Settings allows it, or the person loaded it for this message.
     pub fn remote_allowed(&self, uid: u32) -> bool {
         self.prefs.remote_content || self.remote_loaded.contains(&uid)
+    }
+
+    /// True when the shown mailbox is the account's Drafts (its special-use mailbox, or the fixed name).
+    pub fn is_drafts(&self) -> bool {
+        self.mailbox == self.drafts_mailbox.as_deref().unwrap_or(crate::sync::DRAFTS)
+    }
+
+    /// Message > Edit Draft: the saved message `raw` opens as a compose sheet. Its Message-ID is kept, so saving the
+    /// sheet again replaces that copy in Drafts instead of adding one.
+    pub fn open_draft_copy(&mut self, raw: &str) {
+        let id = Summary::from_headers(raw).message_id;
+        self.open_draft(message::draft_of(raw));
+        if let Some(Sheet::Compose(compose)) = self.sheet.as_mut() {
+            compose.draft_id = id.unwrap_or_default();
+        }
     }
 
     /// Load Remote Content: the remote content of message `uid` may load.

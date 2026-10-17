@@ -19,6 +19,8 @@ use bifrost_app::dispatch::{DispatchQueue, Qos};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Listing {
     pub mailboxes: Vec<String>,
+    /// The account's Drafts mailbox by special use (`\Drafts`), when the server flags one.
+    pub drafts: Option<String>,
     pub messages: Vec<Listed>,
 }
 
@@ -111,13 +113,15 @@ pub fn list(transport: &dyn Transport, account: &Account, password: &str, mailbo
 fn fetch_listing(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Listing, String> {
     let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
-    let mailboxes: Vec<String> = session.list()?.into_iter().map(|m| m.name).collect();
+    let listed = session.list()?;
+    let drafts = crate::imap::drafts_name(&listed).map(str::to_string);
+    let mailboxes: Vec<String> = listed.into_iter().map(|m| m.name).collect();
     session.select(mailbox)?;
     let uids = session.uids()?;
     let newest: Vec<u32> = uids.iter().rev().take(LIST_LIMIT).copied().collect();
     let messages = session.headers(&newest)?;
     session.logout();
-    Ok(Listing { mailboxes, messages })
+    Ok(Listing { mailboxes, drafts, messages })
 }
 
 /// The whole text of one message. Opening it sets the Seen flag on the server.
@@ -194,19 +198,26 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
 /// The mailbox the drafts are kept in.
 pub const DRAFTS: &str = "Drafts";
 
+/// The Drafts mailbox of a server: the mailbox it flags `\Drafts` (RFC 6154), or [`DRAFTS`] when none is flagged.
+pub fn drafts_mailbox(mailboxes: &[crate::imap::Mailbox]) -> String {
+    crate::imap::drafts_name(mailboxes).unwrap_or(DRAFTS).to_string()
+}
+
 /// Saves a draft to Drafts (`raw` given): the copy with the same Message-ID is replaced. Without `raw` the saved copy is
 /// removed. The mailbox is created when it is missing.
 pub fn draft_job(transport: &dyn Transport, account: &Account, password: &str, key: &str, raw: Option<&str>) -> Event {
     let result = (|| -> Result<(), String> {
         let mut session = session::connect(transport, accounts::incoming(account)?)?;
         session.login(&account.username, password)?;
-        let _ = session.create_mailbox(DRAFTS);
-        session.select(DRAFTS)?;
+        // the server's own Drafts mailbox (special use) when it flags one; a failed listing falls back to the fixed name
+        let drafts = drafts_mailbox(&session.list().unwrap_or_default());
+        let _ = session.create_mailbox(&drafts);
+        session.select(&drafts)?;
         for found in session.search(&format!("HEADER Message-ID {}", crate::imap::quote(key)))? {
             session.remove(found)?;
         }
         if let Some(raw) = raw {
-            session.append(DRAFTS, Flags::empty().with(Flag::Seen, true), raw)?;
+            session.append(&drafts, Flags::empty().with(Flag::Seen, true), raw)?;
         }
         session.logout();
         Ok(())
@@ -338,5 +349,20 @@ fn report(tx: &Sender<Event>, wake: &Option<UnixStream>, event: Event) {
         if let Some(mut wake) = wake.as_ref().and_then(|w| w.try_clone().ok()) {
             let _ = wake.write(&[1]);
         }
+    }
+}
+
+#[cfg(test)]
+mod drafts_tests {
+    use super::*;
+    use crate::imap::parse_list;
+
+    #[test]
+    fn drafts_is_the_flagged_mailbox_or_the_fixed_name() {
+        let flagged = [parse_list("LIST (\\Drafts) \"/\" \"Entwuerfe\"").unwrap()];
+        assert_eq!(drafts_mailbox(&flagged), "Entwuerfe");
+        let plain = [parse_list("LIST () \"/\" \"INBOX\"").unwrap()];
+        assert_eq!(drafts_mailbox(&plain), DRAFTS);
+        assert_eq!(drafts_mailbox(&[]), DRAFTS);
     }
 }
