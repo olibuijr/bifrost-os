@@ -9,10 +9,10 @@
  "summary": {
   "features": 29,
   "parity": 3,
-  "partial": 24,
-  "gap": 2,
+  "partial": 25,
+  "gap": 1,
   "n/a": 0,
-  "coverage_pct": 51.7
+  "coverage_pct": 53.4
  },
  "features": [
   {
@@ -21,7 +21,7 @@
    "apple": "Maps.app with a main window, Dock icon and menu bar",
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/main.rs:1",
-   "note": "The app exists: manifest.toml (full-size window, storage, network, documents), main.rs on the SDK App trait, window.rs and the model crate. Not built or run by the author; the lead checks it on the lab machine. Dock New Window is not done (one window per process).",
+   "note": "The app exists: manifest.toml (full-size window, storage, network, documents), main.rs on the SDK App trait, window.rs and the model crate. Not built or run by the author; the lead checks it on the lab machine. Extra windows (File > New Window, Dock) are in the User activity row.",
    "wire": "Add springboard/apps/maps-desktop/manifest.toml (id is.olibuijr.maps.desktop, window = \"full-size\", permissions storage and network), src/main.rs with the SDK App trait as in weather-desktop/src/main.rs, a src/window.rs holding MapView, Pins, TileCache and a worker thread for tile and search requests, and add the app to the shell's app list."
   },
   {
@@ -147,8 +147,8 @@
    "apple": "Show your location on the map and route from it (NSLocationUsageDescription)",
    "status": "partial",
    "bifrost": "springboard/apps/maps-desktop/src/window.rs:1099 (ask_location); springboard/sdk/src/core_location.rs",
-   "note": "The Current Location toolbar button and the Go menu item (main.rs:55) ask the SDK location manager for a position, centre the map on it and use it as the Directions origin; a refusal or an unknown position is shown as a reason.",
-   "wire": "Add a Locate button centring MapView on the location service and use it as default origin."
+   "note": "The Current Location toolbar button and the Go menu item (Cmd+L) ask the SDK location manager for a position, centre the map on it, draw its accuracy ring, and keep following the fix while a route is followed; the position is the Directions origin. A refusal or an unknown position is shown as a reason, and the Allow sheet runs first when the person has not answered (location purpose string in the manifest). Not yet run on the lab machine.",
+   "wire": "Check on Midget that Locate centres the map, draws the accuracy ring and follows the fix; the row stays partial until it is run there."
   },
   {
    "feature": "Map modes",
@@ -253,10 +253,10 @@
    "feature": "User activity handoff and Dock New Window",
    "area": "system",
    "apple": "Dock menu New Window, user activity for handoff",
-   "status": "gap",
+   "status": "partial",
    "bifrost": "",
-   "note": "Not done: Dock New Window needs a second window instance and Handoff needs the user-activity service wired. The SDK window registry now exists (bifrost_app::app_windows), but the shell does not host a second window of an app yet.",
-   "wire": "Add the New Window Dock action through the SDK multi-window API (bifrost_app::app_windows) once the shell hosts extra windows; the window state lives in one struct, so a second window is a second instance."
+   "note": "Dock New Window and File > New Window (Cmd+N) open a second window through the SDK multi-window API; each window has its own map state and takes its own touches (main.rs). Keys, the menu bar and the toolbar still act on the main window, and the windows share places.json and settings.json (last save wins). Handoff is not done: no user activity is published or accepted yet. Not yet run on the lab machine.",
+   "wire": "Publish a user activity for the place or route on the card and accept an incoming one once the shell user-activity service is wired; route keys and the menu bar to the focused window."
   },
   {
    "feature": "Automation and widgets",
