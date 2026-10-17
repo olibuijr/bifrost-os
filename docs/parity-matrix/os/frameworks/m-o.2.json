@@ -1529,8 +1529,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried the name and the extract: the image holds only a notification bundle for name recognition, and BifrOSt has lexical tags but no name recognition, so the job is not built and not determined.",
+   "status": "n/a",
+   "note": "Apple on-device model pack: the index lists NameRecognitionModel.momd, a trained name model with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -2769,8 +2769,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "OS analytics services client (OSAServicesClient). Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Apple analytics services client; the index holds only the bundle shell, but it belongs to the OS analytics family (telemetry) with no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -2811,8 +2811,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "OS analytics sync proxy (OSASyncProxyClient). Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Apple analytics sync proxy (OSA family, telemetry upload); no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -2862,8 +2862,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private analytics bundle (osa.OSAnalyticsPrivate) with an asset set and XPC services in the index. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Apple analytics: the index lists an analytics asset set (assets_1240, stabilityParameters.plist) and a Trial namespace descriptor. Telemetry with no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
