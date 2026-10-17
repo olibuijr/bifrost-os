@@ -7,12 +7,13 @@
 //! datagram to a joined multicast group, and `receive` returns the next datagram or `None` without
 //! blocking, so the owner can call it from its run loop.
 //!
-//! Limit: `std::net` cannot set `SO_REUSEADDR`, so two groups on one port on the same host do not
-//! share it. Use one group per port until a socket-options layer is added.
+//! The socket is bound with `SO_REUSEADDR` (set before the bind through the C library, because `std::net`
+//! cannot set it), so several groups on one host can share a multicast port and each receives the group
+//! datagrams. The option is applied on Linux only; other systems fall back to a plain bind.
 
 use crate::network_listener::Datagram;
 use bifrost_ui::multicast::{MembershipError, MulticastMembership};
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 
 /// Why a group operation was refused.
@@ -30,6 +31,61 @@ impl From<MembershipError> for GroupError {
     }
 }
 
+/// Binds a UDP socket on `0.0.0.0:port` with `SO_REUSEADDR` set before the bind.
+#[cfg(target_os = "linux")]
+fn bind_shared(port: u16) -> io::Result<UdpSocket> {
+    use std::os::fd::FromRawFd;
+
+    /// `struct sockaddr_in` (Linux, IPv4): family, port and address in network byte order, then padding.
+    #[repr(C)]
+    struct SockAddrIn {
+        sin_family: u16,
+        sin_port: u16,
+        sin_addr: u32,
+        sin_zero: [u8; 8],
+    }
+
+    extern "C" {
+        fn socket(domain: i32, kind: i32, protocol: i32) -> i32;
+        fn setsockopt(fd: i32, level: i32, name: i32, value: *const i32, len: u32) -> i32;
+        fn bind(fd: i32, addr: *const SockAddrIn, len: u32) -> i32;
+        fn close(fd: i32) -> i32;
+    }
+    const AF_INET: i32 = 2;
+    const SOCK_DGRAM: i32 = 2;
+    const SOCK_CLOEXEC: i32 = 0o2_000_000;
+    const SOL_SOCKET: i32 = 1;
+    const SO_REUSEADDR: i32 = 2;
+
+    // SAFETY: plain C calls on a descriptor this function owns; the address struct is a live local
+    // with the Linux `sockaddr_in` layout, and every descriptor is closed on the error paths.
+    unsafe {
+        let fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let on: i32 = 1;
+        if setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, std::mem::size_of::<i32>() as u32) != 0 {
+            let e = io::Error::last_os_error();
+            close(fd);
+            return Err(e);
+        }
+        let addr = SockAddrIn { sin_family: AF_INET as u16, sin_port: port.to_be(), sin_addr: 0, sin_zero: [0; 8] };
+        if bind(fd, &addr, std::mem::size_of::<SockAddrIn>() as u32) != 0 {
+            let e = io::Error::last_os_error();
+            close(fd);
+            return Err(e);
+        }
+        Ok(UdpSocket::from_raw_fd(fd))
+    }
+}
+
+/// Other systems: a plain bind on `0.0.0.0:port`.
+#[cfg(not(target_os = "linux"))]
+fn bind_shared(port: u16) -> io::Result<UdpSocket> {
+    UdpSocket::bind(("0.0.0.0", port))
+}
+
 /// `NWConnectionGroup`: one UDP socket and the multicast groups it has joined.
 pub struct ConnectionGroup {
     membership: MulticastMembership,
@@ -39,7 +95,7 @@ pub struct ConnectionGroup {
 impl ConnectionGroup {
     /// Binds the group's socket on `0.0.0.0:port` and applies the default send options.
     pub fn new(port: u16) -> Result<Self, GroupError> {
-        let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| GroupError::Socket(e.to_string()))?;
+        let socket = bind_shared(port).map_err(|e| GroupError::Socket(e.to_string()))?;
         socket.set_nonblocking(true).map_err(|e| GroupError::Socket(e.to_string()))?;
         let membership = MulticastMembership::new();
         socket.set_multicast_loop_v4(membership.loopback()).map_err(|e| GroupError::Socket(e.to_string()))?;
@@ -126,6 +182,13 @@ impl ConnectionGroup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_groups_share_one_port() {
+        let first = ConnectionGroup::new(0).unwrap();
+        let second = ConnectionGroup::new(first.local_port()).unwrap();
+        assert_eq!(second.local_port(), first.local_port());
+    }
 
     #[test]
     fn a_new_group_binds_a_port_with_default_options() {
