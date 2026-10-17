@@ -347,6 +347,8 @@ impl Options {
             tap_to_click: self.tap_to_click,
             secondary: if self.trackpad_secondary == 0 { Secondary::Corner } else { Secondary::TwoFingers },
             swap_buttons: self.swap_buttons,
+            double_click_ms: self.double_click_ms,
+            accel: self.mouse_accel,
         }
     }
 
@@ -511,5 +513,13 @@ mod tests {
         let o = Options { trackpad_secondary: 0, tap_to_click: true, ..Options::default() };
         assert_eq!(o.pointer_tuning().secondary, Secondary::Corner);
         assert!(o.pointer_tuning().tap_to_click);
+    }
+
+    #[test]
+    fn mouse_double_click_and_acceleration_reach_the_input_layer() {
+        let o = Options { double_click_ms: 700, mouse_accel: false, ..Options::default() };
+        assert_eq!(o.pointer_tuning().double_click_ms, 700);
+        assert!(!o.pointer_tuning().accel);
+        assert!(Options::default().pointer_tuning().accel, "acceleration is on by default");
     }
 }

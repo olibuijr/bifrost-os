@@ -28,10 +28,24 @@ pub struct Tuning {
     pub secondary: Secondary,
     /// the mouse's left and right buttons trade places
     pub swap_buttons: bool,
+    /// the longest gap in ms between two presses that still count as a double-click (title-bar zoom)
+    pub double_click_ms: u32,
+    /// pointer acceleration: a fast mouse move travels further (see `accelerate`)
+    pub accel: bool,
 }
 
 impl Tuning {
-    pub const DEFAULT: Tuning = Tuning { mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, secondary: Secondary::TwoFingers, swap_buttons: false };
+    pub const DEFAULT: Tuning = Tuning {
+        mouse_speed: 1.0,
+        mouse_scroll: 1.0,
+        trackpad_speed: 1.0,
+        natural_scroll: false,
+        tap_to_click: false,
+        secondary: Secondary::TwoFingers,
+        swap_buttons: false,
+        double_click_ms: crate::shell::mouse_page::DOUBLE_CLICK_DEFAULT_MS,
+        accel: true,
+    };
 }
 
 static TUNING: Mutex<Tuning> = Mutex::new(Tuning::DEFAULT);
@@ -46,6 +60,31 @@ pub fn set(t: Tuning) {
 /// The choices now in force (the defaults if the lock is poisoned).
 pub fn get() -> Tuning {
     TUNING.lock().map(|g| *g).unwrap_or(Tuning::DEFAULT)
+}
+
+/// Mouse travel per event (in device counts) above which pointer acceleration starts to add distance.
+pub const ACCEL_KNEE: f32 = 2.0;
+/// Extra gain per count past the knee.
+pub const ACCEL_PER_COUNT: f32 = 0.1;
+/// The most the acceleration multiplies a move by.
+pub const ACCEL_MAX: f32 = 2.5;
+
+/// The gain pointer acceleration gives a mouse move of `magnitude` counts: 1 up to the knee, then rising with speed.
+pub fn accel_gain(magnitude: f32) -> f32 {
+    if magnitude <= ACCEL_KNEE {
+        1.0
+    } else {
+        (1.0 + (magnitude - ACCEL_KNEE) * ACCEL_PER_COUNT).min(ACCEL_MAX)
+    }
+}
+
+/// A mouse move after pointer acceleration: unchanged when acceleration is off, else scaled by the gain of its length.
+pub fn accelerate(dx: f32, dy: f32, on: bool) -> (f32, f32) {
+    if !on {
+        return (dx, dy);
+    }
+    let g = accel_gain(dx.hypot(dy));
+    (dx * g, dy * g)
 }
 
 /// A wheel step after the scroll speed and the natural-direction choice. A non-zero step never
@@ -71,6 +110,22 @@ mod tests {
         assert_eq!(scroll_step(-2, 2.0, false), -4);
         assert_eq!(scroll_step(1, 0.25, false), 1, "a small step never rounds to zero");
         assert_eq!(scroll_step(-1, 0.25, true), 1);
+    }
+
+    #[test]
+    fn acceleration_is_linear_below_the_knee_and_capped() {
+        assert_eq!(accelerate(1.0, 1.0, true), (1.0, 1.0), "slow moves are not sped up");
+        assert_eq!(accelerate(10.0, 0.0, false), (10.0, 0.0), "off means the raw travel");
+        let (x, _) = accelerate(10.0, 0.0, true);
+        assert!(x > 10.0, "a fast move travels further with acceleration on");
+        assert!((accel_gain(1000.0) - ACCEL_MAX).abs() < 1e-6, "the gain is capped");
+        assert!(accel_gain(5.0) < accel_gain(8.0), "the gain rises with speed");
+    }
+
+    #[test]
+    fn the_default_double_click_gap_is_the_shell_default() {
+        assert_eq!(Tuning::DEFAULT.double_click_ms, crate::shell::mouse_page::DOUBLE_CLICK_DEFAULT_MS);
+        assert!(Tuning::DEFAULT.accel);
     }
 
     #[test]

@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Same Mouse page (identifier com.apple.Mouse-Settings.extension); host only, see Mouse.",
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click; missing: pointer size and colour",
    "rea": []
   },
   {
@@ -60,7 +60,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Settings > Mouse page exists; its App Intents declarations are not exposed.",
+   "note": "has: Mouse page; missing: App Intents declarations are not exposed",
    "rea": []
   },
   {
@@ -80,7 +80,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Settings wallpaper page exists; the Apple wallpaper resource bundle has no counterpart.",
+   "note": "has: Wallpaper page with bundled stills; the Apple wallpaper resource bundle has no counterpart",
    "rea": []
   },
   {
@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
-   "note": "Network page",
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wifi_page.rs; springboard/src/shell/desktop_network.rs",
+   "bifrost": "springboard/src/shell/wifi_page.rs",
    "status": "partial",
-   "note": "Wi-Fi and network pages exist; App Intents declarations are not exposed.",
+   "note": "has: Wi-Fi and network pages; missing: App Intents declarations are not exposed",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Notifications page",
+   "note": "has: Notifications page (notify_page.rs:186); missing: summary delivery",
    "rea": []
   },
   {
@@ -160,7 +160,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Settings Notifications page exists; App Intents declarations are not exposed.",
+   "note": "has: Notifications page; missing: App Intents declarations are not exposed",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Mouse page, host only: tracking speed, pointer acceleration (stored, not yet applied to the input layer), scrolling speed, double-click speed (stored, not yet read by the shell), natural scrolling, secondary click side. Needs a Midget check; no Bluetooth mouse pairing rows or per-device settings.",
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons); missing: pointer size and colour",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
-   "note": "Network page",
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
    "rea": []
   },
   {
@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
-   "note": "Notifications page",
+   "note": "has: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners; missing: scheduled summary delivery UI",
    "rea": []
   }
  ]

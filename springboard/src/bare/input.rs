@@ -546,8 +546,9 @@ impl PointerDecoder {
     fn sync(&mut self, ptr: &mut Pointer, t: f64, out: &mut Vec<Event>) {
         let cfg = pointer_prefs::get();
         if self.dx != 0.0 || self.dy != 0.0 {
+            let (dx, dy) = if self.touchpad { (self.dx, self.dy) } else { pointer_prefs::accelerate(self.dx, self.dy, cfg.accel) };
             let k = if self.touchpad { cfg.trackpad_speed } else { cfg.mouse_speed };
-            ptr.move_by(self.dx * k, self.dy * k);
+            ptr.move_by(dx * k, dy * k);
             self.moved = true;
         }
         let at = (ptr.x, ptr.y);

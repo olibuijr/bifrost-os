@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/backup_page.rs",
    "status": "partial",
-   "note": "Backup page",
+   "note": "has: Backup page (backup_page.rs:34): Backup now, latest backup, backup before update; missing: choosing a backup disk",
    "rea": []
   },
   {
@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/timemachine.rs",
    "status": "partial",
-   "note": "Time Machine and Backup pages exist; App Intents declarations are not exposed.",
+   "note": "has: Time Machine and Backup pages (timemachine.rs, backup_page.rs:34); missing: App Intents declarations",
    "rea": []
   },
   {
@@ -60,7 +60,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/clock/timer.rs",
    "status": "partial",
-   "note": "Clock timer exists; App Intents declarations are not exposed.",
+   "note": "has: Clock timer; missing: App Intents declarations",
    "rea": []
   },
   {
@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
-   "note": "Same Trackpad page; see Trackpad.",
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
    "rea": []
   },
   {
@@ -120,7 +120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
-   "note": "Pointer settings page exists; the Trackpad pane and its App Intents are not exposed.",
+   "note": "has: Pointer settings page (mouse_page.rs); missing: the Trackpad pane intent and its App Intents",
    "rea": []
   },
   {
@@ -140,7 +140,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
    "status": "partial",
-   "note": "Reduce Transparency setting exists under accessibility; App Intents declarations are not exposed.",
+   "note": "has: Reduce Transparency under Accessibility; missing: App Intents declarations",
    "rea": []
   },
   {
@@ -160,7 +160,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "Users & Groups page: accounts and groups from the system, create, delete, admin flag, password change via the login service, login options. Missing: login-item and parental-control rows, picture picker, sharing-only users. Host only.",
+   "note": "has: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options; missing: per-user login-item options",
    "rea": []
   },
   {
@@ -180,7 +180,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
-   "note": "Settings Users page exists; App Intents declarations are not exposed.",
+   "note": "has: Users page; missing: App Intents declarations",
    "rea": []
   },
   {
@@ -200,7 +200,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/vpn_configuration.rs",
    "status": "partial",
-   "note": "VPN configuration SDK exists; no shell VPN settings page yet.",
+   "note": "has: VPN configuration SDK; missing: shell VPN settings page (Network > VPN, pages.rs:752, shows only the desktop VPN rows) and the intents",
    "rea": []
   },
   {
@@ -220,7 +220,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/backup_page.rs",
    "status": "partial",
-   "note": "Backup page",
+   "note": "has: Backup page (backup_page.rs:34); missing: choosing a backup disk",
    "rea": []
   },
   {
@@ -258,9 +258,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
-   "note": "Trackpad page: tracking speed, tap to click, secondary click, natural scrolling, gesture links. Missing: click pressure, force touch, look up, scroll and zoom gesture rows, per-device settings. Host only.",
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
    "rea": []
   },
   {
@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
-   "note": "Accessibility page",
+   "note": "has: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader; missing: live captions, voice control, hearing",
    "rea": []
   }
  ]

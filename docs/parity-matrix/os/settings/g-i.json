@@ -80,7 +80,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/game_controllers_page.rs",
    "status": "partial",
-   "note": "game controller settings",
+   "note": "has: game controller list and per-controller page (pages.rs:1356); missing: button remapping and profiles",
    "rea": []
   },
   {
@@ -100,7 +100,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/game_controllers_page.rs",
    "status": "partial",
-   "note": "game controller settings",
+   "note": "has: game controller pages; missing: App Intents declarations",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:901",
    "status": "partial",
-   "note": "General page",
+   "note": "has: General page (pages.rs:901): About, Software Update, Storage, Background App Refresh, Date & Time, Keyboard, Fonts, Language & Region, Login Items, Game Mode, Backup, Restart",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1154",
    "status": "partial",
-   "note": "Language & Region page",
+   "note": "has: Language & Region (pages.rs:1154, region pages.rs:1188): preferred language, first day of week, formats; missing: per-app language override",
    "rea": []
   },
   {
@@ -220,7 +220,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "Same Internet Accounts page; see InternetAccounts.",
+   "note": "has: Internet Accounts page: mail, calendar and contact accounts with per-service switches; missing: provider sign-in",
    "rea": []
   },
   {
@@ -240,7 +240,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "Internet Accounts page: mail, calendar and contact accounts with per-service switches, add and remove. Missing: provider sign-in flows (OAuth), account detail panes, notes service. Host only.",
+   "note": "has: Internet Accounts page: mail, calendar and contact accounts, per-service switches, add and remove; missing: provider sign-in (OAuth) and account detail",
    "rea": []
   }
  ]

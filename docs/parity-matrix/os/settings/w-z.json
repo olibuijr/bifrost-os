@@ -40,7 +40,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page",
+   "note": "has: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm; missing: wallpaper from the user's photos",
    "rea": []
   },
   {
@@ -80,7 +80,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
    "status": "partial",
-   "note": "Dynamic wallpaper: pure time-of-day schedule over the packed stills; shell timer wiring pending. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: time-of-day schedule over the packed stills (wallpaper_schedule.rs); missing: shell timer wiring",
    "rea": []
   },
   {
@@ -100,7 +100,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page, gradients",
+   "note": "has: Wallpaper page gradients (wallpaper_page.rs)",
    "rea": []
   },
   {
@@ -120,7 +120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page, image wallpapers",
+   "note": "has: Wallpaper page image wallpapers (wallpaper_page.rs); missing: user photos as wallpaper",
    "rea": []
   },
   {
@@ -140,7 +140,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -160,7 +160,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -180,7 +180,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -200,7 +200,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -220,7 +220,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Shell intent wallpaper-set (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: wallpaper-set intent (catalogue, parse, effect); missing: Search listing",
    "rea": []
   },
   {
@@ -240,7 +240,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -260,7 +260,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "Wallpaper page: BifrOSt's own bundled stills stand in for the Apple resource bundle. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
    "rea": []
   },
   {
@@ -280,7 +280,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Shell intents wifi-power and wifi-scan (catalogue, parse, effect); Search listing pending. built on os/team-m-06-settings; not yet verified on Midget",
+   "note": "has: wifi-power and wifi-scan intents (catalogue, parse, effect); missing: Search listing",
    "rea": []
   },
   {

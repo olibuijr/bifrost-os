@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:931",
    "status": "partial",
-   "note": "About page",
+   "note": "has: About page (pages.rs:931): model, OS version and build; missing: serial and name editing, hardware detail beyond the Model row",
    "rea": []
   },
   {
@@ -40,7 +40,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "About pane intent (settings_intents.rs); the App Intents runtime that serves it is not wired. built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: open-about pane intent in the settings catalogue; missing: the App Intents runtime is not wired to Search or the agent socket",
    "rea": []
   },
   {
@@ -58,9 +58,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
-   "note": "Accessibility page",
+   "note": "has: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader; missing: Live Captions, Voice Control, hearing and speech panes",
    "rea": []
   },
   {
@@ -80,7 +80,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs",
    "status": "partial",
-   "note": "settings search index",
+   "note": "has: settings search over the Accessibility pages; missing: search terms served to the system index",
    "rea": []
   },
   {
@@ -100,7 +100,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Accessibility pane intent only; the glanceable widget itself is not built. built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: open-accessibility pane intent only; missing: the glanceable widget",
    "rea": []
   },
   {
@@ -120,7 +120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Users & Groups pane intent (local account); built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: open-users pane intent for the local accounts page (users_page.rs:153); missing: intents for groups",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "Appearance page (Light, Dark, Auto)",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
    "rea": []
   },
   {
@@ -160,7 +160,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Appearance pane intent; built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: open-appearance intent; missing: App Intents runtime serving it",
    "rea": []
   },
   {
@@ -180,7 +180,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Account intent opens the BifrOSt Account card on the root page; no sign-in intents; built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: intent that opens the BifrOSt Account card on the root page (account.rs); missing: sign-in intents",
    "rea": []
   },
   {
@@ -200,7 +200,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/account.rs",
    "status": "partial",
-   "note": "BifrOSt Account page",
+   "note": "has: BifrOSt Account card and profile (account.rs); missing: sign-in flow and service toggles",
    "rea": []
   },
   {
@@ -220,7 +220,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Battery pane intent; built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: open-battery pane intent; missing: App Intents runtime serving it",
    "rea": []
   },
   {
@@ -240,7 +240,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Passcode and Passwords pane intents; no biometric sensor intents (hardware); built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: Passcode and Passwords pane intents (passwords_page.rs:46); missing: biometric sensor intents (no hardware path)",
    "rea": []
   },
   {
@@ -258,9 +258,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
-   "note": "Bluetooth page",
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
    "rea": []
   },
   {
@@ -280,7 +280,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Bluetooth pane intent only; the widget is not built; built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: Bluetooth pane intent; missing: the widget",
    "rea": []
   },
   {
@@ -378,9 +378,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1283",
    "status": "partial",
-   "note": "Control Centre page",
+   "note": "has: Included Controls list (pages.rs:1283); missing: per-control menu bar choices",
    "rea": []
   },
   {
@@ -400,7 +400,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Control Centre pane intent; built on os/team-m-01-settings; not yet verified on Midget",
+   "note": "has: Control Centre pane intent; missing: App Intents runtime serving it",
    "rea": []
   },
   {
@@ -440,7 +440,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/account.rs",
    "status": "partial",
-   "note": "BifrOSt Account sign-in and profile",
+   "note": "has: BifrOSt Account sign-in state and profile (account.rs); missing: sign-in and sign-out against the cloud API",
    "rea": []
   },
   {
@@ -458,9 +458,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "Appearance page (Light, Dark, Auto)",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
    "rea": []
   },
   {
@@ -480,7 +480,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/account.rs",
    "status": "partial",
-   "note": "BifrOSt Account page",
+   "note": "has: BifrOSt Account card and profile (account.rs); missing: sign-in flow and service toggles",
    "rea": []
   },
   {
@@ -498,9 +498,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1253",
    "status": "partial",
-   "note": "Battery page",
+   "note": "has: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode; missing: per-app energy list",
    "rea": []
   },
   {
@@ -518,9 +518,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
-   "note": "Bluetooth page",
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
    "rea": []
   },
   {
