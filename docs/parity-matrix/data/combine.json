@@ -12,7 +12,7 @@
       "apple": "Publisher, Publishers (map, filter, merge, combineLatest, debounce...)",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. only map and remove_duplicates; no filter, merge, combineLatest, debounce, flatMap Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. Not done: flatMap with asynchronous inner publishers."
+      "note": "verified on Midget 0.7.25 by 23 tests. only map and remove_duplicates; no filter, merge, combineLatest, debounce, flatMap Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. flatMap with Future inners is built (flat_map_future, resolution order). LocalScheduler (run_loop.rs) is the main-thread scheduler; debounce and throttle take it. Not done: receive(on:) and subscribe(on:), since publishers are single-threaded by design."
     },
     {
       "feature": "Type-erased publishers",
