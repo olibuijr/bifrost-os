@@ -232,7 +232,16 @@
    "status": "partial",
    "note": "Light, dark and automatic appearance with an accent colour, published to native apps through the appearance portal. The reference's glass tint amount and appearance-button settings are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance"
+    }
+   ],
+   "ready_note": "Appearance model with light, dark and automatic modes, accent colour and the cross-fade (render/src/appearance.rs) is tested; the appearance portal publishes it to apps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Apple80211.framework",
@@ -418,8 +427,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Firmware update delivery for the vendor's own hardware; BifrOSt has no counterpart for Apple firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -439,8 +448,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Credential sync for the vendor's cloud identity; BifrOSt keeps credentials in its own keychain (springboard/src/keychain.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -460,8 +469,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Depth data from the vendor's front camera hardware; BifrOSt captures through generic V4L2 cameras.",
    "rea": [],
    "method": "assessed"
   },
@@ -481,8 +490,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Depth processing core for the vendor's camera hardware; BifrOSt has no depth sensor support.",
    "rea": [],
    "method": "assessed"
   },
@@ -523,8 +532,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Timing-controller control of the vendor's own display panels; no counterpart on BifrOSt hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -544,8 +553,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Compression for the vendor's APFS file system; BifrOSt runs on btrfs and ext4, which have their own compression.",
    "rea": [],
    "method": "assessed"
   },
@@ -565,8 +574,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Firmware update delivery for the vendor's own hardware; BifrOSt has no counterpart for Apple firmware.",
    "rea": [],
    "method": "assessed"
   },
@@ -607,8 +616,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor system-on-chip GPIO user client; BifrOSt targets generic PC and Arch ARM hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -628,8 +637,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor GPU video accelerator driver interface; BifrOSt decodes video through VA-API and ffmpeg (springboard/src/media/hwdec).",
    "rea": [],
    "method": "assessed"
   },
@@ -649,8 +658,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor GPU video accelerator core; BifrOSt decodes video through VA-API and ffmpeg (springboard/src/media/hwdec).",
    "rea": [],
    "method": "assessed"
   },
@@ -670,8 +679,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor HID transport for the vendor's input hardware; BifrOSt reads input through the Linux input stack.",
    "rea": [],
    "method": "assessed"
   },
@@ -691,8 +700,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple ID sign-in support for the vendor's account service; BifrOSt accounts come from its own service (springboard/src/shell/account.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -712,8 +721,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple ID single sign-on for the vendor's account service; BifrOSt accounts come from its own service (springboard/src/shell/account.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -733,8 +742,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple ID setup for the vendor's account service; BifrOSt setup creates a local account (springboard/src/shell/account.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -754,8 +763,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Daemon for the vendor's Apple ID setup; BifrOSt has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -775,8 +784,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple ID setup interface for the vendor's account service; BifrOSt has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -796,8 +805,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Image signal processor emulation for the vendor's camera hardware; BifrOSt captures through V4L2 with no ISP emulation.",
    "rea": [],
    "method": "assessed"
   },
@@ -817,8 +826,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Feedback reporting for the vendor's on-device intelligence service; BifrOSt has no such service.",
    "rea": [],
    "method": "assessed"
   },
@@ -838,8 +847,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Feedback processing for the vendor's on-device intelligence service; BifrOSt has no such service.",
    "rea": [],
    "method": "assessed"
   },
@@ -901,8 +910,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Key store of the vendor's secure enclave; BifrOSt keeps keys in its own keychain (springboard/src/keychain.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -943,8 +952,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Lights-out management for the vendor's servers; BifrOSt is a desktop and tablet OS.",
    "rea": [],
    "method": "assessed"
   },
@@ -985,8 +994,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store and purchase service of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1006,8 +1015,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store and purchase service of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1027,8 +1036,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store and purchase service of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1048,8 +1057,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store interface of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1069,8 +1078,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store interface of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1090,8 +1099,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Media store interface of the vendor; BifrOSt has the PC App Store and the media player, with no purchase service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1111,8 +1120,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Payment sheets of the vendor's media store; BifrOSt has no payment service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1132,8 +1141,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Code-signing enforcement of the vendor's mobile platform; BifrOSt isolates apps with bubblewrap sandboxes (springboard/src/bare/app_policy.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -1408,7 +1417,16 @@
    "status": "partial",
    "note": "gdb resolves addresses to symbols and reads core dumps, which covers crash symbolication. Not covered: symbolicating trace and signpost files as the reference tracing tools do.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "gdb --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "gdb is installed and resolves addresses and reads core dumps, which is the crash symbolication path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleVA.framework",
@@ -1786,7 +1804,21 @@
    "status": "partial",
    "note": "Sleep and idle assertions are held and listed through systemd-inhibit, and the shell reads the blockers before sleeping. Not covered: display-sleep and user-activity assertions, which the shell does not hold yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "systemd-inhibit --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::sleep"
+    }
+   ],
+   "ready_note": "Sleep blockers are read through systemd-inhibit and refused in bare::sleep, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AssetCacheServices.framework",
@@ -1870,7 +1902,16 @@
    "status": "partial",
    "note": "Previews of files in apps and the shell's preview panel are covered by the peek module. Not covered: the reference preview and thumbnail extensions (RAQLPreviewExtension, RAQLThumbnailExtension) that render asset packages.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek"
+    }
+   ],
+   "ready_note": "Preview model for files in apps and the shell peek panel (sdk/src/peek.rs) is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AssistantActionSuggestion.framework",
@@ -2920,7 +2961,16 @@
    "status": "partial",
    "note": "Keyboard, pointer and touch events are read and routed to the shell in bare/input.rs, with unit tests. Not covered: a system-wide event filter stage and event policies.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::input"
+    }
+   ],
+   "ready_note": "Keyboard, pointer and touch events are read and routed to the shell (bare/input.rs), with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BackBoardHIDTouchEventProcessor.framework",
@@ -2941,7 +2991,16 @@
    "status": "partial",
    "note": "Multitouch devices are classified and their touches translated to fingers (input.rs, wl_touch.rs), with tests in input.rs. Not checked: palm rejection and the reference's edge gestures.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::input"
+    }
+   ],
+   "ready_note": "Multitouch classification and touch translation are in bare/input.rs, with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BackBoardServices.framework",
@@ -3025,7 +3084,21 @@
    "status": "partial",
    "note": "Snapshot retention is modelled (timemachine.rs: hourly, daily, then weekly tiers over btrfs snapshots) and the shell's own data is archived with checksums (backup.rs). Not covered: a scheduler for system volumes and restore from snapshots.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::timemachine"
+    }
+   ],
+   "ready_note": "Retention tiers over btrfs snapshots (shell/timemachine.rs) and checksummed archives (shell/backup.rs) are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BagKit.framework",
@@ -3067,7 +3140,16 @@
    "status": "partial",
    "note": "One-dimensional EAN-13 and Code 39 decoding (barcode.rs), a QR decoder for camera frames (qr.rs) and the SDK scanner (data_scanner.rs). Not covered: the reference's parsing service for pass and ticket codes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "barcode"
+    }
+   ],
+   "ready_note": "EAN-13 and Code 39 decoding in ui/src/barcode.rs is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BaseBoard.framework",
@@ -3109,7 +3191,16 @@
    "status": "partial",
    "note": "Battery level and charging state are read from sysfs and sampled every five minutes (power.rs, battery.rs); power profiles come from power-profiles-daemon. Not covered: charge limits and battery health estimates.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    }
+   ],
+   "ready_note": "Battery level sampling and history bins (shell/battery.rs) are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BatteryCenterUI.framework",
@@ -3130,7 +3221,16 @@
    "status": "partial",
    "note": "Settings > Battery draws a 24-hour level graph in 15-minute bins (battery.rs). Not covered: the reference's per-app usage and health screens.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    }
+   ],
+   "ready_note": "The 24-hour battery history model behind Settings > Battery (shell/battery.rs) is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BatteryUIKit.framework",
@@ -3193,7 +3293,16 @@
    "status": "partial",
    "note": "The volume and input-source overlays appear on screen and fade out (volume_hud.rs, input_source_hud.rs). Not covered: brightness and keyboard backlight overlays.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "volume_hud"
+    }
+   ],
+   "ready_note": "Volume overlay model (shell/volume_hud.rs) is tested; brightness and keyboard overlays are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BinaryAssetTag.framework",
@@ -3403,7 +3512,16 @@
    "status": "partial",
    "note": "The local-auth service evaluates device-owner policies with the account password, and biometry always reports not available. Not covered: fingerprint or face sensors.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth"
+    }
+   ],
+   "ready_note": "Device-owner policy evaluation in the local-auth service is tested; biometry reports unavailable."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BiometricKitUI.framework",
@@ -3634,7 +3752,16 @@
    "status": "partial",
    "note": "pacman keeps the installed-file database that a receipt does, and the installer plans package sets (plan.rs). The bill-of-materials file format is not read or written.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "pacman --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "pacman keeps the installed-file database that receipts provide; the BOM file format itself is not read."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookCoverUtility.framework",
@@ -3823,7 +3950,16 @@
    "status": "partial",
    "note": "Six-dot cell translation covers Grade 1 letters, digits and common punctuation with no contractions, as a pure model. No Braille display driver and no other language tables exist.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille"
+    }
+   ],
+   "ready_note": "Six-dot Grade 1 translation (ui/src/braille.rs) is tested; no contractions or display driver."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BrainTrust.framework",
@@ -4369,7 +4505,21 @@
    "status": "partial",
    "note": "JPEG, PNG and TIFF decoding in the renderer, and a baseline JPEG encoder with EXIF for camera captures. There is no RAW or HEIF pipeline.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::jpeg"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "imgdec"
+    }
+   ],
+   "ready_note": "JPEG, PNG and TIFF decoding and baseline JPEG encoding with EXIF are tested; no RAW or HEIF pipeline."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMPhoto.framework",
@@ -4390,7 +4540,21 @@
    "status": "partial",
    "note": "Photo decoding for JPEG, PNG and TIFF and JPEG encoding with EXIF. HEIF and RAW containers are not supported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::jpeg"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "imgdec"
+    }
+   ],
+   "ready_note": "Photo decoding for JPEG, PNG and TIFF and JPEG encoding with EXIF are tested; HEIF and RAW are not supported."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CPAnalytics.framework",
@@ -4768,7 +4932,16 @@
    "status": "partial",
    "note": "Calendar events for apps and recurrence rules are modelled in the SDK; the calendar app keeps its own RRULE subset (apps/calendar-desktop/src/calendar/recur.rs) and the reference recurrence-rule localisations are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar"
+    }
+   ],
+   "ready_note": "Calendar event and recurrence model used by the calendar app (ui/src/calendar*.rs) is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarIntegrationSupport.framework",
@@ -5146,7 +5319,16 @@
    "status": "partial",
    "note": "Call-stack trees built from diagnostic samples, with shared prefixes counted per node (call_stack_tree.rs); the reference analysis views are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree"
+    }
+   ],
+   "ready_note": "Call-stack tree built from diagnostic samples (sdk/src/call_stack_tree.rs) is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CameraColorProcessing.framework",
@@ -5188,7 +5370,16 @@
    "status": "partial",
    "note": "Lightweight Markdown line classes (headings, lists, checklists) for notes in md.rs; the assistant's answers are not rendered as Markdown.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::md"
+    }
+   ],
+   "ready_note": "Markdown line classes for notes (shell/md.rs) are tested; assistant answers are not rendered as Markdown."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CampoServices.framework",
