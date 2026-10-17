@@ -28,6 +28,8 @@ pub struct Sheet {
     pub message: String,
     passcode: passcode::Store,
     keypad: Option<Keypad>,
+    /// The installed account's content limits switch purchases off.
+    restricted: bool,
 }
 
 impl Sheet {
@@ -42,6 +44,7 @@ impl Sheet {
             message: String::new(),
             passcode: passcode::Store::load(root.join("passcode.ini")),
             keypad: None,
+            restricted: crate::bare::account_policy::feature_switched_off(bifrost_ui::account_policy::Feature::Purchases),
         }
     }
 
@@ -55,8 +58,13 @@ impl Sheet {
         self.keypad.as_ref().is_some_and(|k| k.animating(t))
     }
 
-    /// Buy was tapped. With a passcode set the keypad asks for it; without one the purchase is confirmed at once.
+    /// Buy was tapped. With a passcode set the keypad asks for it; without one the purchase is confirmed at once. When
+    /// the installed account's content limits switch purchases off, nothing is confirmed.
     fn buy(&mut self) -> Option<SheetOut> {
+        if self.restricted {
+            self.message = "Purchases are switched off for this account.".to_string();
+            return None;
+        }
         if !self.passcode.enabled() {
             return Some(SheetOut::Confirmed);
         }
@@ -167,6 +175,16 @@ mod tests {
         assert_eq!(s.purchase.step(), &bifrost_ui::purchase::Step::ConfirmationShown);
         assert_eq!(s.buy(), Some(SheetOut::Confirmed));
         assert!(s.keypad().is_none());
+    }
+
+    #[test]
+    fn content_limits_stop_a_purchase_before_any_confirmation() {
+        let dir = scratch("limited");
+        let mut s = Sheet::open(&dir, "is.o.chess", "Chess", price());
+        s.restricted = true;
+        assert_eq!(s.buy(), None);
+        assert!(s.keypad().is_none());
+        assert_eq!(s.message, "Purchases are switched off for this account.");
     }
 
     #[test]

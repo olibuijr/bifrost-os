@@ -1750,6 +1750,9 @@ impl Reminders {
         if removed.is_empty() || !self.commit(next) {
             return false;
         }
+        // kept in the recently deleted store too, so the deletion survives a restart; a store that cannot be
+        // written does not undo the deletion
+        let _ = crate::archive::keep(&crate::archive::path_beside(&self.path), &removed);
         let label = format!("Deleted \"{}\"", title.unwrap_or_default());
         self.history.register(&label, restore_items(removed), move |d| {
             model::remove_with_children(&mut d.items, id);

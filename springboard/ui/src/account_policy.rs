@@ -94,6 +94,16 @@ impl Policy {
         self.disabled.remove(&feature);
     }
 
+    /// The blocked app identifiers, in sorted order.
+    pub fn blocked_apps(&self) -> Vec<&str> {
+        self.blocked_apps.iter().map(String::as_str).collect()
+    }
+
+    /// The switched-off features, in their declaration order.
+    pub fn disabled_features(&self) -> Vec<Feature> {
+        self.disabled.iter().copied().collect()
+    }
+
     /// Checks whether the account may open the app.
     pub fn check_app(&self, app_id: &str) -> Result<(), Denial> {
         let app_id = app_id.trim();

@@ -213,9 +213,41 @@ fn set_password(user: &str, password: &str) -> Result<(), PErr> {
     run(&strs(&["/usr/bin/chpasswd"]), Some(&format!("{user}:{password}\n")))
 }
 
+fn str_list(p: &Json, name: &str) -> Result<Vec<String>, PErr> {
+    match p.get(name) {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .map(|v| v.as_str().map(str::to_string).ok_or_else(|| PErr::bad(format!("{name} must hold strings"))))
+            .collect(),
+        _ => Err(PErr::bad(format!("{name} must be a list"))),
+    }
+}
+
+/// Settings > Users & Groups > content limits: replaces one managed person's app blocks and feature switches in the
+/// account policy file the launcher reads. The installed account and system accounts have no limits to set.
+fn set_policy(p: &Json) -> Result<Json, PErr> {
+    let name = text(p, "account")?;
+    let (users, _) = db();
+    if !users.iter().any(|u| u.name == name && is_human(u)) {
+        return Err(PErr::bad("not a person's account"));
+    }
+    if installed().as_deref() == Some(name) {
+        return Err(PErr::bad("the account BifrOSt was installed for has no limits"));
+    }
+    let blocked = str_list(p, "blocked")?;
+    let disabled = str_list(p, "disabled")?;
+    let blocked: Vec<&str> = blocked.iter().map(String::as_str).collect();
+    let disabled: Vec<&str> = disabled.iter().map(String::as_str).collect();
+    crate::bare::account_policy::validate_rules(&blocked, &disabled).map_err(PErr::bad)?;
+    crate::bare::account_policy::set_account_rules(std::path::Path::new(crate::bare::account_policy::POLICY_FILE), name, &blocked, &disabled)
+        .map(|_| obj(vec![]))
+        .map_err(PErr::internal)
+}
+
 /// Dispatches the account methods; None when `method` is not one of them.
 pub fn call(method: &str, p: &Json) -> Option<Result<Json, PErr>> {
     Some(match method {
+        "account.set_policy" => set_policy(p),
         "user.add" => user_add(p),
         "user.delete" => user_delete(p),
         "user.set_admin" => user_set_admin(p),

@@ -3,6 +3,7 @@
 
 mod alerts;
 mod app;
+mod archive;
 mod attach;
 mod model;
 mod organize;

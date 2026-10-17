@@ -22,6 +22,7 @@
 //! `media` is `camera`, `microphone` or `screen`. An unknown media name or method is an error, never a panic.
 use super::{Shell, SystemService};
 use bifrost_core::json::Json;
+use bifrost_ui::account_policy::Feature;
 use bifrost_ui::capture_access::{CaptureAccess, Error, Media, Status};
 use bifrost_ui::location_auth::{AuthorizationStatus, Level, RequestOutcome, UsageDescriptions};
 use std::cell::RefCell;
@@ -196,6 +197,10 @@ pub fn expire_once(is_running: impl Fn(&str) -> bool) -> Vec<String> {
 
 /// The location status of one app (a new app has not been asked yet).
 pub fn location_status(app_id: &str) -> AuthorizationStatus {
+    // The installed account's content limits switch location off for every app.
+    if crate::bare::account_policy::feature_switched_off(Feature::Location) {
+        return AuthorizationStatus::Restricted;
+    }
     LOCATION.with(|s| s.borrow().get(app_id).copied().unwrap_or(AuthorizationStatus::NotDetermined))
 }
 
@@ -294,9 +299,22 @@ pub fn outcome_name(outcome: RequestOutcome) -> &'static str {
     }
 }
 
-/// The capture permissions of one app (a new app has none answered yet).
+/// The capture permissions of one app (a new app has none answered yet). The installed account's content limits
+/// restrict the media types it switches off: the stored answer stays, and it returns when the limit is lifted.
 pub fn access(app_id: &str) -> CaptureAccess {
-    STORE.with(|s| s.borrow().get(app_id).copied().unwrap_or_default())
+    let stored = STORE.with(|s| s.borrow().get(app_id).copied().unwrap_or_default());
+    limited_access(stored, crate::bare::account_policy::feature_switched_off(Feature::Camera), crate::bare::account_policy::feature_switched_off(Feature::Microphone))
+}
+
+/// `stored` with the media types the content limits switch off restricted.
+pub fn limited_access(mut access: CaptureAccess, camera_off: bool, microphone_off: bool) -> CaptureAccess {
+    if camera_off {
+        access.set_restricted(Media::Video, true);
+    }
+    if microphone_off {
+        access.set_restricted(Media::Audio, true);
+    }
+    access
 }
 
 /// A change the person makes in Settings for one app and media type.
@@ -461,6 +479,19 @@ pub fn answer(app_id: &str, method: &str, params: &Json) -> Result<Json, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn content_limits_restrict_only_the_media_they_switch_off() {
+        let mut stored = CaptureAccess::default();
+        stored.request(Media::Video, true);
+        stored.request(Media::Audio, true);
+        let limited = limited_access(stored, true, false);
+        assert_eq!(limited.status(Media::Video), Status::Restricted);
+        assert_eq!(limited.status(Media::Audio), Status::Authorized);
+        assert!(!limited.can_capture(Media::Video));
+        // the stored answer is untouched, so lifting the limit brings it back
+        assert_eq!(limited_access(stored, false, false).status(Media::Video), Status::Authorized);
+    }
 
     #[test]
     fn a_location_request_needs_a_purpose_string() {

@@ -1519,11 +1519,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/managed_context.rs (ManagedContext: working copy, change tracking, save, rollback, fetch, restored); springboard/ui/src/persistent_store.rs (file-backed store); springboard/ui/src/fetch.rs",
+   "bifrost": "springboard/ui/src/managed_context.rs (ManagedContext); springboard/ui/src/persistent_store.rs (file-backed store); springboard/ui/src/fetch.rs; springboard/apps/reminders-desktop/src/archive.rs; springboard/apps/reminders-desktop/src/store.rs (item_text, Codec)",
    "status": "partial",
-   "note": "Managed object context with change tracking (managed_context.rs). Built 2026-10-17: a file-backed store writes the saved state through a temporary file and a rename, reloads it with the identity counter, and refuses a damaged file (persistent_store.rs; tests persistent_store::tests). Still missing: entity model with relationships, a database-backed store, persistent history and store migration (SDK matrix core-data.json).",
+   "note": "Managed object context with change tracking (managed_context.rs). Built 2026-10-17: a file-backed persistent store (persistent_store.rs) writes the saved state through a temporary file and a rename and reloads it with the identity counter; Reminders keeps deleted reminders in that store (apps/reminders-desktop/src/archive.rs, Reminder implements its Codec). Still missing: entity model with relationships, a database-backed store, persistent history and store migration (SDK matrix core-data.json).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "persistent_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-reminders",
+     "filter": "archive::tests"
+    }
+   ],
+   "ready_note": "The working copy, change tracking, save and rollback are tested (managed_context::tests); the file store round trip, identity reuse and damaged-file refusal are tested (persistent_store::tests); the Reminders archive uses the store (archive::tests)."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreDisplay.framework",
@@ -1619,9 +1638,33 @@
    "doc": "",
    "bifrost": "springboard/src/bare/input.rs; springboard/mcp/src/keys.rs; springboard/sdk/src/hid_devices.rs; springboard/sdk/src/hid_virtual.rs",
    "status": "partial",
-   "note": "The shell classifies input devices and decodes their reports (springboard/src/bare/input.rs). The SDK has the app-facing device model (springboard/sdk/src/hid_devices.rs, DeviceManager over bifrost_ui::hid_match) and the virtual keyboard report model (springboard/sdk/src/hid_virtual.rs). Not covered: a virtual device that the shell creates for apps, report descriptors for arbitrary devices, and raw reports to apps.",
+   "note": "The shell classifies input devices and decodes their reports (springboard/src/bare/input.rs). The SDK has the app-facing device model (hid_devices.rs, DeviceManager over bifrost_ui::hid_match) and the virtual keyboard report model (hid_virtual.rs). Still not covered: a virtual device the shell creates for apps, report descriptors for arbitrary devices, and raw reports to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "a_report_encodes_the_modifiers"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "a_report_holds_at_most_six_keys"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "a_key_listed_twice_in_one_report_is_refused"
+    }
+   ],
+   "ready_note": "The device manager's change sets (hid_devices::tests) and the keyboard report encoding, key limit and duplicate refusal (parity_sdk-os-10 tests) are covered. Virtual devices created by the shell and raw reports to apps remain open in the note."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreHaptics.framework",
@@ -2028,9 +2071,18 @@
    "doc": "",
    "bifrost": "springboard/src/net/wifi.rs; springboard/src/net/wpa.rs; springboard/src/net/wifi_config.rs; springboard/src/shell/wifi_page.rs; springboard/sdk/src/wlan_service.rs",
    "status": "partial",
-   "note": "The shell finds Wi-Fi interfaces, scans, joins networks, keeps saved profiles and reads signal and security through wpa_supplicant. The app-facing interface API exists as the SDK service layer (springboard/sdk/src/wlan_service.rs, served by springboard::shell::services::wifi), so this row's earlier gap list is stale. Still not covered: access-point and ad-hoc modes, and channel and PHY detail (no wire fields for them yet).",
+   "note": "The shell finds Wi-Fi interfaces, scans, joins networks, keeps saved profiles and reads signal and security through wpa_supplicant. The app-facing interface API is the SDK service layer (springboard/sdk/src/wlan_service.rs), served by springboard::shell::services::wifi. Still not covered: access-point and ad-hoc modes, and channel and PHY detail (no wire fields for them yet).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan_service::tests"
+    }
+   ],
+   "ready_note": "The app-facing request and decode functions for interfaces, networks, power, scan, join and forget are tested (wlan_service::tests). Access-point and ad-hoc modes and channel and PHY detail remain open in the note."
   },
   {
    "id": "path:/System/Library/Frameworks/CrashReportExtension.framework",
@@ -4029,11 +4081,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/account_policy.rs (Policy, PolicyTable, parse and to_text); springboard/src/bare/account_policy.rs",
+   "bifrost": "springboard/ui/src/account_policy.rs (Policy, PolicyTable); springboard/src/bare/account_policy.rs; springboard/src/privd/accounts.rs (set_policy); springboard/src/shell/users_page.rs (CONTENT LIMITS); springboard/src/shell/services/privacy_permissions.rs (access, location_status); springboard/src/shell/store/sheet.rs (purchase refusal)",
    "status": "partial",
-   "note": "A policy table checks app blocks and feature restrictions per account (account_policy.rs). Built 2026-10-17: the launcher refuses a blocked app for the installed account (springboard/src/bare/account_policy.rs, reads /var/lib/springboard/account-policy; a damaged file refuses every launch); tests account_policy::tests and bare::account_policy::tests. Still missing: feature restrictions (camera, microphone, location, purchases) are not enforced where those features start, and the account service that writes the policy file does not exist yet.",
+   "note": "A policy table per account (springboard/ui/src/account_policy.rs) with a text form. Built 2026-10-17: the launcher refuses a blocked app for the installed account (springboard/src/bare/account_policy.rs, reads /var/lib/springboard/account-policy; a damaged file refuses every launch); Settings > Users & Groups > CONTENT LIMITS writes a managed account's rules through privd's account.set_policy (validated and written atomically); the privacy gates answer camera, microphone and location as restricted, and the store purchase sheet refuses Buy, while the installed account's limits switch them off. Still missing: the account service as its own owner of the policy (privd is the only writer now), and limits for sessions of other accounts, since the shell runs only the installed account.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::account_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privacy_permissions::tests::content_limits"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "users_page::tests::a_limit_switch"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "users_page::tests::a_managed_account"
+    }
+   ],
+   "ready_note": "Launch refusal (bare::account_policy), the policy file format (account_policy::tests), the content limits page (users_page tests), and the privacy and purchase gates read the same table. A damaged table refuses or switches off; the installed account has no limits."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountSuggestions.framework",
@@ -4853,9 +4934,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/route_prediction.rs",
+   "bifrost": "springboard/ui/src/route_prediction.rs (suggest, RouteHistory); springboard/src/shell/services/audio_devices.rs (suggested_outputs, history file)",
    "status": "partial",
-   "note": "A pure model ranks known destinations by use count and recency (route_prediction.rs). Built 2026-10-17: RouteHistory persists the picker's choices (newest 256, one id per line, text round trip); tests route_prediction::tests. Still missing: the sound output picker does not read or write the history yet, and the model does not depend on AirPlay transport.",
+   "note": "A pure model ranks known destinations by use count and recency (route_prediction.rs). Built 2026-10-17: RouteHistory persists the picker's choices (newest 256, one id per line). The audio-devices service records each output the person picks and reports up to three suggested outputs from that history (springboard/src/shell/services/audio_devices.rs). Still missing: the picker does not draw the suggestions yet, and there is no AirPlay transport behind them.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -4863,20 +4944,15 @@
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "suggestions_are_the_used_destinations_most_used_first"
+     "filter": "route_prediction::tests"
     },
     {
      "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "equally_used_destinations_rank_the_most_recent_first"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "a_destination_never_chosen_is_not_suggested_and_the_limit_is_kept"
+     "crate": "springboard",
+     "filter": "services::audio_devices::tests::the_most_chosen"
     }
    ],
-   "ready_note": "The route suggestion ranker (most used first, then most recent) is the prediction job; covered by springboard/ui/tests/parity_os-gaps-03.rs. Persisted history is not built (see the note)."
+   "ready_note": "History persistence and ranking are tested (route_prediction::tests); the audio-devices list is tested for suggestions and the history file round trip."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AirPlaySender.framework",

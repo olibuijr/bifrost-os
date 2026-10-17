@@ -185,6 +185,12 @@ impl Client {
         self.call("user.set_admin", vec![("name", privd::s(name)), ("admin", Json::Bool(admin))]).map(|_| ())
     }
 
+    /// Settings > Users & Groups > content limits: replaces a managed account's app blocks and feature switches.
+    pub fn set_account_policy(&self, account: &str, blocked: &[&str], disabled: &[&str]) -> Result<(), ClientError> {
+        let list = |items: &[&str]| Json::Arr(items.iter().map(|item| privd::s(*item)).collect());
+        self.call("account.set_policy", vec![("account", privd::s(account)), ("blocked", list(blocked)), ("disabled", list(disabled))]).map(|_| ())
+    }
+
     /// Another account's password (the installed account changes its own through `account.set_password`).
     pub fn user_set_password(&self, name: &str, new: &str) -> Result<(), ClientError> {
         self.call("user.set_password", vec![("name", privd::s(name)), ("new", privd::s(new))]).map(|_| ())
