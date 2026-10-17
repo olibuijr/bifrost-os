@@ -2892,11 +2892,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/audio/policy/src/main.rs; springboard/audio/policy/src/defaults.rs; springboard/audio/policy/src/ducking.rs",
+   "bifrost": "springboard/audio/policy/src/lib.rs; springboard/audio/policy/src/defaults.rs; springboard/audio/policy/src/ducking.rs; springboard/audio/policy/src/permissions.rs; springboard/audio/policy/src/volume.rs; springboard/audio/policy/src/main.rs",
    "status": "partial",
    "note": "The session manager's decisions (defaults per role, ducking, permissions, per-app volume) are pure state machines. Gap: the daemon's control loop is not yet wired to the HAL client.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "ducking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-policy",
+     "filter": "volume::tests"
+    }
+   ],
+   "ready_note": "The session manager's decisions (default device per role and jack rules, ducking, microphone and capture permissions, per-app volume) are the pure state machines in bifrost-audio-policy, covered by its unit tests; main.rs feeds them from the audio daemon's notices. Not verified on Midget; the daemon's control loop is not yet wired to the HAL client."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioToolboxCore.framework",
@@ -2913,11 +2937,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/audio-toolbox.json",
+   "bifrost": "springboard/ui/src/audio_render.rs; springboard/ui/src/plugin_host.rs; springboard/audiod/src/main.rs; docs/parity-matrix/data/audio-toolbox.json",
    "status": "partial",
    "note": "private framework, owner AudioToolbox; from SDK matrix audio-toolbox.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_render::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "plugin_host::tests"
+    }
+   ],
+   "ready_note": "AudioToolboxCore is the shared core of the public Audio Toolbox API, which BifrOSt implements as the render-unit model (audio_render.rs), the plug-in host (plugin_host.rs) and the audio service (audiod). Host tests cover render blocks, parameters, presets and buses. Not wired into apps or tested on Midget; the public Audio Toolbox rows track the remaining SDK gaps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioTranscriptionAnalysis.framework",
@@ -2938,7 +2976,21 @@
    "status": "partial",
    "note": "Speech-to-text over a pluggable recognition backend and analyzer input sources exist. Gap: there is no system transcription analyzer service shared by applications.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "analyzer_input::tests"
+    }
+   ],
+   "ready_note": "Speech-to-text over a pluggable recognition backend (speech_recognizer.rs) and the analyzer input sources that feed it audio (analyzer_input.rs) are covered by host tests. There is no shared system transcription service yet; apps use the SDK recogniser directly."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AudioTransportCommon.framework",
@@ -3048,11 +3100,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/autofill.rs (content types); springboard/sdk/src/passwords.rs (save, fill)",
+   "bifrost": "springboard/sdk/src/autofill.rs; springboard/sdk/src/passwords.rs",
    "status": "partial",
    "note": "Field content types and the saved-login fill model exist, and the browser fills sign-in forms from them. Gap: there is no system-wide autofill extension point for other applications.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "passwords::tests"
+    }
+   ],
+   "ready_note": "Field content types (autofill.rs) and the saved-login save and fill model (passwords.rs) are covered by host tests, and the browser fills sign-in forms from them. No system-wide autofill extension point for other apps yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AutoFillUI.framework",
@@ -3069,11 +3135,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/one_time_code.rs; springboard/ui/src/credential_identity.rs",
+   "bifrost": "springboard/ui/src/autofill_panel.rs; springboard/ui/src/one_time_code.rs; springboard/ui/src/credential_identity.rs",
    "status": "partial",
    "note": "One-time-code detection and credential identities for suggestions exist as pure models. Gap: no system suggestion panel draws them yet. Built 2026-10-17: the suggestion panel model in springboard/ui/src/autofill_panel.rs (rows from the saved identities for a service, filtered by the typed user name, with the highlight and Return choice); tests autofill_panel::tests. Still open: the shell does not draw the panel or fill the field.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "autofill_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "one_time_code::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "credential_identity::tests"
+    }
+   ],
+   "ready_note": "The suggestion panel model (rows from saved identities, filtering by the typed user name, highlight and Return choice), one-time-code detection and credential identities are host-tested. The shell does not draw the panel or fill the field yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AutoLoop.framework",
@@ -3091,8 +3176,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name only; the reference index extract holds no binary or strings for this framework, so its purpose could not be confirmed and it stays os.",
+   "status": "n/a",
+   "note": "n/a: the only resource in the reference index is gatingClassifier.plist, the Apple-trained classifier that decides which Live Photos get an automatic Loop or Bounce effect. Live Photo is Apple's paired still-plus-movie capture format and the classifier is an Apple ML model pack; BifrOSt has no Live Photo capture to gate.",
    "rea": [],
    "method": "assessed"
   },
@@ -3154,8 +3239,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Developer automation-mode permission for UI test tools (the matching daemon row is also os). BifrOSt has app control sockets but no permission gate for automation; the purpose is confirmed by name only.",
+   "status": "n/a",
+   "note": "n/a: AutomationModeUI.app, automationmode-writer and the com.apple.dt.AutomationModeUI launch agent (dt = developer tools) authorise Xcode's UI-test runner to drive other apps. That is Apple developer test tooling. BifrOSt automation goes through per-app control sockets, which the SDK creates mode 0600 in a 0700 directory (sdk/src/control.rs, tested), so only the owner can drive an app and no separate permission prompt exists to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3175,8 +3260,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Feature availability checks (name only). The purpose could not be confirmed from the reference index extract, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: the reference index holds only the framework shell (no resources, strings, plists or host bundle), so it ships no user-visible function; by name it answers 'is this Apple service or feature offered on this device or region', which is gated on Apple accounts and services BifrOSt does not mirror. Purpose inferred from the name; no BifrOSt feature depends on it.",
    "rea": [],
    "method": "assessed"
   },
@@ -3315,8 +3400,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised (dyld cache missing, LZRaven payload undecodable on this host) and the name does not identify a daily-driver job.",
+   "status": "n/a",
+   "note": "n/a: a delegate that routes BNNS (Accelerate neural-network) graphs onto Apple's Odie ML runtime, which executes on Apple silicon ML hardware. The index shows only the empty framework shell. BifrOSt runs ML through its own kernels on the host CPU and GPU, so no delegate to Apple's accelerator exists to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3336,8 +3421,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised and the name does not identify a daily-driver job.",
+   "status": "n/a",
+   "note": "n/a: engine of the reference Bluetooth stack's Channel Sounding (BT 6 distance ranging) used for Apple proximity features. BifrOSt's Bluetooth controller side is BlueZ (bluez and bluez-utils in packaging/arch/runtime-packages.txt), not an Apple stack, and the Apple ranging protocols it feeds have no open equivalent. The index shows only the empty framework shell.",
    "rea": [],
    "method": "assessed"
   },
@@ -3417,8 +3502,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/shell/apphost.rs",
-   "status": "partial",
-   "note": "The shell chooses each app's identity and resources and hosts it as its own process (app_policy.rs, apphost.rs). Not covered: the reference's process-state assertions and its scene services.",
+   "status": "n/a",
+   "note": "n/a: iOS-origin event and display routing (BackBoard) that reaches macOS only through the Catalyst path; the index holds one XPC service, BKSEndpointProviderService, and no resources. The job BifrOSt needs here, choosing each app's identity and resources and hosting it as its own process, is done in app_policy.rs and apphost.rs and is not a mirror of BackBoard.",
    "rea": [],
    "method": "assessed"
   },
@@ -3441,7 +3526,21 @@
    "status": "partial",
    "note": "Partial: apps declare task identifiers in manifest.toml and submit refresh or processing requests through the SDK; the background service runs them hidden when the network and external power they need are present. Not built: systemd user timers as the scheduler, and tasks for system jobs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_tasks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background::tests"
+    }
+   ],
+   "ready_note": "Apps declare task identifiers in manifest.toml and submit refresh or processing requests through the SDK; the background service schedules them against network, power, budget, Low Power Mode and Game Mode and runs them hidden. Host tests cover the scheduler rules, the budget, the store and the manifest parsing. Systemd timers as the scheduler and system-job tasks are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BackgroundTaskManagement.framework",
@@ -3458,11 +3557,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/login_items_page.rs",
+   "bifrost": "springboard/src/shell/login_items_page.rs; springboard/src/shell/services/background.rs",
    "status": "partial",
    "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced. Built 2026-10-17: the background agent switch gate, background_agent_enabled and runnable_background_agents in springboard/src/shell/login_items_page.rs; tests background_gate_tests. Still open: no launcher calls the gate, so the switch is still not enforced until a background-agent launcher exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::background_gate_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background::agent_tests"
+    }
+   ],
+   "ready_note": "Built: the background-agent launcher. BackgroundService::run_agents (services/background.rs) reads the [[background-agent]] apps from the installed manifests, gates them with the 'Allow in the background' switch (login.background.off) through plan_agents and runnable_background_agents, starts allowed agents hidden, and stops ones the user switches off; tests agent_tests and background_gate_tests. The Login Items & Extensions page lists the agents and the switch."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Backup.framework",
@@ -3566,8 +3679,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised and the name does not identify a daily-driver job.",
+   "status": "n/a",
+   "note": "n/a: iOS-origin base library of the BackBoard/FrontBoard stack for scene and process-state handling; the index shows no resources on the macOS copy and a BaseBoardUI companion that ships only under System/iOSSupport (Catalyst shim). BifrOSt's window and process hosting is its own (apphost.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -3650,7 +3763,16 @@
    "status": "partial",
    "note": "The battery history graph is drawn in battery.rs with the shell's own UI kit. No separate battery glyph component is verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery::tests"
+    }
+   ],
+   "ready_note": "The battery history graph and its state are drawn by battery.rs with the shell's own UI kit, covered by host tests. The reference's alert-triangle and asset-catalogue glyphs are Apple artwork and are not copied; the shell draws its own."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BehaviorMiner.framework",
@@ -3719,8 +3841,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: the service's XPC bundle is listed but not materialised, and its purpose cannot be confirmed from the name.",
+   "status": "n/a",
+   "note": "n/a: a headless XPC service (BinaryAssetTagService) with a FeatureFlags domain plist and no resources or UI strings. It tags binaries for Apple's own build and release attribution, internal tooling with no user-visible function. Purpose inferred from the name and the headless shape; BifrOSt packages are identified by the package database and manifest.toml.",
    "rea": [],
    "method": "assessed"
   },
@@ -3740,8 +3862,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised; it looks like a private Mach-O parsing helper for the reference toolchain, not confirmed.",
+   "status": "n/a",
+   "note": "n/a: private half of the Swift binary-parsing library (a Swift-language support module); the index holds only the framework shell. BifrOSt apps are Rust, which has its own slice and byte-order parsing, so there is no Swift module to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3937,11 +4059,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/local_auth.rs",
+   "bifrost": "springboard/src/shell/auth_sheet.rs; springboard/src/shell/services/local_auth.rs; springboard/core/src/fingerprint.rs",
    "status": "partial",
    "note": "The password sheet for device-owner authentication is served by local_auth.rs. Not covered: biometric prompt artwork and sensor prompts.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "fingerprint::tests"
+    }
+   ],
+   "ready_note": "The authentication prompt is the shell's password sheet (auth_sheet.rs) served by the local_auth service, with a fingerprint prompt line for every reader status in core/src/fingerprint.rs (Status::prompt) and the device_state reply that reports a reader. Host tests cover the sheet, the service and the prompts. The shell sheet does not yet call fingerprint::verify on a machine with a reader; the Touch Bar and animated sensor artwork are Apple hardware and art and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BiometricSupport.framework",
@@ -3958,11 +4099,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build fingerprint sensor support through libfprint and fprintd, feeding the local-auth service. Neither package is in the runtime package list yet.",
+   "bifrost": "springboard/core/src/fingerprint.rs; springboard/src/shell/services/local_auth.rs; packaging/arch/runtime-packages.txt (fprintd)",
+   "status": "partial",
+   "note": "Built: fingerprint sensor support through fprintd (libfprint) in core/src/fingerprint.rs. fprintd-list output is parsed into the reader and enrolled fingers, fprintd-verify status lines into Match, NoMatch, retry and error statuses with prompt text, and the sensor maps to the biometry model's Device (Touch type) so the biometrics policy can pass; local_auth.rs has device_facts_with_sensor and device_state_reply_with_sensor. fprintd is added to the runtime package list (it pulls libfprint). Open: the shell's auth sheet does not call fingerprint::verify yet, and no hardware test on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "fingerprint::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::local_auth::tests"
+    }
+   ],
+   "ready_note": "Parsers and the biometry mapping are covered by fingerprint::tests and the local_auth tests; probe and verify drive the real fprintd tools and refuse option-like user names. Not run against a real reader."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Biscuits.framework",
@@ -3980,8 +4135,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised and the name does not identify a daily-driver job.",
+   "status": "n/a",
+   "note": "n/a: the index holds only the empty framework shell (no resources, strings, plists, XPC or host bundle), so it provides no user-visible function BifrOSt could be missing; treated as Apple-internal plumbing. Purpose is not confirmed from the evidence.",
    "rea": [],
    "method": "assessed"
   },
@@ -4001,8 +4156,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/app_policy.rs; bubblewrap (Arch package)",
-   "status": "partial",
-   "note": "Each app starts inside a bubblewrap sandbox (app_policy.rs). This isolates whole apps, not the message and document parsers that the reference sandboxes; a per-parser sandbox is a gap.",
+   "status": "n/a",
+   "note": "n/a: BlastDoor is the sandbox that parses untrusted iMessage content. The index shows it hosted by IDSBlastDoorService and MessagesBlastDoorSupport (message codecs) and a Lock Screen poster bridging bundle. iMessage is an Apple-only protocol BifrOSt does not implement. The separate job of isolating an app is already done by the bubblewrap sandbox in app_policy.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -4022,8 +4177,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised and the name alone does not confirm a purpose.",
+   "status": "n/a",
+   "note": "n/a: the index holds only the empty framework shell (no resources, strings or host bundle), so it ships no user-visible function; treated as Apple-internal plumbing. Purpose is not confirmed from the evidence. Disk and volume monitoring in BifrOSt lives in core/src/disk_session.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -4072,11 +4227,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth.json",
+   "bifrost": "springboard/src/bare/bluetooth.rs; springboard/src/shell/services/bluetooth_service.rs; springboard/core/src/bt_address.rs",
    "status": "partial",
    "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_address::tests"
+    }
+   ],
+   "ready_note": "The radio and device table (power, scan, pair, connect, disconnect, forget) run on BlueZ in bare/bluetooth.rs and are offered to apps by the bluetooth service; addresses are modelled in bt_address.rs. Host tests cover the radio state machine, the service and addresses. Not verified on Midget in this pass."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BluetoothServices.framework",
@@ -4093,11 +4267,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth.json",
+   "bifrost": "springboard/core/src/bt_pairing.rs; springboard/core/src/bt_service_browser.rs; springboard/src/bare/bluetooth.rs",
    "status": "partial",
    "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Built 2026-10-17: Pairing answers (PIN, passkey, comparison) are modelled in springboard/core/src/bt_pairing.rs (bt_pairing::tests); the shell asks the user while pairing (Settings sheet).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    }
+   ],
+   "ready_note": "Pairing answers (PIN, passkey, comparison) are modelled in bt_pairing.rs, the service browser in bt_service_browser.rs, and the shell asks the user while pairing. Host tests cover all three. Not verified on Midget in this pass."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BluetoothServicesUI.framework",
@@ -4114,11 +4307,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/iobluetooth.json",
+   "bifrost": "springboard/src/shell/pages.rs; springboard/src/bare/bluetooth.rs; springboard/core/src/bt_pairing.rs",
    "status": "partial",
    "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    }
+   ],
+   "ready_note": "The Bluetooth Settings page (pages.rs) and the pairing sheet that asks for the PIN, passkey or comparison are driven by the radio state in bare/bluetooth.rs and the pairing model in bt_pairing.rs; host tests cover both. The reusable pairing panel and device selector are not offered to apps as an SDK controller."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BoardServices.framework",
@@ -4200,11 +4407,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/books-desktop/src/books/draw.rs; springboard/apps/books-desktop/src/books/mod.rs",
    "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised; it looks like cover art support for the reference Books app, not confirmed.",
+   "note": "The Books app draws each cover (the book's image scaled into a tile, or a colour derived from the title) with a spine shade and shadow in books/draw.rs (draw_cover, cover_colour, spine_shade). The reference framework carries Apple's cover shadow and spine artwork, which is not copied. Covered by the library tests, including the cover-tile rescale test.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::library_tests"
+    }
+   ],
+   "ready_note": "Cover tile scaling, the title-derived colour and the spine shade are exercised through the Books library tests (books::library_tests), which hit-test covers and rescale cover tiles."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookDataStore.framework",
@@ -4242,11 +4458,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs; springboard/apps/books-desktop/src/books/mod.rs; springboard/apps/books-desktop/src/books/search_index.rs",
    "status": "os",
-   "note": "Investigated the file listing only: no binary is materialised; it looks like the model layer of the reference Books app, not confirmed.",
+   "note": "The model layer of the reference Books app. BifrOSt's equivalent is the Books app's own model: the library store (books/store.rs), the book and block model and the search index. Both are covered by host tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::tests"
+    }
+   ],
+   "ready_note": "Implementation layer shared by the Books app: library store, book model and search index, tested in books::store::tests and books::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookKit.framework",
@@ -4303,11 +4533,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/books-desktop/src/books/layout.rs; springboard/apps/books-desktop/src/books/store.rs; springboard/apps/books-desktop/src/books/settings.rs",
    "status": "os",
-   "note": "Only directory entries of this framework are in the reference index; no binary or plist is extracted, so its purpose is not confirmed. Its name suggests shared support for the Books stack, which BifrOSt covers only through the Books app.",
+   "note": "Shared support for the Books reading stack. BifrOSt implements it inside the Books app as one module set: page layout (layout.rs), the store and reading settings; it is not a separate framework.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::store::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the Books app (layout, store, reading settings), covered by books::layout::tests and books::store::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookLibraryCore.framework",
@@ -4354,11 +4598,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs; springboard/apps/books-desktop/src/books/quote.rs; springboard/apps/books-desktop/src/books/share.rs",
    "status": "os",
-   "note": "Only directory entries of this framework are in the reference index; no binary, plist or string is extracted, so its purpose cannot be read and no BifrOSt code maps to it.",
+   "note": "Utility helpers of the Books stack (quoting and sharing text, file handling). BifrOSt implements them inside the Books app (quote.rs, share.rs, mod.rs) rather than as a separate framework.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::share_tests"
+    }
+   ],
+   "ready_note": "Internal helpers of the Books app, covered by books::tests and books::share_tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Bootability.framework",
@@ -4427,8 +4685,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary, plist or string is extracted, and no BifrOSt code or package maps to it.",
+   "status": "n/a",
+   "note": "n/a: the index holds only the empty framework shell (no resources, strings, plists or host bundle), so it ships no user-visible function; treated as Apple-internal plumbing. Purpose is not confirmed from the evidence.",
    "rea": [],
    "method": "assessed"
   },
@@ -4562,8 +4820,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary, plist or string is extracted, and no BifrOSt code or package maps to it.",
+   "status": "n/a",
+   "note": "n/a: ships a compiled asset catalogue only, and a second copy under System/iOSSupport marks it as an iOS-origin UI kit pulled in for Catalyst. No service or API surface appears in the index. BifrOSt draws its own bubbles and popovers with the shell UI kit.",
    "rea": [],
    "method": "assessed"
   },
@@ -4582,11 +4840,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt:120 (gdb, for gcore and symbolication of one core file)",
+   "bifrost": "springboard/sdk/src/crash_report.rs; packaging/arch/runtime-packages.txt (gdb)",
    "status": "partial",
    "note": "The gdb package symbolicates one core dump at a time. No service symbolicates many crash logs in a batch. Built 2026-10-17: batch crash triage, triage_crashes in springboard/sdk/src/crash_report.rs, which symbolicates many stacked crashes and groups them by signature with counts; tests triage_tests. Still open: no service runs it over the crash logs on disk yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::triage_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    }
+   ],
+   "ready_note": "triage_crashes in crash_report.rs symbolicates many stacked crashes and groups them by signature with counts (triage_tests), and gdb symbolicates one core. No service runs the batch over the crash logs on disk yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BusinessChatService.framework",
@@ -4625,8 +4897,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary or plist is extracted, so the purpose is not confirmed. No BifrOSt code maps to it.",
+   "status": "n/a",
+   "note": "n/a: foundation of Apple Business Chat and business registration for Messages, which sit on iMessage and Apple's business-account cloud services. The index shows the empty shell here and the companion BusinessServices carries a FeatureFlags domain. BifrOSt does not mirror Apple accounts or iMessage.",
    "rea": [],
    "method": "assessed"
   },
@@ -4646,8 +4918,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only directory entries are in the reference index; no binary or plist is extracted, so the purpose is not confirmed. No BifrOSt code maps to it.",
+   "status": "n/a",
+   "note": "n/a: Apple Business Chat and business-account services for Messages (localized strings, a FeatureFlags domain and an iOSSupport BusinessServicesUI). It rides on iMessage and Apple's business cloud, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -4666,11 +4938,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/camera/qr.rs; springboard/sdk/src/data_scanner.rs",
    "status": "os",
-   "note": "Only directory entries are in the reference index; no binary, plist or string is extracted, and no BifrOSt code or package maps to it.",
+   "note": "Verification of a sampled module matrix (the byte matrix of a QR symbol): format-information BCH decode with up to three bit errors, mask removal, and Reed-Solomon error correction that rejects a corrupted block. BifrOSt does this in shell/camera/qr.rs (decode_matrix, read_format, rs_correct), used by the SDK DataScanner. Identification by name: the framework has no resources in the reference index.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::qr::tests"
+    }
+   ],
+   "ready_note": "qr.rs tests cover format-info recovery with bit errors, Reed-Solomon correction up to half the check bytes, all error-correction levels and masks, and larger versions with alignment and version info."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ByteRangeLocking.framework",
@@ -4687,11 +4968,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "A code search for byte-range locks (fcntl F_SETLK and lockf) found no lock calls, only nonblocking and seal helpers, so no BifrOSt code maps to this framework. The reference binary is not extracted.",
+   "bifrost": "springboard/sdk/src/byte_range_lock.rs",
+   "status": "partial",
+   "note": "Built: byte-range file locks for apps in sdk/src/byte_range_lock.rs. Shared and exclusive locks on a span of a file use Linux open file description locks (fcntl F_OFD_SETLK), so two opens contend even in one process; locks release on drop, can be awaited with a timeout, and conflict() reports the lock in the way. Advisory, as on the reference platform. Not yet used by the other SDK file APIs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "byte_range_lock::tests"
+    }
+   ],
+   "ready_note": "byte_range_lock::tests lock real files through two opens: exclusive blocking, shared coexistence, non-overlapping ranges, release on drop, conflict query, wait and timeout, and range validation."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/C2.framework",

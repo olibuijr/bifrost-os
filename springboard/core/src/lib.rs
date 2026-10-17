@@ -101,6 +101,7 @@ pub mod backup_exclusion;
 pub mod pref_domains;
 pub mod peer_session;
 pub mod biometry;
+pub mod fingerprint;
 pub mod auth_context;
 pub mod auth_session;
 pub mod auth_callback_routes;

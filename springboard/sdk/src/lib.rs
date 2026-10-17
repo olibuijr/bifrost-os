@@ -364,6 +364,7 @@ pub mod operation_queue;
 pub mod actor;
 pub mod synchronization;
 pub mod fswatch;
+pub mod byte_range_lock;
 pub mod file_coordination;
 /// FUSE kernel protocol (7.31+) as pure encode and decode: requests, replies and READDIR packing.
 pub mod fuse;

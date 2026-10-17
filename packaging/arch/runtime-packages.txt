@@ -134,6 +134,7 @@ rdma-core
 espeak-ng
 bluez
 bluez-utils
+fprintd
 colord
 wpa_supplicant
 iw

@@ -189,6 +189,23 @@ pub fn device_facts(password_set: bool) -> bio::Device {
     bio::Device { biometry: bio::BiometryType::None, enrolled_sets: Vec::new(), passcode_set: password_set, failures: 0, max_failures: 3 }
 }
 
+/// The device facts when a fingerprint reader answers `fprintd` (see `bifrost_core::fingerprint`): the reader is the
+/// Touch type and its enrolled fingers are the identity sets, so the biometrics policy can pass.
+pub fn device_facts_with_sensor(password_set: bool, sensor: &bifrost_core::fingerprint::Sensor) -> bio::Device {
+    bifrost_core::fingerprint::device_facts(sensor, password_set, 0, 3)
+}
+
+/// The `device_state` reply for a device with this fingerprint reader.
+pub fn device_state_reply_with_sensor(password_set: bool, sensor: &bifrost_core::fingerprint::Sensor) -> Json {
+    let facts = device_facts_with_sensor(password_set, sensor);
+    Json::Obj(vec![
+        ("ok".into(), Json::Bool(true)),
+        ("biometry_type".into(), Json::Str(biometry_wire(facts.biometry).into())),
+        ("passcode_set".into(), Json::Bool(facts.passcode_set)),
+        ("enrolled_count".into(), Json::Num(facts.enrolled_sets.len() as f64)),
+    ])
+}
+
 /// The biometry model's requirement for an app policy: device-owner asks for the default (biometry, then passcode);
 /// the biometrics policy asks for biometry alone.
 fn requirement(policy: Policy) -> bio::Requirement {
@@ -389,6 +406,18 @@ mod tests {
         assert_eq!(reply.get("passcode_set"), Some(&Json::Bool(true)));
         assert_eq!(device_state_reply(false).get("passcode_set"), Some(&Json::Bool(false)));
         assert_eq!(biometry_wire(bio::BiometryType::Face), "face_id");
+    }
+
+    #[test]
+    fn a_fingerprint_reader_makes_the_biometrics_policy_pass() {
+        let sensor = bifrost_core::fingerprint::parse_list("Fingerprints for user a on Reader (press):\n - #0: left-thumb\n");
+        let facts = device_facts_with_sensor(true, &sensor);
+        assert_eq!(bio::resolve(requirement(Policy::Biometrics), &facts, None), Ok(bio::Method::Biometry));
+        let reply = device_state_reply_with_sensor(true, &sensor);
+        assert_eq!(reply.get("biometry_type").and_then(Json::as_str), Some("touch_id"));
+        assert_eq!(reply.get("enrolled_count"), Some(&Json::Num(1.0)));
+        let none = bifrost_core::fingerprint::Sensor::default();
+        assert_eq!(bio::resolve(requirement(Policy::Biometrics), &device_facts_with_sensor(true, &none), None), Err(bio::Failure::BiometryUnavailable));
     }
 
     #[test]
