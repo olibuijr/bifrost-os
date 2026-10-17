@@ -116,6 +116,7 @@ pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
+pub mod background;
 pub mod contact_pick_sheet;
 mod auth_sheet;
 mod account_access_sheet;
@@ -760,6 +761,8 @@ pub struct Shell {
     /// in seconds, which the answer and the expiry use
     guardian_sheet: Option<guardian_sheet::GuardianSheet>,
     guardian_now: u64,
+    /// background suspension of the external apps (`background.rs`), while Suspend Background Apps is on
+    suspender: background::Suspender,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
     /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
@@ -1085,6 +1088,7 @@ impl Shell {
             permission_sheet: None,
             guardian_sheet: None,
             guardian_now: 0,
+            suspender: Default::default(),
             pick_sheet: None,
             auth_sheet: None,
             auth_clock: 0.0,
@@ -3273,6 +3277,41 @@ impl Shell {
         fx
     }
 
+    /// Stops the external apps nothing shows, and resumes them, while Suspend Background Apps is on. Turning the switch
+    /// off resumes every app this stopped.
+    fn background_tick(&mut self, t: f64) {
+        if !self.options().suspend_background {
+            let signals = self.suspender.resume_all();
+            self.send_app_signals(&signals);
+            return;
+        }
+        let facts: Vec<(u8, background::Facts)> = self
+            .ext
+            .iter()
+            .enumerate()
+            .filter_map(|(n, host)| {
+                if !host.as_ref()?.running() {
+                    return None;
+                }
+                let app = AppId::External(n as u8);
+                let focused = matches!(self.screen, Screen::App(a) if a == app);
+                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized));
+                Some((n as u8, background::Facts { focused, on_screen }))
+            })
+            .collect();
+        let signals = self.suspender.update(&facts, (t.max(0.0) * 1000.0) as u64);
+        self.send_app_signals(&signals);
+    }
+
+    /// Sends each signal to the process of its external app slot, when the app is still running.
+    fn send_app_signals(&self, signals: &[background::Signal]) {
+        for &(slot, sig) in signals {
+            if let Some(pid) = self.ext.get(slot as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()) {
+                crate::bare::sys::kill(pid as i32, sig);
+            }
+        }
+    }
+
     fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
         let reader_on = self.screen_reader_on();
         self.reader.note_mode(reader_on);
@@ -3283,6 +3322,7 @@ impl Shell {
             self.dirty = true;
         }
         self.input_memory_tick();
+        self.background_tick(t);
         self.guided_tick();
         self.split_tick();
         self.markup_tick();

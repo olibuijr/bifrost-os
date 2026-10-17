@@ -6432,9 +6432,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/occlusion.rs; springboard/core/src/memory_pressure.rs",
+   "bifrost": "springboard/core/src/occlusion.rs; springboard/core/src/memory_pressure.rs; springboard/src/shell/background.rs; springboard/src/shell/mod.rs; springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Not built: the shell does not feed occlusion events or send the signals, the Settings toggle is missing, and apps are not told about pressure.",
+   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Built 2026-10-17: the shell feeds occlusion facts for each external app (background.rs Suspender: focus and whether a window is shown) and sends SIGSTOP after the grace period and SIGCONT on focus, only while the Suspend Background Apps switch (suspend_background, off by default) is on; turning it off resumes the stopped apps (tests shell::background::tests). Not built: covering is not known yet (a shown app is never stopped), audio playing in the background is not exempt, and apps are not told about memory pressure, which needs a protocol message.",
    "rea": [],
    "method": "assessed"
   },
