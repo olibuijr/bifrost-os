@@ -4481,12 +4481,13 @@ ships in its bundle; BifrOSt has the same shape as a package.
 - **Books shipped.** Files (`springboard/apps/files/help`: basics, organize, info and archives), TextEdit
   (`springboard/apps/textedit-desktop/help`: writing, formatting, find and print) and Settings (overview, appearance,
   desktop and dock). Each describes menu items that the app's source defines.
-- **Not built yet (gap).** (a) the shell does not yet call `rebuild` at start or after an install or update; (b) the
-  Help menu (`desktop_bar.rs`, `Menu::Help`) still shows its fixed rows: the search field that calls `search_menu` for
-  the frontmost app's menus and `search` for topics is not drawn; (c) no Help viewer window exists: the planned window
-  has a sidebar table of contents from `pages_of`, back and forward, a search field, and renders bodies with
-  `shell::md::classify`; it opens from the Help menu and from `help://` links. Each needs its own round on Midget
-  before the row becomes `parity`.
+- **Index build (done).** `with_index(root, f)` shares one index. It rebuilds when `apps/installed.json` changes (every
+  install, update and removal rewrites it, in the shell or in privd), and `shell.rs` warms it on a worker thread at start.
+- **Not built yet (gap; `com.apple.helpd` stays `gap`).** (a) the Help menu (`desktop_bar.rs`, `Menu::Help`) still shows
+  its fixed rows: the search field that calls `search_menu` for the frontmost app's menus and `search` for topics is not
+  drawn; (b) no Help viewer window exists: the planned window has a sidebar table of contents from `pages_of`, back and
+  forward, a search field, and renders bodies with `shell::md::classify`; it opens from the Help menu and from `help://`
+  links. Help is not reachable from the UI until both exist, so the row is not `partial`.
 - **Tests.** `springboard/src/shell/helpbook.rs` (front matter, anchors, ranking, AND matching, link resolution,
   menu search, built-in book, reading a book from disk). Run by the lead: `cargo test -p springboard helpbook`.
 

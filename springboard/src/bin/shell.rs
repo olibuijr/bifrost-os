@@ -319,6 +319,8 @@ fn run() -> std::io::Result<()> {
     let wallpaper = springboard::first_frame_cache::wallpaper().map_or(wallpaper, |i| View { w: i.w, h: i.h, px: &i.px[..] });
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
+    // the help index reads every installed help book; built on a worker so the first frame is not held up
+    std::thread::spawn(|| springboard::shell::helpbook::with_index(std::path::Path::new(springboard::shell::store::install::ROOT), |_| ()));
     shell.set_route(router.route(), vol.level(), false, 0.0);
     // the wallpaper catalogue reads the packed thumbnails and may crop Pictures stills on first use: a worker builds
     // it and the loop hands it to the shell on its next turn (Settings > Wallpaper is the only reader)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1 — 2026-10-17
+
+- Ships a help book (`help/`: writing, formatting, find and print), indexed by the shell help index for the Help menu and `help://is.olibuijr.textedit.desktop` links.
+
 ## 1.9.0 — 2026-10-17
 
 - Rich text packages (RTFD) are read and written as a folder: `TXT.rtf` plus the files its attachments name, saved
