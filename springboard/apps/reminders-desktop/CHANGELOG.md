@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.17.0 — 2026-10-17
+
+- Format menu (Bold, Bullet List, Numbered List) writes Markdown marks into a reminder's notes while the Notes field has the focus; a command again takes the mark away. The notes are stored as Markdown text and shown as typed, not rendered.
+- Scripting: `tell app "Reminders"` can `make new reminder with properties {name, due}` and `make new list with properties {name}`, and get the name, id, notes, completed, flagged, priority, due day and list of reminders (`scripting.rs`, `[[script.*]]` in the manifest). Setting properties and deleting reminders from a script is refused.
+
 ## 1.16.0 — 2026-10-14
 
 - Settings: the all-day alert time offers every half hour from 6:00 to 20:00 (it offered ten fixed times).

@@ -7,13 +7,16 @@ mod attach;
 mod model;
 mod organize;
 mod quick;
+mod format;
 mod repeat;
+mod scripting;
 mod smartdef;
 mod settings;
 mod store;
 mod system;
 mod zones;
 
+use bifrost_app::app_events::AppEvent;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::share::INBOUND;
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
@@ -49,6 +52,9 @@ const MENU_NEW_SMART: u32 = 18;
 const MENU_SETTINGS: u32 = 19;
 const MENU_URGENT: u32 = 24;
 const MENU_SAVE_AS: u32 = 25;
+const MENU_BOLD: u32 = 26;
+const MENU_BULLETS: u32 = 27;
+const MENU_NUMBERS: u32 = 28;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -126,6 +132,35 @@ impl RemindersApp {
             } else {
                 ctx.disable_sudden_termination();
             }
+        }
+    }
+}
+
+impl RemindersApp {
+    /// The AppEvents Reminders answers (`scripting`): `make new reminder` and `make new list`, which go through the
+    /// Add Reminder and Create List intents, and the core `getd` read of a reminder property. Setting properties and
+    /// deleting reminders from a script are refused for now.
+    fn script_event(&mut self, ctx: Option<&Ctx>, data_dir: &Path, ev: &AppEvent) -> Result<Json, RpcError> {
+        match (ev.class.as_str(), ev.id.as_str()) {
+            ("reminders", "make") => {
+                let params = scripting::reminder_params(&ev.params)?;
+                Ok(self.perform_intent(ctx, data_dir, "add-reminder", &params)?.to_json())
+            }
+            ("reminders", "makelist") => {
+                let params = scripting::list_params(&ev.params)?;
+                Ok(self.perform_intent(ctx, data_dir, "create-list", &params)?.to_json())
+            }
+            ("core", "getd") => {
+                let object = ev.params.get("object").cloned().ok_or_else(|| RpcError::new(INVALID_PARAMS, "getd needs an object"))?;
+                let property = object.str_field("property");
+                let Some(a) = self.app.as_ref() else { return Err(RpcError::new(INVALID_PARAMS, "Reminders is not running yet")) };
+                let rows = scripting::rows(a.items(), a.lists());
+                scripting::get_property(&rows, &object, property.as_deref())
+            }
+            ("core", "setd") | ("core", "delt") => {
+                Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, "Reminders cannot change reminders from a script yet"))
+            }
+            _ => Err(scripting::unhandled(&ev.method())),
         }
     }
 }
@@ -242,6 +277,15 @@ impl App for RemindersApp {
                 ],
             },
             AppMenu { title: "View".into(), items: view },
+            AppMenu {
+                title: "Format".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_BOLD, "Bold").key("cmd+b").enabled(a.notes_focused()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_BULLETS, "Bullet List").enabled(a.notes_focused()),
+                    AppMenuItem::new(MENU_NUMBERS, "Numbered List").enabled(a.notes_focused()),
+                ],
+            },
         ]
     }
 
@@ -319,6 +363,9 @@ impl App for RemindersApp {
             MENU_NEW_SMART => a.new_smart_list(ui, t),
             MENU_SETTINGS => a.open_settings(t),
             MENU_URGENT => a.toggle_urgent_selected(ui),
+            MENU_BOLD => a.format_notes(ui, format::Style::Bold),
+            MENU_BULLETS => a.format_notes(ui, format::Style::Bullets),
+            MENU_NUMBERS => a.format_notes(ui, format::Style::Numbers),
             MENU_SUBTASKS => {
                 a.toggle_all_subtasks(ui);
                 true
@@ -429,6 +476,14 @@ impl App for RemindersApp {
         };
         self.sync_keyboard(ctx);
         Ok(result)
+    }
+
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        // scripting: `tell app "Reminders"` commands arrive as AppEvents (see `scripting` and the manifest's [[script.*]])
+        match AppEvent::from_method(method, params) {
+            Some(ev) => self.script_event(ctx, data_dir, &ev),
+            None => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no method {method}"))),
+        }
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
