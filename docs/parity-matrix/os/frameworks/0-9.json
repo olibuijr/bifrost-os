@@ -698,11 +698,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs; springboard/sdk/src/permission_kit.rs",
+   "bifrost": "springboard/core/src/permission_request.rs, springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/guardian_sheet.rs, springboard/src/shell/services/permission_kit.rs",
    "status": "partial",
-   "note": "The permission-request sheet is built on the models in permission_question.rs, shown by permission_sheet.rs. Parent approval of app updates and an app-facing request API are not built.",
+   "note": "Significant app-update questions are built end to end: the app's ask and responses calls (sdk permission_kit, service shell/services/permission_kit), the question model and AskCenter (ui permission_question), and the guardian's sheet (shell guardian_sheet). Communication questions are not carried. The privacy permission sheet is in permission_sheet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::guardian_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::permission_kit::tests"
+    }
+   ],
+   "ready_note": "Covers the significant-app-update question path (ask, queue, expiry, answer read-back, guardian sheet) and the privacy permission sheet. Communication questions are a separate gap in the SDK matrix."
   },
   {
    "id": "path:/System/Library/Frameworks/_PermissionKit_SwiftUI.framework",

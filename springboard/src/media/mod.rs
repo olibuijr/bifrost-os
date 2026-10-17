@@ -65,6 +65,10 @@ pub mod audioplayer;
 pub mod timestretch;
 pub mod speed;
 pub mod crossfade;
+/// Choice models for the video player's pickers: playback speed and subtitle track.
+pub mod pickers;
+/// Crossfade gains between two songs (equal power), for the music player's transitions.
+pub mod crossfade;
 pub mod queue;
 #[cfg(target_os = "linux")]
 pub mod player;
