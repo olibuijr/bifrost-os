@@ -4399,7 +4399,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/intent_form.rs (IntentForm)",
    "status": "partial",
-   "note": "IntentForm exposes declared fields, validates values and produces arguments for the existing intent model, with SDK tests. There is no drawn action picker or parameter editor UI.",
+   "note": "Partial: IntentForm exposes declared fields, validates values and produces arguments for the existing intent model, with SDK tests. Built 2026-10-17: intent_form::pick filters and orders intents for a picker (tests pick_tests). Still open: there is no drawn action picker or parameter editor UI.",
    "rea": [],
    "method": "assessed"
   },
@@ -4462,7 +4462,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/live_activity.rs, springboard/sdk/src/widgets_timeline.rs",
    "status": "partial",
-   "note": "The life cycle of a live activity (request, update, end) is modelled in live_activity.rs, with timeline data in widgets_timeline.rs. The shell draws no live activity strip yet.",
+   "note": "The life cycle of a live activity (request, update, end) is modelled in live_activity.rs, with timeline data in widgets_timeline.rs. Built 2026-10-17: Registry::strip gives the lock screen strip's activity ids, live ones first (tests live_activity::tests). Still open: the shell draws no live activity strip yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -4629,8 +4629,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/address-book.json",
-   "status": "partial",
-   "note": "private framework, owner AddressBook; from SDK matrix address-book.json",
+   "status": "n/a",
+   "note": "Apple-only: the autocomplete service feeds the recipient fields of Apple's Mail and Messages apps. BifrOSt ships no app with that picker; contact search is in the address-book row.",
    "rea": [],
    "method": "assessed"
   },
@@ -5210,8 +5210,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Gap: human body pose detection is not built. The bundle carries 2D and 3D pose models; needs an ML runtime and a pose request API.",
+   "status": "n/a",
+   "note": "Apple-only: the bundle is Apple's own ML pose model pack. BifrOSt does not ship Apple model packs, and a clean-room pose model is a separate ML project.",
    "rea": [],
    "method": "assessed"
   },
@@ -5497,8 +5497,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Apple-only: build-time extraction of App Intents metadata for Apple's Xcode tooling. BifrOSt declares intents directly in manifest.toml ([[intent]]), so no build tool is needed.",
    "rea": [],
    "method": "assessed"
   },
@@ -5690,9 +5690,18 @@
    "doc": "",
    "bifrost": "springboard/core/src/log.rs",
    "status": "partial",
-   "note": "App logs go to journald through the Unified Logging layer; notification-specific log events are not mirrored.",
+   "note": "App logs go to journald through the Unified Logging layer. Built 2026-10-17: shell notification delivery logs under the notify category (springboard/src/shell/notify/mod.rs), and the category is in the shell registry (core log.rs SHELL_CATEGORIES; test log::tests). Notification titles and bodies are not logged.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "Unified logging: the notify category is in the shell registry (log::tests); delivery logs through it in springboard/src/shell/notify/mod.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppPlaceholderSync.framework",
@@ -5844,7 +5853,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Build it on the shell quick actions (springboard/src/shell/quick_actions.rs) once a suggestion model exists.",
+   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests). Still open: no use counts are recorded to feed it, and no surface draws it; build both on springboard/src/shell/quick_actions.rs.",
    "rea": [],
    "method": "assessed"
   },
