@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Controls > Crossfade Songs: one song fades into the next over 2 to 12 seconds (off by default). The choice is kept in
+  `playback.txt` of the library store and sent to the audio service when the store opens.
+
 ## 1.13.0 — 2026-10-17
 
 - Window > MiniPlayer (Option+Cmd+M) opens a small extra window with the artwork, title and artist, the transport, a

@@ -276,6 +276,10 @@ pub mod audio {
         pub fn set_rate(&mut self, rate: f32) -> bool {
             self.send(Cmd::SetRate(crate::media::timestretch::clamp_rate(rate)))
         }
+        /// Crossfades one song into the next over `ms` milliseconds (capped at the longest crossfade); 0 plays gapless.
+        pub fn set_crossfade_ms(&mut self, ms: u32) -> bool {
+            self.send(Cmd::SetCrossfade(ms.min(crate::media::crossfade_overlap::MAX_OVERLAP_MS)))
+        }
         pub fn set_muted(&mut self, m: bool) -> bool {
             self.send(Cmd::SetMuted(m))
         }

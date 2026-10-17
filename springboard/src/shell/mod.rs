@@ -269,6 +269,10 @@ pub struct Info {
     /// the sizes the panel offers, largest first (Settings > Displays > Resolution)
     pub display_sizes: Vec<(u32, u32)>,
     pub brightness_supported: bool,
+    /// the machine has an ambient light sensor, so Displays can offer Automatically Adjust Brightness
+    pub ambient_light_supported: bool,
+    /// the machine has an accelerometer, so Accessibility can offer Vehicle Motion Cues
+    pub motion_sensor_supported: bool,
     pub battery_present: bool,
     pub desktop_network: Option<desktop_network::Snapshot>,
     pub hour: i32,
@@ -450,6 +454,8 @@ pub use bifrost_ui::Event;
 /// A tap on the dark screen wakes it: down and up within this time and distance.
 const TAP_WAKE_MS: f64 = 300.0;
 const TAP_WAKE_PX: f32 = 40.0;
+/// Radius of a Vehicle Motion Cues dot, in points.
+const MOTION_DOT_PT: f32 = 7.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Screen {
@@ -630,6 +636,10 @@ pub struct Shell {
     /// the drag and drop session between app windows, and the types each window registered (`dnd`)
     dnd: dnd::State,
     assistive_touch: assistive_touch::AssistiveTouch,
+    /// Voice Control's recognition in the `speech_recognizer` service (`accessibility::voice_control`)
+    voice: accessibility::voice_control::Session,
+    /// Vehicle Motion Cues: the accelerometer feed and the dots, created when the setting is first switched on
+    motion_cues: Option<accessibility::motion_cues::MotionCuesFeed>,
     /// an app hiding the status bar and home indicator
     fullscreen: bool,
     /// Game Mode state with its leave hysteresis (`gamemode`)
@@ -949,6 +959,8 @@ impl Shell {
         lock_pager.set_leading(true);
         let mut sh = Shell {
             assistive_touch: assistive_touch::AssistiveTouch::new(&ui, w, h),
+            motion_cues: None,
+            voice: Default::default(),
             w,
             h,
             dock_bg: dock_background(wallpaper, &layout),
@@ -1229,7 +1241,7 @@ impl Shell {
             || self.notify.animating()
             || self.quicksearch.active()
             || self.desktop_menu.is_some()
-            || self.assistive_visible()
+            || self.overlay_visible()
             || self.quick_look.is_visible()
             || self.overview_active()
             || self.keyboard.shown()
@@ -1357,6 +1369,11 @@ impl Shell {
     /// the frame rate while it is on.
     pub fn low_power(&self) -> bool {
         self.options().low_power
+    }
+
+    /// Displays > Automatically Adjust Brightness: the ambient light sensor sets the panel brightness.
+    pub fn auto_brightness(&self) -> bool {
+        self.options().auto_brightness
     }
 
     /// Game Mode's wish: Settings allows it (Automatic) and an installed game is in front, full screen.
@@ -1780,6 +1797,7 @@ impl Shell {
         }
         let a = self.settings.as_ref().map_or_else(|| accessibility::AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone());
         a.publish();
+        self.sync_motion_cues(a.motion_cues);
         let zoom = accessibility::display_zoom();
         // desktop: Settings > Display changed the interface scale, so the home layout follows
         if crate::layout::adaptive() && (crate::layout::base_scale(self.w, self.h) - self.layout.s).abs() > f32::EPSILON {
@@ -1996,6 +2014,10 @@ impl Shell {
         }
         if let Some(w) = self.cc.next_wake().filter(|_| self.screen_on) {
             due.add(Some(w));
+        }
+        if self.screen_on && !self.is_locked() && self.motion_cues.as_ref().is_some_and(|m| m.enabled() && m.available()) {
+            // the accelerometer is read on every wake, so the dots follow the vehicle
+            due.add(Some(t + accessibility::motion_cues::POLL_MS));
         }
         if self.markup_load.is_some() {
             due.add(Some(t + 50.0));
@@ -3500,6 +3522,7 @@ impl Shell {
         if self.screen_on && !self.is_locked() {
             self.dirty |= self.assistive_touch.tick(t);
         }
+        self.dirty |= self.motion_cues_tick(t);
         self.saver_tick(t);
         if self.screen_on && self.idle_off_ms > 0.0 && t - self.last_input > self.idle_off_ms && self.last_input > 0.0 {
             return self.display_off(t);
@@ -3575,6 +3598,7 @@ impl Shell {
             }
         }
         let mut effects = cc_fx;
+        effects.extend(self.voice_control_tick(t));
         let typing_on_hardware = self.desk_active();
         if let Some(p) = &mut self.photos {
             if self.screen == Screen::App(AppId::Photos) {
@@ -3767,7 +3791,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.assistive_visible() && !self.quick_look.is_visible()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible()
             && self.desk_drawn && self.retain_wayland_windows() {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
@@ -3787,9 +3811,9 @@ impl Shell {
             self.rows = rows;
             return &self.damage;
         }
-        if self.assistive_visible() {
+        if self.overlay_visible() {
             // Repaint beneath the movable translucent control, including
-            // its old position, so dragging and closing cannot leave trails.
+            // its old position, so dragging and closing cannot leave trails. The motion cue dots move too.
             self.drawn = Drawn::Nothing;
             damage.all();
         }
@@ -4196,7 +4220,7 @@ impl Shell {
         let term = self.term.as_ref()?;
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
-            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.malware_alert.is_none();
         if !quiet {
@@ -4217,7 +4241,7 @@ impl Shell {
     fn settings_key(&self, t: f64) -> Option<(u64, i32)> {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
-            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.malware_alert.is_none();
         if !quiet {
@@ -4304,6 +4328,61 @@ impl Shell {
         self.draw_perf(s);
         if self.assistive_visible() {
             self.assistive_touch.draw(s, &self.ui, self.w, self.h, t);
+        }
+        self.draw_motion_cues(s);
+    }
+
+    /// Something floats over the screen that moves by itself, so the frame under it is repainted whole: the AssistiveTouch
+    /// control or the Vehicle Motion Cues dots.
+    fn overlay_visible(&self) -> bool {
+        self.assistive_visible() || self.motion_cues_visible()
+    }
+
+    /// Whether the Vehicle Motion Cues dots are on the screen: the setting is on, the accelerometer moved them, and nothing
+    /// (the lock screen, a sleeping display) covers the picture.
+    fn motion_cues_visible(&self) -> bool {
+        self.screen_on && !self.is_locked() && self.motion_cues.as_ref().is_some_and(|m| m.visible())
+    }
+
+    /// Switches the Vehicle Motion Cues with the setting. The accelerometer is looked for the first time they are switched on.
+    fn sync_motion_cues(&mut self, on: bool) {
+        if self.motion_cues.is_none() && on {
+            let mut feed = accessibility::motion_cues::MotionCuesFeed::scan();
+            feed.set_enabled(true);
+            self.motion_cues = Some(feed);
+            self.dirty = true;
+            return;
+        }
+        if let Some(feed) = &mut self.motion_cues {
+            if feed.enabled() != on {
+                feed.set_enabled(on);
+                self.dirty = true;
+                self.drawn = Drawn::Nothing;
+            }
+        }
+    }
+
+    /// Reads the accelerometer for the dots; true when they need drawing again.
+    fn motion_cues_tick(&mut self, t: f64) -> bool {
+        if !self.screen_on || self.is_locked() {
+            return false;
+        }
+        self.motion_cues.as_mut().is_some_and(|m| m.tick(t))
+    }
+
+    /// The dots on the ring: white discs over a faint dark ring, so they read on light and dark pictures alike.
+    fn draw_motion_cues(&self, s: &mut Surface) {
+        if !self.motion_cues_visible() {
+            return;
+        }
+        let Some(feed) = &self.motion_cues else { return };
+        let r = self.ui.pt(MOTION_DOT_PT);
+        for dot in feed.dots() {
+            let cx = (dot.x * 0.5 + 0.5) * self.w as f32;
+            let cy = (dot.y * 0.5 + 0.5) * self.h as f32;
+            let alpha = (dot.opacity.clamp(0.0, 1.0) * 255.0) as u8;
+            s.fill_rrect(cx - r - 2.0, cy - r - 2.0, 2.0 * r + 4.0, 2.0 * r + 4.0, r + 2.0, crate::gfx::rgba(0, 0, 0, alpha / 3));
+            s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, crate::gfx::rgba(255, 255, 255, (alpha as u32 * 4 / 5) as u8));
         }
     }
 

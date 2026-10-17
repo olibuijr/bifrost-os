@@ -1929,11 +1929,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/icon_images.rs; springboard/sdk/src/thumbnails.rs; springboard/src/shell/services/thumb_providers.rs",
    "status": "os",
    "note": "The extract holds only a placeholder text file for the SwiftUI overlay build target and no binary, so the icon service's job is unconfirmed. Left with the OS.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "icon_images::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumb_providers::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI overlay only adapts the icon service to views (the extract holds a placeholder staging text file). The job it fronts is the icon or thumbnail for a file or content type: the thumbnails service and its providers return the picture or the type icon, and sdk icon_images picks the best bitmap per content type with nearest-ancestor lookup. App icons are not cached as a system service (see the IconServices row)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_JetEngine_SwiftUI.framework",
@@ -1972,8 +1991,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The extract holds only Info.plist for this bundle, so the view layer of the same engine family cannot be confirmed. Left with the OS until the binary is extracted.",
+   "status": "n/a",
+   "note": "n/a: the SwiftUI view layer of the vendor's store and TV content engine (the siblings _JetEngine_SwiftUI and _OnDeviceStorage_JetEngine are already n/a). It renders server-driven pages fetched from the reference vendor's store servers, which BifrOSt does not have. Evidence: the index lists only the bundle's Resources directory and code signature.",
    "rea": [],
    "method": "assessed"
   },
@@ -2157,11 +2176,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs; springboard/sdk/src/photo_picker.rs",
    "status": "partial",
    "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built. Built 2026-10-17: picker search model (notes picker::matching, tests notes picker::tests: file-name match, ignoring case, blank query); the search field is not drawn and the source tabs are still missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    }
+   ],
+   "ready_note": "Private SwiftUI pieces of the photo picker. The Photos app (library grid and selection) and the Notes camera-roll sheet (newest-first grid, thumbnails decoded off the UI thread, file-name search model) choose a photo from the folder library, and the SDK picker types (photo_picker) carry filters and the selection limit. Not mirrored: the source tabs for the vendor's Messages, Notes and Files apps (BifrOSt has one library), and the Notes sheet does not draw the search field yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SonicKit_MusicKit.framework",
@@ -2178,11 +2216,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/crossfade.rs",
+   "bifrost": "springboard/src/media/crossfade_overlap.rs; springboard/src/media/crossfade.rs; springboard/src/media/audioplayer.rs; springboard/proto/src/svc.rs; springboard/audiod/src/main.rs; springboard/src/svc.rs; springboard/apps/music-desktop/src/music/menus.rs; springboard/apps/music-desktop/src/music/playback.rs",
    "status": "partial",
    "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade_overlap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::crossfade::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "svc::audio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::menus::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: smart transitions between songs. The audio engine holds the end of a song back and mixes the next song's start under it with equal-power gains (crossfade_overlap::Crossfader, wired into audioplayer; the overlap is capped at half a song and off for live stations), audiod takes it as the SetCrossfade command, and Music's Controls > Crossfade Songs menu sends the saved length (playback.txt) when the library store opens and when it changes. Gapless playback stays the default. Not built: the reference's DSP graph and per-song transition styles (beat-matched mixes); only the crossfade is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI.framework",
@@ -2199,11 +2271,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
+   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
    "status": "partial",
    "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built. Built: speed picker model (speed.rs: steps, label, next, prev, nearest) and subtitle picker model (subtitles.rs Picker); tests media::speed::tests and media::subtitles::tests. The picker views are not drawn yet; route.rs holds the route model.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::subtitles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "playback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "movie::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the media player's views and pickers. The fullscreen player view (HUD, scrubbing, skips) plays through media::player, which now takes a playback rate (0.5x to 3x, the audio time-stretched, the picture clock at the same rate; player::tests). The Video Player app's Playback menu offers the speed picker and a subtitle picker over every per-language sidecar file (name.en.srt; playback::tests, movie::tests, subtitles::tests), and the route picker menu is drawn by shell pickers over media::route. Not built: speed and subtitle buttons in the on-screen HUD (they are menu rows), and embedded subtitle tracks (only sidecar files)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI_MacHelper.framework",
@@ -2220,11 +2346,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
+   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
    "status": "partial",
    "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::subtitles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "playback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-videoplayer",
+     "filter": "movie::tests"
+    }
+   ],
+   "ready_note": "Helper bundle for the same player views; BifrOSt has no separate helper process, so the speed picker, subtitle picker and route picker of the _SwiftMedia_SwiftUI row (same checks) cover it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_ToolKit_AppIntents.framework",
@@ -2241,11 +2421,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
+   "bifrost": "springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/settings_intents.rs, springboard/src/shell/entity_index.rs, springboard/src/shell/services/focus_filter.rs, springboard/src/shell/apphost.rs, springboard/assistant-client/src/intents.rs, springboard/sdk/src/intents.rs",
    "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
+   "note": "Overlay of the action toolkit for App Intents, covered by the intent catalogue and runner listed in bifrost.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::entity_index::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Overlay that exposes the action toolkit (intent and entity metadata) to App Intents code. In BifrOSt the same job is the intent catalogue and runner: apps declare intents in manifest.toml, and the shell intents, Search, Settings intents, entity index and the SDK intents module list, resolve and run them (the same checks as the AppIntents rows)."
   }
  ]
 }

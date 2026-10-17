@@ -1764,6 +1764,88 @@
         assert_eq!(answer.0, "os/settings/general/software-update");
     }
 
+    /// A `speech_recognizer` that logs the calls it gets and answers a scripted poll, in place of the real service.
+    struct ScriptedRecognizer {
+        calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        refuse: bool,
+    }
+
+    impl super::services::SystemService for ScriptedRecognizer {
+        fn name(&self) -> &'static str {
+            "speech_recognizer"
+        }
+        fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, _params: &bifrost_core::json::Json, _t: f64) -> Result<bifrost_core::json::Json, String> {
+            use bifrost_core::json::{parse, Json};
+            self.calls.lock().unwrap().push(format!("{app_id} {method}"));
+            match method {
+                "start" if self.refuse => Err("speech recognizer: no consent".into()),
+                "start" => Ok(Json::Obj(vec![("id".into(), Json::Num(1.0))])),
+                "poll" => parse(r#"{"transcripts":[{"text":"press os/settings/general/software-update.","final":true},{"text":"press nothing","final":false}],"running":true}"#),
+                "stop" => Ok(Json::Obj(vec![("stopped".into(), Json::Bool(true))])),
+                other => Err(format!("no method {other}")),
+            }
+        }
+    }
+
+    fn voice_rig(refuse: bool) -> (Shell, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut sh = desktop_shell();
+        sh.services = vec![Box::new(ScriptedRecognizer { calls: calls.clone(), refuse })];
+        (sh, calls)
+    }
+
+    #[test]
+    fn voice_control_listens_while_it_is_on_and_runs_each_final_command() {
+        let (mut sh, calls) = voice_rig(false);
+        assert!(sh.voice_control_tick(1000.0).is_empty());
+        assert!(calls.lock().unwrap().is_empty(), "off: the recognizer is not touched");
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start"], "switched on: a recognition starts");
+        sh.voice_control_tick(1100.0);
+        assert_eq!(calls.lock().unwrap().len(), 1, "no poll before the interval");
+        sh.voice_control_tick(1000.0 + accessibility::voice_control::POLL_MS);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control poll"]);
+        // the final transcript pressed the Software Update row, the hypothesis did nothing
+        assert_eq!(sh.settings.as_ref().expect("Settings opened").page(), super::pages::PageId::SoftwareUpdate);
+    }
+
+    #[test]
+    fn switching_voice_control_off_ends_the_recognition() {
+        let (mut sh, calls) = voice_rig(false);
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        sh.prefs.set("a11y_voice_control", "0").unwrap();
+        sh.voice_control_tick(1100.0);
+        assert_eq!(*calls.lock().unwrap(), ["shell:voice-control start", "shell:voice-control stop"]);
+        sh.voice_control_tick(2000.0);
+        assert_eq!(calls.lock().unwrap().len(), 2, "off stays off");
+    }
+
+    #[test]
+    fn a_refused_recognition_is_announced_once_and_tried_again_later() {
+        let (mut sh, calls) = voice_rig(true);
+        sh.prefs.set("a11y_voice_control", "1").unwrap();
+        sh.voice_control_tick(1000.0);
+        assert!(sh.announce.tick(1000.0));
+        assert!(sh.announce.shown().is_some_and(|text| text.contains("Voice Control cannot listen")), "{:?}", sh.announce.shown());
+        sh.voice_control_tick(1500.0);
+        assert_eq!(calls.lock().unwrap().len(), 1, "no new attempt inside the pause");
+        sh.voice_control_tick(1000.0 + accessibility::voice_control::RETRY_MS);
+        assert_eq!(calls.lock().unwrap().len(), 2, "tried again after the pause");
+    }
+
+    #[test]
+    fn switch_control_runs_the_reader_cursor_without_the_screen_reader() {
+        let mut sh = desktop_shell();
+        assert!(!sh.reader_active());
+        sh.prefs.set("a11y_switch_control", "1").unwrap();
+        assert!(sh.switch_control_on() && sh.reader_active() && !sh.screen_reader_on());
+        sh.prefs.set("a11y_switch_control", "0").unwrap();
+        sh.prefs.set("a11y_screen_reader", "1").unwrap();
+        assert!(sh.reader_active() && !sh.switch_control_on(), "the reader alone keeps the cursor on");
+    }
+
     #[test]
     fn ax_press_walks_a_label_path_in_settings_like_a_tap() {
         let mut sh = desktop_shell();

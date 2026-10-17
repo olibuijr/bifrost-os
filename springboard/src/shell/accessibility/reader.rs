@@ -177,6 +177,17 @@ impl Shell {
         self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).screen_reader, |st| st.accessibility().screen_reader)
     }
 
+    /// Whether Switch Control is on (Settings > Accessibility > Touch > Switch Control).
+    pub(in crate::shell) fn switch_control_on(&self) -> bool {
+        self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).switch_control, |st| st.accessibility().switch_control)
+    }
+
+    /// Whether the keyboard cursor and its ring are in use: the screen reader is on, or Switch Control steps through the screen
+    /// with the same cursor (and selects with the same press), without the speech.
+    pub(in crate::shell) fn reader_active(&self) -> bool {
+        self.screen_reader_on() || self.switch_control_on()
+    }
+
     /// The rows of the front Settings page (window-local points) and the window-local origin of its content, when the front
     /// window is Settings.
     fn settings_page(&self) -> Option<(Vec<Element>, (f32, f32))> {
@@ -350,7 +361,7 @@ impl Shell {
     /// Draws the focus ring around the cursor's element when the screen reader is on.
     pub(in crate::shell) fn draw_reader(&mut self, s: &mut Surface) {
         let mut drawn = false;
-        if self.screen_reader_on() {
+        if self.reader_active() {
             let els = self.reader_walk();
             if let Some(b) = self.reader.focused(&els).and_then(|e| e.bounds) {
                 let t = self.ui.pt(RING_PT);

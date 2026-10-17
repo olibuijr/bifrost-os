@@ -2767,6 +2767,11 @@ impl Settings {
                         self.a11y.save(prefs);
                         vec![]
                     }
+                    Pick::SpeechPunctuation(k) => {
+                        self.a11y.speech_punctuation = k.min(super::accessibility::SPEECH_PUNCTUATION.len() - 1);
+                        self.a11y.save(prefs);
+                        vec![]
+                    }
                     Pick::SpeechVoice(k) => {
                         self.a11y.speech_voice = super::accessibility::SPEECH_VOICES[k.min(super::accessibility::SPEECH_VOICES.len() - 1)].1.to_string();
                         self.a11y.save(prefs);
@@ -3039,6 +3044,9 @@ impl Settings {
             Toggle::ScreenReader => flip(&mut self.a11y.screen_reader),
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
+            Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
+            Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
+            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"
@@ -3057,6 +3065,7 @@ impl Settings {
             Toggle::Handoff => flip(&mut self.opts.handoff),
             Toggle::UniversalClipboard => flip(&mut self.opts.universal_clipboard),
             Toggle::PipAuto => flip(&mut self.opts.pip_auto),
+            Toggle::AutoBrightness => flip(&mut self.opts.auto_brightness),
             Toggle::BgRefresh => flip(&mut self.opts.bg_refresh),
             Toggle::SuspendBackground => flip(&mut self.opts.suspend_background),
             Toggle::FourFinger => flip(&mut self.opts.four_finger),

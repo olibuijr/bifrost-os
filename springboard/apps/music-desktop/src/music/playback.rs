@@ -1,6 +1,7 @@
 //! Playback settings: the crossfade length between songs, and Sound Check, which plays each song at one loudness.
-//! The settings, their text form and the gain maths are pure. The audio service has no crossfade or gain command
-//! yet, so nothing sends these values to the engine.
+//! The settings, their text form and the gain maths are pure. The crossfade reaches the engine: Music sends it to the
+//! audio service (`SetCrossfade`) when the library store opens and when the Controls menu changes it. The audio service
+//! has no gain command yet, so Sound Check is not sent.
 
 use std::f32::consts::FRAC_PI_2;
 

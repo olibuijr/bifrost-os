@@ -165,4 +165,10 @@ impl AudioPlayer {
     pub fn set_volume(&mut self, v: f32) {
         self.client.set_volume(v);
     }
+
+    /// Crossfades one song into the next over `ms` milliseconds; 0 plays gapless. The audio service keeps it until it
+    /// restarts.
+    pub fn set_crossfade_ms(&mut self, ms: u32) {
+        self.client.set_crossfade_ms(ms);
+    }
 }
