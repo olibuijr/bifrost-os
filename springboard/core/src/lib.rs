@@ -58,6 +58,7 @@ pub mod migrate;
 pub mod occlusion;
 pub mod progress;
 pub mod notify_center;
+pub mod speech_engine;
 pub mod disk_events;
 pub mod disk_claim;
 pub mod disk_claims;

@@ -295,6 +295,14 @@ impl Text {
         self.anchor != self.head
     }
 
+    /// The selected text without styles, or `None` when the caret is a single point.
+    pub fn selected_text(&self) -> Option<String> {
+        if !self.has_selection() {
+            return None;
+        }
+        Some(self.cells[self.selection()].iter().map(|c| c.ch).collect())
+    }
+
     /// Moves the selection, clamped to the text. Any move ends the current typing group, so the next typing is its own
     /// undo entry, and the typing style follows the caret.
     pub fn select(&mut self, anchor: usize, head: usize) {

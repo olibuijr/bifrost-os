@@ -133,6 +133,9 @@ const MENU_COPY_MD: u32 = 6;
 const MENU_PASTE_MD: u32 = 7;
 const MENU_PASTE_PLAIN: u32 = 8;
 const MENU_MATH: u32 = 9;
+/// The Speech submenu: start speaking the selection (else the note), and stop.
+const MENU_SPEAK_START: u32 = 10;
+const MENU_SPEAK_STOP: u32 = 11;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
 const MENU_RECENT: u32 = 100;
 /// The Format menu: `FORMAT_BASE + n` is the n-th row of `format_table`, `TABLE_BASE + n` the n-th table command.
@@ -330,6 +333,10 @@ impl App for NotesApp {
             }
         }
         note.push(AppMenuItem::separator());
+        note.push(AppMenuItem::submenu("Speech"));
+        note.push(AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(n.speakable_text().is_some()).depth(1));
+        note.push(AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1));
+        note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
         vec![AppMenu { title: "Note".into(), items: note }, format_menu(n)]
     }
@@ -386,6 +393,16 @@ impl App for NotesApp {
                 true
             }
             MENU_DELETE => n.delete_current(&ctx.ui, now),
+            MENU_SPEAK_START => {
+                if let Some(text) = n.speakable_text() {
+                    bifrost_app::speech::speak(ctx, &bifrost_app::speech::Utterance::new(&text));
+                }
+                false
+            }
+            MENU_SPEAK_STOP => {
+                bifrost_app::speech::stop(ctx);
+                false
+            }
             MENU_COPY_MD => {
                 if let Some(markdown) = n.selected_markdown() {
                     system::copy_markdown(ctx, &markdown);

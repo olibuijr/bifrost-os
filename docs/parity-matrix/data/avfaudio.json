@@ -4,7 +4,7 @@
   "macos_since": "11.3",
   "status": "partial",
   "bifrost": "bifrost_app::audio (springboard/sdk/src/lib.rs:88 re-exports springboard::svc::audio), springboard/proto/src/svc.rs (audio), springboard/audiod/src/main.rs, springboard/src/media/, springboard/sdk/src/audio_application.rs, springboard/sdk/src/audio_player_control.rs",
-  "summary": "BifrOSt has a system audio service (audiod) that owns the speaker and microphone, with playback queue, volume, mute and WAV recording exposed to apps through the SDK audio client. App-level permission and input mute, player pan, rate and volume fades are modelled in the SDK; session categories, interruptions and route notifications are modelled but not wired to audiod. The AVAudioEngine graph, MIDI playback and speech synthesis have no full app-facing counterpart; the output route is switched by the shell alone.",
+  "summary": "BifrOSt has a system audio service (audiod) that owns the speaker and microphone, with playback queue, volume, mute and WAV recording exposed to apps through the SDK audio client. App-level permission and input mute, player pan, rate and volume fades are modelled in the SDK; session categories, interruptions and route notifications are modelled but not wired to audiod. The AVAudioEngine graph and MIDI playback have no full app-facing counterpart; speech synthesis is app-facing through the shell speech service (espeak-ng) but partial; the output route is switched by the shell alone.",
   "rea_evidence": "ev_df0e56197670a298d99ca1c65c39630cfb6848bc2d4d337b0ef4e4f301f36f1d",
   "features": [
     {
@@ -73,9 +73,9 @@
     {
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
       "apple": "Speech synthesis voices and utterances",
-      "bifrost": "springboard/ui/src/speech.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (Narration over springboard/ui/src/speech.rs)",
+      "bifrost": "springboard/sdk/src/speech.rs (bifrost_app::speech: Utterance, speak, stop, pause, continue_speaking, is_speaking, voices); springboard/src/shell/services/speech.rs (the speech service, one engine child per app); springboard/core/src/speech_engine.rs (engine arguments and voice listing); springboard/ui/src/speech.rs (utterance and voice model); wired: springboard/apps/books-desktop/src/books/narrate.rs (Narration over springboard/ui/src/speech.rs); wired: springboard/apps/notes-desktop, springboard/apps/textedit-desktop (Speech menu)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-speech engine or SDK API found Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Speaks through the system engine espeak-ng (else espeak), as a child process of the shell. The app-facing API now exists: speak with voice and rate, stop, pause and continue (SIGSTOP and SIGCONT), is_speaking and the voice list. Host unit tests cover the engine arguments, the voice listing parser and the service state machine with a fake engine. No word or sentence events, no pitch or volume, and the Apple synthesizer's utterance delegate is not modelled. Not yet tested on Midget; espeak-ng must be installed there. The earlier parity claim rested on the pure model alone and is withdrawn."
     },
     {
       "feature": "Mixing and volume control",
@@ -105,7 +105,7 @@
     "AVAudioApplication permission and input mute: modelled in audio_application.rs, not wired to the shell or the recording path",
     "No AVAudioEngine-style node graph for real-time processing",
     "No MIDI playback (AVMIDIPlayer) or sound bank support in the SDK or audiod",
-    "No speech synthesis API in the SDK audio service",
+    "Speech synthesis has no word or sentence events, pitch or volume control, and no delegate callbacks; the shell speech service (espeak-ng) is the only engine",
     "AVAudioPlayer pan, playback rate and volume fade: modelled in audio_player_control.rs, not applied by audiod"
   ]
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0 — 2026-10-17
+
+- Text > Speech: Start Speaking speaks the selection (else the whole document) through the shell speech service; Stop Speaking ends it.
+
 ## 1.6.2 — 2026-10-14
 
 - Named document-format list indentation and bold-weight thresholds so exported document dimensions remain semantic, not resolution-like literals.

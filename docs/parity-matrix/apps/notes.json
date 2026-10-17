@@ -382,18 +382,18 @@
    "feature": "Speech (start/stop speaking)",
    "area": "menu",
    "apple": "Edit > Speech",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Edit > Speech items sending the selection to the shell speech service."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/main.rs (MENU_SPEAK_START, MENU_SPEAK_STOP); springboard/apps/notes-desktop/src/notes/mod.rs (speakable_text); springboard/sdk/src/speech.rs; springboard/src/shell/services/speech.rs",
+   "note": "Start Speaking and Stop Speaking sit in Note > Speech, not Edit, because the shell's Edit menu takes no app items. Start speaks the selection, else the open note's text, through the shell speech service (espeak-ng). Host unit tests cover the service and the engine arguments; the Notes menu wiring has no test.",
+   "wire": "Verify on Midget with espeak-ng installed (speak, stop, the menu entries). Move the items under Edit once the shell lets an app add to Edit."
   }
  ],
  "summary": {
   "features": 42,
   "parity": 11,
-  "partial": 25,
-  "gap": 4,
+  "partial": 26,
+  "gap": 3,
   "n/a": 2,
-  "coverage_pct": 58.8
+  "coverage_pct": 60.0
  }
 }
