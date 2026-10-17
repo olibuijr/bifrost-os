@@ -472,10 +472,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/services/now_playing.rs",
+   "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/services/now_playing.rs",
    "status": "partial",
    "note": "Play or pause, next and previous track as App Intents mapped to Now Playing commands; not yet wired into Search or the owner routing; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Play or pause, next and previous track are App Intents (media_intents) listed in Search (quicksearch Hit::MediaTransport) and sent to the Now Playing owner through services::now_playing::send, the same path as the Now Playing menu. Tests: media_intents::tests and quicksearch::tests."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MessagesAnalyticsWorker.appex",

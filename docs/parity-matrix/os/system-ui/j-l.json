@@ -263,9 +263,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/login.rs",
+   "bifrost": "springboard/src/shell/login.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "Lock state and lock message exist; no App Intent exposes locking to Search or Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget",
+   "note": "Lock Screen is a Search action (settings_actions lock-screen, runs Shell::lock_screen); not yet exposed as an App Intent to Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget. Built 2026-10-17: Search row and lock hit.",
    "rea": []
   }
  ]

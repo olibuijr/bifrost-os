@@ -87,10 +87,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/bin/shell.rs",
    "status": "partial",
    "note": "has: time-of-day schedule over the packed stills (wallpaper_schedule.rs); missing: shell timer wiring",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "The time-of-day schedule (wallpaper_schedule) is tested. The shell binary evaluates it on every 1 s info tick (bin/shell.rs, wallpaper_dynamic=1), so the still changes at its boundary within a second; no separate timer is needed."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperGradientExtension.appex",
