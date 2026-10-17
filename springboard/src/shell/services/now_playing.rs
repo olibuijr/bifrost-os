@@ -357,7 +357,7 @@ impl Store {
         let command = match &sent {
             Sent::Command(c) => *c,
             Sent::Seek(_) => RemoteCommand::SeekTo,
-            Sent::Toggle(..) | Sent::Rate(_) => return false,
+            Sent::Toggle(..) | Sent::Rate(_) | Sent::Queue(_) => return false,
         };
         let Some(session) = self.session.as_mut() else {
             return false;
@@ -628,7 +628,7 @@ mod tests {
     fn an_enabled_command_is_queued_for_the_owner_and_a_disabled_one_is_not() {
         let mut store = Store::default();
         assert!(!store.send(Sent::Command(RemoteCommand::Play)), "no session yet");
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         assert!(store.send(Sent::Command(RemoteCommand::Pause)));
         assert!(!store.send(Sent::Command(RemoteCommand::Next)), "disabled by the owner");
         assert!(store.send(Sent::Seek(90_000.0)));
@@ -645,12 +645,12 @@ mod tests {
     #[test]
     fn only_the_owner_can_clear_and_a_closed_owner_is_pruned() {
         let mut store = Store::default();
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         store.clear("app.two");
         assert!(store.current().is_some(), "another app cannot clear it");
         store.prune(|id| id == "app.two");
         assert!(store.current().is_none(), "the owner is gone, so the session goes");
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         store.clear("app.one");
         assert!(store.current().is_none());
     }
@@ -666,7 +666,7 @@ mod tests {
     #[test]
     fn a_seek_moves_the_shown_position_and_is_sent_to_the_owner() {
         let mut store = Store::default();
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         assert!(store.send(Sent::Seek(90_000.0)));
         assert_eq!(store.current().unwrap().snapshot().position_ms, 90_000);
         let p = store.progress(Instant::now()).expect("a session has progress");
@@ -708,7 +708,7 @@ mod tests {
     #[test]
     fn the_owner_sets_feedback_and_the_user_toggles_and_rates_it() {
         let mut store = Store::default();
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         let fb = Feedback { toggles: [false; 3], rating: Some(Scale { min: 0.0, max: 5.0, value: 0.0 }) };
         assert!(!store.request_feedback(Sent::Toggle("like", true)), "no feedback published yet");
         assert!(store.set_feedback("app.one", fb));
@@ -726,9 +726,9 @@ mod tests {
     #[test]
     fn a_new_publish_clears_the_previous_feedback() {
         let mut store = Store::default();
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         store.set_feedback("app.one", Feedback { toggles: [true; 3], rating: None });
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         assert_eq!(store.feedback, None);
     }
 
@@ -748,8 +748,8 @@ mod tests {
     #[test]
     fn a_new_publisher_replaces_the_shown_session() {
         let mut store = Store::default();
-        store.publish("app.one", parse_session("app.one", &song()).unwrap());
-        store.publish("app.two", parse_session("app.two", &body(r#"{"title":"Other","commands":{"play":"enabled"}}"#)).unwrap());
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
+        store.publish("app.two", parse_session("app.two", &body(r#"{"title":"Other","commands":{"play":"enabled"}}"#)).unwrap(), Vec::new());
         assert_eq!(store.current().unwrap().content().unwrap().title, "Other");
         assert!(store.send(Sent::Command(RemoteCommand::Play)));
         assert_eq!(store.drain()[0].app.as_deref(), Some("app.two"));
