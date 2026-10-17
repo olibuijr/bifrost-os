@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 — 2026-10-17
+
+- Account key in the keychain: the first device that turns Share My Location on creates the Find My key pair; the
+  private key is stored under this app's keychain items and read back at start (`bifrost_locate::keys`).
+- Cloud worker (`bifrost_locate::cloud`): one background thread registers this device, long-polls its commands (25 s),
+  reads the device list, pending devices, shared positions and the account feed about once a minute, and sends the
+  jobs the window queues. Device positions are opened with the account key. The session comes from the shared keychain
+  group `is.bifrost.account` (item `bc_session`).
+- Location: a report asks the location service (`core_location`, when-in-use), seals the fix with HPKE to the account
+  key with the device id, adds the battery level when known, and uploads it. Reports go out at most every 15 minutes,
+  and at once on a locate request. The manifest carries the `[privacy] location` purpose string.
+- Controls: the Share My Location switch and the join button on the Me page; the approval sheet on any page lists
+  devices waiting on the account with Approve and Deny; the People page lists positions shared with the account.
+- Play sound: the device plays the Bell alert tone through `ToShell::PlaySystemSound` (a new shell message, with up to
+  four sounds queued per frame), then acknowledges the command.
+- Account feed events (`command_done`, `share_received`, `share_ended`) post shell notifications.
+- Queued locate and play-sound requests from the control methods are sent to the account.
+- Not built: copies of positions to contacts (no contact share is created yet), and the join key is held only in memory
+  (a restart during a wait begins again). The worker stays off until the account sign-in stores the session.
+
 ## 0.3.0 — 2026-10-17
 
 - SDK `bifrost_app::cloud_findmy`: request builders and parsers for the account key (`PUT`/`GET findmy/keys`), the
