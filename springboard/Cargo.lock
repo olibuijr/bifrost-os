@@ -590,7 +590,9 @@ dependencies = [
  "bifrost-core",
  "bifrost-proto",
  "bifrost-ui",
+ "png",
  "springboard",
+ "tempfile",
 ]
 
 [[package]]

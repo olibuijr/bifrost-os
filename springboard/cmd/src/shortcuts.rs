@@ -46,11 +46,12 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
     }
 }
 
-pub const AUTOMATOR_USAGE: &str = "usage: automator [-v] WORKFLOW (a saved shortcut: its name or id; see `shortcuts list`)";
+pub const AUTOMATOR_USAGE: &str = "usage: automator [-v] WORKFLOW (a .automator file saved by Automator, or a saved shortcut by name or id)";
 
-/// Reads the `automator` command line: `automator [-v] WORKFLOW`, where the workflow is a saved shortcut. `-v` is
-/// accepted (the run always prints each step). Input (`-i`), variables (`-D`) and a workflow file path are refused by
-/// name: the saved library is the only workflow store, and workflow bundles are not read.
+/// Reads the `automator` command line: `automator [-v] WORKFLOW`, where the workflow is a `.automator` file (the command
+/// runs it when the path names a file) or a saved shortcut by name or id. `-v` is accepted (the run always prints each
+/// step). Input (`-i`), variables (`-D`) are refused by name, and so are `.workflow` bundles, which this system does
+/// not read.
 pub fn parse_automator(args: &[String]) -> Result<Cmd, String> {
     let mut name: Vec<&str> = Vec::new();
     for a in args.iter().map(String::as_str) {
@@ -66,8 +67,8 @@ pub fn parse_automator(args: &[String]) -> Result<Cmd, String> {
         return Ok(Cmd::Help);
     }
     let joined = name.join(" ");
-    if joined.ends_with(".workflow") || joined.contains('/') {
-        return Err(format!("{joined}: workflow bundles are not read; run a saved shortcut by name or id"));
+    if joined.ends_with(".workflow") {
+        return Err(format!("{joined}: workflow bundles are not read; use a .automator file or a saved shortcut"));
     }
     Ok(Cmd::Run(joined))
 }
