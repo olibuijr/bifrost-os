@@ -327,6 +327,15 @@ pub fn unique_name(dir: &Path, name: &str) -> PathBuf {
     (2..u32::MAX).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(|p| p.symlink_metadata().is_err()).unwrap_or(first)
 }
 
+/// Make Alias: a symbolic link to `path` beside it, named "name alias" (numbered when taken). Returns the link's path.
+pub fn make_alias(path: &Path) -> io::Result<PathBuf> {
+    let name = path.file_name().ok_or_else(invalid)?.to_string_lossy().into_owned();
+    let dir = path.parent().ok_or_else(invalid)?;
+    let link = unique_name(dir, &format!("{name} alias"));
+    std::os::unix::fs::symlink(path, &link)?;
+    Ok(link)
+}
+
 /// Copies `src` into `dir`, numbering the name when it is taken.
 pub fn copy_to(src: &Path, dir: &Path) -> io::Result<PathBuf> {
     let name = src.file_name().ok_or_else(invalid)?.to_string_lossy().into_owned();
@@ -808,6 +817,21 @@ pub(crate) mod tests {
         delete(&dir.join("c.txt")).unwrap();
         assert!(delete(&dir.join("c.txt")).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn make_alias_links_beside_the_item_and_numbers_taken_names() {
+        let dir = temp("make-alias");
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, b"hi").unwrap();
+        let first = make_alias(&file).unwrap();
+        assert_eq!(first, dir.join("notes.txt alias"));
+        assert!(std::fs::symlink_metadata(&first).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&first).unwrap(), file);
+        let second = make_alias(&file).unwrap();
+        assert_ne!(second, first, "a taken name is numbered, not reused");
+        assert_eq!(std::fs::read_link(&second).unwrap(), file);
+        assert!(make_alias(Path::new("/")).is_err(), "the root has no name to alias");
     }
 
     #[test]

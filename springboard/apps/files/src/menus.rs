@@ -57,6 +57,9 @@ pub(crate) const MENU_COMPRESS_TGZ: u32 = 26;
 pub(crate) const MENU_COMPRESS_TXZ: u32 = 27;
 
 pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
+pub(crate) const MENU_ALIAS: u32 = 29;
+pub(crate) const MENU_COPY_PATH: u32 = 30;
+pub(crate) const MENU_SAVE_SEARCH: u32 = 31;
 
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
@@ -78,6 +81,7 @@ impl Files {
                 ContextItem { id: MENU_OPEN, label: "Open".into(), enabled: single },
                 ContextItem { id: MENU_QUICK_LOOK, label: "Preview".into(), enabled: single },
                 ContextItem { id: MENU_COPY_NAME, label: "Copy Name".into(), enabled: single },
+                ContextItem { id: MENU_COPY_PATH, label: "Copy Item Path".into(), enabled: single },
                 ContextItem { id: MENU_INFO, label: "Get Info".into(), enabled: single },
                 ContextItem { id: MENU_OPEN_WITH, label: "Open With…".into(), enabled: single && self.focus_entry().is_some_and(|e| !e.is_dir) },
                 ContextItem { id: MENU_COMPRESS, label: "Compress".into(), enabled: !in_bin && !self.in_recents() },
@@ -90,6 +94,7 @@ impl Files {
                 ContextItem { id: MENU_CUT, label: "Cut".into(), enabled: true },
                 ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
                 ContextItem { id: MENU_DUPLICATE, label: "Duplicate".into(), enabled: !in_bin },
+                ContextItem { id: MENU_ALIAS, label: "Make Alias".into(), enabled: !in_bin && !self.in_recents() },
                 if in_bin {
                     ContextItem { id: MENU_PUT_BACK, label: "Put Back".into(), enabled: true }
                 } else {
@@ -110,6 +115,9 @@ impl Files {
                 ContextItem { id: MENU_GROUP_DATE, label: if self.vo.group == Group::Date { "✓ Group By Date".into() } else { "Group By Date".into() }, enabled: true },
                 ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
             ];
+            if !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin() {
+                items.push(ContextItem { id: MENU_SAVE_SEARCH, label: "Save Search as Smart Folder".into(), enabled: true });
+            }
             if self.in_bin() {
                 items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash".into(), enabled: true });
             }
@@ -119,6 +127,12 @@ impl Files {
             items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
         }
         ctx.context_menu(x, y, items);
+    }
+    /// Copy Item Path (Option+Cmd+C): the focused item's full path as text on the clipboard.
+    pub(crate) fn copy_item_path(&mut self) {
+        if let Some(entry) = self.focus_entry() {
+            bifrost_app::kit::clipboard::set_text(&entry.path.to_string_lossy());
+        }
     }
     /// Runs a context-menu choice. Returns false for an id that is not ours.
     pub(crate) fn context_action(&mut self, id: u32) -> bool {
@@ -133,6 +147,9 @@ impl Files {
             MENU_TAGS => self.open_tags(),
             MENU_EXTRACT => self.extract(),
             MENU_COPY_NAME => if let Some(entry) = self.focus_entry() { bifrost_app::kit::clipboard::set_text(&entry.name); },
+            MENU_COPY_PATH => self.copy_item_path(),
+            MENU_ALIAS => self.make_alias(),
+            MENU_SAVE_SEARCH => self.save_search(),
             MENU_REFRESH => { let dir = self.path.clone(); self.navigate(dir, false) }
             MENU_RENAME => self.start_rename(),
             MENU_COPY => self.copy_selected(false),
