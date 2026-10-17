@@ -5,6 +5,7 @@ pub mod netlink;
 pub mod ntp;
 pub mod regdomain;
 pub mod share;
+pub mod state_publish;
 pub mod thread_dataset;
 pub mod wifi;
 pub mod wifi_config;

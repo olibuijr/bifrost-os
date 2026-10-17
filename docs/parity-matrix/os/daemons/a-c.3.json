@@ -3827,10 +3827,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/file_manager.rs, packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/core/src/login_directories.rs, springboard/sdk/src/file_manager.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "systemd covers the per-user runtime directory (/run/user/UID). ensure_login_directories (sdk file_manager.rs) now creates the per-user cache directory (0700) and the application support directory; nothing calls it at login yet, so wiring it into the session start is open. Blocked 2026-10-17: the shell (springboard) does not depend on the SDK crate that holds ensure_login_directories, and the SDK depends on springboard, so the shell cannot call it; the call needs an SDK-side session start or a shared crate.",
-   "rea": []
+   "note": "Built 2026-10-17: the per-user support and private cache directories are created at shell start (bifrost-core login_directories; the SDK's ensure_login_directories uses it, and the shell calls it before the crash-loop rule). systemd covers the per-user runtime directory (/run/user/UID).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "login_directories::tests"
+    }
+   ],
+   "ready_note": "Login directories model (support and 0700 cache directory, XDG values honoured) is built and tested; the shell calls it at start."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cameracaptured.plist",
@@ -4357,9 +4366,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs, springboard/sdk/src/system_config_store.rs",
+   "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs, springboard/src/net/state_publish.rs, springboard/core/src/system_config_store.rs",
    "status": "partial",
-   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). The system configuration store (sdk system_config_store.rs: State:/ and Setup:/ keys with a change revision) now exists, but nothing publishes network state into it yet, and no DNS resolver or proxy service is provided.",
+   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). Built 2026-10-17: the system configuration store (bifrost-core system_config_store, re-exported by the SDK) is published by the Wi-Fi manager: State:/Network address, primary interface, router and Wi-Fi network name, stale keys removed (tests system_config_store::tests, net::state_publish::tests). Open: the store lives in the shell process only (other processes need a published copy); no DNS resolver or proxy service is provided.",
    "rea": []
   },
   {
@@ -4983,9 +4992,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`); a `changes` method that answers the changed and removed records since the client's revision from a per-record change log (built 2026-10-17, same tests); no sync of the stores to other devices yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`); a `changes` method that answers the changed and removed records since the client's revision from a per-record change log (built 2026-10-17, same tests); no sync of the stores to other devices yet (a cloud account service, not part of this per-device store)",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::record_store::tests"
+    }
+   ],
+   "ready_note": "Per-app record stores, shared suite store, and the changes-since-revision method are built and tested. Cross-device sync belongs to the cloud account service."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.deleted_helper.plist",

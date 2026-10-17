@@ -126,6 +126,10 @@ fn run() -> std::io::Result<()> {
             eprintln!("springboard: account session not moved to the keychain: {e:?}");
         }
     }
+    // the per-user support and private cache directories exist before any app runs (dirhelper's job)
+    if let Err(e) = bifrost_core::login_directories::ensure_for_env() {
+        eprintln!("springboard: login directories not created: {e}");
+    }
     // the crash-loop rule applies on every start
     if !springboard::bare::takeover::begin(&dir) {
         return Ok(());
