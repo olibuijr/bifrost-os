@@ -477,6 +477,13 @@ impl MessagesWindow {
         }
     }
 
+    /// The devices of the members of the selected room, as (user, device id), for the room info. All are unverified.
+    pub fn devices_for_room(&self) -> Vec<(String, String)> {
+        let Some(room) = self.model.selected_room() else { return Vec::new() };
+        let users: Vec<String> = room.members.iter().map(|m| m.user_id.clone()).collect();
+        self.api.as_ref().map(|api| api.device_list(&users)).unwrap_or_default()
+    }
+
     /// The answer to one of the window's keychain requests: a crypto item read for a sign-in, or a crypto item written.
     /// False when the request was not the window's.
     pub fn keychain(&mut self, ctx: &Ctx, reply: keychain::Reply) -> bool {

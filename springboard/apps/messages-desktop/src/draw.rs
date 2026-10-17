@@ -29,6 +29,8 @@ const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
 /// How many shared picture names the details panel lists.
 const SHARED_ROWS: usize = 4;
+/// The most devices the details panel lists.
+const DEVICE_ROWS: usize = 8;
 const SEND_W_PT: f32 = 64.0;
 const BUBBLE_PAD_PT: f32 = 10.0;
 const BUBBLE_LINE_PT: f32 = 18.0;
@@ -492,7 +494,13 @@ impl MessagesWindow {
                 let pictures = self.model.selected_room().map_or(0, |r| r.shared_pictures().len());
                 let media = media_rows(pictures);
                 let media_h = if media == 0 { 0.0 } else { lay.pad + media as f32 * lay.line };
-                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + media_h + ui.pt(SHEET_FOOT_PT);
+                let devices = self.devices_for_room().len();
+                let device_h = if devices == 0 {
+                    0.0
+                } else {
+                    lay.pad + (1 + devices.min(DEVICE_ROWS) + usize::from(devices > DEVICE_ROWS)) as f32 * lay.line
+                };
+                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + device_h + media_h + ui.pt(SHEET_FOOT_PT);
                 let r = place(ph, pw);
                 let content_y = r[1] + head + lay.pad;
                 let rename = [r[0] + pw - lay.pad - bw, content_y, bw, lay.button_h];
@@ -859,6 +867,7 @@ impl MessagesWindow {
                 put(s, &mut self.labels, ui, "You leave the conversation and it is removed from the list.", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, panel.content_y + lay.line);
             }
             Overlay::Details => {
+                let devices = self.devices_for_room();
                 if let Some(room) = self.model.selected_room() {
                     let rename_x = panel.buttons.first().map_or(px_ + pw, |b| b.rect[0]);
                     let name = fit(ui, &room.title(&me), MAC_BODY_PT, Weight::Semibold, (rename_x - text_x - lay.gap).max(0.0));
@@ -876,6 +885,23 @@ impl MessagesWindow {
                         let more = format!("and {} more", room.members.len() - MEMBER_ROWS);
                         put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
                         y += lay.line;
+                    }
+                    // The devices of the members. None is verified yet, so each line says Unverified.
+                    if !devices.is_empty() {
+                        y += lay.pad;
+                        let heading = format!("Devices ({})", devices.len());
+                        put(s, &mut self.labels, ui, &heading, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                        for (user, device) in devices.iter().take(DEVICE_ROWS) {
+                            let shown = fit(ui, &format!("{user}  {device}  Unverified"), MAC_FOOTNOTE_PT, Weight::Regular, text_w);
+                            put(s, &mut self.labels, ui, &shown, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                            y += lay.line;
+                        }
+                        if devices.len() > DEVICE_ROWS {
+                            let more = format!("and {} more", devices.len() - DEVICE_ROWS);
+                            put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                            y += lay.line;
+                        }
                     }
                     let pictures = room.shared_pictures();
                     if !pictures.is_empty() {

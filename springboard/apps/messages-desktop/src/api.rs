@@ -202,6 +202,12 @@ impl Api {
         patches
     }
 
+    /// The devices of `users` as (user, device id), for the room info. Every one is unverified (see `Machine::devices_of`).
+    pub fn device_list(&self, users: &[String]) -> Vec<(String, String)> {
+        self.with_crypto(|m| Ok(users.iter().flat_map(|u| m.devices_of(u)).map(|d| (d.user_id, d.device_id)).collect::<Vec<_>>()))
+            .unwrap_or_default()
+    }
+
     /// Whether `room` is end to end encrypted, as the syncs said.
     pub fn is_encrypted(&self, room: &str) -> bool {
         self.encrypted_rooms.lock().map(|r| r.contains(room)).unwrap_or(false)

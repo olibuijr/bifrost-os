@@ -275,6 +275,17 @@ impl Machine {
         Ok(kept)
     }
 
+    /// The devices of `user` for the room info: the ones the last device query kept, and this device for this user. Every
+    /// one is unverified, since device verification is not implemented, so none is ever shown as verified.
+    pub fn devices_of(&self, user: &str) -> Vec<Device> {
+        let mut out: Vec<Device> = self.devices.get(user).cloned().unwrap_or_default();
+        if user == self.user_id && !out.iter().any(|d| d.device_id == self.device_id) {
+            let (curve25519, ed25519) = self.identity();
+            out.push(Device { user_id: user.to_string(), device_id: self.device_id.clone(), curve25519, ed25519 });
+        }
+        out
+    }
+
     /// The devices of `members` (users) except this device, as the last query saw them.
     pub fn other_devices(&self, members: &[String]) -> Vec<Device> {
         let mut out = Vec::new();
