@@ -32,13 +32,25 @@ const MAX_QUEUED_QUANTA: usize = 16;
 pub struct LoopbackDriver {
     clock: ClockFn,
     pipe: Arc<Mutex<Pipe>>,
+    out_uid: String,
+    in_uid: String,
+    label: String,
+    channels: usize,
 }
 
 impl LoopbackDriver {
     /// A loopback on an explicit host clock (tests pass a `ManualClock`).
     pub fn with_clock(clock: ClockFn) -> LoopbackDriver {
-        let pipe = Pipe { planes: vec![VecDeque::new(); CHANNELS], consumed: vec![0; CHANNELS], ..Default::default() };
-        LoopbackDriver { clock, pipe: Arc::new(Mutex::new(pipe)) }
+        LoopbackDriver::named(clock, OUT_UID, IN_UID, "Loopback", CHANNELS)
+    }
+
+    /// A loopback pair with its own uids, display name and channel count (a virtual device a plug-in publishes).
+    /// The playback device is `out_uid`, the capture device `in_uid`; names read "<label> (playback)" and
+    /// "<label> (capture)".
+    pub fn named(clock: ClockFn, out_uid: &str, in_uid: &str, label: &str, channels: usize) -> LoopbackDriver {
+        let channels = channels.max(1);
+        let pipe = Pipe { planes: vec![VecDeque::new(); channels], consumed: vec![0; channels], ..Default::default() };
+        LoopbackDriver { clock, pipe: Arc::new(Mutex::new(pipe)), out_uid: out_uid.to_string(), in_uid: in_uid.to_string(), label: label.to_string(), channels }
     }
 
     /// A loopback on the process's monotonic clock (nanoseconds since the first call).
@@ -48,14 +60,14 @@ impl LoopbackDriver {
         LoopbackDriver::with_clock(Arc::new(move || base.elapsed().as_nanos() as u64))
     }
 
-    fn desc(uid: &str, input: bool) -> DeviceDesc {
+    fn desc(&self, uid: &str, input: bool) -> DeviceDesc {
         DeviceDesc {
             uid: uid.into(),
-            name: if input { "Loopback (capture)" } else { "Loopback (playback)" }.into(),
+            name: format!("{} ({})", self.label, if input { "capture" } else { "playback" }),
             manufacturer: "BifrOSt".into(),
             transport: "virtual".into(),
-            input_channels: if input { CHANNELS as u32 } else { 0 },
-            output_channels: if input { 0 } else { CHANNELS as u32 },
+            input_channels: if input { self.channels as u32 } else { 0 },
+            output_channels: if input { 0 } else { self.channels as u32 },
             rates: vec![(44_100.0, 96_000.0)],
             buffer_frames_range: (16, 4096),
             clock_domain: 1,
@@ -69,15 +81,17 @@ impl Driver for LoopbackDriver {
     }
 
     fn enumerate(&mut self, out: &mut Vec<DeviceDesc>) {
-        out.push(Self::desc(OUT_UID, false));
-        out.push(Self::desc(IN_UID, true));
+        out.push(self.desc(&self.out_uid, false));
+        out.push(self.desc(&self.in_uid, true));
     }
 
     fn open(&mut self, uid: &str, cfg: &IoConfig) -> Result<Box<dyn DeviceIo>, DriverError> {
-        let input = match uid {
-            OUT_UID => false,
-            IN_UID => true,
-            _ => return Err(DriverError::NotFound),
+        let input = if uid == self.out_uid {
+            false
+        } else if uid == self.in_uid {
+            true
+        } else {
+            return Err(DriverError::NotFound);
         };
         let mut p = self.pipe.lock().unwrap();
         if input {
@@ -106,6 +120,7 @@ impl Driver for LoopbackDriver {
             input,
             rate: cfg.rate.round() as u32,
             quantum: cfg.quantum,
+            channels: self.channels,
             start_ns: 0,
             running: false,
             open: true,
@@ -130,6 +145,7 @@ struct LoopIo {
     input: bool,
     rate: u32,
     quantum: u32,
+    channels: usize,
     start_ns: u64,
     running: bool,
     open: bool,
@@ -181,7 +197,7 @@ impl DeviceIo for LoopIo {
         let p = &mut *guard;
         let cap = MAX_QUEUED_QUANTA * self.quantum as usize;
         let mut lost = 0usize;
-        for (c, b) in src.buffers.iter().enumerate().take(CHANNELS) {
+        for (c, b) in src.buffers.iter().enumerate().take(self.channels) {
             let q = &mut p.planes[c];
             let n = (frames as usize).min(b.data.len());
             for (i, v) in b.data[..n].iter().enumerate() {
@@ -234,7 +250,7 @@ impl DeviceIo for LoopIo {
     }
 
     fn physical_formats(&self) -> (Option<StreamFormat>, Option<StreamFormat>) {
-        let f = StreamFormat::float32(self.rate as f64, CHANNELS as u32);
+        let f = StreamFormat::float32(self.rate as f64, self.channels as u32);
         if self.input {
             (Some(f), None)
         } else {
