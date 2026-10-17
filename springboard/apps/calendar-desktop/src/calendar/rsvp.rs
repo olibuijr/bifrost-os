@@ -372,4 +372,26 @@ mod tests {
         assert_eq!(reply_file_name("a/b c@x"), "a_b_c@x.ics");
         assert_eq!(reply_file_name("evt-1@x"), "evt-1@x.ics");
     }
+
+    #[test]
+    fn a_reply_goes_to_the_organiser_with_its_verb_as_the_subject() {
+        let mail = reply_mail("mailto:bo@example.is", Answer::Maybe, "Review", PathBuf::from("/x/itip-replies/a.ics"));
+        assert_eq!(mail.to, vec!["bo@example.is".to_string()]);
+        assert_eq!(mail.subject, "Tentative: Review");
+        assert!(mail.body.contains("\"Review\""));
+        assert_eq!(mailto_address("MAILTO:bo@example.is"), "bo@example.is");
+        assert_eq!(mailto_address("bo@example.is"), "bo@example.is");
+    }
+
+    #[test]
+    fn a_request_is_a_method_request_calendar_with_the_invitees() {
+        let mut ev = IcsEvent::new("evt-2@x", "Planning", ics::Local::new(springboard::shell::calendar::Date { year: 2026, month: 10, day: 20 }, 540), ics::Local::new(springboard::shell::calendar::Date { year: 2026, month: 10, day: 20 }, 600));
+        ev.organizer = Some("mailto:bo@example.is".into());
+        let text = request_text(&ev, &[], "20261017T090000Z");
+        let lines = ics::unfold(&text);
+        assert_eq!(lines[0], "BEGIN:VCALENDAR");
+        assert!(lines.iter().any(|l| l == "METHOD:REQUEST"));
+        assert!(lines.iter().any(|l| l == "UID:evt-2@x"));
+        assert!(lines.iter().any(|l| l == "ORGANIZER:mailto:bo@example.is"));
+    }
 }
