@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::OnceLock;
 
 const BACKLIGHT_ROOT: &str = "/sys/class/backlight";
@@ -78,11 +79,45 @@ pub fn brightness() -> i64 {
     config().backlight.as_ref().and_then(|b| read_num(&b.join("brightness"))).unwrap_or(0)
 }
 
-/// Sets the panel brightness; a machine without a backlight (a desktop monitor) ignores it.
+/// Sets the panel brightness. A machine without a backlight (a desktop with external monitors) sends the level to
+/// the monitors themselves over DDC/CI (`bifrost_core::ddc_ci`), off the caller's thread.
 pub fn set_brightness(v: i64) {
     if let Some(b) = &config().backlight {
         let _ = fs::write(b.join("brightness"), v.clamp(0, max_brightness()).to_string());
+    } else {
+        set_external_brightness(v);
     }
+}
+
+static EXTERNAL_TARGET: AtomicI32 = AtomicI32::new(-1);
+static EXTERNAL_BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Hands a level (0 to `max_brightness()`) to the external monitors as a percent. A monitor takes about a tenth of
+/// a second per change, so one worker thread applies only the newest level while the slider keeps moving.
+fn set_external_brightness(v: i64) {
+    if config().emulated {
+        return;
+    }
+    let max = max_brightness().max(1);
+    EXTERNAL_TARGET.store((v.clamp(0, max) * 100 / max) as i32, Ordering::SeqCst);
+    if EXTERNAL_BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| {
+        let mut done = -1;
+        loop {
+            let want = EXTERNAL_TARGET.load(Ordering::SeqCst);
+            if want != done {
+                bifrost_core::ddc_ci::set_external_brightness(want as u8);
+                done = want;
+                continue;
+            }
+            EXTERNAL_BUSY.store(false, Ordering::SeqCst);
+            if EXTERNAL_TARGET.load(Ordering::SeqCst) == done || EXTERNAL_BUSY.swap(true, Ordering::SeqCst) {
+                break;
+            }
+        }
+    });
 }
 
 /// Makes the power key (gpio-keys) a wakeup source, so pressing it resumes a suspended device.

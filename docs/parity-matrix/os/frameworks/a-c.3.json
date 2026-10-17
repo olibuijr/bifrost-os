@@ -5289,11 +5289,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/bt_passkey.rs; springboard/ui/src/bt_chooser.rs; springboard/core/src/bt_pairing.rs",
    "status": "os",
-   "note": "Internal UI utility framework with a localization table; the binary is not in the extract, so its job is not known and it stays os.",
+   "note": "Pairing code prompts and device chooser: bt_passkey.rs, bt_chooser.rs, bt_pairing.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "bt_passkey::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "bt_chooser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_pairing::tests"
+    }
+   ],
+   "ready_note": "The framework holds the localised pairing prompts shared by the system (index: only .lproj string tables). BifrOSt's pairing prompts are the passkey display (bt_passkey), the device chooser (bt_chooser) and the code check (bt_pairing); each is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreWLANKit.framework",
@@ -5381,8 +5400,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Framework with an Info.plist and no other file in the extract; its job is not known and no owner rule matches, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal framework with no user- or app-visible function BifrOSt mirrors: the reference index lists only an Info.plist and version.plist for this framework (no binary, resources or services extracted) and no other bundle in the index references it by name.",
    "rea": [],
    "method": "assessed"
   },
@@ -5609,8 +5628,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Framework (version 1.5.1) with an Info.plist and icon only in the extract; its job is not known and no owner rule matches, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: Apple silicon multiprocessing (P/E core) management internals, tied to Apple hardware: the reference index lists only an Info.plist and version.plist for this framework (no binary, resources or services extracted) and no other bundle in the index references it by name (version 1.5.1 and an icon only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5629,11 +5648,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/audio/shm/src/lib.rs; springboard/audio/engine/src/rt.rs; springboard/audio/hal/src/iothread.rs; springboard/audio/hal/src/workgroup.rs",
    "status": "os",
-   "note": "Audio framework by bundle name; packaging/arch/bifrost-audiod.service is the nearest counterpart, but the framework's job is not confirmed without its binary, so it stays os.",
+   "note": "Audio concurrency plumbing is covered by the audio-shm ring, audio-engine rt and audio-hal iothread/workgroup modules.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-shm",
+     "filter": "tests::ring"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-engine",
+     "filter": "rt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-hal",
+     "filter": "iothread::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-hal",
+     "filter": "workgroup::tests"
+    }
+   ],
+   "ready_note": "caulk is the audio stack's internal concurrency toolkit (real-time-safe queues, thread and workgroup helpers), plumbing of CoreAudio that BifrOSt implements in its own audio crates: the SPSC shared-memory ring (audio-shm), the lock-free render-side controls (audio-engine rt) and the IO thread and workgroup with SCHED_FIFO and uclamp (audio-hal)."
   }
  ]
 }
