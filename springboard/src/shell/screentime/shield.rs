@@ -81,7 +81,9 @@ impl Shield {
             Btn::Today => 2.0,
             Btn::Ok => 3.0,
         };
-        let top = self.h as f32 * 0.58;
+        // the four buttons sit at 58% of the height, moved up so the stack still fits a short window body
+        let stack = 4.0 * bh + 3.0 * gap;
+        let top = (self.h as f32 * 0.58).min(self.h as f32 - stack - ui.pt(16.0)).max(0.0);
         ((self.w as f32 - bw) / 2.0, top + idx * (bh + gap), bw, bh)
     }
 
