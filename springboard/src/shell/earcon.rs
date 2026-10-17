@@ -56,6 +56,39 @@ pub const EARCONS: &[(&str, &[Note])] = &[
     ("line-warning", &[note(392.0, 0.0, 80.0, 0.35), note(588.0, 110.0, 80.0, 0.3)]),
 ];
 
+/// The earcon a popup (a desktop menu or the power menu) plays when it appears.
+pub const POPUP_APPEARED: &str = "popup-appeared";
+
+/// The earcon a popup plays when it closes (the falling tone).
+pub const POPUP_CLOSED: &str = "tracking-off";
+
+/// Watches, frame by frame, whether a popup is open and queues the earcon of each change. Opening one menu while another
+/// is open is not a change, so moving between menus stays quiet. Pure: the shell feeds it `observe` and plays `take`.
+#[derive(Debug, Default)]
+pub struct PopupCues {
+    open: bool,
+    queued: Vec<usize>,
+}
+
+impl PopupCues {
+    /// Records whether a popup is open now; a change queues its earcon.
+    pub fn observe(&mut self, open: bool) {
+        if open == self.open {
+            return;
+        }
+        self.open = open;
+        let name = if open { POPUP_APPEARED } else { POPUP_CLOSED };
+        if let Some(i) = index_of(name) {
+            self.queued.push(i);
+        }
+    }
+
+    /// The earcon indices queued since the last call, in order.
+    pub fn take(&mut self) -> Vec<usize> {
+        std::mem::take(&mut self.queued)
+    }
+}
+
 /// The number of earcons.
 pub fn count() -> usize {
     EARCONS.len()
@@ -124,6 +157,26 @@ mod tests {
             assert!(p.len() < (RATE as usize), "{} is longer than a second", name(i).unwrap());
             assert!(p.iter().all(|&s| s.abs() < i16::MAX), "{} clips", name(i).unwrap());
         }
+    }
+
+    #[test]
+    fn opening_and_closing_a_popup_queues_one_earcon_each() {
+        let mut c = PopupCues::default();
+        c.observe(false);
+        assert!(c.take().is_empty(), "no popup, no cue");
+        c.observe(true);
+        assert_eq!(c.take(), vec![index_of(POPUP_APPEARED).unwrap()]);
+        c.observe(true);
+        assert!(c.take().is_empty(), "a popup that stays open is quiet");
+        c.observe(false);
+        assert_eq!(c.take(), vec![index_of(POPUP_CLOSED).unwrap()]);
+        assert!(c.take().is_empty(), "taking drains the queue");
+    }
+
+    #[test]
+    fn the_popup_earcons_exist_in_the_set() {
+        assert!(index_of(POPUP_APPEARED).is_some());
+        assert!(index_of(POPUP_CLOSED).is_some());
     }
 
     #[test]

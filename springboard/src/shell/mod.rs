@@ -748,6 +748,8 @@ pub struct Shell {
     speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
     reader: accessibility::reader::Reader,
+    /// the popup earcons (a desktop menu or the power menu opening or closing), queued while the reader is on (`earcon`)
+    popup_cues: earcon::PopupCues,
     battery_checked: f64,
     dirty: bool,
     perf_only: bool,
@@ -1051,6 +1053,7 @@ impl Shell {
             guided: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
+            popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
             dirty: true,
             perf_only: false,
@@ -3159,6 +3162,7 @@ impl Shell {
     fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
         let reader_on = self.screen_reader_on();
         self.reader.note_mode(reader_on);
+        self.popup_cues.observe(self.desktop_menu.is_some() || self.power_menu.is_some());
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();
             self.chrome_gen += 1;
@@ -4470,6 +4474,17 @@ impl Shell {
     /// audio worker plays them on the sound-effects role.
     pub fn take_reader_earcons(&mut self) -> Vec<accessibility::earcons::Earcon> {
         self.reader.take_earcons()
+    }
+
+    /// The shell's popup earcons (`earcon::POPUP_APPEARED`, `POPUP_CLOSED`) asked for since the last call, as indices into
+    /// `earcon::EARCONS`. They play only while the screen reader is on, so a sighted user hears no beeps for menus.
+    pub fn take_popup_earcons(&mut self) -> Vec<usize> {
+        let queued = self.popup_cues.take();
+        if self.screen_reader_on() {
+            queued
+        } else {
+            Vec::new()
+        }
     }
 
     /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
