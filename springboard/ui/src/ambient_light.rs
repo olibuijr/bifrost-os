@@ -92,3 +92,90 @@ pub fn brightness_for_lux(lux: f32) -> f32 {
     let position = (lux.ln() - DARK_LUX.ln()) / (BRIGHT_LUX.ln() - DARK_LUX.ln());
     MIN_BRIGHTNESS + (1.0 - MIN_BRIGHTNESS) * position
 }
+
+/// Decides when the panel brightness is written. The sensor drifts a little from one poll to the next, and every
+/// write flickers the panel, so a new target is applied only when it moves at least `step` away from the level last
+/// applied. The first target is always applied.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BrightnessGate {
+    step: f32,
+    applied: Option<f32>,
+}
+
+impl BrightnessGate {
+    /// A gate that waits for a move of `step`, which must be in (0, 1]. `None` otherwise.
+    pub fn new(step: f32) -> Option<BrightnessGate> {
+        if step.is_finite() && step > 0.0 && step <= 1.0 {
+            Some(BrightnessGate { step, applied: None })
+        } else {
+            None
+        }
+    }
+
+    /// Returns the brightness to write for `target`, or `None` when the panel already shows a level within `step`.
+    pub fn update(&mut self, target: f32) -> Option<f32> {
+        let target = target.clamp(MIN_BRIGHTNESS, 1.0);
+        match self.applied {
+            Some(level) if (target - level).abs() < self.step => None,
+            _ => {
+                self.applied = Some(target);
+                Some(target)
+            }
+        }
+    }
+
+    /// The brightness last written, or `None` before the first write.
+    pub fn applied(&self) -> Option<f32> {
+        self.applied
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-6
+    }
+
+    #[test]
+    fn the_first_target_is_always_applied() {
+        let mut gate = BrightnessGate::new(0.05).unwrap();
+        assert_eq!(gate.applied(), None);
+        assert!(near(gate.update(0.6).unwrap(), 0.6));
+        assert_eq!(gate.applied(), Some(0.6));
+    }
+
+    #[test]
+    fn small_drift_is_not_written() {
+        let mut gate = BrightnessGate::new(0.1).unwrap();
+        gate.update(0.5).unwrap();
+        assert_eq!(gate.update(0.52), None);
+        assert_eq!(gate.update(0.45), None);
+        assert_eq!(gate.applied(), Some(0.5));
+    }
+
+    #[test]
+    fn a_move_of_a_full_step_is_written() {
+        let mut gate = BrightnessGate::new(0.1).unwrap();
+        gate.update(0.5).unwrap();
+        assert!(near(gate.update(0.6).unwrap(), 0.6));
+        assert!(near(gate.update(0.2).unwrap(), 0.2));
+    }
+
+    #[test]
+    fn targets_are_kept_inside_the_ambient_range() {
+        let mut gate = BrightnessGate::new(0.05).unwrap();
+        assert!(near(gate.update(0.0).unwrap(), MIN_BRIGHTNESS));
+        assert!(near(gate.update(7.0).unwrap(), 1.0));
+    }
+
+    #[test]
+    fn a_step_outside_zero_to_one_is_refused() {
+        assert_eq!(BrightnessGate::new(0.0), None);
+        assert_eq!(BrightnessGate::new(-0.1), None);
+        assert_eq!(BrightnessGate::new(1.5), None);
+        assert_eq!(BrightnessGate::new(f32::NAN), None);
+        assert!(BrightnessGate::new(1.0).is_some());
+    }
+}

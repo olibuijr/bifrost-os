@@ -1,12 +1,12 @@
 //! Ambient light sensor on the IIO sysfs tree: finds the device with an illuminance channel and reads it as lux, then
 //! turns the readings into a display brightness. The conversion and the lux-to-brightness rule are in
-//! `bifrost_ui::ambient_light`; this module only reads the channel files. Nothing polls it yet: the shell has no
-//! automatic brightness switch, so the reading is available to the shell but not applied to the panel.
+//! `bifrost_ui::ambient_light`; this module only reads the channel files. `poll_brightness` is one poll: it reads the
+//! sensor, smooths the reading and returns a panel brightness only when it has moved far enough to be worth writing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use bifrost_ui::ambient_light::{brightness_for_lux, lux_from_raw, ReadingError, Smoother};
+use bifrost_ui::ambient_light::{brightness_for_lux, lux_from_raw, BrightnessGate, ReadingError, Smoother};
 
 const IIO_ROOT: &str = "/sys/bus/iio/devices";
 /// Weight of each new reading. A small value hides the flicker of a passing shadow.
@@ -55,6 +55,14 @@ impl Default for AutoBrightness {
 pub fn read_default() -> Option<f32> {
     let dir = find_illuminance(Path::new(IIO_ROOT))?;
     read_lux(&dir).ok()
+}
+
+/// One automatic brightness poll under `root`: reads the sensor, folds the lux into `auto` and returns the brightness
+/// to write, when `gate` lets one through. A machine without a sensor, or a bad reading, returns `None`.
+pub fn poll_brightness(root: &Path, auto: &mut AutoBrightness, gate: &mut BrightnessGate) -> Option<f32> {
+    let dir = find_illuminance(root)?;
+    let lux = read_lux(&dir).ok()?;
+    gate.update(auto.push(lux))
 }
 
 #[cfg(test)]
@@ -137,5 +145,24 @@ mod tests {
         let dim = auto.push(1.0);
         assert!(dim < first, "a dark reading lowers the brightness");
         assert!(dim > brightness_for_lux(1.0), "the change is eased, not instant");
+    }
+
+    #[test]
+    fn a_poll_writes_the_first_level_then_only_real_changes() {
+        let root = fake_tree("poll", &[("iio:device0", &[("in_illuminance_raw", "10000")])]);
+        let mut auto = AutoBrightness::new();
+        let mut gate = BrightnessGate::new(0.05).unwrap();
+        let first = poll_brightness(&root, &mut auto, &mut gate).expect("the first poll writes");
+        assert!(near(first, 1.0));
+        assert_eq!(poll_brightness(&root, &mut auto, &mut gate), None, "the same light writes nothing");
+    }
+
+    #[test]
+    fn a_poll_without_a_sensor_writes_nothing() {
+        let root = fake_tree("poll-none", &[("iio:device0", &[("in_accel_x_raw", "1")])]);
+        let mut auto = AutoBrightness::new();
+        let mut gate = BrightnessGate::new(0.05).unwrap();
+        assert_eq!(poll_brightness(&root, &mut auto, &mut gate), None);
+        assert_eq!(gate.applied(), None);
     }
 }
