@@ -4337,6 +4337,7 @@ mod tests {
         let fx = st.wake_set_minute(&ui, &mut prefs, 0, 8 * 60);
         assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
         assert_eq!(prefs.get("wake_schedule"), Some("96,480,poweron,1"));
+        st.time_picker = None;
         // a fresh Settings reads it back and the Battery page shows it
         let reloaded = Settings::new(&ui, &info(), &prefs, 1200, 1920, Rc::new(vec![]));
         assert_eq!(super::super::wake_page::summary(&reloaded.wake), "1 time");
