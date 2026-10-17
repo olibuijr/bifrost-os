@@ -81,6 +81,7 @@ pub mod notify;
 pub mod usernotif;
 pub mod extras;
 pub mod desktop_gate;
+pub mod search_prefs;
 pub mod spotindex;
 pub mod sharing;
 pub mod forms;

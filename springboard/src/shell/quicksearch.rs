@@ -421,7 +421,9 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
 
 /// The tables as the sources a query runs on.
 fn sources_of(tables: Vec<Table>) -> Vec<Arc<dyn search_rank::Source>> {
-    tables.into_iter().map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
+    // Settings > Search switches a section off: its source is not queried
+    let prefs = super::search_prefs::current();
+    tables.into_iter().filter(|t| prefs.source_on(t.name)).map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
 }
 
 /// The calculator answer for the query, as its group.
@@ -581,7 +583,12 @@ fn app_section_title(name: &str) -> &'static str {
 /// Each section keeps its first `PER_GROUP` items in ranked order, and sections follow the best item of each app.
 /// Matches the ranker does not score keep their index order after the ranked ones.
 fn indexed_groups(query: &str) -> Vec<Group> {
-    let found = super::spotindex::search(query, PER_GROUP * 4);
+    // Settings > Search: the Documents source or an app's items switched off are left out
+    let prefs = super::search_prefs::current();
+    if !prefs.source_on("Documents") {
+        return vec![];
+    }
+    let found: Vec<super::spotindex::Found> = super::spotindex::search(query, PER_GROUP * 4).into_iter().filter(|f| prefs.app_on(&f.app_id)).collect();
     if found.is_empty() {
         return vec![];
     }
@@ -1030,7 +1037,10 @@ impl QuickSearch {
             self.files_root = Some(root.clone());
             let (tx, rx) = std::sync::mpsc::channel();
             crate::bare::sys::spawn_named("quicksearch-files", move || {
-                let _ = tx.send(crate::files::fs::recent_in(&[root], 2000));
+                // Privacy: files in the folders Settings > Search excludes are never listed
+                let excluded = super::search_prefs::current();
+                let files: Vec<crate::files::fs::Entry> = crate::files::fs::recent_in(&[root], 2000).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
+                let _ = tx.send(files);
             });
             self.files_rx = Some(rx);
         }
