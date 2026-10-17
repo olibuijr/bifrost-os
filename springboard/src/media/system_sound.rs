@@ -34,6 +34,9 @@ fn earcon_id(index: usize) -> u32 {
     40 + index as u32
 }
 
+/// Sound id of the audio graph being played (re-registered for each graph; the cues end below 200).
+const GRAPH_ID: u32 = 200;
+
 /// Sound id of a screen reader cue (after the earcons, which end below 100).
 fn reader_cue_id(c: Earcon) -> u32 {
     100 + Earcon::ALL.iter().position(|e| *e == c).unwrap_or(0) as u32
@@ -98,6 +101,17 @@ impl SoundPlayer {
     /// Plays a screen reader cue at `gain` (0 through 1).
     pub fn reader_cue(&mut self, c: Earcon, gain: f32) -> io::Result<()> {
         self.play(reader_cue_id(c), gain)
+    }
+
+    /// Plays an audio graph (`shell::audio_graph::pcm`, mono i16 at `RATE`) at `gain` (0 through 1). Each graph replaces
+    /// the last one registered under the graph sound id.
+    pub fn audio_graph(&mut self, mono: &[i16], gain: f32) -> io::Result<()> {
+        if mono.is_empty() {
+            return Ok(());
+        }
+        let samples: Vec<f32> = mono.iter().map(|&s| s as f32 / 32768.0).collect();
+        self.sounds.register_samples(GRAPH_ID, kb_clicks::RATE, 1, &samples).map_err(|e| io::Error::other(format!("system sounds: {e:?}")))?;
+        self.play(GRAPH_ID, gain)
     }
 
     /// Mixes sound `id` through the toolbox player and queues the result on the stream.
@@ -177,6 +191,17 @@ mod tests {
             k.reader_cue(c, 1.0).unwrap();
             assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0), "{c:?} is silent");
         }
+    }
+
+    #[test]
+    fn an_audio_graph_plays_through_the_stream_and_an_empty_one_writes_nothing() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+        k.audio_graph(&[], 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).is_empty());
+        let tone = bifrost_ui::chart_ax::Tone { hz: 440.0, millis: 120, timbre: 0 };
+        k.audio_graph(&crate::shell::audio_graph::pcm(&[tone], 1.0), 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
     }
 
     #[test]

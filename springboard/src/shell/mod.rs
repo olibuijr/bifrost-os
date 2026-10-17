@@ -68,6 +68,7 @@ pub mod kb_input;
 pub mod input_methods;
 pub mod kb_clicks;
 pub mod alert_sound;
+pub mod audio_graph;
 pub mod earcon;
 pub mod hwkeys;
 pub mod backup;
