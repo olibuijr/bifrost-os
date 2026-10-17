@@ -900,11 +900,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
+   "bifrost": "springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; springboard/src/shell/services/photos.rs; springboard/sdk/src/photo_picker.rs; springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
    "status": "partial",
-   "note": "Open: the PhotosPicker needs a shell picker sheet and there is none. The SDK side exists (sdk photo_picker.rs: configuration, filters, result decode) and the shell service checks the picker params (services/photos.rs picker_call) but then refuses because only the person can choose a picture. Missing: a sheet that lists the library with thumbnails, tracks the selection against the limit and answers the pending call.",
+   "note": "Built 2026-10-17: the PhotosPicker sheet. The photos service picker call opens the shell's picker sheet (shell photo_pick_sheet, model photo_pick): a grid of the library's thumbnails (the Photos app's thumbnail cache), All, Photos and Videos tabs when the app allows more than one kind, the app's selection limit (0 none, default 1 replaces the choice), Add and Cancel, drag to scroll. The call answers pending at once and the choice reaches the app as the picker_did_finish event, with read access to exactly the chosen assets and no photos permission. Open: no keyboard control in the sheet, no search or album sidebar, Live Photos and movies show a still and do not play, the SwiftUI PhotosPickerItem transfer types (data, URL) are not modelled (the app reads the picked file through image), and a pick does not survive a shell restart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    }
+   ],
+   "ready_note": "The picker works end to end: the service call starts a pick, the sheet shows the library with the app's filters and selection limit, a tap chooses, Add returns only the chosen identifiers as picker_did_finish and grants the app those assets (tests photo_pick, photo_pick_sheet, services::photos, photo_picker). Keyboard control, search and Live Photo playback are not in the sheet."
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_WidgetKit.framework",
@@ -921,11 +945,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/widgets/photos.rs; springboard/src/shell/today.rs; springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Open: depends on the PhotosPicker sheet (see _PhotosUI_SwiftUI), which the shell lacks, and on a photo widget kind that reads a chosen asset. The widget runtime exists (sdk widgets.rs) but no widget family shows library pictures, and the configuration cannot pick one.",
+   "note": "Built 2026-10-17: the Today View's Photos widget reads a chosen picture. A tap on the widget opens the picker sheet (one picture, pictures only) and the choice pins the widget to that picture's thumbnail (today pin_photo, saved as photos.pin in today.ini; it falls back to the minute rotation when the thumbnail is gone). Open: the widget cannot be unpinned except by editing today.ini, and there is no multi-picture, album or Memories widget family; the app widget runtime (sdk widgets.rs) has no photo kind for third-party widgets, so a third-party widget configuration cannot pick an asset yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::widgets::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::today::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photo_pick::tests"
+    }
+   ],
+   "ready_note": "Configuring the shell's Photos widget with the picker is wired: tap, choose, the widget shows the chosen picture and keeps it across restarts (tests widgets::photos, today, photo_pick_sheet, photo_pick). Third-party photo widgets and unpinning are open."
   },
   {
    "id": "path:/System/Library/Frameworks/_Photos_AppIntents.framework",

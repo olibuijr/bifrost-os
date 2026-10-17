@@ -22,7 +22,7 @@
 //! | usernotificationsd, UserNotificationCenter | `usernotif.rs`, `notify/store.rs`, `notify/schedule.rs`, `notify/permission.rs` |
 //! | WindowManager, WindowServer | `workspace.rs`, `window_fx.rs`, labwc |
 //! | Search panel | `quicksearch.rs` |
-//! | corespotlightd, mdworker.shared | `spotindex.rs` |
+//! | corespotlightd, mdworker.shared, spotlightknowledged.importer | `spotindex.rs`, `file_import.rs` |
 //! | screencaptureui | `screenshot.rs`, `screenrec.rs` |
 //! | wallpaper | `wallpaper_page.rs` |
 //! | loginwindow | `login.rs` |

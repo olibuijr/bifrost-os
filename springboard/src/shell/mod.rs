@@ -1524,6 +1524,12 @@ impl Shell {
     /// Shows the photo picker sheet for an app's open photo pick when none is on screen, and feeds the sheet on screen its
     /// thumbnails.
     fn photo_pick_tick(&mut self) {
+        // the picture the person chose for the Today View's Photos widget
+        if let Some(keys) = photo_pick::take_widget_result() {
+            self.today.pin_photo(keys.first().map(String::as_str));
+            self.today_stale = true;
+            self.dirty = true;
+        }
         if let Some(sheet) = self.photo_pick_sheet.as_mut() {
             if sheet.prepare(&self.ui, self.w, self.h) {
                 self.dirty = true;
@@ -2378,7 +2384,19 @@ impl Shell {
             }
             Action::OpenDeildu(_) if self.screen == Screen::Lock => {}
             Action::OpenDeildu(p) => self.open_deildu(&p, t),
+            Action::ChoosePhoto if self.screen == Screen::Lock => {}
+            Action::ChoosePhoto => self.choose_widget_photo(),
         }
+    }
+
+    /// Opens the photo picker for the Today View's Photos widget: one picture from the library. The person's choice is
+    /// taken by `photo_pick_tick` and pins the widget to it.
+    fn choose_widget_photo(&mut self) {
+        let library = photos::library::scan(&self.photo_dirs);
+        let entries = services::photos::pick_entries(&library);
+        let pick = photo_pick::Pick::new(photo_pick::WIDGET_APP, "Photos Widget", vec![photo_pick::Filter::Images], 1, entries);
+        // a sheet already up for the widget keeps its place
+        let _ = photo_pick::start(pick);
     }
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.

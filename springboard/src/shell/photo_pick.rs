@@ -177,7 +177,13 @@ enum Slot {
     Showing,
 }
 
+/// The id the shell itself picks under, for the Today View's Photos widget. Its result stays in the shell
+/// (`take_widget_result`): no app is told, and the id is not an installable app id.
+pub const WIDGET_APP: &str = "shell.widget.photos";
+
 thread_local! {
+    /// The thumbnail keys the person chose for the widget, until the shell takes them.
+    static WIDGET_RESULT: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
     static PICKS: RefCell<BTreeMap<String, Slot>> = RefCell::new(BTreeMap::new());
     /// Ended picks not yet delivered: (app id, chosen identifiers; empty when cancelled), oldest first.
     static FINISHED: RefCell<Vec<(String, Vec<String>)>> = RefCell::new(Vec::new());
@@ -222,7 +228,21 @@ pub fn take_waiting() -> Option<Pick> {
 /// Ends the pick with the person's choice (in pick order). The result is queued for the photos service.
 pub fn finish(app_id: &str, chosen: Vec<String>) {
     PICKS.with(|p| p.borrow_mut().remove(app_id));
-    FINISHED.with(|f| f.borrow_mut().push((app_id.to_string(), chosen)));
+    // the shell's own widget pick has no app to tell (a choice comes by `finish_widget`)
+    if app_id != WIDGET_APP {
+        FINISHED.with(|f| f.borrow_mut().push((app_id.to_string(), chosen)));
+    }
+}
+
+/// Ends the widget pick with the thumbnail keys of the chosen assets (`Entry::key`).
+pub fn finish_widget(keys: Vec<String>) {
+    PICKS.with(|p| p.borrow_mut().remove(WIDGET_APP));
+    WIDGET_RESULT.with(|r| *r.borrow_mut() = Some(keys));
+}
+
+/// What the person chose for the widget, once; `None` while the sheet is open or after a cancel.
+pub fn take_widget_result() -> Option<Vec<String>> {
+    WIDGET_RESULT.with(|r| r.borrow_mut().take())
 }
 
 /// Ends the pick without a choice.
@@ -337,6 +357,23 @@ mod tests {
         assert!(!is_open(app));
         assert_eq!(take_finished(), vec![(app.to_string(), vec!["a".to_string(), "b".to_string()])]);
         assert!(take_finished().is_empty(), "each result is delivered once");
+    }
+
+    #[test]
+    fn the_widget_pick_answers_the_shell_and_tells_no_app() {
+        start(Pick::new(WIDGET_APP, "Photos Widget", vec![Filter::Images], 1, library())).unwrap();
+        let mut pick = take_waiting().unwrap();
+        pick.toggle("b");
+        let keys: Vec<String> = pick.selected().iter().filter_map(|id| pick.entries.iter().find(|e| &e.id == id)).map(|e| e.key.clone()).collect();
+        finish_widget(keys);
+        assert!(!is_open(WIDGET_APP));
+        assert!(take_finished().is_empty(), "no app hears of the widget pick");
+        assert_eq!(take_widget_result(), Some(vec!["k-b".to_string()]));
+        assert_eq!(take_widget_result(), None, "the result is taken once");
+        start(Pick::new(WIDGET_APP, "Photos Widget", vec![], 1, library())).unwrap();
+        take_waiting().unwrap();
+        cancel(WIDGET_APP);
+        assert!(take_finished().is_empty() && take_widget_result().is_none(), "a cancel leaves the widget as it was");
     }
 
     #[test]

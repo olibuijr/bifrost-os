@@ -387,6 +387,15 @@ fn project_call(app_id: &str, params: &Json) -> Result<Json, String> {
     })
 }
 
+/// The assets a picker sheet lists: everything the library holds, since the person is choosing, not the app.
+pub fn pick_entries(photos: &[Photo]) -> Vec<PickEntry> {
+    let everything = Access::new(Status::Authorized);
+    listed(photos, &everything)
+        .into_iter()
+        .map(|(p, live)| PickEntry { id: local_identifier(p), path: p.path.clone(), key: p.key(), kind: kind_for_name(&p.name()), live, mtime: p.mtime })
+        .collect()
+}
+
 /// The `picker` call: checks the params and opens the picker sheet for the app over the whole library. The person
 /// chooses; the answer comes later as `picker_did_finish` (see `Photos::tick`).
 fn picker_call(app_id: &str, params: &Json, photos: &[Photo]) -> Result<Json, String> {
@@ -401,12 +410,7 @@ fn picker_call(app_id: &str, params: &Json, photos: &[Photo]) -> Result<Json, St
         None | Some(Json::Null) => 1,
         Some(v) => v.as_u64().ok_or("limit must be a whole number")? as usize,
     };
-    // the sheet lists everything the library holds: the person is choosing, not the app
-    let everything = Access::new(Status::Authorized);
-    let entries: Vec<PickEntry> = listed(photos, &everything)
-        .into_iter()
-        .map(|(p, live)| PickEntry { id: local_identifier(p), path: p.path.clone(), key: p.key(), kind: kind_for_name(&p.name()), live, mtime: p.mtime })
-        .collect();
+    let entries = pick_entries(photos);
     let name = crate::shell::apphost::installed().iter().find(|a| a.manifest.id == app_id).map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
     photo_pick::start(Pick::new(app_id, &name, filters, limit, entries)).map_err(|_| "a photo picker is already open for this app".to_string())?;
     Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))]))

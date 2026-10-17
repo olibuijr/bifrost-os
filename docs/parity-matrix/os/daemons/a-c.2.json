@@ -5281,11 +5281,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
+   "bifrost": "springboard/src/shell/file_import.rs, springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
    "status": "partial",
-   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item) and the bounded folder scan (spotindex::scan_folder, index_folder; tests spotindex::tests). Missing: importers for binary formats and the start-up scan call. Lead 2026-10-17: not ready: the shell does not call index_folder at start-up yet.",
+   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item), the bounded folder scan (spotindex::scan_folder_limited, reindex_folder) and the importer daemon (shell file_import): at shell start and every 30 seconds the tick starts one background thread that compares a cheap change signature of Documents, Desktop and Downloads and re-imports only the folders that changed, a third of the per-app budget each, under the Files app. Missing: importers for binary formats, and the folders are fixed (no Settings list of Search locations); a change is noticed within one period, not at once, since the shell has no file-change feed.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::file_import::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    }
+   ],
+   "ready_note": "The shell imports Documents, Desktop and Downloads into the Core Search index on a background thread, at start and when a folder's signature changes, bounded by depth, file count and a per-folder share (tests file_import, spotindex). Binary-format importers are not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.spotlightknowledged.plist",

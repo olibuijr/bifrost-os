@@ -301,7 +301,13 @@ impl PhotoPickSheet {
     /// Ends the pick with the choice, in pick order.
     pub fn finish(self) {
         let chosen = self.pick.selected().to_vec();
-        photo_pick::finish(&self.pick.app_id, chosen);
+        if self.pick.app_id == photo_pick::WIDGET_APP {
+            // the shell's own widget keeps the thumbnail of the picture, not an app's identifier
+            let keys = chosen.iter().filter_map(|id| self.pick.entries.iter().find(|e| &e.id == id)).map(|e| e.key.clone()).collect();
+            photo_pick::finish_widget(keys);
+        } else {
+            photo_pick::finish(&self.pick.app_id, chosen);
+        }
     }
 
     /// Ends the pick with no choice.
@@ -588,6 +594,77 @@ mod tests {
         tap(&mut sh, &ui, cell_centre(&sh, &ui, 0));
         sh.draw(&mut surface, &ui, W, H);
         assert!(px.iter().any(|p| *p != 0), "the dimmed screen and the card were drawn");
+    }
+
+    #[test]
+    fn an_apps_pick_runs_through_the_shell_from_the_call_to_the_event() {
+        use super::super::services::SystemService;
+        let app = "is.example.sheet-shell-flow";
+        let dir = std::env::temp_dir().join(format!("bifrost-photo-pick-flow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["one.png", "two.png"] {
+            std::fs::write(dir.join(name), b"not a picture").unwrap();
+        }
+        let library = super::super::photos::library::scan(std::slice::from_ref(&dir));
+        assert_eq!(library.len(), 2);
+        // the photos service call opens the pick; the shell tick puts the sheet on screen
+        let reply = super::super::services::photos::answer(app, false, "picker", &bifrost_core::json::Json::Null, &library).unwrap();
+        assert_eq!(reply.str_field("status").as_deref(), Some("pending"));
+        let mut sh = crate::shell::tests::shell();
+        assert!(sh.photo_pick_sheet.is_none());
+        sh.photo_pick_tick();
+        assert_eq!(sh.photo_pick_sheet.as_ref().map(|s| s.app_id().to_string()).as_deref(), Some(app));
+        // the touch goes to the sheet, not to what is under it
+        let (cell, add) = {
+            let sheet = sh.photo_pick_sheet.as_ref().unwrap();
+            let g = sheet.geo(&sh.ui, sh.w, sh.h);
+            (cell_centre(sheet, &sh.ui, 0), centre(sheet.add_rect(&sh.ui, &g)))
+        };
+        for (x, y) in [cell, add] {
+            assert!(sh.modal_event(Event::Down(x, y)).is_some());
+            assert!(sh.modal_event(Event::Up(x, y)).is_some());
+        }
+        assert!(sh.photo_pick_sheet.is_none(), "Add closed the sheet");
+        // the service tick tells the app what was chosen
+        let events = super::super::services::photos::Photos::default().tick(&mut sh, 10.0);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, super::super::services::photos::PICKER_DID_FINISH);
+        assert_eq!(events[0].body.get("results").and_then(bifrost_core::json::Json::as_array).map(|r| r.len()), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_photos_widget_picker_pins_the_chosen_picture_on_the_today_page() {
+        let dir = std::env::temp_dir().join(format!("bifrost-photo-pick-widget-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("only.png"), b"not a picture").unwrap();
+        let key = super::super::photos::library::Photo::from_path(dir.join("only.png")).unwrap().key();
+        let mut sh = crate::shell::tests::shell();
+        sh.photo_dirs = vec![dir.clone()];
+        if sh.is_locked() {
+            sh.act(super::super::today::Action::ChoosePhoto, 0.0);
+            assert!(photo_pick::take_waiting().is_none(), "the lock screen does not open the picker");
+        }
+        sh.choose_widget_photo();
+        sh.photo_pick_tick();
+        let sheet = sh.photo_pick_sheet.as_ref().expect("the sheet is up");
+        assert_eq!((sheet.app_id(), sheet.pick().limit, sheet.pick().allowed.clone()), (photo_pick::WIDGET_APP, 1, vec![Filter::Images]));
+        let (cell, add) = {
+            let g = sheet.geo(&sh.ui, sh.w, sh.h);
+            (cell_centre(sheet, &sh.ui, 0), centre(sheet.add_rect(&sh.ui, &g)))
+        };
+        for (x, y) in [cell, add] {
+            sh.modal_event(Event::Down(x, y));
+            sh.modal_event(Event::Up(x, y));
+        }
+        assert!(sh.photo_pick_sheet.is_none());
+        assert!(sh.today.pinned_photo().is_none(), "the shell takes the choice on its next tick");
+        sh.photo_pick_tick();
+        assert_eq!(sh.today.pinned_photo(), Some(key.as_str()));
+        assert!(photo_pick::take_finished().is_empty(), "no app hears of the widget pick");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
