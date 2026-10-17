@@ -22,6 +22,17 @@ use bifrost_core::json::Json;
 /// The service name the shell registers.
 pub const SERVICE: &str = "quick-look";
 
+/// The control method an app answers to draw a preview of its own file type. The app declares the type in its manifest
+/// (`[[preview]]` with `generator = "preview.render"`, `types` and `timeout_ms`); the shell calls it with
+/// `{"file": "<absolute path>", "width": w, "height": h}` and draws the PNG named in the reply. A late, missing or
+/// error reply falls back to the built-in preview. Answer with [`picture_reply`].
+pub const PREVIEW_METHOD: &str = "preview.render";
+
+/// The reply to [`PREVIEW_METHOD`]: `{"picture": "<absolute path to a PNG>"}`.
+pub fn picture_reply(path: &str) -> Json {
+    Json::Obj(vec![("picture".into(), Json::Str(path.to_string()))])
+}
+
 /// `show` params: `{items: [{url, title}], index}`.
 pub fn show_body(items: &[PreviewItem], index: usize) -> Json {
     let list = items
@@ -209,6 +220,12 @@ mod tests {
         let reply = Json::Obj(vec![("visible".into(), Json::Bool(true)), ("index".into(), Json::Num(2.0)), ("count".into(), Json::Num(5.0))]);
         assert_eq!(parse_state(&reply), Some(State { visible: true, index: 2, count: 5 }));
         assert_eq!(parse_state(&Json::Null), None);
+    }
+
+    #[test]
+    fn a_picture_reply_names_the_png_and_the_method_is_the_declared_one() {
+        assert_eq!(picture_reply("/tmp/p.png").get("picture").and_then(Json::as_str), Some("/tmp/p.png"));
+        assert_eq!(PREVIEW_METHOD, "preview.render");
     }
 
     #[test]
