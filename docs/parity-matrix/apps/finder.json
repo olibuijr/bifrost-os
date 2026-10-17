@@ -1,0 +1,596 @@
+{
+ "app": "Finder",
+ "bifrost_app": "files",
+ "evidence": [
+  "reference: Finder (macOS 27) menus and Get Info as documented by Apple; no ref27 bundle is in this repo, so reference behaviour is stated from the Finder app and is not verified against a bundle",
+  "bifrost: springboard/apps/files/src (window.rs, menus.rs, keys.rs, views/, sidebar.rs, info.rs, smart.rs, search.rs, ops.rs, go.rs, server.rs, dragout.rs, system.rs, tabs.rs, undo.rs)",
+  "bifrost: springboard/src/files (fs.rs, find.rs, menu.rs, mod.rs, empty_trash.rs, info.rs), springboard/src/shell/services_route.rs, springboard/apps/files/manifest.toml (no [[service]] entries)",
+  "note: rows come from code reading only (no build, no Midget run); a row is parity only where the code does the reference job, and nothing here is verified on Midget"
+ ],
+ "features": [
+  {
+   "feature": "Icon view",
+   "area": "view",
+   "apple": "Finder View > as Icons",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/toolbar.rs:64",
+   "note": "Icon grid with the view switcher (window.rs:199 set_view)",
+   "wire": ""
+  },
+  {
+   "feature": "List view with sortable column headers",
+   "area": "view",
+   "apple": "Finder View > as List",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/window.rs:317",
+   "note": "List rows, column headers click to sort, disclosure triangles (views/options.rs:278 toggle_expand)",
+   "wire": ""
+  },
+  {
+   "feature": "Column view with ancestor columns",
+   "area": "view",
+   "apple": "Finder View > as Columns",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/views/column.rs:43",
+   "note": "paint_columns draws the ancestors and the open folder (window.rs:445)",
+   "wire": ""
+  },
+  {
+   "feature": "Gallery view",
+   "area": "view",
+   "apple": "Finder View > as Gallery",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/views/options.rs:394",
+   "note": "paint_gallery: large preview over a filmstrip; set_gallery at options.rs:251",
+   "wire": ""
+  },
+  {
+   "feature": "View Options panel (sort, group, text and icon size)",
+   "area": "view",
+   "apple": "Finder View Options",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/window.rs:277",
+   "note": "Sort and view options panel opens from the toolbar; icon and text size are kept (views/options.rs:164) but label position, snap to grid and background are not offered",
+   "wire": "Add label position, snap to grid and a background choice to the View Options panel (views/options.rs)"
+  },
+  {
+   "feature": "Sort by name, date, size, kind",
+   "area": "view",
+   "apple": "Finder Sort By",
+   "status": "parity",
+   "bifrost": "springboard/src/files/fs.rs:173",
+   "note": "fs::sort with natural name order (fs.rs:137)",
+   "wire": ""
+  },
+  {
+   "feature": "Group by None, Kind, Date",
+   "area": "view",
+   "apple": "Finder Group By",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/menus.rs:151",
+   "note": "Context menu groups by None, Kind or Date; Name, Size, Tags and Application groupings are not offered",
+   "wire": "Add Group By Size, Name and Tags to menus.rs and the Group enum in views/options.rs"
+  },
+  {
+   "feature": "Status bar (item count, free space)",
+   "area": "view",
+   "apple": "Finder View > Show Status Bar",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/window.rs:98",
+   "note": "toggle_status_bar; free space from capacity (springboard/src/files/fs.rs:585)",
+   "wire": ""
+  },
+  {
+   "feature": "Path bar at the foot of the window",
+   "area": "view",
+   "apple": "Finder View > Show Path Bar",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/pathbar.rs:5",
+   "note": "Path items from the computer or home down to the open folder; each item navigates",
+   "wire": ""
+  },
+  {
+   "feature": "Toolbar: back, forward, view switcher, sort, new folder, select, search",
+   "area": "view",
+   "apple": "Finder toolbar",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/toolbar.rs:56",
+   "note": "Toolbar items built per window",
+   "wire": ""
+  },
+  {
+   "feature": "Sidebar show and hide",
+   "area": "view",
+   "apple": "Finder View > Hide Sidebar",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/window.rs:94",
+   "note": "toggle_sidebar; Ctrl+Cmd+S chord at keys.rs (toggle_sidebar call)",
+   "wire": ""
+  },
+  {
+   "feature": "Hidden files toggle (Shift+Cmd+.)",
+   "area": "view",
+   "apple": "Finder Show Hidden Files",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/keys.rs:59",
+   "note": "Shift+period chord calls toggle_hidden",
+   "wire": ""
+  },
+  {
+   "feature": "Expand and collapse folders in list view",
+   "area": "view",
+   "apple": "Finder list disclosure",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/views/options.rs:278",
+   "note": "toggle_expand splices the children under the row",
+   "wire": ""
+  },
+  {
+   "feature": "Sidebar sections: Favorites, Locations, Tags",
+   "area": "sidebar",
+   "apple": "Finder sidebar",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/sidebar.rs:39",
+   "note": "Three sections plus Recents; Favorites are fixed (Applications, Desktop, Documents, Downloads at sidebar.rs:42-48) and cannot be changed",
+   "wire": "Keep a favorites list in the data folder, add drag-to-Favorites and Remove from Favorites in sidebar.rs"
+  },
+  {
+   "feature": "Eject or unmount removable volumes from the sidebar",
+   "area": "sidebar",
+   "apple": "Finder sidebar eject button",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Locations come from fs::locations (springboard/src/files/fs.rs:510); no eject action",
+   "wire": "Add an eject button on removable Locations rows that calls the shell's unmount service"
+  },
+  {
+   "feature": "Tags in the sidebar and colour dots on items",
+   "area": "sidebar",
+   "apple": "Finder Tags sidebar, tag dots",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/info.rs:127",
+   "note": "tag_dots draws the colour dots; the Tags sidebar rows are at sidebar.rs:54",
+   "wire": ""
+  },
+  {
+   "feature": "Assign tags from the Tags panel and the menu",
+   "area": "sidebar",
+   "apple": "Finder Tags…",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/info.rs:153",
+   "note": "toggle_tag applies to the selection; Tags… context item at menus.rs:86",
+   "wire": ""
+  },
+  {
+   "feature": "Custom tag names and colours",
+   "area": "sidebar",
+   "apple": "Finder Edit Tags",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/info.rs:203",
+   "note": "Tags are the seven fixed colours in Tag::ALL; a tag cannot be renamed or added",
+   "wire": "Let the user name a tag and pick its colour; store the names in the tags sidebar file"
+  },
+  {
+   "feature": "Smart folders: saved searches listed in the sidebar",
+   "area": "sidebar",
+   "apple": "Finder Smart Folders",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/smart.rs:84",
+   "note": "results() matches saved folders on words, kind, tag and age; listed in the sidebar at sidebar.rs:66",
+   "wire": ""
+  },
+  {
+   "feature": "Save a search as a Smart Folder",
+   "area": "sidebar",
+   "apple": "Finder File > New Smart Folder",
+   "status": "gap",
+   "bifrost": "",
+   "note": "smart.rs:38 says saving waits for a New Smart Folder sheet; no menu item or key saves the current search",
+   "wire": "Add Save Search as Smart Folder that writes the query into .smart-folders through SmartFolder::serialize (smart.rs:49)"
+  },
+  {
+   "feature": "Tabs in one window",
+   "area": "window",
+   "apple": "Finder File > New Tab",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/tabs.rs:195",
+   "note": "new_tab, close_tab and step_tab; Cmd+T, Cmd+W and Ctrl+Tab at keys.rs:62",
+   "wire": ""
+  },
+  {
+   "feature": "New Finder window (Cmd+N)",
+   "area": "window",
+   "apple": "Finder File > New Finder Window",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No code path opens a second Files window; tabs are the only multi-folder view",
+   "wire": "Add New Window (Cmd+N) that asks the launch service for another bifrost-files window at the home folder"
+  },
+  {
+   "feature": "Quick Look preview (Space)",
+   "area": "window",
+   "apple": "Finder Quick Look",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/system.rs:251",
+   "note": "quick_look calls the shell's quick-look service; arrows step it (follow_preview at system.rs:267)",
+   "wire": ""
+  },
+  {
+   "feature": "Get Info window",
+   "area": "window",
+   "apple": "Finder Get Info",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/info.rs:169",
+   "note": "Get Info is a panel inside the window (info.rs:214), not a floating window; one at a time and it closes on a click elsewhere",
+   "wire": "Open Get Info as a window that stays open, one per item, with its own close control"
+  },
+  {
+   "feature": "Open With (choose app, default marked)",
+   "area": "window",
+   "apple": "Finder Open With",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/openwith.rs:33",
+   "note": "Candidates from the launch service; default is marked",
+   "wire": ""
+  },
+  {
+   "feature": "Folder totals and item counts in Get Info",
+   "area": "window",
+   "apple": "Finder Get Info folder size",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/info.rs:167",
+   "note": "Folder totals count until a deadline (info.rs:11); the info rows come from springboard/src/files/info.rs",
+   "wire": ""
+  },
+  {
+   "feature": "Owner, group and permissions in Get Info (read)",
+   "area": "window",
+   "apple": "Finder Sharing & Permissions",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/info.rs:87",
+   "note": "permission_rows shows owner and group names from /etc/passwd and /etc/group",
+   "wire": ""
+  },
+  {
+   "feature": "Edit owner, group and permissions in Get Info",
+   "area": "window",
+   "apple": "Finder Sharing & Permissions edit",
+   "status": "gap",
+   "bifrost": "",
+   "note": "The permission rows are read-only (info.rs:87)",
+   "wire": "Add an editable access panel that changes mode bits and owner; owner changes need a privilege prompt"
+  },
+  {
+   "feature": "Back and forward history",
+   "area": "navigation",
+   "apple": "Finder Go > Back, Forward",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/window.rs:169",
+   "note": "go_back and go_forward; [ and ] keys at keys.rs:66-67",
+   "wire": ""
+  },
+  {
+   "feature": "Enclosing folder (Cmd+Up)",
+   "area": "navigation",
+   "apple": "Finder Go > Enclosing Folder",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/keys.rs:56",
+   "note": "go_up",
+   "wire": ""
+  },
+  {
+   "feature": "Go to Folder with path completion (Shift+Cmd+G)",
+   "area": "navigation",
+   "apple": "Finder Go > Go to Folder",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/go.rs:94",
+   "note": "open_goto; path completion described in go.rs:1",
+   "wire": ""
+  },
+  {
+   "feature": "Go Home, Desktop, Documents, Downloads, Recents",
+   "area": "navigation",
+   "apple": "Finder Go menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/go.rs:95",
+   "note": "go_chord shortcuts for each place",
+   "wire": ""
+  },
+  {
+   "feature": "Recents",
+   "area": "navigation",
+   "apple": "Finder Recents",
+   "status": "parity",
+   "bifrost": "springboard/src/files/fs.rs:545",
+   "note": "recent_in lists recent files newest first, skipping hidden ones",
+   "wire": ""
+  },
+  {
+   "feature": "Connect to Server",
+   "area": "navigation",
+   "apple": "Finder Go > Connect to Server",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/server.rs:230",
+   "note": "Address sheet and remote folder browser for FTP only (server.rs:157 fetch); recent servers kept (server.rs:65)",
+   "wire": "Add SMB or SFTP browsing next to FTP in server.rs"
+  },
+  {
+   "feature": "Spring-loaded folders during a drag",
+   "area": "navigation",
+   "apple": "Finder spring-loaded folders",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/go.rs:156",
+   "note": "spring_hover opens a hovered folder after SPRING_DELAY (go.rs:6, 800 ms)",
+   "wire": ""
+  },
+  {
+   "feature": "Keyboard navigation (arrows, Return to rename, Cmd+A select all)",
+   "area": "navigation",
+   "apple": "Finder keyboard",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/window.rs:186",
+   "note": "move_focus moves the focus; Return starts a rename (keys.rs:47); Cmd+A selects all (keys.rs:52)",
+   "wire": ""
+  },
+  {
+   "feature": "Search by name (words, ignoring case)",
+   "area": "search",
+   "apple": "Finder search field",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/search.rs:19",
+   "note": "query_changed runs FileManager on a worker; name_matches needs every word (springboard/src/files/find.rs:51)",
+   "wire": ""
+  },
+  {
+   "feature": "Search tokens (kind:, tag:, date:)",
+   "area": "search",
+   "apple": "Finder search tokens",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/search.rs:19",
+   "note": "The search field takes plain words only; kind, tag and age filters exist for smart folders (smart.rs:21) and TypeFilter (springboard/src/files/find.rs:12)",
+   "wire": "Parse kind: tokens in search.rs query_changed into a TypeFilter and tag: into the tag index"
+  },
+  {
+   "feature": "Search scope (this folder, Home, whole disk)",
+   "area": "search",
+   "apple": "Finder search scope bar",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/search.rs:31",
+   "note": "Search always starts at the open folder (root = self.path); no scope choice",
+   "wire": "Add a scope control to the search bar (this folder, Home)"
+  },
+  {
+   "feature": "Kind filter for search results",
+   "area": "search",
+   "apple": "Finder search Kind bar",
+   "status": "partial",
+   "bifrost": "springboard/src/files/find.rs:12",
+   "note": "TypeFilter and accepts() exist in the shell crate, but the app searches with TypeFilter::All (search.rs:34)",
+   "wire": "Show a kind picker over the results and pass the chosen filter to FileManager::new"
+  },
+  {
+   "feature": "Copy, Cut and Paste files",
+   "area": "file-ops",
+   "apple": "Finder Edit > Copy, Cut, Paste",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:307",
+   "note": "copy_selected puts file URLs on the shared pasteboard; paste at ops.rs:528",
+   "wire": ""
+  },
+  {
+   "feature": "Duplicate (Cmd+D)",
+   "area": "file-ops",
+   "apple": "Finder Duplicate",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:517",
+   "note": "Copies the selection into its folder under new names",
+   "wire": ""
+  },
+  {
+   "feature": "Make Alias (symbolic link)",
+   "area": "file-ops",
+   "apple": "Finder File > Make Alias",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No alias or symlink creation in springboard/apps/files/src or springboard/src/files",
+   "wire": "Add make_alias to springboard/src/files/fs.rs and a Make Alias item with Cmd+L"
+  },
+  {
+   "feature": "Copy Item Path",
+   "area": "file-ops",
+   "apple": "Finder Edit > Copy Item Path",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Copy Name exists (menus.rs:80) but no path copy",
+   "wire": "Add Copy Item Path (Option+Cmd+C) to menus.rs beside Copy Name"
+  },
+  {
+   "feature": "Move To… (choose a folder)",
+   "area": "file-ops",
+   "apple": "Finder File > Move To…",
+   "status": "partial",
+   "bifrost": "springboard/src/files/menu.rs:42",
+   "note": "The shared file menu has Move to… (menu.rs:42) and drags move items between folders; the Files app menu has no Move To item",
+   "wire": "Add a Move To… context item that opens a folder picker and calls fs::move_to (springboard/src/files/fs.rs:342)"
+  },
+  {
+   "feature": "Rename inline (Return)",
+   "area": "file-ops",
+   "apple": "Finder Rename",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:552",
+   "note": "start_rename and commit_rename",
+   "wire": ""
+  },
+  {
+   "feature": "Move to Trash (Cmd+Delete)",
+   "area": "file-ops",
+   "apple": "Finder Move to Trash",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:473",
+   "note": "trash_selected; Backspace chord at keys.rs:45",
+   "wire": ""
+  },
+  {
+   "feature": "Put Back from Trash",
+   "area": "file-ops",
+   "apple": "Finder Put Back",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:501",
+   "note": "put_back restores each item to its origin folder",
+   "wire": ""
+  },
+  {
+   "feature": "Empty Trash with confirmation",
+   "area": "file-ops",
+   "apple": "Finder Empty Trash",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/empty_trash.rs:2",
+   "note": "Confirmation sheet, then a worker job (ops.rs:485)",
+   "wire": ""
+  },
+  {
+   "feature": "Undo file operations (Cmd+Z)",
+   "area": "file-ops",
+   "apple": "Finder Edit > Undo",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/undo.rs:88",
+   "note": "undo_file_op reverses moves, renames and trashing",
+   "wire": ""
+  },
+  {
+   "feature": "New Folder (Shift+Cmd+N)",
+   "area": "file-ops",
+   "apple": "Finder New Folder",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:536",
+   "note": "new_folder with a free name",
+   "wire": ""
+  },
+  {
+   "feature": "Compress to ZIP, TAR.GZ, TAR.XZ",
+   "area": "file-ops",
+   "apple": "Finder Compress",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:454",
+   "note": "compress; the three formats are menu items at menus.rs:83-85",
+   "wire": ""
+  },
+  {
+   "feature": "Expand archives",
+   "area": "file-ops",
+   "apple": "Finder Open or Expand archive",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:466",
+   "note": "extract runs as a job; Expand item at menus.rs:87",
+   "wire": ""
+  },
+  {
+   "feature": "Background copy with progress and cancel",
+   "area": "file-ops",
+   "apple": "Finder copy progress",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/ops.rs:335",
+   "note": "spawn_work runs the job; cancel_job at ops.rs:429",
+   "wire": ""
+  },
+  {
+   "feature": "Conflict prompt: keep both, replace, skip",
+   "area": "file-ops",
+   "apple": "Finder replace prompt",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/main.rs:599",
+   "note": "K, R and S answer the conflict prompt",
+   "wire": ""
+  },
+  {
+   "feature": "Drag items out to other windows and apps",
+   "area": "file-ops",
+   "apple": "Finder drag and drop",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/dragout.rs:105",
+   "note": "Drag sessions carry read grants; files from other apps are copied in (1.27.0 changelog)",
+   "wire": ""
+  },
+  {
+   "feature": "Share and Send Nearby",
+   "area": "integration",
+   "apple": "Finder Share, AirDrop",
+   "status": "partial",
+   "bifrost": "springboard/src/files/menu.rs:44",
+   "note": "The shared file menu has Share and Send Nearby (menu.rs:44-45) and Request::Share (springboard/src/files/mod.rs:58); the Files app menu has neither",
+   "wire": "Add a Share submenu to menus.rs that sends Request::Share for the focused file"
+  },
+  {
+   "feature": "Open in Terminal",
+   "area": "integration",
+   "apple": "Finder Open in Terminal (Services)",
+   "status": "partial",
+   "bifrost": "springboard/src/files/menu.rs:46",
+   "note": "The shared file menu has Open in Terminal and Request::OpenTerminal (springboard/src/files/mod.rs:56); not in the Files app menu",
+   "wire": "Add Open in Terminal to menus.rs for a folder or the folder of the focused file"
+  },
+  {
+   "feature": "Services for the selected files",
+   "area": "integration",
+   "apple": "Finder Services menu",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/services_route.rs",
+   "note": "The shell lists services of the frontmost app; Files declares no [[service]] in its manifest and does not send its selection types",
+   "wire": "Declare Files services in apps/files/manifest.toml and send the selection's file types"
+  },
+  {
+   "feature": "Thumbnails and previews of pictures",
+   "area": "integration",
+   "apple": "Finder thumbnails",
+   "status": "parity",
+   "bifrost": "springboard/apps/files/src/system.rs:49",
+   "note": "Thumbnail service request per view (thumb_answer at views/options.rs:334)",
+   "wire": ""
+  },
+  {
+   "feature": "Scripting (Finder dictionary)",
+   "area": "integration",
+   "apple": "Finder AppleScript dictionary",
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/control.rs:368",
+   "note": "A JSON-RPC control socket reports the view, selection and clipboard; there is no AppleScript dictionary",
+   "wire": "Add control methods for navigate, select, new folder and rename in control.rs (bifrost-app-control)"
+  },
+  {
+   "feature": "Stacks (group the desktop or a folder into stacks)",
+   "area": "view",
+   "apple": "Finder Stacks",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No stacks view in the Files app",
+   "wire": "Add a Stacks grouping for the icon view that folds items of one kind into a stack"
+  },
+  {
+   "feature": "BifrOSt Cloud location in the sidebar",
+   "area": "integration",
+   "apple": "Finder iCloud Drive",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No cloud location in the Files sidebar (sidebar.rs:39); the cloud service is separate (bifrost-cloud)",
+   "wire": "Add a BifrOSt Cloud section to the sidebar once the sync client is in the shell"
+  },
+  {
+   "feature": "Burn disc image",
+   "area": "integration",
+   "apple": "Finder Burn to Disc",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Optical burning is not part of the OS",
+   "wire": ""
+  }
+ ],
+ "summary": {
+  "features": 64,
+  "parity": 41,
+  "partial": 14,
+  "gap": 8,
+  "n/a": 1,
+  "coverage_pct": 76.2
+ }
+}
