@@ -2,11 +2,12 @@
 //!
 //! This is the app-facing counterpart of the reference compression API (`compression_encode_buffer`,
 //! `compression_decode_buffer`, `compression_stream_*`, `InputFilter`, `OutputFilter`, `FilterError`).
-//! The codecs are DEFLATE (RFC 1951), the zlib wrapper (RFC 1950) and LZ4 (`lz4`: block, the buffer framing and
-//! the LZ4 frame format). The DEFLATE encoder is greedy or lazy LZ77 with dynamic Huffman blocks, chosen by a
+//! The codecs are DEFLATE (RFC 1951), the zlib wrapper (RFC 1950), LZ4 (`lz4`: block, the buffer framing and
+//! the LZ4 frame format) and LZMA (`lzma`: the xz container around LZMA2, with CRC32, CRC64 and SHA-256 checks).
+//! The DEFLATE encoder is greedy or lazy LZ77 with dynamic Huffman blocks, chosen by a
 //! [`Level`] (the chain depth of the match search; Default and Best are lazy). A block is stored when that is
 //! smaller. Large inputs can be split over several threads (`encode_buffer_threaded`). Algorithm cases this build
-//! has no codec for (Brotli, LZBITMAP, LZFSE, LZMA) are named so that app code keeps the reference shape, and they
+//! has no codec for (Brotli, LZBITMAP, LZFSE) are named so that app code keeps the reference shape, and they
 //! fail with `Error::Unsupported`. `Algorithm::Deflate` (raw DEFLATE, no wrapper) is a BifrOSt addition.
 //!
 //! Streams and filters are incremental. The encoder emits each block as soon as it is full (65535 bytes of input), and
@@ -16,6 +17,7 @@
 mod dynamic;
 mod inflate_stream;
 pub mod lz4;
+pub mod lzma;
 
 use springboard::pngenc::adler32;
 use bifrost_render::cg::pdf::inflate;
@@ -40,7 +42,7 @@ pub enum Algorithm {
 impl Algorithm {
     /// True for the algorithms this build can encode and decode.
     pub fn is_supported(self) -> bool {
-        matches!(self, Algorithm::Zlib | Algorithm::Deflate | Algorithm::Lz4)
+        matches!(self, Algorithm::Zlib | Algorithm::Deflate | Algorithm::Lz4 | Algorithm::Lzma)
     }
 }
 
@@ -122,8 +124,9 @@ pub fn encode_buffer_threaded(algorithm: Algorithm, src: &[u8], level: Level, th
             Ok(out)
         }
         Algorithm::Deflate => Ok(dynamic::encode_threaded(src, level, threads)),
-        // LZ4 has no level or thread option; the level and thread count are ignored
+        // LZ4 and LZMA have no level or thread option; the level and thread count are ignored
         Algorithm::Lz4 => Ok(lz4::encode_buffer(src)),
+        Algorithm::Lzma => Ok(lzma::encode_buffer(src)),
         other => Err(Error::Unsupported(other)),
     }
 }
@@ -160,6 +163,7 @@ pub fn decode_buffer_limited(algorithm: Algorithm, src: &[u8], limit: usize) -> 
         }
         Algorithm::Deflate => inflate::inflate_limited(src, limit).map_err(Error::from),
         Algorithm::Lz4 => lz4::decode_buffer(src, limit),
+        Algorithm::Lzma => lzma::decode_buffer(src, limit),
         other => Err(Error::Unsupported(other)),
     }
 }
@@ -212,7 +216,7 @@ impl Compressor {
 }
 
 /// The codec under a stream or filter: an incremental DEFLATE or zlib compressor or decoder, or, for an
-/// algorithm with no incremental codec here (LZ4), the input buffered and run through the one-shot codec
+/// algorithm with no incremental codec here (LZ4 and LZMA), the input buffered and run through the one-shot codec
 /// when the stream ends.
 #[derive(Debug)]
 enum Codec {
@@ -225,7 +229,7 @@ impl Codec {
     fn new(op: FilterOperation, algorithm: Algorithm) -> Codec {
         let zlib = algorithm == Algorithm::Zlib;
         match (op, algorithm) {
-            (_, Algorithm::Lz4) => Codec::Buffered { op, algorithm, input: Vec::new() },
+            (_, Algorithm::Lz4 | Algorithm::Lzma) => Codec::Buffered { op, algorithm, input: Vec::new() },
             (FilterOperation::Compress, _) => Codec::Encode(Compressor::new(zlib)),
             (FilterOperation::Decompress, _) => Codec::Decode(Decoder::new(zlib, inflate::MAX_OUT)),
         }
@@ -515,7 +519,8 @@ mod tests {
         assert_eq!(decode_buffer_limited(Algorithm::Deflate, &enc, 100).unwrap(), vec![0u8; 100]);
         assert_eq!(encode_buffer(Algorithm::Lzfse, b"x"), Err(Error::Unsupported(Algorithm::Lzfse)));
         assert!(Algorithm::Lz4.is_supported());
-        assert!(!Algorithm::Lzma.is_supported());
+        assert!(Algorithm::Lzma.is_supported());
+        assert!(!Algorithm::Lzfse.is_supported());
     }
 
     #[test]
@@ -603,7 +608,7 @@ mod tests {
         let mut s = Stream::init(FilterOperation::Compress, Algorithm::Zlib).unwrap();
         s.process(b"ab", true).unwrap();
         assert_eq!(s.process(b"c", false), Err(Error::Finished));
-        assert_eq!(Stream::init(FilterOperation::Decompress, Algorithm::Lzma).unwrap_err(), Error::Unsupported(Algorithm::Lzma));
+        assert_eq!(Stream::init(FilterOperation::Decompress, Algorithm::Lzfse).unwrap_err(), Error::Unsupported(Algorithm::Lzfse));
     }
 
     #[test]
