@@ -43,7 +43,16 @@
    "status": "partial",
    "note": "The jdk-openjdk Arch package provides the Java runtime that Java programs run on. Gap: the Cocoa Java bridge and its bridge-support metadata are not provided.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "java -version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "jdk-openjdk provides the Java runtime. The Cocoa Java bridge is not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/JavaVM.framework",
@@ -64,7 +73,16 @@
    "status": "partial",
    "note": "jdk-openjdk provides the OpenJDK virtual machine as an ordinary process. Gap: there is no embedding API that lets an app start a Java VM in process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "java -version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "OpenJDK from jdk-openjdk runs Java programs as an ordinary process. The in-process embedding API is not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/Kerberos.framework",
@@ -794,8 +812,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Learned 3D vision feature models (Espresso and MIL files). No owner is identified from the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Learned 3D vision feature models (espresso weights and model.mil files under Resources/Models and CV3D_LearnedFeatures_* bundles, seen in the reference index). These are Apple ML model packs with no BifrOSt runtime or caller, so n/a.",
    "rea": [],
    "method": "assessed"
   },
@@ -881,7 +899,21 @@
    "status": "partial",
    "note": "Dictionary lookup reads StarDict packages, and spelling uses a word list in the core spellcheck model. Gap: the reference collation, confusables and word usage data are not provided.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stardict::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::"
+    }
+   ],
+   "ready_note": "Dictionary lookup reads StarDict packages (bifrost-ui stardict) and spelling uses the core spellcheck word list; both are tested. Collation and confusables data are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LibraryRepair.framework",
@@ -1469,7 +1501,16 @@
    "status": "partial",
    "note": "Entities an app lists are indexed into the shared Core Search index, so a search finds them without launching the app. Gap: there is no cross-app federated search service, and per-app indexes are not merged into one result set.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "indexed_entity::"
+    }
+   ],
+   "ready_note": "Entities that apps list are indexed into the shared search index (bifrost-app indexed_entity), tested. Cross-app federated merging is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocalSpeechRecognitionBridge.framework",
@@ -1532,7 +1573,26 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::"
+    }
+   ],
+   "ready_note": "Per-app location grants live in shell::services::privacy_permissions and shell::services::location; the authorization status and error model is bifrost-ui location_auth. All three have unit tests. The separate authorization daemon is not part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationFramework.framework",
@@ -1553,7 +1613,26 @@
    "status": "partial",
    "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::"
+    }
+   ],
+   "ready_note": "The authorization status and error model (bifrost-ui location_auth) and the per-app grant store are tested. No separate daemon is part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LocationAuthorizationXPC.framework",
@@ -1679,7 +1758,16 @@
    "status": "partial",
    "note": "Partial: the Time Limit lockout cover (Limit and Downtime, Ignore Limit for 1 more minute, 15 minutes or today, behind the Screen Time passcode) is built in springboard/src/shell/screentime/shield.rs. Gap: the sign-in attempt lock panel (springboard/core/src/password_verify.rs keeps the counter, but no lock screen panel shows the lockout and wait time yet). Not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::shield::"
+    }
+   ],
+   "ready_note": "The Time Limit lockout cover (Limit, Downtime, ignore for a minute, passcode gate) is in shell::screentime::shield, with tests. The sign-in attempt lock is not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LoggingSupport.framework",
@@ -1700,7 +1788,18 @@
    "status": "partial",
    "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine.",
    "ready": true,
-   "checks": [{"kind": "test", "crate": "bifrost-core", "filter": "log::tests"}, {"kind": "test", "crate": "bifrost-core", "filter": "log_format::"}],
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log_format::"
+    }
+   ],
    "ready_note": "Unified logging for apps (the Logger API and the log store) is in bifrost_core::log, with per-argument privacy formatting in log_format.rs; both have unit tests. Journal integration with systemd is not part of this check.",
    "rea": [],
    "method": "assessed"
@@ -1720,11 +1819,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
    "note": "Reference bundle com.apple.LoginUIKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "Login window UI: the shell login window (shell::login) draws the avatar, password field and power controls it needs; the reference login UI assets are not shipped as-is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Lookup.framework",
@@ -1745,7 +1853,21 @@
    "status": "partial",
    "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "look_up::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::look_up_popover::"
+    }
+   ],
+   "ready_note": "Dictionary definition and quick search hits for a selected word, shown in the Look Up popover; the lookup model (bifrost-ui look_up) and the popover (shell::look_up_popover) have tests. A system Look Up service is not part of these checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LowPowerMode.framework",
@@ -1913,7 +2035,16 @@
    "status": "partial",
    "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::"
+    }
+   ],
+   "ready_note": "The lock screen login window (avatar, password field, power menu) is in shell::login, with tests. Multi-user login logic is not covered."
   }
  ]
 }
