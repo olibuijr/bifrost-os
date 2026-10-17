@@ -512,6 +512,18 @@ impl SystemService for Contacts {
                 let format = contactphotos::write(&dir, id, &bytes)?;
                 Ok(Json::Obj(vec![("format".into(), Json::Str(contactphotos::format_name(format).into()))]))
             }
+            "request" => {
+                // An undecided app gets the access sheet; the status it reads is the one before the answer.
+                let status = access_of(app_id).status();
+                if status == Status::NotDetermined {
+                    let name = super::super::apphost::installed()
+                        .iter()
+                        .find(|a| a.manifest.id == app_id)
+                        .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+                    super::privacy_permissions::queue_prompt(app_id, &name, super::privacy_permissions::Kind::Contacts, "");
+                }
+                Ok(Json::Obj(vec![("status".into(), Json::Str(status.name().into()))]))
+            }
             "changes" => {
                 if !reads(app_id) {
                     return Err("contacts access is not granted".into());
