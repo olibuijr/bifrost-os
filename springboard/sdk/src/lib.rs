@@ -513,6 +513,7 @@ pub mod file_wrapper;
 pub mod bookmark;
 pub mod metadata_query;
 pub mod file_stat;
+pub mod core_media_time;
 pub mod file_descriptor;
 /// The system error numbers an app can match on (`Errno::NOENT`, `Errno::from_io`), shared with the shell.
 pub mod errno {
