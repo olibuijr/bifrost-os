@@ -7,11 +7,25 @@ Viewer windows:
 - Double-click on a message row, or File > New Viewer Window, opens the message in a window of its own. The viewer is
   read-only: it shows the header, the files and the body of the copy the main window fetched, and it scrolls.
 
+Compose windows:
+
+- A new message, reply, forward or mailto link opens in a window of its own, and several can be open at once. Sending
+  or cancelling closes the window.
+
 Mail links:
 
 - Mail opens `mailto:` links (manifest `schemes = ["mailto"]`). A new message opens with the To, Cc, Bcc, Subject and
-  Body of the link filled in. The SDK call `bifrost_app::mail_compose::compose` hands a draft to the default mail app.
-  Files cannot be handed over yet, so the call refuses a draft with attachments.
+  Body of the link filled in. The SDK call `bifrost_app::mail_compose::compose` hands a draft to the default mail app,
+  with the files it names as read grants; Mail attaches them. A file named by path is refused.
+
+Privacy:
+
+- Remote content is blocked by default. The reader shows a note with Load Remote Content for the open message, and Mail
+  Settings has a "Load remote content" switch, off by default.
+
+Signatures:
+
+- Mail Settings has "Signature above the quoted text": a reply's signature goes before the quote.
 
 ## 0.12.2 — 2026-10-14
 

@@ -250,6 +250,29 @@ impl super::Shell {
     }
 }
 
+/// The app that opens `mailto:` links and takes a hand-off compose (`mail_compose` service).
+pub(super) const MAIL_APP: &str = "is.olibuijr.mail.desktop";
+
+impl super::Shell {
+    /// `bifrost_app::mail_compose`: opens Mail with the `mailto:` link as a new message, then grants each file of
+    /// `files` (the sender's read grants) to Mail read-only; Mail attaches them to that message.
+    pub(super) fn mail_compose_deliver(&mut self, sender: &str, url: &str, files: &[bifrost_proto::GrantId], t: f64) -> Result<(), String> {
+        let Some(to) = super::apphost::slot_of(MAIL_APP) else { return Err("Mail is not installed".into()) };
+        if self.desk_active() {
+            self.desk_open(super::AppId::External(to as u8), t);
+        } else {
+            self.ext_open(to);
+        }
+        self.ext_send(to, &bifrost_proto::ToApp::Open { url: url.to_string() });
+        if !files.is_empty() {
+            let request = self.app_share.next_inbound();
+            self.inbound_files(sender, MAIL_APP, to as u8, request, files);
+        }
+        self.dirty = true;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

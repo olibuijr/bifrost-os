@@ -577,6 +577,11 @@ pub struct Mail {
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
+    /// Set when a compose was made into the sheet slot (open_draft, a failed send, Undo Send). The app moves it into a
+    /// compose window of its own (see `compose_windows`).
+    pub fresh_compose: bool,
+    /// Messages whose remote content the person allowed with Load Remote Content, by UID. Not kept between runs.
+    pub remote_loaded: HashSet<u32>,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -635,6 +640,8 @@ impl Mail {
             passwords: HashMap::new(),
             baseline: HashMap::new(),
             sheet: None,
+            fresh_compose: false,
+            remote_loaded: HashSet::new(),
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -1026,6 +1033,7 @@ impl Mail {
         form.focus_on(if draft.to.is_empty() { to_at } else { last });
         let signature = self.prefs.signature(&account_id).to_string();
         self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
+        self.fresh_compose = true;
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -1205,6 +1213,21 @@ impl Mail {
     }
 
     /// True when a new sheet may replace what is on screen: not while a message is being written.
+    /// True when remote content may load for message `uid`: Mail Settings allows it, or the person loaded it for this message.
+    pub fn remote_allowed(&self, uid: u32) -> bool {
+        self.prefs.remote_content || self.remote_loaded.contains(&uid)
+    }
+
+    /// Load Remote Content: the remote content of message `uid` may load.
+    pub fn allow_remote(&mut self, uid: u32) {
+        self.remote_loaded.insert(uid);
+    }
+
+    /// True when the sheet slot can take a compose: it is empty, or it holds a compose (which keeps its own window).
+    pub fn sheet_is_free_for_compose(&self) -> bool {
+        matches!(self.sheet, None | Some(Sheet::Compose(_)))
+    }
+
     pub fn sheet_is_free(&self) -> bool {
         !matches!(self.sheet, Some(Sheet::Compose(_)))
     }
@@ -1277,6 +1300,8 @@ impl Mail {
                 Field::yes_no("Quote the original in replies", self.prefs.quote_replies),
                 Field::yes_no("Plain text messages only", self.prefs.plain_text),
                 Field::yes_no("Bold unread messages", self.prefs.bold_unread),
+                Field::yes_no("Load remote content", self.prefs.remote_content),
+                Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
             ],
         );
         Ok(())
@@ -1386,6 +1411,12 @@ impl Mail {
         if form.fields.iter().any(|f| f.label == "Bold unread messages") {
             self.prefs.bold_unread = is_yes(form.value("Bold unread messages"));
         }
+        if form.fields.iter().any(|f| f.label == "Load remote content") {
+            self.prefs.remote_content = is_yes(form.value("Load remote content"));
+        }
+        if form.fields.iter().any(|f| f.label == "Signature above the quoted text") {
+            self.prefs.signature_above_quote = is_yes(form.value("Signature above the quoted text"));
+        }
         Ok(())
     }
 
@@ -1471,7 +1502,11 @@ impl Mail {
             reply_to: message::split_addresses(compose.form.value("Reply-To")),
             priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
-            body: with_signature(compose.form.value("Message"), &compose.signature),
+            body: if self.prefs.signature_above_quote {
+                with_signature_above_quote(compose.form.value("Message"), &compose.signature)
+            } else {
+                with_signature(compose.form.value("Message"), &compose.signature)
+            },
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
@@ -1553,6 +1588,28 @@ pub fn with_signature(body: &str, signature: &str) -> String {
         format!("\n\n-- \n{signature}")
     } else {
         format!("{body}\n\n-- \n{signature}")
+    }
+}
+
+/// The signature placed above the quoted text of a reply: it goes before the attribution line ("On ..., X wrote:"). A
+/// message without one gets the signature at the end, as `with_signature` gives it.
+pub fn with_signature_above_quote(body: &str, signature: &str) -> String {
+    let signature = signature.trim_end();
+    if signature.trim().is_empty() {
+        return body.to_string();
+    }
+    let lines: Vec<&str> = body.split('\n').collect();
+    let Some(at) = lines.iter().position(|line| line.starts_with("On ") && line.trim_end().ends_with("wrote:")) else {
+        return with_signature(body, signature);
+    };
+    let above = lines[..at].join("\n");
+    let top = above.trim_end();
+    let below = lines[at..].join("\n");
+    let block = format!("-- \n{signature}");
+    if top.is_empty() {
+        format!("{block}\n\n{below}")
+    } else {
+        format!("{top}\n\n{block}\n\n{below}")
     }
 }
 
@@ -2138,6 +2195,8 @@ mod tests {
         assert_eq!(with_signature("Hello\n\n", "Ana\n"), "Hello\n\n-- \nAna");
         assert_eq!(with_signature("", "Ana"), "\n\n-- \nAna");
         assert_eq!(with_signature("Hello", "  \n"), "Hello");
+        assert_eq!(with_signature_above_quote("Thanks\n\nOn Mon, Ana wrote:\n> hi", "Ana"), "Thanks\n\n-- \nAna\n\nOn Mon, Ana wrote:\n> hi");
+        assert_eq!(with_signature_above_quote("Hello", "Ana"), "Hello\n\n-- \nAna", "no quote: the end");
         let mut mail = Mail::new(vec![account("work")]);
         mail.prefs.set_signature("work", "Ana");
         mail.open_compose(None);

@@ -272,6 +272,10 @@ pub struct MailWindow {
     in_flight: HashMap<u64, Queued>,
     /// The files named in the open message, where they were drawn last frame, by place in the message.
     pub attach_rects: Vec<(Rect, usize)>,
+    /// The Load Remote Content link of the open message, where it was drawn last frame.
+    pub remote_rect: Option<Rect>,
+    /// How many remote images the open message has, as counted for it (message UID, count).
+    pub remote_memo: Option<(u32, usize)>,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -562,6 +566,8 @@ impl MailWindow {
             drafts: HashMap::new(),
             in_flight: HashMap::new(),
             attach_rects: Vec::new(),
+            remote_rect: None,
+            remote_memo: None,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -1017,6 +1023,14 @@ impl MailWindow {
         self.dirty = true;
     }
 
+    /// Load Remote Content: the open message's remote content may load.
+    fn load_remote(&mut self) {
+        if let Some(uid) = self.mail.open {
+            self.mail.allow_remote(uid);
+            self.dirty = true;
+        }
+    }
+
     /// File > New Viewer Window: the open message goes into a viewer window of its own.
     fn new_viewer(&mut self) {
         if let Some(uid) = self.mail.open {
@@ -1385,8 +1399,9 @@ impl MailWindow {
             }
             Err(e) if id == 0 => self.mail.status = format!("The message was not sent: {e}"),
             Err(e) => {
-                if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free()) {
+                if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free_for_compose()) {
                     self.mail.sheet = Some(Sheet::Compose(compose));
+                    self.mail.fresh_compose = true;
                     self.mail.status = format!("The message was not sent: {e}");
                     self.save_queue_file();
                 } else if let Some(mut queued) = flight {
@@ -1614,6 +1629,8 @@ impl MailWindow {
             },
             DocumentEvent::Opened(doc) => match self.docs.remove(&doc.request) {
                 Some(DocTask::Attach) => self.attach_documents(ctx, vec![doc]),
+                // a file another app hands over with a mailto: link (bifrost_app::mail_compose) goes on the open message
+                None if bifrost_app::share::is_inbound(doc.request) => self.attach_documents(ctx, vec![doc]),
                 Some(DocTask::ImportMbox) => self.import_document(ctx, doc),
                 Some(DocTask::SaveFolder { files }) => self.save_folder(ctx, doc, files),
                 Some(other) => {
@@ -2333,6 +2350,7 @@ impl MailWindow {
         match self.drafts.remove(&id) {
             Some(compose) => {
                 self.mail.sheet = Some(Sheet::Compose(compose));
+                self.mail.fresh_compose = true;
                 self.mail.status = "Send undone".into();
             }
             None => self.mail.status = "Send undone, but the message could not be opened again".into(),
@@ -2406,10 +2424,10 @@ impl MailWindow {
 
     /// True when a new sheet may open; otherwise says why not.
     fn sheet_free(&mut self) -> bool {
-        if self.mail.sheet_is_free() {
+        if self.mail.sheet_is_free_for_compose() {
             true
         } else {
-            self.mail.status = "Send or cancel the message first".into();
+            self.mail.status = "Close the open sheet first".into();
             false
         }
     }
@@ -2619,6 +2637,7 @@ impl MailWindow {
             crate::draw::Hit::Favorite(index) => self.open_favorite(index),
             crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
+            crate::draw::Hit::LoadRemote => self.load_remote(),
             crate::draw::Hit::Attach => self.pick_files(ctx),
             crate::draw::Hit::RemoveAttachment(index) => {
                 if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {

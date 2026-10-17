@@ -1,8 +1,10 @@
-//! Mail as an installed BifrOSt desktop app: hosts `window::MailWindow` through the SDK.
+//! Mail as an installed BifrOSt desktop app: hosts `window::MailWindow` through the SDK. The main window shows the
+//! mailboxes and messages; viewer windows (`viewer`) and compose windows (`compose_windows`) are windows of their own.
 
 use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
+use bifrost_mail::compose_windows::Composes;
 use bifrost_mail::viewer::Viewer;
 use bifrost_mail::window::MailWindow;
 
@@ -10,6 +12,8 @@ struct MailApp {
     window: Option<MailWindow>,
     /// Viewer windows: a message in a window of its own (double-click, File > New Viewer Window).
     viewers: Vec<Viewer>,
+    /// Compose windows, and the one whose compose is in the main window's sheet slot.
+    composes: Composes,
     /// A `mailto:` link that arrived before the window existed; it opens once the window is made.
     pending_url: Option<String>,
 }
@@ -45,6 +49,23 @@ impl MailApp {
         }
         changed
     }
+
+    /// Runs one call on the main window, then moves compose windows into line with its sheet. True when a window
+    /// changed and the app needs a frame.
+    fn with_window(&mut self, ctx: &Ctx, f: impl FnOnce(&mut MailWindow) -> bool) -> bool {
+        let changed = match &mut self.window {
+            Some(mail) => f(mail),
+            None => false,
+        };
+        self.sync(ctx) | changed
+    }
+
+    fn sync(&mut self, ctx: &Ctx) -> bool {
+        match &mut self.window {
+            Some(mail) => self.composes.sync(ctx, mail),
+            None => false,
+        }
+    }
 }
 
 impl App for MailApp {
@@ -54,16 +75,20 @@ impl App for MailApp {
 
     fn configure(&mut self, ctx: &Ctx) {
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
-        match &mut self.window {
-            Some(mail) => mail.set_size(w, h),
-            None => {
-                let mut mail = MailWindow::new(ctx);
+        self.composes.main_size = (w, h);
+        if self.window.is_none() {
+            let mut mail = MailWindow::new(ctx);
+            mail.set_size(w, h);
+            self.window = Some(mail);
+            ctx.wants_keyboard(true);
+            if let (Some(url), Some(mail)) = (self.pending_url.take(), &mut self.window) {
+                mail.open_handoff(&url);
+            }
+            self.sync(ctx);
+        } else if self.composes.active.is_none() {
+            // while a compose window is active, the main window's size is the compose window's
+            if let Some(mail) = &mut self.window {
                 mail.set_size(w, h);
-                if let Some(url) = self.pending_url.take() {
-                    mail.open_handoff(&url);
-                }
-                self.window = Some(mail);
-                ctx.wants_keyboard(true);
             }
         }
     }
@@ -77,7 +102,7 @@ impl App for MailApp {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        self.window.as_mut().is_some_and(|mail| mail.menu(ctx, id))
+        self.with_window(ctx, |mail| mail.menu(ctx, id))
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -90,7 +115,13 @@ impl App for MailApp {
                 false
             }
             Some(mail) => match ev {
-                Input::Touch { kind, x, y, t, .. } => mail.touch(ctx, kind, x, y, t),
+                Input::Touch { kind, x, y, t, .. } => {
+                    // a touch on the main window hands the sheet slot back to the main window
+                    if matches!(kind, TouchKind::Down) {
+                        self.composes.deactivate(mail);
+                    }
+                    mail.touch(ctx, kind, x, y, t)
+                }
                 Input::Key(k) => mail.key(ctx, k),
                 Input::Command(Command::Paste) => mail.paste(),
                 Input::Open(url) => {
@@ -100,18 +131,59 @@ impl App for MailApp {
                 _ => false,
             },
         };
-        self.open_viewers(ctx) | changed
+        self.sync(ctx) | changed
     }
 
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
             return self.event(ctx, ev);
         }
-        let Some(viewer) = self.viewers.iter_mut().find(|v| v.id == window) else { return false };
-        match ev {
-            Input::Touch { kind, y, t, .. } => viewer.touch(kind, y, t),
-            _ => false,
+        if let Some(viewer) = self.viewers.iter_mut().find(|v| v.id == window) {
+            return match ev {
+                Input::Touch { kind, y, t, .. } => viewer.touch(kind, y, t),
+                _ => false,
+            };
         }
+        let Input::Touch { kind, x, y, t, .. } = ev else { return false };
+        let Some(mail) = &mut self.window else { return false };
+        if !self.composes.owns(window) {
+            return false;
+        }
+        if matches!(kind, TouchKind::Down) && !self.composes.activate(mail, window) {
+            return false;
+        }
+        if self.composes.active != Some(window) {
+            return false;
+        }
+        let changed = mail.touch(ctx, kind, x, y, t);
+        self.sync(ctx) | changed
+    }
+
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        self.with_window(ctx, |mail| mail.service_reply(ctx, request, result))
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        self.with_window(ctx, |mail| mail.document(ctx, ev))
+    }
+
+    fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
+        self.with_window(ctx, |mail| mail.keychain(ctx, reply))
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let mut changed = self.open_viewers(ctx) | self.refresh_viewers();
+        changed |= self.with_window(ctx, |mail| mail.tick(ctx, t));
+        changed
+    }
+
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
+        if let Some(mail) = &mut self.window {
+            mail.draw_hiding_compose(s, &ctx.ui, self.composes.active.is_some());
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
     }
 
     fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
@@ -120,6 +192,11 @@ impl App for MailApp {
         }
         if let Some(viewer) = self.viewers.iter_mut().find(|v| v.id == window) {
             viewer.draw(s, &ctx.ui);
+        } else if let Some(mail) = &mut self.window {
+            if let Some(compose) = self.composes.compose_of(window) {
+                self.composes.resized(window, s.w as f32, s.h as f32);
+                mail.draw_compose(s, &ctx.ui, &bifrost_mail::state::Sheet::Compose(compose));
+            }
         }
         let mut d = Damage::new(s.w, s.h);
         d.all();
@@ -129,34 +206,11 @@ impl App for MailApp {
     fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
-        before != self.viewers.len()
-    }
-
-    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
-        self.window.as_mut().is_some_and(|mail| mail.service_reply(ctx, request, result))
-    }
-
-    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
-        self.window.as_mut().is_some_and(|mail| mail.document(ctx, ev))
-    }
-
-    fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
-        self.window.as_mut().is_some_and(|mail| mail.keychain(ctx, reply))
-    }
-
-    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        let mut changed = self.open_viewers(ctx) | self.refresh_viewers();
-        changed |= self.window.as_mut().is_some_and(|mail| mail.tick(ctx, t));
-        changed
-    }
-
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
+        let mut changed = before != self.viewers.len();
         if let Some(mail) = &mut self.window {
-            mail.draw(s, &ctx.ui);
+            changed |= self.composes.closed(mail, window);
         }
-        let mut d = Damage::new(s.w, s.h);
-        d.all();
-        d
+        changed
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
@@ -169,5 +223,5 @@ impl App for MailApp {
 }
 
 fn main() {
-    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), pending_url: None });
+    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None });
 }
