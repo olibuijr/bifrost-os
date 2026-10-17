@@ -39,6 +39,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         "power.shutdown" => power("poweroff"),
         "power.restart" => power("reboot"),
         "power.sleep" => power("suspend"),
+        "power.wake_alarm" => wake_alarm(p),
         "time.set_timezone" => set_timezone(str_param(p, "name")?),
         "time.set_ntp" => match p.get("on") {
             Some(Json::Bool(on)) => run("timedatectl", &["set-ntp", if *on { "true" } else { "false" }]).map(|_| obj(vec![])),
@@ -103,6 +104,30 @@ fn power(verb: &str) -> Result<Json, PErr> {
         unsafe { sync() };
     }
     run("systemctl", &[verb]).map(|_| obj(vec![]))
+}
+
+/// Arms the real-time clock to wake the machine at `at` (Unix seconds), or clears the alarm when `at` is absent or 0.
+/// The time is checked against the clock first (`bifrost_core::wake_schedule::validate_alarm`). The kernel refuses a new
+/// value while an old one is armed, so the old alarm is cleared before the new one is written.
+fn wake_alarm(p: &Json) -> Result<Json, PErr> {
+    use bifrost_core::wake_schedule::{alarm_value, validate_alarm, CLEAR_ALARM, RTC_WAKEALARM};
+    let write = |text: &str| std::fs::write(RTC_WAKEALARM, text).map_err(|e| PErr::internal(format!("{RTC_WAKEALARM}: {e}")));
+    let at = match p.get("at") {
+        None | Some(Json::Null) => 0,
+        Some(Json::Num(n)) if n.is_finite() && n.fract() == 0.0 => *n as i64,
+        _ => return Err(PErr::bad("at must be a whole number of seconds")),
+    };
+    let checked = if at == 0 {
+        None
+    } else {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+        Some(validate_alarm(at, now).map_err(|e| PErr::bad(format!("{e:?}")))?)
+    };
+    write(CLEAR_ALARM)?;
+    if let Some(at) = checked {
+        write(&alarm_value(at))?;
+    }
+    Ok(obj(vec![]))
 }
 
 /// A zone name that is a plain relative path to a regular file under /usr/share/zoneinfo.
