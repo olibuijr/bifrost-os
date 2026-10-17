@@ -19,6 +19,8 @@ use super::{Event, Shell, SystemService};
 use crate::media::route::Route;
 use bifrost_core::json::Json;
 use bifrost_ui::default_device::{Defaults, Device, DeviceError, Role};
+use bifrost_ui::route_picker::Destination;
+use bifrost_ui::route_prediction::{suggest, RouteHistory};
 use bifrost_ui::volume_control::VolumeControl;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -153,13 +155,26 @@ impl SystemService for AudioDevices {
         match method {
             "list" => {
                 let devices = self.state(shell, t);
-                Ok(list_json(&devices, &self.defaults))
+                let mut list = list_json(&devices, &self.defaults);
+                if let Json::Obj(fields) = &mut list {
+                    let suggested = suggested_outputs(&devices, &load_history(&history_path()), SUGGESTIONS).into_iter().map(Json::Str).collect();
+                    fields.push(("suggested".to_string(), Json::Arr(suggested)));
+                }
+                Ok(list)
             }
             "set_default" => {
                 let role = role_arg(params)?;
                 let id = params.str_field("id").ok_or_else(|| "set_default needs an id".to_string())?;
                 self.state(shell, t);
                 self.defaults.set_default(role, &id).map_err(device_error)?;
+                if matches!(role, Role::Output) {
+                    // the choice feeds the suggestions; a history that cannot be saved does not undo the choice
+                    let path = history_path();
+                    let mut history = load_history(&path);
+                    if history.record(&id) {
+                        let _ = save_history(&path, &history);
+                    }
+                }
                 Ok(Json::Null)
             }
             "clear_default" => {
@@ -210,6 +225,38 @@ pub fn present(route: Route, bluetooth: Option<&str>, microphone: bool) -> Vec<D
         out.push(device(MICROPHONE, "Microphone", true, false, false));
     }
     out
+}
+
+/// How many suggested outputs the list reports.
+const SUGGESTIONS: usize = 3;
+
+/// The output choice history: the outputs the picker chose, one identifier per line, oldest first.
+fn history_path() -> std::path::PathBuf {
+    crate::privd_client::user_data_dir().join("audio").join("route-history.txt")
+}
+
+/// The stored history; a missing or unreadable file is an empty history.
+fn load_history(path: &std::path::Path) -> RouteHistory {
+    std::fs::read_to_string(path).map(|text| RouteHistory::parse(&text)).unwrap_or_default()
+}
+
+fn save_history(path: &std::path::Path, history: &RouteHistory) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let temp = path.with_extension("tmp");
+    std::fs::write(&temp, history.to_text())?;
+    std::fs::rename(&temp, path)
+}
+
+/// The output devices listed now that the person chose most often (then most recently), at most `limit` of them.
+pub fn suggested_outputs(devices: &[Device], history: &RouteHistory, limit: usize) -> Vec<String> {
+    let outputs: Vec<Destination> = devices
+        .iter()
+        .filter(|d| d.can_output)
+        .map(|d| Destination { id: d.id.clone(), name: d.name.clone(), local: true, active: false })
+        .collect();
+    suggest(&outputs, &history.ids(), limit).into_iter().map(|d| d.id.clone()).collect()
 }
 
 fn device(id: &str, name: &str, input: bool, output: bool, sound_effects: bool) -> Device {
@@ -328,6 +375,8 @@ fn opt_str(s: Option<&str>) -> Json {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn the_reconnect_wait_doubles_to_30_s_and_resets() {
         let mut b = Backoff::new();
@@ -346,6 +395,34 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn the_most_chosen_listed_outputs_are_suggested() {
+        let devices = vec![
+            device(SPEAKER, "Speaker", false, true, false),
+            device(HEADPHONES, "Headphones", false, true, false),
+            device(MICROPHONE, "Microphone", true, false, false),
+        ];
+        // bluetooth is not listed now, and the microphone is not an output
+        let history = RouteHistory::parse("headphones\nbluetooth\nheadphones\nmicrophone\n");
+        assert_eq!(suggested_outputs(&devices, &history, 3), vec!["headphones".to_string()]);
+        // equal use: the most recent choice first
+        let tied = RouteHistory::parse("speaker\nheadphones\n");
+        assert_eq!(suggested_outputs(&devices, &tied, 1), vec!["headphones".to_string()]);
+    }
+
+    #[test]
+    fn the_choice_history_round_trips_through_its_file() {
+        let dir = std::env::temp_dir().join(format!("audio-history-{}", std::process::id()));
+        let path = dir.join("route-history.txt");
+        assert!(load_history(&path).ids().is_empty(), "a missing file is an empty history");
+        let mut history = RouteHistory::new();
+        history.record(SPEAKER);
+        history.record(HEADPHONES);
+        save_history(&path, &history).unwrap();
+        assert_eq!(load_history(&path).ids(), vec![SPEAKER, HEADPHONES]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn ids(list: &[Device]) -> Vec<&str> {
         list.iter().map(|d| d.id.as_str()).collect()
