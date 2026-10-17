@@ -1,15 +1,17 @@
 //! Music understanding: a session runs analyses over a mono audio buffer and returns time-stamped results
 //! (`MusicUnderstandingSession`, `SessionResult`, `RhythmResult`). Implemented: rhythm (beats, bars, BPM) from an
 //! onset-energy envelope; key over time (`KeyResult`) from 12-bin chroma with a Krumhansl-Kessler profile match; and
-//! structure (`StructureResult`) as chroma-novelty boundaries. Pace is available from a beat grid through
-//! `analyze_pace`; it is not part of `analyze` yet. Loudness and instrument activity are not implemented; asking for
-//! them fails with `Unsupported`. Times are seconds from the start of the buffer. Pure Rust, no decoding: the caller
+//! structure (`StructureResult`) as chroma-novelty boundaries; loudness (`LoudnessResult`, K-weighted LUFS). Pace is
+//! available from a beat grid through `analyze_pace`; it is not part of `analyze` yet. Instrument activity is not
+//! implemented; asking for it fails with `Unsupported`. Times are seconds from the start of the buffer. Pure Rust, no decoding: the caller
 //! hands over samples.
 
 use std::f64::consts::PI;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+use crate::loudness::{self, LoudnessResult};
 
 /// `MusicUnderstandingSession.AnalysisType`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -24,7 +26,8 @@ pub enum AnalysisType {
 
 impl AnalysisType {
     /// The analyses this module runs. `analyze()` performs exactly these.
-    pub const SUPPORTED: [AnalysisType; 3] = [AnalysisType::Rhythm, AnalysisType::Key, AnalysisType::Structure];
+    pub const SUPPORTED: [AnalysisType; 4] =
+        [AnalysisType::Rhythm, AnalysisType::Key, AnalysisType::Structure, AnalysisType::Loudness];
 }
 
 /// `MusicUnderstandingError`: the cases this module can produce.
@@ -112,6 +115,7 @@ pub struct SessionResult {
     pub rhythm: Option<RhythmResult>,
     pub key: Option<KeyResult>,
     pub structure: Option<StructureResult>,
+    pub loudness: Option<LoudnessResult>,
 }
 
 /// Seconds per chroma frame in a session: non-overlapping frames of this many samples.
@@ -184,6 +188,7 @@ impl MusicUnderstandingSession {
                     out.key = Some(analyze_key(&chroma, frame_seconds, window));
                 }
                 AnalysisType::Structure => out.structure = Some(structure_from_chroma(&chroma, frame_seconds)),
+                AnalysisType::Loudness => out.loudness = loudness::measure(&self.samples, self.sample_rate),
                 _ => {}
             }
         }
@@ -644,12 +649,22 @@ mod tests {
     }
 
     #[test]
+    fn session_measures_loudness_of_the_buffer() {
+        let s = MusicUnderstandingSession::new(click_track(120.0, 4.0, 44100), 44100).unwrap();
+        let result = s.analyze_for(&[AnalysisType::Loudness]).unwrap();
+        assert!(result.rhythm.is_none() && result.key.is_none());
+        let loudness = result.loudness.expect("loudness result");
+        assert!(loudness.integrated_lufs.is_finite() && loudness.integrated_lufs < 0.0);
+        assert!(loudness.momentary_max_lufs >= loudness.integrated_lufs - 0.01);
+    }
+
+    #[test]
     fn session_rejects_empty_and_unsupported_sets() {
         let s = MusicUnderstandingSession::new(click_track(120.0, 2.0, 44100), 44100).unwrap();
         assert_eq!(s.analyze_for(&[]).unwrap_err(), MusicUnderstandingError::EmptyAnalysisSet);
         assert_eq!(
-            s.analyze_for(&[AnalysisType::Rhythm, AnalysisType::Loudness]).unwrap_err(),
-            MusicUnderstandingError::Unsupported(AnalysisType::Loudness)
+            s.analyze_for(&[AnalysisType::Rhythm, AnalysisType::InstrumentActivity]).unwrap_err(),
+            MusicUnderstandingError::Unsupported(AnalysisType::InstrumentActivity)
         );
         assert_eq!(
             s.analyze_for(&[AnalysisType::Structure, AnalysisType::InstrumentActivity]).unwrap_err(),
