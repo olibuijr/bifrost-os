@@ -762,8 +762,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/social.json",
-   "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json",
+   "status": "n/a",
+   "note": "n/a: sociallayerd is Apple's social account broker for the account types BifrOSt does not carry. BifrOSt keeps no third-party social accounts and makes no third-party lookups (privacy-first, lead decision). Previous note: private framework, owner Social; from SDK matrix social.json",
    "rea": [],
    "method": "assessed"
   },
@@ -1310,8 +1310,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
-   "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "status": "n/a",
+   "note": "n/a: Apple's speech dictionary data packs (the lexicon data behind Apple's recognizer). BifrOSt's recognizer is its own Whisper backend (springboard/sdk/src/speech_recognizer.rs) and ships no Apple model or lexicon packs. Previous note: private framework, owner Speech; from SDK matrix speech.json",
    "rea": [],
    "method": "assessed"
   },
@@ -1476,8 +1476,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
-   "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device translation model packs and translation service. An ML model pack, and BifrOSt ships no Apple model packs. Previous note: private framework, owner Speech; from SDK matrix speech.json",
    "rea": [],
    "method": "assessed"
   },
@@ -2745,8 +2745,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "n/a: Apple's Stopwatch app's own intents, not a framework. The App Intents layer they run on is ready (see the AppIntents row). Previous note: private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -3400,8 +3400,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
-   "status": "partial",
-   "note": "private framework, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
+   "status": "n/a",
+   "note": "n/a: Apple's SwiftUI runtime tracing for Instruments. BifrOSt has no SwiftUI runtime; its logging is the Logger registry (docs/milestone-unified-logging.md). Previous note: private framework, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -3770,9 +3770,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/src/shell/usernotif.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "Notification banners: the shell's user notification registry and delivered requests (shell::usernotif::tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -3791,9 +3800,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/src/shell/usernotif.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "Banner presentation through the shell notification UI (shell::usernotif::tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -3812,9 +3830,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/render/src/appearance.rs, springboard/render/src/ui.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::scheme_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::tinted_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::display_option_tests"
+    }
+   ],
+   "ready_note": "Light, Dark and Auto appearance with the cross-fade and accent and tint choices (appearance::scheme_tests, tinted_tests, display_option_tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -3833,9 +3870,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Intent manifests and the shell's intent requests and replies (intents::tests, shell::intents::tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -3855,8 +3906,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "status": "n/a",
+   "note": "n/a: Apple's Migration Assistant imports an Apple account's data and settings from another Mac. BifrOSt's installer does not import from Apple systems. Previous note: private framework, owner System; from SDK matrix system.json",
    "rea": [],
    "method": "assessed"
   },
@@ -3876,8 +3927,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "status": "n/a",
+   "note": "n/a: network transport of Apple's Migration Assistant between two Macs. BifrOSt has no such transfer path. Previous note: private framework, owner System; from SDK matrix system.json",
    "rea": [],
    "method": "assessed"
   },
@@ -3897,8 +3948,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "status": "n/a",
+   "note": "n/a: helper library of Apple's Migration Assistant. BifrOSt has no Migration Assistant. Previous note: private framework, owner System; from SDK matrix system.json",
    "rea": [],
    "method": "assessed"
   },
@@ -3918,8 +3969,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
+   "status": "n/a",
+   "note": "n/a: SDK header and code-signing requirement bundle for Apple's Migration Assistant. It is not a runtime, so there is nothing to build. Previous note: private framework, owner System; from SDK matrix system.json",
    "rea": [],
    "method": "assessed"
   },
@@ -3980,9 +4031,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/sdk/src/status_item.rs, springboard/ui/src/menu_extras.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "status_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu_extras::tests"
+    }
+   ],
+   "ready_note": "Menu-bar extras: the SDK status item model (status_item::tests) and the shell-drawn menu extras (menu_extras::tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -4001,9 +4066,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "status_item::tests"
+    }
+   ],
+   "ready_note": "No separate status daemon: the shell hosts the menu-bar status items in process; status_item::tests covers the item model the shell serves.",
    "rea": [],
    "method": "assessed"
   },
@@ -4022,9 +4096,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/ui/src/menu_extras.rs, springboard/sdk/src/status_item.rs",
    "status": "partial",
    "note": "private framework, owner System; from SDK matrix system.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu_extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "status_item::tests"
+    }
+   ],
+   "ready_note": "Status item drawing and menus: menu_extras::tests (titles, symbols, menu entries) and status_item::tests.",
    "rea": [],
    "method": "assessed"
   },
