@@ -809,6 +809,8 @@ pub struct Shell {
     doc_broker:Option<Option<docpanel::Broker>>,
     /// the floating preview panel (`preview_panel`), shown by an app's `ToShell::Preview` or the `quick-look` service
     quick_look:preview_panel::Panel,
+    /// the Picture in Picture window (`pip`): drawn over the screen while it is starting or active
+    pip:pip::Floating,
     desktop_metrics: desktop_metrics::Snapshot,
     desktop_metrics_at:f64,
     metrics_sampler: desktop_metrics::Sampler,
@@ -1089,6 +1091,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
+            pip:Default::default(),
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
@@ -3426,6 +3429,18 @@ impl Shell {
     /// damage for the presenter; a frame with nothing new draws nothing.
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
+    /// Shows the Picture in Picture window (the delegate events are for the app, which the caller delivers).
+    pub(super) fn pip_start(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.start()
+    }
+
+    /// Takes the Picture in Picture window down.
+    pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.stop()
+    }
+
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
         self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
@@ -3749,6 +3764,13 @@ impl Shell {
         };
         if self.clock.alert().is_none() {
             self.draw_banner(s, t);
+        }
+        // Picture in Picture floats above the windows, inside the screen between the menu bar and the dock
+        if self.pip.showing() {
+            damage.all();
+            let m = self.desk_metrics();
+            let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
+            pip::draw_window(s, &self.ui, self.pip.rect(usable), None);
         }
         self.draw_announce(s);
         self.draw_reader(s);
