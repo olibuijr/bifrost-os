@@ -2987,7 +2987,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local. Built 2026-10-17: Outbox in sdk dav_sync.rs queues local Put and Delete writes and flushes them through put_resource and delete_resource, keeping the queue on a transport failure; tests a_flush_sends_the_edits_in_order_and_empties_the_outbox and the two following. Still open: Sync does not hold an outbox yet and Calendar and Contacts do not queue their edits.",
+   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local. Built 2026-10-17: Outbox in sdk dav_sync.rs queues local Put and Delete writes and flushes them through put_resource and delete_resource, keeping the queue on a transport failure; tests a_flush_sends_the_edits_in_order_and_empties_the_outbox and the two following. Still open: Sync does not hold an outbox yet and Calendar and Contacts do not queue their edits. Built 2026-10-17: dav_sync queues edits to synced items (queue_changes, PUT with the last ETag, DELETE) and flushes the outbox on each sync before reading (Done.writes reports it). Calendar passes its events as iCalendar text (main.rs local_objects), but the calendar store keeps only events with rules or alarms as rich events with their UID, so most synced events are not linked and their edits are not sent yet. Contacts is not wired: the contacts store keeps no UID and exports none, so no card can be linked. Still open: store the UID per event and per contact.",
    "rea": [],
    "method": "assessed"
   },
@@ -4907,7 +4907,7 @@
    "doc": "",
    "bifrost": "springboard/src/appearance_portal.rs (light or dark scheme and accent); springboard/ui/src/bar_appearance.rs (inherited appearance objects)",
    "status": "partial",
-   "note": "The effective scheme and accent reach apps through the appearance file, and bar appearance objects inherit from a standard appearance. Gap: there is no editable theme definition format, so theme values exist only in code.",
+   "note": "The effective scheme and accent reach apps through the appearance file, and bar appearance objects inherit from a standard appearance. Gap: there is no editable theme definition format, so theme values exist only in code. Built 2026-10-17: a theme file of the named colours (render/src/theme.rs: TOML colour table, unknown keys ignored, built-in colours when missing; load_at_startup, current; tests in theme::tests). Still open: drawing code reads the ui.rs constants, not the theme, so a theme file does not change the screen yet.",
    "rea": [],
    "method": "assessed"
   },
