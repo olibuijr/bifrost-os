@@ -2098,7 +2098,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role (CJK mincho serif); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SukhumvitSet.ttc",
