@@ -402,12 +402,12 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | gridColor | `GRID` | new |
 | selectedContentBackgroundColor | `SELECTED_CONTENT_BACKGROUND` | `SELECTION` |
 | unemphasizedSelectedContentBackgroundColor | `UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND` | `SIDEBAR_PLATE` |
-| controlAccentColor, linkColor | `CONTROL_ACCENT`, `LINK` | new (Dark 10,132,255; Light 0,122,255) |
+| controlAccentColor | `CONTROL_ACCENT` | new (Dark 10,132,255; Light 0,122,255); follows Settings > Appearance > Accent colour (`Pair::following_accent`) |
+| linkColor, systemBlue | `LINK`, `SYSTEM_BLUE` | Dark 10,132,255; Light 0,122,255; fixed, the accent does not change links |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
 | windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
 
 Gaps (Apple parity rule):
-- The user-chosen accent does not yet feed `CONTROL_ACCENT`; it is fixed systemBlue (the accent is published to the portal separately).
 - `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
 - Other `NSColor` names are not provided.
 - The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.

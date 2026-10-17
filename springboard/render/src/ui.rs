@@ -745,8 +745,10 @@ pub mod system {
     pub const GRID: Pair = Pair::new(pack(56, 56, 58, 255), pack(214, 214, 218, 255));
     pub const SELECTED_CONTENT_BACKGROUND: Pair = SELECTION;
     pub const UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND: Pair = SIDEBAR_PLATE;
-    pub const CONTROL_ACCENT: Pair = Pair::new(pack(10, 132, 255, 255), pack(0, 122, 255, 255));
-    pub const LINK: Pair = CONTROL_ACCENT;
+    /// `controlAccentColor`: follows Settings > Appearance > Accent colour (Blue by default). Controls tinted by the accent use it.
+    pub const CONTROL_ACCENT: Pair = Pair::following_accent(pack(10, 132, 255, 255), pack(0, 122, 255, 255));
+    /// `linkColor`: systemBlue in both appearances, whatever the accent colour (the HIG keeps links blue).
+    pub const LINK: Pair = Pair::new(pack(10, 132, 255, 255), pack(0, 122, 255, 255));
     pub const SYSTEM_RED: Pair = Pair::new(pack(255, 69, 58, 255), pack(255, 59, 48, 255));
     pub const SYSTEM_ORANGE: Pair = Pair::new(pack(255, 159, 10, 255), pack(255, 149, 0, 255));
     pub const SYSTEM_YELLOW: Pair = Pair::new(pack(255, 214, 10, 255), pack(255, 204, 0, 255));
@@ -754,7 +756,7 @@ pub mod system {
     pub const SYSTEM_MINT: Pair = Pair::new(pack(99, 230, 226, 255), pack(0, 199, 190, 255));
     pub const SYSTEM_TEAL: Pair = Pair::new(pack(64, 200, 224, 255), pack(48, 176, 199, 255));
     pub const SYSTEM_CYAN: Pair = Pair::new(pack(100, 210, 255, 255), pack(50, 173, 230, 255));
-    pub const SYSTEM_BLUE: Pair = CONTROL_ACCENT;
+    pub const SYSTEM_BLUE: Pair = Pair::new(pack(10, 132, 255, 255), pack(0, 122, 255, 255));
     pub const SYSTEM_INDIGO: Pair = Pair::new(pack(94, 92, 230, 255), pack(88, 86, 214, 255));
     pub const SYSTEM_PURPLE: Pair = Pair::new(pack(191, 90, 242, 255), pack(175, 82, 222, 255));
     pub const SYSTEM_PINK: Pair = Pair::new(pack(255, 55, 95, 255), pack(255, 45, 85, 255));
