@@ -185,7 +185,7 @@ impl super::Shell {
             WorkspaceOp::OpenFile | WorkspaceOp::OpenWith | WorkspaceOp::Reveal | WorkspaceOp::Recycle => {
                 #[cfg(feature = "desktop-wayland")]
                 {
-                    self.workspace_files(slot, &app_id, op, grants, arg, t)
+                    self.workspace_files(slot, &app_id, op, grants, arg, t, false)
                 }
                 #[cfg(not(feature = "desktop-wayland"))]
                 {
@@ -240,7 +240,7 @@ impl super::Shell {
     }
 
     #[cfg(feature = "desktop-wayland")]
-    fn workspace_files(&mut self, slot: u8, app_id: &str, op: WorkspaceOp, grants: &[GrantId], arg: &str, t: f64) -> Reply {
+    fn workspace_files(&mut self, slot: u8, app_id: &str, op: WorkspaceOp, grants: &[GrantId], arg: &str, t: f64, scanned: bool) -> Reply {
         // the same permission that lets an app hold grants at all
         let permitted = apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == "documents"));
         if !permitted || grants.is_empty() {
@@ -267,6 +267,16 @@ impl super::Shell {
                 }
             }
             WorkspaceOp::OpenFile | WorkspaceOp::OpenWith => {
+                // the malware gate: a clean file goes on; a suspicious one waits for the person's answer on a card; a
+                // known threat is refused (`malware_gate.rs`). `scanned` is set when the person already said Open Anyway.
+                if !scanned {
+                    let paths: Vec<PathBuf> = files.iter().map(|(p, _)| p.clone()).collect();
+                    let held = super::malware_gate::PendingOpen { slot, app_id: app_id.to_string(), op, grants: grants.to_vec(), arg: arg.to_string() };
+                    if !self.malware_gate(&super::malware_gate::rules_dir(), &paths, held) {
+                        let refused = self.malware_alert.as_ref().is_some_and(|a| matches!(a.gate, super::malware_gate::Gate::Refuse { .. }));
+                        return (if refused { WorkspaceStatus::Denied } else { WorkspaceStatus::Ok }, Vec::new());
+                    }
+                }
                 // (target app key, grant) for each file
                 let mut plan: Vec<(String, GrantId)> = Vec::new();
                 if op == WorkspaceOp::OpenWith {
@@ -310,6 +320,18 @@ impl super::Shell {
                 (WorkspaceStatus::Ok, Vec::new())
             }
             _ => denied(),
+        }
+    }
+
+    /// Carries out an open the malware card held back, after the person chose Open Anyway.
+    pub(super) fn resume_open(&mut self, held: super::malware_gate::PendingOpen, t: f64) {
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let _ = self.workspace_files(held.slot, &held.app_id, held.op, &held.grants, &held.arg, t, true);
+        }
+        #[cfg(not(feature = "desktop-wayland"))]
+        {
+            let _ = (held, t);
         }
     }
 

@@ -7,6 +7,9 @@ fn main() {}
 #[cfg(target_os = "linux")]
 fn main() {
     bifrost_core::host::tune_allocator();
+    // the theme definition file (BIFROST_THEME, else /usr/share/bifrost/theme.toml): its colours replace the built-in
+    // pairs of render/src/ui.rs; with no file every colour keeps its built-in value
+    bifrost_render::theme::load_at_startup();
     if let Err(e) = run() {
         eprintln!("springboard: {e}");
         std::process::exit(1);

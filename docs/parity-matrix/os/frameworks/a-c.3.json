@@ -5949,11 +5949,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/theme.rs; springboard/src/appearance_portal.rs; springboard/ui/src/bar_appearance.rs",
+   "bifrost": "springboard/render/src/theme.rs; springboard/render/src/appearance.rs; springboard/src/bin/shell.rs; springboard/sdk/src/runtime.rs; springboard/src/appearance_portal.rs; springboard/ui/src/bar_appearance.rs",
    "status": "partial",
-   "note": "The data model and compiler for themes (Core Data models and a distill tool in the bundle). BifrOSt reads the effective scheme and accent from the appearance file, bar appearances inherit from a standard appearance, and a theme file of the named colours (render/src/theme.rs: TOML colour table, unknown keys ignored, built-in colours when missing) defines themes as data. Applying a theme file to the constants the drawing code reads is a separate step that is not done. Lead 2026-10-17: not ready: drawing still reads the ui.rs constants, not the theme file.",
+   "note": "The data model and compiler for themes (Core Data models and a distill tool in the bundle). BifrOSt reads the effective scheme and accent from the appearance file, bar appearances inherit from a standard appearance, and a theme file of the named colours (render/src/theme.rs: TOML colour table, unknown keys ignored, built-in colours when missing) defines themes as data. Wired 2026-10-17: the shell and every app read the theme file at start (BIFROST_THEME, else /usr/share/bifrost/theme.toml) and Pair::now returns its colours for the dark/light pairs it names (NAME.dark, NAME.light or NAME for both); without a file every pair keeps its ui.rs value. The plain single-colour constants (TINT, WHITE) are compile-time values and stay as built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "theme::tests"
+    }
+   ],
+   "ready_note": "The theme file now changes the ui.rs Pair colours the drawing code resolves with .now(); with no file nothing changes."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreThread.framework",
