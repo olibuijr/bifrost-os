@@ -1385,8 +1385,9 @@ impl MailWindow {
             }
             Err(e) if id == 0 => self.mail.status = format!("The message was not sent: {e}"),
             Err(e) => {
-                if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free()) {
+                if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free_for_compose()) {
                     self.mail.sheet = Some(Sheet::Compose(compose));
+                    self.mail.fresh_compose = true;
                     self.mail.status = format!("The message was not sent: {e}");
                     self.save_queue_file();
                 } else if let Some(mut queued) = flight {
@@ -2333,6 +2334,7 @@ impl MailWindow {
         match self.drafts.remove(&id) {
             Some(compose) => {
                 self.mail.sheet = Some(Sheet::Compose(compose));
+                self.mail.fresh_compose = true;
                 self.mail.status = "Send undone".into();
             }
             None => self.mail.status = "Send undone, but the message could not be opened again".into(),
@@ -2406,10 +2408,10 @@ impl MailWindow {
 
     /// True when a new sheet may open; otherwise says why not.
     fn sheet_free(&mut self) -> bool {
-        if self.mail.sheet_is_free() {
+        if self.mail.sheet_is_free_for_compose() {
             true
         } else {
-            self.mail.status = "Send or cancel the message first".into();
+            self.mail.status = "Close the open sheet first".into();
             false
         }
     }

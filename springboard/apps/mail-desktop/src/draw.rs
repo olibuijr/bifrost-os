@@ -635,6 +635,22 @@ impl MailWindow {
         }
     }
 
+    /// Paints the window without the compose sheet while that sheet belongs to a compose window (`compose_windows`).
+    pub fn draw_hiding_compose(&mut self, s: &mut Surface, ui: &Ui, hide: bool) {
+        let hidden = if hide && matches!(self.mail.sheet, Some(Sheet::Compose(_))) { self.mail.sheet.take() } else { None };
+        self.draw(s, ui);
+        if hidden.is_some() {
+            self.mail.sheet = hidden;
+        }
+    }
+
+    /// Paints a compose window: its message sheet, centred, over the content background.
+    pub fn draw_compose(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet) {
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        let (w, h) = (s.w as f32, s.h as f32);
+        self.draw_sheet(s, ui, sheet, w, h);
+    }
+
     /// The favourites bar: one chip for each pinned mailbox, the one on screen filled.
     fn draw_favorites(&mut self, s: &mut Surface, ui: &Ui, y: f32, h: f32) {
         s.fill_rect(0, px(y), s.w, px(h), CONTENT_BG.now());

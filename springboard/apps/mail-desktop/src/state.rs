@@ -577,6 +577,9 @@ pub struct Mail {
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
+    /// Set when a compose was made into the sheet slot (open_draft, a failed send, Undo Send). The app moves it into a
+    /// compose window of its own (see `compose_windows`).
+    pub fresh_compose: bool,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -635,6 +638,7 @@ impl Mail {
             passwords: HashMap::new(),
             baseline: HashMap::new(),
             sheet: None,
+            fresh_compose: false,
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -1026,6 +1030,7 @@ impl Mail {
         form.focus_on(if draft.to.is_empty() { to_at } else { last });
         let signature = self.prefs.signature(&account_id).to_string();
         self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
+        self.fresh_compose = true;
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -1205,6 +1210,11 @@ impl Mail {
     }
 
     /// True when a new sheet may replace what is on screen: not while a message is being written.
+    /// True when the sheet slot can take a compose: it is empty, or it holds a compose (which keeps its own window).
+    pub fn sheet_is_free_for_compose(&self) -> bool {
+        matches!(self.sheet, None | Some(Sheet::Compose(_)))
+    }
+
     pub fn sheet_is_free(&self) -> bool {
         !matches!(self.sheet, Some(Sheet::Compose(_)))
     }
