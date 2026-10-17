@@ -9,6 +9,8 @@ pub mod api;
 pub mod install;
 pub mod json;
 pub mod net;
+/// In-app products listed from the catalogue, with price, ownership and what the store can offer.
+pub mod products;
 mod sheet;
 
 use super::cache::TextCache;

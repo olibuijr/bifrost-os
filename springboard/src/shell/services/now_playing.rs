@@ -7,6 +7,9 @@
 //!    state: "playing"|"paused"|"stopped", position_ms?: number, commands?: {name: "enabled"|"disabled"}}`
 //!   replaces the shell's session with the caller's. The model is `bifrost_ui::media_session`.
 //! - `clear` removes the caller's session when it is the one shown.
+//! - `feedback` `{toggles: {like, dislike, bookmark: bool}, rating?: {min, max, value}}` sets the lock card's like,
+//!   dislike, bookmark and rating controls for the owner's session. The user's choice goes back as a `command`
+//!   event: `{"command": "like"|"dislike"|"bookmark", "active": bool}` or `{"command": "rate", "rating": number}`.
 //!
 //! Events to the owner: `command` with `{"command": "play"|"pause"|"stop"|"toggle"|"next"|"previous"|
 //! "skip_forward"|"skip_backward"|"seek"}`, plus `"position_ms"` for `seek`. A command the owner did not enable
@@ -100,6 +103,10 @@ pub fn transport_for(target: Media, playing: bool) -> Option<RemoteCommand> {
 enum Sent {
     Command(RemoteCommand),
     Seek(f64),
+    /// A like, dislike or bookmark toggle the user set on the lock card or Control Center: the wire name and the state.
+    Toggle(&'static str, bool),
+    /// A rating the user chose on the lock card.
+    Rate(f64),
 }
 
 fn body_of(sent: &Sent) -> Json {
@@ -109,7 +116,69 @@ fn body_of(sent: &Sent) -> Json {
             ("command".to_string(), Json::Str(command_name(RemoteCommand::SeekTo).into())),
             ("position_ms".to_string(), Json::Num(*ms)),
         ]),
+        Sent::Toggle(name, active) => Json::Obj(vec![
+            ("command".to_string(), Json::Str((*name).into())),
+            ("active".to_string(), Json::Bool(*active)),
+        ]),
+        Sent::Rate(value) => Json::Obj(vec![
+            ("command".to_string(), Json::Str("rate".into())),
+            ("rating".to_string(), Json::Num(*value)),
+        ]),
     }
+}
+
+/// The feedback an app published with its session: the three toggles (like, dislike, bookmark) and, when the item
+/// has a rating command, its scale and the rating now. The app's `feedback` call sets it; a new publish clears it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Feedback {
+    /// Like, dislike, bookmark.
+    pub toggles: [bool; 3],
+    pub rating: Option<Scale>,
+}
+
+/// A rating scale and the rating now.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Scale {
+    pub min: f64,
+    pub max: f64,
+    pub value: f64,
+}
+
+/// The toggle names on the wire, in `Feedback::toggles` order.
+const TOGGLES: [&str; 3] = ["like", "dislike", "bookmark"];
+
+/// Reads the `feedback` call's body: `{"toggles": {"like": bool, "dislike": bool, "bookmark": bool},
+/// "rating"?: {"min", "max", "value"}}`. Errors name the bad field.
+pub(crate) fn parse_feedback(body: &Json) -> Result<Feedback, String> {
+    let Some(toggles_json) = body.get("toggles") else {
+        return Err("feedback needs toggles".to_string());
+    };
+    let mut toggles = [false; 3];
+    for (slot, name) in TOGGLES.iter().enumerate() {
+        toggles[slot] = match toggles_json.get(name) {
+            Some(Json::Bool(b)) => *b,
+            _ => return Err(format!("feedback toggle {name} needs true or false")),
+        };
+    }
+    let rating = match body.get("rating") {
+        None => None,
+        Some(r) => {
+            let num = |key: &str| r.get(key).and_then(Json::number).filter(|v| v.is_finite());
+            let (Some(min), Some(max), Some(value)) = (num("min"), num("max"), num("value")) else {
+                return Err("rating needs min, max and value".to_string());
+            };
+            if max <= min || value < min || value > max {
+                return Err("rating is outside its scale".to_string());
+            }
+            Some(Scale { min, max, value })
+        }
+    };
+    Ok(Feedback { toggles, rating })
+}
+
+/// The wire name of toggle slot `slot`, or None past the three toggles.
+pub(crate) fn toggle_name(slot: usize) -> Option<&'static str> {
+    TOGGLES.get(slot).copied()
 }
 
 /// What the Now Playing tile draws: the playback state, the position now (advanced while playing) and the length
@@ -143,6 +212,7 @@ pub(crate) struct Store {
     owner: Option<String>,
     session: Option<MediaSession>,
     published: Option<Instant>,
+    feedback: Option<Feedback>,
     pending: Vec<(String, Sent)>,
 }
 
@@ -151,6 +221,47 @@ impl Store {
         self.owner = Some(app_id.to_string());
         self.session = Some(session);
         self.published = Some(Instant::now());
+        self.feedback = None;
+    }
+
+    /// Sets the feedback of the shown session. Only its owner may set it.
+    fn set_feedback(&mut self, app_id: &str, feedback: Feedback) -> bool {
+        if self.owner.as_deref() != Some(app_id) {
+            return false;
+        }
+        self.feedback = Some(feedback);
+        true
+    }
+
+    /// Records a toggle or a rating the user set and queues it for the owner. False when the owner published no
+    /// feedback, or the rating is outside its scale (a toggle is always accepted once feedback exists).
+    fn request_feedback(&mut self, sent: Sent) -> bool {
+        let Some(owner) = self.owner.clone() else {
+            return false;
+        };
+        let Some(feedback) = self.feedback.as_mut() else {
+            return false;
+        };
+        match sent {
+            Sent::Toggle(name, active) => {
+                let Some(slot) = TOGGLES.iter().position(|t| *t == name) else {
+                    return false;
+                };
+                feedback.toggles[slot] = active;
+            }
+            Sent::Rate(value) => {
+                let Some(scale) = feedback.rating.as_mut() else {
+                    return false;
+                };
+                if !(value >= scale.min && value <= scale.max) {
+                    return false;
+                }
+                scale.value = value;
+            }
+            _ => return false,
+        }
+        self.pending.push((owner, sent));
+        true
     }
 
     fn clear(&mut self, app_id: &str) {
@@ -158,6 +269,7 @@ impl Store {
             self.owner = None;
             self.session = None;
             self.published = None;
+            self.feedback = None;
         }
     }
 
@@ -187,6 +299,7 @@ impl Store {
         let command = match &sent {
             Sent::Command(c) => *c,
             Sent::Seek(_) => RemoteCommand::SeekTo,
+            Sent::Toggle(..) | Sent::Rate(_) => return false,
         };
         let Some(session) = self.session.as_mut() else {
             return false;
@@ -210,6 +323,7 @@ impl Store {
                 self.owner = None;
                 self.session = None;
                 self.published = None;
+                self.feedback = None;
             }
         }
     }
@@ -222,7 +336,8 @@ impl Store {
     }
 }
 
-static STORE: Mutex<Store> = Mutex::new(Store { owner: None, session: None, published: None, pending: Vec::new() });
+static STORE: Mutex<Store> =
+    Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new() });
 
 fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
     let mut g = STORE.lock().ok()?;
@@ -238,6 +353,68 @@ pub(crate) fn current() -> Option<MediaSession> {
 /// the command.
 pub(crate) fn send(command: RemoteCommand) -> bool {
     with(|s| s.send(Sent::Command(command))).unwrap_or(false)
+}
+
+/// The transport command a hardware media key asks for, by its evdev code. None for keys that are not transport keys.
+/// Play/pause is a toggle; [`toggle_command`] picks the command that matches the playback state.
+pub(crate) fn media_key_command(code: u16) -> Option<RemoteCommand> {
+    Some(match code {
+        164 => RemoteCommand::TogglePlayPause, // KEY_PLAYPAUSE
+        200 | 207 => RemoteCommand::Play,      // KEY_PLAYCD, KEY_PLAY
+        201 => RemoteCommand::Pause,           // KEY_PAUSECD
+        166 => RemoteCommand::Stop,            // KEY_STOPCD
+        163 => RemoteCommand::Next,            // KEY_NEXTSONG
+        165 => RemoteCommand::Previous,        // KEY_PREVIOUSSONG
+        208 => RemoteCommand::SkipForward,     // KEY_FASTFORWARD
+        168 => RemoteCommand::SkipBackward,    // KEY_REWIND
+        _ => return None,
+    })
+}
+
+/// The command a play/pause toggle sends: pause while playing, play otherwise.
+pub(crate) fn toggle_command(playing: bool) -> RemoteCommand {
+    if playing {
+        RemoteCommand::Pause
+    } else {
+        RemoteCommand::Play
+    }
+}
+
+/// Sends the transport command a media key asks for to the owner of the shown session. False when the key is not a
+/// transport key, there is no session, or the owner did not enable the command (the key then falls through).
+pub(crate) fn media_key(code: u16) -> bool {
+    let Some(command) = media_key_command(code) else {
+        return false;
+    };
+    with(|s| {
+        let command = if command == RemoteCommand::TogglePlayPause {
+            let playing = s.session.as_ref().is_some_and(|x| x.snapshot().state == PlaybackState::Playing);
+            toggle_command(playing)
+        } else {
+            command
+        };
+        s.send(Sent::Command(command))
+    })
+    .unwrap_or(false)
+}
+
+/// The feedback the shown session's owner published, for the lock card's like, dislike, bookmark and rating controls.
+pub(crate) fn feedback() -> Option<Feedback> {
+    with(|s| s.feedback).flatten()
+}
+
+/// The user set toggle `slot` (0 like, 1 dislike, 2 bookmark) to `active`. The owner gets it as a `command` event.
+/// False when the owner published no feedback or the slot is unknown.
+pub(crate) fn set_toggle(slot: usize, active: bool) -> bool {
+    let Some(name) = toggle_name(slot) else {
+        return false;
+    };
+    with(|s| s.request_feedback(Sent::Toggle(name, active))).unwrap_or(false)
+}
+
+/// The user chose `value` on the rating scale. False when the owner published no rating or the value is outside it.
+pub(crate) fn set_rating(value: f64) -> bool {
+    with(|s| s.request_feedback(Sent::Rate(value))).unwrap_or(false)
 }
 
 /// Asks the owner to seek to `position_ms`. False when there is no session or it did not enable seeking.
@@ -277,6 +454,14 @@ impl SystemService for NowPlaying {
             }
             "clear" => {
                 with(|s| s.clear(app_id)).ok_or_else(|| "now playing store unavailable".to_string())?;
+                Ok(Json::Null)
+            }
+            "feedback" => {
+                let feedback = parse_feedback(params)?;
+                let owned = with(|s| s.set_feedback(app_id, feedback)).ok_or_else(|| "now playing store unavailable".to_string())?;
+                if !owned {
+                    return Err("only the owner of the shown session may set its feedback".to_string());
+                }
                 Ok(Json::Null)
             }
             _ => Err(format!("now_playing has no method {method}")),
@@ -400,6 +585,68 @@ mod tests {
         assert!(p.playing);
         assert!((90_000..=200_000).contains(&p.position_ms), "at least the seek target, never past the length");
         assert_eq!(store.drain()[0].body.get("position_ms").and_then(Json::number), Some(90_000.0));
+    }
+
+    #[test]
+    fn media_keys_map_to_transport_commands_and_other_keys_do_not() {
+        assert_eq!(media_key_command(164), Some(RemoteCommand::TogglePlayPause));
+        assert_eq!(media_key_command(163), Some(RemoteCommand::Next));
+        assert_eq!(media_key_command(165), Some(RemoteCommand::Previous));
+        assert_eq!(media_key_command(166), Some(RemoteCommand::Stop));
+        assert_eq!(media_key_command(208), Some(RemoteCommand::SkipForward));
+        assert_eq!(media_key_command(168), Some(RemoteCommand::SkipBackward));
+        assert_eq!(media_key_command(115), None, "volume up is the shell's");
+        assert_eq!(media_key_command(28), None, "enter is not a transport key");
+    }
+
+    #[test]
+    fn feedback_parses_the_toggles_and_the_rating_scale() {
+        let fb = parse_feedback(&body(r#"{"toggles":{"like":true,"dislike":false,"bookmark":false},"rating":{"min":0,"max":5,"value":3}}"#)).unwrap();
+        assert_eq!(fb.toggles, [true, false, false]);
+        assert_eq!(fb.rating, Some(Scale { min: 0.0, max: 5.0, value: 3.0 }));
+        let bare = parse_feedback(&body(r#"{"toggles":{"like":false,"dislike":false,"bookmark":true}}"#)).unwrap();
+        assert_eq!(bare.rating, None, "no rating command, no scale");
+    }
+
+    #[test]
+    fn bad_feedback_is_refused_with_the_field_named() {
+        assert!(parse_feedback(&body(r#"{"rating":{"min":0,"max":5,"value":1}}"#)).unwrap_err().contains("toggles"));
+        assert!(parse_feedback(&body(r#"{"toggles":{"like":"yes","dislike":false,"bookmark":false}}"#)).unwrap_err().contains("like"));
+        assert!(parse_feedback(&body(r#"{"toggles":{"like":true,"dislike":false,"bookmark":false},"rating":{"min":5,"max":5,"value":5}}"#)).is_err());
+        assert!(parse_feedback(&body(r#"{"toggles":{"like":true,"dislike":false,"bookmark":false},"rating":{"min":0,"max":5,"value":9}}"#)).is_err());
+    }
+
+    #[test]
+    fn the_owner_sets_feedback_and_the_user_toggles_and_rates_it() {
+        let mut store = Store::default();
+        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        let fb = Feedback { toggles: [false; 3], rating: Some(Scale { min: 0.0, max: 5.0, value: 0.0 }) };
+        assert!(!store.request_feedback(Sent::Toggle("like", true)), "no feedback published yet");
+        assert!(store.set_feedback("app.one", fb));
+        assert!(!store.set_feedback("app.two", fb), "only the owner may set feedback");
+        assert!(store.request_feedback(Sent::Toggle("like", true)));
+        assert!(!store.request_feedback(Sent::Rate(9.0)), "a rating outside the scale is refused");
+        assert!(store.request_feedback(Sent::Rate(4.0)));
+        let events = store.drain();
+        assert_eq!(events[0].body.str_field("command").as_deref(), Some("like"));
+        assert_eq!(events[0].body.get("active"), Some(&Json::Bool(true)));
+        assert_eq!(events[1].body.str_field("command").as_deref(), Some("rate"));
+        assert_eq!(events[1].body.get("rating").and_then(Json::number), Some(4.0));
+    }
+
+    #[test]
+    fn a_new_publish_clears_the_previous_feedback() {
+        let mut store = Store::default();
+        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        store.set_feedback("app.one", Feedback { toggles: [true; 3], rating: None });
+        store.publish("app.one", parse_session("app.one", &song()).unwrap());
+        assert_eq!(store.feedback, None);
+    }
+
+    #[test]
+    fn a_play_pause_key_pauses_while_playing_and_plays_otherwise() {
+        assert_eq!(toggle_command(true), RemoteCommand::Pause);
+        assert_eq!(toggle_command(false), RemoteCommand::Play);
     }
 
     #[test]

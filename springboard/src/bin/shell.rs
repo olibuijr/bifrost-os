@@ -830,6 +830,10 @@ fn run() -> std::io::Result<()> {
                         effects.extend(fx);
                         continue;
                     }
+                    // a media key goes to the owner of the Now Playing session when it enabled the command
+                    if shell.hw_media_key(code, down, t) {
+                        continue;
+                    }
                     // Deildu or Files on screen: they take their own keys (power, volume and wake stay here)
                     if shell.hw_key(code, down, t) {
                         continue;

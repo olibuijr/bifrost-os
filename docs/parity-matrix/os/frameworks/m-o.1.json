@@ -738,11 +738,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "bifrost": "springboard/src/shell/services/now_playing.rs, springboard/src/shell/hwkeys.rs, springboard/sdk/src/now_playing_feedback.rs, springboard/sdk/src/remote_routing.rs",
    "status": "partial",
    "note": "from SDK matrix now-playing.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "now_playing_feedback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "remote_routing::tests"
+    }
+   ],
+   "ready_note": "Session publish and command routing to the owner, hardware media keys to the owner, and lock card feedback and rating (service and SDK models), covered by unit tests. Drawing the lock card controls and the Control Center wiring are not part of this check."
   },
   {
    "id": "path:/System/Library/Frameworks/OSAKit.framework",

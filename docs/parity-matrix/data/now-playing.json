@@ -19,7 +19,7 @@
       "apple": "Publishing media sessions (article)",
       "bifrost": "springboard/ui/src/media_session.rs (MediaSession, RemoteCommand, dispatch); springboard/sdk/src/now_playing.rs (publish_body, publish, clear); springboard/src/shell/music/system.rs (lock-screen card, Control Center controls)",
       "status": "partial",
-      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions. Built 2026-10-17: SDK feedback body and toggle/rate event decoding for the lock card (bifrost_app::now_playing_feedback); shell side pending. Tests springboard/sdk/src/now_playing_feedback.rs::tests."
+      "note": "An app's session, its content, its position capped at the duration and its command gating are tested headless in parity_sdk-os-01. Gap: the lock-screen card for an app's session is not verified on the lab machine, and the shell's Music card is not yet shared with other sessions. Built 2026-10-17: SDK feedback body and toggle/rate event decoding for the lock card (bifrost_app::now_playing_feedback); shell side pending. Tests springboard/sdk/src/now_playing_feedback.rs::tests. Built 2026-10-17: shell now_playing service accepts the feedback call and queues like, dislike, bookmark and rate events to the owner (services/now_playing.rs parse_feedback, set_toggle, set_rating); tests services::now_playing::tests. The lock card controls are not drawn yet."
     },
     {
       "feature": "Remote sessions: RemoteMediaSession, extension, attributes, MediaDevice",
