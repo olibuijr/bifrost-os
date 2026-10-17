@@ -1,4 +1,5 @@
-//! Voice Control: spoken command words run against the element map.
+//! Voice Control: spoken command words run against the element map, and spoken shortcut titles run app shortcuts
+//! ("run Daily Summary" opens the app that declares the shortcut and sends it the intent, as Search does).
 //!
 //! Pure parser. The whisper recognizer (`bifrost_ui::whisper`) reports a transcript; only a final one is a command, and a
 //! hypothesis the element may still revise is ignored. A command is a verb and a name: "press Save", "click Save" or
@@ -15,10 +16,14 @@ use bifrost_ui::whisper::Transcript;
 pub enum Command {
     /// Press the element whose name is `name` (the words after the verb, trimmed and lower-cased).
     Press(String),
+    /// Run the app shortcut whose title is `name` (lower-cased, without a leading "shortcut").
+    Run(String),
 }
 
 /// Verbs that press an element, in the words the person may say.
 const PRESS_VERBS: [&str; 3] = ["press", "click", "tap"];
+/// The verb that runs an app shortcut.
+const RUN_VERB: &str = "run";
 
 /// The command in a transcript. None for a hypothesis (not final), a blank transcript, a verb it does not know, or a verb
 /// with no name after it. Trailing punctuation the recognizer adds ("Save.") is dropped.
@@ -28,11 +33,42 @@ pub fn parse(transcript: &Transcript) -> Option<Command> {
     }
     let words = transcript.text.trim().trim_end_matches(['.', '!', '?']).trim();
     let (verb, name) = words.split_once(char::is_whitespace)?;
-    if !PRESS_VERBS.contains(&verb.to_lowercase().as_str()) {
-        return None;
-    }
+    let verb = verb.to_lowercase();
     let name = name.trim();
-    (!name.is_empty()).then(|| Command::Press(name.to_lowercase()))
+    if PRESS_VERBS.contains(&verb.as_str()) {
+        return (!name.is_empty()).then(|| Command::Press(name.to_lowercase()));
+    }
+    if verb == RUN_VERB {
+        let lower = name.to_lowercase();
+        let title = lower.strip_prefix("shortcut ").unwrap_or(&lower).trim();
+        return (!title.is_empty()).then(|| Command::Run(title.to_string()));
+    }
+    None
+}
+
+/// Which shortcut a spoken title names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    /// The index of the one shortcut with this title.
+    One(usize),
+    /// More than one shortcut has this title; nothing runs.
+    Many,
+    None,
+}
+
+/// The shortcut whose title equals `spoken`, ignoring case and extra spaces. Several equal titles are `Many`.
+pub fn pick_title(titles: &[&str], spoken: &str) -> Pick {
+    let fold = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let wanted = fold(spoken);
+    if wanted.is_empty() {
+        return Pick::None;
+    }
+    let mut hits = titles.iter().enumerate().filter(|(_, t)| fold(t) == wanted).map(|(i, _)| i);
+    match (hits.next(), hits.next()) {
+        (Some(i), None) => Pick::One(i),
+        (Some(_), Some(_)) => Pick::Many,
+        _ => Pick::None,
+    }
 }
 
 impl Shell {
@@ -42,6 +78,31 @@ impl Shell {
     pub(in crate::shell) fn voice_press(&mut self, transcript: &Transcript, t: f64) -> Option<Result<(String, Vec<Effect>), String>> {
         match parse(transcript)? {
             Command::Press(name) => Some(self.ax_press(&name, t)),
+            Command::Run(title) => Some(self.voice_run(&title, t)),
+        }
+    }
+
+    /// Runs the installed app's shortcut titled `title`: opens the app and sends it the intent, as Search does. The
+    /// answer names the app and the intent.
+    fn voice_run(&mut self, title: &str, t: f64) -> Result<(String, Vec<Effect>), String> {
+        let shortcuts = crate::shell::intents::runnable_shortcuts(&crate::shell::apphost::installed());
+        let titles: Vec<&str> = shortcuts.iter().map(|s| s.intent.title.as_str()).collect();
+        match pick_title(&titles, title) {
+            Pick::None => Err(format!("no shortcut {title:?}")),
+            Pick::Many => Err(format!("more than one shortcut is called {title:?}")),
+            Pick::One(i) => {
+                let (app_id, intent) = (shortcuts[i].app_id.clone(), shortcuts[i].intent.id.clone());
+                let slot = crate::shell::apphost::slot_of(&app_id).ok_or_else(|| format!("{app_id} is not installed"))?;
+                self.open(crate::shell::AppId::External(slot as u8), t);
+                let answer = format!("{app_id}:{intent}");
+                // the app may still be starting: retry the connection for a few seconds, off the UI thread
+                crate::bare::sys::spawn_named("intent-retry", move || {
+                    if let Err(e) = crate::shell::intents::run(&app_id, &intent, std::time::Duration::from_secs(8)) {
+                        eprintln!("voice control: intent {intent} of {app_id}: {e}");
+                    }
+                });
+                Ok((answer, Vec::new()))
+            }
         }
     }
 }
@@ -65,6 +126,26 @@ mod tests {
     fn trailing_punctuation_from_the_recognizer_is_dropped() {
         assert_eq!(parse(&fin("Press Save.")), Some(Command::Press("save".into())));
         assert_eq!(parse(&fin("tap Done!")), Some(Command::Press("done".into())));
+    }
+
+    #[test]
+    fn run_names_an_app_shortcut_with_or_without_the_word_shortcut() {
+        assert_eq!(parse(&fin("run Daily Summary")), Some(Command::Run("daily summary".into())));
+        assert_eq!(parse(&fin("Run shortcut New Note.")), Some(Command::Run("new note".into())));
+        assert_eq!(parse(&fin("run")), None);
+        assert_eq!(parse(&fin("run shortcut ")), None);
+        assert_eq!(parse(&fin("running late")), None, "the verb must be a whole word");
+    }
+
+    #[test]
+    fn a_spoken_title_picks_one_shortcut_ignoring_case_and_spacing() {
+        let titles = ["New Note", "Daily  Summary", "new note", "Timer"];
+        assert_eq!(pick_title(&titles, "daily summary"), Pick::One(1));
+        assert_eq!(pick_title(&titles, "TIMER"), Pick::One(3));
+        assert_eq!(pick_title(&titles, "New Note"), Pick::Many, "two shortcuts share the title: ask which");
+        assert_eq!(pick_title(&titles, "weather"), Pick::None);
+        assert_eq!(pick_title(&titles, "  "), Pick::None);
+        assert_eq!(pick_title(&[], "timer"), Pick::None);
     }
 
     #[test]
