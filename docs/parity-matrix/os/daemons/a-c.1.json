@@ -2548,9 +2548,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/pref_domains.rs",
-   "status": "partial",
-   "note": "rule: defaults and preference domain models; Settings app",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Cryptex is the sealed system-volume container of the reference OS. BifrOSt has no Cryptex volumes, so the agent has no job here.",
    "rea": [],
    "method": "rule"
   },
@@ -4078,11 +4078,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
+   "bifrost": "springboard/sdk/src/url_background.rs, springboard/sdk/src/http_auth.rs",
    "status": "partial",
-   "note": "Missing: test coverage for the authentication challenge answer in url_background.rs (answer_challenge has no test). Credential storage is partly covered by url_background.",
+   "note": "Missing: test coverage for the authentication challenge answer in url_background.rs (answer_challenge). Built 2026-10-17: the answer has tests (stored credential, delegate credential kept or not kept, declined challenge, Digest not answered with Basic); tests url_background::tests. Credential storage is in http_auth.rs.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_auth::tests"
+    }
+   ],
+   "ready_note": "Challenge answering for URL sessions (url_background.rs answer_challenge) and the per-host credential store (http_auth.rs URLCredentialStorage) cover the broker job; both are tested in the bifrost-app crate."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cfprefsd.xpc.agent.plist",
@@ -4708,7 +4722,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/recent_items.rs, springboard/src/shell/recent_items.rs",
    "status": "partial",
-   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites, and the recents are session only. Built 2026-10-17: favourites on the recents list (recent_items set_favourite and favourite_apps; favourites are kept past the recents cap); tests shell::recent_items::tests. Still missing: a surface that shows the favourites, and recents that persist across sessions.",
+   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites. Built 2026-10-17: favourites on the recents list (recent_items set_favourite and favourite_apps; favourites are kept past the recents cap); tests shell::recent_items::tests. Built 2026-10-17: recents and favourites are saved to recent-items.txt in the settings directory and read back by set_data_dir (recent_items::load and save; tests shell::recent_items::tests). Still missing: a surface that shows the favourites.",
    "rea": [],
    "method": "audit"
   },

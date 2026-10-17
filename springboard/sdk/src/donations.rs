@@ -168,6 +168,39 @@ impl SharedDonationIndex {
     }
 }
 
+impl SharedDonationIndex {
+    /// The index as a JSON object with one key per app, each holding that app's donation array (`DonationLog::to_json`).
+    pub fn to_json(&self) -> Json {
+        Json::Obj(self.apps.iter().map(|(app, log)| (app.clone(), log.to_json())).collect())
+    }
+    /// Reads an index written by `to_json`. One damaged app entry fails the whole read (`None`).
+    pub fn from_json(j: &Json) -> Option<SharedDonationIndex> {
+        let Json::Obj(entries) = j else { return None };
+        let mut ix = SharedDonationIndex::new();
+        for (app, v) in entries {
+            ix.apps.insert(app.clone(), DonationLog::from_json(v)?);
+        }
+        Some(ix)
+    }
+    /// Writes the index to `path` through a temporary file and a rename, so a crash never leaves half an index.
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, self.to_json().encode())?;
+        std::fs::rename(&tmp, path)
+    }
+    /// The index at `path`. An empty index when the file is missing or damaged, so the suggestions start over.
+    pub fn load(path: &std::path::Path) -> SharedDonationIndex {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|t| bifrost_core::json::parse(&t).ok())
+            .and_then(|j| SharedDonationIndex::from_json(&j))
+            .unwrap_or_default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,5 +346,27 @@ mod shared_tests {
         assert_eq!(ix.forget_app("b"), 1);
         assert_eq!(ix.forget_app("b"), 0);
         assert_eq!(ix.relevant(10, 10).iter().map(|r| r.app_id.as_str()).collect::<Vec<_>>(), vec!["a", "c"]);
+    }
+
+    #[test]
+    fn the_shared_index_survives_a_save_and_a_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("donations.json");
+        assert_eq!(SharedDonationIndex::load(&path), SharedDonationIndex::new(), "no file yet");
+        let mut ix = SharedDonationIndex::new();
+        ix.donate("music", "play", Some("album-1"), 500);
+        ix.donate("mail", "compose", None, 400);
+        ix.save(&path).unwrap();
+        let again = SharedDonationIndex::load(&path);
+        assert_eq!(again, ix);
+        assert_eq!(again.relevant(500, 10), ix.relevant(500, 10));
+    }
+
+    #[test]
+    fn a_damaged_index_file_loads_as_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("donations.json");
+        std::fs::write(&path, "{\"mail\": 3}").unwrap();
+        assert_eq!(SharedDonationIndex::load(&path), SharedDonationIndex::new());
     }
 }
