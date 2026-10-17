@@ -191,7 +191,10 @@ impl Sync {
         let due = self.last.map_or(true, |last| t - last >= EVERY_MS);
         if due && self.asking.is_none() && self.running.is_none() && self.ready.is_none() {
             let objects = local();
-            self.queue_changes(&objects);
+            // an empty list may be a store that did not load, so it never reads as "everything was deleted"
+            if !objects.is_empty() {
+                self.queue_changes(&objects);
+            }
             self.start(ctx, t, now);
         }
         done
