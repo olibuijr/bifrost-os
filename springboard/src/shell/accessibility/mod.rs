@@ -24,6 +24,7 @@ pub mod shortcut_panel;
 pub mod speech;
 pub mod spoken;
 pub mod tree;
+pub mod voice_control;
 pub mod walk;
 pub mod zoom;
 
