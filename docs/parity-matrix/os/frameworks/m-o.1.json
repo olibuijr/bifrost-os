@@ -1048,11 +1048,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/src/shell/quicksearch.rs, springboard/sdk/src/metadata_query.rs, springboard/sdk/src/quicksearch.rs",
    "status": "os",
-   "note": "Only the bundle identifier (com.apple.MDSChannel) was readable from the reference image. Its job is not determined, so it stays os.",
+   "note": "Client channel to the metadata server (mds) that indexes files for search. Name-based reading: the bundle holds only Info.plist and a localised name.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Apps reach the shell's content index over the control channel (SearchIndex and SearchDelete into spotindex, queries through quicksearch and metadata_query). Name-based mapping: the reference binary is not readable, so the lead should confirm the job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MFAAuthentication.framework",
@@ -1343,8 +1362,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.MSGExternalSync) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: name-based (low confidence): external-account sync for the vendor's messaging stack (MSG prefix, ExternalSync); the index holds only Info.plist. BifrOSt Messages is a Matrix client and Mail syncs over IMAP and DAV (dav_sync), neither through a vendor sync service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1414,9 +1433,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/gpu/src/lib.rs",
-   "status": "partial",
-   "note": "The GPU crate gives a Metal-shaped API over Vulkan to the window server and to SDK drawing. The reference's Metal 3 layer on its newer GPU driver is not mirrored, and apps get no GPU API.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: compatibility layer that runs the vendor's Metal 3 API on its Metal 4 driver for its own GPUs. BifrOSt has no Metal and no vendor GPU driver; the gpu crate talks to Vulkan directly.",
    "rea": [],
    "method": "assessed"
   },
@@ -1508,8 +1527,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Looked for the purpose in the reference index and the extracted tree: only the framework skeleton is listed, with no binary, headers or bundle resources, and no name points at a BifrOSt counterpart. Left as os until it can be read.",
+   "status": "n/a",
+   "note": "n/a: Metal shader archives for the vendor's GPUs (the index lists mxi_archive.metallib of 45 MB and default.metallib, and CoreRE has a mxi.metallib). They are compiled for the vendor's silicon and cannot run on Vulkan; BifrOSt writes its own shaders in springboard/ui/src/shaders.",
    "rea": [],
    "method": "assessed"
   },
@@ -2464,11 +2483,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "bifrost": "springboard/apps/maps-desktop/src, springboard/sdk/src/maps.rs, springboard/ui/src/mapview.rs, springboard/ui/src/map_item.rs, springboard/ui/src/maps_link.rs",
    "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "note": "Support code behind the Maps app and MapKit: places, regions, routes, links.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "links::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "maps::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "maps_link::tests"
+    }
+   ],
+   "ready_note": "The Maps app keeps places, routes and links on open tiles and routing (maps-desktop), and the SDK offers the MapKit-shaped models (maps, mapview, map_item, maps_link). Vendor map data and flyover are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsSync.framework",
@@ -2485,9 +2543,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
-   "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: syncs Maps favourites, guides and recents through the vendor's cloud account (name-based; the index holds only the bundle skeleton). BifrOSt has no vendor account; the Maps app keeps its places locally (store.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -2506,11 +2564,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "bifrost": "springboard/apps/maps-desktop/src/window.rs, springboard/apps/maps-desktop/src/view.rs, springboard/ui/src/mapview.rs, springboard/ui/src/map_controls.rs, springboard/ui/src/map_snapshot.rs",
    "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "note": "Views of the Maps app and MapKit: map view, controls, snapshots, place cards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "window::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_snapshot::tests"
+    }
+   ],
+   "ready_note": "The Maps window draws the map, controls, search and place details (maps-desktop window and view), with the camera, controls and snapshot models in bifrost_ui. Vendor imagery layers are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Marco.framework",
@@ -2528,8 +2610,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Looked for the purpose in the reference index and the extracted tree: only the framework skeleton and localisation folders are listed, and no name points at a BifrOSt counterpart. Left as os until it can be read.",
+   "status": "n/a",
+   "note": "n/a: name-based (low confidence): the index shows only Info.plist and an InfoPlist.loctable in every locale, so it is a branded vendor component with no readable function, no linked app and no daemon. Nothing in BifrOSt maps to it and no user-visible job can be shown.",
    "rea": [],
    "method": "assessed"
   },
@@ -2600,8 +2682,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Looked for the purpose in the reference index and the extracted tree: only the framework skeleton is listed, with no binary or resources, and no name points at a BifrOSt counterpart. Left as os until it can be read.",
+   "status": "n/a",
+   "note": "n/a: the vendor assistant's query-rewrite and ranking models (the index has the log subsystem com.apple.siri.marrs.QueryRewrite.CCQR). It runs the vendor's trained model packs, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },
@@ -2690,8 +2772,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier is in the reference index. No daemon, plist or linked app names it, so its purpose stays unknown after reading the index and the reference plists.",
+   "status": "n/a",
+   "note": "n/a: name-based (low confidence): the index shows only Info.plist and version.plist, no resources, no daemon and no linking bundle, which fits a vendor-internal support kit. Nothing in BifrOSt maps to it.",
    "rea": [],
    "method": "assessed"
   },
@@ -2710,11 +2792,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/matter.json",
+   "bifrost": "springboard/core/src/matter.rs, springboard/core/src/matter_fabric.rs, springboard/core/src/matter_interaction.rs, springboard/core/src/matter_cluster.rs",
    "status": "partial",
    "note": "private framework, owner Matter; from SDK matrix matter.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter_interaction::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter_cluster::tests"
+    }
+   ],
+   "ready_note": "Matter controller pieces are built: setup code and QR parsing, DNS-SD names, fabric ids, interaction read/write/invoke/subscribe and typed clusters (On/Off, Level Control and others). Commissioning over Thread and certificate storage are open and tracked in the Matter SDK rows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAgnosticUSB.framework",
@@ -2732,8 +2833,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier is in the reference index. Its name suggests USB media-class devices, but no binary is indexed and no plist names it, so the purpose stays unconfirmed; the Linux side is the kernel UVC and USB audio drivers.",
+   "status": "n/a",
+   "note": "n/a: Media Agnostic USB (MA-USB) tunnels USB over a wireless or IP link, as used by wireless docks (name-based; the index holds only Info.plist and version.plist). No PC peripheral BifrOSt targets uses it, Linux has no in-kernel MA-USB, and wired USB is handled by the kernel and sdk usb_device.",
    "rea": [],
    "method": "assessed"
   },
@@ -3108,11 +3209,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "bifrost": "springboard/ui/src/media_search.rs, springboard/ui/src/media_request.rs, springboard/sdk/src/media_intents.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "private framework, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "A spoken or typed play, queue or search request is parsed into criteria and verb, resolved against the app's catalogue (with disambiguation) and answered with a dialog (media_search, media_request); Search runs the Now Playing transport commands (quicksearch, media_intents::TRANSPORT). No voice assistant delivers requests to apps system-wide."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaIntentsSnippetModels.framework",
@@ -3129,11 +3249,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "bifrost": "springboard/ui/src/media_search.rs, springboard/ui/src/media_request.rs, springboard/ui/src/media_queue.rs",
    "status": "partial",
    "note": "private framework, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_request::tests"
+    }
+   ],
+   "ready_note": "The result models a media request returns (matched items with kind, title, artist, album, the response dialog and the play queue) are media_search::MediaItem, media_request outcomes and media_queue::PlaybackQueue."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaKit.framework",
@@ -3150,11 +3284,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/disk_format.rs, springboard/core/src/disk_request.rs, springboard/src/installer/disks.rs, springboard/bootweave/efi",
    "status": "os",
-   "note": "The framework holds boot and loader resources for installer or recovery media (EFI loaders, database and inventory plists). The BifrOSt boot path is springboard/bootweave/efi and the native installer; the mapping was not verified, so the status stays os.",
+   "note": "Disk media library: partition maps, boot loaders and file system layout for installer and recovery media (MKDrivers.bundle with efi and bootroot loaders in the index).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_format::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::disks::tests"
+    }
+   ],
+   "ready_note": "Erase, partition (GPT with an EFI system partition), format and first-aid plans are built and checked in core (disk_format, disk_request), the installer reads disks and reuses or creates the ESP (installer::disks), and the EFI loader is bootweave-efi. Apple partition maps and HFS media are not supported."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaML.framework",
@@ -3330,8 +3483,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier is in the reference index . No plist or daemon names it, so its purpose stays unconfirmed after reading the index.",
+   "status": "n/a",
+   "note": "n/a: media-services support for the vendor's store and account services (the index shows the AppleMediaServices tree and the AMSMediaServiceOwner plug-in beside it). Needs the vendor account and stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3371,11 +3524,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs, springboard/sdk/src/memory_pressure.rs, springboard/bifrostd/src/pager.rs",
    "status": "os",
-   "note": "Only the bundle identifier is in the reference index . Its job is probably per-process memory accounting, but no daemon or plist confirms it, so the status stays os. Activity Monitor reads /proc/meminfo in springboard/apps/activity-desktop/src/sample.rs.",
+   "note": "Per-process and system memory accounting (footprints, available memory, pressure).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "memory_pressure::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "pager::tests"
+    }
+   ],
+   "ready_note": "Activity Monitor reads /proc (meminfo, per-process statm) with tested parsers, and bifrostd publishes the memory pressure level that apps read through memory_pressure. Per-process compressed-memory accounting is not mirrored (Linux has none)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MemoryDiagnostics.framework",
@@ -3393,8 +3565,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier is in the reference index . The reference memory-maintenance daemon sends memory and jetsam reports, so this may be part of that telemetry, but the index does not confirm it, so the status stays os.",
+   "status": "n/a",
+   "note": "n/a: memory-maintenance reporting of the vendor's diagnostics pipeline (it sends memory and resource-exception reports to the vendor; the index holds only Info.plist and version.plist). BifrOSt sends no diagnostics upload; local crash and memory-pressure data is in crash_report and the pager.",
    "rea": [],
    "method": "assessed"
   },
