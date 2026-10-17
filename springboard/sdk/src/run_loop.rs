@@ -109,9 +109,35 @@ impl RunLoop {
     }
 }
 
+/// The main-thread counterpart of [`crate::schedulers::Scheduler`]: work that is not `Send` (it may hold `Rc`
+/// publishers), run by the owner's tick. [`RunLoop`] is the one implementation.
+pub trait LocalScheduler {
+    /// Runs `work` no earlier than `delay` after the scheduler's current time.
+    fn schedule_local_after(&self, delay: Duration, work: impl FnOnce() + 'static);
+}
+
+impl LocalScheduler for RunLoop {
+    fn schedule_local_after(&self, delay: Duration, work: impl FnOnce() + 'static) {
+        self.schedule_after(delay, work);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_local_scheduler_runs_work_on_the_run_loop_clock() {
+        fn later<S: LocalScheduler>(s: &S, log: Rc<RefCell<Vec<&'static str>>>) {
+            s.schedule_local_after(Duration::from_millis(5), move || log.borrow_mut().push("local"));
+        }
+        let rl = RunLoop::new();
+        let log = Rc::new(RefCell::new(Vec::new()));
+        later(&rl, log.clone());
+        assert_eq!(rl.advance(Duration::from_millis(4)), 0);
+        assert_eq!(rl.advance(Duration::from_millis(5)), 1);
+        assert_eq!(*log.borrow(), vec!["local"]);
+    }
 
     fn log() -> (Rc<RefCell<Vec<&'static str>>>, Rc<RefCell<Vec<&'static str>>>) {
         let l = Rc::new(RefCell::new(Vec::new()));

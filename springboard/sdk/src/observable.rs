@@ -542,10 +542,10 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
     /// restarts the wait, and the last one is the one sent. Timing comes from `run_loop`, which the app's tick
     /// advances. The returned `Subscription` detaches this subject from `self`; a wait already running still ends
     /// quietly, and sends nothing if a newer value has arrived.
-    pub fn debounce(
+    pub fn debounce<S: crate::run_loop::LocalScheduler + Clone + 'static>(
         &self,
         interval: Duration,
-        run_loop: &crate::run_loop::RunLoop,
+        run_loop: &S,
     ) -> (PassthroughSubject<T>, Subscription) {
         let out = PassthroughSubject::new();
         // Generation of the newest value, and that value until it is sent.
@@ -559,7 +559,7 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
                 st.0
             };
             let (o2, s2) = (o.clone(), s.clone());
-            rl.schedule_after(interval, move || {
+            rl.schedule_local_after(interval, move || {
                 let value = {
                     let mut st = s2.borrow_mut();
                     if st.0 != generation {
@@ -578,10 +578,10 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
     /// `throttle(for:scheduler:latest:)`: sends the first value at once, then holds back the rest for `interval`.
     /// With `latest` set, the newest value held back is sent when the interval ends, and a new interval starts with
     /// it; without it, values that arrive during an interval are dropped. Timing comes from `run_loop`.
-    pub fn throttle(
+    pub fn throttle<S: crate::run_loop::LocalScheduler + Clone + 'static>(
         &self,
         interval: Duration,
-        run_loop: &crate::run_loop::RunLoop,
+        run_loop: &S,
         latest: bool,
     ) -> (PassthroughSubject<T>, Subscription) {
         let out = PassthroughSubject::new();
@@ -610,16 +610,16 @@ struct ThrottleState<T> {
 }
 
 /// Starts an interval: schedules its end, which sends the held value (if `latest`) and starts the next interval.
-fn throttle_open_window<T: Clone + 'static>(
+fn throttle_open_window<T: Clone + 'static, S: crate::run_loop::LocalScheduler + Clone + 'static>(
     state: Rc<RefCell<ThrottleState<T>>>,
     out: PassthroughSubject<T>,
-    run_loop: crate::run_loop::RunLoop,
+    run_loop: S,
     interval: Duration,
     latest: bool,
 ) {
     state.borrow_mut().window_open = true;
     let (s, o, rl) = (state.clone(), out.clone(), run_loop.clone());
-    run_loop.schedule_after(interval, move || {
+    run_loop.schedule_local_after(interval, move || {
         let held = {
             let mut st = s.borrow_mut();
             if latest {
