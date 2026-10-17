@@ -12,7 +12,7 @@
       "apple": "EAAccessoryManager (shared(), registerForLocalNotifications, EAAccessoryDidConnect, EAAccessoryDidDisconnect) https://developer.apple.com/documentation/externalaccessory/eaaccessorymanager",
       "bifrost": "springboard/sdk/src/external_accessory.rs (AccessoryManager, register_for_notifications, take_events); springboard/core/src/accessory_manager.rs (AccessoryManager::sync); tests: springboard/sdk/tests/parity_sdk-complete-14.rs",
       "status": "partial",
-      "note": "Apps register for connect and disconnect notifications and take them in order, and a registration that is cancelled drops the queue; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no bus source drives attach and detach on a real device, which needs hardware and a Midget check."
+      "note": "Apps register for connect and disconnect notifications and take them in order, and a registration that is cancelled drops the queue; tested headless in sdk/tests/parity_sdk-complete-14.rs. Gap: no bus source drives attach and detach on a real device, which needs hardware and a Midget check. Refreshed 2026-10-17: the manager, registration and the notification queue are covered by sdk external_accessory.rs (AccessoryManager, register_for_notifications, take_events; tests external_accessory::tests). Only the bus source that drives attach and detach on a device remains."
     },
     {
       "feature": "Accessory object (identity and state)",
@@ -65,11 +65,10 @@
     }
   ],
   "gaps": [
-    "No SDK accessory manager or connect/disconnect events for apps (EAAccessoryManager).",
     "The app view of an accessory (Accessory::from_core) has no bus source yet, and the sandbox binds no accessory device nodes.",
-    "No EASession byte stream for a declared accessory protocol, and no manifest key or sandbox grant for accessory protocols (app_policy.rs binds only /dev/snd and /dev/dri).",
-    "No Bluetooth accessory picker callable from an app; the picker exists only in Settings (shell/pages.rs bluetooth_spec).",
+    "No manifest key or sandbox grant for accessory protocols (app_policy.rs binds only /dev/snd and /dev/dri), so an app cannot reach a declared accessory. The EASession byte streams exist as a model (sdk external_accessory Session)",
+    "The Bluetooth picker request model exists (sdk bluetooth_picker, tests bluetooth_picker::tests), but the request does not cross the shell boundary, so no app can open it; the pairing sheet stays in the shell",
     "No Wi-Fi unconfigured accessory browser or configuration flow.",
-    "Bluetooth device state (springboard/src/bare/bluetooth.rs Device) is not surfaced through any SDK type."
+    "The SDK has a Bluetooth device model (sdk bluetooth_devices: RemoteDevice, DeviceList, tests bluetooth_devices::tests), but the shell keeps its own table in springboard/src/bare/bluetooth.rs and no app can reach the list"
   ]
 }

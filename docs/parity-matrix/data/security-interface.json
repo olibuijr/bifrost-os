@@ -12,7 +12,7 @@
       "apple": "SFAuthorizationView, SFAuthorizationPluginView, SFAuthorizationViewState, SFButtonType, SFViewType",
       "bifrost": "springboard/sdk/src/system/authorization_lock.rs (AuthorizationLock, ButtonType, PasswordError, from_code, message); docs/privd-protocol.md (password gate with wrong_password and locked_out errors)",
       "status": "partial",
-      "note": "The lock state, the privileged password replies (wrong_password, locked_out, no_password) and their messages are tested. The shell draws the lock view, and app-facing plug-in views do not exist."
+      "note": "The lock state, the privileged password replies (wrong_password, locked_out, no_password) and their messages are tested. The shell draws the lock view, and app-facing plug-in views do not exist. Refreshed 2026-10-17: the lock model is sdk system::authorization_lock; no app-facing padlock control yet."
     },
     {
       "feature": "Certificate panel",
@@ -65,10 +65,10 @@
     }
   ],
   "gaps": [
-    "No certificate panel, certificate view or certificate trust editor. The shell has no certificate display or trust UI.",
+    "No certificate panel, certificate view or certificate trust editor. The trust evaluation model is sdk trust.rs (ten tests in its module), with no UI",
     "No choose-identity panel. Keychain items cannot hold identities, keys or certificates.",
     "No keychain save or settings panel. The keychain SDK has no UI and no user-facing keychain settings.",
-    "No authorization lock view for apps. Apps cannot show a padlock or request an admin password through an SDK control; the privd password gate is not exposed to apps.",
+    "No app-facing padlock: sdk system::authorization_lock holds the lock state, messages and privd password errors (tests in its module), but no SDK control draws it. The shell draws the only lock view and the privd password gate is not exposed to apps",
     "Apple's documentation notes the SFAuthorization classes now live in Security Foundation. This matrix does not cover them here."
   ]
 }
