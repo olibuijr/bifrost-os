@@ -8,6 +8,7 @@ mod model;
 mod organize;
 mod quick;
 mod repeat;
+mod search;
 mod smartdef;
 mod settings;
 mod store;
@@ -88,6 +89,9 @@ struct RemindersApp {
     quick: Option<StatusItem>,
     /// The open panel asked for by a reminder form's Add Image.
     pick: Option<u32>,
+    /// The reminders as the Core Search index holds them (see `search.rs`), and the store generation they were read at.
+    indexed: std::collections::HashMap<u64, String>,
+    indexed_gen: Option<u32>,
     /// The save panel asked for by File > Save List As, with the checklist it will write.
     save: Option<(u32, String)>,
 }
@@ -112,6 +116,24 @@ impl RemindersApp {
         // the reminder form asked for a picture: the open panel answers in `document`
         if self.app.as_mut().is_some_and(|a| a.take_image_request()) {
             self.pick = Some(ctx.open_document(DocMode::Read, "Add Image", &["png", "jpg", "jpeg"]));
+        }
+    }
+
+    /// Keeps the Core Search index in step with the reminders: runs when the store generation changed.
+    fn sync_index(&mut self, ctx: &Ctx) {
+        let Some(a) = &self.app else { return };
+        if self.indexed_gen == Some(a.generation()) {
+            return;
+        }
+        self.indexed_gen = Some(a.generation());
+        let (changed, gone) = search::sync(&mut self.indexed, a.items());
+        let index = bifrost_app::quicksearch::CSSearchableIndex::default_index();
+        if !changed.is_empty() {
+            index.index_searchable_items(ctx, &changed);
+        }
+        if !gone.is_empty() {
+            let refs: Vec<&str> = gone.iter().map(String::as_str).collect();
+            index.delete_searchable_items(ctx, &refs);
         }
     }
 
@@ -579,6 +601,11 @@ impl App for RemindersApp {
         }
     }
 
+    fn continue_activity(&mut self, _ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
+        let Ok(id) = activity.unique_identifier.parse::<u64>() else { return false };
+        activity.activity_type == bifrost_app::quicksearch::ACTION_TYPE && self.app.as_mut().is_some_and(|a| a.show_item(id))
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let Some(a) = &mut self.app else { return false };
         self.wall = Wall::sample(t);
@@ -611,6 +638,7 @@ impl App for RemindersApp {
                 alerts::apply(ctx, &change, via_service);
             }
         }
+        self.sync_index(ctx);
         self.sync_keyboard(ctx);
         redraw
     }
@@ -677,5 +705,5 @@ fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None, indexed: Default::default(), indexed_gen: None });
 }
