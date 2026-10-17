@@ -10,8 +10,11 @@ use std::process::{Child, Command, Stdio};
 
 /// The engines tried in order.
 pub const ENGINES: [&str; 2] = ["espeak-ng", "espeak"];
-/// Speech rate in words per minute (the engine's `-s` option).
-pub const RATE_WPM: u32 = 180;
+/// The slowest and fastest rate the engine is asked for, in words per minute (the engine's `-s` option).
+pub const MIN_RATE: u32 = 80;
+pub const MAX_RATE: u32 = 450;
+/// The highest pitch the engine takes (its `-p` option; 0 is the lowest).
+pub const MAX_PITCH: u32 = 99;
 /// The longest text spoken, in characters; a longer announcement is cut.
 pub const MAX_CHARS: usize = 400;
 
@@ -45,9 +48,35 @@ pub fn clean(text: &str) -> String {
     joined.chars().take(MAX_CHARS).collect()
 }
 
-/// The engine's arguments for `text`: the rate, then `--` and the text, so text that starts with a dash is not an option.
-pub fn args(text: &str) -> Vec<String> {
-    vec!["-s".to_string(), RATE_WPM.to_string(), "--".to_string(), clean(text)]
+/// The voice the screen reader speaks with, from Settings > Accessibility > Screen Reader.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Config {
+    /// words per minute, clamped to `MIN_RATE..=MAX_RATE` when spoken
+    pub rate: u32,
+    /// 0 to `MAX_PITCH`
+    pub pitch: u32,
+    /// an engine voice name; empty for the engine's default voice
+    pub voice: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config { rate: 180, pitch: 50, voice: String::new() }
+    }
+}
+
+/// The engine's arguments for `text` under `config`: the rate, the pitch, the voice when one is set, then `--` and the text,
+/// so text that starts with a dash is not an option. Out-of-range values are clamped; a voice name that is not a plain word
+/// is left out.
+pub fn args(text: &str, config: &Config) -> Vec<String> {
+    let mut out = vec!["-s".to_string(), config.rate.clamp(MIN_RATE, MAX_RATE).to_string(), "-p".to_string(), config.pitch.min(MAX_PITCH).to_string()];
+    if bifrost_core::speech_engine::voice_name_ok(&config.voice) {
+        out.push("-v".to_string());
+        out.push(config.voice.clone());
+    }
+    out.push("--".to_string());
+    out.push(clean(text));
+    out
 }
 
 /// Speaks announcements through the detected engine. A new utterance stops the one still playing.
@@ -55,12 +84,23 @@ pub fn args(text: &str) -> Vec<String> {
 pub struct Speaker {
     engine: Option<PathBuf>,
     child: Option<Child>,
+    config: Config,
 }
 
 impl Speaker {
     /// A speaker for the engine found on the current `PATH`; silent when there is none.
     pub fn detect() -> Self {
-        Speaker { engine: std::env::var("PATH").ok().and_then(|p| find_engine(&p)), child: None }
+        Speaker { engine: std::env::var("PATH").ok().and_then(|p| find_engine(&p)), child: None, config: Config::default() }
+    }
+
+    /// Sets the rate, pitch and voice the next utterances use. An utterance in progress keeps its own.
+    pub fn configure(&mut self, config: Config) {
+        self.config = config;
+    }
+
+    /// The voice the next utterance uses.
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Whether an engine was found.
@@ -77,7 +117,7 @@ impl Speaker {
             return false;
         }
         self.stop();
-        match Command::new(&engine).args(args(&spoken)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        match Command::new(&engine).args(args(&spoken, &self.config)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
             Ok(child) => {
                 self.child = Some(child);
                 true
@@ -124,8 +164,31 @@ mod tests {
 
     #[test]
     fn args_put_the_text_after_a_separator() {
-        let a = args("-rf now");
-        assert_eq!(a, vec!["-s", "180", "--", "-rf now"]);
+        let a = args("-rf now", &Config::default());
+        assert_eq!(a, vec!["-s", "180", "-p", "50", "--", "-rf now"]);
+    }
+
+    #[test]
+    fn args_carry_the_chosen_rate_pitch_and_voice() {
+        let c = Config { rate: 240, pitch: 70, voice: "is".into() };
+        assert_eq!(args("Halló", &c), vec!["-s", "240", "-p", "70", "-v", "is", "--", "Halló"]);
+    }
+
+    #[test]
+    fn args_clamp_the_rate_and_pitch_and_drop_a_bad_voice() {
+        let c = Config { rate: 10, pitch: 500, voice: "-x y".into() };
+        assert_eq!(args("hi", &c), vec!["-s", "80", "-p", "99", "--", "hi"]);
+        let fast = Config { rate: 9000, ..Config::default() };
+        assert_eq!(args("hi", &fast)[1], "450");
+    }
+
+    #[test]
+    fn configure_replaces_the_voice_for_the_next_utterance() {
+        let mut s = Speaker::default();
+        assert_eq!(s.config(), &Config::default());
+        s.configure(Config { rate: 140, pitch: 30, voice: "en-gb".into() });
+        assert_eq!(s.config().rate, 140);
+        assert_eq!(s.config().voice, "en-gb");
     }
 
     #[test]
@@ -156,7 +219,7 @@ mod tests {
 
     #[test]
     fn blank_text_is_never_spoken() {
-        let mut s = Speaker { engine: Some(PathBuf::from("/nonexistent/engine")), child: None };
+        let mut s = Speaker { engine: Some(PathBuf::from("/nonexistent/engine")), child: None, config: Config::default() };
         assert!(!s.say(" \t "));
         assert!(s.child.is_none());
     }
