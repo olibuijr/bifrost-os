@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.6 — 2026-10-17
+
+- Pages > Insert > Page from File… merges every page of another PDF after the shown page, and Pages > Insert > Blank
+  Page adds a blank page the size of the shown page. The result is written to a copy under the app's data folder and
+  opened; the other file's objects are renumbered and the page tree is rewritten. Undo does not reach back past an insert.
+- Fill PDF forms: text fields and check boxes are read when a PDF opens, drawn over the page, typed into (Return or
+  Escape leaves a field) or toggled by a click, and saved by Save, Export PDF and Print. Radio groups, choice lists and
+  signature fields are not filled yet.
+
 ## 0.11.5 — 2026-10-14
 
 - Outline, markup, bookmark and search sidebar rows use the Golden Gate source-list widget and its hit model; page

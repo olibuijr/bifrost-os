@@ -4,9 +4,10 @@
 
 use crate::model::{self, Mark, MarkKind};
 use crate::pdfjob::{self, Job, Pdf, Reply};
+use springboard::cg::pdf::doc::Doc;
 use springboard::cg::pdf::obj::{fmt_num, Dict, Obj};
-use springboard::cg::pdf::page::Page as PdfPage;
-use springboard::cg::pdf::writer::{self, Annotation, Edits};
+use springboard::cg::pdf::page::{self, Page as PdfPage, PageBox};
+use springboard::cg::pdf::writer::{self, Annotation, Edits, FieldEdit};
 use std::path::{Path, PathBuf};
 
 /// A note's marker in default user space, in points.
@@ -54,18 +55,67 @@ pub fn stamp_author(plan: &mut Edits, author: &str) {
 
 /// Writes the edited PDF to `target`: the file at `source` with the edits appended. Runs on the worker, which holds
 /// the parsed file, so the edits are made there. Returns `target`.
-pub fn write_edited(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark], author: &str) -> Result<PathBuf, String> {
+pub fn write_edited(
+    pdf: &Pdf,
+    source: &Path,
+    target: &Path,
+    order: &[usize],
+    turns: &[u8],
+    marks: &[Mark],
+    author: &str,
+    insertion: &Insertion,
+    forms: &[FieldEdit],
+) -> Result<PathBuf, String> {
     let base = std::fs::read(source).map_err(|e| e.to_string())?;
     let mut plan = edits(&pdf.pages, order, turns, marks)?;
     stamp_author(&mut plan, author);
+    plan.insert = insertion_for(pdf, insertion)?;
+    plan.fields = forms.to_vec();
     let bytes = writer::save(&base, &pdf.doc, &plan)?;
     std::fs::write(target, bytes).map_err(|e| e.to_string())?;
     Ok(target.to_path_buf())
 }
 
+/// A page the save adds to the document, placed in the page order.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Insertion {
+    /// No pages are added.
+    None,
+    /// Every page of the PDF at `path`, placed from display place `at` on.
+    File { path: PathBuf, at: usize },
+    /// One blank page the size of source page `src`, placed at display place `at`.
+    Blank { at: usize, src: usize },
+}
+
+/// The pages `insertion` adds, as the writer takes them. A blank page takes the size of the page it is inserted by.
+fn insertion_for(pdf: &Pdf, insertion: &Insertion) -> Result<Option<writer::Insert>, String> {
+    match insertion {
+        Insertion::None => Ok(None),
+        Insertion::File { path, at } => {
+            let other = Doc::open(std::fs::read(path).map_err(|e| e.to_string())?)?;
+            let all: Vec<usize> = (0..page::page_count(&other)).collect();
+            writer::import(&other, &all, *at).map(Some)
+        }
+        Insertion::Blank { at, src } => {
+            let sized_by = pdf.pages.get(*src).ok_or("the page to size the blank page by is missing")?;
+            let (w, h) = sized_by.size(PageBox::Crop);
+            Ok(Some(writer::blank(*at, w, h)))
+        }
+    }
+}
+
 /// A job that writes the edited PDF to `target` (see `write_edited`) and replies with the file written.
-pub fn save_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>, author: String) -> Job {
-    pdfjob::run(move |pdf: &Pdf| Reply::Written(write_edited(pdf, &source, &target, &order, &turns, &marks, &author)))
+pub fn save_job(
+    source: PathBuf,
+    target: PathBuf,
+    order: Vec<usize>,
+    turns: Vec<u8>,
+    marks: Vec<Mark>,
+    author: String,
+    insertion: Insertion,
+    forms: Vec<FieldEdit>,
+) -> Job {
+    pdfjob::run(move |pdf: &Pdf| Reply::Written(write_edited(pdf, &source, &target, &order, &turns, &marks, &author, &insertion, &forms)))
 }
 
 /// The annotation for one mark, or None when the mark cannot be placed on its page. `quarters` is how far the page is
@@ -475,6 +525,49 @@ mod tests {
         let pages = page::pages(&doc);
         let m = mark(MarkKind::Redact, 0, Norm { x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
         assert!(edits(&pages, &[0], &[0], std::slice::from_ref(&m)).unwrap().annotations.is_empty());
+    }
+
+    #[test]
+    fn a_pdf_is_merged_after_the_shown_page_and_its_pages_resolve() {
+        let dir = std::env::temp_dir().join(format!("viewer-merge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = dir.join("base.pdf");
+        let other = dir.join("other.pdf");
+        let merged = dir.join("merged.pdf");
+        std::fs::write(&base, one_page()).unwrap();
+        std::fs::write(&other, one_page()).unwrap();
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let pdf = Pdf { doc, pages };
+        let insertion = Insertion::File { path: other.clone(), at: 1 };
+        write_edited(&pdf, &base, &merged, &[0], &[0], &[], "", &insertion, &[]).unwrap();
+        let out = Doc::open(std::fs::read(&merged).unwrap()).unwrap();
+        let merged_pages = page::pages(&out);
+        assert_eq!(merged_pages.len(), 2);
+        for p in &merged_pages {
+            let num = p.num.expect("each page is an object");
+            assert!(matches!(out.load(num), Obj::Dict(_)), "page {num} resolves");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_blank_page_is_the_size_of_the_page_it_follows() {
+        let dir = std::env::temp_dir().join(format!("viewer-blank-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = dir.join("base.pdf");
+        let out_path = dir.join("blank.pdf");
+        std::fs::write(&base, one_page()).unwrap();
+        let doc = Doc::open(one_page()).unwrap();
+        let pages = page::pages(&doc);
+        let pdf = Pdf { doc, pages };
+        let insertion = Insertion::Blank { at: 1, src: 0 };
+        write_edited(&pdf, &base, &out_path, &[0], &[0], &[], "", &insertion, &[]).unwrap();
+        let out = Doc::open(std::fs::read(&out_path).unwrap()).unwrap();
+        let pages = page::pages(&out);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[1].size(PageBox::Crop), (612.0, 792.0));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

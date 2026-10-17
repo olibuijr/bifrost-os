@@ -7,6 +7,7 @@ use crate::model::Mark;
 use crate::pdfjob::{self, Job, Pdf, Reply};
 use crate::pdfmarks;
 use bifrost_app::print::{PrintError, PrintOperation};
+use springboard::cg::pdf::writer::FieldEdit;
 use std::path::{Path, PathBuf};
 
 /// The status line after a job is sent to the printer.
@@ -36,9 +37,9 @@ pub fn print_file(path: PathBuf) -> String {
 }
 
 /// A job that writes the edited PDF to `target` and prints that file. It replies with the status line.
-pub fn pdf_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>, author: String) -> Job {
+pub fn pdf_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>, author: String, forms: Vec<FieldEdit>) -> Job {
     pdfjob::run(move |pdf: &Pdf| {
-        let status = match prepare(pdf, &source, &target, &order, &turns, &marks, &author) {
+        let status = match prepare(pdf, &source, &target, &order, &turns, &marks, &author, &forms) {
             Ok(file) => print_file(file),
             Err(e) => format!("Printing failed: {e}"),
         };
@@ -47,11 +48,11 @@ pub fn pdf_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u
 }
 
 /// Writes the edited PDF to `target`, making its folder first.
-fn prepare(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark], author: &str) -> Result<PathBuf, String> {
+fn prepare(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark], author: &str, forms: &[FieldEdit]) -> Result<PathBuf, String> {
     if let Some(dir) = target.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    pdfmarks::write_edited(pdf, source, target, order, turns, marks, author)
+    pdfmarks::write_edited(pdf, source, target, order, turns, marks, author, &pdfmarks::Insertion::None, forms)
 }
 
 #[cfg(test)]
