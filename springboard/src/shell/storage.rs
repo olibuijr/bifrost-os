@@ -15,8 +15,6 @@ use std::sync::mpsc::{channel, Receiver, TryRecvError};
 pub const PARTITION: &str = "/data";
 /// Below this much free space the shell trims the disposable caches itself.
 pub const LOW_BYTES: u64 = 500 * 1_000_000;
-/// Once a notice was posted, the next one waits this long (seconds).
-pub const NOTICE_GAP_S: i64 = 6 * 3600;
 /// Old binaries kept by every trim: the newest two.
 pub const KEEP_BINARIES: usize = 2;
 const BINARY_PREFIX: &str = "springboard.before-";
@@ -296,16 +294,11 @@ pub fn is_low(free: u64) -> bool {
     free > 0 && free < LOW_BYTES
 }
 
-/// Whether a notice may be posted now, given when the last one was.
-pub fn notice_due(last: Option<i64>, now: i64) -> bool {
-    last.map_or(true, |t| now.saturating_sub(t) >= NOTICE_GAP_S || now < t)
-}
-
-/// The low-space guard's state: one trim worker at a time.
+/// The low-space guard's state: one trim worker at a time, and the warning level last announced.
 #[derive(Default)]
 pub struct Guard {
     rx: Option<Receiver<u64>>,
-    last_notice: Option<i64>,
+    watch: bifrost_core::low_space::Watch,
 }
 
 impl Guard {
@@ -339,24 +332,25 @@ impl Guard {
         }
     }
 
-    /// Records a posted notice at `now`, or says one is not due yet.
-    pub fn note(&mut self, now: i64) -> bool {
-        if !notice_due(self.last_notice, now) {
-            return false;
-        }
-        self.last_notice = Some(now);
-        true
-    }
 }
 
 impl Shell {
-    /// Called with every fresh `Info`: trims the caches while `/data` is low
-    /// and posts "Storage Almost Full" once the trim has finished.
+    /// Called with every fresh `Info`: reads the `/data` capacity, posts the low-space warning when the level
+    /// escalates or its reminder is due (`low_space::Watch`), and trims the caches while `/data` is low.
     pub(super) fn storage_check(&mut self, free: u64) {
+        let now = unix_now();
+        if let Ok(cap) = bifrost_core::volume::capacity(Path::new(PARTITION)) {
+            let level = bifrost_core::low_space::level(&cap);
+            if let Some(due) = self.storage_guard.watch.observe(level, now) {
+                if let Some(body) = bifrost_core::low_space::message(due, "The data partition") {
+                    self.notify(Notification::new(AppId::Settings, "Storage Almost Full", body, now));
+                }
+            }
+        }
         if let Some(freed) = self.storage_guard.poll() {
-            if is_low(free) && self.storage_guard.note(unix_now()) {
-                let body = format!("Only {} is left. SpringBoard cleared {} of caches; delete photos, music or downloads to free more.", human(free), human(freed));
-                self.notify(Notification::new(AppId::Settings, "Storage Almost Full", body, unix_now()));
+            if is_low(free) {
+                let body = format!("Only {} is left. SpringBoard cleared {} of caches.", human(free), human(freed));
+                self.notify(Notification::new(AppId::Settings, "Storage Cleared", body, now));
             }
         }
         let dir = self.data_dir.clone();
@@ -441,13 +435,8 @@ mod tests {
         assert!(!is_low(0), "unknown is not low");
         assert!(is_low(LOW_BYTES - 1));
         assert!(!is_low(LOW_BYTES));
-        assert!(notice_due(None, 100));
-        assert!(!notice_due(Some(100), 100 + NOTICE_GAP_S - 1));
-        assert!(notice_due(Some(100), 100 + NOTICE_GAP_S));
-        assert!(notice_due(Some(100), 50), "a clock set back does not silence it forever");
         let mut g = Guard::default();
-        assert!(g.note(1000));
-        assert!(!g.note(1001));
+        assert!(g.poll().is_none(), "no trim is running at first");
     }
 
     #[test]

@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/scanner.rs (parse_list, parse_help)",
+   "bifrost": "springboard/sdk/src/scan_session.rs (ScanSession); springboard/ui/src/scanner.rs (parse_list, parse_help, scan_to); springboard/ui/src/scan_job.rs",
    "status": "partial",
-   "note": "Scanners are listed from scanimage -L and their options parsed from its help text in ui::scanner, and the Print & Scan page shows them. Gap: no app-facing scan session API.",
+   "note": "Scanners are listed from scanimage -L and their options parsed from its help text in ui::scanner. Built 2026-10-17: sdk scan_session::ScanSession opens a device, configures it, scans pages to files and makes previews, gated by the scan_job model; tests scan_session::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scan_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scanner::tests"
+    }
+   ],
+   "ready_note": "The app-facing scan session gates and runs scans through scanimage; the job gate and the parsing are tested headless. Scanning on hardware is for the lab."
   },
   {
    "id": "path:/System/Library/Frameworks/TabularData.framework",
@@ -1456,11 +1470,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/timemachine.rs",
+   "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/services/snapshots.rs (tick, prune)",
    "status": "partial",
-   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Gap: privd does not implement backup.snapshot or backup.prune, so no snapshot is taken or pruned yet.",
+   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::snapshots::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::timemachine::tests"
+    }
+   ],
+   "ready_note": "Retention, the scheduled snapshot and the prune are tested; the snapshots service runs them from the shell tick."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TimeMachinePrivate.framework",
@@ -1477,11 +1505,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/timemachine.rs",
+   "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/services/snapshots.rs (tick, prune)",
    "status": "partial",
-   "note": "Same model as TimeMachine (schedule, retention, exclusions, restore paths, tested). Gap: privd does not implement backup.snapshot or backup.prune, so no snapshot is taken or pruned yet.",
+   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::snapshots::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::timemachine::tests"
+    }
+   ],
+   "ready_note": "Retention, the scheduled snapshot and the prune are tested; the snapshots service runs them from the shell tick."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TimeSync.framework",
@@ -3208,9 +3250,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/store/install.rs",
+   "bifrost": "springboard/src/shell/store/install.rs; springboard/src/shell/pacman_update.rs (remove_args)",
    "status": "partial",
-   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Gap: there is no system-wide removal of OS-provided apps.",
+   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Built 2026-10-17: pacman_update::remove_args builds the guarded `pacman -R` for a non-store app and refuses the shell and the base system (tests pacman_update::tests). Gap: no privd method runs it and no confirmation sheet asks first.",
    "rea": [],
    "method": "assessed"
   },
