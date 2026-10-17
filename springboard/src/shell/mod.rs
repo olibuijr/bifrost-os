@@ -99,6 +99,7 @@ pub mod crash_alert;
 pub mod permission_sheet;
 pub mod options;
 pub mod gamemode;
+pub mod game_priority;
 pub mod pageedit;
 pub mod pages;
 mod login_items_page;
@@ -574,6 +575,8 @@ pub struct Shell {
     game: gamemode::Model,
     /// where the pointer was last, for the menu bar that a full-screen window hides (`desk::bar_hidden`)
     pointer_y: Option<f32>,
+    /// the game pid Game Mode raised, put back when it leaves the front
+    game_pid: Option<u32>,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
     prefs: Prefs,
     /// Screen Zoom (Option+Cmd+8, =, -): the final-frame magnifier the GPU presenter draws (`accessibility::zoom`)
@@ -916,6 +919,7 @@ impl Shell {
             fullscreen: false,
             game: Default::default(),
             pointer_y: None,
+            game_pid: None,
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
             ota: None,
@@ -1227,7 +1231,30 @@ impl Shell {
 
     /// The menu bar's "Turn Off Game Mode": off for the game in front until it leaves. True if it was on.
     pub fn game_mode_turn_off(&mut self) -> bool {
-        self.game.turn_off()
+        let was_on = self.game.turn_off();
+        if was_on {
+            self.game_mode_restore_priority();
+        }
+        was_on
+    }
+
+    /// Raises the game in front through bifrostd and remembers its pid for the restore.
+    pub fn game_mode_raise_priority(&mut self) {
+        let pid = match self.screen {
+            Screen::App(AppId::External(n)) => self.ext.get(n as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()),
+            _ => None,
+        };
+        if let Some(pid) = pid {
+            self.game_pid = Some(pid);
+            crate::bare::sys::spawn_named("gamepriority", move || game_priority::raise(pid));
+        }
+    }
+
+    /// Puts the raised game's nice and uclamp back, if one was raised.
+    pub fn game_mode_restore_priority(&mut self) {
+        if let Some(pid) = self.game_pid.take() {
+            crate::bare::sys::spawn_named("gamepriority", move || game_priority::restore(pid));
+        }
     }
 
     /// Whether Game Mode is on now (the CPU profile is Performance while it is).

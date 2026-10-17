@@ -4,18 +4,18 @@
 //! screen, and is Game Mode allowed?") and a clock in milliseconds, and applies the `Effect`s that `plan` lists.
 //! Entering takes effect at once; leaving waits `LEAVE_MS` so a briefly unfocused or windowed game does not flap.
 //!
-//! Effects that exist today: the CPU profile goes to Performance (`bare::boost::set_profile`, which already writes
-//! the governor and clock window). Not built yet, and recorded in `SKIPPED`: the background task and file indexing
-//! pause (no such scheduler exists in the shell), raising the game's scheduling priority (no privileged request in
-//! bifrostd), and the Bluetooth sniff-interval change (the shell's mgmt socket has no connection-update opcode).
+//! Effects: the CPU profile goes to Performance (`bare::boost::set_profile`, which writes the governor and clock
+//! window), the game's nice and uclamp are raised through bifrostd (`game_priority`), and the background task
+//! scheduler does not start new tasks while Game Mode is on (`services::background`). Not built, recorded in
+//! `SKIPPED`: the file indexing pause (no indexer runs in the shell) and the Bluetooth sniff-interval change (the
+//! shell's mgmt socket has no connection-update opcode).
 
 /// How long the game must be out of front, or out of full screen, before Game Mode leaves.
 pub const LEAVE_MS: u64 = 3_000;
 
 /// Things Game Mode would do that this build cannot do yet. Read by the Game Mode page and the docs.
-pub const SKIPPED: [&str; 3] = [
-    "background task and file indexing pause: the shell has no background scheduler to pause",
-    "game process priority: needs a privileged request, bifrostd has no knob for it yet",
+pub const SKIPPED: [&str; 2] = [
+    "file indexing pause: no indexer runs in the shell",
     "Bluetooth sniff interval: the shell's mgmt socket has no connection parameter update",
 ];
 
@@ -66,13 +66,17 @@ pub enum Effect {
     CpuPerformance,
     /// the CPU profile the user's Power Mode choice picks again
     CpuFollowPowerMode,
+    /// nice and uclamp raised for the game in front (`game_priority`, through bifrostd)
+    RaisePriority,
+    /// the game's nice and uclamp put back
+    RestorePriority,
 }
 
 /// The effects for a change of state, in the order they apply.
 pub fn plan(change: Change) -> Vec<Effect> {
     match change {
-        Change::Enter => vec![Effect::CpuPerformance],
-        Change::Leave => vec![Effect::CpuFollowPowerMode],
+        Change::Enter => vec![Effect::CpuPerformance, Effect::RaisePriority],
+        Change::Leave => vec![Effect::CpuFollowPowerMode, Effect::RestorePriority],
     }
 }
 
@@ -197,9 +201,9 @@ mod tests {
 
     #[test]
     fn effects_follow_the_change() {
-        assert_eq!(plan(Change::Enter), vec![Effect::CpuPerformance]);
-        assert_eq!(plan(Change::Leave), vec![Effect::CpuFollowPowerMode]);
-        assert_eq!(SKIPPED.len(), 3, "every unbuilt effect is named");
+        assert_eq!(plan(Change::Enter), vec![Effect::CpuPerformance, Effect::RaisePriority]);
+        assert_eq!(plan(Change::Leave), vec![Effect::CpuFollowPowerMode, Effect::RestorePriority]);
+        assert_eq!(SKIPPED.len(), 2, "every unbuilt effect is named");
     }
 
     #[test]

@@ -1053,8 +1053,16 @@ fn run() -> std::io::Result<()> {
             last_game_check = t;
             if let Some(change) = shell.game_mode_update(t as u64) {
                 eprintln!("springboard: game mode {}", if change == springboard::shell::gamemode::Change::Enter { "on" } else { "off" });
-                // the effects of a change are the CPU profile, which is recomputed below at once
-                last_profile_check = f64::NEG_INFINITY;
+                for effect in springboard::shell::gamemode::plan(change) {
+                    match effect {
+                        // the CPU profile is recomputed below at once
+                        springboard::shell::gamemode::Effect::CpuPerformance | springboard::shell::gamemode::Effect::CpuFollowPowerMode => {
+                            last_profile_check = f64::NEG_INFINITY;
+                        }
+                        springboard::shell::gamemode::Effect::RaisePriority => shell.game_mode_raise_priority(),
+                        springboard::shell::gamemode::Effect::RestorePriority => shell.game_mode_restore_priority(),
+                    }
+                }
                 if change == springboard::shell::gamemode::Change::Enter {
                     shell.game_mode_notice();
                 }
