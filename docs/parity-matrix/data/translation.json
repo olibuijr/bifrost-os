@@ -12,7 +12,7 @@
    "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)",
    "bifrost": "springboard/ui/src/translation.rs, springboard/sdk/src/translation.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (translation.rs, translation.rs); not wired into the shell or apps, not tested on Midget. no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation"
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (translation.rs, translation.rs); not wired into the shell or apps, not tested on Midget. no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation Built 2026-10-17: springboard/sdk/src/translation_popover.rs (TranslationPresenter) runs the translation through the app Translator after the language-pair check, and places the panel with split::place_popover; tests translation_popover::tests."
   },
   {
    "feature": "Translation session and tasks",
