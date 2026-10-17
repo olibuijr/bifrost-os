@@ -19,8 +19,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,8 +82,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
