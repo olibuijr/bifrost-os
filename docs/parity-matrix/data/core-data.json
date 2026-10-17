@@ -130,7 +130,7 @@
   "gaps": [
     "No object graph: no entity model, relationships, inverse relationships or delete rules.",
     "No fetch requests or predicates; apps filter in-memory vectors.",
-    "No managed object context with change tracking, dirty state or faulting.",
+    "No faulting in the managed object context. Change tracking, dirty state, save and rollback are built: springboard/ui/src/managed_context.rs (ManagedContext over FetchRequest, Change, ObjectId; tests in that module, not run on Midget).",
     "No database-backed store, so stores are rewritten whole on each save and do not scale past the bounded lists (contacts MAX_ITEMS 10000, calendar MAX_EVENTS 2048).",
     "No persistent history or transaction log of store changes.",
     "No migration path between store versions (lightweight, staged or manual).",
