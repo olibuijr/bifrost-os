@@ -678,6 +678,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-folder-actions"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+]
+
+[[package]]
 name = "bifrost-fontbook"
 version = "0.6.6"
 dependencies = [

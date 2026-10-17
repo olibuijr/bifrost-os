@@ -92,6 +92,7 @@ pub mod background;
 pub mod scripting;
 pub mod metric_reports;
 pub mod backup_exclusions;
+pub mod folder_actions_service;
 pub mod snapshots;
 pub mod braille_text;
 pub mod record_store;
@@ -187,6 +188,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(scripting::Scripting),
         Box::new(metric_reports::MetricReports),
         Box::new(backup_exclusions::BackupExclusions),
+        Box::new(folder_actions_service::FolderActions),
         Box::new(snapshots::Snapshots::default()),
         Box::new(braille_text::BrailleText),
         Box::new(record_store::RecordStore::default()),
