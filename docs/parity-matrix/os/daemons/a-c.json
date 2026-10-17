@@ -816,9 +816,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Screen Time has a limit shield, but family controls and family-group management have no equivalent",
+   "bifrost": "springboard/src/shell/screentime/mod.rs",
+   "status": "partial",
+   "note": "Screen Time agent role is filled inside the shell: on-device per-app usage, pickups and notifications (usage.rs), App Limits and Downtime (config.rs), the Time Limit cover with Ignore Limit choices and the passcode (shield.rs), and a five-minute warning. Family controls and family-group management (parental accounts, remote approval) have no equivalent and stay gap. Not verified on Midget.",
    "rea": [],
    "method": "heuristic"
   },

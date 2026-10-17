@@ -2874,8 +2874,9 @@ notificationcenterui, usernotificationsd, WindowManager, WindowServer, Spotlight
 wallpaper, loginwindow, TextInputSwitcher, battery menu extra, login item registration, shared file list) inside one
 process, so these rows in `docs/parity-matrix/os/daemons/` are `partial` with the filling module in `bifrost` and the
 missing parts in the note. The table is in the `services/mod.rs` doc comment; `springboard/tests/daemon_map.rs`
-checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party,
-Screen Time and slot-notification agents have no counterpart and stay `gap`. Parity needs a Midget check.
+checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party
+and slot-notification agents have no counterpart and stay `gap`. The Screen Time agent (`com.apple.FamilyControlsAgent`)
+is `partial`: the shell fills its on-device role (see "Screen Time" below). Parity needs a Midget check.
 
 ## AppKit: named alert sounds (`bifrost_sdk::system_sound`, `shell::alert_sound`)
 
@@ -4293,3 +4294,36 @@ Until the wiring is built, the cloud accepts no location from this app, and the 
 Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
 `{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
 `202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.
+
+## Screen Time (`shell::screentime`, shell only, no SDK API)
+
+Owner decision (privacy first): usage data stays on the device and is never uploaded. Apps get no read access to it.
+The feature lives in `springboard/src/shell/screentime/`; the parity rows are `com.apple.FamilyControlsAgent` and
+`LockoutUI` (both `partial`), and `screen-time.json` is unchanged.
+
+- Usage (`usage.rs`): one `key=value` file per local day under the shell data directory (`screentime/<day>.txt`):
+  foreground seconds per app and per hour, pickups (screen comes on), and notifications per app. Files older than
+  28 days are deleted on the day roll. A tick credits at most 15 s, so a stalled loop invents nothing, and the gap
+  across midnight is credited to neither day. Foreground time is credited to the app seen at the tick that follows
+  it, so the seconds before a switch can go to the next app (at most one tick, 5 s).
+- Settings (`page.rs`, `chart.rs`, the Screen Time page in `pages.rs`): day and week bars, most used apps, pickups,
+  notifications, Downtime, App Limits (cycled 15 min to 4 h), Always Allowed, and a Content & Privacy Restrictions
+  row marked "Not Available" (not enforced yet). Changing limits or Downtime needs the Screen Time passcode.
+- Policy (`config.rs`): `Config::block` is the one decision. Downtime (may cross midnight, `Schedule`) blocks apps not
+  in Always Allowed (Settings always allowed, Clock allowed by default). A daily limit blocks at its minute count.
+  `Config::warn_due` says when a limit is five minutes from running out, and the shell posts one notification per app
+  per day. Settings is never blocked, so limits can always be changed.
+- Time Limit cover (`shield.rs`): OK (go Home), "Ignore Limit for 1 More Minute" (60 s), "Ignore Limit for 15 min",
+  and "Ignore Limit For Today". Each grant is stored as `ignore.until.<app>` or `ignore.day.<app>` in
+  `screentime.ini`. The passcode prompt comes first when a Screen Time passcode is set.
+- Launching (`mod.rs`, `st_launch_check`): opening a blocked app puts the cover up before its zoom starts, and the
+  cover stays up while that open animation runs.
+- Passcode: the Screen Time passcode uses the shell's salted, stretched SHA-256 store (`shell/passcode.rs`, file
+  `screentime_passcode.ini`), not the keychain service (`springboard/src/keychain.rs`). Moving it to the keychain is
+  open.
+- Not built: category charts (the bars are per app), SDK access for apps (out of scope), family controls and
+  remote approval, and the desktop window path (`desk_open` does not check limits yet). Not verified on Midget.
+
+Tests: `usage.rs` (midnight gap, app switches, rollover, pruning), `config.rs` (limits, warning window, one-minute,
+15-minute and today grants, Downtime over midnight, Settings exempt), `shield.rs` (button order, passcode gate),
+`page.rs` (rows, placeholder). Run `cargo test -p springboard screentime` (lead runs them; not run by this round).
