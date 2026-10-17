@@ -1,11 +1,13 @@
 //! `ifconfig`: lists the network interfaces with their flags, MTU, hardware address and IPv6 addresses. Read-only.
 //! The interfaces and their flags come from `/sys/class/net`, the IPv6 addresses from `/proc/net/if_inet6`.
 //! See `src/bin/ifconfig.rs` for the command.
-//! Gap: IPv4 addresses are not listed, because they are only in the netlink service and `/proc` does not carry them
-//! (`ip -4 addr` shows them). Changing an interface (`ifconfig en0 up`, addresses, MTU) is refused: that needs netlink.
+//! The primary IPv4 address of an interface, with its netmask and broadcast address, comes from the interface ioctls
+//! (`SIOCGIFADDR`, `SIOCGIFNETMASK`, `SIOCGIFBRDADDR`), the same calls `springboard::net::wifi::iface_ipv4` uses; the
+//! netmask prints in hex as the reference tool does. An interface with several IPv4 addresses shows the primary one.
+//! Changing an interface (`ifconfig en0 up`, addresses, MTU) is refused: that needs netlink.
 
 use std::fmt::Write as _;
-use std::net::Ipv6Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 
 pub const USAGE: &str = "usage: ifconfig [-a | interface]";
@@ -66,6 +68,45 @@ pub struct Inet6 {
     pub scope: u8,
 }
 
+/// The IPv4 configuration of one interface: address, netmask and (when the link has one) broadcast address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inet4 {
+    pub addr: Ipv4Addr,
+    pub netmask: Ipv4Addr,
+    pub broadcast: Option<Ipv4Addr>,
+}
+
+const SIOCGIFADDR: std::ffi::c_ulong = 0x8915;
+const SIOCGIFBRDADDR: std::ffi::c_ulong = 0x8919;
+const SIOCGIFNETMASK: std::ffi::c_ulong = 0x891b;
+
+/// One interface ioctl that answers with an IPv4 `sockaddr` in a 40-byte `ifreq` (16 bytes of name, then the
+/// family, port and address). `None` when the interface has no such address.
+fn ioctl_addr(sock: &std::net::UdpSocket, name: &str, request: std::ffi::c_ulong) -> Option<Ipv4Addr> {
+    use std::os::fd::AsRawFd;
+    extern "C" {
+        fn ioctl(fd: i32, req: std::ffi::c_ulong, ...) -> i32;
+    }
+    let bytes = name.as_bytes();
+    if bytes.is_empty() || bytes.len() >= 16 {
+        return None;
+    }
+    let mut req = [0u8; 40];
+    req[..bytes.len()].copy_from_slice(bytes);
+    // SAFETY: the request reads the interface name and fills the 40-byte `ifreq` this function owns.
+    let r = unsafe { ioctl(sock.as_raw_fd(), request, req.as_mut_ptr()) };
+    (r == 0).then(|| Ipv4Addr::new(req[20], req[21], req[22], req[23]))
+}
+
+/// The primary IPv4 configuration of `name`, or `None` when it has no IPv4 address.
+pub fn read_inet4(name: &str) -> Option<Inet4> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    let addr = ioctl_addr(&sock, name, SIOCGIFADDR).filter(|a| !a.is_unspecified())?;
+    let netmask = ioctl_addr(&sock, name, SIOCGIFNETMASK).unwrap_or(Ipv4Addr::new(255, 255, 255, 255));
+    let broadcast = ioctl_addr(&sock, name, SIOCGIFBRDADDR).filter(|b| !b.is_unspecified());
+    Some(Inet4 { addr, netmask, broadcast })
+}
+
 /// The names of the set flag bits, joined with commas: `UP,LOOPBACK,RUNNING`.
 pub fn flags_text(flags: u32) -> String {
     FLAG_NAMES.iter().filter(|(bit, _)| flags & bit != 0).map(|(_, name)| *name).collect::<Vec<_>>().join(",")
@@ -121,10 +162,22 @@ pub fn read_interfaces(dir: &Path) -> Vec<Iface> {
 
 /// The block `ifconfig` prints for one interface, with the IPv6 addresses that belong to it.
 pub fn render(iface: &Iface, inet6: &[Inet6]) -> String {
+    render_with(iface, None, inet6)
+}
+
+/// Like `render`, with the interface's IPv4 line (`inet ADDR netmask 0xMASK broadcast ADDR`) before its IPv6 lines.
+pub fn render_with(iface: &Iface, inet4: Option<&Inet4>, inet6: &[Inet6]) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "{}: flags={}<{}>  mtu {}", iface.name, iface.flags & 0xffff, flags_text(iface.flags), iface.mtu);
     if iface.mac != "00:00:00:00:00:00" && !iface.mac.is_empty() {
         let _ = writeln!(out, "        ether {}", iface.mac);
+    }
+    if let Some(v4) = inet4 {
+        let _ = write!(out, "        inet {} netmask 0x{:08x}", v4.addr, u32::from(v4.netmask));
+        if let Some(b) = v4.broadcast {
+            let _ = write!(out, " broadcast {b}");
+        }
+        out.push('\n');
     }
     for a in inet6.iter().filter(|a| a.iface == iface.name) {
         let scope = match scope_name(a.scope) {
@@ -181,6 +234,28 @@ fe80000000000000021122fffe334455 02 40 20 80 eth0\n";
         let eth_text = render(&eth, &addrs);
         assert!(eth_text.contains("ether 02:11:22:33:44:55"));
         assert!(eth_text.contains("scopeid 0x20<link>"));
+    }
+
+    #[test]
+    fn the_ipv4_line_has_a_hex_netmask_and_the_broadcast_address() {
+        let eth = Iface { name: "eth0".into(), flags: 0x1043, mtu: 1500, mac: "02:11:22:33:44:55".into() };
+        let v4 = Inet4 { addr: Ipv4Addr::new(192, 168, 1, 7), netmask: Ipv4Addr::new(255, 255, 255, 0), broadcast: Some(Ipv4Addr::new(192, 168, 1, 255)) };
+        let text = render_with(&eth, Some(&v4), &parse_inet6(INET6));
+        assert!(text.contains("        inet 192.168.1.7 netmask 0xffffff00 broadcast 192.168.1.255\n"), "{text}");
+        assert!(text.find("inet 192").unwrap() < text.find("inet6").unwrap(), "IPv4 comes before IPv6");
+        let lo = Inet4 { addr: Ipv4Addr::LOCALHOST, netmask: Ipv4Addr::new(255, 0, 0, 0), broadcast: None };
+        let lo_text = render_with(&Iface { name: "lo".into(), flags: 0x49, mtu: 65536, mac: String::new() }, Some(&lo), &[]);
+        assert!(lo_text.contains("inet 127.0.0.1 netmask 0xff000000\n"), "{lo_text}");
+    }
+
+    #[test]
+    fn ipv4_is_read_from_the_kernel_and_an_unknown_interface_has_none() {
+        // The loopback interface carries 127.0.0.1 on any host that has one; a bare namespace reads as None.
+        if let Some(v4) = read_inet4("lo") {
+            assert_eq!(v4.addr, Ipv4Addr::LOCALHOST);
+        }
+        assert_eq!(read_inet4("no-such-if0"), None);
+        assert_eq!(read_inet4(""), None);
     }
 
     #[test]

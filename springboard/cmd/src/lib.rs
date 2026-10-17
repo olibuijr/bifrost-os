@@ -23,6 +23,7 @@ pub mod neighbors;
 pub mod mtree;
 pub mod hdiutil;
 pub mod ifconfig;
+pub mod ipconfig;
 pub mod iconutil;
 pub mod open;
 pub mod osascript;
