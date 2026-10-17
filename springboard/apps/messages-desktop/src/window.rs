@@ -3,6 +3,8 @@
 //! are in [`crate::draw`].
 
 use crate::accounts::{self, Account};
+use crate::crypto;
+use bifrost_app::keychain;
 use crate::api::{Api, UPLOAD_LIMIT};
 use crate::draw::{inside, ChipHit, Hit, OverlayAction, Rect};
 use crate::model::{InfoKind, Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
@@ -71,6 +73,33 @@ enum Pending {
     Replace,
     /// The saved login removed at sign-out; the answer is not needed.
     Forget,
+    /// One of the crypto items read before a sign-in (see [`Lookup`]).
+    Lookup(Item),
+    /// A crypto item written after a change. `added` is true once the item was added after an update found none.
+    Store { service: String, account: String, value: String, added: bool },
+}
+
+/// The keychain items of the end-to-end encryption state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Item {
+    Device,
+    Key,
+    Sessions,
+}
+
+/// The crypto items read for one sign-in: the device the account had, its pickle key and its sessions. They wait for
+/// the three keychain answers, then the sign-in starts with the device id as a hint, and `restore` holds them for the
+/// sign-in to install.
+#[derive(Clone, Debug, Default)]
+struct Lookup {
+    homeserver: String,
+    user: String,
+    password: String,
+    typed: bool,
+    waiting: u32,
+    device: Option<String>,
+    key: Option<String>,
+    sessions: Option<String>,
 }
 
 /// What the open context menu is about.
@@ -121,6 +150,10 @@ pub struct MessagesWindow {
     wake_rx: Option<UnixStream>,
     wake_tx: Option<UnixStream>,
     pending: HashMap<u32, Pending>,
+    /// The crypto items being read for a sign-in that has not started yet.
+    lookup: Option<Lookup>,
+    /// The crypto items the sign-in in progress restores from.
+    restore: Option<Lookup>,
     /// The file the user is choosing, with the room it is for.
     picking: Option<(u32, String)>,
     /// The file drag in progress, if any.
@@ -174,6 +207,8 @@ impl MessagesWindow {
             wake_rx,
             wake_tx,
             pending: HashMap::new(),
+            lookup: None,
+            restore: None,
             picking: None,
             file_drop: None,
             account: None,
@@ -245,6 +280,7 @@ impl MessagesWindow {
             },
             Event::Synced(Ok(_)) if self.api.is_none() => {}
             Event::Synced(Ok(sync)) => {
+                self.save_crypto(ctx);
                 let marks = self.model.prefs.unread_marks.clone();
                 let notices = self.model.apply_sync(&sync);
                 if self.model.prefs.unread_marks != marks {
@@ -306,6 +342,10 @@ impl MessagesWindow {
                 }
                 Err(e) => self.model.status = format!("Rename failed: {e}"),
             },
+            Event::Decrypted(patches) => {
+                self.model.apply_decrypted(&patches);
+                self.save_crypto(ctx);
+            }
             Event::LoggedOut { result: _ } => {}
         }
         self.dirty = true;
@@ -317,6 +357,12 @@ impl MessagesWindow {
         self.account = Some(Account { homeserver: homeserver.clone(), user: user.clone() });
         self.model.sign_in = None;
         self.model.status.clear();
+        let restore = self.restore.take().unwrap_or_default();
+        let key = restore.key.as_deref().and_then(crypto::parse_key_item);
+        let stored = restore.device.as_deref().and_then(crypto::parse_device_item);
+        if let Err(e) = api.install_crypto(key, stored, restore.sessions.as_deref()) {
+            self.model.status = format!("Encryption could not start: {e}");
+        }
         sync::run_sync(api.clone(), self.tx.clone(), self.wake());
         self.api = Some(api);
         if typed {
@@ -343,7 +389,7 @@ impl MessagesWindow {
                 }
             },
             Pending::Password(account) => match passwords::decode_password(result) {
-                Ok(password) => self.start_sign_in(account.homeserver, account.user, password, false),
+                Ok(password) => self.start_sign_in(ctx, account.homeserver, account.user, password, false),
                 Err(e) => {
                     self.model.status = match e {
                         KeyError::ItemNotFound => "No password is saved for this account".into(),
@@ -371,20 +417,36 @@ impl MessagesWindow {
         true
     }
 
-    /// Signs in on a job thread. A typed password is saved on success (see `signed_in`).
-    fn start_sign_in(&mut self, homeserver: String, user: String, password: String, typed: bool) {
+    /// Starts a sign-in. First the account's crypto items are read from the keychain (the device, its pickle key and
+    /// its sessions); the sign-in job starts when the three answers are in (see [`MessagesWindow::keychain`]). A typed
+    /// password is saved on success (see `signed_in`).
+    fn start_sign_in(&mut self, ctx: &Ctx, homeserver: String, user: String, password: String, typed: bool) {
         if let Some(sign) = self.model.sign_in.as_mut() {
             sign.busy = true;
         }
         self.model.status = "Signing in...".into();
+        for (prefix, item) in [(crypto::DEVICE_ITEM, Item::Device), (crypto::KEY_ITEM, Item::Key), (crypto::SESSIONS_ITEM, Item::Sessions)] {
+            let request = keychain::get(ctx, &crypto::item_service(prefix, &homeserver), &user);
+            self.pending.insert(request, Pending::Lookup(item));
+        }
+        self.lookup = Some(Lookup { homeserver, user, password, typed, waiting: 3, ..Lookup::default() });
+    }
+
+    /// Starts the sign-in job once the crypto items are read. The stored device id is the hint the login asks for.
+    fn launch_sign_in(&mut self) {
+        let Some(lookup) = self.lookup.take() else { return };
+        let device_hint = lookup.device.as_deref().and_then(crypto::parse_device_item).map(|(device, _)| device.to_string());
+        let (homeserver, user, password, typed) =
+            (lookup.homeserver.clone(), lookup.user.clone(), lookup.password.clone(), lookup.typed);
+        self.restore = Some(lookup);
         let transport = self.transport.clone();
         let tx = self.tx.clone();
         let wake = self.wake();
-        sync::spawn(tx, wake, move || sync::sign_in(transport, homeserver, user, password, typed));
+        sync::spawn(tx, wake, move || sync::sign_in(transport, homeserver, user, password, typed, device_hint));
     }
 
     /// Checks the sign-in sheet and starts the sign-in when every field is right.
-    fn submit_sign_in(&mut self) {
+    fn submit_sign_in(&mut self, ctx: &Ctx) {
         let Some(sign) = self.model.sign_in.as_mut() else { return };
         if sign.busy {
             return;
@@ -392,10 +454,74 @@ impl MessagesWindow {
         match sign.checked() {
             Ok((homeserver, user, password)) => {
                 sign.error.clear();
-                self.start_sign_in(homeserver, user, password, true);
+                self.start_sign_in(ctx, homeserver, user, password, true);
             }
             Err(e) => sign.error = e,
         }
+    }
+
+    /// Writes the crypto state to the keychain when it changed (see [`crypto::Machine::snapshot`]). A write is an update;
+    /// an item that does not exist yet is added (see [`MessagesWindow::keychain`]).
+    fn save_crypto(&mut self, ctx: &Ctx) {
+        let Some(api) = self.api.clone() else { return };
+        let Some(snap) = api.take_snapshot() else { return };
+        let Some(account) = self.account.clone() else { return };
+        let mut items = vec![(crypto::KEY_ITEM, snap.key), (crypto::DEVICE_ITEM, snap.device)];
+        if let Some(sessions) = snap.sessions {
+            items.push((crypto::SESSIONS_ITEM, sessions));
+        }
+        for (prefix, value) in items {
+            let service = crypto::item_service(prefix, &account.homeserver);
+            let request = keychain::update(ctx, &service, &account.user, value.as_bytes());
+            self.pending.insert(request, Pending::Store { service, account: account.user.clone(), value, added: false });
+        }
+    }
+
+    /// The devices of the members of the selected room, as (user, device id), for the room info. All are unverified.
+    pub fn devices_for_room(&self) -> Vec<(String, String)> {
+        let Some(room) = self.model.selected_room() else { return Vec::new() };
+        let users: Vec<String> = room.members.iter().map(|m| m.user_id.clone()).collect();
+        self.api.as_ref().map(|api| api.device_list(&users)).unwrap_or_default()
+    }
+
+    /// The answer to one of the window's keychain requests: a crypto item read for a sign-in, or a crypto item written.
+    /// False when the request was not the window's.
+    pub fn keychain(&mut self, ctx: &Ctx, reply: keychain::Reply) -> bool {
+        let Some(pending) = self.pending.remove(&reply.request) else { return false };
+        match pending {
+            Pending::Lookup(item) => {
+                let value = reply.result.ok().and_then(|bytes| String::from_utf8(bytes).ok());
+                let ready = match self.lookup.as_mut() {
+                    Some(lookup) => {
+                        match item {
+                            Item::Device => lookup.device = value,
+                            Item::Key => lookup.key = value,
+                            Item::Sessions => lookup.sessions = value,
+                        }
+                        lookup.waiting = lookup.waiting.saturating_sub(1);
+                        lookup.waiting == 0
+                    }
+                    None => false,
+                };
+                if ready {
+                    self.launch_sign_in();
+                }
+            }
+            Pending::Store { service, account, value, added } => match reply.result {
+                Ok(_) => {}
+                Err(keychain::Error::ItemNotFound) if !added => {
+                    let request = keychain::add(ctx, &service, &account, value.as_bytes());
+                    self.pending.insert(request, Pending::Store { service, account, value, added: true });
+                }
+                Err(e) => self.model.status = format!("The encryption keys could not be saved in the keychain: {e:?}"),
+            },
+            other => {
+                self.pending.insert(reply.request, other);
+                return false;
+            }
+        }
+        self.dirty = true;
+        true
     }
 
     /// Puts a room on screen and marks its newest message read.
@@ -1004,7 +1130,7 @@ impl MessagesWindow {
                     sign.focus = i;
                 }
             }
-            Hit::SignIn => self.submit_sign_in(),
+            Hit::SignIn => self.submit_sign_in(ctx),
             Hit::Nothing if had_overlay => {
                 // A tap outside a panel closes it, except a sheet that is busy.
                 let busy = matches!(&self.model.overlay, Overlay::Prompt(p) if p.busy);
@@ -1100,7 +1226,7 @@ impl MessagesWindow {
             }
             KeyInput::Code(KEY_RETURN) => {
                 if self.model.sign_in.is_some() {
-                    self.submit_sign_in();
+                    self.submit_sign_in(ctx);
                 } else if let Overlay::Prompt(p) = self.model.overlay.clone() {
                     self.submit_prompt(p);
                 } else if matches!(self.model.overlay, Overlay::Emoji(_)) {

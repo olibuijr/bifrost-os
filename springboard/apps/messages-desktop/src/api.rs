@@ -4,10 +4,10 @@
 //! (see [`crate::sync`]).
 
 use crate::crypto::{self, Machine};
-use crate::protocol::{self, Login, Sync};
+use crate::protocol::{self, Body, Ciphertext, Login, Sync, ToDevice};
 use bifrost_core::json::{self, Json};
 use springboard::deildu::http::{Client, Jar, Response, Transport};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -18,6 +18,18 @@ const SYNC_LIMIT: usize = 32 * 1024 * 1024;
 const CALL_LIMIT: usize = 1024 * 1024;
 /// The largest image the app uploads.
 pub const UPLOAD_LIMIT: usize = 25 * 1024 * 1024;
+/// The most messages kept waiting for a room key. The oldest are dropped first.
+const MAX_PENDING: usize = 500;
+
+/// The bodies that now open in one room, for the window: the room id, then (event id, body, the event it answers).
+pub type Patch = (String, Vec<(String, Body, Option<String>)>);
+
+/// The key work one sync leaves for the keys worker (see [`Api::run_key_work`]).
+pub struct KeyWork {
+    upload: bool,
+    device_changed: Vec<String>,
+    to_device: Vec<ToDevice>,
+}
 
 /// A signed-in session on one homeserver.
 pub struct Api {
@@ -30,13 +42,17 @@ pub struct Api {
     crypto: Mutex<Machine>,
     /// The rooms that have `m.room.encryption`, as the syncs reported them. A send to one of them is encrypted.
     encrypted_rooms: Mutex<HashSet<String>>,
+    /// The joined members of each room, as the syncs reported them.
+    room_members: Mutex<HashMap<String, Vec<String>>>,
+    /// Encrypted messages that did not open yet, waiting for their room key.
+    pending_ciphertexts: Mutex<Vec<(String, Ciphertext)>>,
 }
 
 impl Api {
     /// Signs in with a user name and password. Makes a new device on the account, so the token is per start.
-    pub fn login(transport: Arc<dyn Transport>, base: &str, user: &str, password: &str) -> Result<Api, String> {
+    pub fn login(transport: Arc<dyn Transport>, base: &str, user: &str, password: &str, device_hint: Option<&str>) -> Result<Api, String> {
         let http = Client::new(transport, Jar::default()).require_https();
-        let body = protocol::login_body(user, password);
+        let body = protocol::login_body(user, password, device_hint);
         let url = protocol::login_url(base);
         let answer = call(&http, "POST", &url, None, Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
         let Login { user_id, access_token, device_id } = protocol::parse_login(&answer)?;
@@ -49,42 +65,200 @@ impl Api {
             device_id,
             crypto,
             encrypted_rooms: Mutex::new(HashSet::new()),
+            room_members: Mutex::new(HashMap::new()),
+            pending_ciphertexts: Mutex::new(Vec::new()),
         })
     }
 
-    /// Takes in a sync answer before the window sees it: the rooms' encryption state is noted, the device keys of the
-    /// senders of room keys are fetched, the room keys are taken in and the encrypted messages are opened (or marked
-    /// undecryptable), and the one-time keys are topped up when the server runs low. Failures never stop the sync: a
-    /// message that cannot be opened shows as undecryptable.
-    pub fn process_sync(&self, sync: &mut Sync) {
+    /// Installs the crypto state of this login. `stored` is the device the keychain holds for the account (its id and
+    /// pickle) and `key` its pickle key; the stored device is used only when the server gave back the same device id.
+    /// Otherwise a new device is made. Returns true when the stored device was restored. The state is marked dirty, so
+    /// the next [`Api::take_snapshot`] writes it.
+    pub fn install_crypto(&self, key: Option<[u8; 32]>, stored: Option<(&str, &str)>, sessions: Option<&str>) -> Result<bool, String> {
+        let key = match key {
+            Some(key) => key,
+            None => crypto::new_pickle_key()?,
+        };
+        let mut restored = false;
+        let mut next = None;
+        if let Some((device, pickled)) = stored {
+            if device == self.device_id {
+                if let Ok(mut m) = Machine::restore(&self.user_id, &self.device_id, &key, pickled) {
+                    if let Some(blob) = sessions {
+                        let _ = m.load_sessions(&key, blob);
+                    }
+                    next = Some(m);
+                    restored = true;
+                }
+            }
+        }
+        let mut machine = next.unwrap_or_else(|| Machine::new(&self.user_id, &self.device_id));
+        machine.set_pickle_key(key);
+        *self.crypto.lock().map_err(|_| "the encryption state is unavailable".to_string())? = machine;
+        Ok(restored)
+    }
+
+    /// The keychain items to write, when the crypto state changed since the last call (see [`Machine::snapshot`]).
+    pub fn take_snapshot(&self) -> Option<crypto::Snapshot> {
+        self.crypto.lock().ok()?.snapshot()
+    }
+
+    /// Looks at a sync answer on the sync thread, before the window sees it: the rooms' encryption state and members are
+    /// noted, and the encrypted messages that the keys already held open are opened. The network work (device queries,
+    /// room keys, key uploads) is returned as a [`KeyWork`] for the keys worker, so a slow homeserver never holds the
+    /// sync. Messages that do not open yet show as undecryptable, and are opened later (see `run_key_work`).
+    pub fn sync_crypto(&self, sync: &mut Sync) -> Option<KeyWork> {
         if let Ok(mut rooms) = self.encrypted_rooms.lock() {
             for room in sync.rooms.iter().filter(|r| r.encrypted) {
                 rooms.insert(room.id.clone());
             }
         }
-        let mut senders: Vec<String> =
-            sync.to_device.iter().filter(|e| e.kind == "m.room.encrypted").map(|e| e.sender.clone()).collect();
-        senders.sort();
-        senders.dedup();
-        if !senders.is_empty() {
-            let _ = self.query_devices(&senders);
-            if let Ok(mut m) = self.crypto.lock() {
-                m.receive(&sync.to_device);
+        // Who is joined to each room, as far as the syncs say (the send path asks the server for the exact list).
+        if let Ok(mut joined) = self.room_members.lock() {
+            for room in &sync.rooms {
+                let members = joined.entry(room.id.clone()).or_default();
+                for m in &room.members {
+                    if m.membership == "join" {
+                        if !members.contains(&m.user_id) {
+                            members.push(m.user_id.clone());
+                        }
+                    } else {
+                        members.retain(|u| *u != m.user_id);
+                    }
+                }
             }
         }
+        // Open what the keys already held open. The rest waits for the key work (see `run_key_work`).
+        let mut failed: Vec<(String, Ciphertext)> = Vec::new();
         for room in sync.rooms.iter_mut().filter(|r| !r.ciphertexts.is_empty()) {
             if let Ok(mut m) = self.crypto.lock() {
                 m.decrypt_events(&room.id, &mut room.events, &room.ciphertexts);
             }
+            for ct in &room.ciphertexts {
+                if room.events.iter().any(|e| e.id == ct.id && e.body == Body::Undecryptable) {
+                    failed.push((room.id.clone(), ct.clone()));
+                }
+            }
         }
-        if sync.otk_count.map_or(true, |n| n < crypto::OTK_FLOOR) {
+        if let Ok(mut pending) = self.pending_ciphertexts.lock() {
+            pending.extend(failed);
+            let excess = pending.len().saturating_sub(MAX_PENDING);
+            pending.drain(..excess);
+        }
+        let to_device: Vec<ToDevice> = sync
+            .to_device
+            .iter()
+            .filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request")
+            .cloned()
+            .collect();
+        let upload = sync.otk_count.map_or(true, |n| n < crypto::OTK_FLOOR);
+        let has_pending = self.pending_ciphertexts.lock().map(|p| !p.is_empty()).unwrap_or(false);
+        if !upload && to_device.is_empty() && sync.device_changed.is_empty() && !has_pending {
+            return None;
+        }
+        Some(KeyWork { upload, device_changed: sync.device_changed.clone(), to_device })
+    }
+
+    /// The key work of one sync, on the keys worker (not the sync thread): uploads keys when the server runs low,
+    /// queries the devices of the users that changed or sent room keys and requests, takes in the room keys, answers the
+    /// key requests of this user's devices, shares room keys with devices that appeared, and opens the messages that were
+    /// waiting for a key. Returns the bodies that now open, per room, for the window.
+    pub fn run_key_work(&self, work: KeyWork) -> Vec<Patch> {
+        if work.upload {
             let _ = self.upload_keys();
         }
+        let mut users: Vec<String> = work.device_changed.clone();
+        users.extend(work.to_device.iter().filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request").map(|e| e.sender.clone()));
+        users.sort();
+        users.dedup();
+        if !users.is_empty() {
+            let _ = self.query_devices(&users);
+        }
+        if work.to_device.iter().any(|e| e.kind == "m.room.encrypted") {
+            if let Ok(mut m) = self.crypto.lock() {
+                m.receive(&work.to_device);
+            }
+        }
+        self.answer_key_requests(&work.to_device);
+        for (room, members) in self.rooms_with_new_devices(&work.device_changed) {
+            let _ = self.share_with_new_devices(&room, &members);
+        }
+        // Retry the messages still waiting. Those that open now are patched in the window.
+        let waiting: Vec<(String, Ciphertext)> = self.pending_ciphertexts.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default();
+        let mut still = Vec::new();
+        let mut patches: Vec<Patch> = Vec::new();
+        for (room, ct) in waiting {
+            match self.with_crypto(|m| Ok(m.open_room_event(&room, &ct))).ok().flatten() {
+                Some((body, reply)) => match patches.iter_mut().find(|(r, _)| *r == room) {
+                    Some((_, events)) => events.push((ct.id.clone(), body, reply)),
+                    None => patches.push((room.clone(), vec![(ct.id.clone(), body, reply)])),
+                },
+                None => still.push((room, ct)),
+            }
+        }
+        if let Ok(mut pending) = self.pending_ciphertexts.lock() {
+            pending.extend(still);
+        }
+        patches
+    }
+
+    /// The devices of `users` as (user, device id), for the room info. Every one is unverified (see `Machine::devices_of`).
+    pub fn device_list(&self, users: &[String]) -> Vec<(String, String)> {
+        self.with_crypto(|m| Ok(users.iter().flat_map(|u| m.devices_of(u)).map(|d| (d.user_id, d.device_id)).collect::<Vec<_>>()))
+            .unwrap_or_default()
     }
 
     /// Whether `room` is end to end encrypted, as the syncs said.
     pub fn is_encrypted(&self, room: &str) -> bool {
         self.encrypted_rooms.lock().map(|r| r.contains(room)).unwrap_or(false)
+    }
+
+    /// The encrypted rooms that have a member whose device list just changed, with their members.
+    fn rooms_with_new_devices(&self, changed: &[String]) -> Vec<(String, Vec<String>)> {
+        if changed.is_empty() {
+            return Vec::new();
+        }
+        let (Ok(rooms), Ok(joined)) = (self.encrypted_rooms.lock(), self.room_members.lock()) else { return Vec::new() };
+        rooms
+            .iter()
+            .filter_map(|room| joined.get(room).map(|members| (room.clone(), members.clone())))
+            .filter(|(_, members)| members.iter().any(|m| changed.contains(m)))
+            .collect()
+    }
+
+    /// Sends the room key of `room` to the devices of `members` that do not hold it yet (devices that appeared since the
+    /// key was shared; see [`Machine::pending_shares`]). Claims one-time keys for the ones without an Olm session first.
+    fn share_with_new_devices(&self, room: &str, members: &[String]) -> Result<(), String> {
+        if self.with_crypto(|m| Ok(m.pending_shares(room, members)))?.is_empty() {
+            return Ok(());
+        }
+        let missing = self.with_crypto(|m| Ok(m.devices_without_session(members)))?;
+        self.claim_sessions(&missing)?;
+        let now = now_ms();
+        let (batch, _) = self.with_crypto(|m| Ok(m.prepare_room(room, members, now)))?;
+        if batch.is_empty() {
+            return Ok(());
+        }
+        self.send_room_keys(batch)
+    }
+
+    /// Answers the room key requests of this user's other devices (see [`Machine::key_requests`]): a device without an
+    /// Olm session gets one claimed first, then the key is sent to it.
+    fn answer_key_requests(&self, events: &[crate::protocol::ToDevice]) {
+        let requests = match self.with_crypto(|m| Ok(m.key_requests(events))) {
+            Ok(requests) => requests,
+            Err(_) => return,
+        };
+        for (room, user, device) in requests {
+            let needed = vec![(user.clone(), device.clone())];
+            if self.with_crypto(|m| Ok(m.needs_session(&user, &device))).unwrap_or(false) {
+                let _ = self.claim_sessions(&needed);
+            }
+            let answer = self.with_crypto(|m| Ok(m.answer_key_request(&room, &user, &device)));
+            if let Ok(Some(message)) = answer {
+                let _ = self.send_room_keys(vec![message]);
+            }
+        }
     }
 
     /// Uploads this device's keys and a batch of one-time keys (`POST /keys/upload`). Returns the server's count of

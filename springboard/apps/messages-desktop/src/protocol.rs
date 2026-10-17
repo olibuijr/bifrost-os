@@ -34,6 +34,8 @@ pub struct Sync {
     pub rooms: Vec<RoomUpdate>,
     pub to_device: Vec<ToDevice>,
     pub otk_count: Option<u64>,
+    /// The users whose device lists changed (`device_lists.changed`): their keys must be queried again.
+    pub device_changed: Vec<String>,
 }
 
 /// A to-device message: `kind` is the event type (`m.room.encrypted` for Olm), `sender` the user who sent it.
@@ -348,14 +350,19 @@ pub fn upload_url(base: &str, file_name: &str) -> String {
 }
 
 /// The login request: a password login for `user` (a local part or a full Matrix id).
-pub fn login_body(user: &str, password: &str) -> String {
-    obj(vec![
+/// With `device_id`, the login asks the server for that device again (its keys and one-time keys stay); without it, a new
+/// device is made.
+pub fn login_body(user: &str, password: &str, device_id: Option<&str>) -> String {
+    let mut fields = vec![
         ("type", text("m.login.password")),
         ("identifier", obj(vec![("type", text("m.id.user")), ("user", text(user))])),
         ("password", text(password)),
         ("initial_device_display_name", text(DEVICE_NAME)),
-    ])
-    .encode()
+    ];
+    if let Some(device) = device_id {
+        fields.push(("device_id", text(device)));
+    }
+    obj(fields).encode()
 }
 
 /// The content of a plain text message.
@@ -480,7 +487,13 @@ pub fn parse_sync(body: &Json) -> Result<Sync, String> {
         })
         .collect();
     let otk_count = body.get("device_one_time_keys_count").and_then(|c| c.get("signed_curve25519")).and_then(|v| v.as_u64());
-    Ok(Sync { next_batch, rooms, to_device, otk_count })
+    let device_changed = body
+        .get("device_lists")
+        .and_then(|d| d.get("changed"))
+        .and_then(|c| c.as_array())
+        .map(|users| users.iter().filter_map(|u| u.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    Ok(Sync { next_batch, rooms, to_device, otk_count, device_changed })
 }
 
 /// The Megolm fields of an `m.room.encrypted` timeline event, or `None` when it lacks them.
@@ -816,10 +829,13 @@ mod tests {
 
     #[test]
     fn login_body_is_a_password_login_with_a_user_identifier() {
-        let body = parse(&login_body("alice", "p\"w"));
+        let body = parse(&login_body("alice", "p\"w", None));
         assert_eq!(body.str_field("type").as_deref(), Some("m.login.password"));
         assert_eq!(body.get("identifier").and_then(|i| i.str_field("user")).as_deref(), Some("alice"));
         assert_eq!(body.str_field("password").as_deref(), Some("p\"w"), "quotes survive the encoding");
+        assert!(body.get("device_id").is_none(), "no device asked for, a new one is made");
+        let again = parse(&login_body("alice", "pw", Some("OLDDEV")));
+        assert_eq!(again.str_field("device_id").as_deref(), Some("OLDDEV"), "the stored device is asked for again");
     }
 
     #[test]
@@ -1073,6 +1089,12 @@ mod tests {
         assert_eq!(keys_claim_url("https://h"), "https://h/_matrix/client/v3/keys/claim");
         assert_eq!(joined_members_url("https://h", "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/joined_members");
         assert_eq!(send_to_device_url("https://h", "m.room.encrypted", "t1"), "https://h/_matrix/client/v3/sendToDevice/m.room.encrypted/t1");
+    }
+
+    #[test]
+    fn a_sync_names_the_users_whose_device_lists_changed() {
+        let sync = parse_sync(&parse(r#"{"next_batch":"n","rooms":{},"device_lists":{"changed":["@a:x"]}}"#)).unwrap();
+        assert_eq!(sync.device_changed, vec!["@a:x".to_string()]);
     }
 
     #[test]

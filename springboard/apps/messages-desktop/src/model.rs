@@ -808,6 +808,20 @@ impl Messages {
 
     /// Applies one sync answer and returns the notifications for messages that just arrived from other people.
     /// Rooms are kept in order of their newest message, newest first.
+    /// Puts the decrypted bodies in place of the undecryptable placeholders (see `api::Patch`). A message that is gone
+    /// by now is skipped.
+    pub fn apply_decrypted(&mut self, patches: &[crate::api::Patch]) {
+        for (room_id, events) in patches {
+            let Some(room) = self.rooms.iter_mut().find(|r| r.id == *room_id) else { continue };
+            for (id, body, reply_to) in events {
+                if let Some(message) = room.timeline.iter_mut().find(|m| m.id == *id) {
+                    message.body = body.clone();
+                    message.reply_to = reply_to.clone();
+                }
+            }
+        }
+    }
+
     pub fn apply_sync(&mut self, sync: &Sync) -> Vec<Notice> {
         let mut notices = Vec::new();
         for update in &sync.rooms {

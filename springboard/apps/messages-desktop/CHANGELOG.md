@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 — 2026-10-17
+
+- The encryption state survives a restart. The device (its id and encrypted Olm account), the pickle key and the Megolm sessions are app keychain items per homeserver and login (matrix-key, matrix-device, matrix-sessions). A sign-in asks the login for the stored device id, so the same device is reused; a new one is made only when none is stored.
+- Late joiners: a device that appears gets the current room key without a rotation, and this user's own verified devices can ask for a room key and are answered. Other requests are ignored.
+- Device queries, key uploads and room key delivery run on a keys worker, not the sync thread; messages that wait for a key are opened later and patched in place.
+- The room info lists each member's devices, each marked Unverified.
+- Not yet: device verification, key backup, cross-signing, encrypted pictures and reactions, Olm sessions across a restart. A sessions item over 8 KiB is refused by the keychain and reported in the status line.
+
 ## 0.6.0 — 2026-10-17
 
 - End-to-end encryption on vodozemac (Olm and Megolm), in src/crypto.rs. Each sign-in makes a device with an Olm account; its device keys and signed one-time keys are uploaded (`/keys/upload`), the members' devices are queried (`/keys/query`) and checked against their self-signatures, and one-time keys are claimed (`/keys/claim`) for the devices without a session.
