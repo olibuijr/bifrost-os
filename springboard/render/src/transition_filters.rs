@@ -228,6 +228,33 @@ pub fn ripple(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option
     }))
 }
 
+/// `CIAccordionFoldTransition`: the picture folds like an accordion into `folds` vertical panels.
+/// Each panel keeps its left edge and compresses to the fraction `1 - time` of its width, so the
+/// `from` picture is squeezed into the left part of the panel, and the rest of the panel shows `to`.
+/// At time 0 nothing is folded and at time 1 the whole picture is `to`. `None` when the sizes
+/// differ or `folds` is 0.
+pub fn accordion_fold(from: &Image, to: &Image, time: f32, folds: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if folds == 0 {
+        return None;
+    }
+    let t = time_of(time);
+    let panel = from.w as f32 / folds as f32;
+    let keep = 1.0 - t;
+    Some(select(from, to, n, |i, _, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let fx = x as f32 + 0.5;
+        let index = (fx / panel).floor();
+        let local = fx - index * panel;
+        if t >= 1.0 || local >= panel * keep {
+            return b;
+        }
+        // Read from's panel stretched back to full width: local / keep runs over the whole panel.
+        let sx = ((index * panel + local / keep).max(0.0) as usize).min(from.w - 1);
+        from.px[y * from.w + sx]
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +333,28 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn accordion_fold_squeezes_each_panel_into_its_left_part() {
+        let from = Image { w: 8, h: 1, px: (0..8u32).map(|i| (i * 16) | 0xff00_0000).collect() };
+        let to = flat(8, 1, GREY);
+        let out = accordion_fold(&from, &to, 0.5, 2).unwrap();
+        // Two panels of 4 pixels, each keeping half its width: pixels 0 and 1 show from's pixels 1 and 3,
+        // and pixels 2 and 3 show to.
+        assert_eq!(out.px[0], from.px[1]);
+        assert_eq!(out.px[1], from.px[3]);
+        assert_eq!(out.px[2], GREY);
+        assert_eq!(out.px[3], GREY);
+        assert_eq!(out.px[4], from.px[5]);
+    }
+
+    #[test]
+    fn accordion_fold_ends_and_rejects_zero_folds() {
+        let (a, b) = (flat(8, 2, BLACK), flat(8, 2, GREY));
+        assert_eq!(accordion_fold(&a, &b, 0.0, 3).unwrap(), a);
+        assert_eq!(accordion_fold(&a, &b, 1.0, 3).unwrap(), b);
+        assert!(accordion_fold(&a, &b, 0.5, 0).is_none());
     }
 
     #[test]
