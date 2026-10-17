@@ -399,6 +399,9 @@
    "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Coordinate)",
    "status": "partial",
    "note": "The SDK location manager and coordinate model cover the public location surface. Gap: the private location-essentials service has no BifrOSt counterpart.",
+   "ready": true,
+   "checks": [{"kind": "test", "crate": "bifrost-app", "filter": "core_location::tests"}],
+   "ready_note": "The public location surface (LocationManager authorization, start/stop updates, one-shot request, Coordinate and distance model) is in springboard/sdk/src/core_location.rs and covered by its unit tests. The private location-essentials service itself is not provided.",
    "rea": [],
    "method": "heuristic"
   },
