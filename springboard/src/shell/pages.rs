@@ -248,6 +248,8 @@ pub enum Pick {
     Accent(usize),
     /// Appearance > Liquid Glass style: 0 Clear, 1 Tinted
     GlassStyle(usize),
+    /// Appearance > Icon & widget style: the index into `ICON_STYLES` (0 Default, 1 Dark, 2 Tinted)
+    IconStyle(usize),
     Nearby(usize),
     /// Language & Region > Preferred Language: the index into `bifrost_ui::region::LANGUAGES`
     Language(usize),
@@ -1516,6 +1518,14 @@ impl DeskPrefs {
     }
 }
 
+/// Appearance > Icon & widget style, in the order of `icon_doc::Variant` (Default 0, Dark 1, Tinted 2).
+pub const ICON_STYLES: [&str; 3] = ["Default", "Dark", "Tinted"];
+
+/// The row that is checked: the variant the icon renderer draws with.
+fn icon_style_index() -> usize {
+    bifrost_render::icon_doc::current_style().0 as usize
+}
+
 /// Appearance: the scheme, accent and highlight colour, sidebar icon size, scroll bars and transparency.
 pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     use bifrost_render::appearance::{accent, mode, mode_label, Accent, Mode};
@@ -1535,6 +1545,9 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
             .header("SIDEBAR ICON SIZE"),
         Group::new(SCROLL_BAR_MODES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.scroll_bars, Action::Pick(Pick::ScrollBars(i)))).collect())
             .header("SHOW SCROLL BARS"),
+        Group::new(ICON_STYLES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == icon_style_index(), Action::Pick(Pick::IconStyle(i)))).collect())
+            .header("ICON & WIDGET STYLE")
+            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
         Group::new(vec![
             Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass)),
             reduce_transparency_item(m.a11y.reduce_transparency, m.a11y.increase_contrast),

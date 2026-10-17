@@ -1143,6 +1143,8 @@ impl Shell {
             let mode = bifrost_render::appearance::Mode::parse(self.prefs.get(settings::APPEARANCE_PREF).unwrap_or("dark"));
             bifrost_render::appearance::publish_mode(mode);
             bifrost_render::appearance::set_accent(bifrost_render::appearance::Accent::parse(self.prefs.get(settings::ACCENT_PREF).unwrap_or("blue")));
+            // after the accent, which the Tinted icons take as their tint
+            settings::apply_icon_style(bifrost_render::icon_doc::Variant::parse(self.prefs.get(settings::ICON_STYLE_PREF).unwrap_or("default")));
             let (unix, offset) = self.wall_now(0.0);
             bifrost_render::appearance::jump_to(mode.is_light(((unix + offset as i64).rem_euclid(86_400) / 3600) as u32));
         }
