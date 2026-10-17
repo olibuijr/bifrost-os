@@ -1032,16 +1032,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/automix.rs, springboard/apps/music-desktop/src/music/playback.rs",
    "status": "os",
-   "note": "The mixer parameters of a transition (two gains, a low cut on each song, incoming playback rate) as automation over the overlap.",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "automix::tests"
-    }
-   ],
-   "ready_note": "Transition::frame gives the gain, high-pass corner and varispeed rate a mixer stage takes at any point of an overlap; the units themselves (gain, filter, varispeed) are the audio service stages, which have no transition command yet. Host tests only.",
+   "note": "The mixer parameters of a transition (two gains, a low cut on each song, incoming playback rate) as automation over the overlap. Lead 2026-10-17: not ready: the audio service has no crossfade command, so nothing plays the automix plan.",
    "rea": [],
    "method": "assessed"
   },
@@ -1062,21 +1053,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/automix.rs, springboard/ui/src/music.rs",
    "status": "os",
-   "note": "Shared foundations of the transition engine: beat grids (RhythmResult), tempo folding for half and double time, bar arithmetic.",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "automix::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "music::tests"
-    }
-   ],
-   "ready_note": "Internal plumbing of the transition engine: the beat-grid types are bifrost_ui::music and the tempo and bar helpers are in automix.rs, covered by their tests. Host tests only.",
+   "note": "Shared foundations of the transition engine: beat grids (RhythmResult), tempo folding for half and double time, bar arithmetic. Lead 2026-10-17: not ready: the audio service has no crossfade command, so nothing plays the automix plan.",
    "rea": [],
    "method": "assessed"
   },
@@ -1097,21 +1074,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/automix.rs, springboard/ui/src/music.rs, springboard/apps/music-desktop/src/music/playback.rs",
    "status": "os",
-   "note": "Beat-matched transitions between songs (automix): the plan comes from ui::automix over the song beat grids.",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "automix::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "music::tests"
-    }
-   ],
-   "ready_note": "Index evidence: SonicKit hosts SonicDiagnostics.appex (diagnostics plug-in) and _SonicKit_MusicKit with TransitionStyles.json and DSPGraph.dspg, i.e. song-to-song transitions. ui::automix plans whole-bar, bar-aligned overlaps with a tempo ramp and bass swap from RhythmResult grids (analyze_rhythm); music-desktop playback.rs has the equal-power crossfade and Sound Check. The audio service has no crossfade command yet, so the plan is not played; host tests only.",
+   "note": "Beat-matched transitions between songs (automix): the plan comes from ui::automix over the song beat grids. Lead 2026-10-17: not ready: the audio service has no crossfade command, so nothing plays the automix plan.",
    "rea": [],
    "method": "assessed"
   },
@@ -3517,16 +3480,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/crlite.rs",
    "status": "os",
-   "note": "Offline certificate revocation by filter cascade: build, encode, decode and look up.",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "crlite::tests"
-    }
-   ],
-   "ready_note": "Built in wave 12: bifrost_core::crlite answers revoked or not from a Bloom-filter cascade without asking any online responder (privacy-first). Wire format is our own (BFCR v1); the reference system's published filter format is not read, and no filter feed ships yet. Host tests only.",
+   "note": "Offline certificate revocation by filter cascade: build, encode, decode and look up. Lead 2026-10-17: not ready: no filter cascade ships and the TLS path does not consult it.",
    "rea": [],
    "method": "assessed"
   },
