@@ -38,6 +38,7 @@ pub mod admin_sign_in;
 pub mod gpu_memory;
 pub mod virtio;
 pub mod accessory_manager;
+pub mod usb_bus_source;
 pub mod script_io;
 pub mod script;
 pub mod app_links;

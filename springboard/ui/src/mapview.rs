@@ -273,6 +273,18 @@ impl MapView {
         &self.camera
     }
 
+    /// Resizes the viewport the camera looks through (the view's size in pixels); the centre and zoom stay. A size
+    /// that is not positive and finite is ignored. Returns whether the viewport changed.
+    pub fn set_viewport(&mut self, width: f64, height: f64) -> bool {
+        let ok = width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0;
+        if !ok || (self.camera.viewport_w == width && self.camera.viewport_h == height) {
+            return false;
+        }
+        self.camera.viewport_w = width;
+        self.camera.viewport_h = height;
+        true
+    }
+
     /// Pitch in degrees, 0..=MAX_PITCH_DEG.
     pub fn pitch_deg(&self) -> f64 {
         self.pitch_deg
@@ -524,5 +536,17 @@ mod tests {
         assert!((back.center.latitude - 64.0).abs() < 1e-6, "latitude {}", back.center.latitude);
         assert!((back.center.longitude + 22.0).abs() < 1e-6, "longitude {}", back.center.longitude);
         assert!(view.camera().zoom > 0.0, "a 20 km region zooms in from the world view");
+    }
+
+    #[test]
+    fn set_viewport_keeps_the_centre_and_ignores_bad_sizes() {
+        let mut view = view_at_zoom_zero();
+        let centre = view.camera().center;
+        assert!(view.set_viewport(640.0, 480.0));
+        assert_eq!((view.camera().viewport_w, view.camera().viewport_h), (640.0, 480.0));
+        assert_eq!(view.camera().center, centre);
+        assert!(!view.set_viewport(640.0, 480.0), "no change");
+        assert!(!view.set_viewport(0.0, 480.0));
+        assert!(!view.set_viewport(f64::NAN, 480.0));
     }
 }

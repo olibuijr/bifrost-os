@@ -553,11 +553,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "bifrost": "springboard/sdk/src/view/map_widget.rs, springboard/sdk/src/maps.rs, springboard/ui/src/mapview.rs, springboard/ui/src/map_item.rs, springboard/ui/src/map_snapshot.rs, springboard/ui/src/map_geojson.rs",
    "status": "partial",
-   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json Glue missing: no map View in the declarative tree; ui/src/mapview.rs is a model with no renderer or tile source (mapkit.json gaps). Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests); the map view itself is still not drawn.",
+   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json. Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests). Built 2026-10-17: MapWidget view that draws the Maps app tiles with pins, drag and key zoom (sdk view map_widget, tests view::map_widget::tests). Overlays (lines, polygons) are not drawn by the view yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::map_widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "maps::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mapview::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_snapshot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "map_geojson::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI Map content is the MapWidget view (sdk view/map_widget.rs): it shows the Maps app's own tiles around a MapView camera, draws annotation pins, pans by drag and zooms by key, over the camera, item and snapshot models. Host tests cover the picture conversion, refresh tracking, drag, zoom and pin placement. Not verified on Midget; the app calls refresh from its tick (drawing never waits for the network), and overlays (polylines, polygons) and map controls are not drawn by the view yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaIntents_AppIntents.framework",
@@ -574,11 +608,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "bifrost": "springboard/ui/src/media_search.rs, springboard/ui/src/media_request.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet. Built 2026-10-17: requestConfirmation check for a loose text match (ui media_search, tests media_search::tests); system delivery of requests is still missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Media intents are the AudioSearch filter fields, resolve() with disambiguation and the confirmation check (ui media_search, media_request), the transport intents Search lists and runs (shell media_intents, intents) and the App Intents runtime (sdk intents). Host tests only; no voice assistant delivers requests, so requests arrive from Search, the control socket and the Control Center."
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaPlayer_AppIntents.framework",
@@ -656,11 +719,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "bifrost": "springboard/sdk/src/now_playing.rs, springboard/ui/src/media_session.rs, springboard/ui/src/media_feedback.rs, springboard/src/shell/services/now_playing.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/now_playing_menu.rs",
    "status": "partial",
    "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_feedback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::media_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::now_playing_menu::tests"
+    }
+   ],
+   "ready_note": "Intents that control the Now Playing session: an app publishes and clears its session and receives remote commands (sdk now_playing, ui media_session, media_feedback), the shell keeps the card and menu (services now_playing, now_playing_menu) and exposes play or pause, next and previous as App Intents (media_intents). Host tests only; remote media sessions on other devices are not modelled in the shell."
   },
   {
    "id": "path:/System/Library/Frameworks/_PassKit_SwiftUI.framework",
@@ -753,11 +850,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
+   "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/services/permission_kit.rs, springboard/core/src/permission_request.rs",
    "status": "partial",
-   "note": "The SwiftUI side has no separate code; the same question and answer models in permission_question.rs back the sheet. No SwiftUI permission view is built.",
+   "note": "The SwiftUI side has no separate code: the system draws the permission sheet, and the same question and answer models in permission_question.rs back it, so there is no view type to build.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::permission_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The question and answer models (ui permission_question: AskCenter, PermissionQuestion, PermissionButton, responses) back the SDK ask call (sdk permission_kit), the shell service that carries it and the guardian sheet the person answers (permission_sheet). The SwiftUI side is the same models; there is no separate view type because the system draws the sheet. Communication topics are not carried."
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_SwiftUI.framework",
@@ -776,7 +902,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
    "status": "partial",
-   "note": "The SwiftUI side has no separate code; the same question and answer models in permission_question.rs back the sheet. No SwiftUI permission view is built.",
+   "note": "Open: the PhotosPicker needs a shell picker sheet and there is none. The SDK side exists (sdk photo_picker.rs: configuration, filters, result decode) and the shell service checks the picker params (services/photos.rs picker_call) but then refuses because only the person can choose a picture. Missing: a sheet that lists the library with thumbnails, tracks the selection against the limit and answers the pending call.",
    "rea": [],
    "method": "assessed"
   },
@@ -797,7 +923,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/photokit.json",
    "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "note": "Open: depends on the PhotosPicker sheet (see _PhotosUI_SwiftUI), which the shell lacks, and on a photo widget kind that reads a chosen asset. The widget runtime exists (sdk widgets.rs) but no widget family shows library pictures, and the configuration cannot pick one.",
    "rea": [],
    "method": "assessed"
   },
@@ -816,11 +942,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_intents.rs, springboard/sdk/src/photo_library.rs, springboard/ui/src/photo_smart_albums.rs",
    "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Built 2026-10-17: PhotoAsset and PhotoAlbum entities and open, open-album and favourite intents (sdk photo_intents, tests photo_intents::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_smart_albums::tests"
+    }
+   ],
+   "ready_note": "Photo App Intents are the PhotoAsset and PhotoAlbum entities and the open-photo, open-album and set-photo-favourite intents (sdk photo_intents) over the library asset records and the smart albums. Host tests cover entity building, album queries and parameter validation; the Photos app has not adopted the intents in its manifest yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_QuickLook_SwiftUI.framework",
@@ -946,7 +1091,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/scenekit.json",
    "status": "partial",
-   "note": "overlay module, owner SceneKit; from SDK matrix scenekit.json",
+   "note": "Open: SceneView needs a 3D scene renderer. The scene graph, camera, projection and hit-test models exist (ui scene3d, scene_view, shading, primitives3d, physics3d) but nothing rasterises a Scene into a window, and the SDK has no View that hosts one. Missing: a CPU or GPU scene renderer and the hosting view.",
    "rea": [],
    "method": "assessed"
   },
@@ -965,11 +1110,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/capture_picker.rs",
+   "bifrost": "springboard/ui/src/capture_picker.rs, springboard/ui/src/capture_access.rs, springboard/ui/src/capture_config.rs, springboard/ui/src/capture_content.rs, springboard/ui/src/capture_filter.rs",
    "status": "partial",
    "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_content::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_filter::tests"
+    }
+   ],
+   "ready_note": "The content-sharing picker's modes, configuration and observer results (ui capture_picker), the permission gate (capture_access), shareable content, stream configuration and content filters. The picker itself is a system surface in the reference, so the SwiftUI overlay adds no view type of its own; here it is the same model. Host tests only; the shell does not draw the picker window yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_SharedWithYou_AppIntents.framework",
@@ -986,9 +1160,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/capture_picker.rs",
-   "status": "partial",
-   "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built.",
+   "bifrost": "docs/parity-matrix/data/shared-with-you.json",
+   "status": "n/a",
+   "note": "n/a: Shared with You surfaces links and files people received in Messages, Mail and FaceTime, and this overlay adds App Intents entities for those received items. BifrOSt has no Messages, Mail or FaceTime and no Apple-only message transport, so there is nothing to surface. Evidence: the reference holds only a Metadata.appintents bundle under _SharedWithYou_AppIntents.framework and the SharedWithYou accessibility bundle; the owner framework is n/a in docs/parity-matrix/data/shared-with-you.json. Generic sharing is covered by the share sheet (sdk share.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -1051,7 +1225,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/spritekit.json",
    "status": "partial",
-   "note": "overlay module, owner SpriteKit; from SDK matrix spritekit.json",
+   "note": "Open: SpriteView needs a 2D scene renderer and node tree. The pieces exist as models (ui scene2d view scaling, sk_action, sk_atlas, sk_tilemap, emitter, physics, scene_loop) but there is no sprite node tree that draws them and no SDK View that hosts a scene. Missing: the node tree with drawing and the hosting view.",
    "rea": [],
    "method": "assessed"
   },
@@ -1091,11 +1265,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "bifrost": "springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/ui/src/model_schema.rs, springboard/ui/src/data_store.rs, springboard/ui/src/history.rs",
    "status": "partial",
    "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "data_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "history::tests"
+    }
+   ],
+   "ready_note": "The bridge between the model layer and the managed-object layer is the shared store: model schema and store (ui model_schema, model_store), the managed context with change history and transaction tokens and live fetched results (managed_context), and the data store and history. Host tests only; apps keep their own file stores today and none has moved onto the model store."
   },
   {
    "id": "path:/System/Library/Frameworks/_SwiftData_SwiftUI.framework",
@@ -1112,11 +1315,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "bifrost": "springboard/ui/src/observe.rs, springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/sdk/src/observable.rs",
    "status": "partial",
    "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "observe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    }
+   ],
+   "ready_note": "The SwiftUI side of the model layer is observation: live fetched results that report a changed row set (ui managed_context), observation of model changes (ui observe) and the observable property wrapper in the SDK (sdk observable). Host tests only; the declarative views take their data from these through the app's own update loop."
   },
   {
    "id": "path:/System/Library/Frameworks/_Translation_SwiftUI.framework",
@@ -1133,11 +1360,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs",
    "status": "partial",
    "note": "overlay module, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "The translation presentation (popover model, language-pair check, result and replacement) and the session and availability types over the installed language packs. Host tests only; there is no neural engine in the Arch repositories, so translation uses phrase tables, and the shell does not draw the popover yet."
   },
   {
    "id": "path:/System/Library/Frameworks/_USDKit_RealityKit.framework",
@@ -1175,11 +1421,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "springboard/sdk/src/usernotif.rs, springboard/sdk/src/usernotif_model.rs, springboard/sdk/src/notification_schedule.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/services/notification_schedule.rs",
    "status": "partial",
    "note": "overlay module, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::notification_schedule::tests"
+    }
+   ],
+   "ready_note": "Notification actions that run an intent: the SDK notification content, categories and actions (sdk usernotif, usernotif_model), scheduling (notification_schedule) and the shell service that posts and routes the response (shell usernotif, services notification_schedule). Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/_Vision_FoundationModels.framework",
@@ -1196,11 +1471,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/ui/src/model_attachment.rs, springboard/ui/src/model_session.rs, springboard/ui/src/detect.rs, springboard/ui/src/generation_schema.rs",
    "status": "partial",
    "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_attachment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_schema::tests"
+    }
+   ],
+   "ready_note": "Image input for model sessions: the attachment model with size and kind checks (ui model_attachment), the session that carries it (model_session), the image detectors that feed Vision-style results to a prompt (detect) and the typed generation schema. Host tests only; there is no on-device model runtime, so a session needs a provider (model_provider) to answer."
   },
   {
    "id": "path:/System/Library/Frameworks/_WorkoutKit_SwiftUI.framework",
