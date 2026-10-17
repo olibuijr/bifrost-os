@@ -107,6 +107,7 @@ tcpdump
 tcsh
 tftp-hpa
 tidy
+time
 tk
 traceroute
 udisks2
