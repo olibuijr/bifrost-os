@@ -179,7 +179,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accelerate.json",
    "status": "partial",
-   "note": "from SDK matrix accelerate.json Built 2026-10-17: DCT (dct::tests) and spectrogram (spectrogram::tests) in the SDK; convolution, geometry, colour and neural-network gaps remain.",
+   "note": "from SDK matrix accelerate.json Built 2026-10-17: DCT (dct::tests) and spectrogram (spectrogram::tests) in the SDK; convolution, geometry, colour and neural-network gaps remain. Built 2026-10-17: gamma and histogram specification (render histogram::tests); morphology and histogram reachable through the SDK kit (sdk kit_image_tools tests).",
    "rea": [],
    "method": "assessed"
   },
@@ -1215,7 +1215,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/colorsync.json",
    "status": "partial",
-   "note": "from SDK matrix colorsync.json",
+   "note": "from SDK matrix colorsync.json Built 2026-10-17: ROMM RGB built-in profile (render icc_builtin::tests).",
    "rea": [],
    "method": "assessed"
   },

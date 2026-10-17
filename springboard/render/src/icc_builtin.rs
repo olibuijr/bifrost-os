@@ -16,6 +16,8 @@ pub enum Builtin {
     AdobeRgb1998,
     /// ITU-R BT.2020 primaries with the BT.2020 10-bit transfer curve.
     Rec2020,
+    /// ROMM RGB (ProPhoto): D50 white, gamma 1.8 with a linear toe.
+    RommRgb,
     /// A grey profile with gamma 2.2.
     Gray22,
 }
@@ -29,7 +31,8 @@ const D65_XY: (f64, f64) = (0.3127, 0.3290);
 
 impl Builtin {
     /// Every built-in profile, in the order a colour settings page lists them.
-    pub const ALL: [Builtin; 5] = [Builtin::Srgb, Builtin::DisplayP3, Builtin::AdobeRgb1998, Builtin::Rec2020, Builtin::Gray22];
+    pub const ALL: [Builtin; 6] =
+        [Builtin::Srgb, Builtin::DisplayP3, Builtin::AdobeRgb1998, Builtin::Rec2020, Builtin::RommRgb, Builtin::Gray22];
 
     /// The description tag text, as the profile names itself.
     pub fn description(self) -> &'static str {
@@ -38,6 +41,7 @@ impl Builtin {
             Builtin::DisplayP3 => "Display P3",
             Builtin::AdobeRgb1998 => "Adobe RGB (1998)",
             Builtin::Rec2020 => "ITU-R BT.2020",
+            Builtin::RommRgb => "ROMM RGB",
             Builtin::Gray22 => "Generic Gray Gamma 2.2",
         }
     }
@@ -50,6 +54,7 @@ impl Builtin {
             Builtin::DisplayP3 => space_profile(desc, Space::DisplayP3),
             Builtin::AdobeRgb1998 => space_profile(desc, Space::AdobeRgb),
             Builtin::Rec2020 => rgb_profile(desc, REC2020_PRIMARIES, D65_XY, rec2020_to_linear),
+            Builtin::RommRgb => space_profile(desc, Space::RommRgb),
             Builtin::Gray22 => gray_profile(desc, |v| v.powf(2.2)),
         }
     }
@@ -261,6 +266,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn romm_profile_has_d50_white_and_the_romm_red_colorant() {
+        let data = Builtin::RommRgb.bytes();
+        let p = Profile::parse(&data).unwrap();
+        assert_eq!(p.header.color_space, "RGB ");
+        assert!(p.matrix_shaper(&data).is_some());
+        // The D50 white is stored as the media white point, so the ROMM white maps to unit Y.
+        let m = p.matrix_shaper(&data).unwrap();
+        let white = m.to_xyz_d50([1.0, 1.0, 1.0]);
+        assert!(close(white[1], 1.0, 2e-3), "{white:?}");
+        assert_eq!(Builtin::RommRgb.description(), "ROMM RGB");
     }
 
     #[test]

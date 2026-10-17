@@ -54,7 +54,7 @@
       "apple": "vImage gamma, tone curves, histogram calculation, specification and equalization",
       "bifrost": "springboard/src/shell/photos/edit.rs:287 (per-channel lookup table: contrast then brightness); springboard/render/src/histogram.rs (histogram, equalization_lut, levels_lut, curve_lut)",
       "status": "partial",
-      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: the Photos app does not use these yet, and there is no gamma or histogram specification API."
+      "note": "Histogram, equalization, level stretch and piecewise tone curves are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Built 2026-10-17: gamma_lut and specification_lut (render histogram::tests), reachable as bifrost_app::kit::histogram. Gap: the Photos app does not use these yet."
     },
     {
       "feature": "Compression and decompression",
