@@ -14,7 +14,7 @@ fn main() {
         Err(e) => die("mdfind", &e, 1),
     };
     let start = mdfind::start_folder(options.onlyin.as_deref(), std::env::var("HOME").ok().as_deref());
-    let found = mdfind::search(&start, &options.query);
+    let found = mdfind::search_with(&start, &options.query, options.content);
     if options.count {
         println!("{}", found.len());
         return;

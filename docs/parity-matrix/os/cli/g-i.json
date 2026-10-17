@@ -489,7 +489,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: h2xs installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/h2xs"
+    }
+   ],
+   "ready_note": "perl h2xs"
   },
   {
    "id": "path:/usr/bin/hdid",
@@ -970,7 +978,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: infocmp installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/infocmp"
+    }
+   ],
+   "ready_note": "ncurses infocmp"
   },
   {
    "id": "path:/usr/bin/install",
@@ -1012,7 +1028,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: instmodsh installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/instmodsh"
+    }
+   ],
+   "ready_note": "perl instmodsh"
   },
   {
    "id": "path:/usr/bin/iofile.d",
@@ -2100,7 +2124,15 @@
    "status": "partial",
    "note": "provided by Arch package nfs-utils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpc.gssd"
+    }
+   ],
+   "ready_note": "nfs-utils provides rpc.gssd"
   },
   {
    "id": "path:/usr/sbin/hdik",

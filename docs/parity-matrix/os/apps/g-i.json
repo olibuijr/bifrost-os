@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "Games app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-games",
+     "filter": "solitaire::"
+    }
+   ],
+   "ready_note": "games logic tests (solitaire, tic-tac-toe, motion)"
   },
   {
    "id": "path:/System/Applications/Home.app",
@@ -106,7 +115,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "plot::"
+    }
+   ],
+   "ready_note": "expression parser, plotting and PNG output tests"
   },
   {
    "id": "path:/System/Applications/iPhone Mirroring.app",

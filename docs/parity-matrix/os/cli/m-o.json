@@ -275,11 +275,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "tools/parity/os_cli_packages.txt (davfs2 provides mount.davfs)",
+   "bifrost": "/usr/bin/mount.davfs",
    "status": "partial",
    "note": "The davfs2 package that supplies mount.davfs is a candidate in the os/cli package list, not yet in the runtime package list. No BifrOSt code mounts WebDAV shares.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "command -v mount.davfs",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "davfs2 provides mount.davfs (added to runtime-packages.txt)"
   },
   {
    "id": "path:/sbin/mpioutil",
@@ -342,7 +351,15 @@
    "status": "partial",
    "note": "nfs-utils ships rpc.nfsd and is listed in the runtime package list. No BifrOSt service starts the NFS server, and the daemon is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpc.nfsd"
+    }
+   ],
+   "ready_note": "nfs-utils provides rpc.nfsd"
   },
   {
    "id": "path:/sbin/nologin",
@@ -363,7 +380,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: nologin installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nologin"
+    }
+   ],
+   "ready_note": "nologin from util-linux/shadow"
   },
   {
    "id": "path:/usr/bin/macbinary",
@@ -498,7 +523,15 @@
    "status": "partial",
    "note": "provided by Arch package mandoc; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandoc"
+    }
+   ],
+   "ready_note": "mandoc package (added to runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/mcxquery",
@@ -580,7 +613,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/mdfind.rs",
    "status": "partial",
-   "note": "mdfind walks the folder tree and matches names; the content index and -live are missing (see the module comment). Not yet verified on Midget.",
+   "note": "mdfind walks the folder tree, matches names and (with -content) text of files up to 4 MiB; the content index and -live are missing. Not yet verified on Midget.",
    "rea": [],
    "method": "assessed"
   },
@@ -664,7 +697,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/mdutil.rs",
    "status": "partial",
-   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Not yet verified on Midget.",
+   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index.",
    "rea": [],
    "method": "assessed"
   },
@@ -1452,7 +1485,16 @@
    "status": "partial",
    "note": "BifrOSt bus only: names are not the Darwin system names, -w polls the token every 50 ms instead of a pushed event, names cannot hold white space, state is a whole number up to 2^53. Not run on Midget; the shell side is unbuilt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "notifyutil::"
+    }
+   ],
+   "ready_note": "notify bus; shell side is wired (springboard/src/bin/shell.rs Request::Notify -> notify_bus::control)"
   },
   {
    "id": "path:/usr/bin/nscurl",
@@ -1596,7 +1638,16 @@
    "status": "partial",
    "note": "open goes through the shell control socket; see the module comment for the supported options. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "open::"
+    }
+   ],
+   "ready_note": "open routes apps, folders and URLs through the shell control socket; shell answers open-app/open-folder/open-url"
   },
   {
    "id": "path:/usr/bin/opensnoop",
@@ -1659,7 +1710,16 @@
    "status": "partial",
    "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt's own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osacompile::"
+    }
+   ],
+   "ready_note": "compiles to BifrOSt's own script format; no compiled JavaScript"
   },
   {
    "id": "path:/usr/bin/osadecompile",
@@ -1722,7 +1782,16 @@
    "status": "partial",
    "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app's dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::"
+    }
+   ],
+   "ready_note": "BifrOSt scripting language with tell-app dispatch; JavaScript and interactive mode refused"
   },
   {
    "id": "path:/usr/libexec/MSUEarlyBootTask",
@@ -1907,11 +1976,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (man-db provides mandb, which builds the whatis database)",
+   "bifrost": "/usr/bin/mandb",
    "status": "partial",
    "note": "man-db is in the runtime package list and its mandb builds the whatis database that this command builds. The command itself has not been run on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandb"
+    }
+   ],
+   "ready_note": "man-db mandb builds the whatis database"
   },
   {
    "id": "path:/usr/libexec/makewhatis.local",
@@ -1928,11 +2005,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (man-db, mandb)",
+   "bifrost": "/usr/bin/mandb",
    "status": "partial",
    "note": "man-db provides mandb, which builds the whatis index, and is listed in the runtime package list. The makewhatis.local wrapper itself is not installed, and the index build is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/mandb"
+    }
+   ],
+   "ready_note": "man-db mandb builds the whatis database"
   },
   {
    "id": "path:/usr/libexec/managedappsd",
@@ -3003,7 +3088,16 @@
    "status": "partial",
    "note": "springboard/cmd/src/mtree.rs and bin/mtree.rs (-c, compare, -e, -d, -x, -U/-u, -f, -p, /set, /unset, .., escapes, continuation). Keywords type, mode, uid, gid, size, link, time, nlink, sha1/256/512digest only; flags, uname, gname and other BSD keywords are not implemented and are reported on stderr, not checked. -u is an alias of -U. Uncompiled and untested on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mtree::"
+    }
+   ],
+   "ready_note": "spec compare and create for the supported keywords; flags and BSD-only keywords are reported, not checked"
   },
   {
    "id": "path:/usr/sbin/ndp",
@@ -3087,7 +3181,16 @@
    "status": "partial",
    "note": "networksetup reads services, ports, Wi-Fi, DNS and proxies; DNS and proxy settings are read-only. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "networksetup::"
+    }
+   ],
+   "ready_note": "services, ports, Wi-Fi, DNS and proxy reads; module tests"
   },
   {
    "id": "path:/usr/sbin/newsyslog",
@@ -3104,11 +3207,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (logrotate)",
+   "bifrost": "springboard/cmd/src/bin/newsyslog.rs; springboard/cmd/src/newsyslog.rs",
    "status": "partial",
    "note": "logrotate rotates and compresses logs on a schedule, the job newsyslog does on the reference system, and is listed in the runtime package list. The newsyslog.conf entries are not translated, and rotation is not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "newsyslog::"
+    }
+   ],
+   "ready_note": "translates newsyslog.conf rules to logrotate stanzas and runs logrotate; B, X, G, M flags are reported, not translated"
   },
   {
    "id": "path:/usr/sbin/nfs4mapid",

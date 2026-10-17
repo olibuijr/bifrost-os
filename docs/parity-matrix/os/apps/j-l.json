@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-journal",
+     "filter": "store::"
+    }
+   ],
+   "ready_note": "journal store and layout tests"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Keychain Access.app",

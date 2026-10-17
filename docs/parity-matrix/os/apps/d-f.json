@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "the Dictionary settings page exists, no dictionary app round 75, host only: app: StarDict lookup, search field; was gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-dictionary",
+     "filter": "model::"
+    }
+   ],
+   "ready_note": "dictionary lookup model tests (StarDict-format lookup and search)"
   },
   {
    "id": "path:/System/Applications/FaceTime.app",
@@ -85,7 +94,16 @@
    "status": "partial",
    "note": "Fonts settings page, no font manager app round 75, host only: app 0.2.0 (preview, remove font).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-fontbook",
+     "filter": "validate::"
+    }
+   ],
+   "ready_note": "font validation, preview and export tests"
   },
   {
    "id": "path:/System/Applications/Freeform.app",
@@ -106,7 +124,16 @@
    "status": "partial",
    "note": "Freeform app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-freeform",
+     "filter": "boards::"
+    }
+   ],
+   "ready_note": "board model, items, ink, PDF output and services tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Digital Color Meter.app",
@@ -127,7 +154,16 @@
    "status": "partial",
    "note": "no colour picker utility round 75, host only: app 0.2.0 with screen sample service; was gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-colormeter",
+     "filter": "color::"
+    }
+   ],
+   "ready_note": "colour sampling, loupe and menu tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Disk Utility.app",
@@ -148,7 +184,16 @@
    "status": "partial",
    "note": "no disk utility app round 75, host only: sidebar, info, mount, eject; erase and first aid in core only; was gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "images::"
+    }
+   ],
+   "ready_note": "disk model, mount/eject flow and forms tests"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/DVD Player.app",

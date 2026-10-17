@@ -129,3 +129,6 @@ colord
 wpa_supplicant
 iw
 v4l-utils
+audit
+mandoc
+davfs2
