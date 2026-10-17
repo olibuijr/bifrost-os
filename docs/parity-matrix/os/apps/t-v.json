@@ -169,7 +169,16 @@
    "status": "partial",
    "note": "Term (is.olibuijr.term) terminal",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::terminal::tests"
+    }
+   ],
+   "ready_note": "Term terminal: the terminal module tests (sessions, tabs, profiles, search, links, input and layout)"
   },
   {
    "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
