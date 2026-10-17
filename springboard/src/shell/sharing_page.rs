@@ -1,5 +1,5 @@
 //! Settings > Sharing, the part that changes the computer itself: the computer name and the three sharing services
-//! (Remote Login, File Sharing, Screen Sharing). The name is read from `/etc/machine-info` (the pretty host name
+//! (Remote Login, File Sharing, Screen Sharing, Printer Sharing). The name is read from `/etc/machine-info` (the pretty host name
 //! `hostnamectl` writes) and each service's state from `systemctl is-enabled`. Changes go to `bifrost-privd`
 //! (`system.set_names`, `service.set`), which validates them and runs the fixed command as root.
 //! Nearby Share and AirPlay & Handoff stay on the same page, below these groups (`pages::spec`).
@@ -9,7 +9,7 @@ use super::pages::Action;
 use crate::privd::accounts;
 
 /// The sharing services the page switches, as (privd id, row label), in the order they are listed.
-pub const SERVICES: [(&str, &str); 3] = [("remote_login", "Remote Login"), ("file_sharing", "File Sharing"), ("screen_sharing", "Screen Sharing")];
+pub const SERVICES: [(&str, &str); 4] = [("remote_login", "Remote Login"), ("file_sharing", "File Sharing"), ("screen_sharing", "Screen Sharing"), ("printer_sharing", "Printer Sharing")];
 
 /// What a row on the Sharing page does.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -286,7 +286,7 @@ mod tests {
         let v = View::from_text("", "", |unit| unit == "sshd.service");
         let g = groups(&v);
         assert_eq!(g[0].items[0].action, Action::Sharing(Edit::ComputerName));
-        assert_eq!(g[1].items.len(), 3);
+        assert_eq!(g[1].items.len(), 4);
         assert_eq!(g[1].items[0].action, Action::Sharing(Edit::Service { id: "remote_login", on: false }));
         assert_eq!(g[1].items[1].action, Action::Sharing(Edit::Service { id: "file_sharing", on: true }));
     }
