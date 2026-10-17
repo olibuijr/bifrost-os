@@ -2923,7 +2923,20 @@
    "status": "partial",
    "note": "BankGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/RobotoCondensed-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Roboto Condensed (ttf-roboto, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Basra.ttc",
@@ -2973,7 +2986,20 @@
    "status": "partial",
    "note": "BebasNeue resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/RobotoCondensed-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Roboto Condensed (ttf-roboto, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Blackmoor LET Fonts.ttf",
@@ -3057,7 +3083,20 @@
    "status": "partial",
    "note": "Bodoni SvtyTwo OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo SC Book.ttf",
@@ -3078,7 +3117,20 @@
    "status": "partial",
    "note": "Bodoni SvtyTwo SC Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo.ttc",
@@ -3099,7 +3151,20 @@
    "status": "partial",
    "note": "Bodoni SvtyTwo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BookAntiqua.ttc",
@@ -3178,7 +3243,20 @@
    "status": "partial",
    "note": "Bordeaux Roman Bold LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Braganza.ttf",
@@ -3199,7 +3277,20 @@
    "status": "partial",
    "note": "Braganza resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Capitals.ttf",
@@ -3241,7 +3332,20 @@
    "status": "partial",
    "note": "Carlito resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/carlito/Carlito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Carlito (ttf-carlito, OFL-1.1) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/CenturyGothic.ttc",
@@ -3320,7 +3424,20 @@
    "status": "partial",
    "note": "AdelleSans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/IBMPlexSans-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute IBM Plex Sans (ttf-ibm-plex, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AkayaKannada.ttf",
@@ -4182,7 +4299,20 @@
    "status": "partial",
    "note": "Brill-Italic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Brill-Roman.ttf",
@@ -4203,7 +4333,20 @@
    "status": "partial",
    "note": "Brill-Roman resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (ttf-libertinus, OFL-1.1-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CambayDevanagari.ttc",
@@ -4253,7 +4396,20 @@
    "status": "partial",
    "note": "Canela resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CanelaDeck.ttc",
@@ -4274,7 +4430,20 @@
    "status": "partial",
    "note": "CanelaDeck resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CanelaText.ttc",
@@ -4295,7 +4464,20 @@
    "status": "partial",
    "note": "CanelaText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ChakraPetch.ttc",
@@ -5095,7 +5277,20 @@
    "status": "partial",
    "note": "Coolvetica resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Montserrat-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Montserrat (ttf-montserrat, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Sounds/Basso.aiff",

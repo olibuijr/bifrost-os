@@ -168,6 +168,19 @@ const FACES: &[(&str, &str)] = &[
     ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
     ("charter", "Charis SIL"),
     ("american typewriter", "IBM Plex Serif"),
+    // reference typefaces shipped by macOS (licensed, never shipped here); open faces from packaged families
+    ("bank gothic", "Roboto Condensed"), ("bebas neue", "Roboto Condensed"), ("din alternate", "Roboto Condensed"),
+    ("din condensed", "Roboto Condensed"), ("druk", "Roboto Condensed"),
+    ("bodoni svtytwo", "Noto Serif Display"), ("bodoni svtytwo os", "Noto Serif Display"),
+    ("bodoni svtytwo sc", "Noto Serif Display"), ("didot", "Noto Serif Display"),
+    ("canela", "Noto Serif Display"), ("canela deck", "Noto Serif Display"), ("canela text", "Noto Serif Display"),
+    ("bordeaux roman bold let", "Libertinus Serif"), ("bordeaux roman bold let fonts", "Libertinus Serif"),
+    ("brill", "Libertinus Serif"),
+    ("braganza", "TeX Gyre Chorus"),
+    ("carlito", "Carlito"), ("calibri", "Carlito"),
+    ("adelle sans", "IBM Plex Sans"), ("euphemia ucas", "Noto Sans"), ("euphemiacas", "Noto Sans"),
+    ("coolvetica", "Montserrat"), ("futura", "Montserrat"),
+    ("fakt slab stencil pro", "IBM Plex Serif"),
 ];
 
 /// The open face mapped to `family` in `FACES`, if any.
@@ -296,7 +309,7 @@ mod tests {
     #[test]
     fn substitute_lists_open_equivalents_preferred_first() {
         assert_eq!(substitute("Helvetica Neue")[0], "Inter");
-        assert_eq!(substitute("Futura")[0], "Outfit");
+        assert_eq!(substitute("Futura")[0], "Montserrat");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
     }
@@ -325,10 +338,30 @@ mod tests {
         assert_eq!(substitute("Arial Unicode MS"), vec!["Noto Sans"]);
         assert_eq!(substitute("Baskerville")[0], "Libertinus Serif");
         assert_eq!(substitute("American Typewriter")[0], "IBM Plex Serif");
-        assert_eq!(substitute("Futura")[0], "Outfit");
+        assert_eq!(substitute("Futura")[0], "Montserrat");
         let avenir = candidates(&FontSpec::new().family("Avenir"));
         assert_eq!(avenir[0].family.as_deref(), Some("Lato"));
         assert!(avenir.iter().all(|s| s.family.as_deref() != Some("Avenir")));
+    }
+
+    #[test]
+    fn reference_typefaces_resolve_to_packaged_open_faces() {
+        let pairs = [
+            ("Bank Gothic", "Roboto Condensed"), ("Bebas Neue", "Roboto Condensed"),
+            ("DIN Alternate", "Roboto Condensed"), ("DIN Condensed", "Roboto Condensed"), ("Druk", "Roboto Condensed"),
+            ("Bodoni SvtyTwo", "Noto Serif Display"), ("Bodoni SvtyTwo OS", "Noto Serif Display"),
+            ("Bodoni SvtyTwo SC", "Noto Serif Display"), ("Didot", "Noto Serif Display"),
+            ("Canela", "Noto Serif Display"), ("Canela Deck", "Noto Serif Display"), ("Canela Text", "Noto Serif Display"),
+            ("Bordeaux Roman Bold LET", "Libertinus Serif"), ("Brill", "Libertinus Serif"),
+            ("Braganza", "TeX Gyre Chorus"), ("Carlito", "Carlito"), ("Calibri", "Carlito"),
+            ("Adelle Sans", "IBM Plex Sans"), ("Euphemia UCAS", "Noto Sans"), ("EuphemiaCAS", "Noto Sans"),
+            ("Coolvetica", "Montserrat"), ("Futura", "Montserrat"), ("Fakt Slab Stencil Pro", "IBM Plex Serif"),
+        ];
+        for (reference, open) in pairs {
+            assert_eq!(face_of_family(reference), Some(open), "{reference}");
+            assert_eq!(substitute(reference)[0], open, "{reference}");
+        }
+        assert_eq!(face_of_family("Blackmoor LET"), None);
     }
 
     #[test]

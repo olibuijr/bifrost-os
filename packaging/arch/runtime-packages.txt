@@ -140,3 +140,7 @@ ttf-nunito
 ttf-libertinus
 ttf-charis
 ttf-ibm-plex
+ttf-carlito
+ttf-roboto
+ttf-montserrat
+tex-gyre-fonts
