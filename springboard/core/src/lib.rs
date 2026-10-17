@@ -134,7 +134,6 @@ pub mod imgmeta;
 pub mod file_mode;
 pub mod errno;
 pub mod net_path;
-pub mod app_firewall;
 pub mod net_connection;
 pub mod dns_browse;
 pub mod websocket;
