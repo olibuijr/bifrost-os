@@ -2422,6 +2422,14 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // usage is recorded before and after the event, so a switch it makes is credited from its own time
+        self.st_mark(t);
+        let fx = self.event_inner(ev, t);
+        self.st_mark(t);
+        fx
+    }
+
+    fn event_inner(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // session event taps see the pointer first and may drop or move it (`services::event_services`)
         let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
         self.last_input = t;
@@ -2917,6 +2925,13 @@ impl Shell {
     }
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
+        self.st_mark(t);
+        let fx = self.tick_inner(t);
+        self.st_mark(t);
+        fx
+    }
+
+    fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
         keyboard::pump();
         self.appearance_tick(t);
         self.terminal_follow_scheme();
@@ -3195,7 +3210,8 @@ impl Shell {
             damage.all();
         }
         self.notify_prepare();
-        if let Some(sh) = self.shield.as_ref().filter(|_| !self.st_suspended()) {
+        // on the desktop the cover is drawn inside its window (`desk_cover`), not over the screen
+        if let Some(sh) = self.shield.as_ref().filter(|_| !self.st_suspended() && !self.desk_active()) {
             damage.all();
             sh.draw(s, &self.ui, t);
             self.drawn = Drawn::App;
