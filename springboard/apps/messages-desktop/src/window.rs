@@ -4,6 +4,7 @@
 
 use crate::accounts::{self, Account};
 use crate::crypto;
+use crate::state_file;
 use bifrost_app::keychain;
 use crate::api::{Api, UPLOAD_LIMIT};
 use crate::draw::{inside, ChipHit, Hit, OverlayAction, Rect};
@@ -68,15 +69,34 @@ enum Pending {
     Accounts,
     /// The password of a saved login, read to sign in.
     Password(Account),
-    /// A login saved after a typed sign-in: added, or replaced when an item already exists.
-    Save { account: Account, password: String },
-    Replace,
-    /// The saved login removed at sign-out; the answer is not needed.
+    /// A login saved after a typed sign-in, or moved to the server's full user id: added, or replaced when an item already
+    /// exists. `legacy` is the bare name the login was saved under before, removed once the full id is saved.
+    Save { account: Account, password: String, legacy: Option<String> },
+    Replace { legacy: Option<String> },
+    /// The saved login removed at sign-out, or a login under a bare name removed after it moved (its answer is not needed).
     Forget,
     /// One of the crypto items read before a sign-in (see [`Lookup`]).
     Lookup(Item),
-    /// A crypto item written after a change. `added` is true once the item was added after an update found none.
-    Store { service: String, account: String, value: String, added: bool },
+    /// A crypto item written after a change. `added` is true once the item was added after an update found none. `moving`
+    /// is true while the items are moved from a bare name to the full user id (see [`Migration`]).
+    Store { service: String, account: String, value: String, added: bool, moving: bool },
+    /// A keychain item removed after a move; the answer is not needed.
+    Discard,
+}
+
+/// A sign-in under a name other than the stored full user id, or one that found the sessions in the keychain. The crypto
+/// items under the typed name are copied to the stored name and then removed, and the sessions keychain item is removed
+/// once the sessions file holds them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Migration {
+    /// The name the crypto items were read under at this sign-in.
+    typed: String,
+    /// True while the sessions keychain item of an earlier version is still to be removed.
+    sessions_item: bool,
+    /// True once the device and key items were copied to the stored name and removed under `typed`.
+    items_moved: bool,
+    /// The copies still to be confirmed (the device and the key) before `typed` is removed.
+    stores_left: u32,
 }
 
 /// The keychain items of the end-to-end encryption state.
@@ -100,6 +120,8 @@ struct Lookup {
     device: Option<String>,
     key: Option<String>,
     sessions: Option<String>,
+    /// True when `sessions` came from the keychain item of an earlier version (see [`crypto::SESSIONS_ITEM`]).
+    sessions_legacy: bool,
 }
 
 /// What the open context menu is about.
@@ -154,6 +176,8 @@ pub struct MessagesWindow {
     lookup: Option<Lookup>,
     /// The crypto items the sign-in in progress restores from.
     restore: Option<Lookup>,
+    /// The move of a login under a bare name, or the removal of the sessions keychain item (see [`Migration`]).
+    migration: Option<Migration>,
     /// The file the user is choosing, with the room it is for.
     picking: Option<(u32, String)>,
     /// The file drag in progress, if any.
@@ -209,6 +233,7 @@ impl MessagesWindow {
             pending: HashMap::new(),
             lookup: None,
             restore: None,
+            migration: None,
             picking: None,
             file_drop: None,
             account: None,
@@ -351,13 +376,24 @@ impl MessagesWindow {
         self.dirty = true;
     }
 
-    fn signed_in(&mut self, ctx: &Ctx, api: Arc<Api>, homeserver: String, user: String, password: String, typed: bool) {
+    fn signed_in(&mut self, ctx: &Ctx, api: Arc<Api>, homeserver: String, typed_user: String, password: String, typed: bool) {
+        // The login is stored under the full user id the server returned, whatever was typed (see `accounts::stored_user`).
+        let user = accounts::stored_user(&typed_user, &api.user_id);
+        let moved = accounts::moved_from(&typed_user, &user);
         self.model.user_id = api.user_id.clone();
         self.model.homeserver = homeserver.clone();
         self.account = Some(Account { homeserver: homeserver.clone(), user: user.clone() });
         self.model.sign_in = None;
         self.model.status.clear();
         let restore = self.restore.take().unwrap_or_default();
+        if moved.is_some() || restore.sessions_legacy {
+            self.migration = Some(Migration {
+                typed: restore.user.clone(),
+                sessions_item: restore.sessions_legacy,
+                items_moved: moved.is_none(),
+                stores_left: 0,
+            });
+        }
         let key = restore.key.as_deref().and_then(crypto::parse_key_item);
         let stored = restore.device.as_deref().and_then(crypto::parse_device_item);
         if let Err(e) = api.install_crypto(key, stored, restore.sessions.as_deref()) {
@@ -365,9 +401,10 @@ impl MessagesWindow {
         }
         sync::run_sync(api.clone(), self.tx.clone(), self.wake());
         self.api = Some(api);
-        if typed {
+        // A login under a bare name is saved again under the full id, and the bare item is removed once that is stored.
+        if typed || moved.is_some() {
             let request = passwords::save(ctx, &accounts::service(&homeserver), &user, &password);
-            self.pending.insert(request, Pending::Save { account: Account { homeserver, user }, password });
+            self.pending.insert(request, Pending::Save { account: Account { homeserver, user }, password, legacy: moved });
         }
     }
 
@@ -398,20 +435,22 @@ impl MessagesWindow {
                     self.model.sign_in = Some(SignIn::prefilled(&account.homeserver, &account.user, ""));
                 }
             },
-            Pending::Save { account, password } => match passwords::decode_password(result) {
-                Ok(_) => {}
+            Pending::Save { account, password, legacy } => match passwords::decode_password(result) {
+                Ok(_) => self.forget_bare_login(ctx, &account.homeserver, legacy),
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &accounts::service(&account.homeserver), &account.user, &password);
-                    self.pending.insert(request, Pending::Replace);
+                    self.pending.insert(request, Pending::Replace { legacy });
                 }
                 Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
-            Pending::Replace => {
-                if let Err(e) = passwords::decode_password(result) {
-                    self.model.status = format!("The password could not be saved in Passwords: {e:?}");
+            Pending::Replace { legacy } => match passwords::decode_password(result) {
+                Ok(_) => {
+                    let homeserver = self.model_homeserver();
+                    self.forget_bare_login(ctx, &homeserver, legacy);
                 }
-            }
-            Pending::Forget => {}
+                Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
+            },
+            Pending::Forget | Pending::Discard => {}
         }
         self.dirty = true;
         true
@@ -434,7 +473,15 @@ impl MessagesWindow {
 
     /// Starts the sign-in job once the crypto items are read. The stored device id is the hint the login asks for.
     fn launch_sign_in(&mut self) {
-        let Some(lookup) = self.lookup.take() else { return };
+        let Some(mut lookup) = self.lookup.take() else { return };
+        // The sessions file wins over the keychain item of an earlier version, which is removed after the file is written.
+        if let Some(key) = lookup.key.as_deref().and_then(crypto::parse_key_item) {
+            match state_file::load(&self.data_dir, &lookup.homeserver, &lookup.user, &key) {
+                Ok(Some(blob)) => lookup.sessions = Some(blob),
+                Ok(None) => {}
+                Err(e) => self.model.status = format!("The saved sessions could not be read: {e}"),
+            }
+        }
         let device_hint = lookup.device.as_deref().and_then(crypto::parse_device_item).map(|(device, _)| device.to_string());
         let (homeserver, user, password, typed) =
             (lookup.homeserver.clone(), lookup.user.clone(), lookup.password.clone(), lookup.typed);
@@ -466,15 +513,80 @@ impl MessagesWindow {
         let Some(api) = self.api.clone() else { return };
         let Some(snap) = api.take_snapshot() else { return };
         let Some(account) = self.account.clone() else { return };
-        let mut items = vec![(crypto::KEY_ITEM, snap.key), (crypto::DEVICE_ITEM, snap.device)];
-        if let Some(sessions) = snap.sessions {
-            items.push((crypto::SESSIONS_ITEM, sessions));
+        // The sessions are too large for an item: they go to the sessions file, sealed with the pickle key.
+        if let (Some(sessions), Some(key)) = (snap.sessions.as_deref(), crypto::parse_key_item(&snap.key)) {
+            match state_file::save(&self.data_dir, &account.homeserver, &account.user, &key, sessions) {
+                Ok(()) => self.retire_sessions_item(ctx),
+                Err(e) => self.model.status = format!("The encryption sessions could not be saved: {e}"),
+            }
         }
-        for (prefix, value) in items {
+        let moving = match self.migration.as_mut() {
+            Some(m) if !m.items_moved && m.typed != account.user => {
+                m.stores_left = 2;
+                true
+            }
+            _ => false,
+        };
+        for (prefix, value) in [(crypto::KEY_ITEM, snap.key), (crypto::DEVICE_ITEM, snap.device)] {
             let service = crypto::item_service(prefix, &account.homeserver);
             let request = keychain::update(ctx, &service, &account.user, value.as_bytes());
-            self.pending.insert(request, Pending::Store { service, account: account.user.clone(), value, added: false });
+            self.pending.insert(request, Pending::Store { service, account: account.user.clone(), value, added: false, moving });
         }
+    }
+
+    /// Removes the sessions keychain item of an earlier version, once the sessions file holds its sessions.
+    fn retire_sessions_item(&mut self, ctx: &Ctx) {
+        let Some(m) = self.migration.as_mut() else { return };
+        if !m.sessions_item {
+            return;
+        }
+        m.sessions_item = false;
+        let typed = m.typed.clone();
+        let homeserver = self.model_homeserver();
+        let request = keychain::delete(ctx, &crypto::item_service(crypto::SESSIONS_ITEM, &homeserver), &typed);
+        self.pending.insert(request, Pending::Discard);
+        self.finish_migration();
+    }
+
+    /// One copy of the device or the key item to the stored name is confirmed. After both, the items under the bare name
+    /// are removed.
+    fn copy_confirmed(&mut self, ctx: &Ctx) {
+        let Some(m) = self.migration.as_mut() else { return };
+        if m.items_moved {
+            return;
+        }
+        m.stores_left = m.stores_left.saturating_sub(1);
+        if m.stores_left > 0 {
+            return;
+        }
+        m.items_moved = true;
+        let typed = m.typed.clone();
+        let homeserver = self.model_homeserver();
+        for prefix in [crypto::DEVICE_ITEM, crypto::KEY_ITEM] {
+            let request = keychain::delete(ctx, &crypto::item_service(prefix, &homeserver), &typed);
+            self.pending.insert(request, Pending::Discard);
+        }
+        self.finish_migration();
+    }
+
+    /// Ends the migration once nothing under the bare name is left to remove.
+    fn finish_migration(&mut self) {
+        if self.migration.as_ref().is_some_and(|m| m.items_moved && !m.sessions_item) {
+            self.migration = None;
+        }
+    }
+
+    /// Removes the Passwords login under a bare name, once the full id holds the password.
+    fn forget_bare_login(&mut self, ctx: &Ctx, homeserver: &str, legacy: Option<String>) {
+        if let Some(bare) = legacy {
+            let request = passwords::remove(ctx, &accounts::service(homeserver), &bare);
+            self.pending.insert(request, Pending::Forget);
+        }
+    }
+
+    /// The homeserver of the signed-in login (empty before a sign-in).
+    fn model_homeserver(&self) -> String {
+        self.account.as_ref().map(|a| a.homeserver.clone()).unwrap_or_default()
     }
 
     /// The devices of the members of the selected room, as (user, device id), for the room info. All are unverified.
@@ -496,7 +608,10 @@ impl MessagesWindow {
                         match item {
                             Item::Device => lookup.device = value,
                             Item::Key => lookup.key = value,
-                            Item::Sessions => lookup.sessions = value,
+                            Item::Sessions => {
+                                lookup.sessions_legacy = value.is_some();
+                                lookup.sessions = value;
+                            }
                         }
                         lookup.waiting = lookup.waiting.saturating_sub(1);
                         lookup.waiting == 0
@@ -507,14 +622,19 @@ impl MessagesWindow {
                     self.launch_sign_in();
                 }
             }
-            Pending::Store { service, account, value, added } => match reply.result {
-                Ok(_) => {}
+            Pending::Store { service, account, value, added, moving } => match reply.result {
+                Ok(_) => {
+                    if moving {
+                        self.copy_confirmed(ctx);
+                    }
+                }
                 Err(keychain::Error::ItemNotFound) if !added => {
                     let request = keychain::add(ctx, &service, &account, value.as_bytes());
-                    self.pending.insert(request, Pending::Store { service, account, value, added: true });
+                    self.pending.insert(request, Pending::Store { service, account, value, added: true, moving });
                 }
                 Err(e) => self.model.status = format!("The encryption keys could not be saved in the keychain: {e:?}"),
             },
+            Pending::Discard => {}
             other => {
                 self.pending.insert(reply.request, other);
                 return false;
