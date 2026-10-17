@@ -213,11 +213,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ping",
+   "bifrost": "springboard/cmd/src/bin/ping6.rs; springboard/cmd/src/ping6.rs (runs /usr/bin/ping -6)",
    "status": "partial",
-   "note": "no ping6 command on the installed system; iputils provides ping -6, which is not the same name",
+   "note": "no ping6 command on the installed system; Built 2026-10-17: ping6 is a command that runs the installed ping with -6 (cmd/src/ping6.rs, tests ping6::tests). Output and exit status are ping's",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ping6::tests"
+    }
+   ],
+   "ready_note": "ping6 runs ping -6 with the caller's arguments (ping6::tests)"
   },
   {
    "id": "path:/sbin/quotacheck",
@@ -2116,7 +2125,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/plistbuddy.rs",
    "status": "partial",
-   "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; no interactive mode; writes XML only",
+   "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; Built 2026-10-17: with no -c, commands are read from standard input (plistbuddy::interactive, tests plistbuddy::tests); writes XML only",
    "rea": [],
    "method": "assessed"
   },
