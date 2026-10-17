@@ -4,12 +4,16 @@
 //!
 //! Methods (every one takes an optional `interface`, the wireless interface name; the first Wi-Fi interface is
 //! used when it is absent):
-//! - `interfaces` returns `[{name, powered, connected, ssid, address}]`, one per Wi-Fi interface.
+//! - `interfaces` returns `[{name, powered, connected, ssid, address, mode, channel, frequency_mhz, width_mhz,
+//!   tx_power_dbm}]`, one per Wi-Fi interface. The radio fields come from `iw dev <name> info` (`net::wifi_phy`) and
+//!   are null when iw does not report them.
 //! - `networks` returns the visible networks `[{ssid, bars, secure, saved}]`, as the last scan saw them.
 //! - `power` `{on}` turns the radio on or off.
 //! - `scan` starts a rescan. Results arrive in the next `networks` read.
 //! - `join` `{ssid, password?}` joins a network. An absent or empty password joins an open network.
 //! - `forget` `{ssid}` removes a saved network. Only a saved network can be forgotten.
+//! - `host` `{ssid, password?}` offers a hotspot (an access point) on the interface; `ad_hoc` `{ssid}` offers an open
+//!   ad-hoc network; `stop_hosting` takes the offered network down. NetworkManager does the work (`desktop_network`).
 //!
 //! Each change returns `{queued: true}` at once. The outcome shows in `interfaces` and `networks` when netd has
 //! acted, so an app reads the state again rather than trusting the reply.
@@ -75,6 +79,29 @@ pub fn interfaces_json(net: Option<&Snapshot>) -> Json {
         })
         .collect();
     Json::Arr(items)
+}
+
+/// Adds each interface's radio detail to its item in an interface list: `mode`, `channel`, `frequency_mhz`,
+/// `width_mhz` and `tx_power_dbm`, each null when the radio does not report it. `phy` looks an interface up by name.
+pub fn with_phy(list: Json, phy: impl Fn(&str) -> Option<crate::net::wifi_phy::Phy>) -> Json {
+    let Json::Arr(items) = list else { return list };
+    let number = |v: Option<f64>| v.map_or(Json::Null, Json::Num);
+    Json::Arr(
+        items
+            .into_iter()
+            .map(|item| {
+                let Json::Obj(mut fields) = item else { return item };
+                let name = fields.iter().find(|(k, _)| k == "name").and_then(|(_, v)| v.as_str()).map(str::to_string);
+                let radio = name.as_deref().and_then(&phy).unwrap_or_default();
+                fields.push(("mode".into(), radio.mode.map_or(Json::Null, Json::Str)));
+                fields.push(("channel".into(), number(radio.channel.map(f64::from))));
+                fields.push(("frequency_mhz".into(), number(radio.frequency_mhz.map(f64::from))));
+                fields.push(("width_mhz".into(), number(radio.width_mhz.map(f64::from))));
+                fields.push(("tx_power_dbm".into(), number(radio.tx_power_dbm)));
+                Json::Obj(fields)
+            })
+            .collect(),
+    )
 }
 
 /// The wire form of the visible networks from the last scan.
@@ -146,6 +173,22 @@ fn ssid_param(params: &Json) -> Result<String, String> {
     check_ssid(ssid)
 }
 
+/// The access point a `host` request names: an interface, an SSID and an optional passphrase (an absent or empty one
+/// leaves the network open).
+pub fn access_point_offer(net: Option<&Snapshot>, params: &Json) -> Result<desktop_network::Offer, String> {
+    let ifname = pick_interface(net, interface_param(params)?)?;
+    let ssid = ssid_param(params)?;
+    let psk = check_password(params.get("password").and_then(Json::as_str).unwrap_or(""))?;
+    Ok(desktop_network::Offer::AccessPoint { ifname, ssid, psk })
+}
+
+/// The ad-hoc network an `ad_hoc` request names: an interface and an SSID, open.
+pub fn ad_hoc_offer(net: Option<&Snapshot>, params: &Json) -> Result<desktop_network::Offer, String> {
+    let ifname = pick_interface(net, interface_param(params)?)?;
+    let ssid = ssid_param(params)?;
+    Ok(desktop_network::Offer::AdHoc { ifname, ssid })
+}
+
 fn queued() -> Json {
     Json::Obj(vec![("queued".into(), Json::Bool(true))])
 }
@@ -172,7 +215,7 @@ impl SystemService for WifiService {
     fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let net = shell.info.desktop_network.as_ref();
         match method {
-            "interfaces" => Ok(interfaces_json(net)),
+            "interfaces" => Ok(with_phy(interfaces_json(net), crate::net::wifi_phy::read)),
             "networks" => Ok(networks_json(net)),
             "power" => {
                 pick_interface(net, interface_param(params)?)?;
@@ -200,6 +243,20 @@ impl SystemService for WifiService {
                     return Err(wifi_error(format!("{ssid} is not a saved network")));
                 }
                 desktop_network::send(Request::Wifi(WifiAction::Forget(ssid)));
+                Ok(queued())
+            }
+            "host" => {
+                let offer = access_point_offer(net, params)?;
+                desktop_network::send(Request::Offer(offer));
+                Ok(queued())
+            }
+            "ad_hoc" => {
+                let offer = ad_hoc_offer(net, params)?;
+                desktop_network::send(Request::Offer(offer));
+                Ok(queued())
+            }
+            "stop_hosting" => {
+                desktop_network::send(Request::StopOffer);
                 Ok(queued())
             }
             _ => Err(format!("wifi has no method {method}")),
@@ -256,6 +313,27 @@ mod tests {
     }
 
     #[test]
+    fn a_hotspot_or_ad_hoc_network_is_checked_before_it_is_offered() {
+        let net = snapshot();
+        let host = |password: &str| Json::Obj(vec![("ssid".into(), Json::Str("Guest".into())), ("password".into(), Json::Str(password.into()))]);
+        assert_eq!(
+            access_point_offer(Some(&net), &host("correct-horse")),
+            Ok(desktop_network::Offer::AccessPoint { ifname: "wlan0".into(), ssid: "Guest".into(), psk: Some("correct-horse".into()) })
+        );
+        assert_eq!(
+            access_point_offer(Some(&net), &host("")),
+            Ok(desktop_network::Offer::AccessPoint { ifname: "wlan0".into(), ssid: "Guest".into(), psk: None }),
+            "an empty passphrase is an open hotspot"
+        );
+        assert!(access_point_offer(Some(&net), &host("short")).is_err(), "a passphrase is 8 to 63 characters");
+        let no_ssid = Json::Obj(vec![]);
+        assert!(access_point_offer(Some(&net), &no_ssid).is_err());
+        let ad_hoc = Json::Obj(vec![("ssid".into(), Json::Str("Camp".into()))]);
+        assert_eq!(ad_hoc_offer(Some(&net), &ad_hoc), Ok(desktop_network::Offer::AdHoc { ifname: "wlan0".into(), ssid: "Camp".into() }));
+        assert!(ad_hoc_offer(None, &ad_hoc).is_err(), "no Wi-Fi interface, no network");
+    }
+
+    #[test]
     fn no_snapshot_or_no_wifi_is_an_error() {
         assert!(pick_interface(None, None).is_err());
         let wired = Snapshot { interfaces: vec![Interface { name: "eth0".into(), kind: "ethernet".into(), ..Interface::default() }], ..Snapshot::default() };
@@ -274,6 +352,27 @@ mod tests {
         assert_eq!(items[0].get("address").and_then(Json::as_str), Some("192.168.1.9"));
         assert_eq!(bool_of(items[1].get("connected")), Some(true));
         assert!(matches!(items[1].get("ssid"), Some(Json::Null)));
+    }
+
+    #[test]
+    fn interfaces_carry_their_radio_detail_or_nulls() {
+        let phy = |name: &str| {
+            (name == "wlan0").then(|| crate::net::wifi_phy::Phy {
+                mode: Some("managed".into()),
+                channel: Some(36),
+                frequency_mhz: Some(5180),
+                width_mhz: Some(80),
+                tx_power_dbm: Some(20.0),
+            })
+        };
+        let json = with_phy(interfaces_json(Some(&snapshot())), phy);
+        let items = json.as_array().unwrap();
+        assert_eq!(items[0].get("name").and_then(Json::as_str), Some("wlan0"));
+        assert_eq!(items[0].get("channel").and_then(Json::number), Some(36.0));
+        assert_eq!(items[0].get("width_mhz").and_then(Json::number), Some(80.0));
+        assert_eq!(items[0].get("mode").and_then(Json::as_str), Some("managed"));
+        assert!(matches!(items[1].get("channel"), Some(Json::Null)));
+        assert!(matches!(items[1].get("mode"), Some(Json::Null)));
     }
 
     #[test]

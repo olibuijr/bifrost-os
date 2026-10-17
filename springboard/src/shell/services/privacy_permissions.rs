@@ -161,10 +161,16 @@ pub fn decide_grant(prompt: &Prompt, grant: Grant) {
 /// Writes a location grant. Allow Once and Allow While Using both make the app authorized while in use; Allow Once is
 /// also remembered so `expire_once` can take it back. A restricted app keeps its status.
 pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
+    set_location_grant_with(app_id, grant, crate::bare::account_policy::feature_switched_off(Feature::Location))
+}
+
+/// [`set_location_grant`] with the content limit given. While the limit is on the answer is still stored, so it is
+/// there when the limit lifts, but the status reported stays restricted (see [`location_status_with`]).
+pub fn set_location_grant_with(app_id: &str, grant: Grant, limited: bool) -> AuthorizationStatus {
     mark_grants_dirty();
-    let current = location_status(app_id);
+    let current = stored_location_status(app_id);
     if current == AuthorizationStatus::Restricted {
-        return current;
+        return location_status_with(app_id, limited);
     }
     let next = if grant == Grant::Deny { AuthorizationStatus::Denied } else { AuthorizationStatus::AuthorizedWhenInUse };
     ONCE.with(|o| {
@@ -178,7 +184,7 @@ pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
     LOCATION.with(|s| {
         s.borrow_mut().insert(app_id.to_string(), next);
     });
-    next
+    location_status_with(app_id, limited)
 }
 
 /// Takes back every Allow Once grant whose app is no longer running (`is_running`): the app's location goes back to
@@ -197,11 +203,22 @@ pub fn expire_once(is_running: impl Fn(&str) -> bool) -> Vec<String> {
 
 /// The location status of one app (a new app has not been asked yet).
 pub fn location_status(app_id: &str) -> AuthorizationStatus {
-    // The installed account's content limits switch location off for every app.
-    if crate::bare::account_policy::feature_switched_off(Feature::Location) {
-        return AuthorizationStatus::Restricted;
-    }
+    location_status_with(app_id, crate::bare::account_policy::feature_switched_off(Feature::Location))
+}
+
+/// The status the person's answer stands for, as stored (the answer is kept even while a limit hides it).
+pub fn stored_location_status(app_id: &str) -> AuthorizationStatus {
     LOCATION.with(|s| s.borrow().get(app_id).copied().unwrap_or(AuthorizationStatus::NotDetermined))
+}
+
+/// The reported status: restricted while the installed account's content limits switch location off, else the stored
+/// answer.
+pub fn location_status_with(app_id: &str, limited: bool) -> AuthorizationStatus {
+    if limited {
+        AuthorizationStatus::Restricted
+    } else {
+        stored_location_status(app_id)
+    }
 }
 
 /// The person's location switch for one app: on allows location while the app is in use, off refuses it. A restricted
@@ -491,6 +508,16 @@ mod tests {
         assert!(!limited.can_capture(Media::Video));
         // the stored answer is untouched, so lifting the limit brings it back
         assert_eq!(limited_access(stored, false, false).status(Media::Video), Status::Authorized);
+    }
+
+    #[test]
+    fn a_location_grant_is_stored_while_a_limit_is_on_and_reported_restricted() {
+        let app = "limit.location.test";
+        let answer = set_location_grant_with(app, Grant::WhileUsing, true);
+        assert_eq!(answer, AuthorizationStatus::Restricted, "the limit hides the answer");
+        assert_eq!(stored_location_status(app), AuthorizationStatus::AuthorizedWhenInUse, "the answer is kept");
+        assert_eq!(location_status_with(app, false), AuthorizationStatus::AuthorizedWhenInUse, "it returns when the limit lifts");
+        assert_eq!(set_location_grant_with(app, Grant::Deny, false), AuthorizationStatus::Denied);
     }
 
     #[test]

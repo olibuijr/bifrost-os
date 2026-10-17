@@ -12,6 +12,7 @@ mod chrome;
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
+use crate::archive;
 use bifrost_app::kit::ui::{home_zone, Ui};
 use bifrost_app::kit::{Event, Image, TextCache};
 use crate::{attach, format, model, organize, quick, repeat, settings, store, zones};
@@ -75,6 +76,10 @@ enum Target {
     Search,
     Options,
     Smart(Smart),
+    /// Recently Deleted: opens the page of kept reminders.
+    Deleted,
+    /// Restores one kept reminder (by its id) from the Recently Deleted page.
+    Restore(u64),
     List(u64),
     ListInfo(u64),
     /// A tag in the sidebar's Tags section, by its `model::tag_key`.
@@ -311,6 +316,10 @@ pub struct Reminders {
     image_request: bool,
     wall: Wall,
     data: Data,
+    /// The Recently Deleted page: the kept reminders, while the page is open.
+    deleted: Option<Vec<Reminder>>,
+    /// How many reminders the recently deleted store holds (the sidebar count).
+    kept_count: usize,
     screen: Screen,
     view: View,
     opts: Options,
@@ -442,7 +451,10 @@ impl Reminders {
             ..Options::default()
         };
         let collapsed: HashSet<u64> = settings.collapsed.iter().copied().collect();
+        let kept_count = archive::kept(&archive::path_beside(&path)).map_or(0, |kept| kept.len());
         let mut app = Self {
+            kept_count,
+            deleted: None,
             w,
             x0: 0.0,
             full_w: w,
@@ -1377,6 +1389,14 @@ impl Reminders {
                 if top_bar {
                     return None;
                 }
+                if let Some(kept) = &self.deleted {
+                    for (i, reminder) in kept.iter().enumerate() {
+                        if within(x, y, self.deleted_row_rect(ui, i)) {
+                            return Some(Target::Restore(reminder.id));
+                        }
+                    }
+                    return None;
+                }
                 let bar = self.bottom(ui);
                 if self.undo.is_some() && y >= bar && y < bar + ui.pt(52.0) {
                     return if x > wpx - ui.pt(UNDO_HIT_PT) { Some(Target::Undo) } else { None };
@@ -1553,8 +1573,52 @@ impl Reminders {
         self.title_hint = hint;
         self.title_max = max;
     }
+    /// Recently Deleted: shows the reminders kept in the archive store.
+    fn open_deleted(&mut self, ui: &Ui) {
+        self.deleted = Some(archive::kept(&archive::path_beside(&self.path)).unwrap_or_default());
+        self.screen = Screen::Items;
+        self.searching = false;
+        self.swipe = None;
+        self.scroll.jump_top();
+        self.rebuild(ui);
+    }
+
+    /// Puts a kept reminder back into the reminders, in the same list when that list still exists (else the default
+    /// list), and takes it out of the store only once the reminders file has been written.
+    fn restore_deleted(&mut self, ui: &Ui, id: u64) {
+        let path = archive::path_beside(&self.path);
+        let Some(mut reminder) = self.deleted.as_ref().and_then(|kept| kept.iter().find(|r| r.id == id).cloned()) else {
+            return;
+        };
+        let mut next = self.data.clone();
+        if !next.lists.iter().any(|l| l.id == reminder.list) {
+            reminder.list = model::DEFAULT_LIST;
+        }
+        if reminder.parent.is_some_and(|p| !next.items.iter().any(|r| r.id == p)) {
+            reminder.parent = None;
+        }
+        if next.items.iter().any(|r| r.id == reminder.id) {
+            let Some(fresh) = next.next_item_id() else { return };
+            reminder.id = fresh;
+        }
+        next.items.push(reminder);
+        if !self.commit_named(next, "Restore Reminder") {
+            return;
+        }
+        let _ = archive::take(&path, id);
+        self.deleted = Some(archive::kept(&path).unwrap_or_default());
+        self.kept_count = self.deleted.as_ref().map_or(0, |kept| kept.len());
+        self.rebuild(ui);
+    }
+
+    /// The rectangle of kept reminder `i` on the Recently Deleted page (the same geometry the page draws).
+    fn deleted_row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        (ui.pt(SPACE_XL), self.top_px(ui) + ui.pt(ITEM_H) * i as f32, self.w as f32 - ui.pt(SPACE_HUGE), ui.pt(ITEM_H))
+    }
+
     fn open_view(&mut self, ui: &Ui, view: View) {
         self.view = view;
+        self.deleted = None;
         self.screen = Screen::Items;
         self.searching = false;
         self.swipe = None;
@@ -1752,7 +1816,9 @@ impl Reminders {
         }
         // kept in the recently deleted store too, so the deletion survives a restart; a store that cannot be
         // written does not undo the deletion
-        let _ = crate::archive::keep(&crate::archive::path_beside(&self.path), &removed.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
+        let kept_path = crate::archive::path_beside(&self.path);
+        let _ = crate::archive::keep(&kept_path, &removed.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
+        self.kept_count = crate::archive::kept(&kept_path).map_or(0, |kept| kept.len());
         let label = format!("Deleted \"{}\"", title.unwrap_or_default());
         self.history.register(&label, restore_items(removed), move |d| {
             model::remove_with_children(&mut d.items, id);
@@ -2169,6 +2235,8 @@ impl Reminders {
                 self.save_settings();
             }
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
+            Target::Deleted => self.open_deleted(ui),
+            Target::Restore(id) => self.restore_deleted(ui, id),
             Target::List(id) => self.open_view(ui, View::List(id)),
             Target::Tag(key) => self.open_view(ui, View::Tag(key)),
             Target::Custom(id) => self.open_view(ui, View::Custom(id)),

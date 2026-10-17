@@ -2166,7 +2166,10 @@ impl Shell {
     pub(crate) fn route_menu_below(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> RouteMenu {
         let auth = bifrost_ui::route_auth::RouteAuth::new();
         let local: Vec<(&str, &str)> = if self.cc.headphones_present { vec![("speaker", "Speaker"), ("headphones", "Headphones")] } else { vec![("speaker", "Speaker")] };
-        let mut rows = bifrost_ui::route_picker::destinations(&local, &[], &auth);
+        let rows = bifrost_ui::route_picker::destinations(&local, &[], &auth);
+        // the three outputs the person chose most often lead the menu (the audio service keeps the history)
+        let history = super::services::audio_devices::load_history(&super::services::audio_devices::history_path());
+        let mut rows = bifrost_ui::route_prediction::lead_with_suggestions(rows, &history.ids(), 3);
         let current = match self.cc.route {
             crate::media::route::Route::Speaker => "speaker",
             crate::media::route::Route::Headphones => "headphones",
