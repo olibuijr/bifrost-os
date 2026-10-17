@@ -256,6 +256,7 @@ mod tests {
         assert_eq!(class_of_family("Hiragino Sans"), Some(CjkGothic));
         assert_eq!(class_of_family("PingFang SC"), Some(CjkGothic));
         assert_eq!(class_of_family("YuMincho"), Some(CjkMincho));
+        assert_eq!(class_of_family("Songti"), Some(CjkMincho));
         assert_eq!(class_of_family("Kaiti"), Some(CjkKai));
         assert_eq!(class_of_family("Yuanti SC"), Some(CjkRounded));
         assert_eq!(class_of_family("Nothing Like This"), None);
