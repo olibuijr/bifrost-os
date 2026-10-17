@@ -7,7 +7,7 @@ use super::music::icons;
 use super::switcher::draw_scaled;
 use super::ui::Ui;
 use crate::gfx::{rgba, Image, Surface};
-use bifrost_ui::pip_window::{self, Controller, Corner, Event};
+use bifrost_ui::pip_window::{self, Controller, Corner, Event, State};
 use bifrost_ui::Rect;
 
 /// The floating window's corner radius in pt: the grouped-card radius of the macOS-style design.
@@ -43,6 +43,45 @@ pub fn draw_window(s: &mut Surface, ui: &Ui, r: Rect, frame: Option<&Image>) {
         None => draw_scaled(s, &icons::placeholder(64, 0.0), slot, radius, 255),
     }
     s.stroke_rrect(r.x, r.y, r.w, r.h, radius, 1.0, rgba(255, 255, 255, 60));
+}
+
+/// The Picture in Picture window the shell holds: the controller's life cycle, the corner it rests in and the
+/// video's aspect ratio (width over height; a bad value uses 16:9). `Shell::draw` paints it over the screen while it
+/// is starting or active.
+#[derive(Debug, Default)]
+pub struct Floating {
+    pub controller: Controller,
+    pub corner: Corner,
+    pub aspect: f32,
+}
+
+impl Floating {
+    /// Whether the window is on screen (starting or active).
+    pub fn showing(&self) -> bool {
+        matches!(self.controller.state(), State::Starting | State::Active)
+    }
+
+    /// Starts the window and finishes the hand-over at once: the shell paints it on the next frame. Returns the
+    /// delegate events in order.
+    pub fn start(&mut self) -> Vec<Event> {
+        let mut events = Vec::new();
+        events.extend(self.controller.start());
+        events.extend(self.controller.finish_start());
+        events
+    }
+
+    /// Takes the window down, finishing the hand-over at once. Returns the delegate events in order.
+    pub fn stop(&mut self) -> Vec<Event> {
+        let mut events = Vec::new();
+        events.extend(self.controller.stop());
+        events.extend(self.controller.finish_stop());
+        events
+    }
+
+    /// The window's rectangle inside `usable` (the screen without the menu bar and the dock).
+    pub fn rect(&self, usable: Rect) -> Rect {
+        window_rect(usable, self.aspect, self.corner)
+    }
 }
 
 /// The app left the foreground. Starts the window when the Settings toggle is on and the controller allows it (see
@@ -103,6 +142,19 @@ mod tests {
         assert_eq!(px[0], 0, "the corner of the screen is untouched");
         assert_ne!(px[175 * w + 200], 0, "the middle of the window is drawn");
         assert_eq!(px[299 * w + 399], 0, "the far corner is untouched");
+    }
+
+    #[test]
+    fn a_started_window_is_showing_until_it_stops() {
+        let mut f = Floating { aspect: 16.0 / 9.0, ..Default::default() };
+        assert!(!f.showing());
+        assert!(f.start().is_empty(), "an impossible player cannot start");
+        f.controller.set_possible(true);
+        assert_eq!(f.start(), vec![Event::WillStart, Event::DidStart]);
+        assert!(f.showing());
+        assert_eq!(f.rect(usable()).w, 300.0, "placed by the shared geometry");
+        assert_eq!(f.stop(), vec![Event::WillStop, Event::DidStop]);
+        assert!(!f.showing());
     }
 
     #[test]

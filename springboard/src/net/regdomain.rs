@@ -42,9 +42,47 @@ pub fn apply(country: &str) -> Result<(), String> {
     }
 }
 
+/// The country the Language & Region setting names (`region=` in `settings.ini`), upper-cased, or `None` when it
+/// is unset or is not a country code.
+pub fn from_region_pref(region: Option<&str>) -> Option<String> {
+    let code = region?.trim().to_ascii_uppercase();
+    is_country_code(&code).then_some(code)
+}
+
+/// Starts a thread that applies the region's country at start and again each time the setting changes. The shell
+/// saves the setting to `settings_path`; the file is read every few seconds, which is cheap and needs no new
+/// message on the network socket. A failed `iw` call is logged and retried on the next change only.
+pub fn follow_region(settings_path: std::path::PathBuf) {
+    crate::bare::sys::spawn_named("regdomain", move || {
+        let mut applied: Option<String> = None;
+        loop {
+            let prefs = crate::shell::prefs::Prefs::load(&settings_path);
+            if let Some(country) = from_region_pref(prefs.get("region")) {
+                if applied.as_deref() != Some(country.as_str()) {
+                    match apply(&country) {
+                        Ok(()) => eprintln!("netd: wireless regulatory domain {country}"),
+                        Err(e) => eprintln!("netd: {e}"),
+                    }
+                    applied = Some(country);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_region_setting_names_the_country_in_upper_case() {
+        assert_eq!(from_region_pref(Some("is")).as_deref(), Some("IS"));
+        assert_eq!(from_region_pref(Some(" DK ")).as_deref(), Some("DK"));
+        assert_eq!(from_region_pref(Some("Iceland")), None, "a name is not a code");
+        assert_eq!(from_region_pref(Some("")), None);
+        assert_eq!(from_region_pref(None), None, "no region saved, no domain set");
+    }
 
     #[test]
     fn a_country_code_is_two_upper_case_letters() {

@@ -164,9 +164,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs",
+   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs; springboard/src/shell/guardian_sheet.rs; springboard/src/shell/mod.rs",
    "status": "partial",
-   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Not built: the guardian sheet that shows a question and calls respond, and a timer that calls expire.",
+   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Built 2026-10-17: the guardian sheet (shell/guardian_sheet.rs) lists the oldest pending question as an alert card with one button per choice and answers it with respond; the shell's tick calls expire each frame so an unanswered question goes away on time, and the sheet closes with it (tests guardian_sheet::tests, services::permission_kit::tests). Not built: a live check on the lab machine, and no app can send a question on the lab image yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -770,9 +770,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs",
+   "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs; springboard/src/shell/mod.rs",
    "status": "partial",
-   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Not built: nothing calls it from Shell::draw yet, since no shell state holds an active window, and frames are not scaled.",
+   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Not built: no player reports that it can show a window or asks for one, so nothing calls pip_start yet, and frames are not scaled (the placeholder is drawn).",
    "rea": [],
    "method": "assessed"
   },
@@ -849,7 +849,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/pacman_progress.rs",
    "status": "gap",
-   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Not built: the install sheet, the confirmation before scripts run, and the shell wiring.",
+   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Built 2026-10-17: pacman_progress::progress gives the sheet's fraction against the packages it listed, and confirmation_needed says an install waits for the person before pacman runs its scripts (tests pacman_progress::tests). Not built: the install sheet that draws them and calls pacman, and the shell wiring; the Software Update page already confirms its own pacman run.",
    "rea": [],
    "method": "assessed"
   },
@@ -5597,11 +5597,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/regdomain.rs",
+   "bifrost": "springboard/src/net/regdomain.rs; springboard/netd/src/main.rs; springboard/src/shell/pages.rs",
    "status": "gap",
-   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Not built: netd does not call it at start or when the region changes, and Wi-Fi settings do not show the domain.",
+   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Built 2026-10-17: netd starts net::regdomain::follow_region, which reads region from settings.ini every 5 seconds and applies the country at start and on each change; the Wi-Fi page shows Country or Region (tests regdomain::tests, shell::pages::tests). Not built: a live check on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::regdomain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    }
+   ],
+   "ready_note": "The regulatory domain follows the region setting (netd applies it at start and on change) and the Wi-Fi page shows the country; host-tested only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RelativeMotion.framework",

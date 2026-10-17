@@ -114,6 +114,7 @@ pub mod list;
 pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
+pub mod guardian_sheet;
 pub mod contact_pick_sheet;
 mod auth_sheet;
 mod account_access_sheet;
@@ -752,6 +753,10 @@ pub struct Shell {
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the guardian's sheet for an app's PermissionKit question (`guardian_sheet.rs`), and the shell's last tick time
+    /// in seconds, which the answer and the expiry use
+    guardian_sheet: Option<guardian_sheet::GuardianSheet>,
+    guardian_now: u64,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
     /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
@@ -819,6 +824,8 @@ pub struct Shell {
     doc_broker:Option<Option<docpanel::Broker>>,
     /// the floating preview panel (`preview_panel`), shown by an app's `ToShell::Preview` or the `quick-look` service
     quick_look:preview_panel::Panel,
+    /// the Picture in Picture window (`pip`): drawn over the screen while it is starting or active
+    pip:pip::Floating,
     desktop_metrics: desktop_metrics::Snapshot,
     desktop_metrics_at:f64,
     metrics_sampler: desktop_metrics::Sampler,
@@ -1072,6 +1079,8 @@ impl Shell {
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            guardian_sheet: None,
+            guardian_now: 0,
             pick_sheet: None,
             auth_sheet: None,
             auth_clock: 0.0,
@@ -1102,6 +1111,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
+            pip:Default::default(),
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
@@ -1432,6 +1442,23 @@ impl Shell {
     fn permission_tick(&mut self, t: f64) {
         services::privacy_permissions::persist_grants(&self.data_dir);
         self.pick_tick();
+        // PermissionKit: drop the questions no guardian answered in time, and show the next one when no sheet is up
+        self.guardian_now = t.max(0.0) as u64;
+        if services::permission_kit::expire(self.guardian_now) > 0 {
+            self.dirty = true;
+        }
+        if self.guardian_sheet.as_ref().is_some_and(|g| !services::permission_kit::is_pending(g.question_id())) {
+            self.guardian_sheet = None;
+            self.dirty = true;
+            self.drawn = Drawn::Nothing;
+        }
+        if self.guardian_sheet.is_none() {
+            if let Some(next) = services::permission_kit::pending().into_iter().next() {
+                self.guardian_sheet = guardian_sheet::GuardianSheet::new(&self.ui, &next);
+                self.dirty = true;
+                self.drawn = Drawn::Nothing;
+            }
+        }
         // an Allow Once grant ends when its app quits, so the next request asks again
         let _ = services::privacy_permissions::expire_once(|app| self.ext.iter().flatten().any(|h| h.id == app && h.running()));
         if self.permission_sheet.is_some() {
@@ -1563,6 +1590,20 @@ impl Shell {
                 if let Some(tap) = hit {
                     if let Some(sheet) = self.pick_sheet.take() {
                         self.pick_sheet = sheet.tapped(&self.ui, tap);
+                    }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.guardian_sheet.is_some() {
+            // the guardian's sheet takes every touch until the guardian answers it
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.guardian_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(choice) = hit {
+                    if let Some(sheet) = self.guardian_sheet.take() {
+                        sheet.finish(&choice, self.guardian_now);
                     }
                 }
             }
@@ -3451,6 +3492,18 @@ impl Shell {
     /// damage for the presenter; a frame with nothing new draws nothing.
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
+    /// Shows the Picture in Picture window (the delegate events are for the app, which the caller delivers).
+    pub(super) fn pip_start(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.start()
+    }
+
+    /// Takes the Picture in Picture window down.
+    pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.stop()
+    }
+
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
         self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
@@ -3775,6 +3828,13 @@ impl Shell {
         if self.clock.alert().is_none() {
             self.draw_banner(s, t);
         }
+        // Picture in Picture floats above the windows, inside the screen between the menu bar and the dock
+        if self.pip.showing() {
+            damage.all();
+            let m = self.desk_metrics();
+            let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
+            pip::draw_window(s, &self.ui, self.pip.rect(usable), None);
+        }
         self.draw_announce(s);
         self.draw_reader(s);
         if self.dnd.session.is_some() {
@@ -3812,7 +3872,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.access_showing() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3824,6 +3884,9 @@ impl Shell {
             }
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(g) = &self.guardian_sheet {
+                g.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
@@ -3879,7 +3942,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage(); && self.guardian_sheet.is_none()
         if !quiet {
             return None;
         }
@@ -3900,7 +3963,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage(); && self.guardian_sheet.is_none()
         if !quiet {
             return None;
         }

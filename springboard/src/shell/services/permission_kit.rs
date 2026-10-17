@@ -10,7 +10,8 @@
 //!   topic, and removes them from the queue.
 //!
 //! Each app's topics are stored under `app_id/topic`, so one app never reads another app's answers. The pending
-//! sheet the guardian answers from is not drawn yet; `respond` is the call it will make.
+//! sheet the guardian answers from is `shell/guardian_sheet.rs`: it lists `pending` and answers with `respond`, and the
+//! shell's tick calls `expire` so an unanswered question goes away on time.
 use super::{Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_core::permission_request::{
@@ -114,6 +115,34 @@ pub fn expire(now: u64) -> usize {
     CENTER.with(|c| c.borrow_mut().expire(now))
 }
 
+/// A question waiting for a guardian: its number, its scoped topic (`app/topic`) and its choices as `(id, title)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Pending {
+    pub id: u64,
+    pub topic: String,
+    pub choices: Vec<(String, String)>,
+}
+
+/// The questions waiting for a guardian, oldest first.
+pub fn pending() -> Vec<Pending> {
+    CENTER.with(|c| {
+        c.borrow()
+            .pending()
+            .iter()
+            .map(|q| Pending {
+                id: q.id(),
+                topic: q.topic_id().to_string(),
+                choices: q.choices().iter().map(|c| (c.id().to_string(), c.title().to_string())).collect(),
+            })
+            .collect()
+    })
+}
+
+/// Whether question `id` still waits for a guardian (not answered, not expired).
+pub fn is_pending(id: u64) -> bool {
+    CENTER.with(|c| c.borrow().pending().iter().any(|q| q.id() == id))
+}
+
 /// The `permission` service as the shell's service table sees it.
 pub struct PermissionKit;
 
@@ -187,6 +216,32 @@ mod tests {
         assert!(responses("is.example.other", SIGNIFICANT_APP_UPDATE_TOPIC).is_empty());
         assert_eq!(responses("is.example.owner", SIGNIFICANT_APP_UPDATE_TOPIC), vec![(id, "approve".to_string(), true)]);
         assert!(responses("is.example.owner", SIGNIFICANT_APP_UPDATE_TOPIC).is_empty(), "drained once");
+    }
+
+    #[test]
+    fn a_pending_question_lists_its_choices_until_it_is_answered() {
+        let id = ask("is.example.pending", &ask_params(SIGNIFICANT_APP_UPDATE_TOPIC), 100).unwrap();
+        let waiting = pending().into_iter().find(|p| p.id == id).expect("queued for the guardian");
+        assert_eq!(waiting.topic, scoped_topic("is.example.pending", SIGNIFICANT_APP_UPDATE_TOPIC));
+        assert_eq!(waiting.choices, vec![("approve".to_string(), "Allow".to_string()), ("decline".to_string(), "Not now".to_string())]);
+        assert!(is_pending(id));
+        respond(id, "decline", 101).unwrap();
+        assert!(!is_pending(id), "an answered question leaves the queue");
+    }
+
+    #[test]
+    fn an_expired_question_leaves_the_queue_and_is_refused_an_answer() {
+        let params = Json::Obj(vec![
+            ("topic".into(), Json::Str(SIGNIFICANT_APP_UPDATE_TOPIC.into())),
+            ("expires_at".into(), Json::Num(200.0)),
+            ("choices".into(), ask_params(SIGNIFICANT_APP_UPDATE_TOPIC).get("choices").unwrap().clone()),
+        ]);
+        let id = ask("is.example.expiry", &params, 100).unwrap();
+        assert!(is_pending(id));
+        assert_eq!(expire(199), 0, "not yet due");
+        assert_eq!(expire(200), 1);
+        assert!(!is_pending(id));
+        assert!(respond(id, "approve", 201).is_err(), "a late answer is refused");
     }
 
     #[test]
