@@ -3,7 +3,8 @@
 //! through the pane's own actions (`pages::Action`); an intent never writes a setting itself.
 //!
 //! The catalogue uses the same `[[intent]]` manifest spelling as app manifests (`manifest_lines`), so the shell can
-//! list these in the same way it lists app shortcuts (`intents.rs`). Search does not read this list yet.
+//! list these in the same way it lists app shortcuts (`intents.rs`). Search lists them among its Shortcuts
+//! (`quicksearch.rs`, `settings_intent_rows`) and opens the pane with `Settings::open_page_id`.
 
 use super::pages::PageId;
 

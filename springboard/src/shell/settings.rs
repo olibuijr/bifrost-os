@@ -1300,6 +1300,32 @@ impl Settings {
         }
     }
 
+    /// Opens the pane `id` directly, for an App Intent of the Settings panes (`settings_intents`, opened from Search).
+    /// It goes on top of the current stack like `open_page` does; the root is the base and is not pushed twice.
+    pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
+        self.sheet = None;
+        self.zone_picker = None;
+        self.time_picker = None;
+        self.pressed = None;
+        self.transition = None;
+        self.stack.truncate(usize::from(self.side_w == 0));
+        if id == PageId::Root {
+            if self.stack.is_empty() {
+                self.push(ui, PageId::Root, t);
+            }
+            return vec![];
+        }
+        if matches!(id, PageId::SoftwareUpdate | PageId::Fonts) {
+            self.push(ui, PageId::General, t);
+        }
+        self.push(ui, id, t);
+        match id {
+            PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
+            PageId::Bluetooth => vec![Effect::Bluetooth(BtCmd::Scan)],
+            _ => vec![],
+        }
+    }
+
     /// Developer preview: opens a stack of pages by `PageId` name, e.g. `General>About` (tests only).
     #[cfg(test)]
     pub fn preview_open(&mut self, ui: &Ui, path: &str, t: f64) {
