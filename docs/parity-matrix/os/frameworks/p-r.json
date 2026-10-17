@@ -2458,11 +2458,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs; springboard/src/shell/photos/undo.rs; springboard/ui/src/photo_adjustment.rs; springboard/sdk/src/photo_editing.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::undo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_adjustment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_editing::tests"
+    }
+   ],
+   "ready_note": "Photos' edit mode is covered: pixel edits (edit.rs), the non-destructive recipe (recipe.rs), undo (undo.rs), adjustment records and the editing session (photo_adjustment.rs) and the SDK editing contract (photo_editing.rs). A third-party editor extension host is not built; the PhotoKit note lists it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUIFoundation.framework",
@@ -2479,11 +2508,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/thumbs.rs; springboard/src/shell/photos/zoom.rs; springboard/src/shell/photos/models.rs; springboard/ui/src/photo_library.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::grid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::thumbs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::zoom::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::models::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_library::tests"
+    }
+   ],
+   "ready_note": "The shared UI layer of the Photos screens (grid layout, thumbnails, zoom, library models) is implemented in the Photos app modules and the photo_library model; the checks run those modules' tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUIPrivate.framework",
@@ -2500,11 +2558,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/mod.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/albums.rs; springboard/src/shell/photos/slideshow.rs; springboard/ui/src/photo_changes.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::viewer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::albums::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::slideshow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_changes::tests"
+    }
+   ],
+   "ready_note": "The Photos app's own screens (library grid, viewer, albums, slideshow) and the library change feed are built; the checks run their tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosensitivityProcessing.framework",
@@ -2542,11 +2629,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/physics.rs; springboard/ui/src/physics3d.rs",
    "status": "os",
-   "note": "The Info.plist has no bundle identifier or version and the binary is not extracted, so its purpose is undetermined and the row stays os.",
+   "note": "The bundle holds only an Info.plist and version.plist, so the job is taken from the name: a physics simulation toolkit. BifrOSt has a 2D rigid-body world and a 3D sphere world (gravity, contacts, restitution, fixed bodies) with tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "physics3d::tests"
+    }
+   ],
+   "ready_note": "The bundle holds only an Info.plist and version.plist, so the job is taken from the name: a physics simulation toolkit. BifrOSt has a 2D rigid-body world and a 3D sphere world (gravity, contacts, restitution, fixed bodies) with tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Planks.framework",
@@ -2738,8 +2839,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.lighthouse.PnROnDeviceFramework gives no version; the binary is not extracted, so its on-device job is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: the on-device half of a server-assisted Apple ranking/ML service (the bundle holds only an Info.plist: no resources, no XPC service, and nothing else in the reference index links it). BifrOSt has no server-assisted services and ships no Apple ML model packs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2944,11 +3045,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/search_ranking.rs",
+   "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/spotindex.rs; springboard/sdk/src/search_ranking.rs; springboard/src/shell/services/search_ranking.rs",
    "status": "partial",
    "note": "Bundle com.apple.metadata.PommesRankingCore ranks metadata results; search_ranking.rs ranks search results with rules, and the reference's learned ranking model is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    }
+   ],
+   "ready_note": "Result ranking for search is built locally: BM25 over title and text, recency, and local open counts (search_rank.rs), plus the index order (spotindex.rs). It is rule and usage based, learned only from this machine's own opens; the reference's trained model is deliberately not reproduced (no Apple model packs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Portrait.framework",
@@ -2965,11 +3085,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/portrait_lighting.rs",
    "status": "os",
-   "note": "Bundle com.apple.portrait.Portrait is probably the portrait-mode depth effect; the binary is not extracted and no BifrOSt module does depth effects, so the row stays os.",
+   "note": "Portrait lighting from a depth map is built (portrait_lighting::relight, a Lambert model of our own). The reference's bundled background photographs are Apple artwork and are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    }
+   ],
+   "ready_note": "Portrait lighting from a depth map is built (portrait_lighting::relight, a Lambert model of our own). The reference's bundled background photographs are Apple artwork and are not reproduced."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PortraitCore.framework",
@@ -2986,11 +3115,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/portrait_lighting.rs",
    "status": "os",
-   "note": "Kept os. Name suggests portrait lighting for the camera pipeline, but the reference index holds only the bundle shell and no binary, so the purpose is unconfirmed; the camera and depth-blur rows in render/ are the nearest BifrOSt counterpart.",
+   "note": "Core of the portrait effect: depth-map relighting is implemented in portrait_lighting.rs and tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    }
+   ],
+   "ready_note": "Core of the portrait effect: depth-map relighting is implemented in portrait_lighting.rs and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PostSiriEngagement.framework",
@@ -3067,11 +3205,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs; springboard/src/shell/wallpaper_page.rs",
    "status": "os",
-   "note": "Kept os. Likely the lock screen poster model, but the reference index holds only the bundle shell and no binary; BifrOSt's wallpaper pages are the nearest counterpart and do not cover posters.",
+   "note": "The poster (wallpaper configuration) foundation maps to BifrOSt's wallpaper kinds (still, day set), app-provided wallpapers and the Settings page; the checks run those tests. Lock-screen-specific poster layouts (clock styles over the picture) are not part of this row.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "The poster (wallpaper configuration) foundation maps to BifrOSt's wallpaper kinds (still, day set), app-provided wallpapers and the Settings page; the checks run those tests. Lock-screen-specific poster layouts (clock styles over the picture) are not part of this row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PosterFuturesKit.framework",
@@ -3088,11 +3240,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
    "status": "os",
-   "note": "Kept os. Likely lock screen poster content, but the reference index holds only the bundle shell and no binary; purpose unconfirmed.",
+   "note": "The scheduling of what a poster shows next maps to wallpaper_schedule (current still of a day set and the time to the next change); tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "The scheduling of what a poster shows next maps to wallpaper_schedule (current still of a day set and the time to the next change); tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PosterModel.framework",
@@ -3109,11 +3270,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs",
    "status": "os",
-   "note": "Kept os. Likely the lock screen poster data model, but the reference index holds only the bundle shell and no binary; purpose unconfirmed.",
+   "note": "The poster data model maps to wallpaper_types (Kind, provided wallpapers, ids); tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    }
+   ],
+   "ready_note": "The poster data model maps to wallpaper_types (Kind, provided wallpapers, ids); tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PowerExperience.framework",
@@ -3368,11 +3538,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/preference-panes.json",
+   "bifrost": "springboard/ui/src/pane.rs; springboard/src/shell/settings_panes.rs",
    "status": "partial",
    "note": "private framework, owner PreferencePanes; from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pane::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    }
+   ],
+   "ready_note": "Support code of the preference-pane host: the pane lifecycle model (pane.rs) and app-declared Settings panes opened over the control socket (settings_panes.rs). There is no loadable pane bundle format; apps declare panes in manifest.toml instead."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PreviewShellKit.framework",
@@ -3751,11 +3935,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/privacy.rs; springboard/src/shell/permission_sheet.rs; springboard/src/shell/services/privacy_permissions.rs",
    "status": "os",
-   "note": "Kept os. The bundle holds a localised PrivacyPolicy string table, but its consumer is not identified in the reference index, so no BifrOSt counterpart is cited.",
+   "note": "The bundle holds the localized privacy-policy texts shown beside features that touch personal data. BifrOSt's counterpart is the app privacy declaration (privacy.rs), the permission sheet and the privacy permission service; the reference's Apple legal text is not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "privacy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The bundle holds the localized privacy-policy texts shown beside features that touch personal data. BifrOSt's counterpart is the app privacy declaration (privacy.rs), the permission sheet and the privacy permission service; the reference's Apple legal text is not reproduced."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PrivateCloudCompute.framework",
@@ -3878,8 +4081,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Kept os. The reference index holds only the bundle shell, and no binary or strings were available to confirm whether this is the search service client; BifrOSt's search modules are not cited without evidence.",
+   "status": "n/a",
+   "note": "n/a: Private Search is Apple's server-assisted private lookup (queries sent to an Apple service under homomorphic encryption, client/core/protocols split). The bundle has only Info.plist and version.plist. BifrOSt does not send queries to a third party, and local search is covered by search_rank.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3899,8 +4102,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: Private Search is Apple's server-assisted private lookup (queries sent to an Apple service under homomorphic encryption, client/core/protocols split). The bundle has only Info.plist and version.plist. BifrOSt does not send queries to a third party, and local search is covered by search_rank.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3920,8 +4123,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: Private Search is Apple's server-assisted private lookup (queries sent to an Apple service under homomorphic encryption, client/core/protocols split). The bundle has only Info.plist and version.plist. BifrOSt does not send queries to a third party, and local search is covered by search_rank.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3941,8 +4144,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: library for Apple's Pro Display XDR hardware (reference modes, brightness, firmware). The bundle holds only Info.plist and version.plist. BifrOSt does not target Apple displays.",
    "rea": [],
    "method": "assessed"
   },
@@ -3962,8 +4165,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: iOS-only build of the Siri Suggestions blending layer; no counterpart on a desktop.",
    "rea": [],
    "method": "assessed"
   },
@@ -3982,11 +4185,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/quicksearch.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Blending suggestions from several sources into one ranked list is what search_rank::Query::merge does for the Search panel (sources searched in parallel, merged by score, recency and local usage); tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Blending suggestions from several sources into one ranked list is what search_rank::Query::merge does for the Search panel (sources searched in parallel, merged by score, recency and local usage); tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactiveCDNDownloader.framework",
@@ -4004,8 +4221,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: downloads Siri suggestion model and asset updates from Apple's CDN (Info.plist only). BifrOSt fetches no Apple CDN content.",
    "rea": [],
    "method": "assessed"
   },
@@ -4025,8 +4242,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: client of Apple's proactive daemon that reports device context (app, location, activity) to the Siri Suggestions engine. BifrOSt does not collect cross-app context for suggestions (privacy-first).",
    "rea": [],
    "method": "assessed"
   },
@@ -4046,8 +4263,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: plumbing of Apple's proactive/Siri Suggestions daemon, which BifrOSt does not mirror (it harvests content across apps and learns from it; see ProactiveHarvesting).",
    "rea": [],
    "method": "assessed"
   },
@@ -4130,8 +4347,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: harvests content from Mail, Messages, Safari and other apps into Apple's suggestion knowledge store (the reference also carries ProactiveHarvestingConfig.plist in CoreSuggestionsInternals). BifrOSt does not scrape other apps' data; apps index their own items with Core Search.",
    "rea": [],
    "method": "assessed"
   },
@@ -4150,11 +4367,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/keyboard/src/predict.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Predictive text above the keyboard is built: prefix trie, learned bigram bonus and autocorrect (keyboard predict.rs, English and Icelandic). Contact-name and contextual suggestions are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "predict::tests"
+    }
+   ],
+   "ready_note": "Predictive text above the keyboard is built: prefix trie, learned bigram bonus and autocorrect (keyboard predict.rs, English and Icelandic). Contact-name and contextual suggestions are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactiveInputPredictionsInternals.framework",
@@ -4171,11 +4397,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/keyboard/src/predict.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Internal split of ProactiveInputPredictions; the predictor is one module (predict.rs), checked by its tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "predict::tests"
+    }
+   ],
+   "ready_note": "Internal split of ProactiveInputPredictions; the predictor is one module (predict.rs), checked by its tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactiveML.framework",
@@ -4193,8 +4428,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device machine-learning models for Siri Suggestions (model loading and training for the proactive engine; Info.plist only). BifrOSt ships no Apple ML model packs; ranking is local rules and usage counts.",
    "rea": [],
    "method": "assessed"
   },
@@ -4214,8 +4449,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: Apple Intelligence/Siri 'moments' suggestions (surfaces timely suggestions drawn from harvested personal data); Info.plist only. BifrOSt does not mirror cross-app personal-data suggestion surfaces.",
    "rea": [],
    "method": "assessed"
   },
@@ -4234,11 +4469,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs; springboard/ui/src/search_rank.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "The visible job, suggesting what to open next, is built as the Search panel's Assistant Suggestions (recent apps, persisted) and usage-weighted ranking (Usage counts). Server or daemon side prediction is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "The visible job, suggesting what to open next, is built as the Search panel's Assistant Suggestions (recent apps, persisted) and usage-weighted ranking (Usage counts). Server or daemon side prediction is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactivePredictionFoundation.framework",
@@ -4255,11 +4504,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs; springboard/ui/src/search_rank.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "Foundation types of the prediction client; BifrOSt keeps the suggestion data in quicksearch recents and search_rank::Usage, checked by their tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "Foundation types of the prediction client; BifrOSt keeps the suggestion data in quicksearch recents and search_rank::Usage, checked by their tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactiveSuggestionClientModel.framework",
@@ -4276,11 +4539,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/search_rank.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "The suggestion item model maps to search_rank::Item, Kind, Hit, Section and Merged; tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "The suggestion item model maps to search_rank::Item, Kind, Hit, Section and Merged; tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProactiveSummarization.framework",
@@ -4319,8 +4591,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: client of Apple's generative summarization (Apple Intelligence model packs and its server fallback); the bundle has no resources of its own. BifrOSt ships no Apple ML models and sends no content to a third party.",
    "rea": [],
    "method": "assessed"
   },
@@ -4340,8 +4612,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: shared support library of Apple's proactive daemon stack (Info.plist and version.plist only), which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -4361,8 +4633,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: stub library for the proactive daemon stack (linking stand-in for internal builds); nothing to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -4424,8 +4696,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: XPC service (ProfileValidatedAppIdentityService.xpc) that validates an app's identity against Apple developer provisioning profiles. BifrOSt packages are signed through its own store, not Apple profiles.",
    "rea": [],
    "method": "assessed"
   },
@@ -4529,8 +4801,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "status": "n/a",
+   "note": "n/a: prompt assembly for Apple's generative model stack (the bundle holds only Info.plist and sits with the Apple Intelligence frameworks). BifrOSt ships no Apple ML models.",
    "rea": [],
    "method": "assessed"
   },
@@ -4549,11 +4821,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/spellcheck.rs; springboard/sdk/src/spellcheck.rs",
    "status": "os",
-   "note": "Not classified: the reference binary was not extracted (a bifrost pc ref extract run timed out with no output), the name matches no owner rule, and the index holds only directory entries; purpose unknown.",
+   "note": "The bundle is the spelling dictionaries (per-language Dictionary.dat and bindict). BifrOSt's spell checker (tokenizer, pluggable dictionary, learned and ignored words) is built in core and exposed in the SDK; the reference's dictionary data is not copied.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "The bundle is the spelling dictionaries (per-language Dictionary.dat and bindict). BifrOSt's spell checker (tokenizer, pluggable dictionary, learned and ignored words) is built in core and exposed in the SDK; the reference's dictionary data is not copied."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ProtectedCloudStorage.framework",
