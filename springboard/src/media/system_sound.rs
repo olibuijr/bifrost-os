@@ -4,6 +4,7 @@
 //! [`SoundPlayer::click`] for `Effect::KeyClick` and [`SoundPlayer::alert`] when a timer or alarm fires.
 
 use super::audio_out::AudioOut;
+use crate::shell::accessibility::earcons::Earcon;
 use crate::shell::alert_sound;
 use crate::shell::earcon;
 use crate::shell::kb_clicks::{self, Click};
@@ -33,6 +34,11 @@ fn earcon_id(index: usize) -> u32 {
     40 + index as u32
 }
 
+/// Sound id of a screen reader cue (after the earcons, which end below 100).
+fn reader_cue_id(c: Earcon) -> u32 {
+    100 + Earcon::ALL.iter().position(|e| *e == c).unwrap_or(0) as u32
+}
+
 pub struct SoundPlayer {
     out: Box<dyn AudioOut>,
     sounds: SystemSounds,
@@ -54,6 +60,10 @@ impl SoundPlayer {
         for index in 0..earcon::count() {
             let mono: Vec<f32> = earcon::pcm(index, 1.0).iter().map(|&s| s as f32 / 32768.0).collect();
             sounds.register_samples(earcon_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
+        }
+        for c in Earcon::ALL {
+            let mono: Vec<f32> = c.pcm(1.0).iter().map(|&s| s as f32 / 32768.0).collect();
+            sounds.register_samples(reader_cue_id(c), kb_clicks::RATE, 1, &mono).map_err(other)?;
         }
         Ok(SoundPlayer { out, sounds })
     }
@@ -83,6 +93,11 @@ impl SoundPlayer {
             return Err(io::Error::other(format!("no earcon {index}")));
         }
         self.play(earcon_id(index), gain)
+    }
+
+    /// Plays a screen reader cue at `gain` (0 through 1).
+    pub fn reader_cue(&mut self, c: Earcon, gain: f32) -> io::Result<()> {
+        self.play(reader_cue_id(c), gain)
     }
 
     /// Mixes sound `id` through the toolbox player and queues the result on the stream.
@@ -152,6 +167,16 @@ mod tests {
         k.earcon(0, 1.0).unwrap();
         assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
         assert!(k.earcon(earcon::count(), 1.0).is_err());
+    }
+
+    #[test]
+    fn every_reader_cue_plays_through_the_stream() {
+        for c in Earcon::ALL {
+            let got = Arc::new(Mutex::new(Vec::new()));
+            let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+            k.reader_cue(c, 1.0).unwrap();
+            assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0), "{c:?} is silent");
+        }
     }
 
     #[test]
