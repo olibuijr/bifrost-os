@@ -91,3 +91,51 @@ impl IntentForm {
             .ok_or_else(|| FormError::UnknownParameter(name.to_string()))
     }
 }
+
+/// The intents an action picker lists for a search `query`: every intent whose title or id contains the query
+/// (ignoring case), those whose title starts with it first, each group in declaration order. An empty query lists
+/// every intent. The picker draws the rows; this only orders and filters them.
+pub fn pick<'a>(intents: &'a [Intent], query: &str) -> Vec<&'a Intent> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return intents.iter().collect();
+    }
+    let mut prefix = Vec::new();
+    let mut inside = Vec::new();
+    for intent in intents {
+        let title = intent.title.to_lowercase();
+        if title.starts_with(&query) {
+            prefix.push(intent);
+        } else if title.contains(&query) || intent.id.to_lowercase().contains(&query) {
+            inside.push(intent);
+        }
+    }
+    prefix.extend(inside);
+    prefix
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+
+    fn intent(id: &str, title: &str) -> Intent {
+        Intent::new(id, title, "")
+    }
+
+    #[test]
+    fn an_empty_query_lists_every_intent_in_order() {
+        let intents = vec![intent("a", "Alpha"), intent("b", "Beta")];
+        let ids: Vec<&str> = pick(&intents, "  ").iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b"]);
+    }
+
+    #[test]
+    fn title_prefixes_come_before_other_matches_and_ids_match_too() {
+        let intents = vec![intent("open-notes", "Show Notes"), intent("new", "New Note"), intent("q", "Quit"), intent("zz", "Other")];
+        let ids: Vec<&str> = pick(&intents, "NOTE").iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, ["new", "open-notes"], "a title starting with the query comes first");
+        let by_id: Vec<&str> = pick(&intents, "zz").iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(by_id, ["zz"]);
+        assert!(pick(&intents, "missing").is_empty());
+    }
+}
