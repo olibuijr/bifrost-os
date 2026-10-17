@@ -153,7 +153,7 @@ mod tests {
     fn every_earcon_is_short_and_does_not_clip() {
         for i in 0..count() {
             let p = pcm(i, 1.0);
-            assert!(p.len() < (RATE as usize), "{} is longer than a second", name(i).unwrap());
+            assert!(p.len() < (super::super::kb_clicks::RATE as usize), "{} is longer than a second", name(i).unwrap());
             assert!(p.iter().all(|&s| s.abs() < i16::MAX), "{} clips", name(i).unwrap());
         }
     }

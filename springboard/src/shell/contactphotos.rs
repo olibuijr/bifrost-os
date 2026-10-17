@@ -87,8 +87,8 @@ mod tests {
         write(&dir, 7, &PNG).unwrap();
         assert!(write(&dir, 7, b"not a picture").is_err());
         assert_eq!(read(&dir, 7), Some((Format::Png, PNG.to_vec())));
-        assert_eq!(remove(&dir, 7), Ok(true));
-        assert_eq!(remove(&dir, 7), Ok(false));
+        assert!(matches!(remove(&dir, 7), Ok(true)));
+        assert!(matches!(remove(&dir, 7), Ok(false)));
         assert_eq!(read(&dir, 7), None);
         let _ = std::fs::remove_dir_all(&dir);
     }

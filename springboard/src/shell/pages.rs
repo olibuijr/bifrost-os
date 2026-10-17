@@ -1433,7 +1433,6 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
     }
 }
 
-/// The index of the `SPEECH_VOICES` choice for an engine voice name; an unknown name shows as the default voice (0).
 /// Keyboard > Dictation: the speech model state, what it needs from the person, and the download or removal.
 pub fn dictation_page(v: &super::services::recognizer::ModelView) -> Spec {
     let state = if v.downloading {
@@ -1455,11 +1454,12 @@ pub fn dictation_page(v: &super::services::recognizer::ModelView) -> Spec {
             Some(e) => e.clone(),
             None => "Downloading the model needs your consent. It is about 148 MB and comes from the model's public download address; no audio is sent anywhere.".to_string(),
         };
-        groups.push(Group::new(vec![Item::new("Download Speech Model").tint(Tint::Blue).action(Action::Run(Command::DownloadSpeechModel))]).footer(footer));
+        groups.push(Group::new(vec![Item::new("Download Speech Model").tint(Tint::Blue).action(Action::Run(Command::DownloadSpeechModel))]).footer(&footer));
     }
-    page("Dictation", false, groups)
+    Spec { id: PageId::Dictation, title: "Dictation".into(), large: false, groups }
 }
 
+/// The index of the `SPEECH_VOICES` choice for an engine voice name; an unknown name shows as the default voice (0).
 pub fn speech_voice_index(voice: &str) -> usize {
     SPEECH_VOICES.iter().position(|(_, v)| *v == voice).unwrap_or(0)
 }

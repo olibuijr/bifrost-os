@@ -16,7 +16,7 @@
 //! | [`cards::ContactProvider`] | `public.vcard` | a contact card |
 //! | [`cards::CalendarProvider`] | `public.calendar-event` | a calendar page |
 //! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a video's first key frame or an audio waveform card |
-| [`pdf::PdfProvider`] | `com.adobe.pdf` | the first page, drawn by the PDF renderer |
+//! | [`pdf::PdfProvider`] | `com.adobe.pdf` | the first page, drawn by the PDF renderer |
 //! | [`text::ClippingsProvider`] | text clippings and web locations | the clipped text on a tabbed page |
 //!
 //! Thumbnails are kept as raw images in a disk cache named by [`bifrost_ui::thumb_service::cache_key`].

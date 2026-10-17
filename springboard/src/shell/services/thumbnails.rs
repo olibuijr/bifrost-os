@@ -178,8 +178,8 @@ impl Thumbnails {
                 if self.queue.len() >= MAX_QUEUE {
                     return Err("too many thumbnails waiting".into());
                 }
-                self.waiting.insert(key.clone(), vec![app_id.to_string()]);
-                self.queue.push_back(Job { key: key.clone(), req });
+                self.waiting.insert(key.to_string(), vec![app_id.to_string()]);
+                self.queue.push_back(Job { key: key.to_string(), req });
             }
         }
         Ok(pending_json(&key, &file, px))

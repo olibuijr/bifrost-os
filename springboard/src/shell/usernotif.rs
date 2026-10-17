@@ -1091,7 +1091,7 @@ mod tests {
     #[test]
     fn answers_wait_for_a_stopped_app() {
         let mut r = Registry::default();
-        let m = |n: &str| ToApp::NotificationAction { id: n.into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new() };
+        let m = |n: &str| ToApp::NotificationAction { id: n.into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] };
         r.queue(APP, m("1"));
         r.queue("other", m("x"));
         r.queue(APP, m("2"));
