@@ -6,6 +6,7 @@
 //! are verified and installed by `install`. The UI thread only reads memory.
 
 pub mod api;
+pub mod coordination;
 pub mod install;
 pub mod json;
 pub mod net;

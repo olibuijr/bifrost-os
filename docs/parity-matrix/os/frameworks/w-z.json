@@ -353,11 +353,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
    "status": "partial",
    "note": "Process watchdog is systemd: RuntimeWatchdogSec and RebootWatchdogSec in /etc/systemd/system.conf.d/bifrost-watchdog.conf (springboard/src/installer/plan.rs); no app-facing client API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "watchdog::tests"
+    }
+   ],
+   "ready_note": "Per-service side: the SDK watchdog module reads WATCHDOG_USEC and pings systemd with WATCHDOG=1 over NOTIFY_SOCKET at half the timeout. Machine-wide side: RuntimeWatchdogSec and RebootWatchdogSec in bifrost-watchdog.conf (installer plan)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchdogServiceManagement.framework",
@@ -374,11 +383,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
    "status": "partial",
    "note": "Watchdog service registration is systemd unit management; BifrOSt sets watchdog timeouts in the system manager, with no app-facing API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "watchdog::tests"
+    }
+   ],
+   "ready_note": "Per-service side: the SDK watchdog module reads WATCHDOG_USEC and pings systemd with WATCHDOG=1 over NOTIFY_SOCKET at half the timeout. Machine-wide side: RuntimeWatchdogSec and RebootWatchdogSec in bifrost-watchdog.conf (installer plan)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherAnalytics.framework",
@@ -446,9 +464,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/weather/data.rs",
    "status": "partial",
-   "note": "No weather daemon; the shell fetches forecasts in springboard/src/shell/weather/data.rs.",
+   "note": "Built 2026-10-17: refresh_summary keeps the summary for the Today widget and lock screen current from the saved place, reusing the cached forecast under a maximum age (tests shell::weather::data::tests). Gap: nothing calls it on a timer yet, so the summary still refreshes only while the weather app or Today runs.",
    "rea": [],
    "method": "assessed"
   },
