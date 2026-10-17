@@ -2097,7 +2097,17 @@ fn wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
         })
         .chain(photo_wallpapers(dir))
         .chain(app_wallpapers(dir))
+        .chain(gradient_posters(dir))
         .collect()
+}
+
+/// The gradient posters (`ui::procedural_texture`) at the screen's wallpaper size, so Settings lists them beside the
+/// stills. Nothing without a `wallpaper.raw` to take the size from.
+#[cfg(target_os = "linux")]
+fn gradient_posters(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
+    use springboard::gfx::Image;
+    let Some(base) = std::fs::read(format!("{dir}/wallpaper.raw")).ok().and_then(|b| Image::from_raw(&b)) else { return vec![] };
+    springboard::shell::wallpaper_page::gradient_wallpapers(dir, base.w, base.h)
 }
 
 /// Decodes the picture at `src` once, cover-fits it to the `tw` x `th` wallpaper size and caches it as

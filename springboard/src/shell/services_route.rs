@@ -146,13 +146,18 @@ impl Shell {
     /// Opens `app` and runs its `intent` with one string parameter over its control socket, on a worker thread.
     /// Shared by the Services routes and the Look Up popover's Open in Dictionary row.
     pub(super) fn run_intent(&mut self, app: &'static str, intent: &'static str, param: &'static str, text: &str, t: f64) {
+        self.run_intent_with(app, intent, vec![(param, text.to_string())], t);
+    }
+
+    /// Like `run_intent`, with several string parameters (`name`, `value`). Used by the Look Up popover's Add to Calendar.
+    pub(super) fn run_intent_with(&mut self, app: &'static str, intent: &'static str, params: Vec<(&'static str, String)>, t: f64) {
         if !self.desktop_open_app(app, t) {
             eprintln!("services: {app} is not installed");
             return;
         }
-        let text = text.to_string();
         std::thread::spawn(move || {
-            if let Err(e) = super::intents::run_with(app, intent, &[(param, text.as_str())], INTENT_WAIT) {
+            let refs: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            if let Err(e) = super::intents::run_with(app, intent, &refs, INTENT_WAIT) {
                 eprintln!("services: {app} {intent}: {e}");
             }
         });

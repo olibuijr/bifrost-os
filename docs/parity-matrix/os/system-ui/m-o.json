@@ -225,9 +225,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/files/src/server.rs",
    "status": "os",
-   "note": "network authentication agent, the Linux base supplies 802.1X",
+   "note": "Missing: BifrOSt connects to FTP servers only (Files, Go > Connect to Server, anonymous or name:password in the address) and has no name-and-password dialog or share picker. Needs a network volume mounter for SMB (cifs-utils and smbclient are packaged) that runs through the privileged helper (privd has no mount request yet), a credentials sheet with Guest or Registered User, and a share list. Not a stub-sized job: it adds a privd request, a credentials store entry and two sheets.",
    "rea": []
   },
   {

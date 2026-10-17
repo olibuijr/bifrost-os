@@ -1369,10 +1369,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/disk_format.rs, springboard/apps/diskutil-desktop/src/actions.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
    "note": "filesystem extension, the Linux kernel provides the filesystem",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_format::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "actions::tests"
+    }
+   ],
+   "ready_note": "The Linux kernel mounts exFAT volumes; Disks (udisks) mounts and unmounts it, Disk Utility formats, checks and renames it (core disk_format: mkfs.exfat, fsck.exfat, exfatlabel) and the packages that provide the tools are in runtime-packages.txt (exfatprogs, dosfstools)."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.fskit.ftp.appex",
@@ -1409,10 +1423,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/disk_format.rs, springboard/apps/diskutil-desktop/src/actions.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
    "note": "filesystem extension, the Linux kernel provides the filesystem",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_format::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-diskutil",
+     "filter": "actions::tests"
+    }
+   ],
+   "ready_note": "The Linux kernel mounts FAT volumes (vfat); Disks (udisks) mounts and unmounts it, Disk Utility formats, checks and renames it (core disk_format: mkfs.vfat, fsck.fat, fatlabel) and the packages that provide the tools are in runtime-packages.txt (exfatprogs, dosfstools)."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.mlhost.SampleWorker.appex",

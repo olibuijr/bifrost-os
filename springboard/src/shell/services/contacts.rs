@@ -13,6 +13,8 @@
 //!   `{year?, month, day}` and `dates` is a list of `{label, year?, month, day}`. `query`
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
+//! - `view {contact}` shows the person one contact's card in Contacts (`contact` is a name or an identifier) and
+//!   returns `{status: "shown"}`. It reads nothing from the book, so it needs no grant.
 //! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
 //!   `add` and `update` hold records of the fields above (`update` also needs the contact `id` and changes only the
 //!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
@@ -563,12 +565,32 @@ pub fn donations_answer(app_id: &str, method: &str, params: &Json, store: &mut D
     }
 }
 
+/// The Contacts app, which draws a contact's card for the `view` method.
+pub const CONTACTS_APP: &str = "is.olibuijr.contacts.desktop";
+
+/// The longest contact name or identifier a `view` call may carry, in characters.
+const VIEW_QUERY_MAX: usize = 200;
+
+/// The text the Contacts app is asked to open: the `contact` param, a name or an identifier (a number is an identifier).
+/// A blank value, a control character or a longer value is refused.
+pub fn view_query(params: &Json) -> Result<String, String> {
+    let text = match params.get("contact") {
+        Some(Json::Num(n)) if n.fract() == 0.0 && *n >= 0.0 => format!("{}", *n as u64),
+        Some(Json::Str(s)) => s.trim().to_string(),
+        _ => return Err("view needs a contact: a name or an identifier".into()),
+    };
+    if text.is_empty() || text.chars().count() > VIEW_QUERY_MAX || text.chars().any(char::is_control) {
+        return Err("view needs a contact: a name or an identifier".into());
+    }
+    Ok(text)
+}
+
 impl SystemService for Contacts {
     fn name(&self) -> &'static str {
         "contacts"
     }
 
-    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
         let path = contactstore::store_path(&shell.data_dir);
         let groups_path = contactgroups::path_for(&path);
         let load = || contactstore::load_checked(&path).map_err(|e| e.to_string());
@@ -683,6 +705,13 @@ impl SystemService for Contacts {
                 contactchanges::record_for(&path, &[(contactchanges::Kind::Updated, id)]).map_err(|e| e.to_string())?;
                 Ok(Json::Obj(vec![("format".into(), Json::Str(contactphotos::format_name(format).into()))]))
             }
+            "view" => {
+                // Shows the person one contact's card in Contacts. The card is drawn by that app, so the caller reads
+                // nothing from the book and needs no grant; it learns only that the request was made.
+                let query = view_query(params)?;
+                shell.run_intent(CONTACTS_APP, "view-card", "contact", &query, t);
+                Ok(Json::Obj(vec![("status".into(), Json::Str("shown".into()))]))
+            }
             "request" => {
                 // An undecided app gets the access sheet; the status it reads is the one before the answer.
                 let status = access_of(app_id).status();
@@ -752,6 +781,19 @@ impl SystemService for Contacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn view_takes_a_name_or_an_identifier_and_nothing_else() {
+        let obj = |v: Json| Json::Obj(vec![("contact".into(), v)]);
+        assert_eq!(view_query(&obj(Json::Str("  Ada Lovelace ".into()))), Ok("Ada Lovelace".into()));
+        assert_eq!(view_query(&obj(Json::Num(42.0))), Ok("42".into()));
+        assert!(view_query(&obj(Json::Str("   ".into()))).is_err());
+        assert!(view_query(&obj(Json::Str("a\nb".into()))).is_err());
+        assert!(view_query(&obj(Json::Str("x".repeat(201)))).is_err());
+        assert!(view_query(&obj(Json::Num(-1.0))).is_err());
+        assert!(view_query(&obj(Json::Num(1.5))).is_err());
+        assert!(view_query(&Json::Obj(vec![])).is_err());
+    }
 
     fn contact(id: u64, name: &str, phone: &str, email: &str, notes: &str) -> Contact {
         Contact { id, name: name.into(), phone: phone.into(), email: email.into(), notes: notes.into(), ..Default::default() }

@@ -1,5 +1,15 @@
 //! The source list: Favorites, Locations and Tags sections (Files's sidebar).
 use crate::*;
+use std::sync::Mutex;
+
+/// Why the last eject failed, until the app loop shows it (a worker thread leaves it here).
+static EJECT_NOTICE: Mutex<Option<String>> = Mutex::new(None);
+
+fn post_eject_notice(notice: String) {
+    if let Ok(mut slot) = EJECT_NOTICE.lock() {
+        *slot = Some(notice);
+    }
+}
 
 /// The sidebar column's width, its rows' start below the traffic lights, and the header band's height (points).
 pub(crate) const SIDEBAR_W: f32 = 160.;
@@ -106,24 +116,34 @@ impl Files {
         let Some(id) = self.sidebar().hit(self.sidebar_bounds(), SIDEBAR_SCROLL, x, y) else { return };
         let Some(place) = self.places().into_iter().nth(id.saturating_sub(100) as usize) else { return };
         match place.eject {
-            Some(device) if x > self.side() - EJECT_W => self.eject_volume(&device, &place.path),
+            Some(device) if x > self.side() - EJECT_W => self.eject_volume(&place.label, &device, &place.path),
             _ => self.navigate(place.path, true),
         }
     }
     /// Ejects a removable volume in the background (unmount, then power off). A folder open inside it moves home first.
-    /// A failure is written to the log; the row goes away on the next sidebar build once the volume is gone.
-    fn eject_volume(&mut self, device: &str, mount: &Path) {
+    /// A failure is logged and shown in the status bar, naming the programs that still hold the volume open
+    /// (`volumes::eject_with_notice`); the row goes away on the next sidebar build once the volume is gone.
+    fn eject_volume(&mut self, name: &str, device: &str, mount: &Path) {
         if self.path.starts_with(mount) {
             let home = self.home.clone();
             self.navigate(home, true);
         }
-        let device = device.to_string();
+        let (name, device, mount) = (name.to_string(), device.to_string(), mount.to_path_buf());
         DispatchQueue::global(Qos::Utility).async_(move || {
-            if let Err(e) = springboard::files::volumes::run_eject(&device) {
-                eprintln!("eject {device}: {e}");
+            if let Some(notice) = springboard::files::volumes::eject_with_notice(&name, &device, &mount) {
+                eprintln!("eject {device}: {notice}");
+                post_eject_notice(notice);
+                // wake the app loop so `tick` shows it
+                DispatchQueue::main().async_(|| {});
             }
         });
         self.revision += 1;
+    }
+    /// The notice a failed eject left, once: the status bar shows it.
+    pub(crate) fn take_eject_notice(&mut self) -> bool {
+        let Some(notice) = EJECT_NOTICE.lock().ok().and_then(|mut n| n.take()) else { return false };
+        self.notice = Some(notice);
+        true
     }
     pub(crate) fn sidebar_id(&self, path: &Path) -> Option<u32> {
         self.places().iter().position(|p| p.path == path).map(|i| 100 + i as u32)

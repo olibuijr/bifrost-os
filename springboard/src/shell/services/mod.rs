@@ -109,6 +109,7 @@ pub mod obex_codec;
 pub mod domains;
 pub mod peer_hub;
 pub mod running_board;
+pub mod system_intents;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -209,6 +210,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(domains::Domains),
         Box::new(peer_hub::PeerHub::new()),
         Box::new(running_board::RunningBoard),
+        Box::new(system_intents::SystemIntents),
     ]
 }
 

@@ -105,10 +105,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/script-editor-desktop/src/runner.rs, springboard/src/shortcuts.rs",
+   "bifrost": "springboard/src/shell/scripts_menu.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "scripts run from Script Editor and Shortcuts; no menu bar Script menu yet. built on os/team-l-07-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::scripts_menu::tests"
+    }
+   ],
+   "ready_note": "The Script menu extra in the menu bar (desktop_bar Menu::Scripts) lists the scripts in ~/.local/share/bifrost/scripts and runs the chosen one with sh; it shows only while the folder holds a script."
   },
   {
    "id": "path:/System/Library/CoreServices/ScriptMonitor.app",
@@ -194,10 +203,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shortcuts.rs",
+   "bifrost": "springboard/src/shortcuts/droplet.rs, springboard/src/shortcuts.rs, springboard/cmd/src/shortcuts.rs, springboard/cmd/src/bin/shortcuts.rs",
    "status": "partial",
    "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: a dropped-file automation (shortcuts::Automation::FileDropped, Event::FileDropped; shortcuts::tests); the shell still has to send the event from the droplet icon.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::droplet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "shortcuts --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/shortcuts"
+    }
+   ],
+   "ready_note": "A shortcut whose automation is \"When a File Is Dropped\" is a droplet: `shortcuts launcher NAME` writes a desktop launcher (~/.local/share/applications/bifrost-droplet-NAME.desktop), dropping files on it runs `shortcuts drop NAME %F`, and droplet::run passes the dropped paths to the first step as its input."
   },
   {
    "id": "path:/System/Library/CoreServices/Shortcuts Events.app",
@@ -214,10 +246,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/shortcuts-desktop",
+   "bifrost": "springboard/cmd/src/shortcuts.rs, springboard/cmd/src/bin/shortcuts.rs, springboard/src/shortcuts/flow.rs, springboard/apps/shortcuts-desktop",
    "status": "partial",
    "note": "Shortcuts app",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::flow"
+    },
+    {
+     "kind": "cmd",
+     "run": "shortcuts --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/shortcuts"
+    }
+   ],
+   "ready_note": "Running shortcuts without the window: the `shortcuts` command lists, shows and runs saved shortcuts (and droplets) from scripts and the shell, and the Shortcuts app serves run-shortcut and plan-shortcut intents on its control socket."
   },
   {
    "id": "path:/System/Library/CoreServices/ShortcutsActions.app",
@@ -372,7 +427,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/stage_strip.rs",
    "status": "partial",
-   "note": "stage strip model (one stage per app, limit, removal) only; the window manager does not use it yet. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "note": "Missing: Stage Manager itself. shell::stage_strip is a tested model (one stage per app, limit of five, removal), but the desktop window manager does not use it: nothing records focus into the strip, draws it at the screen edge, minimizes the stages it evicts, or offers the setting that turns it on, and the onboarding sheet that introduces it is the last step. Needs the desk window-focus hook, the strip drawing and hit test, a Desktop & Dock switch, then the sheet.",
    "rea": []
   },
   {
@@ -392,7 +447,7 @@
    "doc": "",
    "bifrost": "springboard/mcp/src/app.rs, springboard/src/shell/atspi/mod.rs",
    "status": "partial",
-   "note": "app control, window control and the AT-SPI bridge exist; no scripting dictionary for UI automation. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "note": "Missing: a System Events scripting target. App control (control sockets, osascript AppEvents), window control (MCP) and the AT-SPI bridge exist, but osascript and the JavaScript runner resolve only installed apps' manifest dictionaries. Needs a built-in provider in cmd/src/osascript.rs and shell::js_automation with a dictionary for processes, windows, UI elements (from the AT-SPI tree), keystrokes and clicks (the shell's events service), and power requests.",
    "rea": []
   },
   {
@@ -617,10 +672,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "Search lists apps, Settings pages, cities, titles and shortcuts; no third-party search extensions. built on os/team-l-07-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "Apps contribute results to Search: they send searchable items to the shell's index (ToShell::SearchIndex, services/search_ranking), declare App Intents as shortcuts (intents.rs), and the Search panel lists both (\"Documents\" and \"Shortcuts\") and opens the owning app on the result."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SearchUploadWorker.appex",
@@ -766,10 +835,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/look_up_popover.rs, springboard/ui/src/detect.rs",
+   "bifrost": "springboard/ui/src/suggested_actions.rs, springboard/src/shell/look_up_popover.rs, springboard/ui/src/look_up.rs, springboard/ui/src/detect.rs",
    "status": "partial",
    "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: suggested-actions model (springboard/ui/src/suggested_actions.rs) that lists detected items with their actions in reading order; tests suggested_actions::tests. The panel is not drawn or wired into the shell yet.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "suggested_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "look_up::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::look_up_popover::tests"
+    }
+   ],
+   "ready_note": "The suggested-actions panel is a section of the Look Up popover: the items detected in the selection with the actions that have a route (copy, open link, compose mail, add to calendar), in reading order, and a tap runs the route."
   }
  ]
 }

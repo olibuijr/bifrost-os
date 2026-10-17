@@ -394,6 +394,9 @@ impl App for Files {
         if self.poll_server() {
             changed = true;
         }
+        if self.take_eject_notice() {
+            changed = true;
+        }
         if self.spring_tick() {
             changed = true;
         }

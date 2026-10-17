@@ -79,8 +79,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "IO device UI agent, the Linux base handles device prompts",
+   "status": "n/a",
+   "note": "n/a: relays IOKit kernel notifications to the user session as alerts. The bundle has only Info.plist, a LaunchAgent plist and a man page in the index (no nib or UI resources of its own), and IOKit has no Linux counterpart. The hardware events a person needs are shown by the features that own them: storage by Files and Disk Utility, battery by low_battery, heat by thermal_alert.",
    "rea": []
   },
   {
@@ -425,10 +425,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/procedural_texture.rs (gradient)",
+   "bifrost": "springboard/ui/src/procedural_texture.rs, springboard/src/shell/wallpaper_page.rs, springboard/src/bin/shell.rs",
    "status": "partial",
    "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget. Built 2026-10-17: five named gradient presets and gradient_poster(name, w, h) (ui::procedural_texture, tests procedural_texture::tests). Still missing: the picker that shows the presets in the wallpaper settings.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "procedural_texture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Five named gradient posters (procedural_texture::GRADIENT_PRESETS) are packed as stills at the screen's wallpaper size (wallpaper_page::gradient_wallpapers) and listed in Settings > Wallpaper beside the photographs, where they can be set for the lock and home screens."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Hello.appex",

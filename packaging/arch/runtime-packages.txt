@@ -160,3 +160,5 @@ ttf-montserrat
 tesseract
 tesseract-data-eng
 tesseract-data-isl
+exfatprogs
+dosfstools

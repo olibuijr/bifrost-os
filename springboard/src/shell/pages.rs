@@ -915,6 +915,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         ("Address", d.addr.clone()),
                         ("Type", d.type_label().to_string()),
                         ("Status", if d.connected { "Connected" } else { "Not Connected" }.to_string()),
+                        // the properties rows of the SDK's device model (`RemoteDevice::properties`) end with the signal
+                        ("Signal", d.rssi.map_or("Not reported".to_string(), |r| format!("{r} dBm"))),
                     ]),
                     // The service browser model: no service records are read yet, so the list is empty and says so.
                     Group::new(vec![Item::new("Services").value("None listed")]).header("SERVICES").footer(super::services::bluetooth_service::SERVICE_NOTE),
@@ -2396,6 +2398,12 @@ mod tests {
         assert_eq!(detail.groups[0].items[1].action, Action::AudioOutput);
         let kind = &detail.groups[2].items[1];
         assert_eq!((kind.label.as_str(), kind.value.as_str()), ("Type", "Unknown"));
+        // the signal row reads "Not reported" until a scan heard the device, then its strength
+        let signal = &detail.groups[2].items[3];
+        assert_eq!((signal.label.as_str(), signal.value.as_str()), ("Signal", "Not reported"));
+        info.bt.devices[0].rssi = Some(-61);
+        let heard = spec(PageId::BluetoothDetail, &Model { detail: "Buds", ..model(&info, &opts) });
+        assert_eq!(heard.groups[2].items[3].value.as_str(), "-61 dBm");
         let services = &detail.groups[3];
         assert_eq!((services.items[0].label.as_str(), services.items[0].value.as_str()), ("Services", "None listed"));
         assert_eq!(services.header.as_deref(), Some("SERVICES"));
@@ -2448,5 +2456,5 @@ fn desktop_ethernet_page(info:&Info)->Spec {
 fn desktop_vpn_page(_info:&Info)->Spec {
     let profiles=super::desktop_network::vpn_profiles();
     let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service. Adding one needs the tunnel client, which is not built yet, so this list stays empty.")]}
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service (NetworkManager). Shortcuts and Search connect and disconnect one by its name; this list does not show them yet.")]}
 }

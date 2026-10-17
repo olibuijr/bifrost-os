@@ -116,10 +116,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/setup.rs (Step::Language), springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/installer/app.rs, springboard/src/shell/pages.rs, springboard/src/setup.rs",
    "status": "partial",
    "note": "Setup language step, plus Settings > Language & Region reachable by Search (settings_intents open-language-region, 2026-10-17). Still missing: a standalone Language Chooser app (the picker outside Settings); built on os/team-l-04-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::app::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::language"
+    }
+   ],
+   "ready_note": "The language picker: the native installer's Language page (LANGUAGES, with the keyboard layout that language starts with), the first-run Setup Language step, and Settings > Language & Region (also reachable from Search)."
   },
   {
    "id": "path:/System/Library/CoreServices/liquiddetectiond.app",
@@ -263,10 +277,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/login.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/sdk/src/system_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/mod.rs",
    "status": "partial",
    "note": "Lock Screen is a Search action (settings_actions lock-screen, runs Shell::lock_screen); not yet exposed as an App Intent to Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget. Built 2026-10-17: Search row and lock hit.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::system_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "The lock_screen App Intent (sdk lock_intents) is served by the system_intents service: a first-party app, Search or Shortcuts calls run {intent: lock_screen} and the shell's tick locks the screen as the menu's Lock Screen does. Search lists the same action (settings_actions lock-screen)."
   }
  ]
 }

@@ -366,10 +366,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/detect.rs",
+   "bifrost": "springboard/ui/src/detect.rs, springboard/ui/src/suggested_actions.rs, springboard/src/shell/look_up_popover.rs",
    "status": "partial",
    "note": "data detector matching and the context menu actions per detected kind (springboard/ui/src/detect.rs menu_actions); no context menu host yet",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "suggested_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::look_up_popover::tests"
+    }
+   ],
+   "ready_note": "Data detectors find links, email addresses, dates, addresses, amounts, flights and phone numbers (detect); the Look Up popover hosts the actions of every detected item in the selection (suggested_actions routes: copy, open a link in the browser, start a mail, add an event to the calendar) and runs the tapped one. Actions nothing in BifrOSt performs (call, message, maps, reading list, flight status) are not offered."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DefaultExtensionEnablement.appex",
@@ -406,10 +425,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_devices.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_devices.rs, springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "remote device name, class and signal model, and the properties rows (RemoteDevice::properties, sdk bluetooth_devices); no device properties sheet in the shell yet",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::bluetooth_detail"
+    }
+   ],
+   "ready_note": "The SDK model lists a device's properties (RemoteDevice::properties) and Settings > Bluetooth > device (PageId::BluetoothDetail) shows the same rows: address, type, status, signal, connect, disconnect and forget."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DoNotDisturbAppIntents.appex",
@@ -565,8 +598,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "filesystem module manager, the Linux kernel provides filesystems",
+   "status": "n/a",
+   "note": "n/a: manages third-party user-space file system modules (the registry behind Login Items & Extensions > File System Extensions). The index shows only the extension binary, Info.plist and Localizable.loctable. BifrOSt mounts volumes with the Linux kernel drivers through udisks (see the exFAT and FAT rows) and has no user-space file system module host to enable or disable.",
    "rea": []
   },
   {

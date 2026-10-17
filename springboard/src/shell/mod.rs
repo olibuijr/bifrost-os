@@ -116,6 +116,7 @@ pub mod photos;
 pub mod music;
 pub mod list;
 pub mod low_battery;
+pub mod thermal_alert;
 pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
@@ -867,6 +868,8 @@ pub struct Shell {
     quick_look:preview_panel::Panel,
     /// the Picture in Picture window (`pip`): drawn over the screen while it is starting or active
     pip:pip::Floating,
+    /// the thermal warning (`thermal_alert`): when the kernel's thermal zones last read and which warning was given
+    thermal:thermal_alert::Monitor,
     desktop_metrics: desktop_metrics::Snapshot,
     desktop_metrics_at:f64,
     metrics_sampler: desktop_metrics::Sampler,
@@ -1167,6 +1170,7 @@ impl Shell {
             doc_broker:None,
             quick_look:Default::default(),
             pip:Default::default(),
+            thermal:Default::default(),
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
@@ -3683,6 +3687,7 @@ impl Shell {
         }
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
+        self.thermal_tick(t);
         self.announce_tick(t);
         self.permission_tick(t);
         self.auth_tick(t);
@@ -3694,6 +3699,10 @@ impl Shell {
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
+        // a first-party app asked to lock the screen (services/system_intents.rs)
+        if services::system_intents::take_lock() {
+            effects.extend(self.lock_screen());
+        }
         self.perf_only = perf_changed && !self.dirty;
         self.dirty |= perf_changed;
         effects

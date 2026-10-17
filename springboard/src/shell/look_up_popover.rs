@@ -2,14 +2,26 @@
 //! Search for the term and Open in Dictionary. `bifrost_ui::look_up` holds the content and its rows; this module
 //! measures, draws and hit tests them. Opened by the Services menu's Look Up and by Ctrl+Cmd+D; Escape or a tap
 //! outside closes it, and a tap on an action runs it.
+//!
+//! The popover also hosts the suggested actions for the items the selection holds (a link, an email address, a date):
+//! `bifrost_ui::suggested_actions` finds them and says what each action does (`Route`), and a tap on one runs that
+//! route here: copy to the clipboard, open the link in the browser, start a mail, or add an event to the calendar.
 
 use super::quicksearch::{self, Hit};
 use super::{apphost, Drawn, Effect, Event, Shell};
 use crate::gfx::Surface;
 use crate::shell::ui::{Ui, Weight};
 use bifrost_ui::look_up::{LookUp, Row, HITS_SHOWN};
-use bifrost_ui::services_menu::DICTIONARY_APP;
+use bifrost_ui::services_menu::{Selection, DICTIONARY_APP};
 use bifrost_ui::stardict;
+use bifrost_ui::suggested_actions::{self, Route, ALL_KINDS};
+
+/// The Calendar app, which an Add to Calendar suggestion opens.
+const CALENDAR_APP: &str = "is.olibuijr.calendar.desktop";
+/// The most selection text the suggestions look through, in characters.
+const SELECTION_SCAN_MAX: usize = 4000;
+/// The most suggested actions the model gathers (the popover lists `look_up::SUGGESTIONS_SHOWN` of them).
+const SUGGESTIONS_GATHERED: usize = 8;
 
 const WIDTH_PT: f32 = 320.0;
 const RADIUS_PT: f32 = 6.0;
@@ -41,6 +53,8 @@ pub enum Outcome {
     Search(String),
     /// Open in Dictionary: the popover closes and the Dictionary app looks the word up
     Dictionary(String),
+    /// A suggested action: the popover closes and the route runs
+    Suggest(Route),
 }
 
 /// The popover on screen: its content and where it opens (px). It drops below `anchor`, centred on its x.
@@ -78,7 +92,7 @@ fn bands(look: &LookUp, ui: &Ui, max: f32) -> Vec<Band> {
                     let lines = ui.wrap(t, TEXT_PT, Weight::Regular, max);
                     (LINE_PT * lines.len().max(1) as f32, lines)
                 }
-                Row::Search { .. } | Row::OpenInDictionary { .. } => (ACTION_PT, Vec::new()),
+                Row::Search { .. } | Row::OpenInDictionary { .. } | Row::Suggest { .. } => (ACTION_PT, Vec::new()),
             };
             let band = Band { row, top, h, lines };
             top += h;
@@ -122,6 +136,7 @@ impl Popover {
                 return match &b.row {
                     Row::Search { query } => Outcome::Search(query.clone()),
                     Row::OpenInDictionary { word } => Outcome::Dictionary(word.clone()),
+                    Row::Suggest { route, .. } => Outcome::Suggest(route.clone()),
                     _ => Outcome::None,
                 };
             }
@@ -145,10 +160,11 @@ impl Popover {
                         s.blit(&t, x as i32, (y + ui.pt(LINE_PT * i as f32)) as i32, 255, 255);
                     }
                 }
-                Row::Search { .. } | Row::OpenInDictionary { .. } => {
+                Row::Search { .. } | Row::OpenInDictionary { .. } | Row::Suggest { .. } => {
                     let label = match &b.row {
                         Row::Search { query } => format!("Search for {query}"),
                         Row::OpenInDictionary { word } => format!("Open {word} in Dictionary"),
+                        Row::Suggest { title, item, .. } => suggestion_label(title, item),
                         _ => String::new(),
                     };
                     s.fill_rect(x.max(0.0) as usize, y.max(0.0) as usize, bw.max(0.0) as usize, 1, DIVIDER);
@@ -158,6 +174,18 @@ impl Popover {
             }
         }
     }
+}
+
+/// The text of a suggested action row: the action, then the item it acts on.
+fn suggestion_label(title: &str, item: &str) -> String {
+    format!("{title}: {item}")
+}
+
+/// The suggested actions for the selection `text`: the actions of every link, email address and date in it that
+/// something in BifrOSt performs (`suggested_actions::offers`).
+fn suggestions_for(text: &str) -> Vec<suggested_actions::Offer> {
+    let scan: String = text.chars().take(SELECTION_SCAN_MAX).collect();
+    suggested_actions::offers(&scan, &ALL_KINDS, SUGGESTIONS_GATHERED)
 }
 
 /// The popover's content for `term`: the first definition the installed dictionaries give, and the quick search hits.
@@ -171,6 +199,14 @@ fn content(term: &str) -> LookUp {
         .take(HITS_SHOWN)
         .collect();
     LookUp::new(term, definition, hits)
+}
+
+/// The text the suggestions look through: the whole text selection when there is one, else the term itself.
+fn suggestion_source(term: &str, selection: Option<Selection>) -> String {
+    match selection {
+        Some(Selection::Text(text)) if text.contains(term) => text,
+        _ => term.to_string(),
+    }
 }
 
 /// The text a quick search result is listed by. A Terminal or Show in Folder result has no title to list.
@@ -192,7 +228,9 @@ impl Shell {
     /// focused app's selection is.
     pub(super) fn open_look_up(&mut self, term: String) {
         let anchor = (self.w as f32 / 2.0, self.desktop_bar_height() as f32);
-        self.look_up = Some(Popover::new(content(&term), anchor));
+        let source = suggestion_source(&term, super::services_route::selection());
+        let look = content(&term).with_suggestions(suggestions_for(&source));
+        self.look_up = Some(Popover::new(look, anchor));
         self.drawn = Drawn::Nothing;
         self.dirty = true;
     }
@@ -229,10 +267,40 @@ impl Shell {
                 self.look_up = None;
                 self.run_intent(DICTIONARY_APP, "look-up", "word", &word, t);
             }
+            Outcome::Suggest(route) => {
+                self.look_up = None;
+                self.run_suggestion(route, t);
+            }
         }
         self.drawn = Drawn::Nothing;
         self.dirty = true;
         Some(Vec::new())
+    }
+
+    /// Carries out the route of a suggested action with the shell's own open paths.
+    fn run_suggestion(&mut self, route: Route, t: f64) {
+        match route {
+            Route::Copy(text) => {
+                if let Some(plain) = super::pasteboard::set(vec![(bifrost_ui::app_services::PLAIN_TEXT.to_string(), text.into_bytes())]) {
+                    bifrost_render::clipboard::set_text(&plain);
+                }
+            }
+            Route::OpenUrl(url) => {
+                if let Err(e) = self.desktop_open_url(&url, t) {
+                    eprintln!("look up: {e}");
+                }
+            }
+            Route::ComposeMail(url) => {
+                if let Err(e) = self.mail_compose_deliver("", &url, &[], t) {
+                    eprintln!("look up: {e}");
+                }
+            }
+            Route::CreateEvent { title, day } => {
+                let mut params = vec![("title", title)];
+                params.extend(day.map(|d| ("start", d)));
+                self.run_intent_with(CALENDAR_APP, "create-event", params, t);
+            }
+        }
     }
 
     pub(super) fn draw_look_up(&self, s: &mut Surface<'_>) {
@@ -297,6 +365,35 @@ mod tests {
         let rows = bands(&LookUp::new("cat", Some(long), vec![]), &ui, ui.pt(WIDTH_PT - PAD_PT * 2.0));
         let text = rows.iter().find(|b| matches!(b.row, Row::Text(_))).expect("definition band");
         assert!(text.lines.len() > 1, "{:?}", text.lines);
+    }
+
+    #[test]
+    fn a_selection_with_links_lists_suggested_actions_that_run_on_a_tap() {
+        let ui = crate::shell::tests::ui();
+        let offers = suggestions_for("read https://example.com/a on 9.10.2026");
+        let look = look().with_suggestions(offers);
+        let p = Popover::new(look, (600.0, 40.0));
+        let (w, h) = (1200, 1600);
+        let row = Row::Suggest { title: "Open Link", item: "https://example.com/a".into(), route: Route::OpenUrl("https://example.com/a".into()) };
+        let (x, y) = centre_of(&p, &ui, w, h, &row);
+        assert_eq!(p.tap(&ui, w, h, x, y), Outcome::Suggest(Route::OpenUrl("https://example.com/a".into())));
+        let event = Row::Suggest {
+            title: "Add to Calendar",
+            item: "9.10.2026".into(),
+            route: Route::CreateEvent { title: "9.10.2026".into(), day: Some("2026-10-09".into()) },
+        };
+        let (ex, ey) = centre_of(&p, &ui, w, h, &event);
+        assert_eq!(p.tap(&ui, w, h, ex, ey), Outcome::Suggest(Route::CreateEvent { title: "9.10.2026".into(), day: Some("2026-10-09".into()) }));
+    }
+
+    #[test]
+    fn the_suggestions_look_through_the_whole_selection_only_when_it_holds_the_term() {
+        let sel = Some(Selection::Text("see https://example.com now".into()));
+        assert_eq!(suggestion_source("see https://example.com now", sel.clone()), "see https://example.com now");
+        assert_eq!(suggestion_source("cat", sel), "cat", "a selection the term was not taken from is not scanned");
+        assert_eq!(suggestion_source("cat", None), "cat");
+        assert_eq!(suggestion_label("Copy Link", "https://x.is"), "Copy Link: https://x.is");
+        assert!(suggestions_for("a plain word").is_empty());
     }
 
     #[test]

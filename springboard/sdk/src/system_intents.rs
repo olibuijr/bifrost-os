@@ -14,6 +14,9 @@ pub const REDUCE_TRANSPARENCY_ID: &str = "set_reduce_transparency";
 /// Id of the intent that turns Do Not Disturb on or off.
 pub const DO_NOT_DISTURB_ID: &str = "set_do_not_disturb";
 
+/// Id of the intent that locks the screen now.
+pub const LOCK_SCREEN_ID: &str = "lock_screen";
+
 /// Parameter: how long the timer runs, in whole seconds.
 pub const DURATION_PARAM: &str = "duration";
 /// Parameter: the optional name of the timer.
@@ -36,6 +39,12 @@ pub fn setting_intents() -> Vec<Intent> {
         Intent::new(DO_NOT_DISTURB_ID, "Set Do Not Disturb", "Turns Do Not Disturb on or off.")
             .param(Param::new(ENABLED_PARAM, "On", ParamType::Bool)),
     ]
+}
+
+/// The Lock Screen intent: no parameters, so it is a shortcut. The shell serves it through the `system_intents`
+/// service (`springboard/src/shell/services/system_intents.rs`), the same path Lock Screen in the menu takes.
+pub fn lock_intents() -> Vec<Intent> {
+    vec![Intent::new(LOCK_SCREEN_ID, "Lock Screen", "Locks the screen now, so the password is asked for again.").shortcut()]
 }
 
 /// Every intent this module declares, in the order Search lists them.
@@ -82,6 +91,16 @@ mod tests {
             assert_eq!(i.params[0].ty, ParamType::Bool);
             assert!(!i.params[0].optional);
         }
+    }
+
+    #[test]
+    fn lock_screen_is_a_shortcut_without_parameters() {
+        let list = lock_intents();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, LOCK_SCREEN_ID);
+        assert_eq!(list[0].method(), "intent.lock_screen");
+        assert!(list[0].params.is_empty());
+        assert!(list[0].shortcut);
     }
 
     #[test]
