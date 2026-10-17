@@ -720,22 +720,22 @@ mod tests {
         let ctx = test_ctx();
         let mut published = None;
         let first = song_session(5_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), 0.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 0.0);
         // normal playback a second later: the position is where it should be, nothing is sent
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert_eq!((sent[0].0.as_str(), sent[0].1.as_str()), (now_playing::SERVICE, "publish"));
         assert!(sent[0].2.contains("\"title\":\"Song\""));
         // a scrub to 90 s
         let scrubbed = song_session(90_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), &[], 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert!(sent[0].2.contains("90000"));
         // no song left: the session is withdrawn once
-        MusicApp::publish_step(&mut published, &ctx, None, 2_000.0);
-        MusicApp::publish_step(&mut published, &ctx, None, 3_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], 2_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], 3_000.0);
         assert_eq!(calls(&ctx), vec![(now_playing::SERVICE.to_string(), "clear".to_string(), "null".to_string())]);
     }
 
