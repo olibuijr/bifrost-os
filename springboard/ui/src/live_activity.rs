@@ -190,7 +190,21 @@ impl<T: Clone> Registry<T> {
             .map(|a| a.id)
             .collect()
     }
-}
+
+    /// The ids for the lock screen strip at `now`: live activities (active or stale) of every app first, then ended
+    /// ones still on screen, each group in request order, at most `limit`. Pending and dismissed activities are left out.
+    pub fn strip(&self, now: u64, limit: usize) -> Vec<u32> {
+        let mut live = Vec::new();
+        let mut ended = Vec::new();
+        for a in &self.activities {
+            match self.state(a.id, now) {
+                Some(State::Active | State::Stale) => live.push(a.id),
+                Some(State::Ended) => ended.push(a.id),
+                _ => {}
+            }
+        }
+        live.into_iter().chain(ended).take(limit).collect()
+    }}
 
 #[cfg(test)]
 mod tests {
@@ -292,5 +306,19 @@ mod tests {
         r.end(3, None, Dismissal::Immediate, 150).unwrap();
         assert_eq!(r.visible("app.a", 150), vec![1]);
         assert_eq!(r.visible("app.b", 150), vec![2]);
+    }
+
+    #[test]
+    fn the_strip_lists_live_activities_before_ended_ones_and_skips_pending_and_dismissed() {
+        let mut r: Registry<u8> = Registry::new(true);
+        let ended = r.request("a", Content::new(1), None, 100).unwrap();
+        let later = r.request("b", Content::new(2), Some(500), 100).unwrap();
+        let live = r.request("c", Content::new(3), None, 100).unwrap();
+        r.end(ended, None, Dismissal::Default, 150).unwrap();
+        let gone = r.request("d", Content::new(4), None, 100).unwrap();
+        r.end(gone, None, Dismissal::Immediate, 160).unwrap();
+        assert_eq!(r.strip(200, 4), [live, ended], "pending and dismissed activities are not on the strip");
+        assert_eq!(r.strip(200, 1), [live], "the limit caps the strip");
+        assert_eq!(r.strip(600, 4), [later, live, ended], "a started activity joins the live group in request order");
     }
 }

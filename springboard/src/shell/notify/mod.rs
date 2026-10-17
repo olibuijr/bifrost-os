@@ -436,6 +436,8 @@ impl Shell {
     pub fn notify_id_banner(&mut self, n: Notification, banner: bool) -> u64 {
         let app = n.app;
         let id = self.notify.store.push(n);
+        // the app and the outcome only: the title and body stay out of the log
+        bifrost_core::log::shell_logger("notify").info(format!("notification {id} from app {app:?} stored, banner {banner}"));
         self.screentime.note_notification(app);
         self.store_changed();
         self.notify.refresh_schedule();
@@ -445,6 +447,7 @@ impl Shell {
         // the delivery model decides: Stored (Alert Style None, muted, or Focus) is listed and badged only
         let decision = presentation_of(&self.app_notif(app), self.notify.delivers(app));
         if decision.presentation == bifrost_ui::notifdelivery::Presentation::Stored {
+            bifrost_core::log::shell_logger("notify").debug(format!("notification {id} listed only, no banner"));
             return id;
         }
         if !self.screen_on {
