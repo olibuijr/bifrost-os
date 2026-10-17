@@ -3805,7 +3805,16 @@
    "status": "partial",
    "note": "File demux and playback in springboard/src/media exist. HLS media playlists are now parsed and their segment addresses resolved (media/hls.rs). Not built: fetching the segments over HTTP, joining them into one stream for the demuxer, and master playlist variant selection, so streamed network media does not play yet. Built 2026-10-17: master playlist variant selection (media/hls.rs parse_master, select_variant; tests a_master_playlist_lists_its_variants, the_variant_is_the_best_one_under_the_limit). Still open: fetching the segments over HTTP and joining them for the demuxer.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::hls::tests"
+    }
+   ],
+   "ready_note": "HLS playlists: media playlist parsing and address resolution, master playlist variant selection, load_media over an injected fetch, and Segments, which joins segments into one Read stream fetching each one on demand. client_fetch runs them over the shell's deildu HTTP client. Tested offline with a fake server."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreMediaSwiftUpwardLinkingTrampoline.framework",
@@ -3910,7 +3919,16 @@
    "status": "partial",
    "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). The contact fetch layer now has middle_name and name_suffix keys (ui contact_fetch.rs, additive), and the vCard reader already splits middle and suffix parts (contact_vcard.rs). Not built: the store holds one name string, so the shell does not yet split a typed name into middle and suffix, and the bundled frequency and surname tables are missing. Built 2026-10-17: name parts (given, middle, family, suffix) are read from the store name and joined back on save (services/contacts.rs name_parts, join_name); tests a_name_splits_into_given_middle_and_family, a_trailing_suffix_is_split_off_the_name. Still open: the bundled frequency and surname tables.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    }
+   ],
+   "ready_note": "Name parts (given, middle, family, suffix) are split on read and joined on save in services/contacts.rs; tested by the contacts tests. The fetch layer's middle_name and name_suffix keys (ui contact_fetch.rs) are served from them. The bundled frequency and surname tables are not used: the split is by position, not by a name model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreNavigation.framework",
