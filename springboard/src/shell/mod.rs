@@ -2259,6 +2259,7 @@ impl Shell {
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.
     pub fn set_wallpapers(&mut self, wallpapers: Vec<Wallpaper>) {
+        quicksearch::set_wallpaper_catalogue(wallpapers.iter().map(|w| (w.id.clone(), w.name.clone())).collect());
         self.wallpapers = Rc::new(wallpapers);
     }
 

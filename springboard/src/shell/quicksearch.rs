@@ -182,7 +182,7 @@ pub enum Hit {
     /// a Settings intent (`settings_intents`, "Open Keyboard"): opens the pane it names in Settings
     SettingsIntent { id: &'static str, title: &'static str },
     /// a shell action intent (`settings_actions`) with its parameters already set: runs the same effect the Settings pane does
-    SettingsAction { intent: super::settings_actions::SettingsIntent, title: &'static str },
+    SettingsAction { intent: super::settings_actions::SettingsIntent, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
@@ -243,18 +243,36 @@ fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
         .collect()
 }
 
-/// The shell action intents (`settings_actions`) that take no parameter from Search: the Wi-Fi scan and the two Wi-Fi
-/// switch states. Wallpaper needs a picture id, so it is not offered here.
+/// The wallpaper catalogue as (id, name), for the "Set Wallpaper to" Search rows. The shell sets it whenever its
+/// wallpaper list changes (`Shell::set_wallpapers`).
+static WALLPAPERS: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+/// Records the wallpaper catalogue Search offers rows for.
+pub fn set_wallpaper_catalogue(list: Vec<(String, String)>) {
+    *WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()) = list;
+}
+
+/// The shell action intents (`settings_actions`) Search lists: the Wi-Fi scan, the two Wi-Fi switch states, and one
+/// "Set Wallpaper to" row per picture in the catalogue.
 fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
     use super::settings_actions::SettingsIntent;
-    let rows: [(&'static str, &'static str, &str, SettingsIntent); 3] = [
+    let fixed: [(&str, &str, &str, SettingsIntent); 3] = [
         ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
         ("wifi-on", "Turn Wi-Fi On", "Switch the Wi-Fi radio on", SettingsIntent::WifiPower(true)),
         ("wifi-off", "Turn Wi-Fi Off", "Switch the Wi-Fi radio off", SettingsIntent::WifiPower(false)),
     ];
-    rows.into_iter()
-        .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title }, fuzzy::fold(title)))
-        .collect()
+    let mut rows: Vec<(search_rank::Item, String)> = fixed
+        .into_iter()
+        .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title: title.to_string() }, fuzzy::fold(title)))
+        .collect();
+    let pictures = WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for (id, name) in pictures {
+        let title = format!("Set Wallpaper to {name}");
+        let folded = fuzzy::fold(&title);
+        let hit = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper(id.clone()), title: title.clone() };
+        rows.push(table_row(hits, format!("settings-action:wallpaper:{id}"), &title, "Use this picture as the desktop wallpaper".to_string(), search_rank::Kind::Settings, hit, folded));
+    }
+    rows
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
@@ -1345,7 +1363,7 @@ impl QuickSearch {
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
-                    Hit::SettingsAction { title, .. } => title.to_string(),
+                    Hit::SettingsAction { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -2092,10 +2110,14 @@ mod tests {
     fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
         use super::super::settings_actions::SettingsIntent;
         let groups = results("turn wi-fi off", &[]);
-        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off" };
+        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off".into() };
         assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
-        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks" };
+        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks".into() };
         assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
+        set_wallpaper_catalogue(vec![("kirkjufell_dusk".into(), "Kirkjufell Dusk".into())]);
+        let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
+        assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
+        set_wallpaper_catalogue(Vec::new());
     }
 
     /// A one-piece torrent named `name`.
