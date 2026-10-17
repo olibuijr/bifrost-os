@@ -332,6 +332,7 @@ fn run() -> std::io::Result<()> {
     // the help index reads every installed help book; built on a worker so the first frame is not held up
     std::thread::spawn(|| springboard::shell::helpbook::with_index(std::path::Path::new(springboard::shell::store::install::ROOT), |_| ()));
     shell.set_route(router.route(), vol.level(), false, 0.0);
+    shell.set_headphones_present(jack.plugged());
     // the wallpaper catalogue reads the packed thumbnails and may crop Pictures stills on first use: a worker builds
     // it and the loop hands it to the shell on its next turn (Settings > Wallpaper is the only reader)
     let (wallpapers_tx, wallpapers_rx) = std::sync::mpsc::channel::<Vec<springboard::shell::wallpaper_page::Wallpaper>>();
@@ -979,8 +980,23 @@ fn run() -> std::io::Result<()> {
             d.read(&mut jack_events);
             for ev in &jack_events {
                 let input::Event::Switch { code, on } = *ev else { continue };
-                let Some(change) = jack.feed(code, on).and_then(|plugged| router.jack(plugged)) else { continue };
+                let Some(plugged) = jack.feed(code, on) else { continue };
+                shell.set_headphones_present(plugged);
+                let Some(change) = router.jack(plugged) else { continue };
                 eprintln!("springboard: audio route -> {} ({}%)", change.route.label(), (change.volume.level() * 100.0).round());
+                if change.pause {
+                    shell.pause_music();
+                }
+                vol = change.volume;
+                let _ = audio_tx.send(AudioJob::Volume(vol));
+                shell.set_route(change.route, vol.level(), change.hud, t);
+                shell.save_prefs(&change.prefs);
+            }
+        }
+        // the output the user picked in the Sound module's menu holds against the jack (media::route::Router::choose)
+        if let Some(route) = shell.take_route_choice() {
+            if let Some(change) = router.choose(route) {
+                eprintln!("springboard: audio route chosen -> {}", change.route.label());
                 if change.pause {
                     shell.pause_music();
                 }

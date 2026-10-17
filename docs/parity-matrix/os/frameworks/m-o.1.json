@@ -384,7 +384,7 @@
    "doc": "",
    "bifrost": "springboard/gpu/src/lib.rs",
    "status": "partial",
-   "note": "Checked 2026-10-17: springboard/gpu/Cargo.toml uses ash with the loaded feature, so Vulkan comes from libvulkan.so.1 (vulkan-icd-loader, pacman -Qi). The mesa package ships no Vulkan ICD (no intel_icd or radeon_icd; /usr/share/vulkan/icd.d holds only nvidia_icd.json), and vulkan-intel is not in packaging/arch/runtime-packages.txt. A device therefore depends on a package the runtime list does not name. Apps get no GPU API, so the row stays partial.",
+   "note": "Checked 2026-10-17: springboard/gpu/Cargo.toml loads Vulkan through ash (loaded feature), so the device comes from libvulkan.so.1 (vulkan-icd-loader, in gpu_packages). The vendor ICDs are chosen per detected GPU by springboard/src/installer/plan.rs gpu_packages: vulkan-intel for Intel, vulkan-radeon for AMD, nvidia-open and nvidia-utils for NVIDIA. Apps get no GPU API, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -913,11 +913,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
+   "bifrost": "springboard/src/installer/plan.rs (gpu_packages adds opencl-mesa for Intel and AMD)",
    "status": "partial",
-   "note": "Checked 2026-10-17: pacman -Ql mesa (1:26.2.2-1) lists no rusticl library and no OpenCL vendor file, and /etc/OpenCL/vendors holds only nvidia.icd (opencl-nvidia). No OpenCL provider from the runtime list is verified, so the system layer has no CL driver on Arch as packaged. Apps get no compute SDK. Stays partial; packaging would need a mesa build with rusticl plus its ICD.",
+   "note": "Provided at the system layer: springboard/src/installer/plan.rs gpu_packages adds opencl-mesa (mesa's rusticl OpenCL driver) for Intel and AMD, and a test pins it (installer::plan::tests::gpu_packages_follow_the_hardware). NVIDIA keeps its own OpenCL stack, which gpu_packages does not add. Apps get no compute SDK, so the row stays partial until an SDK surface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests::gpu_packages_follow_the_hardware"
+    }
+   ],
+   "ready_note": "The system provides OpenCL: the installer adds opencl-mesa (mesa rusticl) for Intel and AMD GPUs, and the test pins the package choice. NVIDIA keeps its own OpenCL stack. No compute API reaches apps, so the row describes the system layer only."
   },
   {
    "id": "path:/System/Library/Frameworks/OpenDirectory.framework",
@@ -957,7 +966,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
    "status": "partial",
-   "note": "Checked 2026-10-17: springboard/src/gpu/egl.rs dlopens libEGL.so.1 and libGLESv2.so.2 (DESKTOP_LIBS). On the host libEGL.so.1 is owned by libglvnd (pacman -Qo), which dispatches to mesa's libEGL_mesa.so; mesa 1:26.2.2 ships the DRI drivers (/usr/lib/dri) and libgbm. packaging/arch/runtime-packages.txt names only mesa, not libglvnd. Apps get no GL SDK surface, so the row stays partial.",
+   "note": "Checked 2026-10-17: springboard/src/gpu/egl.rs dlopens libEGL.so.1 and libGLESv2.so.2 (DESKTOP_LIBS). The installer puts libglvnd in the base list (springboard/src/installer/plan.rs BASE_PACKAGES) and mesa from gpu_packages, which also provides the DRI drivers and libgbm (on the host, libEGL.so.1 is owned by libglvnd and dispatches to mesa's libEGL_mesa.so). Apps get no GL SDK surface, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },

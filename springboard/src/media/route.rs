@@ -167,6 +167,11 @@ pub struct Router {
     speaker: Volume,
     headphones: Volume,
     lifted: bool,
+    /// Whether the headset is in the jack now. Headphones can only be chosen while it is.
+    plugged: bool,
+    /// The route the user chose (the route picker). It holds against the jack until its device disappears: an
+    /// unplug ends a Headphones choice, and a Speaker choice holds through plug and unplug.
+    manual: Option<Route>,
 }
 
 impl Router {
@@ -180,6 +185,8 @@ impl Router {
             speaker: level(PREF_SPEAKER).or_else(|| level(super::volume::PREF)).unwrap_or_default(),
             headphones: level(PREF_HEADPHONES).unwrap_or_default(),
             lifted: get(PREF_CAP_LIFTED).as_deref() == Some("1"),
+            plugged,
+            manual: None,
         };
         if plugged {
             r.route = Route::Headphones;
@@ -190,6 +197,21 @@ impl Router {
 
     pub fn route(&self) -> Route {
         self.route
+    }
+
+    /// The route the user chose, if one holds over the jack.
+    pub fn manual(&self) -> Option<Route> {
+        self.manual
+    }
+
+    /// The user picked a route. Headphones is refused while the headset is not in the jack. The change is what the
+    /// binary applies (volume, HUD, saved prefs) and is None when the route does not change.
+    pub fn choose(&mut self, to: Route) -> Option<Change> {
+        if to == Route::Headphones && !self.plugged {
+            return None;
+        }
+        self.manual = Some(to);
+        self.switch(to, false)
     }
 
     /// The current route's volume.
@@ -212,20 +234,30 @@ impl Router {
     /// plug-in lowers a too-loud remembered headphone volume to the cap
     /// (until the user has lifted it); an unplug pauses playback.
     pub fn jack(&mut self, plugged: bool) -> Option<Change> {
-        let to = if plugged { Route::Headphones } else { Route::Speaker };
+        self.plugged = plugged;
+        // the chosen headphones are gone with the headset
+        if !plugged && self.manual == Some(Route::Headphones) {
+            self.manual = None;
+        }
+        let to = self.manual.unwrap_or(if plugged { Route::Headphones } else { Route::Speaker });
+        self.switch(to, !plugged)
+    }
+
+    /// Makes `to` the route, capping the headphone volume when it is headphones. None when it already is.
+    fn switch(&mut self, to: Route, pause: bool) -> Option<Change> {
         if to == self.route {
             return None;
         }
         self.route = to;
         let mut prefs = Vec::new();
-        if plugged {
+        if to == Route::Headphones {
             let capped = self.capped(self.headphones);
             if capped != self.headphones {
                 self.headphones = capped;
                 prefs.push((PREF_HEADPHONES, capped.pref()));
             }
         }
-        Some(Change { route: to, volume: self.volume(), pause: !plugged, hud: true, prefs })
+        Some(Change { route: to, volume: self.volume(), pause, hud: true, prefs })
     }
 
     /// The user set the current route's volume (slider or keys): what to
@@ -250,6 +282,43 @@ impl Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_chosen_route_beats_the_jack_until_its_device_disappears() {
+        let mut r = Router::from_prefs(|_| None, true);
+        assert_eq!(r.route(), Route::Headphones);
+        // the user picks the speaker while the headset is in: the plug stays ignored
+        let change = r.choose(Route::Speaker).expect("speaker is a change");
+        assert_eq!((change.route, change.pause), (Route::Speaker, false));
+        assert!(r.jack(true).is_none(), "a plug-in does not steal a speaker choice");
+        assert_eq!(r.route(), Route::Speaker);
+        // unplugging does not change the speaker choice either
+        assert!(r.jack(false).is_none());
+        assert_eq!(r.manual(), Some(Route::Speaker));
+        // headphones cannot be chosen without the headset
+        assert!(r.choose(Route::Headphones).is_none());
+        assert_eq!(r.route(), Route::Speaker);
+    }
+
+    #[test]
+    fn a_headphones_choice_ends_with_the_headset() {
+        let mut r = Router::from_prefs(|_| None, false);
+        let change = r.jack(true).expect("plugging in switches");
+        assert_eq!(change.route, Route::Headphones);
+        assert!(r.choose(Route::Speaker).is_some());
+        assert!(r.choose(Route::Headphones).is_some());
+        assert_eq!(r.manual(), Some(Route::Headphones));
+        let gone = r.jack(false).expect("unplugging ends the headphones choice");
+        assert_eq!((gone.route, gone.pause), (Route::Speaker, true));
+        assert_eq!(r.manual(), None);
+    }
+
+    #[test]
+    fn choosing_the_current_route_changes_nothing() {
+        let mut r = Router::from_prefs(|_| None, false);
+        assert!(r.choose(Route::Speaker).is_none());
+        assert_eq!(r.manual(), Some(Route::Speaker));
+    }
 
     #[test]
     fn the_bluetooth_sink_is_the_connected_audio_device() {

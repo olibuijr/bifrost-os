@@ -494,11 +494,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/container_layout.rs, springboard/src/bare/app_policy.rs",
+   "bifrost": "core/src/container_layout.rs, springboard/sdk/src/container_layout.rs (re-export), springboard/src/shell/apphost.rs (spawn creates the folders), springboard/src/bare/app_policy.rs",
    "status": "partial",
    "note": "Per-app container folders (Documents, Library, Caches, tmp) and the sandbox policy that mounts them are modelled. Gap: the shell does not create the folders yet, so apps still use a flat data directory.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Per-app container folders (Documents, Library, Caches, tmp) are created by the shell when an app is first launched (apphost spawn_with calls ContainerLayout::ensure). The layout and its symlink and file refusals are in bifrost-core, which the SDK re-exports, and the sandbox policy that mounts them is in app_policy.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileIcons.framework",
