@@ -2112,6 +2112,7 @@ impl Settings {
                 let v = v.clamp(0., 1.);
                 self.opts.double_click_ms = super::mouse_page::double_click_from_slider(v);
                 self.list_mut().expect("list").set_slider(g, i, v);
+                self.apply_pointer();
                 if release {
                     self.opts.save(prefs);
                 }
@@ -2655,7 +2656,11 @@ impl Settings {
                 self.apply_pointer();
                 on
             }
-            Toggle::MouseAcceleration => flip(&mut self.opts.mouse_accel),
+            Toggle::MouseAcceleration => {
+                let on = flip(&mut self.opts.mouse_accel);
+                self.apply_pointer();
+                on
+            }
             Toggle::LoginNamePassword => flip(&mut self.opts.login_name_password),
             Toggle::LoginHints => flip(&mut self.opts.login_hints),
             Toggle::FunctionStandard => {

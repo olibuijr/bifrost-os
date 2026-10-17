@@ -174,8 +174,11 @@ struct CachedWindow {
     focused:bool, maximized:bool, hover:bool, drawn:f64,
 }
 
-/// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does.
-const DOUBLE_CLICK_MS: f64 = 400.0;
+/// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is
+/// the Settings > Mouse > Double-Click Speed choice (`pointer_prefs`).
+fn double_click_ms() -> f64 {
+    crate::bare::pointer_prefs::get().double_click_ms as f64
+}
 
 #[derive(Default)]
 pub struct Desk {
@@ -204,7 +207,7 @@ pub struct Desk {
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
     pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
-    /// the last title-bar press (window, time in ms): a second press within DOUBLE_CLICK_MS zooms
+    /// the last title-bar press (window, time in ms): a second press within the Double-Click Speed gap zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
     /// the newest files of Downloads, fanned out by the Dock's stack, and when the folder was last listed (seconds)
@@ -1566,7 +1569,7 @@ impl Shell {
                 }
                 if hit == Hit::Title {
                     let d = self.desk.as_mut()?;
-                    if d.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= DOUBLE_CLICK_MS) {
+                    if d.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= double_click_ms()) {
                         d.last_title = None;
                         d.toggle_zoom(&m, i);
                         self.desk_layout(i);
