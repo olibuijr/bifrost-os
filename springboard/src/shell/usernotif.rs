@@ -5,7 +5,7 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 
@@ -388,6 +388,15 @@ pub fn display(req: &NotifRequest) -> (String, String) {
     (req.title.clone(), body)
 }
 
+/// The text shown while previews are hidden (the app's Show Previews setting, or the lock screen): the body never shows,
+/// and the title and subtitle show only when the category's hidden-preview options ask for them. The subtitle then shows
+/// alone in the body.
+pub fn hidden_text(options: u8, req: &NotifRequest) -> (String, String) {
+    let title = if options & NOTIF_CATEGORY_HIDDEN_SHOW_TITLE != 0 { req.title.clone() } else { String::new() };
+    let body = if options & NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE != 0 { req.subtitle.clone() } else { String::new() };
+    (title, body)
+}
+
 /// What a delivery shows for a grant (None when the app was never decided): (banner, sound). The banner needs the alert
 /// option and the sound needs the sound option and an unmuted app; a request without a sound (kind 0) plays none. A
 /// critical sound has no grant here, so it plays as the default sound.
@@ -589,13 +598,25 @@ impl super::Shell {
         }
     }
 
+    /// What a delivery of `req` shows for the app's Show Previews setting: hidden when set to Never, or when set to When
+    /// Unlocked and the device is locked. The shell decides at delivery, so the stored text stays hidden after unlocking.
+    fn usernotif_text(&self, slot: u8, app: &str, req: &NotifRequest) -> (String, String) {
+        let previews = self.app_notif(super::AppId::External(slot)).previews;
+        let hidden = previews == 2 || (previews == 1 && self.is_locked());
+        if !hidden {
+            return display(req);
+        }
+        let options = self.usernotif.category(app, &req.category).map_or(0, |c| c.options);
+        hidden_text(options, req)
+    }
+
     /// Shows a delivered request. `presented` is the `willPresent` plan of a request that arrived in front; None applies
     /// the grant and mute state alone.
     fn usernotif_show(&mut self, slot: u8, app: &str, req: NotifRequest, replaced: Vec<u64>, t: f64, presented: Option<u8>) {
         for id in replaced {
             self.notify_remove(id);
         }
-        let (title, body) = display(&req);
+        let (title, body) = self.usernotif_text(slot, app, &req);
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
         let (banner, sound, badge_allowed) = match presented {
@@ -994,6 +1015,16 @@ mod tests {
         r.hold(APP, 2, 1, req("gone"));
         r.forget_app(APP);
         assert!(r.take_held(APP).is_empty());
+    }
+
+    #[test]
+    fn hidden_previews_keep_only_what_the_category_asks_for() {
+        let r = NotifRequest { title: "T".into(), subtitle: "S".into(), body: "B".into(), ..Default::default() };
+        assert_eq!(hidden_text(0, &r), (String::new(), String::new()), "no option: nothing of the content shows");
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_TITLE, &r), ("T".to_string(), String::new()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, &r), (String::new(), "S".to_string()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, &r), ("T".to_string(), "S".to_string()));
+        assert_eq!(hidden_text(NOTIF_CATEGORY_CUSTOM_DISMISS, &r), (String::new(), String::new()), "the dismiss option does not show text");
     }
 
     #[test]

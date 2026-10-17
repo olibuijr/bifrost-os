@@ -140,8 +140,12 @@ pub const NOTIF_PRESENT_BANNER: u8 = 16;
 /// `UNNotificationCategoryOptions.customDismissAction`: the app hears `NOTIF_DISMISS_ACTION` when the user clears one of
 /// its notifications of this category without opening it.
 pub const NOTIF_CATEGORY_CUSTOM_DISMISS: u8 = 1;
+/// `UNNotificationCategoryOptions.hiddenPreviewsShowTitle`: the title still shows when previews are hidden.
+pub const NOTIF_CATEGORY_HIDDEN_SHOW_TITLE: u8 = 4;
+/// `UNNotificationCategoryOptions.hiddenPreviewsShowSubtitle`: the subtitle still shows when previews are hidden.
+pub const NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE: u8 = 8;
 /// Every category option bit the wire accepts.
-pub const NOTIF_CATEGORY_MASK: u8 = NOTIF_CATEGORY_CUSTOM_DISMISS;
+pub const NOTIF_CATEGORY_MASK: u8 = NOTIF_CATEGORY_CUSTOM_DISMISS | NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE;
 
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -967,6 +971,9 @@ mod tests {
     fn notification_category_options_round_trip_and_reject_unknown_bits() {
         let custom = NotifCategory { options: NOTIF_CATEGORY_CUSTOM_DISMISS, ..category() };
         shell_rt(ToShell::NotifyCategories(vec![custom]));
+        let hidden = NotifCategory { options: NOTIF_CATEGORY_HIDDEN_SHOW_TITLE | NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, ..category() };
+        shell_rt(ToShell::NotifyCategories(vec![hidden]));
+        assert_eq!(NOTIF_CATEGORY_MASK, 13);
         // tag 4, count 4, id length 4 and "c" 1 bytes come first, so the options byte is at index 13
         let mut bytes = ToShell::NotifyCategories(vec![NotifCategory { id: "c".into(), actions: vec![], options: 0 }]).encode();
         assert_eq!(bytes[13], 0);
