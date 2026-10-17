@@ -3494,7 +3494,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3515,7 +3515,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3536,7 +3536,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3557,7 +3557,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3578,7 +3578,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -3599,7 +3599,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accounts.json",
    "status": "partial",
-   "note": "private framework, owner Accounts; from SDK matrix accounts.json",
+   "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
    "method": "assessed"
   },
