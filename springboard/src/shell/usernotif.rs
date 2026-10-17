@@ -47,6 +47,8 @@ pub struct Registry {
     queued: Vec<(String, ToApp)>,
     /// requests that wait for the first-time alert of their app: app, slot, request id, request
     held: Vec<(String, u8, u32, NotifRequest)>,
+    /// `requestAuthorization` calls that wait for the first-time alert of their app: app, slot, request id
+    auth_held: Vec<(String, u8, u32)>,
 }
 
 impl Registry {
@@ -217,6 +219,17 @@ impl Registry {
         mine.into_iter().map(|(_, slot, request, req)| (slot, request, req)).collect()
     }
 
+    pub fn hold_authorization(&mut self, app: &str, slot: u8, request: u32) {
+        self.auth_held.push((app.to_string(), slot, request));
+    }
+
+    /// The app's authorization requests that waited for its answer, oldest first, as (slot, request id).
+    pub fn take_authorization(&mut self, app: &str) -> Vec<(u8, u32)> {
+        let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.auth_held).into_iter().partition(|(a, ..)| a == app);
+        self.auth_held = rest;
+        mine.into_iter().map(|(_, slot, request)| (slot, request)).collect()
+    }
+
     /// Holds an answer for an app that is not running; delivered by `take_queued` when it starts.
     pub fn queue(&mut self, app: &str, msg: ToApp) {
         let n = self.queued.iter().filter(|(a, _)| a == app).count();
@@ -241,6 +254,7 @@ impl Registry {
         self.delivered.retain(|d| d.app != app);
         self.queued.retain(|(a, _)| a != app);
         self.held.retain(|(a, ..)| a != app);
+        self.auth_held.retain(|(a, ..)| a != app);
     }
 }
 
@@ -292,6 +306,7 @@ impl super::Shell {
                 let ids = self.usernotif.list(&app, delivered);
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
             }
+            ToShell::NotifyAuthorize { request, .. } => self.usernotif_authorize(slot, &app, &name, request, permitted),
             ToShell::NotifySettings { request } => {
                 let muted = self.notify.store().is_muted(super::AppId::External(slot));
                 let settings = settings_for(permitted, muted, self.dnd());
@@ -316,7 +331,27 @@ impl super::Shell {
     /// A request of an app that was never asked waits for the first-time alert. The alert is queued once per app.
     fn usernotif_hold(&mut self, slot: u8, app: &str, name: &str, request: u32, req: NotifRequest) {
         self.usernotif.hold(app, slot, request, req);
+        self.usernotif_ask_first_time(super::AppId::External(slot), name);
+    }
+
+    /// `requestAuthorization`: an app asked before gets the stored answer (granted while its alerts are not muted). An
+    /// app never asked waits for the first-time alert and is answered after the person chose. The option bits are
+    /// validated by the protocol; the single alert switch decides all of them, so they are not stored per option.
+    fn usernotif_authorize(&mut self, slot: u8, app: &str, name: &str, request: u32, permitted: bool) {
         let id = super::AppId::External(slot);
+        if !permitted {
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: false });
+        } else if self.notify.store().is_asked(id) {
+            let granted = !self.notify.store().is_muted(id);
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted });
+        } else {
+            self.usernotif.hold_authorization(app, slot, request);
+            self.usernotif_ask_first_time(id, name);
+        }
+    }
+
+    /// Queues the first-time alert of `id` once, unless it is already queued or on screen.
+    fn usernotif_ask_first_time(&mut self, id: super::AppId, name: &str) {
         let queued = self.notify.ask_queue.iter().any(|(a, _)| *a == id);
         let showing = self.notify.ask.as_ref().is_some_and(|s| s.app() == id);
         if !queued && !showing {
@@ -368,6 +403,9 @@ impl super::Shell {
         for (slot, request, req) in self.usernotif.take_held(&app) {
             let status = if allowed { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
             self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
+        }
+        for (slot, request) in self.usernotif.take_authorization(&app) {
+            self.ext_send(slot as usize, &ToApp::NotificationAuthorized { request, granted: allowed });
         }
     }
 
@@ -469,6 +507,19 @@ mod tests {
     use bifrost_proto::TextInput;
 
     const APP: &str = "is.example.chat";
+
+    #[test]
+    fn an_authorization_waits_for_its_own_app_only() {
+        let mut r = Registry::default();
+        r.hold_authorization(APP, 2, 7);
+        r.hold_authorization("is.other", 3, 8);
+        assert_eq!(r.take_authorization(APP), vec![(2, 7)]);
+        assert!(r.take_authorization(APP).is_empty());
+        assert_eq!(r.take_authorization("is.other"), vec![(3, 8)]);
+        r.hold_authorization(APP, 2, 9);
+        r.forget_app(APP);
+        assert!(r.take_authorization(APP).is_empty());
+    }
 
     #[test]
     fn a_denied_app_is_told_nothing_is_allowed_but_still_sees_focus() {

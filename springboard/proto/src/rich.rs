@@ -109,6 +109,10 @@ impl NotifStatus {
     }
 }
 
+/// `UNAuthorizationOptions` bits a `requestAuthorization` may carry: badge 1, sound 2, alert 4, critical alert 16,
+/// provisional 64. Other bits make the message invalid.
+pub const NOTIF_AUTH_MASK: u8 = 1 | 2 | 4 | 16 | 64;
+
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NotifSettings {
@@ -502,6 +506,7 @@ pub(crate) mod tag {
     pub const NOTIFICATION_STATUS: u32 = 51;
     pub const NOTIFICATION_LIST: u32 = 52;
     pub const NOTIFICATION_SETTINGS: u32 = 56;
+    pub const NOTIFICATION_AUTHORIZED: u32 = 57;
     pub const SHARE_DONE: u32 = 53;
     pub const DRAG_DEST: u32 = 54;
     pub const DRAG_ENDED: u32 = 55;
@@ -511,6 +516,7 @@ pub(crate) mod tag {
     pub const NOTIFY_REMOVE: u32 = 0x142;
     pub const NOTIFY_QUERY: u32 = 0x143;
     pub const NOTIFY_SETTINGS: u32 = 0x14a;
+    pub const NOTIFY_AUTHORIZE: u32 = 0x14b;
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -550,6 +556,11 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             u32_(b, tag::NOTIFICATION_SETTINGS);
             u32_(b, *request);
             b.push(settings.bits());
+        }
+        ToApp::NotificationAuthorized { request, granted } => {
+            u32_(b, tag::NOTIFICATION_AUTHORIZED);
+            u32_(b, *request);
+            b.push(*granted as u8);
         }
         ToApp::ShareDone { request, target } => {
             u32_(b, tag::SHARE_DONE);
@@ -603,6 +614,7 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
         tag::NOTIFICATION_STATUS => ToApp::NotificationStatus { request: r.u32()?, status: NotifStatus::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_LIST => ToApp::NotificationList { request: r.u32()?, delivered: flag(r)?, ids: get_ids(r)? },
         tag::NOTIFICATION_SETTINGS => ToApp::NotificationSettings { request: r.u32()?, settings: NotifSettings::from_bits(r.u8()?).ok_or(DecodeError::BadValue)? },
+        tag::NOTIFICATION_AUTHORIZED => ToApp::NotificationAuthorized { request: r.u32()?, granted: flag(r)? },
         tag::DIST_NOTIFY => {
             let (name, user_info) = get_dist(r)?;
             ToApp::DistNotify { name, user_info }
@@ -661,6 +673,11 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
         ToShell::NotifySettings { request } => {
             u32_(b, tag::NOTIFY_SETTINGS);
             u32_(b, *request);
+        }
+        ToShell::NotifyAuthorize { request, options } => {
+            u32_(b, tag::NOTIFY_AUTHORIZE);
+            u32_(b, *request);
+            b.push(*options);
         }
         ToShell::DistPost { name, user_info } => {
             u32_(b, tag::DIST_POST);
@@ -721,6 +738,13 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
         tag::NOTIFY_REMOVE => ToShell::NotifyRemove { delivered: flag(r)?, ids: get_ids(r)? },
         tag::NOTIFY_QUERY => ToShell::NotifyQuery { request: r.u32()?, delivered: flag(r)? },
         tag::NOTIFY_SETTINGS => ToShell::NotifySettings { request: r.u32()? },
+        tag::NOTIFY_AUTHORIZE => {
+            let (request, options) = (r.u32()?, r.u8()?);
+            if options & !NOTIF_AUTH_MASK != 0 {
+                return Err(DecodeError::BadValue);
+            }
+            ToShell::NotifyAuthorize { request, options }
+        }
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
             ToShell::DistPost { name, user_info }
@@ -823,6 +847,28 @@ mod tests {
         let mut bytes = ToApp::NotificationSettings { request: 1, settings: NotifSettings { authorized: true, ..Default::default() } }.encode();
         let last = bytes.len() - 1;
         bytes[last] = 0x20;
+        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_authorization_round_trips() {
+        for options in [0u8, 1, 2, 4, 16, 64, NOTIF_AUTH_MASK] {
+            shell_rt(ToShell::NotifyAuthorize { request: 21, options });
+        }
+        app_rt(ToApp::NotificationAuthorized { request: 21, granted: true });
+        app_rt(ToApp::NotificationAuthorized { request: 22, granted: false });
+    }
+
+    #[test]
+    fn notification_authorization_rejects_unknown_option_bits() {
+        assert_eq!(ToShell::NotifyAuthorize { request: 1, options: NOTIF_AUTH_MASK }.encode().last(), Some(&NOTIF_AUTH_MASK));
+        let mut bytes = ToShell::NotifyAuthorize { request: 1, options: 2 }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 0x08;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        let mut bytes = ToApp::NotificationAuthorized { request: 1, granted: true }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 2;
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
     }
 

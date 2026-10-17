@@ -160,6 +160,13 @@ fn headless_the_settings_query_is_sent_with_its_request_id() {
 }
 
 #[test]
+fn headless_request_authorization_sends_the_known_option_bits_and_drops_the_rest() {
+    let ctx = testing_ctx();
+    let request = usernotif::request_authorization(&ctx, AuthorizationOptions(2 | 4 | 0x80));
+    assert_eq!(ctx.take_sent(), vec![ToShell::NotifyAuthorize { request, options: 2 | 4 }]);
+}
+
+#[test]
 fn headless_settings_flags_pack_into_one_byte_with_focus_on_bit_four() {
     let flags = NotifSettings { authorized: true, alert: true, sound: true, badge: true, focus: false };
     assert_eq!(flags.bits(), 15);
