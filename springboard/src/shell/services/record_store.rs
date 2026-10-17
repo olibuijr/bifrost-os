@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn changes_answer_the_records_only_when_the_revision_moved() {
         let mut store = MemoryDataStore::new();
-        put(&mut store, 1, "first").unwrap();
+        put(&mut store, 1.0, "first").unwrap();
         let moved = changes_json(&store, 7, 3, "Note");
         assert_eq!(moved.get("changed"), Some(&Json::Bool(true)));
         assert_eq!(moved.get("records").and_then(Json::as_array).map(|r| r.len()), Some(1));

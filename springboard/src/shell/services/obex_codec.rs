@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn an_app_that_is_not_installed_gets_no_link() {
         let req = obj(vec![("addr", Json::Str("AA:BB:CC:DD:EE:FF".into())), ("channel", Json::Num(3.0)), ("hex", Json::Str("8000".into()))]);
-        assert!(exchange("app.nobody", &req).unwrap_err().contains("first-party"));
+        assert!(ObexCodec::default().start("app.nobody", &req).unwrap_err().contains("first-party"));
     }
 
     #[test]

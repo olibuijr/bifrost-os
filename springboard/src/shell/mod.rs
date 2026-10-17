@@ -3327,7 +3327,8 @@ impl Shell {
     fn send_app_signals(&self, signals: &[background::Signal]) {
         for &(slot, sig) in signals {
             if let Some(pid) = self.ext.get(slot as usize).and_then(|h| h.as_ref()).and_then(|h| h.pid()) {
-                crate::bare::sys::kill(pid as i32, sig);
+                // SAFETY: kill(2) takes plain integers; a gone pid only returns ESRCH
+                unsafe { crate::bare::sys::kill(pid as i32, sig) };
             }
         }
     }
