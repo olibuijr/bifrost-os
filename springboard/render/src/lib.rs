@@ -36,6 +36,7 @@ pub mod texture;
 pub mod colorfx;
 pub mod colorcube;
 pub mod gradient;
+pub mod pbr;
 pub mod colorspace;
 pub mod rendering_intent;
 pub mod icc;

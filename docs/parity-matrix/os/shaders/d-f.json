@@ -148,7 +148,21 @@
    "status": "partial",
    "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    }
+   ],
+   "ready_note": "Ready: the depth-driven blur (springboard/render/src/depth_blur.rs) and the portrait relighting (springboard/render/src/portrait_lighting.rs, relight) run as CPU pixel code, with tests render::depth_blur::tests and render::portrait_lighting::tests. The depth or matte input still comes from the caller."
   },
   {
    "id": "path:/System/Library/CoreServices/GameOverlayUI.app/Contents/Resources/default.metallib",
@@ -211,7 +225,16 @@
    "status": "partial",
    "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists. Built 2026-10-17: render::demosaic bilinear Bayer demosaic for the four CFA layouts; tests render::demosaic::tests. Still missing: RAW colour and tone shaders.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "demosaic::tests"
+    }
+   ],
+   "ready_note": "Ready for the demosaic piece: springboard/render/src/demosaic.rs is a bilinear Bayer demosaic for the four CFA layouts, with tests render::demosaic::tests. RAW colour matrix and tone shaders are still missing, so this library stays partial."
   },
   {
    "id": "path:/System/Library/CoreServices/default.metallib",
@@ -293,9 +316,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. Still missing: the animated poster renderer that calls them.",
+   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated poster renderer is gradient::animated_frame.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    }
+   ],
+   "ready_note": "Ready: springboard/render/src/gradient.rs provides the per-pixel animated poster frame (animated_frame, cross_fade over ping_pong_phase), with tests render::gradient::tests. Wallpapers are still shipped as static images; this renderer is the piece they would use."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Monterey.appex/Contents/Resources/default.metallib",
@@ -356,9 +388,18 @@
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
    "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. Still missing: the animated wallpaper renderer that calls them.",
+   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated wallpaper renderer is gradient::animated_frame, which calls them.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gradient::tests"
+    }
+   ],
+   "ready_note": "Ready: springboard/render/src/gradient.rs provides the per-pixel animated poster frame (animated_frame, cross_fade over ping_pong_phase), with tests render::gradient::tests. Wallpapers are still shipped as static images; this renderer is the piece they would use."
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/ei_rt_g13.metallib",
@@ -610,7 +651,16 @@
    "status": "partial",
    "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn. Built 2026-10-17: ui::chart_marks::area_fill_alpha (top-to-baseline fill fade) and glow_alpha (glow falloff); tests ui::chart_marks::tests. Not yet called by the chart painter, so the gradient and glow are still not drawn.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "chart_marks::tests"
+    }
+   ],
+   "ready_note": "Ready: the chart fill and glow falloff are CPU kernels in springboard/ui/src/chart_marks.rs (area_fill_alpha, glow_alpha), with tests ui::chart_marks::tests. The chart painter does not call them yet."
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework/Versions/A/Resources/default.metallib",
@@ -970,7 +1020,26 @@
    "status": "partial",
    "note": "BifrOSt has CPU spatial (bicubic) and temporal (jittered history) upscalers; no GPU or ML-based path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "temporal_upscale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "lanczos::tests"
+    }
+   ],
+   "ready_note": "Ready: CPU spatial upscalers (springboard/render/src/upscale.rs, lanczos.rs) and the temporal upscaler (springboard/render/src/temporal_upscale.rs), with tests render::upscale::tests, render::lanczos::tests and render::temporal_upscale::tests. No GPU or ML path."
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSCore.framework/Versions/A/Resources/default.metallib",
