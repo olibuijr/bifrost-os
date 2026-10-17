@@ -5,10 +5,12 @@
 
 pub mod accounts;
 pub mod api;
+pub mod attachment;
 pub mod crypto;
 pub mod draw;
 pub mod model;
 pub mod protocol;
+pub mod state_file;
 pub mod store;
 pub mod sync;
 pub mod window;

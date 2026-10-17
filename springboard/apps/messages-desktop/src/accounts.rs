@@ -34,6 +34,30 @@ pub fn from_rows(rows: &[keychain::Row]) -> Vec<Account> {
     rows.iter().filter_map(|row| from_item(&row.service, &row.account)).collect()
 }
 
+/// The account a login is stored under once the server has signed it in: the full user id the login response gives
+/// (`@alice:example.org`), whatever was typed (a bare `alice` or a different case). The server's id is always used when
+/// it has one; the typed name is kept only when the response gave none.
+pub fn stored_user(typed: &str, server_user_id: &str) -> String {
+    let server = server_user_id.trim();
+    if server.is_empty() {
+        typed.trim().to_string()
+    } else {
+        server.to_string()
+    }
+}
+
+/// The name a login was saved under before, when it differs from the stored one. Its items (the Passwords login and the
+/// crypto items) are moved to the stored name and removed under this one. `None` when the names agree.
+pub fn moved_from(typed: &str, stored: &str) -> Option<String> {
+    let typed = typed.trim();
+    (typed != stored && !typed.is_empty()).then(|| typed.to_string())
+}
+
+/// Whether `user` is a full Matrix user id (`@localpart:server`).
+pub fn is_full_user_id(user: &str) -> bool {
+    user.strip_prefix('@').and_then(|rest| rest.split_once(':')).is_some_and(|(local, server)| !local.is_empty() && !server.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,5 +95,28 @@ mod tests {
         assert_eq!(accounts.len(), 2);
         assert_eq!(accounts[0].user, "@one:a.example");
         assert_eq!(accounts[1].homeserver, "https://b.example");
+    }
+
+    #[test]
+    fn the_stored_name_is_the_full_id_the_server_returned() {
+        assert_eq!(stored_user("alice", "@alice:example.org"), "@alice:example.org");
+        assert_eq!(stored_user("@Alice:example.org", "@alice:example.org"), "@alice:example.org");
+        assert_eq!(stored_user("alice", "  "), "alice", "no server id keeps the typed name");
+    }
+
+    #[test]
+    fn a_bare_localpart_login_is_moved_to_the_full_id() {
+        let stored = stored_user("alice", "@alice:example.org");
+        assert_eq!(moved_from("alice", &stored).as_deref(), Some("alice"), "the bare item is moved away");
+        assert_eq!(moved_from("@alice:example.org", &stored), None, "a full id needs no move");
+        assert_eq!(moved_from("  ", &stored), None);
+    }
+
+    #[test]
+    fn only_full_matrix_ids_count_as_normalised() {
+        assert!(is_full_user_id("@alice:example.org"));
+        assert!(!is_full_user_id("alice"));
+        assert!(!is_full_user_id("@alice"));
+        assert!(!is_full_user_id("@:example.org"));
     }
 }

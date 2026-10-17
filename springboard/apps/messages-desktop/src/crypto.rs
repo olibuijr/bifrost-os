@@ -3,10 +3,11 @@
 //! Megolm session per encrypted room, the wire shapes of the key endpoints and to-device messages, the rotation policy,
 //! and the pickles that keep the state. Nothing here opens a connection: [`crate::api`] makes the calls.
 //!
-//! The state is kept in the app's keychain (see [`KEY_ITEM`], [`DEVICE_ITEM`] and [`SESSIONS_ITEM`]): the device's account
-//! pickle is reloaded at the next sign-in of the same account on this machine, and every pickle is encrypted with the
-//! key item. Not done yet: device verification (every device is unverified, and the room info must say so), key backup,
-//! cross-signing, and pictures or reactions in encrypted rooms (refused by [`crate::api`]).
+//! The state is kept in two places. The pickle key and the device's account pickle are keychain items (see [`KEY_ITEM`]
+//! and [`DEVICE_ITEM`]), reloaded at the next sign-in of the same account on this machine. The sessions (Megolm and Olm)
+//! are too large for a keychain item, so they go to an encrypted file (see [`crate::state_file`]), sealed with the pickle
+//! key. Every pickle is encrypted with the pickle key. Not done yet: device verification (every device is unverified,
+//! and the room info must say so), key backup, cross-signing, and reactions in encrypted rooms (refused by [`crate::api`]).
 
 use crate::protocol::{self, Body, Ciphertext, Event, ToDevice};
 use bifrost_core::json::{self, Json};
@@ -15,7 +16,7 @@ use vodozemac::megolm::{
     GroupSession, GroupSessionPickle, InboundGroupSession, InboundGroupSessionPickle, MegolmMessage, SessionConfig as MegolmConfig,
     SessionKey,
 };
-use vodozemac::olm::{Account, AccountPickle, OlmMessage, Session, SessionConfig as OlmConfig};
+use vodozemac::olm::{Account, AccountPickle, OlmMessage, Session, SessionConfig as OlmConfig, SessionPickle};
 use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature};
 
 /// The algorithm of the Olm messages that carry room keys between devices.
@@ -118,12 +119,13 @@ impl Machine {
         self.dirty = true;
     }
 
-    /// The Megolm sessions, encrypted with `key`, as the sessions item: one record per line, `out` for an outbound
-    /// session (room, created time, message count, members, pickle) and `in` for an inbound one (room, session id,
-    /// pickle). `None` when there are none. The Olm sessions are not kept: they only carry room keys, which are sent
-    /// again at rotation and for new devices.
+    /// The sessions, each pickle encrypted with `key`, one record per line: `out` for an outbound Megolm session (room,
+    /// created time, message count, members, shared devices, pickle), `in` for an inbound one (room, session id,
+    /// pickle) and `olm` for an Olm session (the peer's curve25519 key, pickle). Olm sessions are kept so a room key
+    /// message still in flight can be opened after a restart. `None` when there are none. The caller stores the text
+    /// under an AEAD seal (see [`crate::state_file`]); the file is never written in the clear.
     fn sessions_blob(&self, key: &[u8; 32]) -> Option<String> {
-        if self.outbound.is_empty() && self.inbound.is_empty() {
+        if self.outbound.is_empty() && self.inbound.is_empty() && self.olm.is_empty() {
             return None;
         }
         let mut lines = Vec::new();
@@ -139,6 +141,9 @@ impl Machine {
         }
         for ((room, session_id), session) in &self.inbound {
             lines.push(format!("in\t{room}\t{session_id}\t{}", session.pickle().encrypt(key)));
+        }
+        for (curve, session) in &self.olm {
+            lines.push(format!("olm\t{curve}\t{}", session.pickle().encrypt(key)));
         }
         Some(lines.join("\n"))
     }
@@ -165,6 +170,10 @@ impl Machine {
                         InboundGroupSession::from_pickle(InboundGroupSessionPickle::from_encrypted(pickle, key).map_err(|e| e.to_string())?);
                     self.inbound.insert((room.to_string(), session_id.to_string()), session);
                 }
+                ["olm", curve, pickle] => {
+                    let session = Session::from_pickle(SessionPickle::from_encrypted(pickle, key).map_err(|e| e.to_string())?);
+                    self.olm.insert(curve.to_string(), session);
+                }
                 _ => continue,
             }
             loaded += 1;
@@ -172,8 +181,8 @@ impl Machine {
         Ok(loaded)
     }
 
-    /// The state to write to the keychain, when it changed since the last call and a pickle key is set. The items are
-    /// the pickle key, the device (its id and encrypted account pickle), and the Megolm and Olm sessions (encrypted).
+    /// The state to write, when it changed since the last call and a pickle key is set: the pickle key and the device
+    /// (keychain items), and the sessions text for the sessions file.
     pub fn snapshot(&mut self) -> Option<Snapshot> {
         let key = self.pickle_key?;
         if !std::mem::take(&mut self.dirty) {
@@ -621,17 +630,24 @@ impl Machine {
 
 /// A new 32-byte pickle key from the kernel's random source.
 pub fn new_pickle_key() -> Result<[u8; 32], String> {
+    random_bytes()
+}
+
+/// `N` random bytes from the kernel's random source (`/dev/urandom`).
+pub fn random_bytes<const N: usize>() -> Result<[u8; N], String> {
     use std::io::Read;
-    let mut key = [0u8; 32];
-    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut key)).map_err(|e| e.to_string())?;
-    Ok(key)
+    let mut bytes = [0u8; N];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut bytes)).map_err(|e| e.to_string())?;
+    Ok(bytes)
 }
 
 /// The keychain items the crypto state lives in. Each is one app keychain item per homeserver (service = prefix plus the
-/// homeserver address) and per login (account = the user id as typed at sign-in), so the same account on this machine
-/// finds its device again. The pickle key is its own item, and every pickle is encrypted with it.
+/// homeserver address) and per login (account = the full Matrix user id the server returned at sign-in), so the same
+/// account on this machine finds its device again. The pickle key is its own item, and every pickle is encrypted with it.
 pub const KEY_ITEM: &str = "matrix-key:";
 pub const DEVICE_ITEM: &str = "matrix-device:";
+/// The sessions item of earlier versions. The keychain caps an item at 8 KiB, so the sessions are now in a file (see
+/// [`crate::state_file`]); this item is only read once, to migrate it, and then deleted.
 pub const SESSIONS_ITEM: &str = "matrix-sessions:";
 
 /// The keychain service of one of the crypto items for `homeserver`.
@@ -666,8 +682,8 @@ pub fn parse_device_item(value: &str) -> Option<(&str, &str)> {
     value.split_once('\n')
 }
 
-/// The state to write to the keychain after a change: the key item, the device item and the sessions item (`None`
-/// when there are no sessions to save yet).
+/// The state to write after a change: the key item and the device item (keychain), and the sessions text (`None` when
+/// there are no sessions to save yet), which the caller seals into the sessions file with the key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
     pub key: String,
@@ -940,5 +956,32 @@ mod tests {
         let back = Machine::restore("@a:x", "DEVA", &key, &pickled).unwrap();
         assert_eq!(back.identity(), m.identity());
         assert!(Machine::restore("@a:x", "DEVA", &[1u8; 32], &pickled).is_err(), "the wrong key does not open it");
+    }
+
+    #[test]
+    fn the_sessions_text_keeps_olm_and_megolm_sessions_across_a_reload() {
+        let key = [7u8; 32];
+        let mut m = Machine::new("@alice:example.org", "DEV1");
+        let peer = Curve25519PublicKey::from_bytes([9u8; 32]);
+        let session = m.account.create_outbound_session(OlmConfig::version_2(), peer, peer);
+        m.olm.insert("peer-curve".to_string(), session);
+        m.outbound.insert(
+            "!room:example.org".to_string(),
+            (GroupSession::new(MegolmConfig::version_1()), Outbound { created_ms: 5, messages: 2, members: vec!["@bob:example.org".into()], shared: Vec::new() }),
+        );
+        let blob = m.sessions_blob(&key).expect("sessions");
+        assert!(blob.lines().any(|l| l.starts_with("olm\tpeer-curve\t")));
+        let mut back = Machine::new("@alice:example.org", "DEV1");
+        assert_eq!(back.load_sessions(&key, &blob), Ok(2));
+        assert!(back.olm.contains_key("peer-curve"));
+        assert_eq!(back.outbound.get("!room:example.org").map(|(_, s)| s.messages), Some(2));
+        assert!(back.load_sessions(&[8u8; 32], &blob).is_err(), "a wrong pickle key does not open the sessions");
+    }
+
+    #[test]
+    fn random_bytes_are_not_all_zero_and_differ() {
+        let a: [u8; 32] = random_bytes().unwrap();
+        let b: [u8; 32] = random_bytes().unwrap();
+        assert_ne!(a, b);
     }
 }
