@@ -1017,17 +1017,17 @@ impl Settings {
     /// The Screen Time pages from the day files and the config on disk.
     fn st_spec(&self, id: PageId) -> super::list::Spec {
         let (cfg, days) = &self.loads.screentime.value;
-        let passcode_on = passcode::Store::load(self.data_dir.join("screentime_passcode.ini")).enabled();
+        let passcode_on = screentime::passcode(&self.data_dir).enabled();
         screentime::page::spec(id, &StView { weekly: self.st_weekly, days: days.as_slice(), cfg, passcode_on, clock_24h: self.opts.clock_24h })
     }
 
     /// A Screen Time row was tapped: the passcode keypad first when it guards the edit.
     fn st_edit(&mut self, ui: &Ui, edit: StEdit) {
-        let pass = self.data_dir.join("screentime_passcode.ini");
+        let pass = screentime::passcode(&self.data_dir);
         if let StEdit::Passcode(purpose, custom) = edit {
-            self.passcode = Some(Overlay::new(&pass, purpose, custom, self.w, self.h));
-        } else if edit.needs_passcode() && Lock::required(&pass) {
-            self.st_gate = Some((Lock::new(&pass, self.w, self.h), edit));
+            self.passcode = Some(Overlay::with_store(pass, purpose, custom, self.w, self.h));
+        } else if edit.needs_passcode() && pass.enabled() {
+            self.st_gate = Some((Lock::with_store(pass, self.w, self.h), edit));
         } else {
             self.st_apply(ui, edit);
         }
