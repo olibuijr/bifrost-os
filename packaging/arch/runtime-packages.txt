@@ -119,3 +119,7 @@ ffmpeg
 gdb
 rdma-core
 espeak-ng
+audit
+krb5
+mandoc
+davfs2

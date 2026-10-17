@@ -81,7 +81,16 @@
    "status": "partial",
    "note": "BifrOSt launchctl maps list, print, start, stop, enable, disable and kickstart onto systemctl --user; launchd domains and plist load/unload are not reproduced; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "launchctl::"
+    }
+   ],
+   "ready_note": "launchctl maps list/print/start/stop/enable/disable/kickstart onto systemctl --user; module tests"
   },
   {
    "id": "path:/bin/link",
@@ -309,7 +318,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: json_pp installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/json_pp"
+    }
+   ],
+   "ready_note": "perl json_pp"
   },
   {
    "id": "path:/usr/bin/json_xs",
@@ -351,7 +368,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: klist installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    }
+   ],
+   "ready_note": "krb5 klist (added to runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/kdestroy",
@@ -372,7 +397,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kdestroy installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kdestroy"
+    }
+   ],
+   "ready_note": "krb5 kdestroy"
   },
   {
    "id": "path:/usr/bin/kextutil",
@@ -506,7 +539,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kinit installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    }
+   ],
+   "ready_note": "krb5 kinit"
   },
   {
    "id": "path:/usr/bin/kmutil",
@@ -548,7 +589,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kpasswd installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kpasswd"
+    }
+   ],
+   "ready_note": "krb5 kpasswd"
   },
   {
    "id": "path:/usr/bin/krb5-config",
@@ -653,7 +702,16 @@
    "status": "partial",
    "note": "BifrOSt parses and reports Linux acct_v3 records from /var/account/pacct. The OS does not enable process accounting or create the file, and user names and rotated logs are not handled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "lastcomm::"
+    }
+   ],
+   "ready_note": "parses acct_v3 pacct records; module tests"
   },
   {
    "id": "path:/usr/bin/lastwords",
@@ -2423,7 +2481,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kadmin installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin"
+    }
+   ],
+   "ready_note": "krb5 kadmin"
   },
   {
    "id": "path:/usr/sbin/kadmin.local",
@@ -2444,7 +2510,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kadmin.local installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin.local"
+    }
+   ],
+   "ready_note": "krb5 kadmin.local"
   },
   {
    "id": "path:/usr/sbin/kcditto",
@@ -2756,7 +2830,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/lpc"
+    }
+   ],
+   "ready_note": "cups provides lpc"
   },
   {
    "id": "path:/usr/sbin/lpinfo",

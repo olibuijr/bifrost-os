@@ -998,11 +998,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/uudecode",
+   "bifrost": "springboard/cmd/src/bin/b64decode.rs; springboard/cmd/src/b64.rs",
    "status": "partial",
    "note": "provided by Arch package sharutils; not yet verified on Midget. uudecode -m decodes base64 from sharutils; the b64decode name is not installed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "b64::"
+    }
+   ],
+   "ready_note": "b64 decode in springboard/cmd; -r accepted; no begin-base64 header check"
   },
   {
    "id": "path:/usr/bin/b64encode",
@@ -1019,11 +1028,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/uuencode",
+   "bifrost": "springboard/cmd/src/bin/b64encode.rs; springboard/cmd/src/b64.rs",
    "status": "partial",
    "note": "provided by Arch package sharutils; not yet verified on Midget. uuencode -m encodes base64 from sharutils; the b64encode name is not installed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "b64::"
+    }
+   ],
+   "ready_note": "b64 encode in springboard/cmd; -r for unwrapped output; no begin-base64 header or -w"
   },
   {
    "id": "path:/usr/bin/banner",
@@ -4516,7 +4534,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: auditd installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/auditd"
+    }
+   ],
+   "ready_note": "audit package provides auditd"
   },
   {
    "id": "path:/usr/sbin/auditreduce",
@@ -4810,7 +4836,15 @@
    "status": "partial",
    "note": "provided by Arch package cronie; not yet verified on Midget. the cron daemon; the package does not enable it",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/crond"
+    }
+   ],
+   "ready_note": "cronie provides crond"
   },
   {
    "id": "path:/usr/sbin/cupsaccept",
@@ -4889,7 +4923,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget. the CUPS scheduler; the package does not enable it",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsd"
+    }
+   ],
+   "ready_note": "cups provides cupsd"
   },
   {
    "id": "path:/usr/sbin/cupsfilter",

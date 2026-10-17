@@ -3,11 +3,13 @@
 
 pub mod defaults;
 pub mod ditto;
+pub mod b64;
 pub mod caffeinate;
 pub mod control;
 pub mod network;
 pub mod notifyutil;
 pub mod networksetup;
+pub mod newsyslog;
 pub mod diskutil;
 pub mod launchctl;
 pub mod leave;
