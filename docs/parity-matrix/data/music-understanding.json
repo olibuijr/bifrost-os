@@ -40,7 +40,7 @@
       "apple": "LoudnessResult, loudnessResults async sequence, AnalysisType.loudness",
       "bifrost": "springboard/apps/daw/src/lab.rs (integrated_lufs, max_momentary_lufs, max_short_term_lufs, measure: true peak, band energy)",
       "status": "partial",
-      "note": "Integrated LUFS with both gates, maximum momentary and maximum short-term LUFS, and true peak are ITU-R BS.1770 code for the DAW lab, tested in springboard/apps/daw/tests/parity_sdk-tests-08.rs. Gap: no live momentary or short-term meter, no streaming results, and no SDK API."
+      "note": "Integrated LUFS with both gates, maximum momentary and maximum short-term LUFS, and true peak are ITU-R BS.1770 code for the DAW lab, tested in springboard/apps/daw/tests/parity_sdk-tests-08.rs. Gap: no live momentary or short-term meter, no streaming results, and no SDK API. Built 2026-10-17: SDK loudness analysis in bifrost_ui::loudness (K-weighted integrated, momentary and short-term LUFS of a mono buffer), run by AnalysisType::Loudness into SessionResult.loudness; tests loudness::tests and music::tests; SDK test music_understanding::tests. True peak and the DAW's stereo measures stay in the DAW lab."
     },
     {
       "feature": "Pace",
@@ -84,7 +84,7 @@
     "Musical key detection on audio (KeyResult).",
     "Structure segmentation (sections, segments, phrases) and pace analysis.",
     "Instrument activity detection and source separation.",
-    "Loudness exists only as private DAW lab code: no momentary or short-term values, no streaming results, no SDK surface.",
+    "Loudness: no live momentary or short-term meter and no streaming results; the offline values are in the SDK (see the Loudness feature), and true peak is still DAW-only.",
     "No buffer-stream input for analysis; decoders only return whole files to the DAW."
   ]
 }

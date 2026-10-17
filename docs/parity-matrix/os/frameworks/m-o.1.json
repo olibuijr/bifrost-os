@@ -603,7 +603,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/music-understanding.json",
    "status": "partial",
-   "note": "from SDK matrix music-understanding.json",
+   "note": "from SDK matrix music-understanding.json Built 2026-10-17: loudness analysis (integrated, momentary and short-term LUFS) in the SDK, tests loudness::tests and music::tests; instrument activity and source separation are still open.",
    "rea": [],
    "method": "assessed"
   },

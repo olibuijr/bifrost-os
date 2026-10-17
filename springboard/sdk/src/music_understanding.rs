@@ -1,13 +1,15 @@
 //! `MusicUnderstanding` for apps (see `docs/parity/music-understanding.md`): run analyses over audio the app already
 //! holds and get time-stamped results. The model and the analyses live in `bifrost_ui::music`; decoding files is the
 //! app's job (`springboard::media` decodes FLAC, Ogg Vorbis, WAV and MP3 for the DAW). Implemented: rhythm, key over
-//! time and structure (segment boundaries). Loudness, instrument activity and the rest are not yet implemented.
+//! time, structure (segment boundaries) and loudness (integrated and maximum momentary and short-term LUFS).
+//! Instrument activity and the rest are not yet implemented.
 
 pub use bifrost_ui::music::{
     analyze_key, analyze_rhythm, chroma_frames, key_from_chroma, segment_frames, AnalysisType, Key, KeyResult, Mode,
     MusicUnderstandingError, MusicUnderstandingSession, RangedValue, RhythmResult, SessionResult, StructureResult,
     TimedValue,
 };
+pub use bifrost_ui::loudness::{measure as measure_loudness, LoudnessResult};
 
 /// One call for interleaved PCM: mix down to mono, then run every supported analysis.
 pub fn analyze_interleaved(samples: &[f32], channels: usize, sample_rate: u32) -> Result<SessionResult, MusicUnderstandingError> {
@@ -62,11 +64,20 @@ mod tests {
     }
 
     #[test]
-    fn loudness_is_named_as_unsupported_until_it_exists() {
+    fn loudness_is_measured_for_a_tone() {
+        let tone: Vec<f32> = (0..44100 * 3).map(|i| (0.5 * (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / 44100.0).sin()) as f32).collect();
+        let session = MusicUnderstandingSession::new(tone, 44100).unwrap();
+        let loudness = session.analyze_for(&[AnalysisType::Loudness]).unwrap().loudness.expect("loudness");
+        assert!(loudness.integrated_lufs.is_finite());
+        assert!(loudness.short_term_max_lufs.is_finite());
+    }
+
+    #[test]
+    fn instrument_activity_is_named_as_unsupported_until_it_exists() {
         let session = MusicUnderstandingSession::new(vec![0.0f32; 100], 44100).unwrap();
         assert_eq!(
-            session.analyze_for(&[AnalysisType::Loudness]).unwrap_err(),
-            MusicUnderstandingError::Unsupported(AnalysisType::Loudness)
+            session.analyze_for(&[AnalysisType::InstrumentActivity]).unwrap_err(),
+            MusicUnderstandingError::Unsupported(AnalysisType::InstrumentActivity)
         );
     }
 }

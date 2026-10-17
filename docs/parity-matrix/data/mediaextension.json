@@ -61,7 +61,7 @@
     "No public extension point for third-party format readers, video decoders or RAW processors.",
     "No public track reader or sample cursor API for apps; sample cursors are internal to springboard/src/media/demux/.",
     "No RAW image processing (camera RAW decode, processing parameters) in springboard/render/src/imgdec.rs.",
-    "No property-list or manifest mechanism that registers a decoder for a four-character codec type.",
+    "Codec manifests (a property-list dictionary with FourCC, Name and Professional) are read and registered by bifrost_ui::codec_manifest; no extension ships a decoder through one yet.",
     "No extension host or entitlement that loads a sandboxed plug-in to read a format or decode a codec.",
     "VideoDecoder is an internal trait with one implementation; there is no second decoder or per-frame decode options."
   ]
