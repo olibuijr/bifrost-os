@@ -562,6 +562,7 @@ pub mod identity;
 pub mod reachability;
 /// The route flags for a host or address, computed from the network path (`SCNetworkReachabilityFlags`).
 pub mod reachability_flags;
+pub mod reachability_watch;
 pub mod auth_events;
 pub mod identity_events;
 pub mod memory_events;
