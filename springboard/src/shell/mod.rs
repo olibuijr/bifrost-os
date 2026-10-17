@@ -3537,14 +3537,18 @@ impl Shell {
     }
 
     /// Shows the Picture in Picture window (the delegate events are for the app, which the caller delivers).
-    #[allow(dead_code)] // not wired yet: no player reports that it can show a window
     pub(super) fn pip_start(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
         self.dirty = true;
         self.pip.start()
     }
 
+    /// A player says whether it can show the Picture in Picture window. Turning that off takes a showing window down.
+    pub(super) fn pip_possible(&mut self, on: bool) -> Vec<bifrost_ui::pip_window::Event> {
+        self.dirty = true;
+        self.pip.controller.set_possible(on).into_iter().collect()
+    }
+
     /// Takes the Picture in Picture window down.
-    #[allow(dead_code)] // not wired yet: no player reports that it can show a window
     pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
         self.dirty = true;
         self.pip.stop()
