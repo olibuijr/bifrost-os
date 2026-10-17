@@ -9,7 +9,7 @@
 //!
 //! Reading: [`import_path`] reads at most [`MAX_HEAD`] bytes from the start of a file, so a large file costs a bounded
 //! read. Gaps: no plug-in loading from bundles (the table is compiled in), no importers for binary formats (PDF, office
-//! and image metadata), and no directory walk that feeds the index; the caller decides which files to import.
+//! and image metadata). The directory walk that feeds the index is `scan_folder` in the shell's `spotindex`.
 
 use super::uttype;
 use std::collections::BTreeMap;

@@ -1719,7 +1719,31 @@
    "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_resolve.rs, springboard/sdk/src/donations.rs",
    "status": "partial",
    "note": "Built 2026-10-17: cross-app donation index in springboard/sdk/src/donations.rs (SharedDonationIndex: donations from every app ranked together, forget_app; tests donations::shared_tests). Built 2026-10-17: the index is saved and loaded (SharedDonationIndex::save, load, to_json, from_json; tests donations::shared_tests). Open: the shell suggestion list does not read it yet, so the row stays partial.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_resolve::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "donations::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "donations::shared_tests"
+    }
+   ],
+   "ready_note": "The App Intents link job is done by the SDK: apps declare typed intents and entity queries (intents.rs), parameter resolution and confirmation run before an intent performs (intent_resolve.rs), and runs are donated and ranked across apps with a saved shared index (donations.rs). Open: the shell's Search suggestion list does not read the shared index yet."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.liveactivitiesd.plist",
@@ -1779,7 +1803,21 @@
    "bifrost": "springboard/sdk/src/locale.rs, springboard/core/src/language_generation.rs, springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "Built 2026-10-17: language generation file in springboard/sdk/src/locale.rs (announce_language_change, language_generation, LanguageWatch; tests locale::tests). Built 2026-10-17: Language & Region calls announce_language_change when the language list changes (settings.rs change_region). The model moved to bifrost-core and the SDK re-exports it (tests in bifrost-core language_generation::tests). Open: apps do not yet reload their strings on LanguageWatch.changed, so the row stays partial.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "language_generation::tests"
+    }
+   ],
+   "ready_note": "A language change is announced through the language generation file (announce_language_change, LanguageWatch) that Language & Region writes when the list changes; apps read it through the SDK locale module. Open: apps do not yet reload their strings on LanguageWatch.changed."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.locationaccessstored.plist",
@@ -2768,10 +2806,34 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/core_ml.rs, springboard/sdk/src/inference.rs, springboard/ui/src/ml_runtime.rs, springboard/ui/src/ml_model.rs",
    "status": "gap",
-   "note": "On-demand machine learning runtime that apps reach over an XPC service. Build a model loading and inference service in the SDK; hamr serves language models only and is not a general model runtime.",
-   "rea": []
+   "note": "On-demand machine learning runtime for apps. Built: model loading and inference in the SDK (core_ml.rs, inference.rs over bifrost_ui ml_runtime and ml_model).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_ml::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "inference::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_runtime::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_model::tests"
+    }
+   ],
+   "ready_note": "Apps load and run models through the SDK (core_ml.rs: named models in an AnalysisRuntime, feature values in and out, a compute policy, typed input and output signatures in inference.rs); the runtime is linked into the app, so no separate service process is needed. Models run on the CPU evaluator (dense, relu, softmax); there is no accelerator, no model download or compile step, and hamr stays the language-model server."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mobilerepaird.plist",
@@ -3087,7 +3149,7 @@
    "doc": "",
    "bifrost": "springboard/core/src/matter.rs, springboard/core/src/matter_interaction.rs, springboard/core/src/matter_hub.rs",
    "status": "partial",
-   "note": "Home accessory hub service that routes accessory events and voice requests. Matter setup codes, discovery and interaction are in matter.rs and matter_interaction.rs. Not built: the hub service that keeps accessories and routes voice commands. Built 2026-10-17: the hub model (springboard/core/src/matter_hub.rs) keeps accessories with their room and clusters, tracks the On/Off state applied to each, and routes on/off requests by name and room; tests matter_hub::tests. Still missing: the hub service that runs on the network and sends the routed commands.",
+   "note": "Home accessory hub service that routes accessory events and voice requests. Matter setup codes, discovery and interaction are in matter.rs and matter_interaction.rs. Not built: the hub service that keeps accessories and routes voice commands. Built 2026-10-17: the hub model (springboard/core/src/matter_hub.rs) keeps accessories with their room and clusters, tracks the On/Off state applied to each, and routes on/off requests by name and room; tests matter_hub::tests. Still missing: the hub service that runs on the network and sends the routed commands. Reviewed 2026-10-17 (wave 13): left partial. The index shows only usr/libexec/nexusd, the plist and empty Nexus and NexusDaemon framework shells, so the role is taken from the earlier reading (accessory hub). What is missing is the Matter controller transport (commissioning sessions, discovery and the encrypted message layer) that sends the commands matter_hub routes; that is a whole engine, not a row-sized change.",
    "rea": []
   },
   {
@@ -3105,10 +3167,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Syncs Notes with Exchange accounts. The CalDAV and CardDAV sync in dav_sync.rs does not cover Exchange. Build an Exchange notes source for the Notes app beside dav_sync.rs.",
-   "rea": []
+   "bifrost": "springboard/sdk/src/exchange_notes.rs",
+   "status": "partial",
+   "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Not wired: the Notes app and an Exchange account type in Settings.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "exchange_notes::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the Exchange notes source (SDK exchange_notes.rs) lists, reads, creates, updates and deletes notes in the mailbox's notes folder over Exchange Web Services (HTTPS only, plain-text bodies, paged and batched reads, a change diff for the app to import). Open: the Notes app does not call it yet and Settings has no Exchange account type; the app passes the server address and the login from the passwords store."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.notificationcenterui.plist",
@@ -3382,10 +3453,34 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/photo_library.rs",
+   "bifrost": "springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs, springboard/ui/src/photo_fetch.rs, springboard/ui/src/photo_access.rs",
    "status": "partial",
-   "note": "The PhotoKit model (authorization, fetches and thumbnails) is in photo_library.rs. Not built: a shared library service that keeps one photo library for all apps.",
-   "rea": []
+   "note": "Photo library daemon. The photos shell service is the one library all apps share (authorization, fetch, thumbnails, change observation); SDK PhotoKit surface in photo_library.rs.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_fetch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_access::tests"
+    }
+   ],
+   "ready_note": "One photo library serves every app: the shell's photos service scans ~/Pictures once, answers authorization, fetches, thumbnails and image paths per calling app (limited access shows only granted ids) and pushes change indexes to observers; the SDK side is PhotoKit-shaped (photo_library.rs). Gap: favorite marks stay in the Photos app."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.pluginkit.pkd.plist",
@@ -4064,11 +4159,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/rfb",
+   "bifrost": "springboard/src/shell/services/screen_stream.rs, springboard/src/shell/services/screen_sample.rs, springboard/sdk/src/screen_stream.rs, springboard/ui/src/recording.rs, springboard/ui/src/capture_access.rs",
    "status": "partial",
-   "note": "rule: remote framebuffer service; Remote app",
+   "note": "Screen recording and broadcast daemon (ReplayKit role). Covered by the screen_stream service, the recording session model and capture consent; no movie-file encoder, pointer not drawn.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::screen_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::screen_sample::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recording::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "capture_access::tests"
+    }
+   ],
+   "ready_note": "Screen recording for apps: an app holding the Screen permission starts a screen stream and receives frames from the shell (screen_stream service, PNG frames at a minimum interval), the recording session model keeps the recorder state and trim range, and capture consent is per app and media type. Limits: frames are PNG files, there is no movie encoder here, and the pointer is not drawn into the stream."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.replicatord.plist",
@@ -4251,11 +4375,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/privd/accounts.rs",
+   "bifrost": "springboard/apps/remote, springboard/src/privd/accounts.rs",
    "status": "partial",
-   "note": "Screen sharing maps to the wayvnc.service unit",
+   "note": "Screen sharing server launch: the Remote app starts wayvnc on a private socket behind a password. The Settings > Sharing switch maps to wayvnc.service, which has no unit in the packaging yet.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/wayvnc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-remote",
+     "filter": "services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    }
+   ],
+   "ready_note": "Sharing this desktop is the Remote app: it supervises wayvnc on a private Unix socket and serves it to a browser behind a generated password (Remote > Start Sharing); wayvnc is a runtime package. Settings > Sharing > Screen Sharing maps to wayvnc.service in privd. Open: no wayvnc.service unit is packaged, so that Settings switch has nothing to start; the Remote app is the working path."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.scrod.plist",
@@ -5150,9 +5292,23 @@
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
    "status": "partial",
-   "note": "Shell search index; no importer plug-ins Built 2026-10-17: importer plug-ins (springboard/ui/src/mdimport.rs: a text importer and a file-name fallback, chosen by content type) and the file-to-item conversion (spotindex::file_item); tests mdimport::tests and spotindex::tests::a_file_becomes_an_item_with_its_imported_metadata. Still missing: the folder scan that feeds files to the index, and importers for binary formats (PDF, image, office).",
+   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item) and the bounded folder scan (spotindex::scan_folder, index_folder; tests spotindex::tests). Missing: importers for binary formats and the start-up scan call.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mdimport::tests"
+    }
+   ],
+   "ready_note": "Importers read a file head and give the index a title, description and keywords by content type (mdimport.rs: text importer plus file-name fallback); spotindex::scan_folder walks a folder breadth first (regular files only, no links, no hidden names, bounded depth and count) and index_folder feeds the result to the index. Open: no importers for binary formats (PDF, image, office) and the shell does not call index_folder at start-up yet."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.spotlightknowledged.plist",
@@ -5169,11 +5325,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotindex.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs",
    "status": "partial",
    "note": "Shell search index; no knowledge graph",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    }
+   ],
+   "ready_note": "The shell search index keeps what apps donate (per app, bounded, saved atomically, optionally encrypted), searches with typed filters and ranks with BM25, recency and open counts; items expire. There is no separate knowledge graph process."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.spotlightknowledged.updater.plist",
@@ -5913,10 +6083,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_resolve.rs",
    "status": "os",
-   "note": "Tried reading the launchd plist (launch events, run at load, one XPC service); no framework or binary is extracted yet, so the purpose is unconfirmed.",
-   "rea": []
+   "note": "App action (tool) registry daemon (ToolKit role, taken from the daemon name and the diagnostic extension in the index; the binary is not extracted). Covered by the SDK App Intents registry.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "The tool registry for app actions: apps declare typed intents (parameters, entities, shortcuts) in code and in manifest.toml so the shell lists them without launching the app, and `intent.list` and `intent.<id>` call them (intents.rs, intent_resolve.rs)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.translationd.plist",

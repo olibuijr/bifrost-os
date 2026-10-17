@@ -144,6 +144,26 @@ pub fn dispatch(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, method: &str, para
     exec.call(method, params)
 }
 
+/// The audit record of one handled request, one line for the journal: the method, the outcome and which door the
+/// request came through (`root` socket, the console `shell`, any `other` admitted peer). Every privileged call leaves
+/// one, allowed or refused, so the journal is the trail of what the root daemon was asked to do. It never carries the
+/// parameters (passwords travel there). The method is the client's string: it is capped and quoted with Debug escapes,
+/// so it cannot forge a second journal line.
+pub fn audit_line(peer: Peer, method: &str, outcome: &Result<Json, PErr>) -> String {
+    let shown: String = method.chars().take(64).collect();
+    let via = if peer.root_socket {
+        "root"
+    } else if peer.console_shell {
+        "shell"
+    } else {
+        "other"
+    };
+    match outcome {
+        Ok(_) => format!("privd: {shown:?} ok via {via}"),
+        Err(e) => format!("privd: {shown:?} -> {} via {via}", e.code),
+    }
+}
+
 /// Handles one request frame and returns the reply frame.
 pub fn handle_request(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, text: &str) -> String {
     let req = match json::parse(text) {
@@ -155,13 +175,7 @@ pub fn handle_request(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, text: &str) 
     let empty = Json::Obj(vec![]);
     let params = req.get("params").unwrap_or(&empty);
     let r = dispatch(gate, exec, peer, method, params);
-    // the journal gets the method and the outcome, never the parameters (passwords travel here)
-    // the method is the client's string: escaped and capped, so it cannot forge journal lines
-    let shown: String = method.chars().take(64).collect();
-    match &r {
-        Ok(_) => eprintln!("privd: {shown:?} ok"),
-        Err(e) => eprintln!("privd: {shown:?} -> {}", e.code),
-    }
+    eprintln!("{}", audit_line(peer, method, &r));
     match r {
         Ok(v) => reply_ok(id, &v),
         Err(e) => reply_err(id, &e),
@@ -367,6 +381,31 @@ mod tests {
         let r = json::parse(&read_frame(&mut c).unwrap().unwrap()).unwrap();
         assert_eq!(code(&r), "bad_params");
         assert_eq!(read_frame(&mut c).unwrap(), None);
+    }
+
+    #[test]
+    fn every_call_leaves_one_audit_line_without_its_parameters() {
+        let shell = Peer { root_socket: false, console_shell: true };
+        assert_eq!(audit_line(shell, "power.sleep", &Ok(obj(vec![]))), r#"privd: "power.sleep" ok via shell"#);
+        let refused = audit_line(Peer::default(), "account.set_password", &Err(PErr::new("wrong_password", "x")));
+        assert_eq!(refused, r#"privd: "account.set_password" -> wrong_password via other"#);
+        assert!(audit_line(Peer { root_socket: true, console_shell: false }, "update.check", &Ok(obj(vec![]))).ends_with("via root"));
+        // a hostile method name stays on one line and is capped
+        let forged = audit_line(shell, "x\nprivd: \"power.shutdown\" ok via root", &Ok(obj(vec![])));
+        assert_eq!(forged.lines().count(), 1);
+        let long = audit_line(shell, &"m".repeat(500), &Ok(obj(vec![])));
+        assert!(long.len() < 100);
+    }
+
+    #[test]
+    fn the_audit_line_of_a_handled_request_never_shows_the_password() {
+        let g = TestGate { unlocked: Mutex::new(false) };
+        let req = json::parse(r#"{"id":1,"method":"login.authenticate","params":{"password":"hunter2-secret"}}"#).unwrap();
+        let outcome = dispatch(&g, &FakeExec, Peer::default(), "login.authenticate", req.get("params").unwrap());
+        assert_eq!(outcome.as_ref().unwrap_err().code, "wrong_password");
+        let line = audit_line(Peer::default(), "login.authenticate", &outcome);
+        assert_eq!(line, r#"privd: "login.authenticate" -> wrong_password via other"#);
+        assert!(!line.contains("hunter2"));
     }
 
     #[test]

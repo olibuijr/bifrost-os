@@ -993,6 +993,61 @@ pub fn file_item(domain: &str, path: &Path) -> io::Result<SearchableItem> {
     })
 }
 
+/// The most files one folder scan turns into items (the index keeps at most [`MAX_PER_APP`] per app).
+pub const SCAN_MAX_FILES: usize = MAX_PER_APP;
+/// The deepest folder level a scan enters; `root` itself is level 0.
+pub const SCAN_MAX_DEPTH: usize = 6;
+
+/// The searchable items for the files under `root`, read by the importers (`bifrost_ui::mdimport`): the folder is
+/// walked breadth first, names in alphabetical order, so the files nearest the root come first and the result is the
+/// same on every run. Only regular files count: symbolic links are not followed, hidden names (a leading dot) are
+/// skipped, and so are devices, sockets and pipes, so a scan never blocks on a special file. A file that cannot be
+/// read is left out. The scan stops at [`SCAN_MAX_FILES`] files and enters folders no deeper than [`SCAN_MAX_DEPTH`].
+pub fn scan_folder(domain: &str, root: &Path) -> Vec<SearchableItem> {
+    let mut items = Vec::new();
+    let mut level = vec![root.to_path_buf()];
+    for depth in 0..=SCAN_MAX_DEPTH {
+        let mut next = Vec::new();
+        for dir in &level {
+            let Ok(read) = std::fs::read_dir(dir) else { continue };
+            let mut names: Vec<PathBuf> = read.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            names.sort();
+            for path in names {
+                let hidden = path.file_name().and_then(|n| n.to_str()).is_none_or(|n| n.starts_with('.'));
+                if hidden {
+                    continue;
+                }
+                let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+                if meta.is_dir() {
+                    if depth < SCAN_MAX_DEPTH {
+                        next.push(path);
+                    }
+                } else if meta.is_file() {
+                    if let Ok(item) = file_item(domain, &path) {
+                        items.push(item);
+                        if items.len() >= SCAN_MAX_FILES {
+                            return items;
+                        }
+                    }
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        level = next;
+    }
+    items
+}
+
+/// Scans `root` ([`scan_folder`]) and indexes what it finds under `app_id`. Returns the number of files indexed.
+pub fn index_folder(app_id: &str, domain: &str, root: &Path) -> usize {
+    let items = scan_folder(domain, root);
+    let n = items.len();
+    index_items(app_id, items.into_iter().map(|i| (i, None)).collect());
+    n
+}
+
 /// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
 pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
     with(|ix| {
@@ -1120,6 +1175,56 @@ mod tests {
         assert_eq!(ix.search("lisbon", 5).len(), 1);
         assert!(file_item("Documents", &dir.join("missing.txt")).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folder_scan_indexes_regular_files_only_and_in_a_stable_order() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub/deeper")).unwrap();
+        std::fs::create_dir_all(dir.join(".hidden")).unwrap();
+        std::fs::write(dir.join("b.txt"), "Budget\nyearly numbers\n").unwrap();
+        std::fs::write(dir.join("a.txt"), "Aurora notes\nnorthern lights\n").unwrap();
+        std::fs::write(dir.join(".secret.txt"), "Hidden file\n").unwrap();
+        std::fs::write(dir.join(".hidden/inside.txt"), "Inside hidden folder\n").unwrap();
+        std::fs::write(dir.join("sub/c.txt"), "Cabin booking\nweekend\n").unwrap();
+        std::fs::write(dir.join("sub/deeper/d.txt"), "Deep file\n").unwrap();
+        std::os::unix::fs::symlink(dir.join("a.txt"), dir.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&dir, dir.join("sub/loop")).unwrap();
+        let items = scan_folder("Documents", &dir);
+        let titles: Vec<&str> = items.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["Aurora notes", "Budget", "Cabin booking", "Deep file"], "level by level, names in order, no links, no hidden");
+        assert!(items.iter().all(|i| i.domain == "Documents" && i.content_url.starts_with("file://")));
+        let mut ix = Index::default();
+        ix.index("files", items);
+        assert_eq!(ix.search("cabin", 5).len(), 1);
+        assert!(ix.search("hidden", 5).is_empty());
+        assert!(scan_folder("Documents", &dir.join("missing")).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folder_scan_stops_at_its_depth_and_file_limits() {
+        let dir = std::env::temp_dir().join(format!("bifrost-spot-limits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut deep = dir.clone();
+        for level in 0..=SCAN_MAX_DEPTH + 1 {
+            deep = deep.join(format!("d{level}"));
+        }
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("too-deep.txt"), "Too deep\n").unwrap();
+        std::fs::write(dir.join("d0/d1/ok.txt"), "Reachable\n").unwrap();
+        let titles: Vec<String> = scan_folder("Documents", &dir).into_iter().map(|i| i.title).collect();
+        assert_eq!(titles, ["Reachable"]);
+        let _ = std::fs::remove_dir_all(&dir);
+        let many = std::env::temp_dir().join(format!("bifrost-spot-many-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&many);
+        std::fs::create_dir_all(&many).unwrap();
+        for i in 0..SCAN_MAX_FILES + 5 {
+            std::fs::write(many.join(format!("f{i:05}.txt")), format!("File {i}\n")).unwrap();
+        }
+        assert_eq!(scan_folder("Documents", &many).len(), SCAN_MAX_FILES);
+        let _ = std::fs::remove_dir_all(&many);
     }
 
     #[test]
