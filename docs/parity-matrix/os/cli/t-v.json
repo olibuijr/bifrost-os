@@ -1089,9 +1089,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no Arch package found in the official repositories; unit converter not implemented",
+   "bifrost": "springboard/cmd/src/bin/units.rs",
+   "status": "partial",
+   "note": "bifrost-cmd units tool (conversion, -q/-t/-v/-f/-U/-V, interactive two-prompt mode, conformability errors, SI and binary prefixes, temperature functions, built-in table of 140 definitions); not yet built or verified on Midget. Not covered: currency rates, the reference database's full size (the built-in table is smaller; -f adds more), angle units (no radian or degree), and exact reference output wording (-v and the interactive ratio lines are our own format)",
    "rea": [],
    "method": "assessed"
   },
