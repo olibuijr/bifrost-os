@@ -3664,11 +3664,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "springboard/src/shell/usernotif.rs (apply_page, gate_by_page); springboard/src/shell/notify_page.rs (AppNotif)",
    "status": "partial",
-   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
+   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json. Built 2026-10-17: the settings query answers alert, sound and badge from the app's Settings > Notifications page as well as the grant and mute (usernotif::apply_page, tests shell::usernotif::sound_tests), and deliveries follow the same page (usernotif::gate_by_page).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::sound_tests"
+    }
+   ],
+   "ready_note": "The per-app page's Banners, Sounds and Badges rows gate the settings answer and every delivery; tested headless."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserSafety.framework",
