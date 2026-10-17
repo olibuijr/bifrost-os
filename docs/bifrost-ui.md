@@ -3618,7 +3618,7 @@ Gaps, stated rather than skipped:
 
 ## Assistant system service (`springboard/src/shell/assistant.rs`, OS daemon `com.apple.Siri.agent`)
 
-Status: partial. Built and tested as pure logic; not yet wired into the desktop.
+Status: gap. Groundwork only: the pure logic is built and unit-tested, but nothing is wired into the desktop, so the daemon row stays `gap`.
 
 - Settings (`assistant.*` prefs): `enabled` (off), `shortcut` (`meta-shift-a`, Cmd+Shift+A; Cmd+Space is Search, Ctrl+Space the input source, Ctrl+Option+Space reader activation, so none is reused), `backend` (`off`; the only other choice is `anthropic`, the API `assistant-desktop` already speaks), `history` (off: earlier turns are neither kept nor sent), and `assistant.app.<id>` per-app access to intents (off for every app).
 - Catalogue: `assistant::build` takes the installed apps' `[[intent]]` tables and keeps only allowed apps. Ids must be safe (letters, digits, `-`, `_`), a title is required, parameter specs must be `name:type` (`?` optional), descriptions are cut at 300 characters. Only these entries are sent.
