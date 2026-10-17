@@ -4482,6 +4482,37 @@ contact in the main window and opens its editor (`edit_from_card`). The SDK has 
 Its close unbinds the card (`window_closed`). The row is partial in `docs/parity-matrix/apps/contacts.json`.
 Dictionary, Mail, Calendar and Maps stay gap and name this API in their `wire`.
 
+Key window (keys, text, menus, commands). One window of an app has key focus: the desk's front window when it is one of
+the app's extra windows, otherwise the main window (`WindowId::MAIN`). Wire (`springboard/proto`): the shell sends
+`WindowFocus {window, focused}` (0x24f) when key focus moves (the old window `focused: false`, the new one `true`; the main
+window is 0), and `WindowInput {window, input}` (0x250) carrying a `WindowInput`: `Key`, `Command`, `MenuAction`,
+`SetMarkedText`, `UnmarkText` or `DeleteSurrounding`. Window 0 is sent as the messages every app already handles (`Key`,
+`Command`, `MenuAction`, `SetMarkedText`, ...), so an app without extra windows is unchanged. Shell
+(`springboard/src/shell/apphost.rs`, `desk.rs`): `sync_key_windows` makes each host's `key_window` follow the desk's front
+window before input and on each tick; `AppHost::input` tags keys, commands, menu items and composition with it;
+`set_key_window` sends the focus pair. The keyboard's composition goes through `textinput::to_input`. SDK
+(`springboard/sdk`): `Ctx::key_window()` (falls back to the main window once the key window is closed); `App::window_input(ctx,
+window, input)`, whose default (`app_windows::default_window_input`) sends keys and commands to `window_event` as `Input::Key`
+and `Input::Command`, and sends a menu item and a text edit to the main window's `menu_action` and `text_input` only;
+`App::menus_for(ctx, window)`, whose default is `main_menu`, is what the runtime sends as the app's menus. Clipboard calls
+are not window-scoped and did not change. Cmd+W (`app_windows::is_close_window_key`) closes the window it is typed in: the
+desk's own Close action already does that for an extra window (it sends `WindowClosed`), and an app that handles the key
+closes its window with `ctx.close_window`.
+
+Adopting it (Maps and Mail, not done here): override `window_input` for the extra windows, forward the keys and commands
+of the key window to that window's own state (as Dictionary's `extra_event` does), and call
+`app_windows::default_window_input(self, ctx, window, input)` for the main window and anything else; override `menus_for` when
+an extra window has its own enabled or checked items. Shared state (Maps' store, Mail's compose window) should be read back
+before a change, as Dictionary's `change_prefs` does, so one window's save does not overwrite another's.
+
+Tests: proto (`key_window_messages_round_trip_through_the_codec`, `window_input_has_the_documented_layout`,
+`a_bad_window_focus_or_window_input_is_refused`); SDK (`app_windows` tests drive the messages through their wire bytes: key
+routing, focus and the late lost focus, closed windows, menu items and text edits, `menus_for`, Cmd+W); shell
+(`apphost` `the_key_window_gets_the_input_and_the_app_hears_each_focus_change`). Not verified: no build or test run was done
+for this change; the desk's `sync_key_windows` has no test of its own. Apps: Contacts 1.14.0 (Cmd+W), Dictionary 0.6.0 (own
+keys and Copy per window, Cmd+W, prefs read back before each change), Activity Monitor 0.9.0 (Cmd+W in CPU windows).
+`min_shell` is not raised: an older shell sends none of these messages.
+
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
 lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.15.0 — 2026-10-17
+
+- Cmd+W closes the card window it is typed in. Keys and menu items follow the key window: the shell tells the app which window is key (`WindowFocus`) and sends it the input (`WindowInput`), and the app's `window_input` closes the card (`ctx.close_window`).
+
 ## 1.14.0 — 2026-10-17
 
 - A tap on an email in a card opens a new message in Mail, prefilled with the address (`bifrost_app::mail_compose`); a tap on a phone number opens a `tel:` link through the shell. Other values still copy on a tap, and the Copy buttons still copy.

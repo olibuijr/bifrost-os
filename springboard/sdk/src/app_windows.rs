@@ -253,8 +253,53 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
                 None => false,
             }
         }
+        // the shell moved key focus: the window is key while it is focused, and the main window is key again once the
+        // extra window that was key loses focus (the shell sends that pair)
+        ToApp::WindowFocus { window, focused } => {
+            apply_focus(&ctx.key_window_id, *window, *focused);
+            true
+        }
+        // the key window's keys, commands, menu items and text edits; a closed window gets none of them
+        ToApp::WindowInput { window, input } => {
+            let routed = ctx.windows.borrow().route(WindowId(*window));
+            match routed {
+                Some(window) => app.window_input(ctx, window, input.clone()),
+                None => false,
+            }
+        }
         _ => return None,
     })
+}
+
+/// What `App::window_input` does unless the app overrides it: keys and commands go to `window_event` of the window
+/// (as `Input::Key` and `Input::Command`); a menu item and a text edit go to the main window's `menu_action` and
+/// `text_input`, and drop for an extra window. An app that handles its own keys calls this for the rest.
+pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ctx, window: WindowId, input: crate::proto::WindowInput) -> bool {
+    use crate::proto::WindowInput;
+    match input {
+        WindowInput::Key(k) => app.window_event(ctx, window, crate::Input::Key(k)),
+        WindowInput::Command(c) => app.window_event(ctx, window, crate::Input::Command(c)),
+        WindowInput::MenuAction(id) if window.is_main() => app.menu_action(ctx, id),
+        text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. }) if window.is_main() => {
+            app.text_input(ctx, text.to_app(0))
+        }
+        _ => false,
+    }
+}
+
+/// Cmd+W (evdev W with the Meta chord): the key that closes the window it is typed in.
+pub fn is_close_window_key(key: &crate::proto::KeyInput) -> bool {
+    key.as_chord() == Some((17, crate::proto::CHORD_META))
+}
+
+/// Records a focus change in the key window cell. Focusing window `window` makes it key; losing focus only clears it when
+/// it was the key window, so a late "lost" for an old window cannot take the key from the window that is key now.
+pub(crate) fn apply_focus(key: &std::cell::Cell<u32>, window: u32, focused: bool) {
+    if focused {
+        key.set(window);
+    } else if key.get() == window {
+        key.set(WindowId::MAIN.0);
+    }
 }
 
 #[cfg(test)]
@@ -397,6 +442,148 @@ mod tests {
             self.log.push(format!("double {}", window.0));
             true
         }
+    }
+
+    /// An app that logs what each window and the main window receive. Keys and commands reach `window_event` on an
+    /// extra window (the trait default of `window_input`), menu items and text edits reach the main window only.
+    #[derive(Default)]
+    struct KeyFake {
+        log: Vec<String>,
+    }
+
+    impl crate::App for KeyFake {
+        fn id(&self) -> &str {
+            "is.test.keys"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn event(&mut self, _: &crate::Ctx, ev: crate::Input) -> bool {
+            if let crate::Input::Key(crate::proto::KeyInput::Code(c)) = ev {
+                self.log.push(format!("main key {c}"));
+            }
+            true
+        }
+        fn window_event(&mut self, _: &crate::Ctx, window: WindowId, ev: crate::Input) -> bool {
+            match ev {
+                crate::Input::Key(crate::proto::KeyInput::Code(c)) => self.log.push(format!("key {c} on {}", window.0)),
+                crate::Input::Command(c) => self.log.push(format!("command {c:?} on {}", window.0)),
+                _ => {}
+            }
+            true
+        }
+        fn menu_action(&mut self, _: &crate::Ctx, id: u32) -> bool {
+            self.log.push(format!("menu {id}"));
+            true
+        }
+        fn text_input(&mut self, _: &crate::Ctx, ev: ToApp) -> bool {
+            self.log.push(format!("text {ev:?}"));
+            true
+        }
+        fn window_closed(&mut self, _: &crate::Ctx, window: WindowId) -> bool {
+            self.log.push(format!("closed {}", window.0));
+            true
+        }
+    }
+
+    /// The fake transport: the message goes through its wire bytes and back before the app sees it.
+    fn over_the_wire(app: &mut KeyFake, ctx: &crate::Ctx, m: &ToApp) -> Option<bool> {
+        let decoded = ToApp::decode(&m.encode()).expect("the message decodes");
+        deliver_window(app, ctx, &decoded, 0.0)
+    }
+
+    #[test]
+    fn the_main_window_is_key_until_the_shell_makes_an_extra_window_key() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let id = ctx.open_window(WindowSpec::new("Card", 480.0, 560.0)).unwrap();
+        assert_eq!(ctx.key_window(), WindowId::MAIN);
+        assert_eq!(over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: id.0, focused: true }), Some(true));
+        assert_eq!(ctx.key_window(), id);
+        assert_eq!(over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: id.0, focused: false }), Some(true));
+        assert_eq!(ctx.key_window(), WindowId::MAIN, "losing focus hands the key back to the main window");
+        assert_eq!(over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: 0, focused: true }), Some(true));
+        assert_eq!(ctx.key_window(), WindowId::MAIN);
+    }
+
+    #[test]
+    fn a_late_lost_focus_for_an_old_window_does_not_take_the_key_from_the_new_one() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let a = ctx.open_window(WindowSpec::new("A", 100.0, 100.0)).unwrap();
+        let b = ctx.open_window(WindowSpec::new("B", 100.0, 100.0)).unwrap();
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: a.0, focused: true });
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: b.0, focused: true });
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: a.0, focused: false });
+        assert_eq!(ctx.key_window(), b);
+    }
+
+    #[test]
+    fn keys_and_commands_go_to_the_key_window_and_not_to_the_main_window() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let id = ctx.open_window(WindowSpec::new("Card", 480.0, 560.0)).unwrap();
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: id.0, focused: true });
+        let key = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::Key(crate::proto::KeyInput::Code(30)) };
+        assert_eq!(over_the_wire(&mut app, &ctx, &key), Some(true));
+        let cmd = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::Command(crate::proto::Command::SelectAll) };
+        over_the_wire(&mut app, &ctx, &cmd);
+        assert_eq!(app.log, vec!["key 30 on 1".to_string(), format!("command {:?} on 1", crate::proto::Command::SelectAll)]);
+    }
+
+    #[test]
+    fn the_main_window_key_arrives_through_the_window_path_as_a_plain_key() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let key = ToApp::WindowInput { window: 0, input: crate::proto::WindowInput::Key(crate::proto::KeyInput::Code(9)) };
+        assert_eq!(over_the_wire(&mut app, &ctx, &key), Some(true));
+        assert_eq!(app.log, vec!["key 9 on 0".to_string()]);
+    }
+
+    #[test]
+    fn menu_items_and_text_edits_reach_only_the_main_window() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let id = ctx.open_window(WindowSpec::new("Card", 480.0, 560.0)).unwrap();
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: id.0, focused: true });
+        let menu = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::MenuAction(4) };
+        over_the_wire(&mut app, &ctx, &menu);
+        let text = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::UnmarkText { commit: true } };
+        over_the_wire(&mut app, &ctx, &text);
+        assert!(app.log.is_empty(), "an extra window gets no menu item or text edit by default: {:?}", app.log);
+        // the main window's menu item and text edit go to the main window's callbacks
+        let main_menu = ToApp::WindowInput { window: 0, input: crate::proto::WindowInput::MenuAction(4) };
+        over_the_wire(&mut app, &ctx, &main_menu);
+        assert_eq!(app.log, vec!["menu 4".to_string()]);
+    }
+
+    #[test]
+    fn input_for_a_closed_window_is_dropped() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let id = ctx.open_window(WindowSpec::new("Card", 480.0, 560.0)).unwrap();
+        over_the_wire(&mut app, &ctx, &ToApp::WindowFocus { window: id.0, focused: true });
+        ctx.close_window(id).unwrap();
+        let key = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::Key(crate::proto::KeyInput::Code(30)) };
+        assert_eq!(over_the_wire(&mut app, &ctx, &key), Some(false));
+        assert_eq!(ctx.key_window(), WindowId::MAIN, "a closed key window falls back to the main window");
+        assert!(app.log.is_empty());
+    }
+
+    #[test]
+    fn the_menus_for_a_window_default_to_the_main_menus() {
+        let ctx = crate::runtime::test_ctx();
+        let app = KeyFake::default();
+        assert!(app.menus_for(&ctx, WindowId(1)) == app.main_menu(&ctx));
+    }
+
+    #[test]
+    fn only_cmd_w_is_the_close_window_key() {
+        use crate::proto::{KeyInput, CHORD_CTRL, CHORD_META};
+        assert!(is_close_window_key(&KeyInput::chord(17, CHORD_META)));
+        assert!(!is_close_window_key(&KeyInput::chord(17, CHORD_CTRL)));
+        assert!(!is_close_window_key(&KeyInput::Code(17)));
+        assert!(!is_close_window_key(&KeyInput::Text("w".into())));
     }
 
     fn touch_down(id: u32) -> ToApp {

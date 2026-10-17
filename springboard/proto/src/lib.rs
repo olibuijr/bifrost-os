@@ -65,6 +65,40 @@ pub enum KeyInput {
     Code(u32),
 }
 
+/// Input for the key window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go
+/// to the window with key focus. The main window gets the same input in the messages every app already handles
+/// (`WindowInput::to_app` with window 0), so an app without extra windows is unchanged.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WindowInput {
+    Key(KeyInput),
+    Command(Command),
+    MenuAction(u32),
+    /// as `ToApp::SetMarkedText`
+    SetMarkedText { text: String, sel_start: u32, sel_len: u32 },
+    /// as `ToApp::UnmarkText`
+    UnmarkText { commit: bool },
+    /// as `ToApp::DeleteSurrounding`
+    DeleteSurrounding { before: u32, after: u32 },
+}
+
+impl WindowInput {
+    /// The message that carries this input to `window`. Window 0 is the main window and keeps the messages every app
+    /// already handles; an extra window gets `ToApp::WindowInput`.
+    pub fn to_app(self, window: u32) -> ToApp {
+        if window != 0 {
+            return ToApp::WindowInput { window, input: self };
+        }
+        match self {
+            WindowInput::Key(k) => ToApp::Key(k),
+            WindowInput::Command(c) => ToApp::Command(c),
+            WindowInput::MenuAction(id) => ToApp::MenuAction(id),
+            WindowInput::SetMarkedText { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
+            WindowInput::UnmarkText { commit } => ToApp::UnmarkText { commit },
+            WindowInput::DeleteSurrounding { before, after } => ToApp::DeleteSurrounding { before, after },
+        }
+    }
+}
+
 /// A Ctrl or Cmd chord the shell did not use, sent as `KeyInput::Code` with `CHORD_FLAG` set.
 /// The SDK checks versions exactly, so chords ride on the existing message: an app built
 /// before chords sees a code it does not match and ignores it.
@@ -416,6 +450,11 @@ pub enum ToApp {
     /// Several windows: the person double-clicked the title bar of window `window`. Only sent to windows opened with
     /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x24e.
     WindowTitleDoubleClick { window: u32 },
+    /// Several windows: window `window` gained (`focused`) or lost key focus. The main window is key when no extra
+    /// window is, and it is told as `WindowFocus { window: 0, .. }` when focus moves back to it. Tag 0x24f.
+    WindowFocus { window: u32, focused: bool },
+    /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x250.
+    WindowInput { window: u32, input: WindowInput },
     Resume,
     Suspend,
     Quit,
@@ -917,6 +956,20 @@ mod tag {
     pub const WINDOW_RESIZE: u32 = 0x243;
     pub const WINDOW_BUFFERS: u32 = 0x244;
     pub const WINDOW_FRAME: u32 = 0x245;
+    pub const WINDOW_CLOSED: u32 = 0x1c8;
+    pub const WINDOW_CONFIGURE: u32 = 0x1c9;
+    pub const WINDOW_TOUCH: u32 = 0x1ca;
+    pub const WINDOW_RELEASE: u32 = 0x1cb;
+    /// Shell -> app: window key focus changed (`ToApp::WindowFocus`).
+    pub const WINDOW_FOCUS: u32 = 0x24f;
+    /// Shell -> app: input for the key window (`ToApp::WindowInput`).
+    pub const WINDOW_INPUT: u32 = 0x250;
+    pub const WINDOW_OPEN: u32 = 0x1c0;
+    pub const WINDOW_CLOSE: u32 = 0x1c1;
+    pub const WINDOW_TITLE: u32 = 0x1c2;
+    pub const WINDOW_RESIZE: u32 = 0x1c3;
+    pub const WINDOW_BUFFERS: u32 = 0x1c4;
+    pub const WINDOW_FRAME: u32 = 0x1c5;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1066,6 +1119,70 @@ fn short_title(title: &str) -> String {
 /// A decoded window title; a title over the limit is refused.
 fn checked_title(title: String) -> Result<String, DecodeError> {
     if title.len() > MAX_WINDOW_TITLE { Err(DecodeError::BadValue) } else { Ok(title) }
+}
+
+/// `WindowInput` after the window id: a kind byte, then the payload (`0` key, `1` command, `2` menu item, `3` marked
+/// text, `4` unmark, `5` delete surrounding).
+fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
+    match input {
+        WindowInput::Key(KeyInput::Text(s)) => {
+            b.push(0);
+            b.push(0);
+            str_(b, s);
+        }
+        WindowInput::Key(KeyInput::Code(c)) => {
+            b.push(0);
+            b.push(1);
+            u32_(b, *c);
+        }
+        WindowInput::Command(c) => {
+            b.push(1);
+            u32_(b, *c as u32);
+        }
+        WindowInput::MenuAction(id) => {
+            b.push(2);
+            u32_(b, *id);
+        }
+        WindowInput::SetMarkedText { text, sel_start, sel_len } => {
+            b.push(3);
+            str_(b, text);
+            u32_(b, *sel_start);
+            u32_(b, *sel_len);
+        }
+        WindowInput::UnmarkText { commit } => {
+            b.push(4);
+            b.push(*commit as u8);
+        }
+        WindowInput::DeleteSurrounding { before, after } => {
+            b.push(5);
+            u32_(b, *before);
+            u32_(b, *after);
+        }
+    }
+}
+
+fn window_input_decode(r: &mut Reader) -> Result<WindowInput, DecodeError> {
+    Ok(match r.u8()? {
+        0 => match r.u8()? {
+            0 => WindowInput::Key(KeyInput::Text(r.str()?)),
+            1 => WindowInput::Key(KeyInput::Code(r.u32()?)),
+            _ => return Err(DecodeError::BadValue),
+        },
+        1 => WindowInput::Command(Command::from_wire(r.u32()?).ok_or(DecodeError::BadValue)?),
+        2 => WindowInput::MenuAction(r.u32()?),
+        3 => {
+            let text = r.str()?;
+            let (sel_start, sel_len) = (r.u32()?, r.u32()?);
+            let end = sel_start as u64 + sel_len as u64;
+            if end > text.len() as u64 || !text.is_char_boundary(sel_start as usize) || !text.is_char_boundary(end as usize) {
+                return Err(DecodeError::BadValue);
+            }
+            WindowInput::SetMarkedText { text, sel_start, sel_len }
+        }
+        4 => WindowInput::UnmarkText { commit: r.u8()? != 0 },
+        5 => WindowInput::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
+        _ => return Err(DecodeError::BadValue),
+    })
 }
 
 struct Reader<'a>(&'a [u8]);
@@ -1233,6 +1350,16 @@ impl ToApp {
                 u32_(&mut b, *buf);
                 u32_(&mut b, *generation);
             }
+            ToApp::WindowFocus { window, focused } => {
+                u32_(&mut b, tag::WINDOW_FOCUS);
+                u32_(&mut b, *window);
+                b.push(*focused as u8);
+            }
+            ToApp::WindowInput { window, input } => {
+                u32_(&mut b, tag::WINDOW_INPUT);
+                u32_(&mut b, *window);
+                window_input_encode(&mut b, input);
+            }
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -1398,6 +1525,19 @@ impl ToApp {
                 ToApp::WindowTouch { id, touch, kind, x, y, t_ms: r.u32()? }
             }
             tag::WINDOW_RELEASE => ToApp::WindowRelease { id: r.u32()?, buf: r.u32()?, generation: r.u32()? },
+            tag::WINDOW_FOCUS => {
+                let window = r.u32()?;
+                let focused = match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToApp::WindowFocus { window, focused }
+            }
+            tag::WINDOW_INPUT => {
+                let window = r.u32()?;
+                ToApp::WindowInput { window, input: window_input_decode(&mut r)? }
+            }
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -2831,6 +2971,72 @@ mod quick_action_tests {
         for m in app {
             assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
         }
+    }
+
+    #[test]
+    fn key_window_messages_round_trip_through_the_codec() {
+        let app = [
+            ToApp::WindowFocus { window: 3, focused: true },
+            ToApp::WindowFocus { window: 0, focused: false },
+            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Text("é😀".into())) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Command(Command::SelectAll) },
+            ToApp::WindowInput { window: 3, input: WindowInput::MenuAction(7) },
+            ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
+            ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
+            ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
+        ];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn window_input_has_the_documented_layout() {
+        // tag 0x250, window 3, kind 0 (key), key kind 1 (code), code 30
+        let bytes = ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) }.encode();
+        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &3u32.to_le_bytes());
+        assert_eq!(&bytes[8..10], &[0, 1]);
+        assert_eq!(&bytes[10..14], &30u32.to_le_bytes());
+        // tag 0x24f, window 3, focused
+        let focus = ToApp::WindowFocus { window: 3, focused: true }.encode();
+        assert_eq!(&focus[..4], &0x24fu32.to_le_bytes());
+        assert_eq!(&focus[4..9], &[3, 0, 0, 0, 1]);
+    }
+
+    #[test]
+    fn window_input_for_the_main_window_uses_the_legacy_messages() {
+        assert_eq!(WindowInput::Key(KeyInput::Code(9)).to_app(0), ToApp::Key(KeyInput::Code(9)));
+        assert_eq!(WindowInput::Command(Command::Copy).to_app(0), ToApp::Command(Command::Copy));
+        assert_eq!(WindowInput::MenuAction(4).to_app(0), ToApp::MenuAction(4));
+        assert_eq!(WindowInput::UnmarkText { commit: false }.to_app(0), ToApp::UnmarkText { commit: false });
+        assert_eq!(WindowInput::MenuAction(4).to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::MenuAction(4) });
+    }
+
+    #[test]
+    fn a_bad_window_focus_or_window_input_is_refused() {
+        let mut focus = ToApp::WindowFocus { window: 1, focused: true }.encode();
+        focus[8] = 2;
+        assert_eq!(ToApp::decode(&focus), Err(DecodeError::BadValue));
+        // unknown input kind
+        let mut kind = ToApp::WindowInput { window: 1, input: WindowInput::MenuAction(1) }.encode();
+        kind[8] = 9;
+        assert_eq!(ToApp::decode(&kind), Err(DecodeError::BadValue));
+        // unknown key kind inside a key
+        let mut key = ToApp::WindowInput { window: 1, input: WindowInput::Key(KeyInput::Code(1)) }.encode();
+        key[9] = 7;
+        assert_eq!(ToApp::decode(&key), Err(DecodeError::BadValue));
+        // a command number the table does not know
+        let mut cmd = ToApp::WindowInput { window: 1, input: WindowInput::Command(Command::Copy) }.encode();
+        cmd[9..13].copy_from_slice(&99u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&cmd), Err(DecodeError::BadValue));
+        // a marked-text selection that ends inside a character
+        let mut marked = ToApp::WindowInput { window: 1, input: WindowInput::SetMarkedText { text: "é".into(), sel_start: 0, sel_len: 2 } }.encode();
+        // kind 3 at byte 8, the text length at 9..13, "é" at 13..15, then sel_start and sel_len
+        marked[15..19].copy_from_slice(&0u32.to_le_bytes());
+        marked[19..23].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&marked), Err(DecodeError::BadValue));
     }
 
     #[test]

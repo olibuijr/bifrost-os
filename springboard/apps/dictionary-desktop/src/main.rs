@@ -201,6 +201,14 @@ impl DictionaryApp {
         true
     }
 
+    /// Hands an event to the extra window's own lookup. False when the window is not open.
+    fn extra_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        match self.windows.iter_mut().find(|e| e.id == window) {
+            Some(e) => e.app.event(ctx, ev),
+            None => false,
+        }
+    }
+
     /// Drops the state of a window the shell or the app closed. Returns true when one was dropped.
     fn close_extra(&mut self, window: WindowId) -> bool {
         let before = self.windows.len();
@@ -233,6 +241,18 @@ impl DictionaryApp {
         if !self.prefs_path.as_os_str().is_empty() {
             let _ = std::fs::write(&self.prefs_path, self.prefs.serialize());
         }
+    }
+
+    /// Applies one change to the stored choices. Every window has its own copy of them, so the file is the store: the
+    /// copy is read back first, so a change made in another window survives this window's save.
+    fn change_prefs(&mut self, change: impl FnOnce(&mut Prefs)) {
+        if !self.prefs_path.as_os_str().is_empty() {
+            if let Ok(text) = std::fs::read_to_string(&self.prefs_path) {
+                self.prefs = Prefs::parse(&text);
+            }
+        }
+        change(&mut self.prefs);
+        self.save_prefs();
     }
 
     /// The hits of the shown lookup that the scope bar lets through.
@@ -303,13 +323,11 @@ impl DictionaryApp {
             Act::Back => self.go_back(),
             Act::Forward => self.go_forward(),
             Act::Smaller => {
-                self.prefs.smaller();
-                self.save_prefs();
+                self.change_prefs(|p| p.smaller());
                 true
             }
             Act::Bigger => {
-                self.prefs.bigger();
-                self.save_prefs();
+                self.change_prefs(|p| p.bigger());
                 true
             }
             Act::Scope(s) => {
@@ -318,18 +336,15 @@ impl DictionaryApp {
                 true
             }
             Act::Toggle(i) => {
-                self.prefs.toggle(i);
-                self.save_prefs();
+                self.change_prefs(|p| p.toggle(i));
                 self.refresh()
             }
             Act::Up(i) => {
-                self.prefs.move_dict(i, -1);
-                self.save_prefs();
+                self.change_prefs(|p| p.move_dict(i, -1));
                 self.refresh()
             }
             Act::Down(i) => {
-                self.prefs.move_dict(i, 1);
-                self.save_prefs();
+                self.change_prefs(|p| p.move_dict(i, 1));
                 self.refresh()
             }
             Act::Rename(i) => {
@@ -500,8 +515,7 @@ impl DictionaryApp {
                 if let Some(d) = self.drag.take() {
                     let to = model::drop_slot(py, self.rows_top, SETTINGS_ROW_H, self.prefs.dicts.len());
                     if to != d.from {
-                        self.prefs.move_to(d.from, to);
-                        self.save_prefs();
+                        self.change_prefs(|p| p.move_to(d.from, to));
                         self.refresh();
                     }
                     return true;
@@ -570,9 +584,8 @@ impl DictionaryApp {
                 }
                 KeyInput::Code(13) => {
                     let (i, label) = (*i, buf.clone());
-                    self.prefs.set_label(i, &label);
+                    self.change_prefs(|p| p.set_label(i, &label));
                     self.rename = None;
-                    self.save_prefs();
                     return self.refresh();
                 }
                 KeyInput::Code(27) => self.rename = None,
@@ -914,6 +927,23 @@ impl App for DictionaryApp {
 
     fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
         self.close_extra(window)
+    }
+
+    /// An extra window is a whole lookup of its own, so its keys and Copy go to it; Cmd+W closes it. The main window
+    /// takes the rest as before (`default_window_input`).
+    fn window_input(&mut self, ctx: &Ctx, window: WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        use bifrost_app::proto::WindowInput;
+        if window.is_main() {
+            return bifrost_app::app_windows::default_window_input(self, ctx, window, input);
+        }
+        match input {
+            WindowInput::Key(k) if bifrost_app::app_windows::is_close_window_key(&k) => {
+                ctx.close_window(window).is_ok() && self.close_extra(window)
+            }
+            WindowInput::Key(k) => self.extra_event(ctx, window, Input::Key(k)),
+            WindowInput::Command(c) => self.extra_event(ctx, window, Input::Command(c)),
+            _ => false,
+        }
     }
 
     fn draws_canvas(&self) -> bool {

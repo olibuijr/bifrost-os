@@ -10,19 +10,24 @@
 //! `preedit_string` is `Composition::Preedit` (cursor_begin/end are `sel_start`/`sel_len`), `commit_string` is a
 //! `KeyInput::Text`, and `delete_surrounding_text` is `ToApp::DeleteSurrounding`.
 use super::keyboard::{Composition, Out};
-use bifrost_proto::{InputTraits, ReturnKey, TextContentKind, ToApp};
+use bifrost_proto::{InputTraits, ReturnKey, TextContentKind, ToApp, WindowInput};
 
 /// The keyboard app's return key label for a field: the nearest of its six (`ReturnKeyType::basic`).
 pub fn return_key(t: InputTraits) -> ReturnKey {
     t.return_key.basic()
 }
 
-/// The app message for a composition event from the keyboard app.
-pub fn to_app(c: Composition) -> ToApp {
+/// The input for a composition event from the keyboard app, for the app's key window (`AppHost::input`).
+pub fn to_input(c: Composition) -> WindowInput {
     match c {
-        Composition::Preedit { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
-        Composition::Unmark { commit } => ToApp::UnmarkText { commit },
+        Composition::Preedit { text, sel_start, sel_len } => WindowInput::SetMarkedText { text, sel_start, sel_len },
+        Composition::Unmark { commit } => WindowInput::UnmarkText { commit },
     }
+}
+
+/// The app message for a composition event from the keyboard app, as the main window gets it.
+pub fn to_app(c: Composition) -> ToApp {
+    to_input(c).to_app(0)
 }
 
 /// Top-left of a popup `w` x `h` (candidate window, correction bubble) for the caret rectangle `caret` in a screen of

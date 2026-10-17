@@ -323,6 +323,20 @@ impl App for ActivityApp {
         self.forget_window(window)
     }
 
+    /// Cmd+W in a CPU window closes it, as its traffic light does. The main window takes its keys and items as before.
+    fn window_input(&mut self, ctx: &Ctx, window: WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        if window.is_main() {
+            return bifrost_app::app_windows::default_window_input(self, ctx, window, input);
+        }
+        match input {
+            bifrost_app::proto::WindowInput::Key(k) if bifrost_app::app_windows::is_close_window_key(&k) => {
+                let _ = ctx.close_window(window);
+                self.forget_window(window)
+            }
+            _ => false,
+        }
+    }
+
     fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
         if window.is_main() {
             return self.draw(ctx, s, t);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — 2026-10-17
+
+- Keys, Copy and Paste go to the key window, so a second window takes its own typing and Cmd+C copies from it; Cmd+W closes the window it is typed in (`window_input`, `extra_event`).
+- The stored choices (dictionaries, order, labels, text size) are read back before each change and then saved, so one window's change no longer overwrites another's (`change_prefs`).
+
 ## 0.5.5 — 2026-10-17
 
 - File > New Window (cmd+n) opens a second window with its own lookup, history, scope and find. Touch works in every window; the keyboard and the menus stay with the main window.

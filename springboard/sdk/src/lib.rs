@@ -565,8 +565,19 @@ pub trait App {
     /// app is in front. Called after every event and frame; the runtime sends the menus only when they differ from
     /// the last ones, so enabled and checked state is recomputed here (`validateMenuItem:`).
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> { Vec::new() }
+    /// The main-menu items while `window` is the key window (`Ctx::key_window`); the runtime sends them when they
+    /// differ from the last ones. Override it when an extra window has its own enabled or checked items. The default
+    /// is the main window's menus for every window.
+    fn menus_for(&self, ctx: &Ctx, _window: app_windows::WindowId) -> Vec<AppMenu> { self.main_menu(ctx) }
     /// The user chose menu item `id` (from the bar or its key equivalent); true when the app needs a new frame.
     fn menu_action(&mut self, _ctx: &Ctx, _id: u32) -> bool { false }
+    /// Input for the key window (`ToApp::WindowInput`): a key, a command, a menu item or a text edit that the shell
+    /// sent to `window`, which is an extra window or the main window. The default sends keys and commands to
+    /// `window_event` (as `Input::Key` and `Input::Command`), a menu item and a text edit to the main window's
+    /// `menu_action` and `text_input`, and drops the rest for extra windows. True when the app needs a new frame.
+    fn window_input(&mut self, ctx: &Ctx, window: app_windows::WindowId, input: crate::proto::WindowInput) -> bool {
+        app_windows::default_window_input(self, ctx, window, input)
+    }
     /// Draws into `surface` (premultiplied pixels, stride = width) and returns what changed.
     /// The first frame after a (re)allocation is always sent in full.
     fn draw(&mut self, ctx: &Ctx, surface: &mut Surface, t: f64) -> Damage;
