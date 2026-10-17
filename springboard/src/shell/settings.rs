@@ -2885,6 +2885,7 @@ impl Settings {
             Toggle::DimFlashingLights => flip(&mut self.a11y.dim_flashing_lights),
             Toggle::GuidedAccess => flip(&mut self.a11y.guided_access),
             Toggle::ScreenReader => flip(&mut self.a11y.screen_reader),
+            Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"

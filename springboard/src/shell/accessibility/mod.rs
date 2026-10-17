@@ -56,6 +56,8 @@ pub struct AccessibilitySettings {
     pub guided_access: bool,
     /// Screen Reader: a keyboard cursor walks the visible Settings page and speaks each element (`reader`).
     pub screen_reader: bool,
+    /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
+    pub sticky_keys: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -71,7 +73,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -89,6 +91,7 @@ impl AccessibilitySettings {
             dim_flashing_lights: flag("a11y_dim_flashing_lights", d.dim_flashing_lights),
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
+            sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -110,6 +113,7 @@ impl AccessibilitySettings {
             ("a11y_dim_flashing_lights", flag(self.dim_flashing_lights)),
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
+            ("a11y_sticky_keys", flag(self.sticky_keys)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -142,6 +146,7 @@ impl AccessibilitySettings {
 
     /// Makes these the values the hooks report.
     pub fn publish(&self) {
+        STICKY_KEYS.store(self.sticky_keys, std::sync::atomic::Ordering::Relaxed);
         bifrost_render::appearance::publish(bifrost_render::appearance::Appearance {
             text_scale: self.text_scale, zoom: self.zoom_factor(), hold_ms: self.hold_ms(),
             bold: self.bold_text, reduce_motion: self.reduce_motion,
@@ -159,6 +164,14 @@ impl Default for AccessibilitySettings {
     }
 }
 
+/// Sticky Keys as the last `publish` set it. The key loop keeps `HwKeys` in step with this.
+static STICKY_KEYS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Settings > Accessibility > Sticky Keys is on.
+pub fn sticky_keys() -> bool {
+    STICKY_KEYS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub use bifrost_render::appearance::{text_scale, bold_text, display_zoom, reduce_motion, increase_contrast, reduce_transparency, button_shapes, touch_hold_ms, contrast, contrast_on, button_shape_radius, anim_ms, long_press_ms};
 
 #[cfg(test)]
@@ -173,6 +186,19 @@ mod tests {
         assert_eq!(AccessibilitySettings::load(&p), a);
         assert_eq!(a.hold_ms(), 1500);
         assert!((a.zoom_factor() - 1.15).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sticky_keys_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).sticky_keys);
+        let a = AccessibilitySettings { sticky_keys: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).sticky_keys);
+        // the global the key loop reads: set directly, because `publish` also writes the window server's display file
+        STICKY_KEYS.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(sticky_keys());
+        STICKY_KEYS.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     #[test]

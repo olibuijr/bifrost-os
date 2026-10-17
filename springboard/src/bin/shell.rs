@@ -805,6 +805,10 @@ fn run() -> std::io::Result<()> {
                     let Some(code) = shell.tap_key(code, down) else { continue };
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
                     let kp = springboard::shell::kb_input::get();
+                    // Settings > Accessibility > Sticky Keys: the key path follows the saved switch
+                    if hw_keys.sticky_keys() != springboard::shell::accessibility::sticky_keys() {
+                        hw_keys.set_sticky_keys(springboard::shell::accessibility::sticky_keys());
+                    }
                     let code = kp.remap.apply(code);
                     key_repeat.set_timing(f64::from(kp.repeat_delay_ms), kp.repeat_rate);
                     shell.keyboard_viewer_key(code, down);

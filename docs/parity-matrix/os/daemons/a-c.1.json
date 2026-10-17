@@ -229,8 +229,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
-   "status": "partial",
-   "note": "rule: nearby and peer session models",
+   "status": "n/a",
+   "note": "n/a: AirPlay is Apple's proprietary streaming protocol and receiver. BifrOSt does not speak it; nearby discovery and peer sessions are generic (springboard/sdk/src/nearby_service.rs, peer_session.rs).",
    "rea": [],
    "method": "rule"
   },
@@ -250,8 +250,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "n/a",
+   "note": "n/a: Apple platform single sign-on brokers tokens for Apple accounts and managed Apple identity providers. BifrOSt has no Apple account service. Kerberos stays in springboard/sdk/src/gss_krb5.rs.",
    "rea": [],
    "method": "rule"
   },
@@ -715,7 +715,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "Disk sessions and arbitration run in core disk_session and the SDK disk_arbitration model. Both are used by the disk tools (diskutil-desktop actions and shell services/disks), and their tests cover the session rules."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.Dock.plist",
@@ -764,7 +778,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/dwell.rs",
    "status": "partial",
-   "note": "Dwell-click state only; not yet wired to the cursor service. built on os/team-m-07-daemons; not yet verified on Midget",
+   "note": "Dwell-click state only (shell/dwell.rs, with the accessibility model in shell/accessibility/dwell.rs). Not wired to the pointer: the click has to come from the bin input loop, and the dwell delay has no Settings switch yet.",
    "rea": [],
    "method": "heuristic"
   },
@@ -826,8 +840,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/mod.rs",
-   "status": "gap",
-   "note": "Family accounts, remote management and Screen Time sharing have no BifrOSt counterpart. The on-device usage and limit pieces are the Screen Time rows (springboard/src/shell/screentime), not this agent. Kept a gap.",
+   "status": "n/a",
+   "note": "n/a: family accounts and remote management run on Apple's family service with Apple IDs. BifrOSt has no equivalent service; the on-device Screen Time limits are the separate ScreenTimeAgent row.",
    "rea": [],
    "method": "heuristic"
   },
@@ -1106,7 +1120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs",
    "status": "partial",
-   "note": "Sticky Keys latches are wired into the key path: HwKeys taps them on modifier presses and holds the latched modifiers for the next text key (hwkeys.rs). No Settings switch calls set_sticky_keys yet, so the user cannot turn it on. Slow Keys, Repeat Keys and Mouse Keys are not built.",
+   "note": "Sticky Keys is on and off from Settings > Accessibility > Keyboard (a11y_sticky_keys, shell/accessibility/mod.rs). The switch drives HwKeys, which taps the latches on modifier presses and holds them for the next text key (hwkeys.rs). Slow Keys, Repeat Keys and Mouse Keys are not built.",
    "rea": [],
    "method": "heuristic"
   },
@@ -1513,8 +1527,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "n/a",
+   "note": "n/a: the sign-in UI for Apple platform single sign-on, which BifrOSt does not use (see AppSSOAgent). Kerberos stays in springboard/sdk/src/gss_krb5.rs.",
    "rea": [],
    "method": "rule"
   },
@@ -1534,8 +1548,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs",
-   "status": "partial",
-   "note": "rule: nearby and peer session models",
+   "status": "n/a",
+   "note": "n/a: the pairing UI of Apple's Rapport device-to-device (Continuity) protocol. BifrOSt does not speak Rapport; generic peer sessions are in springboard/sdk/src/peer_session.rs.",
    "rea": [],
    "method": "rule"
   },
@@ -2458,7 +2472,21 @@
    "status": "partial",
    "note": "rule: accessory manager and external accessory models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "accessory_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "external_accessory::tests"
+    }
+   ],
+   "ready_note": "The accessory manager in core tracks connected accessories and their sensors. The SDK external_accessory and accessory_access modules use it, and the tests cover both."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accountsd.plist",
@@ -3601,7 +3629,21 @@
    "status": "partial",
    "note": "rule: defaults and preference domain models; Settings app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pref_domains::tests"
+    }
+   ],
+   "ready_note": "The preferences store runs in-process in the SDK defaults module, with per-domain rules in pref_domains. Apps read and write it (for example music-desktop and stickies-desktop), and the tests cover the store."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.chronod.plist",
@@ -4051,7 +4093,16 @@
    "status": "partial",
    "note": "rule: record store models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_store::tests"
+    }
+   ],
+   "ready_note": "The record store is the shared record model that the cloud record and sync modules build on (sdk cloud_records, ui record_sync and record_share). Its tests cover the store. data_store is a model with no caller yet and is not claimed here."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreidvd.plist",
@@ -4112,7 +4163,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pasteboard.rs",
    "status": "partial",
-   "note": "Pasteboard contents and Wayland offer only; no transfer progress UI",
+   "note": "Pasteboard contents and Wayland offers only (shell/pasteboard.rs). Not built: the transfer progress panel for a shared clipboard item that is still arriving.",
    "rea": [],
    "method": "heuristic"
   },
