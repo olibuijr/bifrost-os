@@ -10,6 +10,8 @@ pub(crate) enum Undo {
     Trash(Vec<(PathBuf, PathBuf)>),
     /// A folder created (removed again only while it is empty).
     NewFolder(PathBuf),
+    /// A link made by Make Alias (removed again only while it is still a link).
+    Alias(PathBuf),
 }
 
 impl Undo {
@@ -20,6 +22,7 @@ impl Undo {
             Undo::Move(_) => "Move",
             Undo::Trash(_) => "Trash",
             Undo::NewFolder(_) => "New Folder",
+            Undo::Alias(_) => "Make Alias",
         }
     }
 }
@@ -70,6 +73,11 @@ pub(crate) fn undo_step(step: &Undo, bin: &Path) -> Result<String, String> {
             failed.map_or(Ok("Put the items back".into()), Err)
         }
         Undo::NewFolder(path) => std::fs::remove_dir(path).map(|_| "Removed the new folder".into()).map_err(|_| "The new folder is no longer empty".into()),
+        Undo::Alias(link) => match link.symlink_metadata() {
+            Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(link).map(|_| "Removed the alias".to_string()).map_err(|e| batch::friendly(&e)),
+            Ok(_) => Err("The item is no longer an alias".into()),
+            Err(_) => Err("The alias is no longer there".into()),
+        },
     }
 }
 
@@ -127,6 +135,18 @@ mod tests {
         assert_eq!(std::fs::read_to_string(a.join("f 2")).unwrap(), "moved");
         assert!(!b.join("f").exists());
         assert!(undo_step(&Undo::Move(vec![(a.join("f"), b.join("f"))]), &d).is_err(), "already gone");
+    }
+
+    #[test]
+    fn undo_alias_removes_only_the_link() {
+        let d = scratch("alias");
+        std::fs::write(d.join("file"), "kept").unwrap();
+        let link = fs::make_alias(&d.join("file")).unwrap();
+        assert_eq!(Undo::Alias(link.clone()).name(), "Make Alias");
+        undo_step(&Undo::Alias(link.clone()), &d).unwrap();
+        assert!(link.symlink_metadata().is_err(), "the link is removed");
+        assert_eq!(std::fs::read_to_string(d.join("file")).unwrap(), "kept", "the original is untouched");
+        assert!(undo_step(&Undo::Alias(link), &d).is_err(), "a second undo finds nothing");
     }
 
     #[test]
