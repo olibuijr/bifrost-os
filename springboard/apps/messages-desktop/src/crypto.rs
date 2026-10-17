@@ -3,9 +3,10 @@
 //! Megolm session per encrypted room, the wire shapes of the key endpoints and to-device messages, the rotation policy,
 //! and the pickles that keep the state. Nothing here opens a connection: [`crate::api`] makes the calls.
 //!
-//! Not done yet: device verification (every device is unverified, and the room info must say so), key backup, cross-
-//! signing, room keys for devices that appear after a session was shared, and pictures or reactions in encrypted rooms
-//! (refused by [`crate::api`]). A sign-in makes a new device, so the pickle of an earlier device is never reloaded.
+//! The state is kept in the app's keychain (see [`KEY_ITEM`], [`DEVICE_ITEM`] and [`SESSIONS_ITEM`]): the device's account
+//! pickle is reloaded at the next sign-in of the same account on this machine, and every pickle is encrypted with the
+//! key item. Not done yet: device verification (every device is unverified, and the room info must say so), key backup,
+//! cross-signing, and pictures or reactions in encrypted rooms (refused by [`crate::api`]).
 
 use crate::protocol::{self, Body, Ciphertext, Event, ToDevice};
 use bifrost_core::json::{self, Json};
@@ -70,6 +71,10 @@ pub struct Machine {
     outbound: HashMap<String, (GroupSession, Outbound)>,
     /// The inbound Megolm sessions, by (room id, session id).
     inbound: HashMap<(String, String), InboundGroupSession>,
+    /// The key the pickles are encrypted with (held in the keychain). Without it nothing is saved.
+    pickle_key: Option<[u8; 32]>,
+    /// True when the state changed since the last [`Machine::snapshot`].
+    dirty: bool,
 }
 
 impl Machine {
@@ -87,7 +92,45 @@ impl Machine {
             devices: HashMap::new(),
             outbound: HashMap::new(),
             inbound: HashMap::new(),
+            pickle_key: None,
+            dirty: false,
         }
+    }
+
+    /// The device id this machine runs as.
+    pub fn device_id(&self) -> &str {
+        &self.device_id
+    }
+
+    /// Sets the key the pickles are written with, and marks the state dirty so it is saved.
+    pub fn set_pickle_key(&mut self, key: [u8; 32]) {
+        self.pickle_key = Some(key);
+        self.dirty = true;
+    }
+
+    /// The encrypted pickles of the Olm and Megolm sessions, as a sessions item (one record per line; see
+    /// [`Machine::load_sessions`]). `None` when there are none.
+    fn sessions_blob(&self, _key: &[u8; 32]) -> Option<String> {
+        None
+    }
+
+    /// Restores the sessions a [`Machine::sessions_blob`] wrote. Returns how many were restored.
+    pub fn load_sessions(&mut self, _key: &[u8; 32], _blob: &str) -> Result<usize, String> {
+        Ok(0)
+    }
+
+    /// The state to write to the keychain, when it changed since the last call and a pickle key is set. The items are
+    /// the pickle key, the device (its id and encrypted account pickle), and the Megolm and Olm sessions (encrypted).
+    pub fn snapshot(&mut self) -> Option<Snapshot> {
+        let key = self.pickle_key?;
+        if !std::mem::take(&mut self.dirty) {
+            return None;
+        }
+        Some(Snapshot {
+            key: key_item(&key),
+            device: device_item(&self.device_id, &self.pickle(&key)),
+            sessions: self.sessions_blob(&key),
+        })
     }
 
     /// The account, encrypted with `key` (32 bytes from [`new_pickle_key`]). Only the pickle is ever stored.
@@ -136,6 +179,7 @@ impl Machine {
     /// The body of `POST /keys/upload`: the device keys and `count` new signed one-time keys. Call
     /// [`Machine::mark_published`] once the server has answered.
     pub fn upload_body(&mut self, count: usize) -> Json {
+        self.dirty = true;
         self.account.generate_one_time_keys(count);
         let mut keys = Vec::new();
         for (id, key) in self.account.one_time_keys() {
@@ -149,6 +193,7 @@ impl Machine {
 
     /// Marks the one-time keys of the last [`Machine::upload_body`] as published, so they are not offered again.
     pub fn mark_published(&mut self) {
+        self.dirty = true;
         self.account.mark_keys_as_published();
     }
 
@@ -236,6 +281,7 @@ impl Machine {
                 });
                 if let Some(session) = session {
                     self.olm.insert(device.curve25519.clone(), session);
+                    self.dirty = true;
                     made += 1;
                 }
             }
@@ -270,6 +316,7 @@ impl Machine {
         let session = GroupSession::new(MegolmConfig::version_1());
         let key = session.session_key().to_base64();
         let session_id = session.session_id();
+        self.dirty = true;
         self.outbound.insert(room.to_string(), (session, Outbound { created_ms: now_ms, messages: 0, members: sorted.clone() }));
 
         let mut messages = Vec::new();
@@ -325,6 +372,7 @@ impl Machine {
         let mut taken = 0;
         for event in events.iter().filter(|e| e.kind == "m.room.encrypted") {
             let Some(plain) = self.open_olm(&event.content) else { continue };
+            self.dirty = true;
             if self.accept_room_key(&event.sender, &plain) {
                 taken += 1;
             }
@@ -377,6 +425,7 @@ impl Machine {
         };
         let Ok(key) = SessionKey::from_base64(&session_key) else { return false };
         let inbound = InboundGroupSession::new(&key, MegolmConfig::version_1());
+        self.dirty = true;
         self.inbound.insert((room, session_id), inbound);
         true
     }
@@ -386,6 +435,7 @@ impl Machine {
     pub fn encrypt_room_event(&mut self, room: &str, event_type: &str, content: &Json) -> Result<Json, String> {
         let (mine, _) = self.identity();
         let device_id = self.device_id.clone();
+        self.dirty = true;
         let (session, state) = self.outbound.get_mut(room).ok_or("no room key for this room yet")?;
         let plain = protocol::obj(vec![
             ("type", protocol::text(event_type)),
@@ -446,43 +496,52 @@ pub fn new_pickle_key() -> Result<[u8; 32], String> {
     Ok(key)
 }
 
-/// The keychain value of a device's pickle: the pickle key in hex, a newline, then the pickle. Both live in the keychain
-/// item, so the pickle is never stored without its key and never written to disk as plain text.
-pub fn vault_value(key: &[u8; 32], pickled: &str) -> String {
-    let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
-    format!("{hex}\n{pickled}")
+/// The keychain items the crypto state lives in. Each is one app keychain item per homeserver (service = prefix plus the
+/// homeserver address) and per login (account = the user id as typed at sign-in), so the same account on this machine
+/// finds its device again. The pickle key is its own item, and every pickle is encrypted with it.
+pub const KEY_ITEM: &str = "matrix-key:";
+pub const DEVICE_ITEM: &str = "matrix-device:";
+pub const SESSIONS_ITEM: &str = "matrix-sessions:";
+
+/// The keychain service of one of the crypto items for `homeserver`.
+pub fn item_service(prefix: &str, homeserver: &str) -> String {
+    format!("{prefix}{homeserver}")
 }
 
-/// The pickle key and pickle of a [`vault_value`]; `None` for a value that is not one.
-pub fn split_vault_value(value: &str) -> Option<([u8; 32], &str)> {
-    let (hex, pickled) = value.split_once('\n')?;
-    if hex.len() != 64 {
+/// The key item's value: the 32-byte pickle key in hex.
+pub fn key_item(key: &[u8; 32]) -> String {
+    key.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The pickle key of a key item; `None` for a value that is not one.
+pub fn parse_key_item(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64 {
         return None;
     }
     let mut key = [0u8; 32];
     for (i, byte) in key.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(hex.get(i * 2..i * 2 + 2)?, 16).ok()?;
+        *byte = u8::from_str_radix(value.get(i * 2..i * 2 + 2)?, 16).ok()?;
     }
-    Some((key, pickled))
+    Some(key)
 }
 
-/// Where a device's pickle is kept. The app's keychain item is the real store; the window binds it through this trait.
-pub trait Vault {
-    fn load(&self, account: &str) -> Option<String>;
-    fn store(&mut self, account: &str, value: &str) -> Result<(), String>;
+/// The device item's value: the device id, a newline, then the account pickle (encrypted with the pickle key).
+pub fn device_item(device_id: &str, pickled: &str) -> String {
+    format!("{device_id}\n{pickled}")
 }
 
-/// The keychain account a device's pickle is stored under.
-pub fn vault_account(user_id: &str, device_id: &str) -> String {
-    format!("{user_id}/{device_id}")
+/// The device id and account pickle of a device item; `None` for a value that is not one.
+pub fn parse_device_item(value: &str) -> Option<(&str, &str)> {
+    value.split_once('\n')
 }
 
-/// Makes the device for a new login and stores its pickle in `vault`. Each sign-in is a new device, as the access token is.
-pub fn open(vault: &mut dyn Vault, user_id: &str, device_id: &str) -> Result<Machine, String> {
-    let machine = Machine::new(user_id, device_id);
-    let key = new_pickle_key()?;
-    vault.store(&vault_account(user_id, device_id), &vault_value(&key, &machine.pickle(&key)))?;
-    Ok(machine)
+/// The state to write to the keychain after a change: the key item, the device item and the sessions item (`None`
+/// when there are no sessions to save yet).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+    pub key: String,
+    pub device: String,
+    pub sessions: Option<String>,
 }
 
 /// The signing key and identity of one device in a keys/query answer, when the device is signed by its own key.
@@ -653,36 +712,38 @@ mod tests {
     }
 
     #[test]
-    fn a_pickle_round_trips_through_the_vault_value() {
-        let key = [7u8; 32];
-        let m = Machine::new("@a:x", "DEVA");
+    fn a_device_round_trips_through_its_keychain_items() {
+        let mut m = Machine::new("@a:x", "DEVA");
         let (curve, ed) = m.identity();
-        let value = vault_value(&key, &m.pickle(&key));
-        let (got_key, pickled) = split_vault_value(&value).expect("a vault value");
-        assert_eq!(got_key, key);
-        let back = Machine::restore("@a:x", "DEVA", &got_key, pickled).unwrap();
+        assert!(m.snapshot().is_none(), "no key yet, so nothing is saved");
+        m.set_pickle_key([7u8; 32]);
+        let snap = m.snapshot().expect("the first snapshot after the key is set");
+        assert!(m.snapshot().is_none(), "a snapshot is taken once per change");
+        assert_eq!(parse_key_item(&snap.key), Some([7u8; 32]));
+        let (device, pickled) = parse_device_item(&snap.device).expect("a device item");
+        assert_eq!(device, "DEVA");
+        assert!(!snap.device.contains(&ed), "the pickle does not show the signing key in plain text");
+        let back = Machine::restore("@a:x", device, &[7u8; 32], pickled).unwrap();
         assert_eq!(back.identity(), (curve, ed));
-        assert!(split_vault_value("not a vault value").is_none());
-    }
-
-    struct MemoryVault(HashMap<String, String>);
-
-    impl Vault for MemoryVault {
-        fn load(&self, account: &str) -> Option<String> {
-            self.0.get(account).cloned()
-        }
-        fn store(&mut self, account: &str, value: &str) -> Result<(), String> {
-            self.0.insert(account.to_string(), value.to_string());
-            Ok(())
-        }
+        assert!(parse_key_item("not a key").is_none());
+        assert!(parse_device_item("no newline").is_none());
     }
 
     #[test]
-    fn a_new_login_stores_its_pickle_under_its_device_only() {
-        let mut vault = MemoryVault(HashMap::new());
-        let m = open(&mut vault, "@a:x", "DEVA").unwrap();
-        let stored = vault.load(&vault_account("@a:x", "DEVA")).expect("stored");
-        assert!(!stored.contains(&m.identity().1), "the pickle does not show the signing key in plain text");
-        assert!(vault.load(&vault_account("@a:x", "OTHER")).is_none());
+    fn keychain_item_names_are_per_homeserver() {
+        assert_eq!(item_service(DEVICE_ITEM, "https://matrix.example.org"), "matrix-device:https://matrix.example.org");
+        assert_ne!(item_service(KEY_ITEM, "https://a.example"), item_service(KEY_ITEM, "https://b.example"));
+    }
+
+    #[test]
+    fn a_device_restored_from_a_pickle_keeps_its_one_time_keys() {
+        let key = [9u8; 32];
+        let mut m = Machine::new("@a:x", "DEVA");
+        m.upload_body(3);
+        m.mark_published();
+        let pickled = m.pickle(&key);
+        let back = Machine::restore("@a:x", "DEVA", &key, &pickled).unwrap();
+        assert_eq!(back.identity(), m.identity());
+        assert!(Machine::restore("@a:x", "DEVA", &[1u8; 32], &pickled).is_err(), "the wrong key does not open it");
     }
 }

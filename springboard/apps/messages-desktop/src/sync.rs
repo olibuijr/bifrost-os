@@ -62,8 +62,15 @@ fn notify(tx: &EventQueue, wake: &mut Option<UnixStream>, event: Event) -> bool 
 }
 
 /// Signs in to `homeserver` as `user`. The result carries the session, or the error the server gave.
-pub fn sign_in(transport: Arc<dyn Transport>, homeserver: String, user: String, password: String, typed: bool) -> Event {
-    let result = Api::login(transport, &homeserver, &user, &password).map(Arc::new);
+pub fn sign_in(
+    transport: Arc<dyn Transport>,
+    homeserver: String,
+    user: String,
+    password: String,
+    typed: bool,
+    device_hint: Option<String>,
+) -> Event {
+    let result = Api::login(transport, &homeserver, &user, &password, device_hint.as_deref()).map(Arc::new);
     Event::SignedIn { homeserver, user, password, typed, result }
 }
 

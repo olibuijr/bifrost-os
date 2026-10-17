@@ -348,14 +348,19 @@ pub fn upload_url(base: &str, file_name: &str) -> String {
 }
 
 /// The login request: a password login for `user` (a local part or a full Matrix id).
-pub fn login_body(user: &str, password: &str) -> String {
-    obj(vec![
+/// With `device_id`, the login asks the server for that device again (its keys and one-time keys stay); without it, a new
+/// device is made.
+pub fn login_body(user: &str, password: &str, device_id: Option<&str>) -> String {
+    let mut fields = vec![
         ("type", text("m.login.password")),
         ("identifier", obj(vec![("type", text("m.id.user")), ("user", text(user))])),
         ("password", text(password)),
         ("initial_device_display_name", text(DEVICE_NAME)),
-    ])
-    .encode()
+    ];
+    if let Some(device) = device_id {
+        fields.push(("device_id", text(device)));
+    }
+    obj(fields).encode()
 }
 
 /// The content of a plain text message.
@@ -816,10 +821,13 @@ mod tests {
 
     #[test]
     fn login_body_is_a_password_login_with_a_user_identifier() {
-        let body = parse(&login_body("alice", "p\"w"));
+        let body = parse(&login_body("alice", "p\"w", None));
         assert_eq!(body.str_field("type").as_deref(), Some("m.login.password"));
         assert_eq!(body.get("identifier").and_then(|i| i.str_field("user")).as_deref(), Some("alice"));
         assert_eq!(body.str_field("password").as_deref(), Some("p\"w"), "quotes survive the encoding");
+        assert!(body.get("device_id").is_none(), "no device asked for, a new one is made");
+        let again = parse(&login_body("alice", "pw", Some("OLDDEV")));
+        assert_eq!(again.str_field("device_id").as_deref(), Some("OLDDEV"), "the stored device is asked for again");
     }
 
     #[test]

@@ -34,9 +34,9 @@ pub struct Api {
 
 impl Api {
     /// Signs in with a user name and password. Makes a new device on the account, so the token is per start.
-    pub fn login(transport: Arc<dyn Transport>, base: &str, user: &str, password: &str) -> Result<Api, String> {
+    pub fn login(transport: Arc<dyn Transport>, base: &str, user: &str, password: &str, device_hint: Option<&str>) -> Result<Api, String> {
         let http = Client::new(transport, Jar::default()).require_https();
-        let body = protocol::login_body(user, password);
+        let body = protocol::login_body(user, password, device_hint);
         let url = protocol::login_url(base);
         let answer = call(&http, "POST", &url, None, Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
         let Login { user_id, access_token, device_id } = protocol::parse_login(&answer)?;
@@ -50,6 +50,39 @@ impl Api {
             crypto,
             encrypted_rooms: Mutex::new(HashSet::new()),
         })
+    }
+
+    /// Installs the crypto state of this login. `stored` is the device the keychain holds for the account (its id and
+    /// pickle) and `key` its pickle key; the stored device is used only when the server gave back the same device id.
+    /// Otherwise a new device is made. Returns true when the stored device was restored. The state is marked dirty, so
+    /// the next [`Api::take_snapshot`] writes it.
+    pub fn install_crypto(&self, key: Option<[u8; 32]>, stored: Option<(&str, &str)>, sessions: Option<&str>) -> Result<bool, String> {
+        let key = match key {
+            Some(key) => key,
+            None => crypto::new_pickle_key()?,
+        };
+        let mut restored = false;
+        let mut next = None;
+        if let Some((device, pickled)) = stored {
+            if device == self.device_id {
+                if let Ok(mut m) = Machine::restore(&self.user_id, &self.device_id, &key, pickled) {
+                    if let Some(blob) = sessions {
+                        let _ = m.load_sessions(&key, blob);
+                    }
+                    next = Some(m);
+                    restored = true;
+                }
+            }
+        }
+        let mut machine = next.unwrap_or_else(|| Machine::new(&self.user_id, &self.device_id));
+        machine.set_pickle_key(key);
+        *self.crypto.lock().map_err(|_| "the encryption state is unavailable".to_string())? = machine;
+        Ok(restored)
+    }
+
+    /// The keychain items to write, when the crypto state changed since the last call (see [`Machine::snapshot`]).
+    pub fn take_snapshot(&self) -> Option<crypto::Snapshot> {
+        self.crypto.lock().ok()?.snapshot()
     }
 
     /// Takes in a sync answer before the window sees it: the rooms' encryption state is noted, the device keys of the
