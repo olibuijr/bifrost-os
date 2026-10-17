@@ -274,6 +274,13 @@ pub mod history {
     pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
 }
 
+/// Contact pictures (CNContact image and thumbnail data): PNG or JPEG only, detected from the first bytes, capped at
+/// `photos::MAX_BYTES`. `Photos::set` replaces a contact's picture and keeps the old one when the new data is refused;
+/// `fit_size` works out a thumbnail size inside a square. Notes are plain text on the contact record.
+pub mod photos {
+    pub use bifrost_ui::contact_photo::{fit_size, format_of, Error, Format, Photos, MAX_BYTES};
+}
+
 /// Contact display preferences (CNContactsUserDefaults and CNContactFormatter sort order): the sort order a list uses,
 /// the country code a phone number is written with, and the sort helpers. `ContactsDefaults` keeps the user's choice;
 /// `effective_sort_order` resolves "system default" against the system's order.
@@ -358,6 +365,17 @@ mod tests {
         assert_eq!(ids(matching(&people, Key::GivenName, " ADA ")), vec![1]);
         assert_eq!(ids(matching(&people, Key::Emails, "example")), vec![1]);
         assert_eq!(ids(matching(&people, Key::Emails, "")), vec![1]);
+    }
+
+    #[test]
+    fn a_refused_picture_keeps_the_contacts_old_picture() {
+        let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+        let mut photos = photos::Photos::new();
+        assert_eq!(photos.set(4, &png), Ok(photos::Format::Png));
+        assert_eq!(photos.set(4, b"not a picture"), Err(photos::Error::UnknownFormat));
+        assert_eq!(photos.data(4), Some(&png[..]));
+        assert_eq!(photos.format(4), Some(photos::Format::Png));
+        assert_eq!(photos::fit_size(400, 200, 100), (100, 50));
     }
 
     #[test]
