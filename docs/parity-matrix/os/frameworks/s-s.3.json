@@ -1456,7 +1456,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no app-facing microphone permission prompt; the audio service records only on explicit user action (speech.json gaps).",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: no app-facing microphone permission prompt; the audio service records only on explicit user action (speech.json gaps). Checked 2026-10-17: the SDK already has privacy_permissions::request for the microphone (sdk privacy_permissions.rs), which the shell answers with an Allow sheet. Still open: the audio service records only on explicit user action (springboard/proto/src/svc.rs), so no app can stream microphone audio.",
    "rea": [],
    "method": "assessed"
   },
@@ -3730,7 +3730,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps).",
+   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps). Built 2026-10-17: savePresentedItemChanges negotiation (sdk file_coordination save_presented_item_changes, tests file_coordination::tests) and a watch stream pumped into presenters (file_coordination::pump). Still open: relinquish negotiation.",
    "rea": [],
    "method": "assessed"
   },

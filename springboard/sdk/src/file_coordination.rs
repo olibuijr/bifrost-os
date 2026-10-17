@@ -11,7 +11,10 @@
 //! items this process just wrote through `coordinate_writing` are dropped once, so a presenter does not hear its own
 //! write (Apricot: the writer is excluded). Presenters run on the calling (main) thread.
 //!
-//! Gaps: no `relinquish`/`savePresentedItemChanges` negotiation, no `itemAtURL:willMoveToURL:` callbacks (a rename is
+//! Before a coordinated write runs, every presenter of the item is asked to `save_presented_item_changes` (the
+//! `savePresentedItemChanges` negotiation); a presenter that refuses stops the write with an error and `f` is not run.
+//!
+//! Gaps: no `relinquish` negotiation, no `itemAtURL:willMoveToURL:` callbacks (a rename is
 //! reported as `presented_item_did_change` on the old and new path), no ubiquitous-item or version coordination,
 //! and locking is advisory (a process that does not coordinate is not blocked). The suppression of own writes is
 //! per path and consumed by the first event, so a write that raises several coalesced events is heard once.
@@ -22,7 +25,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use crate::fswatch::{WatchEvent, WatchEventFlags};
+use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream};
 
 extern "C" {
     fn flock(fd: i32, op: i32) -> i32;
@@ -55,6 +58,11 @@ pub trait FilePresenter {
     fn presented_item_did_change(&mut self, _path: &Path) {}
     /// `accommodatePresentedItemDeletion`: the item was removed or moved away.
     fn accommodate_deletion(&mut self, _path: &Path) {}
+    /// `savePresentedItemChanges`: a coordinated writer is about to change `path` inside this item. The presenter
+    /// flushes its pending edits; `Err` refuses the write and the writer's closure does not run.
+    fn save_presented_item_changes(&mut self, _path: &Path) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 struct Entry {
@@ -107,13 +115,40 @@ impl NativeFileCoordinator {
         Ok(f(path))
     }
 
-    /// `coordinate(writingItemAt:)`: runs `f` under an exclusive lock; presenters in this process are not told about
-    /// the resulting change.
+    /// `coordinate(writingItemAt:)`: first asks this process's presenters of the item to save (see
+    /// `save_presented_item_changes`), then runs `f` under an exclusive lock. Presenters in this process are not told
+    /// about the resulting change.
     pub fn coordinate_writing<R>(&self, path: &Path, f: impl FnOnce(&Path) -> R) -> Result<R, CoordinationError> {
+        // before the lock: a presenter that writes through the coordinator itself must not wait on its own lock
+        save_presented_changes(path)?;
         let _guard = lock(path, LOCK_EX)?;
         STATE.with(|s| s.borrow_mut().own_writes.insert(path.to_path_buf()));
         Ok(f(path))
     }
+}
+
+/// Asks every presenter of an item containing `path` to save; stops at the first refusal.
+fn save_presented_changes(path: &Path) -> Result<(), CoordinationError> {
+    // take the presenters out so a callback may add or drop presenters, as in `deliver_events`
+    let mut taken: Vec<Entry> = STATE.with(|s| std::mem::take(&mut s.borrow_mut().presenters));
+    let mut result = Ok(());
+    for e in taken.iter_mut() {
+        let url = e.presenter.presented_item_url();
+        if path != url && !path.starts_with(&url) {
+            continue;
+        }
+        if let Err(reason) = e.presenter.save_presented_item_changes(path) {
+            result = Err(CoordinationError::Io(std::io::Error::other(reason)));
+            break;
+        }
+    }
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let added = std::mem::take(&mut s.presenters);
+        s.presenters = taken;
+        s.presenters.extend(added);
+    });
+    result
 }
 
 struct Guard(std::fs::File);
@@ -170,6 +205,12 @@ pub fn deliver_events(events: &[WatchEvent]) {
     }
 }
 
+/// Callback delivery for presenters: polls `stream` at `now` and hands each non-empty batch to the registered
+/// presenters, so an app does not write its own poll loop. Returns the number of events delivered.
+pub fn pump(stream: &mut WatchStream, now: Instant) -> usize {
+    stream.deliver(now, deliver_events)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +258,68 @@ mod tests {
         drop(NativeFileCoordinator::add_presenter(Box::new(P { url: file.clone(), log: log.clone() })));
         deliver_events(&[ev(&file, WatchEventFlags::MODIFIED)]);
         assert!(log.borrow().is_empty());
+    }
+
+    struct Saver {
+        url: PathBuf,
+        log: Rc<RefCell<Vec<String>>>,
+        refuse: bool,
+    }
+    impl FilePresenter for Saver {
+        fn presented_item_url(&self) -> PathBuf {
+            self.url.clone()
+        }
+        fn save_presented_item_changes(&mut self, path: &Path) -> Result<(), String> {
+            self.log.borrow_mut().push(format!("save {}", path.file_name().unwrap().to_string_lossy()));
+            if self.refuse { Err("busy".into()) } else { Ok(()) }
+        }
+    }
+
+    #[test]
+    fn writers_ask_the_presenters_of_that_item_to_save_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("d.txt");
+        let other = dir.path().join("e.txt");
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let _a = NativeFileCoordinator::add_presenter(Box::new(Saver { url: file.clone(), log: log.clone(), refuse: false }));
+        let _b = NativeFileCoordinator::add_presenter(Box::new(Saver { url: other, log: log.clone(), refuse: false }));
+        NativeFileCoordinator.coordinate_writing(&file, |p| std::fs::write(p, b"x").unwrap()).unwrap();
+        assert_eq!(*log.borrow(), ["save d.txt"], "only the presenter of the written item is asked");
+    }
+
+    #[test]
+    fn a_refusing_presenter_stops_the_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("f.txt");
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let _t = NativeFileCoordinator::add_presenter(Box::new(Saver { url: file.clone(), log: log.clone(), refuse: true }));
+        let mut ran = false;
+        let result = NativeFileCoordinator.coordinate_writing(&file, |_| ran = true);
+        assert!(result.is_err(), "the refusal is returned to the writer");
+        assert!(!ran, "the closure does not run");
+        assert!(!file.exists());
+        // the presenter is still registered after the refusal
+        let _ = NativeFileCoordinator.coordinate_writing(&file, |_| ());
+        assert_eq!(log.borrow().len(), 2);
+    }
+
+    #[test]
+    fn pump_feeds_presenters_from_a_watch_stream() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("g.txt");
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let _t = NativeFileCoordinator::add_presenter(Box::new(P { url: file.clone(), log: log.clone() }));
+        let flags = WatchStreamFlags::FILE_EVENTS.union(WatchStreamFlags::NO_DEFER);
+        let mut stream = WatchStream::new(&[dir.path().to_path_buf()], Duration::from_millis(20), flags);
+        assert!(stream.start());
+        // another process (not coordinated) writes the item
+        std::fs::write(&file, b"y").unwrap();
+        let end = Instant::now() + Duration::from_secs(3);
+        while log.borrow().is_empty() && Instant::now() < end {
+            pump(&mut stream, Instant::now());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(*log.borrow(), ["change g.txt"]);
     }
 
     #[test]
