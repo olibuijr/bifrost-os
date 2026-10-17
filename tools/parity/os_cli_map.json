@@ -207,7 +207,7 @@
     "nfs4mapid": "nfsidmap",
     "nfsd": "rpc.nfsd",
     "nfsstat": "nfsstat",
-    "notifyutil": null,
+    "notifyutil": "notifyutil",
     "nslookup": "nslookup",
     "nsupdate": "nsupdate",
     "nvram": "efibootmgr",

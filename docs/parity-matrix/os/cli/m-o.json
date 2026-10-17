@@ -1341,9 +1341,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no BifrOSt or Linux equivalent",
+   "bifrost": "springboard/cmd/src/bin/notifyutil.rs (bifrost_cmd::notifyutil) over the shell's notify bus (springboard/src/shell/services/notify_bus.rs, control line `notify`)",
+   "status": "partial",
+   "note": "BifrOSt bus only: names are not the Darwin system names, -w polls the token every 50 ms instead of a pushed event, names cannot hold white space, state is a whole number up to 2^53. Not run on Midget; the shell side is unbuilt.",
    "rea": [],
    "method": "assessed"
   },

@@ -6,6 +6,7 @@ pub mod ditto;
 pub mod caffeinate;
 pub mod control;
 pub mod network;
+pub mod notifyutil;
 pub mod networksetup;
 pub mod diskutil;
 pub mod launchctl;

@@ -80,6 +80,9 @@ pub enum Request {
     Lock,
     /// `term <verb> key=value ...` (values percent-encoded): Term agent control, see `shell/terminal/control.rs`.
     Term(String, Vec<(String, String)>),
+    /// `notify <verb> <args>`: the named-notification bus for the command line (`notifyutil`). The words are checked by
+    /// `shell::services::notify_bus::control`, which runs them as a call on the bus service.
+    Notify(Vec<String>),
     /// `image-attach ro|rw <absolute image path>`: binds the image to a loop device and mounts it (`shell::disk_image`).
     ImageAttach { read_only: bool, path: String },
     /// `image-detach <loop device or mount folder>`: unmounts the image and releases its loop device.
@@ -152,6 +155,9 @@ pub fn parse(line: &str) -> Result<Request, String> {
         let verb = w.next().ok_or("usage: term <verb> key=value ...")?.to_string();
         let args = w.filter_map(|p| p.split_once('=')).map(|(k, v)| (k.to_string(), pct_decode(v))).collect();
         return Ok(Request::Term(verb, args));
+    }
+    if let Some(rest) = line.trim().strip_prefix("notify ") {
+        return Ok(Request::Notify(rest.split_whitespace().map(str::to_string).collect()));
     }
     // the folder may contain spaces, so it takes the rest of the line
     if let Some(rest) = line.trim_end().strip_prefix("open-folder ") {
@@ -445,5 +451,12 @@ mod tests {
         assert!(parse("term").is_err());
         assert_eq!(pct_decode("a%2"), "a%2");
         assert_eq!(pct_decode("%zz%41"), "%zzA");
+    }
+
+    #[test]
+    fn notify_requests_keep_their_words() {
+        assert_eq!(parse("notify post com.example.refresh\n"), Ok(Request::Notify(vec!["post".into(), "com.example.refresh".into()])));
+        assert_eq!(parse("notify set a.b 42"), Ok(Request::Notify(vec!["set".into(), "a.b".into(), "42".into()])));
+        assert_eq!(parse("notify"), Err("unknown command Some(\"notify\")".into()));
     }
 }

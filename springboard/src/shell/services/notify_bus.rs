@@ -158,7 +158,8 @@ impl NotifyBus {
     /// Cancels the tokens of every app that `running` does not name. An app that exits never cancels its tokens,
     /// so without this its tokens would stay posted to and count against [`MAX_TOKENS_PER_APP`] on every later launch.
     fn prune(&mut self, running: impl Fn(&str) -> bool) {
-        let gone: Vec<u32> = self.owners.iter().filter(|(_, o)| !running(&o.app)).map(|(&t, _)| t).collect();
+        // the command line has no app to run; its tokens are cancelled by the client when it exits (see `control`)
+        let gone: Vec<u32> = self.owners.iter().filter(|(_, o)| o.app != CONTROL_OWNER && !running(&o.app)).map(|(&t, _)| t).collect();
         for token in gone {
             self.center.cancel(token);
             self.owners.remove(&token);
@@ -326,6 +327,37 @@ impl SystemService for NotifyBus {
         self.system_changes(now);
         self.deliver()
     }
+}
+
+/// The owner of the calls the command line makes through the shell's control socket (`notifyutil`).
+pub const CONTROL_OWNER: &str = "control";
+
+/// Answers one `notify` control line (`control::Request::Notify`): `post NAME`, `set NAME VALUE`, `get NAME`,
+/// `register NAME`, `check TOKEN`, `cancel TOKEN`. The answer is the reply's JSON, which the client reads. `register`
+/// makes a poll token (the client checks it until a post comes), owned by [`CONTROL_OWNER`]; the client cancels it when
+/// it exits, so a killed client leaves at most [`MAX_TOKENS_PER_APP`] tokens behind for the control owner.
+pub fn control(shell: &mut Shell, words: &[String], t: f64) -> Result<String, String> {
+    const USAGE: &str = "usage: notify post NAME | set NAME VALUE | get NAME | register NAME | check TOKEN | cancel TOKEN";
+    let (verb, args) = words.split_first().ok_or(USAGE)?;
+    let name = |n: &str| bifrost_core::json::quote(n);
+    let (method, body) = match (verb.as_str(), args) {
+        ("post", [n]) => ("post", format!("{{\"name\":{}}}", name(n))),
+        ("get", [n]) => ("state", format!("{{\"name\":{}}}", name(n))),
+        ("set", [n, value]) => {
+            let state: u64 = value.parse().map_err(|_| format!("notify: {value} is not a whole number"))?;
+            ("set_state", format!("{{\"name\":{},\"state\":{state}}}", name(n)))
+        }
+        ("register", [n]) => ("register", format!("{{\"name\":{},\"mode\":\"poll\"}}", name(n))),
+        ("check", [token]) => ("check", format!("{{\"token\":{}}}", token_word(token)?)),
+        ("cancel", [token]) => ("cancel", format!("{{\"token\":{}}}", token_word(token)?)),
+        _ => return Err(USAGE.into()),
+    };
+    let reply = shell.service_call(CONTROL_OWNER, SERVICE, method, &body, t)?;
+    Ok(reply.encode())
+}
+
+fn token_word(word: &str) -> Result<u32, String> {
+    word.parse::<u32>().ok().filter(|&n| n >= 1).ok_or_else(|| format!("notify: {word} is not a token"))
 }
 
 fn is_system(name: &str) -> bool {
@@ -541,6 +573,34 @@ mod tests {
         bus.prune(|_| true);
         assert_eq!(bus.owners.len(), 2);
         assert_eq!(number(&bus.handle("app.c", "post", &name("app.x.keep")), "delivered"), 2.0);
+    }
+
+    #[test]
+    fn a_command_line_poll_token_survives_prune_and_sees_one_post() {
+        let mut bus = NotifyBus::default();
+        let poll = params(vec![("name", Json::Str("app.x.cli".into())), ("mode", Json::Str("poll".into()))]);
+        let id = number(&bus.handle(CONTROL_OWNER, "register", &poll), "token") as u32;
+        bus.prune(|_| false);
+        assert!(bus.owners.contains_key(&id), "the command line has no app to run, so nothing prunes its token");
+        assert_eq!(number(&bus.handle("app.b", "post", &name("app.x.cli")), "delivered"), 1.0);
+        assert_eq!(bus.handle(CONTROL_OWNER, "check", &token(id)).unwrap().get("pending"), Some(&Json::Bool(true)));
+        assert_eq!(bus.handle(CONTROL_OWNER, "check", &token(id)).unwrap().get("pending"), Some(&Json::Bool(false)), "a check clears the mark");
+    }
+
+    #[test]
+    fn set_and_get_keep_a_whole_number_state_per_name() {
+        let mut bus = NotifyBus::default();
+        let set = params(vec![("name", Json::Str("app.x.state".into())), ("state", Json::Num(42.0))]);
+        bus.handle(CONTROL_OWNER, "set_state", &set).unwrap();
+        assert_eq!(number(&bus.handle(CONTROL_OWNER, "state", &name("app.x.state")), "state"), 42.0);
+        assert_eq!(number(&bus.handle(CONTROL_OWNER, "state", &name("app.x.unset")), "state"), 0.0, "an unset name reads 0");
+    }
+
+    #[test]
+    fn control_words_are_checked_before_the_bus() {
+        assert_eq!(token_word("3"), Ok(3));
+        assert!(token_word("0").is_err());
+        assert!(token_word("x").is_err());
     }
 
     #[test]
