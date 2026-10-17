@@ -1741,7 +1741,8 @@ impl Shell {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
-            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+            // an extra window has no window-server id yet: it is drawn by the software path below (its frame blitted)
+            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && win_id(w.app).is_some() {
                 let id = apps().iter().position(|a| a.id == w.app).unwrap() as u32 + 1;
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
