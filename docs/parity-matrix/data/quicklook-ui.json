@@ -12,7 +12,7 @@
       "apple": "QLPreviewPanel: shared(), dataSource, reloadData(), refreshCurrentPreviewItem(), currentController",
       "bifrost": "springboard/sdk/src/peek.rs (PreviewPanel: set_items, step, toggle, reload_data, make_key_and_order_front, close, handle_key); springboard/proto/src/peek.rs (ToShell::Preview 0x1e0, PreviewClose 0x1e1); wired: springboard/src/shell/preview_panel.rs",
       "status": "partial",
-      "note": "The SDK sends the list and close messages, refresh_current_item re-sends the list, and handle_key maps the arrows, Space and Escape to the panel's step, toggle and close; the shell draws the panel (wired in 0.5.41). Headless tests: sdk/tests/parity_sdk-complete-11.rs (the_arrow_keys_step_through_the_list_without_wrapping, space_and_escape_are_handed_back_without_moving_the_index). Gap: there is no process-wide shared() panel, which the shell's single floating panel makes unnecessary, and no controller responder chain; the drawn panel and key delivery need a check on Midget."
+      "note": "The SDK sends the list and close messages, refresh_current_item re-sends the list, and handle_key maps the arrows, Space and Escape to the panel's step, toggle and close; the shell draws the panel (wired in 0.5.41), which resizes by dragging its right or bottom edge and has a full-screen button (springboard/src/shell/preview_panel.rs, tests there). Headless tests: sdk/tests/parity_sdk-complete-11.rs (the_arrow_keys_step_through_the_list_without_wrapping, space_and_escape_are_handed_back_without_moving_the_index). Gap: there is no process-wide shared() panel, which the shell's single floating panel makes unnecessary, and no controller responder chain; the drawn panel and key delivery need a check on Midget."
     },
     {
       "feature": "Preview items (QLPreviewItem)",
@@ -40,7 +40,7 @@
       "apple": "Quick Look generates previews for common file types (text, images, audio, video, PDF, documents)",
       "bifrost": "springboard/src/files/preview.rs (preview_for, line 28: text, image, audio card, video, PDF, folder summary, info card); springboard/src/files/mod.rs (spawn_preview: PDF text via the Books engine)",
       "status": "partial",
-      "note": "The preview choice by file type, text wrapping and picture size checks are tested headless in springboard/tests/parity_sdk-tests-16.rs. Only the Files app uses these. The shell panel also gives video, font and folder items a preview kind (springboard/src/shell/preview_panel.rs, tested there). The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
+      "note": "The preview choice by file type, text wrapping and picture size checks are tested headless in springboard/tests/parity_sdk-tests-16.rs. Only the Files app uses these. The shell panel also renders PDF pages (scrolled), sets font samples in the face, plays audio and video behind a transport, and gives folders an item count and size (springboard/src/shell/preview_panel.rs, tested there). The SDK offers no built-in renderer, so other apps get nothing unless they render thumbnails themselves."
     },
     {
       "feature": "Thumbnails (QLThumbnailGenerator)",
@@ -61,7 +61,7 @@
       "apple": "QLPreviewingController: preparePreviewOfFile(at:completionHandler:), preparePreviewOfSearchableItem(...), providePreview(for:completionHandler:)",
       "bifrost": "springboard/ui/src/preview.rs (Subject, Registry::register_searchable, Registry::provider_for_subject, Registry::unregister)",
       "status": "partial",
-      "note": "The model routes a file by its type and a searchable item by its longest matching domain, and unregister removes a provider with its types and domains. App manifests can now declare [[preview]] blocks (ui/src/preview_manifest.rs, with a generator Wait that falls back to the generic preview on timeout; tests in that file), but the shell does not call them yet. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_narrow_searchable_domain_beats_a_broader_one, file_subjects_must_name_an_absolute_file, searchable_subjects_drop_a_blank_query) and ui/tests/parity_sdk-complete-11.rs (unregistering_a_provider_removes_its_types_and_domains). Gap: no app registration reaches the shell and no searchable item preview is drawn; both need the shell side and a check on Midget."
+      "note": "The model routes a file by its type and a searchable item by its longest matching domain, and unregister removes a provider with its types and domains. App manifests can now declare [[preview]] blocks (ui/src/preview_manifest.rs, with a generator Wait that falls back to the generic preview on timeout; tests in that file), but the shell does not call them yet. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_narrow_searchable_domain_beats_a_broader_one, file_subjects_must_name_an_absolute_file, searchable_subjects_drop_a_blank_query) and ui/tests/parity_sdk-complete-11.rs (unregistering_a_provider_removes_its_types_and_domains). A declared generator now reaches the shell: an app's [[preview]] block (types, generator, timeout) is read from its manifest and the shell asks it for a picture over its control socket (springboard/src/shell/preview_gen.rs, tests with a fake exchanger). Gap: no searchable item preview is drawn, and the generator path needs a check on Midget."
     },
     {
       "feature": "Data-based preview extensions (QLPreviewProvider)",
@@ -72,12 +72,12 @@
     }
   ],
   "gaps": [
-    "The shell does not draw the Quick Look panel: ToShell::Preview and PreviewClose are decoded and ignored (springboard/proto/src/lib.rs:677-679).",
-    "No app-facing preview extension point: no equivalent of QLPreviewingController or QLPreviewProvider.",
+    "The shell draws the Quick Look panel (ToShell::Preview and PreviewClose, and the quick-look service). Not yet checked on Midget.",
+    "App-facing preview extension: only the [[preview]] generator path (PNG answer over the control socket) exists; no QLPreviewingController or QLPreviewProvider reply with HTML, PDF or file data reaches the shell.",
     "No embeddable preview view (QLPreviewView) in the SDK.",
     "The SDK has no built-in file renderers for QLThumbnailGenerator; each app renders its own thumbnails.",
     "No thumbnail update handlers or multi-representation requests.",
     "No panel data source or delegate protocol, no lazy loading block, and no display state for items.",
-    "The Files Quick Look menu item is not in springboard/apps/files/src/main.rs: the index returned a MENU_QUICK_LOOK constant there, but a grep of the current file finds none."
+    "File > Quick Look is a Files menu item (springboard/apps/files/src/main.rs, main_menu and menu_action), merged into the shell's File menu. Not yet checked on Midget."
   ]
 }
