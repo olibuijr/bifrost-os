@@ -186,6 +186,19 @@ pub enum Hit {
     Event { title: String },
 }
 
+#[cfg(test)]
+mod app_section_title_tests {
+    use super::app_section_title;
+
+    #[test]
+    fn an_app_section_is_titled_by_the_app_name_and_the_name_is_kept_once() {
+        let a = app_section_title("Notes");
+        assert_eq!(a, "Notes");
+        assert!(std::ptr::eq(a, app_section_title("Notes")), "the same name is kept once");
+        assert_eq!(app_section_title("Mail"), "Mail");
+    }
+}
+
 /// The label of an indexed result: its title, then its content type when it has one ("Q1 report · PDF document").
 fn indexed_label(title: &str, kind: &str) -> String {
     if kind.is_empty() {
@@ -408,7 +421,9 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
 
 /// The tables as the sources a query runs on.
 fn sources_of(tables: Vec<Table>) -> Vec<Arc<dyn search_rank::Source>> {
-    tables.into_iter().map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
+    // Settings > Search switches a section off: its source is not queried
+    let prefs = super::search_prefs::current();
+    tables.into_iter().filter(|t| prefs.source_on(t.name)).map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
 }
 
 /// The calculator answer for the query, as its group.
@@ -550,14 +565,34 @@ fn indexed_key(app_id: &str, unique_id: &str) -> String {
     format!("{app_id}/{unique_id}")
 }
 
-/// "Documents" section: items apps indexed with `CSSearchableIndex`, up to `PER_GROUP` rows. The indexed matches are
-/// ordered by the hybrid ranker (`bifrost_ui::search_rank`): title and word match, recency of indexing, and local
-/// opens. Matches the ranker does not score keep their index order after the ranked ones.
+/// The section title of an app's indexed items: the app's name. Names are kept for the rest of the run (an app name is
+/// a few bytes and there are at most a few dozen installed apps), so a section title stays a `&'static str`.
+fn app_section_title(name: &str) -> &'static str {
+    static NAMES: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+    let mut names = NAMES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(known) = names.iter().copied().find(|known| *known == name) {
+        return known;
+    }
+    let kept: &'static str = Box::leak(name.to_string().into_boxed_str());
+    names.push(kept);
+    kept
+}
+
+/// One section per app that has matching items, titled with the app's name. Items are ordered by the hybrid ranker
+/// (`bifrost_ui::search_rank`) across all apps at once: title and word match, recency of indexing, and local opens.
+/// Each section keeps its first `PER_GROUP` items in ranked order, and sections follow the best item of each app.
+/// Matches the ranker does not score keep their index order after the ranked ones.
 fn indexed_groups(query: &str) -> Vec<Group> {
-    let found = super::spotindex::search(query, PER_GROUP * 4);
+    // Settings > Search: the Documents source or an app's items switched off are left out
+    let prefs = super::search_prefs::current();
+    if !prefs.source_on("Documents") {
+        return vec![];
+    }
+    let found: Vec<super::spotindex::Found> = super::spotindex::search(query, PER_GROUP * 4).into_iter().filter(|f| prefs.app_on(&f.app_id)).collect();
     if found.is_empty() {
         return vec![];
     }
+    let names: BTreeMap<String, String> = super::apphost::installed().iter().map(|a| (a.manifest.id.clone(), a.manifest.name.clone())).collect();
     let items: Vec<search_rank::Item> = found
         .iter()
         .map(|f| search_rank::Item {
@@ -573,22 +608,28 @@ fn indexed_groups(query: &str) -> Vec<Group> {
     let empty = search_rank::Usage::default();
     let usage = guard.as_ref().unwrap_or(&empty);
     let order = search_rank::order(query, &items, usage, now, &search_rank::NoSemantic);
-    let hits: Vec<Hit> = order
-        .into_iter()
-        .take(PER_GROUP)
-        .map(|i| {
-            let f = found[i].clone();
-            Hit::Indexed {
-                kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
-                thumb: f.thumbnail,
-                app_id: f.app_id,
-                unique_id: f.unique_id,
-                domain: f.domain,
-                title: f.title,
+    let mut groups: Vec<Group> = vec![];
+    for i in order {
+        let f = found[i].clone();
+        let title = app_section_title(names.get(&f.app_id).map_or(f.app_id.as_str(), String::as_str));
+        let hit = Hit::Indexed {
+            kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
+            thumb: f.thumbnail,
+            app_id: f.app_id,
+            unique_id: f.unique_id,
+            domain: f.domain,
+            title: f.title,
+        };
+        match groups.iter_mut().find(|g| g.title == title) {
+            Some(g) => {
+                if g.hits.len() < PER_GROUP {
+                    g.hits.push(hit);
+                }
             }
-        })
-        .collect();
-    vec![Group { title: "Documents", hits }]
+            None => groups.push(Group { title, hits: vec![hit] }),
+        }
+    }
+    groups
 }
 
 /// A release title from a torrent name: dots and underscores become
@@ -996,7 +1037,10 @@ impl QuickSearch {
             self.files_root = Some(root.clone());
             let (tx, rx) = std::sync::mpsc::channel();
             crate::bare::sys::spawn_named("quicksearch-files", move || {
-                let _ = tx.send(crate::files::fs::recent_in(&[root], 2000));
+                // Privacy: files in the folders Settings > Search excludes are never listed
+                let excluded = super::search_prefs::current();
+                let files: Vec<crate::files::fs::Entry> = crate::files::fs::recent_in(&[root], 2000).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
+                let _ = tx.send(files);
             });
             self.files_rx = Some(rx);
         }

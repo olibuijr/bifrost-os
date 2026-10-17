@@ -537,6 +537,16 @@ impl Reminders {
         self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id))
     }
 
+    /// Selects the reminder `id` on the items screen (a Core Search result opened it); false when there is no such one.
+    pub fn show_item(&mut self, id: u64) -> bool {
+        if !self.data.items.iter().any(|r| r.id == id) {
+            return false;
+        }
+        self.screen = Screen::Items;
+        self.selected = Some(id);
+        true
+    }
+
     /// File > New Reminder (Cmd+N), File > New List (Cmd+Shift+N), Edit > Find (Cmd+F): the toolbar and chord paths.
     pub fn new_reminder(&mut self, ui: &Ui, t: f64) {
         self.activate(ui, Target::New, t);

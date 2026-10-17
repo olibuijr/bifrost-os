@@ -5,8 +5,12 @@ use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_mail::compose_windows::Composes;
+use bifrost_mail::index;
 use bifrost_mail::viewer::Viewer;
 use bifrost_mail::window::MailWindow;
+
+/// How often the app compares the mailbox on screen with what it indexed (ms).
+const INDEX_EVERY_MS: f64 = 3000.0;
 
 struct MailApp {
     window: Option<MailWindow>,
@@ -16,6 +20,10 @@ struct MailApp {
     composes: Composes,
     /// A `mailto:` link that arrived before the window existed; it opens once the window is made.
     pending_url: Option<String>,
+    /// The messages Core Search holds, by id, with the subject and sender each was indexed with (see `index.rs`).
+    indexed: std::collections::HashMap<String, String>,
+    /// The time of the next comparison with the index.
+    next_index: f64,
 }
 
 impl MailApp {
@@ -193,7 +201,45 @@ impl App for MailApp {
             self.composes.autosave(mail, t);
         }
         changed |= self.with_window(ctx, |mail| mail.tick(ctx, t));
+        self.index_tick(ctx, t);
         changed
+    }
+
+    fn continue_activity(&mut self, _ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
+        if activity.activity_type != bifrost_app::quicksearch::ACTION_TYPE {
+            return false;
+        }
+        let Some((account, mailbox, uid)) = index::parse_id(&activity.unique_identifier) else { return false };
+        let Some(mail) = self.window.as_mut().map(|w| &mut w.mail) else { return false };
+        let Some(i) = mail.accounts.iter().position(|a| a.id == account) else { return false };
+        if mail.account != i {
+            mail.show_account(i);
+        }
+        if mail.mailbox != mailbox {
+            mail.show_mailbox(mailbox);
+        }
+        mail.open_message(uid);
+        true
+    }
+
+    /// Keeps Core Search in step with the newest messages of the mailbox on screen: subjects and senders only.
+    fn index_tick(&mut self, ctx: &Ctx, t: f64) {
+        if t < self.next_index {
+            return;
+        }
+        self.next_index = t + INDEX_EVERY_MS;
+        let Some(w) = &self.window else { return };
+        let m = &w.mail;
+        let account = m.accounts.get(m.account).map(|a| a.id.clone());
+        let p = index::plan(&mut self.indexed, m.prefs.show_in_search, account.as_deref(), &m.mailbox, &m.rows);
+        let spot = bifrost_app::quicksearch::CSSearchableIndex::default_index();
+        if !p.changed.is_empty() {
+            spot.index_searchable_items(ctx, &p.changed);
+        }
+        if !p.gone.is_empty() {
+            let refs: Vec<&str> = p.gone.iter().map(String::as_str).collect();
+            spot.delete_searchable_items(ctx, &refs);
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
@@ -245,5 +291,5 @@ impl App for MailApp {
 }
 
 fn main() {
-    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None });
+    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0 });
 }

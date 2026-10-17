@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.0 — 2026-10-17
+
+- Core Search indexes every reminder with a title: the title, and the first lines of its notes. Edited reminders are indexed again, deleted or untitled ones leave the index, and a Search result opens the reminder in the list.
+
 ## 1.18.0 — 2026-10-17
 
 - A reminder's row shows its notes with the Markdown marks taken away (bold as plain words, bullets as bullets), through `format::preview` and the shell's `md::to_plain`.

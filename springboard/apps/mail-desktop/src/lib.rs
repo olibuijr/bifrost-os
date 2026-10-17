@@ -39,4 +39,5 @@ pub mod transport;
 pub mod viewer;
 pub mod window;
 pub mod signature;
+pub mod index;
 pub mod organize;
