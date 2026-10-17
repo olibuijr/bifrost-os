@@ -351,6 +351,8 @@ pub enum Command {
     RootedOff,
     BackUpNow,
     RestoreBackup,
+    /// delete every backup archive (Backup page); the data itself is kept
+    DeleteBackups,
     CheckUpdate,
     DownloadUpdate,
     /// restarts the shell so boot.sh promotes the staged binary

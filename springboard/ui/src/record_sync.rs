@@ -18,6 +18,31 @@ use std::fmt;
 
 use crate::record_store::{ChangeSet, Database, Record, RecordID};
 
+/// Where a zone's records are kept: the in-memory `Database`, or a remote store reached over a transport (the cloud
+/// zone in the SDK). `push` and `resolve` need only these three operations, so one sync queue serves both.
+pub trait Remote {
+    /// Saves `record` if the stored change tag is `expected` (`None` for a new record); returns the new tag.
+    fn save_expecting(&mut self, record: Record, expected: Option<u64>) -> Result<u64, RecordError>;
+    /// Deletes the record; returns the new tag of the zone.
+    fn delete(&mut self, id: &RecordID) -> Result<u64, RecordError>;
+    /// The stored version of the record.
+    fn fetch(&self, id: &RecordID) -> Result<Record, RecordError>;
+}
+
+impl Remote for Database {
+    fn save_expecting(&mut self, record: Record, expected: Option<u64>) -> Result<u64, RecordError> {
+        Database::save_expecting(self, record, expected)
+    }
+
+    fn delete(&mut self, id: &RecordID) -> Result<u64, RecordError> {
+        Database::delete(self, id)
+    }
+
+    fn fetch(&self, id: &RecordID) -> Result<Record, RecordError> {
+        Database::fetch(self, id).cloned()
+    }
+}
+
 /// The error codes a record operation can report (`CKError.Code`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorCode {
@@ -246,7 +271,7 @@ impl SyncEngine {
     /// Applies the queue to `db` in order. A stale save becomes a conflict; a transient failure stays queued until
     /// `max_attempts`; anything else is reported and dropped. A delete of a record that is already gone counts as
     /// done.
-    pub fn push(&mut self, db: &mut Database) -> PushReport {
+    pub fn push<R: Remote>(&mut self, db: &mut R) -> PushReport {
         let mut report = PushReport::default();
         let queue = std::mem::take(&mut self.queue);
         for mut pending in queue {
@@ -266,7 +291,7 @@ impl SyncEngine {
                                 self.conflicts.push(Conflict {
                                     id: record.id.clone(),
                                     local: record.clone(),
-                                    server: server.clone(),
+                                    server,
                                 });
                                 report.conflicts += 1;
                             }
@@ -287,7 +312,7 @@ impl SyncEngine {
 
     /// Settles conflict `index` with `policy` and returns the change tag the record has afterwards. The conflict is
     /// removed only when the settlement succeeds; a newer server version makes it fail again.
-    pub fn resolve(&mut self, index: usize, policy: ConflictPolicy, db: &mut Database) -> Result<u64, RecordError> {
+    pub fn resolve<R: Remote>(&mut self, index: usize, policy: ConflictPolicy, db: &mut R) -> Result<u64, RecordError> {
         let conflict = match self.conflicts.get(index) {
             Some(c) => c.clone(),
             None => {
@@ -476,5 +501,42 @@ mod tests {
         assert_eq!(report.saved, 1);
         assert_eq!(changes.saved.len(), 1);
         assert_eq!(changes.saved[0].id.name, "a");
+    }
+
+    /// A remote that is not the local database: it counts the saves it receives and delegates to a database.
+    struct CountingRemote {
+        inner: Database,
+        saves: usize,
+    }
+
+    impl Remote for CountingRemote {
+        fn save_expecting(&mut self, record: Record, expected: Option<u64>) -> Result<u64, RecordError> {
+            self.saves += 1;
+            self.inner.save_expecting(record, expected)
+        }
+
+        fn delete(&mut self, id: &RecordID) -> Result<u64, RecordError> {
+            self.inner.delete(id)
+        }
+
+        fn fetch(&self, id: &RecordID) -> Result<Record, RecordError> {
+            self.inner.fetch(id).cloned()
+        }
+    }
+
+    #[test]
+    fn a_remote_store_takes_the_same_queue_and_conflicts() {
+        let mut remote = CountingRemote { inner: db(), saves: 0 };
+        let mut engine = SyncEngine::new("notes");
+        engine.enqueue_save(note("a", "first"), None);
+        assert_eq!(engine.push(&mut remote).saved, 1);
+        assert_eq!(remote.saves, 1);
+        // A stale base tag is a conflict against the remote's version, as with the local database.
+        engine.enqueue_save(note("a", "second"), Some(0));
+        let report = engine.push(&mut remote);
+        assert_eq!(report.conflicts, 1);
+        assert_eq!(engine.conflicts()[0].server.get("title"), Some(&Value::Str("first".into())));
+        assert_eq!(engine.resolve(0, ConflictPolicy::KeepLocal, &mut remote).unwrap(), 2);
+        assert_eq!(remote.inner.fetch(&RecordID::new("notes", "a")).unwrap().get("title"), Some(&Value::Str("second".into())));
     }
 }

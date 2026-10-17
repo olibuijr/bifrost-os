@@ -158,6 +158,7 @@ pub mod cloud_identity;
 pub mod cloud_account;
 pub mod cloud_keys;
 pub mod cloud_clipboard;
+pub mod cloud_records;
 pub mod cloud_findmy;
 pub mod buffer_share;
 pub mod testing;

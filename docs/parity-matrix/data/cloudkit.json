@@ -31,16 +31,16 @@
     {
       "feature": "Sync engine, change tokens, subscriptions",
       "apple": "CKSyncEngine, remote records, subscriptions",
-      "bifrost": "springboard/ui/src/record_sync.rs (SyncEngine), springboard/ui/src/record_store.rs (changes_since)",
+      "bifrost": "springboard/ui/src/record_sync.rs (SyncEngine), springboard/ui/src/record_store.rs (changes_since); springboard/sdk/src/cloud_records.rs (CloudZone, the cloud records zone)",
       "status": "parity",
       "note": "verified on Midget 0.7.25 by 16 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no change tokens, push or incremental fetch for apps"
     },
     {
       "feature": "Conflict handling",
       "apple": "CKError record-changed keys",
-      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition); springboard/ui/src/record_sync.rs (Conflict, ConflictPolicy, resolve)",
+      "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition); springboard/ui/src/record_sync.rs (Remote, Conflict, ConflictPolicy, resolve); springboard/sdk/src/cloud_records.rs (CloudZone save_expecting checks the cloud change tag)",
       "status": "partial",
-      "note": "optimistic concurrency per object, internal to contacts and calendar. Checked 2026-10-17: the client model keeps a record-changed conflict with the local and server version and settles it with keep-local, keep-server or merge (server version plus the local changed keys), tests record_sync::tests. Still partial: the If-Match check runs in bifrost-cloud and no app or shell path calls the model yet."
+      "note": "Built 2026-10-17: SyncEngine::push and resolve now work on any Remote store, not only the local Database, and CloudZone implements Remote over the cloud records table: a stale change tag becomes a record-changed conflict with the cloud's version, settled with keep-local, keep-server or merge. Tests: record_sync::tests::a_remote_store_takes_the_same_queue_and_conflicts and cloud_records::tests::save_then_stale_save_is_a_conflict_on_the_cloud. Still partial: the data API has no compare-and-swap, so two devices writing between the read and the write can both pass the check; no app is wired yet."
     },
     {
       "feature": "Shared records",
@@ -54,7 +54,7 @@
       "apple": "CKUserIdentity",
       "bifrost": "springboard/sdk/src/cloud_identity.rs (identity_from_me, UserIdentity); ~/Projects/bifrost-cloud/crates/cloud-server/src/api.rs (GET /me)",
       "status": "partial",
-      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request. Checked 2026-10-17: nothing to build in BifrOSt until bifrost-cloud has a lookup route; that change belongs to the server repo."
+      "note": "The signed-in user's identity (record name, display name, sign-up address, admin flag) is read from the cloud answer to GET /me and mapped to typed errors, tested headless in springboard/sdk/tests/parity_sdk-rest-07.rs. Gap: the service has no lookup by address, so an app cannot discover another user, and the caller performs the request. Checked 2026-10-17: nothing to build in BifrOSt until bifrost-cloud has a lookup route; that change belongs to the server repo. Blocked on the server (2026-10-17): bifrost-cloud has no lookup-by-address route, so an app cannot find another user. That change belongs in the server repo; nothing is built here."
     },
     {
       "feature": "Web auth tokens",
@@ -66,9 +66,9 @@
     {
       "feature": "Privacy: encryption and data export/delete",
       "apple": "encrypted values, access and deletion articles",
-      "bifrost": "springboard/src/shell/backup.rs (encode, decode, create, restore, stage, apply_pending); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs; delete_backups in springboard/src/shell/backup.rs",
+      "bifrost": "springboard/src/shell/backup.rs (encode, decode, seal, open, create, restore, stage, apply_pending, backup_key, delete_backups); springboard/src/shell/backup_page.rs (Delete All Backups); springboard/sdk/src/keychain.rs; tests: springboard/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "The archive format, its checksums, the name rules, restore and the staged restore are tested headless in springboard/tests/parity_sdk-tests-15.rs. Backup is local only and export is a file in the data directory; there is no delete action and the keychain has no iCloud sync (docs/bifrost-ui.md). Built 2026-10-17: delete_backups removes only the backup-<unix>.sbk archives and keeps the live data; tests shell::backup::tests::delete_removes_only_backup_archives. Still partial: no Settings action yet, and the archive is not encrypted (needs a key decision and an audited AEAD crate)."
+      "note": "Built 2026-10-17: backup archives are encrypted with XChaCha20-Poly1305 (format SBBK2, random 256-bit key kept in the shell keychain under bifrost.backup, random 24-byte nonce in the header, header as associated data). Version 1 (SBBK1) archives still restore without a key. Settings > Backup > Delete All Backups (confirmed) removes the archives and keeps the live data. Tests: shell::backup::tests (round trip, tampered archive, wrong key, version 1 restore, staged encrypted restore, delete). Still partial: the archive key stays on this device (no escrow, so a new device cannot open old archives), the keychain is not iCloud-synced (docs/bifrost-ui.md), and the tests have not run on the VM or Midget."
     },
     {
       "feature": "Errors",
@@ -82,7 +82,7 @@
       "apple": "app local persistence",
       "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs",
       "status": "partial",
-      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices. Checked 2026-10-17: local by design, no sync to build here."
+      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices. Checked 2026-10-17: local by design, no sync to build here. Checked 2026-10-17: local by design, no sync to build here."
     }
   ],
   "gaps": [

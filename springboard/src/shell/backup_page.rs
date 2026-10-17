@@ -45,6 +45,8 @@ fn backup_spec(st: &PageState) -> Spec {
         Group::new(vec![Item::new("Back Up Now").tint(Tint::Blue).action(Action::Run(Command::BackUpNow)), Item::new("Latest Backup").value(latest)])
             .footer(&format!("Saves Notes, Contacts, Calendar, Reminders, settings and notifications to one file in {}/. `tab backup` copies it to a computer.", backup::BACKUP_DIR)),
         Group::new(vec![restore]).footer("Replaces that data with the backup and restarts SpringBoard. The backup is checked first; a damaged one is refused."),
+        Group::new(vec![Item::new("Delete All Backups").tint(if st.latest_backup.is_some() { Tint::Red } else { Tint::Dim }).action(Action::Run(Command::DeleteBackups))])
+            .footer("Removes every backup file. Your data is not changed."),
     ];
     if !st.backup_note.is_empty() {
         groups.push(Group::new(vec![]).footer(st.backup_note));
@@ -161,6 +163,16 @@ mod tests {
         let g = card(&m);
         assert_eq!(g.footer.as_deref(), Some("\u{2022} Faster \u{2022} Fixed"));
         assert_eq!(card(&Manifest { changelog: vec![], ..m }).footer.as_deref(), Some("old"));
+    }
+
+    #[test]
+    fn delete_backups_is_offered_and_dim_without_a_backup() {
+        let u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
+        let none = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None });
+        assert_eq!(none.groups[2].items[0].action, Action::Run(Command::DeleteBackups));
+        assert_eq!(none.groups[2].items[0].tint, Tint::Dim);
+        let some = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: Some(1) });
+        assert_eq!(some.groups[2].items[0].tint, Tint::Red);
     }
 
     #[test]
