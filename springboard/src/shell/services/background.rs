@@ -18,6 +18,9 @@
 //! app gets a warning 5 s before its time is up. The pending queue and the budget are saved to `background-tasks.txt`
 //! under the shell's root so they survive a restart.
 //!
+//! Game Mode (`shell::gamemode`) pauses new starts while a game is in front full screen; a task already running still
+//! ends on time. File indexing is not paused: no indexer runs in the shell (`ui::index_client` is a model only).
+//!
 //! Known gaps: a hidden launch does not run the notification or extension hooks that a Dock launch runs, and
 //! a task started for an app the user opens in the meantime still ends the app when the task completes.
 use super::{Event, Shell, SystemService};
@@ -270,6 +273,8 @@ pub enum Effect {
 pub struct Settings {
     pub enabled: bool,
     pub low_power: bool,
+    /// Game Mode is on: no task starts until it leaves (a running task still ends on time).
+    pub paused: bool,
     /// App ids whose refresh the user turned off.
     pub off: Vec<String>,
 }
@@ -299,7 +304,7 @@ pub fn plan_app(app: &str, tasks: &mut AppTasks, now: u64, conditions: Condition
     for rest in due {
         let _ = tasks.scheduler.submit(rest);
     }
-    let gate = Gate { enabled: settings.enabled, app_allowed: !settings.off.iter().any(|a| a == app), low_power: settings.low_power, busy: false };
+    let gate = Gate { enabled: settings.enabled && !settings.paused, app_allowed: !settings.off.iter().any(|a| a == app), low_power: settings.low_power, busy: false };
     match may_start(gate, &tasks.budget, now) {
         Ok(()) => {
             tasks.budget.record(now);
@@ -580,7 +585,12 @@ impl SystemService for BackgroundService {
             network: network_up_in(Path::new(NET_CLASS)),
             external_power: on_external_power(&power_supply::sources_in(Path::new(super::power_service::SUPPLY_CLASS))),
         };
-        let settings = Settings { enabled: shell.options().bg_refresh, low_power: shell.low_power(), off: off_from_pref(shell.prefs.get(PREF_OFF)) };
+        let settings = Settings {
+            enabled: shell.options().bg_refresh,
+            low_power: shell.low_power(),
+            paused: shell.game_mode_on(),
+            off: off_from_pref(shell.prefs.get(PREF_OFF)),
+        };
         let effects = self.plan(now, conditions, &settings);
         if effects.is_empty() {
             return Vec::new();
@@ -601,7 +611,7 @@ mod tests {
     const NONE: Conditions = Conditions { network: false, external_power: false };
 
     fn settings() -> Settings {
-        Settings { enabled: true, low_power: false, off: Vec::new() }
+        Settings { enabled: true, low_power: false, paused: false, off: Vec::new() }
     }
 
     fn declared(ids: &[&str]) -> Vec<String> {
@@ -762,6 +772,16 @@ mod tests {
         let disabled = Settings { enabled: false, ..settings() };
         assert_eq!(plan_app("a", &mut tasks, 100, NONE, &disabled), None);
         assert_eq!(tasks.scheduler.pending().len(), 1);
+        assert_eq!(started_app(plan_app("a", &mut tasks, 100, NONE, &settings())), "a");
+    }
+
+    #[test]
+    fn game_mode_pauses_new_starts_only() {
+        let mut tasks = AppTasks::default();
+        tasks.scheduler.submit(Request::refresh("r")).unwrap();
+        let paused = Settings { paused: true, ..settings() };
+        assert_eq!(plan_app("a", &mut tasks, 100, NONE, &paused), None);
+        assert_eq!(tasks.scheduler.pending().len(), 1, "the request waits for Game Mode to end");
         assert_eq!(started_app(plan_app("a", &mut tasks, 100, NONE, &settings())), "a");
     }
 
