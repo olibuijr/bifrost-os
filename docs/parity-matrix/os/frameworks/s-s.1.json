@@ -880,8 +880,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "UI front end of the vendor secure element service; BifrOSt has no secure element to front.",
    "rea": [],
    "method": "assessed"
   },
@@ -901,8 +901,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Core of the vendor secure element UI service; BifrOSt has no secure element to front.",
    "rea": [],
    "method": "assessed"
   },
@@ -922,8 +922,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Secure element service for the vendor secure hardware that holds payment and credential keys; BifrOSt has no secure element (see SESMacUIHelper).",
    "rea": [],
    "method": "assessed"
   },
@@ -1783,8 +1783,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Search Ads advertising service; BifrOSt runs no ad network.",
    "rea": [],
    "method": "assessed"
   },
@@ -3022,8 +3022,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Music recognition backend of the Shazam service that ShazamKit fronts; the SDK matrix marks ShazamKit n/a, so there is no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -3043,8 +3043,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Event reporting for the Shazam music recognition service; no BifrOSt counterpart (SDK matrix marks ShazamKit n/a).",
    "rea": [],
    "method": "assessed"
   }
