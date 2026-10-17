@@ -80,7 +80,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/paperkit.json",
+   "bifrost": "springboard/src/shell/markup.rs (markup editor: strokes, undo and redo); springboard/apps/freeform-desktop/src/freeform.rs",
    "status": "partial",
    "note": "from SDK matrix paperkit.json",
    "rea": [],
