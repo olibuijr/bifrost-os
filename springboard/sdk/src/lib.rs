@@ -312,6 +312,7 @@ pub mod markup;
 pub mod log;
 pub mod signpost;
 pub mod dispatch;
+pub mod operation_queue;
 pub mod actor;
 pub mod synchronization;
 pub mod fswatch;
