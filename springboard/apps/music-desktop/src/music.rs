@@ -1620,6 +1620,26 @@ impl Music {
         self.scanning
     }
 
+    /// The Up Next list Control Center shows: the songs after the current one.
+    pub fn up_next_entries(&self) -> Vec<bifrost_app::now_playing::QueueEntry> {
+        nowplay::up_next_entries(self.queue.upcoming(), |path| {
+            self.path_id.get(path).and_then(|&id| self.library.songs.get(id)).map(|song| (song.title.clone(), song.artist.clone()))
+        })
+    }
+
+    /// Plays the Up Next song Control Center picked, by its place among the upcoming songs. False when there is no such
+    /// song in the library.
+    pub fn remote_queue_pick(&mut self, index: usize) -> bool {
+        let absolute = self.queue.current() + 1 + index;
+        let playable = self.queue.items().get(absolute).is_some_and(|path| self.path_id.contains_key(path));
+        if !playable {
+            return false;
+        }
+        self.queue.set_current(absolute);
+        self.push_queue(0.0, true);
+        true
+    }
+
     /// A seek from Control Center, in milliseconds. False when the session does not allow it now: no song, a station,
     /// or no length. The position is clamped to the song's length.
     pub fn remote_seek(&mut self, position_ms: f64) -> bool {

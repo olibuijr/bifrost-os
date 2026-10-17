@@ -31,6 +31,7 @@ pub mod gallery;
 pub mod note_windows;
 
 mod parity;
+mod html;
 mod pdf;
 mod picker;
 pub mod store;
@@ -274,6 +275,7 @@ enum Act {
     ShareMd,
     ShareText,
     SharePdf,
+    ShareHtml,
     InsertTable,
     /// move the open note to a folder ("" is no folder)
     MoveTo(String),
@@ -1991,6 +1993,7 @@ impl Notes {
             ("Share as Markdown (.md)".to_string(), Act::ShareMd, false),
             ("Share as Text (.txt)".to_string(), Act::ShareText, false),
             ("Share as PDF (.pdf)".to_string(), Act::SharePdf, false),
+            ("Share as HTML (.html)".to_string(), Act::ShareHtml, false),
             ("Format...".to_string(), Act::OpenFormat, false),
             ("Title".to_string(), Act::Style(md::Block::Title), false),
             ("Heading".to_string(), Act::Style(md::Block::Heading), false),
@@ -2307,6 +2310,17 @@ impl Notes {
                     let note = &self.notes[i];
                     let bytes = pdf::render(note.title(), &md::to_plain(&note.text));
                     match store::export_file(&self.dir, note, "pdf", &bytes) {
+                        Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
+                        Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
+                    }
+                }
+            }
+            Act::ShareHtml => {
+                if let Screen::Editor(i) = self.screen {
+                    self.save(t, true);
+                    let note = &self.notes[i];
+                    let page = html::render(note.title(), &note.text);
+                    match store::export_file(&self.dir, note, "html", page.as_bytes()) {
                         Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
                         Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
                     }

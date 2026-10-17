@@ -87,6 +87,11 @@ impl TextDocument {
             text.load(cells);
             properties = if docx::is_docx(bytes) { docx::read_properties(bytes) } else { odt::read_properties(bytes) };
             true
+        } else if crate::office::is_office(bytes) {
+            // a workbook or a deck opens as its plain text (sheets as tab-separated rows, slides as paragraphs)
+            let Some(plain) = crate::office::text(bytes) else { return Err(DocumentError::new("The document could not be read")) };
+            text.load(rtf::plain_cells(&plain));
+            false
         } else if rtf::is_rtf(bytes) {
             let (cells, tab, pictures) = rtf::read_doc_pictures(bytes);
             text.load_with_attachments(cells, rtfd::attachments_without_data(pictures));

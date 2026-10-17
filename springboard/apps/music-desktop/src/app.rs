@@ -133,8 +133,8 @@ impl MusicApp {
 
     /// Publishes the session to Control Center when its content, state or commands changed, or when a seek moved the
     /// position. A stopped session (no song) is withdrawn. Nothing is sent while playback runs normally.
-    fn publish_step(published: &mut Option<Published>, ctx: &Ctx, session: Option<&now_playing::MediaSession>, now: f64) {
-        let body = session.and_then(now_playing::publish_body);
+    fn publish_step(published: &mut Option<Published>, ctx: &Ctx, session: Option<&now_playing::MediaSession>, queue: &[now_playing::QueueEntry], now: f64) {
+        let body = session.and_then(|s| now_playing::publish_queue_body(s, queue));
         let (Some(session), Some(body)) = (session, body) else {
             if published.take().is_some() {
                 now_playing::clear(ctx);
@@ -151,7 +151,7 @@ impl MusicApp {
             Some(p) => p.key != key || (seekable && system::seeked(p.position_ms, p.at, now, p.playing, position)),
         };
         if due {
-            let _ = now_playing::publish(ctx, session);
+            let _ = now_playing::publish_with_queue(ctx, session, queue);
             *published = Some(Published { key, position_ms: position, at: now, playing });
         }
     }
@@ -335,7 +335,8 @@ impl MusicApp {
         self.dock_step(ctx, busy);
         let now = self.clock();
         let session = self.app.as_ref().and_then(|m| m.session());
-        Self::publish_step(&mut self.published, ctx, session, now);
+        let queue = if session.is_some() { self.app.as_ref().map(|m| m.up_next_entries()).unwrap_or_default() } else { Vec::new() };
+        Self::publish_step(&mut self.published, ctx, session, &queue, now);
     }
 }
 
@@ -447,6 +448,9 @@ impl App for MusicApp {
     }
 
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if let Some(index) = now_playing::queue_pick(service, event, body) {
+            return self.app.as_mut().is_some_and(|m| m.remote_queue_pick(index));
+        }
         if let Some(cmd) = now_playing::command_from_event(service, event, body) {
             return self.system_command(cmd);
         }
