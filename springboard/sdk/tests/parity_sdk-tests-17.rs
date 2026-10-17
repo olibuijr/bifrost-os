@@ -45,7 +45,7 @@ fn every_level_is_delivered_in_the_order_it_was_reported() {
 }
 
 #[test]
-fn the_handler_runs_on_the_queue_thread_not_the_reporting_thread() {
+fn the_handler_runs_off_the_reporting_thread() {
     let _guard = serial();
     let queue = DispatchQueue::serial("bifrost.tests.pressure.thread");
     let ran_on: Arc<Mutex<Option<ThreadId>>> = Arc::new(Mutex::new(None));
@@ -54,9 +54,10 @@ fn the_handler_runs_on_the_queue_thread_not_the_reporting_thread() {
         *sink.lock().unwrap() = Some(thread::current().id());
     });
     notify_pressure(MemoryPressure::Critical);
-    let queue_thread = queue.sync(|| thread::current().id());
+    // A serial queue runs its items on pool workers, not on one fixed thread, so only the contract is checked here:
+    // the handler ran (before this sync returned) on some other thread than the one that reported the pressure.
+    queue.sync(|| ());
     let handler_thread = (*ran_on.lock().unwrap()).expect("the handler ran");
-    assert_eq!(handler_thread, queue_thread);
     assert_ne!(handler_thread, thread::current().id());
 }
 
