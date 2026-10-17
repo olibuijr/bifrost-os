@@ -18,11 +18,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/weatherkit.json",
+   "bifrost": "springboard/sdk/src/weather_service.rs, springboard/src/shell/weather/data.rs",
    "status": "partial",
-   "note": "from SDK matrix weatherkit.json",
+   "note": "Built 2026-10-17: sdk weather_service gives apps the forecast of the places the person saved in Weather (current conditions, wind with compass point and Beaufort force, hours, ten days, air quality, minutes until rain, daylight, moon phase) from the shell's cache with no request of its own, refuses places that are not saved, and carries the Open-Meteo attribution. Not built: severe weather alerts (the data source has none) and per-place history beyond the ten-year mean high.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "weather_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "the SDK's weather_service serves the cached forecast of the saved places with attribution, wind, moon and rain-ahead helpers (weather_service::tests); the forecast fetch and parsing behind it are the shell's weather data module (shell::weather::data::tests)"
   },
   {
    "id": "path:/System/Library/Frameworks/WiFiAware.framework",
@@ -60,11 +74,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/widgetkit.json",
+   "bifrost": "springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/today_widgets.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/ui/src/timeline.rs, springboard/ui/src/widget_config.rs, springboard/ui/src/widget_kind.rs",
    "status": "partial",
-   "note": "from SDK matrix widgetkit.json",
+   "note": "apps give the shell dated widget timelines with a reload policy, widget options and live activities through the widgets_timeline service (SDK client sdk/src/widgets_timeline.rs); the shell draws the current entry, asks the app for a new timeline when the reload date passes, and edits options from the Options chip. Widgets are drawn by the shell rather than run as extension processes, by design.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "today_widgets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "widget_kind::tests"
+    }
+   ],
+   "ready_note": "apps supply widget timelines, options and live activities to the shell through the widgets_timeline service and the SDK client; the checks run the SDK client, the shell service and the timeline, configuration and kind models"
   },
   {
    "id": "path:/System/Library/Frameworks/WorkoutKit.framework",

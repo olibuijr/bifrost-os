@@ -489,11 +489,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visionkit.json",
+   "bifrost": "springboard/sdk/src/text_recognition.rs, springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs",
    "status": "partial",
-   "note": "Remaining from data file visionkit (refreshed 2026-10-17): No text recognition (OCR) for camera frames or images, so Live Text, DataScanner text and ImageAnalyzer have no counterpart. | Document scanning is an SDK model (sdk document_scan.rs: page corners to a flat page); the Camera app has no scanning mode. | No subject lifting or background removal for images. | Visual Look Up models exist (springboard/ui/src/visual_lookup.rs, look_up.rs, visual_search.rs) but no image lookup UI or service is wired into the shell or apps. | Barcode scanning is an SDK model (sdk data_scanner.rs), and the Camera app scans QR model 2 codes; no other barcode formats. | Plain-text data detection (controls::detect) has no image counterpart and does not cover transit information.",
+   "note": "Built 2026-10-17: sdk text_recognition reads the text in an image through the local tesseract engine (words and lines with pixel boxes and confidence, tap-to-select, find; the tesseract packages are in runtime-packages.txt). With subject lifting and Visual Look Up (image_analysis), QR and barcode scanning (data_scanner) and document page flattening (document_scan), apps get the ImageAnalyzer, DataScanner and document-scanner jobs. Not built: a Live Text overlay view for apps, languages beyond the packs installed (English ships), transit and other non-text data types.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "text_recognition::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_analysis::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "data_scanner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document_scan::tests"
+    }
+   ],
+   "ready_note": "the SDK offers the framework's jobs to apps: text recognition (text_recognition), subject lift and lookup requests (image_analysis), barcode and QR scanning (data_scanner), document page flattening (document_scan); the checks run their unit tests"
   },
   {
    "id": "path:/System/Library/Frameworks/VisualIntelligence.framework",
@@ -510,9 +534,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/sdk/src/visual_search.rs, springboard/ui/src/visual_search.rs",
    "status": "partial",
-   "note": "from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
+   "note": "app side built, system side not: apps become visual-search providers with sdk visual_search (the provider trait, the visual-search App Intent and the reply merge, built 2026-10-17; tests visual_search::tests in bifrost-app and bifrost-ui). Missing, and beyond one agent: a scene classifier that fills the labels (nothing classifies a scene yet) and the capture UI (camera and screenshot object selection) that would call the providers; without them nothing reaches an app from the desktop, so the row stays partial and is not marked ready.",
    "rea": [],
    "method": "assessed"
   },

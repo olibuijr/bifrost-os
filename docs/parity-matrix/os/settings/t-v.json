@@ -290,10 +290,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/vpn_configuration.rs; springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/desktop_network.rs, springboard/src/shell/pages.rs (VPN page), springboard/sdk/src/vpn_configuration.rs",
    "status": "partial",
-   "note": "has: VPN configuration SDK; Settings intent open-vpn opens the VPN pane (settings_intents.rs). Built 2026-10-17: the open-vpn intent; tests settings_intents::tests. Missing: the shell VPN page only lists configurations (pages.rs, PageId::Vpn) and cannot add one yet, because the tunnel client is not built.",
-   "rea": []
+   "note": "the open-vpn intent opens the VPN pane from Search. Built 2026-10-17: the pane lists the VPN and WireGuard connections NetworkManager holds (read with nmcli on the network service's thread) and a tap connects or disconnects one (desktop_network Request::Vpn, nmcli connection up/down), and the Network page shows whether a VPN is up. Not built: creating a configuration in the page (import with nmcli), and running the SDK's vpn_connect and vpn_disconnect intent descriptors from Search.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests::the_vpn_page_lists_the_held_connections_and_a_tap_flips_one"
+    }
+   ],
+   "ready_note": "the VPN settings intent opens the pane, which lists and switches the system's VPN connections; the checks run the settings catalogue, the nmcli parsing and request, and the page"
   },
   {
    "id": "path:/System/Library/PreferencePanes/TimeMachine.prefPane",

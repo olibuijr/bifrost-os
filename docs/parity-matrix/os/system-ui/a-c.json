@@ -116,10 +116,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/printers-desktop/src/discover.rs",
+   "bifrost": "springboard/apps/printers-desktop/src/discover.rs, springboard/apps/printers-desktop/src/window.rs",
    "status": "partial",
-   "note": "printer discovery and queue exist; no add-printer sheet yet; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "the Printers app has an Add Printer pane that browses the network for printers, lists them with model and location, adds the one chosen under its own name, and adds a printer from the address on the clipboard (discover.rs, window.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-printers",
+     "filter": "discover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-printers",
+     "filter": "window::tests::add_printer"
+    }
+   ],
+   "ready_note": "the Printers app's Add Printer pane discovers and adds printers; the checks run the discovery rules and the pane's add paths"
   },
   {
    "id": "path:/System/Library/CoreServices/AddressBookUrlForwarder.app",
@@ -334,10 +348,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_picker.rs; springboard/src/bare/bluetooth.rs",
+   "bifrost": "springboard/src/bare/bluetooth.rs, springboard/src/shell/pages.rs (Bluetooth pages), springboard/sdk/src/bluetooth_picker.rs",
    "status": "partial",
-   "note": "pairing picker and radio control exist; no guided setup flow; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "Settings > Bluetooth scans, lists nearby devices, pairs the one tapped (the PIN or passkey the device asks for is typed in a prompt and sent), connects, disconnects and forgets it; apps get the same chooser through the SDK picker (bluetooth_picker.rs).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_picker::tests"
+    }
+   ],
+   "ready_note": "the Bluetooth pane scans, pairs with a passkey prompt, connects and forgets devices, and apps have the picker; the checks run the radio and pairing logic and the picker"
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothUIServer.app",
@@ -412,10 +440,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs, springboard/apps/calendar-desktop/src/calendar/archive.rs, springboard/apps/calendar-desktop/src/main.rs",
    "status": "partial",
-   "note": "ICS parsing exists; the manifest declares public.calendar-event. Built 2026-10-17: an .ics file the shell opens goes to the import path (springboard/apps/calendar-desktop/src/main.rs, document()); no test covers the open path. Not yet verified on Midget",
-   "rea": []
+   "note": "the Calendar app declares public.calendar-event, so an .ics file the shell opens reaches the app's document handler, which imports its events (Calendar::import_file); a file that is not a calendar is reported.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::ics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests::importing_an_ics_file_adds_its_events"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests::a_file_that_is_not_a_calendar_is_reported"
+    }
+   ],
+   "ready_note": "an opened .ics file is imported by the Calendar app; the checks run the ICS parser and the import path including the refusal of a non-calendar file"
   },
   {
    "id": "path:/System/Library/CoreServices/Captive Network Assistant.app",
@@ -461,10 +508,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/trust.rs",
+   "bifrost": "springboard/sdk/src/certificate_assistant.rs, springboard/sdk/src/trust.rs, springboard/cmd/src/certassist.rs",
    "status": "partial",
-   "note": "trust evaluation exists; no certificate assistant UI yet; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "Built 2026-10-17: sdk certificate_assistant makes self-signed certificates, certificate authorities and signing requests (checked request, keys made by the system openssl with owner-only permissions, never overwritten), reads a certificate back and judges it against anchors and a host (the trust rules plus the signature, checked with openssl verify); the certassist command (create, show, verify) is the front end. Not built: a windowed wizard.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "certificate_assistant::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "certassist::tests"
+    }
+   ],
+   "ready_note": "certificates can be created, read and judged with the SDK module and the certassist tool; the checks run the request rules, the parsing, the trust rules and the tool, and exercise openssl when it is installed"
   },
   {
    "id": "path:/System/Library/CoreServices/ClockAngel.app",
@@ -588,10 +654,34 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/permission_sheet.rs",
+   "bifrost": "springboard/src/shell/permission_sheet.rs, springboard/src/shell/auth_sheet.rs, springboard/src/shell/guardian_sheet.rs, springboard/src/shell/crash_alert.rs",
    "status": "partial",
-   "note": "system prompt sheets exist; other core service dialogs not covered; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "the shell shows the system's question sheets: the permission sheet for location, camera, microphone and screen recording, the password sheet for an app's local-authentication request, the guardian's sheet for a PermissionKit question, and the quit-unexpectedly alert.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::guardian_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::crash_alert::tests"
+    }
+   ],
+   "ready_note": "the shell draws the system prompt sheets that services raise for apps; the checks run each sheet's decisions"
   },
   {
    "id": "path:/System/Library/CoreServices/Coverage Details.app",
@@ -648,9 +738,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/shortcut.rs",
-   "status": "partial",
-   "note": "Accessibility Shortcut exists; no access key navigation; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: not the keyboard access feature the name suggests: the index shows an ExtensionKit appex with only an Info.plist and name strings, and the same name in the iCloud account UI (AOSUI AccountContactsAccessKeyViewController) and the platform sign-on UI (POUIAccessKeyViewController), so it is the Apple Account recovery-contact access key. BifrOSt's keyboard navigation is the Tab navigation option and the Accessibility Shortcut, which are separate rows.",
    "rea": []
   },
   {
@@ -708,10 +798,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/clock/alarm.rs; springboard/sdk/src/intents.rs; springboard/apps/clock-desktop/src/clock/intent.rs",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs, springboard/apps/clock-desktop/src/clock/mod.rs, springboard/apps/clock-desktop/src/main.rs, springboard/src/shell/clock/alarm.rs",
    "status": "partial",
-   "note": "alarms exist; Built 2026-10-17: App Intent next-alarm reports when the next alarm rings (clock::intent::tests). Still missing: an intent that adds or edits an alarm, which needs the clock's RTC wake effect passed back to the shell. Not yet verified on Midget",
-   "rea": []
+   "note": "the Clock app declares the next-alarm intent (when the next alarm rings) and, built 2026-10-17, set-alarm (hour, minute, optional label and repeat: once, daily, weekdays, weekends). set-alarm adds the alarm and writes the alarm file; the shell's headless Clock service reads the change, arms the RTC wake and rings it with the app closed.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::intent::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::tests::an_alarm_added_by_an_intent_is_listed_and_written_for_the_shell_service"
+    }
+   ],
+   "ready_note": "the Clock app's App Intents report the next alarm and set a new one, which the shell's alarm service rings; the checks run the intent builders and the alarm write"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Album Artwork.appex",

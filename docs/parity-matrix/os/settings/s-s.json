@@ -123,7 +123,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pacman_update.rs",
    "status": "partial",
-   "note": "has: security fixes arrive through the pacman check and the user-confirmed install (pacman_update.rs), unit-tested headless; missing: automatic security-only install policy. Blocker: pacman output has no advisory field, so the policy needs an advisory feed that is not built.",
+   "note": "has: Software Update checks pacman for the shell package and installs it after the person confirms, through the recovery guard (pacman_update.rs). Missing: security fixes for the rest of the system. The guard rejects base-system upgrades until a whole-root recovery path exists, and pacman output carries no advisory field, so a security-only install policy needs an advisory feed as well (for example arch-audit against the Arch security tracker, a lookup the person would have to consent to). Left open: it depends on the whole-root recovery design, which is not one agent's task.",
    "rea": []
   },
   {
@@ -204,10 +204,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "has: Settings app pages and actions (settings.rs); settings_intents.rs maps each intent id to its pane (page_for) and Search opens it. Missing: the Settings pages have no control socket, so intent.<id> requests over RPC do not reach them.",
-   "rea": []
+   "note": "Settings > General > Login Items & Extensions lists the app extensions the installed manifests declare, grouped by kind, and the background agents with a switch per app (login_items_page.rs). System extensions in the sense of kernel and driver extensions do not exist on Linux; kernel modules are the system's.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests"
+    }
+   ],
+   "ready_note": "the Login Items & Extensions pane lists extensions by kind and switches background agents; the checks run the page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sharing.appex",
