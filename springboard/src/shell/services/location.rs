@@ -22,6 +22,8 @@
 //!   message}`), the second only once per run of the same failure.
 //! - `reverse {latitude, longitude}` returns the `{city, country, latitude, longitude}` of the known place within
 //!   50 km. The known place is the fixed location.
+//! - `geocode {address}` returns `{places: [{city, country, latitude, longitude}]}` for the known places whose city or
+//!   country equals the address (case-insensitive). No gazetteer is kept, so other names find nothing.
 //!
 //! A location is `{latitude, longitude, altitude: null, horizontal_accuracy, timestamp, source, city, country}`.
 use super::{Event, Shell, SystemService};
@@ -197,6 +199,16 @@ pub fn reverse(places: &[Fix], latitude: f64, longitude: f64) -> Option<&Fix> {
         .map(|(_, p)| p)
 }
 
+/// The known places whose city or country equals the address, ignoring case and surrounding spaces. Only known places
+/// are searched (no gazetteer and no network lookup), so a name the fixed location does not carry finds nothing.
+pub fn forward<'a>(places: &'a [Fix], address: &str) -> Vec<&'a Fix> {
+    let want = address.trim().to_lowercase();
+    if want.is_empty() {
+        return Vec::new();
+    }
+    places.iter().filter(|p| p.city.to_lowercase() == want || p.country.to_lowercase() == want).collect()
+}
+
 fn error_json(e: LocationError) -> Json {
     Json::Obj(vec![
         ("code".into(), Json::Num(e.code() as f64)),
@@ -283,6 +295,25 @@ impl Location {
                     ("latitude".into(), Json::Num(p.latitude)),
                     ("longitude".into(), Json::Num(p.longitude)),
                 ]))
+            }
+            "geocode" => {
+                let address = params.get("address").and_then(Json::as_str).ok_or("address is required")?;
+                let found = forward(places, address);
+                if found.is_empty() {
+                    return Err(format!("{:?}", LocationError::GeocodeFoundNoResult));
+                }
+                let list = found
+                    .into_iter()
+                    .map(|p| {
+                        Json::Obj(vec![
+                            ("city".into(), Json::Str(p.city.clone())),
+                            ("country".into(), Json::Str(p.country.clone())),
+                            ("latitude".into(), Json::Num(p.latitude)),
+                            ("longitude".into(), Json::Num(p.longitude)),
+                        ])
+                    })
+                    .collect();
+                Ok(Json::Obj(vec![("places".into(), Json::Arr(list))]))
             }
             _ => Err(format!("location has no method {method}")),
         }
@@ -524,6 +555,24 @@ mod tests {
         let far = Json::Obj(vec![("latitude".into(), Json::Num(64.14)), ("longitude".into(), Json::Num(-21.94))]);
         assert_eq!(call(&mut s, WHEN, "reverse", &far, Some(&f)), Err("GeocodeFoundNoResult".to_string()));
         assert!(call(&mut s, WHEN, "reverse", &Json::Null, Some(&f)).is_err());
+    }
+
+    #[test]
+    fn forward_geocoding_finds_the_known_place_by_name_only() {
+        let mut s = Location::default();
+        let f = here();
+        let by_city = Json::Obj(vec![("address".into(), Json::Str("  akureyri ".into()))]);
+        let r = call(&mut s, WHEN, "geocode", &by_city, Some(&f)).unwrap();
+        let places = r.get("places").and_then(Json::as_array).unwrap();
+        assert_eq!(places.len(), 1);
+        assert_eq!(places[0].get("country").and_then(Json::as_str), Some("Iceland"));
+        let by_country = Json::Obj(vec![("address".into(), Json::Str("Iceland".into()))]);
+        assert!(call(&mut s, WHEN, "geocode", &by_country, Some(&f)).is_ok());
+        let unknown = Json::Obj(vec![("address".into(), Json::Str("Reykjavik".into()))]);
+        assert_eq!(call(&mut s, WHEN, "geocode", &unknown, Some(&f)), Err("GeocodeFoundNoResult".to_string()));
+        let blank = Json::Obj(vec![("address".into(), Json::Str("   ".into()))]);
+        assert_eq!(call(&mut s, WHEN, "geocode", &blank, Some(&f)), Err("GeocodeFoundNoResult".to_string()));
+        assert!(call(&mut s, WHEN, "geocode", &Json::Null, Some(&f)).is_err());
     }
 
     #[test]

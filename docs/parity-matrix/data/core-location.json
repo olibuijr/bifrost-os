@@ -33,7 +33,7 @@
       "apple": "CLGeocoder (geocodeAddressString), CLPlacemark, Converting between coordinates and user-friendly place names",
       "bifrost": "springboard/src/shell/weather/data.rs (GEOCODE_API, geocode_url, parse_places)",
       "status": "partial",
-      "note": "The place-name request is trimmed, percent-encoded and asks for six English matches, and each answer becomes a name, region and coordinates; tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: only the Weather app's data module uses it, not springboard/sdk/src, and no placemark carries address parts."
+      "note": "The place-name request is trimmed, percent-encoded and asks for six English matches, and each answer becomes a name, region and coordinates; tested headless in springboard/tests/parity_sdk-tests-21.rs. Gap: only the Weather app's data module uses it, not springboard/sdk/src, and no placemark carries address parts. Built 2026-10-17: shell location service method geocode {address} searches the known places by city or country (springboard/src/shell/services/location.rs, forward); SDK geocode_address and decode_placemarks in springboard/sdk/src/core_location.rs; tests springboard/src/shell/services/location.rs::tests::forward_geocoding_finds_the_known_place_by_name_only and springboard/sdk/src/core_location.rs::tests::a_geocode_reply_decodes_to_every_placemark_and_skips_other_shapes. Still no world gazetteer: names other than the fixed location find nothing (not run: lead runs the tests)."
     },
     {
       "feature": "Reverse geocoding (coordinates to placemark)",
