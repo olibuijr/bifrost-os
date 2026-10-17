@@ -18,6 +18,7 @@ use bifrost_ui::capture_content::{CaptureDisplay, CaptureWindow, ShareableConten
 use bifrost_ui::capture_filter::{ContentFilter, Rule};
 use bifrost_ui::Rect;
 use super::super::apps::AppId;
+use super::super::screenrec::{self, Area, Session};
 use bifrost_ui::capture_stream::{Frame, FrameKind, ScreenStream};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -32,6 +33,8 @@ struct Active {
     stream: ScreenStream,
     /// what the stream shows: the whole display, one window, or one app
     filter: ContentFilter,
+    /// the movie the stream writes, when the request named one (`record`)
+    recording: Option<Session>,
     hash: Option<u64>,
     path: Option<PathBuf>,
 }
@@ -89,6 +92,24 @@ pub fn file_stem(app_id: &str) -> String {
 
 /// The one display the shell has. Its id in the content and filters.
 const DISPLAY: u32 = 0;
+/// The movie frame rate when the stream has no frame interval limit.
+const DEFAULT_FPS: u32 = 30;
+
+/// Starts the movie of a stream when the request names one (`record`: a file name). The movie covers the filter's
+/// region at the stream's frame rate, written by the recorder's encoder: ffmpeg when the PATH holds it, else Motion JPEG.
+fn start_recording(shell: &Shell, params: &Json, filter: &ContentFilter, fps: u32, t: f64) -> Result<Option<Session>, String> {
+    let Some(name) = params.get("record").and_then(Json::as_str) else { return Ok(None) };
+    let encoder = screenrec::choose(std::env::var_os("PATH").as_deref());
+    let region = filter.source_region(&shareable_content(shell)).unwrap_or(Rect { x: 0.0, y: 0.0, w: shell.w as f32, h: shell.h as f32 });
+    let area = Area { x: region.x.max(0.0) as u32, y: region.y.max(0.0) as u32, w: region.w.max(1.0) as u32, h: region.h.max(1.0) as u32 };
+    let path = shell.data_dir.join("ScreenStream").join(format!("{}.{}", file_stem(name), encoder.extension()));
+    Session::start(path, encoder, area, fps, t).map(Some)
+}
+
+/// Ends a movie and returns its file. None when the stream recorded nothing.
+fn finish_movie(recording: Option<Session>) -> Result<Option<PathBuf>, String> {
+    recording.map(Session::finish).transpose()
+}
 
 /// The filter a start request asks for. `{"window": id}` shows one window. `{"app": pid}` shows one app's windows.
 /// `{"excludeApps": [pid, ...]}`, or nothing, shows the display without those apps.
@@ -183,13 +204,10 @@ pub fn with_pointer(base: &Image, pointer: Option<(i32, i32)>) -> Image {
 }
 
 /// Removes the streams whose app is no longer running (`running` is false for it) and returns their app ids, sorted.
-fn stop_exited(active: &mut HashMap<String, Active>, running: impl Fn(&str) -> bool) -> Vec<String> {
+fn stop_exited(active: &mut HashMap<String, Active>, running: impl Fn(&str) -> bool) -> Vec<(String, Active)> {
     let mut gone: Vec<String> = active.keys().filter(|app| !running(app)).cloned().collect();
     gone.sort();
-    for app in &gone {
-        active.remove(app);
-    }
-    gone
+    gone.into_iter().filter_map(|app| active.remove(&app).map(|a| (app, a))).collect()
 }
 
 pub fn kind_name(kind: FrameKind) -> &'static str {
@@ -221,12 +239,20 @@ impl SystemService for ScreenStreamService {
                 let config = config_from(params, app_id, shell.w as u32, shell.h as u32);
                 let stream = ScreenStream::start(&privacy_permissions::access(app_id), config, t / 1000.0).map_err(|e| e.describe().to_string())?;
                 let filter = filter_from(params)?;
-                self.active.insert(app_id.to_string(), Active { stream, filter, hash: None, path: None });
+                let fps = stream.config().max_frame_rate().map_or(DEFAULT_FPS, |f| f.round() as u32);
+                let recording = start_recording(shell, params, &filter, fps, t)?;
+                self.active.insert(app_id.to_string(), Active { stream, filter, recording, hash: None, path: None });
                 Ok(Json::Obj(Vec::new()))
             }
             "stop" => {
-                self.active.remove(app_id);
-                Ok(Json::Obj(Vec::new()))
+                let movie = match self.active.remove(app_id) {
+                    Some(a) => finish_movie(a.recording)?,
+                    None => None,
+                };
+                Ok(match movie {
+                    Some(path) => Json::Obj(vec![("movie".into(), Json::Str(path.display().to_string()))]),
+                    None => Json::Obj(Vec::new()),
+                })
             }
             _ => Err(format!("screen_stream has no method {method}")),
         }
@@ -235,8 +261,11 @@ impl SystemService for ScreenStreamService {
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let now = t / 1000.0;
         // a stream ends with its app: an app that is no longer running loses its stream
-        for app in stop_exited(&mut self.active, |app| app_pid(shell, app).is_some()) {
+        for (app, gone) in stop_exited(&mut self.active, |app| app_pid(shell, app).is_some()) {
             eprintln!("springboard: screen stream {app} ended with its app");
+            if let Err(e) = finish_movie(gone.recording) {
+                eprintln!("springboard: screen stream {app}: {e}");
+            }
         }
         let mut due: Vec<String> = self.active.iter().filter(|(_, a)| a.stream.is_due(now)).map(|(app, _)| app.clone()).collect();
         if due.is_empty() {
@@ -263,11 +292,16 @@ impl SystemService for ScreenStreamService {
         for app in due {
             let Some(a) = self.active.get_mut(&app) else { continue };
             // each stream sends its own filter's picture: its region, its blanked windows, and the pointer
-            let composed = frame_for(img, a.filter.source_region(&content), &a.filter.masked_frames(&content), pointer);
+            let masks = a.filter.masked_frames(&content);
+            let composed = frame_for(img, a.filter.source_region(&content), &masks, pointer);
             // a moved pointer or a changed window makes a fresh frame
             let hash = frame_hash(&composed.px);
             let Some(frame) = a.stream.tick(now, a.hash != Some(hash)) else { continue };
             a.hash = Some(hash);
+            // the movie takes every due frame; its session crops to the region it was started with
+            if let Some(movie) = a.recording.as_mut() {
+                movie.push(&frame_for(img, None, &masks, pointer), t);
+            }
             if frame.kind == FrameKind::Fresh {
                 let name = format!("{}.png", file_stem(&app));
                 match super::super::screenshot::write(&dir, &name, &super::super::screenshot::encode(&composed), unix) {
@@ -314,6 +348,21 @@ mod tests {
         assert_eq!(file_stem("is.olibuijr.mail"), "is.olibuijr.mail");
         assert_eq!(file_stem("../etc/passwd"), ".._etc_passwd");
         assert_eq!(file_stem(""), "app");
+    }
+
+    #[test]
+    fn a_movie_is_written_from_the_frames_it_takes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("clip.avi");
+        let area = Area { x: 0, y: 0, w: 4, h: 4 };
+        let mut movie = Session::start(path.clone(), screenrec::Encoder::Avi, area, 10, 0.0).unwrap();
+        let frame = Image { w: 4, h: 4, px: vec![pack(200, 40, 40, 255); 16] };
+        movie.push(&frame, 0.0);
+        movie.push(&frame, 150.0);
+        let written = finish_movie(Some(movie)).unwrap();
+        assert_eq!(written, Some(path.clone()));
+        assert!(path.is_file() && std::fs::metadata(&path).unwrap().len() > 0);
+        assert_eq!(finish_movie(None).unwrap(), None);
     }
 
     #[test]
@@ -385,9 +434,9 @@ mod tests {
         let stream = || ScreenStream::start(&access, StreamConfig::default(), 0.0).unwrap();
         let mut active = HashMap::new();
         let filter = || ContentFilter::display(0, Rule::ExcludeWindows(Vec::new()));
-        active.insert("is.a".to_string(), Active { stream: stream(), filter: filter(), hash: None, path: None });
-        active.insert("is.b".to_string(), Active { stream: stream(), filter: filter(), hash: None, path: None });
-        let gone = stop_exited(&mut active, |app| app == "is.b");
+        active.insert("is.a".to_string(), Active { stream: stream(), filter: filter(), recording: None, hash: None, path: None });
+        active.insert("is.b".to_string(), Active { stream: stream(), filter: filter(), recording: None, hash: None, path: None });
+        let gone: Vec<String> = stop_exited(&mut active, |app| app == "is.b").into_iter().map(|(app, _)| app).collect();
         assert_eq!(gone, vec!["is.a".to_string()]);
         assert!(active.contains_key("is.b") && !active.contains_key("is.a"));
         assert!(stop_exited(&mut active, |_| true).is_empty());
