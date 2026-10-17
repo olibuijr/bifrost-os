@@ -280,6 +280,8 @@ pub mod media_library;
 pub mod media_picker_view;
 /// Like, dislike, bookmark and rating for the Lock Screen and Control Center (`now_playing` service events).
 pub mod now_playing_feedback;
+/// Document link index for backlinks (`bifrost_core::link_index`, contentlinkingd).
+pub mod document_links;
 /// Routes menu bar, Control Center and media key transport requests to the app's remote command handlers.
 pub mod remote_routing;
 /// Purchase receipts the PC App Store signs; the caller supplies the signature check.
