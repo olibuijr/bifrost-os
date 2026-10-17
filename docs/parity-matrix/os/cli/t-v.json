@@ -1513,9 +1513,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no usdextract in the Arch usd package; not implemented",
+   "bifrost": "springboard/cmd/src/usdextract.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17: usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package through unzip (springboard/cmd/src/usdextract.rs; tests usdextract::tests). Only the unpack form is built; any other usdextract options are not. Not verified on Midget.",
    "rea": [],
    "method": "assessed"
   },

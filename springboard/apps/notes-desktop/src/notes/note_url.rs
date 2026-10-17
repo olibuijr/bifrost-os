@@ -56,6 +56,24 @@ pub fn backlink_label(count: usize) -> String {
     }
 }
 
+/// What a linked-notes panel shows for one open note: the label above the list and the ids of the notes listed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkedPanel<'a> {
+    pub label: String,
+    pub ids: Vec<&'a str>,
+}
+
+/// The panel for note `target`: its backlinks in the order `backlinks` gives, under the count label.
+pub fn linked_panel<'a>(notes: &[(&'a str, &str)], target: &str) -> LinkedPanel<'a> {
+    let ids = backlinks(notes, target);
+    LinkedPanel { label: backlink_label(ids.len()), ids }
+}
+
+/// The title of each listed note, in list order. An id with no note in `titles` (the note was deleted) is skipped.
+pub fn panel_titles(ids: &[&str], titles: &[(&str, &str)]) -> Vec<String> {
+    ids.iter().filter_map(|id| titles.iter().find(|(known, _)| known == id).map(|(_, title)| title.to_string())).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +137,21 @@ mod tests {
         ];
         assert_eq!(backlinks(&notes, "t"), vec!["a", "c"]);
         assert!(backlinks(&notes, "b").is_empty());
+    }
+
+    #[test]
+    fn the_panel_lists_the_backlinks_under_their_count() {
+        let notes = [("a", "notes://note/t"), ("b", "nothing"), ("c", "notes://note/t")];
+        let panel = linked_panel(&notes, "t");
+        assert_eq!(panel.label, "2 linked notes");
+        assert_eq!(panel.ids, vec!["a", "c"]);
+        assert_eq!(linked_panel(&notes, "b").label, "No linked notes");
+    }
+
+    #[test]
+    fn panel_titles_follow_the_list_and_skip_deleted_notes() {
+        let titles = [("a", "Groceries"), ("c", "Trip")];
+        assert_eq!(panel_titles(&["c", "gone", "a"], &titles), vec!["Trip", "Groceries"]);
+        assert!(panel_titles(&[], &titles).is_empty());
     }
 }
