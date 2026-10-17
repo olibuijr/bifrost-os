@@ -67,9 +67,9 @@
    "area": "view",
    "apple": "Finder Group By",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/menus.rs:151",
-   "note": "Context menu groups by None, Kind or Date; Name, Size, Tags and Application groupings are not offered",
-   "wire": "Add Group By Size, Name and Tags to menus.rs and the Group enum in views/options.rs"
+   "bifrost": "springboard/apps/files/src/menus.rs; views/options.rs (Group)",
+   "note": "Context menu groups by None, Kind, Date, Name (first letter) or Size (folders and size bands) (menus.rs, views/options.rs Group::key). Tags and Application groupings are not offered",
+   "wire": "Add Group By Tags to menus.rs and the Group enum in views/options.rs (the key needs the tag index)"
   },
   {
    "feature": "Status bar (item count, free space)",
@@ -138,10 +138,10 @@
    "feature": "Eject or unmount removable volumes from the sidebar",
    "area": "sidebar",
    "apple": "Finder sidebar eject button",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Locations come from fs::locations (springboard/src/files/fs.rs:510); no eject action",
-   "wire": "Add an eject button on removable Locations rows that calls the shell's unmount service"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/sidebar.rs (sidebar_click, eject_volume); springboard/src/files/volumes.rs",
+   "note": "Volumes mounted under /run/media or /media are listed in Locations after Trash (sidebar.rs sections, springboard/src/files/volumes.rs parse_mounts). The Eject text ejects through udisksctl (unmount the partition, then power off the disk) in the background. Built, not yet run on Midget; a failed eject is only written to the log",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Tags in the sidebar and colour dots on items",
@@ -201,10 +201,10 @@
    "feature": "New Finder window (Cmd+N)",
    "area": "window",
    "apple": "Finder File > New Finder Window",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No code path opens a second Files window; tabs are the only multi-folder view",
-   "wire": "Add New Window (Cmd+N) that asks the launch service for another bifrost-files window at the home folder"
+   "status": "partial",
+   "bifrost": "springboard/apps/files/src/windows.rs; main.rs (window_event, draw_window, window_closed)",
+   "note": "Cmd+N and New Window in the empty-area menu open a second Files window at the home folder (windows.rs new_window; window_event and draw_window route touches and drawing). The new window has no live folder watch or thumbnails yet, and the keyboard stays with the main window. Built, not yet run on Midget",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Quick Look preview (Space)",
@@ -346,9 +346,9 @@
    "area": "search",
    "apple": "Finder search tokens",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/search.rs:19",
-   "note": "The search field takes plain words only; kind, tag and age filters exist for smart folders (smart.rs:21) and TypeFilter (springboard/src/files/find.rs:12)",
-   "wire": "Parse kind: tokens in search.rs query_changed into a TypeFilter and tag: into the tag index"
+   "bifrost": "springboard/apps/files/src/search.rs (parse_terms, poll_search)",
+   "note": "kind: and tag: terms are parsed in search.rs (parse_terms): kind:images narrows the search by TypeFilter and tag:red keeps the hits with that tag. date: is not parsed yet. Built, not yet run on Midget",
+   "wire": "Parse a date: term in search.rs parse_terms (age buckets such as today, this week) and filter the hits by mtime"
   },
   {
    "feature": "Search scope (this folder, Home, whole disk)",
@@ -364,9 +364,9 @@
    "area": "search",
    "apple": "Finder search Kind bar",
    "status": "partial",
-   "bifrost": "springboard/src/files/find.rs:12",
-   "note": "TypeFilter and accepts() exist in the shell crate, but the app searches with TypeFilter::All (search.rs:34)",
-   "wire": "Show a kind picker over the results and pass the chosen filter to FileManager::new"
+   "bifrost": "springboard/apps/files/src/search.rs (query_changed); springboard/src/files/find.rs:12",
+   "note": "The kind: term in the search field passes the chosen TypeFilter to FileManager::new (search.rs query_changed). No kind picker is shown over the results yet",
+   "wire": "Show a kind picker over the results (a row of TypeFilter choices) that sets the same filter as kind:"
   },
   {
    "feature": "Copy, Cut and Paste files",
@@ -391,9 +391,9 @@
    "area": "file-ops",
    "apple": "Finder File > Make Alias",
    "status": "partial",
-   "bifrost": "springboard/apps/files/src/ops.rs:517",
-   "note": "Cmd+L and the context menu link each selected item beside it as name alias (fs::make_alias, springboard/src/files/fs.rs:331). Not tested on Midget; a link is not undone by Undo yet",
-   "wire": "Verify on Midget; add an undo step that removes the link"
+   "bifrost": "springboard/apps/files/src/ops.rs:517; undo.rs",
+   "note": "Cmd+L and the context menu link each selected item beside it as name alias (fs::make_alias). Undo after Make Alias removes the link (undo.rs Undo::Alias). Not tested on Midget",
+   "wire": "Verify on Midget, then promote to parity."
   },
   {
    "feature": "Copy Item Path",
@@ -588,9 +588,9 @@
  "summary": {
   "features": 64,
   "parity": 0,
-  "partial": 58,
-  "gap": 5,
+  "partial": 60,
+  "gap": 3,
   "n/a": 1,
-  "coverage_pct": 46.0
+  "coverage_pct": 47.6
  }
 }
