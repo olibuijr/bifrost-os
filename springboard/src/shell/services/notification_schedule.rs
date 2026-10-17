@@ -613,4 +613,27 @@ mod tests {
         assert_eq!(second.usernotif.calendars.len(), 1);
         assert_eq!((second.usernotif.calendars[0].due, second.usernotif.calendars[0].repeats), (expected, true));
     }
+
+    #[test]
+    fn the_pending_list_and_removal_cover_both_kinds() {
+        let dir = scratch_dir("wire-pending");
+        let mut sh = shell_in(&dir, 1_000_000);
+        let app = "is.example.timer";
+        let at_8_30 = NotifTrigger::Calendar { hour: 8, minute: 30, weekdays: 0, repeats: false };
+        let cal = NotifRequest { id: "cal".into(), title: "C".into(), ..Default::default() };
+        let int = NotifRequest { id: "int".into(), title: "I".into(), ..Default::default() };
+        assert_eq!(sh.usernotif_schedule(app, cal, at_8_30, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_schedule(app, int, NotifTrigger::Interval { seconds: 120, repeats: false }, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_pending(app), vec!["int".to_string(), "cal".to_string()], "interval first, then calendar");
+
+        // the same identifier replaces the pending request of either kind
+        let again = NotifRequest { id: "int".into(), title: "I".into(), ..Default::default() };
+        assert_eq!(sh.usernotif_schedule(app, again, NotifTrigger::Calendar { hour: 9, minute: 0, weekdays: 0, repeats: false }, 0.0), NotifStatus::Ok);
+        assert_eq!(sh.usernotif_pending(app), vec!["cal".to_string(), "int".to_string()]);
+
+        sh.usernotif_remove_pending(app, &["cal".to_string()]);
+        assert_eq!(sh.usernotif_pending(app), vec!["int".to_string()]);
+        sh.usernotif_remove_pending(app, &[]);
+        assert!(sh.usernotif_pending(app).is_empty());
+    }
 }

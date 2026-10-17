@@ -375,6 +375,7 @@ impl super::Shell {
                 let status = if posting { self.usernotif_submit(slot, &app, req, t) } else { NotifStatus::NotPermitted };
                 self.ext_send(slot as usize, &ToApp::NotificationStatus { request, status });
             }
+            ToShell::NotifyRemove { delivered: false, ids } if permitted => self.usernotif_remove_pending(&app, &ids),
             ToShell::NotifyRemove { delivered, ids } if permitted => {
                 for id in self.usernotif.remove(&app, delivered, &ids) {
                     self.notify_remove(id);
@@ -382,7 +383,7 @@ impl super::Shell {
             }
             ToShell::NotifyQuery { request, delivered } if permitted => {
                 self.usernotif_prune();
-                let ids = self.usernotif.list(&app, delivered);
+                let ids = if delivered { self.usernotif.list(&app, true) } else { self.usernotif_pending(&app) };
                 self.ext_send(slot as usize, &ToApp::NotificationList { request, delivered, ids });
             }
             // the first scheduled request of an app that was never asked waits for the first-time alert, as a request does
