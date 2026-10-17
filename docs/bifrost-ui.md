@@ -4483,11 +4483,16 @@ ships in its bundle; BifrOSt has the same shape as a package.
   desktop and dock). Each describes menu items that the app's source defines.
 - **Index build (done).** `with_index(root, f)` shares one index. It rebuilds when `apps/installed.json` changes (every
   install, update and removal rewrites it, in the shell or in privd), and `shell.rs` warms it on a worker thread at start.
-- **Not built yet (gap; `com.apple.helpd` stays `gap`).** (a) the Help menu (`desktop_bar.rs`, `Menu::Help`) still shows
-  its fixed rows: the search field that calls `search_menu` for the frontmost app's menus and `search` for topics is not
-  drawn; (b) no Help viewer window exists: the planned window has a sidebar table of contents from `pages_of`, back and
-  forward, a search field, and renders bodies with `shell::md::classify`; it opens from the Help menu and from `help://`
-  links. Help is not reachable from the UI until both exist, so the row is not `partial`.
+- **Help viewer (built, host tests not yet run).** `springboard/src/shell/help_viewer.rs`: a floating window in the
+  character viewer's overlay pattern. Sidebar: a search field (typing goes to it through `type_out`, ranked `search`
+  hits) over the book's table of contents (`toc`: pages, then the open page's headings). Toolbar: Back and Forward over
+  a history stack (`Nav`), a book popup over `HelpIndex::books`, and Done. Pages render through `md::classify`, with
+  link markup stripped and the first link on a line followed (`help://` inside the viewer, `http(s)` through
+  `desktop_open_url`). `Shell::open_help(app_id, anchor)` opens it; the Help menu's "<App> Help" row calls it for the
+  settings book or the installed app in front. Gaps: inline bold and italics are not styled, a tap follows only the
+  first link of a line, and SDK apps reached through `External(slot)` get no Help row yet.
+- **Not built yet (gap; `com.apple.helpd` stays `gap`).** The Help menu's search field, which would call `search_menu`
+  for the frontmost app's menus and `search` for topics, is not drawn yet. Help stays off the parity rows until it is.
 - **Tests.** `springboard/src/shell/helpbook.rs` (front matter, anchors, ranking, AND matching, link resolution,
   menu search, built-in book, reading a book from disk). Run by the lead: `cargo test -p springboard helpbook`.
 
