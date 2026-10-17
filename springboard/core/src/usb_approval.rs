@@ -75,6 +75,22 @@ pub fn sysfs_value(decision: Decision) -> Option<&'static str> {
     }
 }
 
+/// The kernel attribute to write for a device port: `/sys/bus/usb/devices/<port>/authorized`. A port is a bus
+/// (`usb1`) or a bus-port path (`1-2`, `1-2.4`); anything else, including a path separator or `..`, is `None`, so a
+/// caller can never be walked out of the sysfs tree.
+pub fn authorized_path(port: &str) -> Option<String> {
+    let valid = if let Some(bus) = port.strip_prefix("usb") {
+        !bus.is_empty() && bus.bytes().all(|b| b.is_ascii_digit())
+    } else {
+        let (bus, ports) = port.split_once('-')?;
+        !bus.is_empty()
+            && bus.bytes().all(|b| b.is_ascii_digit())
+            && !ports.is_empty()
+            && ports.split('.').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+    };
+    valid.then(|| format!("/sys/bus/usb/devices/{port}/authorized"))
+}
+
 impl Approvals {
     pub fn new() -> Self {
         Self::default()
@@ -171,6 +187,19 @@ mod tests {
         assert_eq!(sysfs_value(Decision::Allow), Some("1"));
         assert_eq!(sysfs_value(Decision::Deny), Some("0"));
         assert_eq!(sysfs_value(Decision::Prompt), None);
+    }
+
+    #[test]
+    fn the_authorized_attribute_path_accepts_only_bus_and_port_names() {
+        assert_eq!(authorized_path("1-2").as_deref(), Some("/sys/bus/usb/devices/1-2/authorized"));
+        assert_eq!(authorized_path("1-2.4.1").as_deref(), Some("/sys/bus/usb/devices/1-2.4.1/authorized"));
+        assert_eq!(authorized_path("usb1").as_deref(), Some("/sys/bus/usb/devices/usb1/authorized"));
+        assert_eq!(authorized_path("../../etc"), None);
+        assert_eq!(authorized_path("1-2/../../x"), None);
+        assert_eq!(authorized_path("1-2:1.0"), None, "interfaces are not written here");
+        assert_eq!(authorized_path("1-"), None);
+        assert_eq!(authorized_path("usb"), None);
+        assert_eq!(authorized_path(""), None);
     }
 
     #[test]
