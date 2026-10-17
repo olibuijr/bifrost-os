@@ -398,6 +398,7 @@ pub mod http_message;
 pub mod net_service;
 pub mod service_discovery;
 pub mod local_auth;
+pub mod local_account;
 pub mod privacy_permissions;
 pub mod screen_sample;
 pub mod external_accessory;
