@@ -473,6 +473,8 @@ pub struct Shell {
     base_icons: Vec<Image>,
     /// the icon style generation the icons were drawn in (`icon_doc::style_generation`)
     icon_gen: u64,
+    /// counts the icon rebuilds; the Dock client drops its cached icons when it changes
+    icon_rebuilds: u32,
     /// the `installed.json` stamp the icons were drawn against (`helpbook::installed_stamp`)
     installed_stamp: Option<std::time::SystemTime>,
     zoom: f32,
@@ -861,6 +863,7 @@ impl Shell {
             grid,
             base_icons,
             icon_gen: bifrost_render::icon_doc::style_generation(),
+            icon_rebuilds: 0,
             installed_stamp: helpbook::installed_stamp(&apphost::root()),
             zoom: 1.0,
             pager,
@@ -1566,6 +1569,7 @@ impl Shell {
     /// refreshes what holds them: the Dock and grid tiles, the App Library, Spotlight and the Overview. Runs when the
     /// icon style changes and when an app is installed or updated.
     pub(super) fn rebuild_app_icons(&mut self) {
+        self.icon_rebuilds = self.icon_rebuilds.wrapping_add(1);
         let size = self.layout.icon as usize;
         let mask = squircle_mask(size);
         let all = apps();

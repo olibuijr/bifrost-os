@@ -75,6 +75,11 @@ pub struct DockModel {
     pub magnified: f32,
     pub position: DockPosition,
     pub autohide: bool,
+    /// The icon style (`bifrost_render::icon_doc::Variant` as its index) and the tint Tinted icons use.
+    pub icon_variant: u8,
+    pub icon_tint: [u8; 3],
+    /// Counts the shell's icon rebuilds (an install or update); the client drops its cached icons when it changes.
+    pub icon_gen: u32,
 }
 
 /// A notification as Notification Center shows it.
@@ -360,6 +365,11 @@ pub fn encode_to_chrome(m: &ToChrome) -> Vec<u8> {
             w.f32(d.magnified);
             w.u8(dock_position_tag(d.position));
             w.bool(d.autohide);
+            w.u8(d.icon_variant);
+            for c in d.icon_tint {
+                w.u8(c);
+            }
+            w.u32(d.icon_gen);
             w.out
         }
         ToChrome::Panels(p) => {
@@ -437,7 +447,10 @@ pub fn decode_to_chrome(b: &[u8]) -> Result<ToChrome, DecodeError> {
                 t => return Err(DecodeError::UnknownTag(t)),
             };
             let autohide = r.bool()?;
-            ToChrome::Dock(DockModel { items, size, magnified, position, autohide })
+            let icon_variant = r.u8()?;
+            let icon_tint = [r.u8()?, r.u8()?, r.u8()?];
+            let icon_gen = r.u32()?;
+            ToChrome::Dock(DockModel { items, size, magnified, position, autohide, icon_variant, icon_tint, icon_gen })
         }
         TO_PANELS => {
             let n = r.count(MIN_NOTIFICATION)?;
@@ -579,6 +592,9 @@ mod tests {
                 magnified: 72.0,
                 position: DockPosition::Left,
                 autohide: true,
+                icon_variant: 2,
+                icon_tint: [10, 132, 255],
+                icon_gen: 7,
             }),
             ToChrome::Panels(PanelsModel {
                 notifications: vec![Notification {

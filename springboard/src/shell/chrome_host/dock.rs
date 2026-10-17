@@ -88,6 +88,10 @@ impl Shell {
             magnified: if prefs.magnification { prefs.magnified } else { prefs.size },
             position: chrome_position(prefs.position),
             autohide: prefs.autohide,
+            // the Dock client draws with the same icon style, and drops its icons when the shell rebuilt them
+            icon_variant: bifrost_render::icon_doc::current_style().0 as u8,
+            icon_tint: bifrost_render::icon_doc::current_style().1,
+            icon_gen: self.icon_rebuilds,
         })
     }
 

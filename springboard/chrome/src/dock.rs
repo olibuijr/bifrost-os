@@ -398,11 +398,20 @@ pub struct DockState {
     /// Launch bounces: (item index, start seconds).
     pub bounces: Vec<(usize, f64)>,
     pub gesture: Option<Gesture>,
+    /// The shell's icon rebuild count the cached icons were drawn for (see `DockModel::icon_gen`).
+    pub icon_gen: u32,
 }
 
 impl DockState {
     /// Replaces the model. Bounces of items that are gone are dropped; icons are decoded again.
     pub fn set_model(&mut self, model: DockModel) {
+        // the shell's icon style: set before the icons are decoded, so Dark and Tinted icons come out right
+        bifrost_render::icon_doc::set_style(bifrost_render::icon_doc::Variant::from_u8(model.icon_variant), model.icon_tint);
+        // the shell rebuilt its icons (an install or update): the cached ones are stale
+        if model.icon_gen != self.icon_gen {
+            self.icon_gen = model.icon_gen;
+            bifrost_render::icon_doc::clear_cache();
+        }
         self.bounces.retain(|(i, _)| *i < model.items.len());
         self.images = model.items.iter().map(load_icon).collect();
         self.model = model;
@@ -784,6 +793,7 @@ mod tests {
             magnified: 96.0,
             position: DockPosition::Bottom,
             autohide: false,
+            icon_variant: 0, icon_tint: [0; 3], icon_gen: 0,
         }
     }
 

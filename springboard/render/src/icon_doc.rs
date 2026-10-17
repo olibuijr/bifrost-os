@@ -68,7 +68,8 @@ impl Variant {
         }
     }
 
-    fn from_u8(v: u8) -> Variant {
+    /// The variant with this index (its `as u8`); an unknown index is Default.
+    pub fn from_u8(v: u8) -> Variant {
         match v {
             1 => Variant::Dark,
             2 => Variant::Tinted,
@@ -596,6 +597,13 @@ pub fn set_style(variant: Variant, tint: [u8; 3]) {
 /// How many times the style has changed since start (see [`set_style`]).
 pub fn style_generation() -> u64 {
     GENERATION.load(Ordering::Relaxed)
+}
+
+/// Forgets every cached icon. A process that sees its apps change (the Dock client) calls this.
+pub fn clear_cache() {
+    if let Ok(mut c) = cache().lock() {
+        c.clear();
+    }
 }
 
 /// Forgets the cached icons of `app` (its id as the shell names it). Called when the app is installed or updated.
