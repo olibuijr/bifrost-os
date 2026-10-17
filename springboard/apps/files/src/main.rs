@@ -790,7 +790,7 @@ mod tests {
     }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {
-        let font = springboard::font::Font::parse(include_bytes!("../../../../bifrost-ref/fonts/SFUI.ttf")).unwrap();
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
         let ui = Ui::new(font,1.25);
         let mut files = fixture((0..12).map(|i| folder(&format!("Folder {i}"))).collect());
         let (w,h)=(1200,788);
