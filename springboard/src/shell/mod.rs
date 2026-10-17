@@ -139,6 +139,7 @@ pub mod settings_load;
 // the settings App Intents catalogue; Search does not list it yet, so unused items are expected for now
 #[allow(dead_code)]
 pub mod settings_intents;
+pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;

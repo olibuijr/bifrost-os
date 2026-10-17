@@ -64,6 +64,8 @@ pub struct Manifest {
     pub schemes: Vec<String>,
     /// App Intents declared as `[[intent]]` tables (`shell::intents`); Search lists the shortcuts.
     pub intents: Vec<super::intents::ManifestIntent>,
+    /// entity types the app offers to Search (`[[entity]]` tables with `type = "Note"`); `entity_index` indexes them
+    pub entity_types: Vec<String>,
     /// `[[control]]` tables: buttons and toggles the app adds to Control Center (`shell::app_controls`).
     pub controls: Vec<super::app_controls::ManifestControl>,
     /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
@@ -108,6 +110,8 @@ impl Manifest {
         let mut privacy = false;
         // inside a `[[service]]` table keys belong to the service
         let mut service = false;
+        // inside an `[[entity]]` table the `type` key names an entity type Search indexes
+        let mut entity = false;
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -123,6 +127,7 @@ impl Manifest {
                 if service {
                     m.services.push(Default::default());
                 }
+                entity = line == "[[entity]]";
                 continue;
             }
             let Some((k, v)) = line.split_once('=') else { continue };
@@ -134,6 +139,12 @@ impl Manifest {
                 continue;
             }
             let strs = || -> Vec<String> { v.trim_start_matches('[').trim_end_matches(']').split(',').map(|s| unquote(s.trim())).filter(|s| !s.is_empty()).collect() };
+            if entity {
+                if k == "type" {
+                    m.entity_types.push(unquote(v));
+                }
+                continue;
+            }
             if privacy {
                 if k == "location" {
                     m.location_purpose = unquote(v);
@@ -1560,6 +1571,7 @@ impl Shell {
         match AppHost::spawn_with(&app.manifest.id, &app.exec_path(), &data, &root(), self.ext_cfg(), self.session_restore_flag()) {
             Ok(h) => {
                 self.ext[slot] = Some(h);
+                super::entity_index::start(&app.manifest.id, &app.manifest.entity_types);
                 self.usernotif_started(slot);
                 self.extras_started(slot);
                 self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidLaunchApplication, slot as u8);
@@ -2107,6 +2119,15 @@ mod tests {
         assert_eq!(super::quit_plan(true), super::QuitPlan::KillNow);
         assert_eq!(super::quit_plan(false), super::QuitPlan::QuitThenKill(super::QUIT_GRACE_MS));
     }
+    #[test]
+    fn entity_tables_declare_the_types_search_indexes() {
+        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[entity]]\ntype = \"Note\"\n\n[[entity]]\ntype = \"Folder\"\nname = \"ignored\"\n\n[[intent]]\nid = \"open\"\ntitle = \"Open\"\n").unwrap();
+        assert_eq!(m.entity_types, vec!["Note", "Folder"]);
+        assert_eq!(m.name, "Notes", "an entity table does not change the app keys");
+        assert_eq!(m.intents.len(), 1);
+        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n").unwrap().entity_types.is_empty());
+    }
+
     #[test]
     fn intent_tables_do_not_leak_into_the_app_keys() {
         let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nparams = [\"text:string\", \"due:date?\"]\n\n[other]\nname = \"ignored\"\n").unwrap();
