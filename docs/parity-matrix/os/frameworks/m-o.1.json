@@ -316,7 +316,16 @@
    "status": "partial",
    "note": "The media module demuxes MP4, decodes AAC and plays through ALSA with A/V sync, behind the player the Deildu app uses. Audio processing taps, the professional format reader plug-ins and the public Media Toolbox API are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::"
+    }
+   ],
+   "ready_note": "The media module demuxes MP4, decodes AAC and plays through the audio service, with unit tests in springboard::media. Audio processing taps and plug-in readers are not part of this check."
   },
   {
    "id": "path:/System/Library/Frameworks/Message.framework",
@@ -640,7 +649,16 @@
    "status": "partial",
    "note": "The kernel mount helpers mount.cifs and mount.nfs from the cifs-utils and nfs-utils packages mount network shares. Apps get no mount API and the desktop has no connect-to-server flow, so the row stays partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "command -v mount.cifs",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The cifs-utils package provides mount.cifs and the kernel mount helpers mount network shares on the installed system."
   },
   {
    "id": "path:/System/Library/Frameworks/Network.framework",
@@ -1047,8 +1065,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.MIL) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "Model intermediate language used by the reference on-device ML compiler. BifrOSt has no model compiler or model format, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1089,8 +1107,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Runtime for the reference's on-device model compiler (bundle com.apple.mlcompiler.runtime). BifrOSt has no model compiler, so it stays os.",
+   "status": "n/a",
+   "note": "Runtime for the reference on-device model compiler. BifrOSt has no model compiler stack, and the reference format it compiles is Apple-only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1110,8 +1128,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "XPC compile service for the reference's model compiler (MLCompilerOSXPC). BifrOSt has no model compiler, so it stays os.",
+   "status": "n/a",
+   "note": "XPC compile service for the reference on-device model compiler (MLCompilerOSXPC). BifrOSt has no model compiler stack, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1131,8 +1149,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "MLIR-based machine learning toolchain; its bundle ships a model viewer tool. BifrOSt has no model compiler stack, so it stays os.",
+   "status": "n/a",
+   "note": "MLIR-based ML toolchain of the reference, with its model viewer tool. BifrOSt has no model compiler stack, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1152,8 +1170,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Model asset packaging for the reference's on-device machine learning (bundle com.apple.ggml.ModelAsset). BifrOSt has no model asset format, so it stays os.",
+   "status": "n/a",
+   "note": "Model asset packaging for the reference on-device ML (com.apple.ggml.ModelAsset). It is an Apple model-pack format that BifrOSt does not use.",
    "rea": [],
    "method": "assessed"
   },
@@ -1194,8 +1212,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Model file format specification for the reference's on-device machine learning. BifrOSt has no model format, so it stays os.",
+   "status": "n/a",
+   "note": "Model file format specification of the reference on-device ML. BifrOSt has no model format, so the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -1329,8 +1347,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier (com.apple.MTInferenceToolib) was readable from the reference image. Its job is not determined, so it stays os.",
+   "status": "n/a",
+   "note": "Inference tooling library of the reference model toolchain, used by Apple's internal tools. It has no BifrOSt meaning.",
    "rea": [],
    "method": "assessed"
   },
@@ -1809,7 +1827,16 @@
    "status": "partial",
    "note": "Account sync runs on worker threads in sync.rs while the window is open. Not mirrored: a background mail agent that keeps accounts synced while the app is closed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "sync::"
+    }
+   ],
+   "ready_note": "Account sync runs on worker threads in the sync module while the window is open. A background agent that keeps accounts synced while closed is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSupport.framework",
@@ -2002,7 +2029,16 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the vendor's asset delivery service and its fetching from vendor servers.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::"
+    }
+   ],
+   "ready_note": "Background downloads for apps are modelled in bifrost_ui::managed_download with unit tests, and the SDK exposes them through the background download module. The vendor asset servers are not part of this check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsHelper.framework",
@@ -2233,7 +2269,16 @@
    "status": "partial",
    "note": "2D drawing runs in-process in the bifrost-render cg module. Not mirrored: the separate graphics services agent process that the reference runs for drawing requests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::"
+    }
+   ],
+   "ready_note": "2D drawing runs in-process in bifrost_render::cg, with its unit tests. The separate graphics agent process is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsBlastDoorSupport.framework",
@@ -2422,7 +2467,16 @@
    "status": "partial",
    "note": "Pen and marker annotation work in markup.rs for screenshots and in the Preview canvas for documents. Not mirrored: a system Markup extension point that other apps and image editors call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::"
+    }
+   ],
+   "ready_note": "Pen and marker annotation for screenshots is in shell::markup, with unit tests. A system Markup extension point is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Marrs.framework",
@@ -2862,7 +2916,16 @@
    "status": "partial",
    "note": "The Now Playing card and the player capsule draw the playback controls. Not covered: the animated level bars and the shared media control views of the reference framework.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying::"
+    }
+   ],
+   "ready_note": "The Now Playing card and player capsule draw the playback controls, with unit tests for the card model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaExperience.framework",

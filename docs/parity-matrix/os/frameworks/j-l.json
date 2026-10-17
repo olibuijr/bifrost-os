@@ -434,8 +434,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "The index shows the jetpackassetd daemon, which downloads Apple-hosted asset packs for Apple's own services. BifrOSt has no counterpart service and no content store to serve.",
    "rea": [],
    "method": "assessed"
   },
@@ -1671,8 +1671,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Encryption of the reference location log store (com.apple.CoreLocation.LocationLogEncryption). BifrOSt writes no location log, so there is no store to encrypt; it stays os pending that decision.",
+   "status": "n/a",
+   "note": "Encryption of the reference location log store. BifrOSt writes no location log, so there is no store to encrypt; the row does not apply.",
    "rea": [],
    "method": "assessed"
   },
