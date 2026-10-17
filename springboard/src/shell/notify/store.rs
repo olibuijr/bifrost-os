@@ -96,6 +96,11 @@ impl Store {
         store
     }
 
+    /// The file the store saves to, or None for a store that never touches the disk.
+    pub fn path(&self) -> Option<&PathBuf> {
+        self.path.as_ref()
+    }
+
     /// A store that never touches the disk.
     pub fn memory() -> Self {
         Store::default()

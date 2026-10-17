@@ -580,6 +580,12 @@ impl Shell {
         self.ui.pt(pt)
     }
 
+    /// Where the pending requests of `notification-schedule` are saved: beside the notification store, once the
+    /// data directory is set (None before that, so a test shell writes nothing).
+    pub(in crate::shell) fn pending_path(&self) -> Option<std::path::PathBuf> {
+        self.notify.store.path().and_then(|p| p.parent()).map(|dir| dir.join("pending-notifications.ini"))
+    }
+
     /// Loads the persisted notifications from `path` and saves there from now on.
     pub(super) fn notify_load(&mut self, path: &str) {
         self.notify.store = Store::load(path);

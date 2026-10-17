@@ -119,6 +119,18 @@ impl Registry {
         fired.into_iter().map(|p| (p.app, p.req)).collect()
     }
 
+    /// The pending interval requests as `(app, request, due)`, with `due` in Unix milliseconds: `t` is the shell
+    /// clock now and `now_ms` the Unix time now. This is what `notification-schedule` saves across a restart.
+    pub fn pending_rows(&self, t: f64, now_ms: i64) -> Vec<(String, NotifRequest, i64)> {
+        self.pending.iter().map(|p| (p.app.clone(), p.req.clone(), now_ms + (p.due - t).round() as i64)).collect()
+    }
+
+    /// Puts back a pending request saved by `pending_rows`; `due` is its trigger on the shell clock.
+    pub fn restore_pending(&mut self, app: &str, req: NotifRequest, due: f64) {
+        self.pending.retain(|p| !(p.app == app && p.req.id == req.id));
+        self.pending.push(Pending { app: app.to_string(), req, due });
+    }
+
     /// The soonest trigger (ms), for the shell's wake-up.
     pub fn next_due(&self) -> Option<f64> {
         self.pending.iter().map(|p| p.due).min_by(f64::total_cmp)
