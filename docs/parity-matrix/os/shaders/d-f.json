@@ -2629,11 +2629,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Morpheus.framework/Versions/A/Resources/default.metallib",
@@ -2701,11 +2710,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs",
+   "status": "partial",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NodesUI.framework/Versions/A/Resources/default.metallib",
@@ -2743,11 +2761,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoImaging.framework/Versions/A/Resources/default.metallib",
@@ -2764,11 +2791,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/photo_effects.rs",
+   "bifrost": "springboard/render/src/photo_effects.rs; springboard/render/src/kernel_photo_adjust.rs; springboard/gpu/shaders/photo_adjust.comp",
    "status": "partial",
-   "note": "Photo looks are approximated by name as CPU colour chains. There are no photo imaging kernels.",
+   "note": "Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    }
+   ],
+   "ready_note": "Ready: spatial photo adjustments in springboard/render/src/kernel_photo_adjust.rs (box blur, unsharp mask with threshold, midtone-weighted clarity, bilateral denoise, percentile auto levels, dark-channel dehaze), tests kernel_photo_adjust::tests; per-pixel colour adjustments stay in colorfx.rs, color_curve.rs, edge_tone_filters.rs and photo_effects.rs; GLSL twin of the unsharp and clarity apply pass in springboard/gpu/shaders/photo_adjust.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosGenerativeServices.framework/Versions/A/Resources/default.metallib",
@@ -2941,11 +2977,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Quagga.framework/Versions/A/Resources/default.metallib",
@@ -2983,11 +3028,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/render/src/kernel_texture_import.rs",
+   "status": "partial",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_texture_import::tests"
+    }
+   ],
+   "ready_note": "Ready: texture import and processing kernels in springboard/render/src/kernel_texture_import.rs (sRGB transfer, linear-light box mip chain, normal-map mips with lost-coherence length, Toksvig-style roughness filtering, occlusion/roughness/metallic packing, channel swizzle, BC1 block encode and decode), tests kernel_texture_import::tests; no GLSL file was written. Other block formats (BC3, BC5, BC7, ASTC) are not covered. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteCompositorServices.framework/Versions/A/Resources/default.binary.metallib",
@@ -3046,11 +3100,20 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_layer_fx::tests"
+    }
+   ],
+   "ready_note": "Ready: layer-effect kernels in springboard/render/src/kernel_layer_fx.rs (layer mask scaling of premultiplied pixels, luminance and alpha masks, extended-range tone mapping per pixel, height field to normals, Blinn-Phong icon specular, highlight limited to layer coverage), tests kernel_layer_fx::tests; GLSL twin of mask plus tone map in springboard/gpu/shaders/layer_mask_edr.comp (not wired to a pipeline). Lensing and rim light stay in glass_lens.rs; blur in the Kawase shaders. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/default.metallib",
@@ -3214,11 +3277,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib",
@@ -3325,11 +3397,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/temporal_upscale.rs",
+   "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/kernel_video_filters.rs",
    "status": "partial",
-   "note": "A temporal upscaler model runs on CPU rasters. There are no GPU video processing kernels.",
+   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_filters::tests"
+    }
+   ],
+   "ready_note": "Ready: video-processing kernels in springboard/render/src/kernel_video_filters.rs (SAD, 4x4 Hadamard SATD, 2x luma downscale, histogram scene-cut score, edge-directed deinterlace, motion-adaptive temporal denoise, flow warp, Gaussian pyramid step), tests kernel_video_filters::tests. Motion search is block_motion.rs, interpolation frame_interp.rs, shutter blend and median deghost temporal_upscale.rs; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisionCore.framework/Versions/A/Resources/default.metallib",
@@ -3346,11 +3427,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs",
+   "status": "partial",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework/Versions/A/Resources/default.metallib",
@@ -3367,11 +3457,25 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared. Also: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework/Versions/A/Resources/default.metallib",
@@ -3460,11 +3564,20 @@
    "description": "",
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
-   "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs",
+   "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
    "status": "partial",
-   "note": "Pixel conversion of decoded pictures to RGBA exists on the CPU. There is no screen capture shader.",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_convert::tests"
+    }
+   ],
+   "ready_note": "Ready: capture and decode pixel conversion in springboard/render/src/kernel_video_convert.rs (RGBA to NV12 with BT.601 or BT.709 and limited or full range, 10-bit P010 to RGBA, un-premultiply), tests kernel_video_convert::tests; 8-bit NV12 to RGBA stays in video_transfer.rs; GLSL twin of the RGBA to NV12 step in springboard/gpu/shaders/rgba_to_nv12.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreDeformation.framework/Versions/A/Resources/default.metallib",
@@ -3481,11 +3594,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_mesh_vertex.rs; springboard/gpu/shaders/skin_blend.comp",
+   "status": "partial",
+   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_mesh_vertex::tests"
+    }
+   ],
+   "ready_note": "Ready: vertex-stage kernels in springboard/render/src/kernel_mesh_vertex.rs (4x4 matrix algebra, Vulkan-style perspective, projection to screen, normal matrix, linear-blend skinning of positions and normals, morph-target accumulation, smooth vertex normals, tangent frame from UVs), tests kernel_mesh_vertex::tests; GLSL twin of skinning and morph in springboard/gpu/shaders/skin_blend.comp (not wired to a pipeline). The triangle rasteriser stays in bifrost-ui raster3d.rs. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreRenderer.framework/Versions/A/Resources/default.metallib",
@@ -3532,11 +3654,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
+   "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/render/src/kernel_texture_import.rs",
    "status": "partial",
-   "note": "Material models exist as pure data. There are no texture processing kernels.",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_texture_import::tests"
+    }
+   ],
+   "ready_note": "Ready: texture import and processing kernels in springboard/render/src/kernel_texture_import.rs (sRGB transfer, linear-light box mip chain, normal-map mips with lost-coherence length, Toksvig-style roughness filtering, occlusion/roughness/metallic packing, channel swizzle, BC1 block encode and decode), tests kernel_texture_import::tests; no GLSL file was written. Other block formats (BC3, BC5, BC7, ASTC) are not covered. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AV1DecoderSW.bundle/Contents/Resources/default.metallib",
@@ -3553,11 +3684,20 @@
    "description": "",
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs",
+   "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
    "status": "partial",
-   "note": "The software decoder's picture conversion has a CPU counterpart in transfer_nv12; BifrOSt's decoder and its colour path are different code, and the shader is not reproduced.",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_video_convert::tests"
+    }
+   ],
+   "ready_note": "Ready: capture and decode pixel conversion in springboard/render/src/kernel_video_convert.rs (RGBA to NV12 with BT.601 or BT.709 and limited or full range, 10-bit P010 to RGBA, un-premultiply), tests kernel_video_convert::tests; 8-bit NV12 to RGBA stays in video_transfer.rs; GLSL twin of the RGBA to NV12 step in springboard/gpu/shaders/rgba_to_nv12.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AppleAVEEncoder.bundle/Contents/Resources/default.metallib",
@@ -3595,11 +3735,20 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_portrait_matte::tests"
+    }
+   ],
+   "ready_note": "Ready: portrait kernels in springboard/render/src/kernel_portrait_matte.rs (trimap from depth, matte refined onto image edges with the guided filter, circle-of-confusion radius, gather bokeh blur that does not bleed a sharp subject into the background and boosts highlights, subject-over-blur composite), tests kernel_portrait_matte::tests. The depth map and the initial matte come from the caller; no trained model ships; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/VideoProcessors/RTSCV1.bundle/Contents/Resources/default.metallib",

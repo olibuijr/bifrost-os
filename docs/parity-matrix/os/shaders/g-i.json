@@ -39,11 +39,25 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/image_kernels.rs (convolve, source_over, histogram); springboard/src/gpu/filter_kernels.rs",
+   "bifrost": "springboard/ui/src/image_kernels.rs (convolve, source_over, histogram); springboard/src/gpu/filter_kernels.rs; springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_photo_adjust.rs; springboard/gpu/shaders/photo_adjust.comp",
    "status": "partial",
-   "note": "CPU reference kernels and generated GLSL colour filters exist. The vision image filters are not reproduced.",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_photo_adjust::tests"
+    }
+   ],
+   "ready_note": "Ready: classical computer-vision kernels in springboard/render/src/kernel_vision.rs (Sobel, Canny with non-maximum suppression and hysteresis, Harris corners, Otsu and Sauvola thresholds, summed-area tables, normalised cross-correlation template matching, text-line bands, centre-surround saliency and salient box), tests kernel_vision::tests. No trained model is involved or shipped; no GLSL file was written. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared. Also: spatial photo adjustments in springboard/render/src/kernel_photo_adjust.rs (box blur, unsharp mask with threshold, midtone-weighted clarity, bilateral denoise, percentile auto levels, dark-channel dehaze), tests kernel_photo_adjust::tests; per-pixel colour adjustments stay in colorfx.rs, color_curve.rs, edge_tone_filters.rs and photo_effects.rs; GLSL twin of the unsharp and clarity apply pass in springboard/gpu/shaders/photo_adjust.comp (not wired to a pipeline). Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Gess_Kernels.metallib",
@@ -141,11 +155,20 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_materialx.rs",
+   "status": "partial",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_materialx::tests"
+    }
+   ],
+   "ready_note": "Ready (node subset and compiler): material-graph node library and graph compiler in springboard/render/src/kernel_materialx.rs (gradient and fractal noise, cellular noise, ramps, split, checkerboard, remap, contrast, HSV conversion, 2-D placement, normal-map node; ShaderGraph with CPU evaluation and GLSL code generation including a noise prelude that matches the CPU hash), tests kernel_materialx::tests. The simpler evaluator is shading_graph.rs; surface shading is pbr.rs. Only a subset of the standard node library is implemented, with scalar graphs; no GLSL shader file was added because the compiler emits GLSL at run time. Clean-room: written from public algorithm descriptions for the job this library serves; the metallib was not disassembled or compared."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_1.metallib",

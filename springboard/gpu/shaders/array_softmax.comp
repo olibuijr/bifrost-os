@@ -1,0 +1,58 @@
+#version 450
+// Row-wise softmax (GPU twin of render/src/kernel_array_ops.rs softmax_rows): one workgroup per row, a shared-memory
+// reduction for the row maximum and again for the sum, so large logits do not overflow. Our own implementation of the
+// standard numerically stable softmax.
+
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Input { float x[]; };
+layout(std430, set = 0, binding = 1) writeonly buffer Output { float y[]; };
+
+layout(push_constant) uniform Push {
+    uint rows;
+    uint cols;
+} pc;
+
+shared float scratch[256];
+
+void main() {
+    uint row = gl_WorkGroupID.x;
+    uint lane = gl_LocalInvocationID.x;
+    if (row >= pc.rows) {
+        return;
+    }
+    uint base = row * pc.cols;
+
+    float m = -3.402823e38;
+    for (uint j = lane; j < pc.cols; j += 256u) {
+        m = max(m, x[base + j]);
+    }
+    scratch[lane] = m;
+    barrier();
+    for (uint s = 128u; s > 0u; s >>= 1) {
+        if (lane < s) {
+            scratch[lane] = max(scratch[lane], scratch[lane + s]);
+        }
+        barrier();
+    }
+    float row_max = scratch[0];
+    barrier();
+
+    float total = 0.0;
+    for (uint j = lane; j < pc.cols; j += 256u) {
+        total += exp(x[base + j] - row_max);
+    }
+    scratch[lane] = total;
+    barrier();
+    for (uint s = 128u; s > 0u; s >>= 1) {
+        if (lane < s) {
+            scratch[lane] += scratch[lane + s];
+        }
+        barrier();
+    }
+    float row_sum = scratch[0];
+
+    for (uint j = lane; j < pc.cols; j += 256u) {
+        y[base + j] = exp(x[base + j] - row_max) / row_sum;
+    }
+}
