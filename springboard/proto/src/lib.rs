@@ -25,7 +25,7 @@ pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePrio
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
-pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK};
+pub use rich::{dragop, DragItem, DragPhase, DragPreview, NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, Payload, TextInput, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_CRITICAL, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_MASK, NOTIF_PRESENT_SOUND};
 
 pub const MAX_PACKET: usize = 16 * 1024;
 /// The most user info pairs a quick action may carry on the wire.
