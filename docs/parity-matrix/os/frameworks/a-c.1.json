@@ -2899,7 +2899,16 @@
    "status": "partial",
    "note": "The About pane shows name, processor, memory, serial and storage, read by springboard/core/src/sysinfo.rs. It has no software update, service or legal pages.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sysinfo::tests"
+    }
+   ],
+   "ready_note": "The About pane's job (name, processor, memory, serial and storage) is read by springboard/core/src/sysinfo.rs and covered by its parser tests. Software update, service and legal pages stay missing, as the note says."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccelerateGPU.framework",
@@ -4684,7 +4693,21 @@
    "status": "partial",
    "note": "Each app runs in its own bubblewrap sandbox with unshared namespaces, dropped capabilities and its own data directory; the container manager database and its migrations are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "bwrap --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Each app runs in its own bubblewrap namespace sandbox with dropped capabilities and its own data directory (bare/app_policy.rs). The container manager database and its migrations are not mirrored; the isolation the row describes is."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppIntentSchemas.framework",
@@ -4852,7 +4875,16 @@
    "status": "partial",
    "note": "The in-process query for suggested apps is built and tested headless (tests/parity_os-gaps-04.rs): launch counts decay by half every week and suggest ranks them. Gap: no separate prediction service, and the Dock and search do not call it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "suggestions_"
+    }
+   ],
+   "ready_note": "The in-process suggestion query (AppUsage::suggest) is tested in tests/parity_os-gaps-04.rs. Gap kept: there is no separate prediction service, and the Dock and search do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppPredictionFoundation.framework",
@@ -5083,7 +5115,21 @@
    "status": "partial",
    "note": "Each app launches in a fail-closed sandbox built from its manifest permissions, and the granted capabilities are readable from the SDK. Gap: the first-run prompt for apps from unidentified developers is not mirrored, because BifrOSt verifies every store package by checksum instead.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "bwrap --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Apps launch in a fail-closed bubblewrap sandbox built from manifest permissions (bare/app_policy.rs, tests there). The first-run prompt for unidentified developers is not mirrored because every store package is checksum-verified."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppServerSupport.framework",
@@ -5188,7 +5234,16 @@
    "status": "partial",
    "note": "BifrOSt's background service downloads checksum-verified packages and installs and updates them silently from its own catalogue. It does not cover the vendor's purchase flow, device-management installs or age-rating updates.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "The store service installs and updates checksum-verified packages silently; its install tests cover the package path. Vendor purchase, device-management and age-rating flows are not part of BifrOSt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppStoreDaemonUI.framework",
