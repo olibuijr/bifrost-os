@@ -998,17 +998,11 @@ fn square_thumb(img: &Image, n: usize) -> Image {
     img.crop((img.w - side) / 2, (img.h - side) / 2, side, side).resized(n.max(1), n.max(1))
 }
 
-/// The Camera icon, built with software shapes (no asset download).
+/// The Camera icon: a camera body on dark grey, a layered document (`res/icons/camera`) drawn by the icon renderer.
 pub fn icon(size: usize) -> Image {
-    let mut image = Image { w: size, h: size, px: vec![pack(58, 58, 60, 255); size * size] };
-    let f = size as f32;
-    let mut s = Surface { w: size, h: size, stride: size, px: &mut image.px, y0: 0 };
-    let grey = pack(200, 200, 204, 255);
-    s.fill_rrect(f * 0.14, f * 0.30, f * 0.72, f * 0.46, f * 0.06, grey);
-    s.fill_rrect(f * 0.34, f * 0.22, f * 0.32, f * 0.12, f * 0.03, grey);
-    s.fill_rrect(f * 0.32, f * 0.35, f * 0.36, f * 0.36, f * 0.18, pack(44, 44, 46, 255));
-    s.fill_rrect(f * 0.38, f * 0.41, f * 0.24, f * 0.24, f * 0.12, pack(30, 60, 110, 255));
-    image
+    const JSON: &str = include_str!("../../../res/icons/camera/icon.json");
+    bifrost_render::icon_doc::render_builtin(JSON, &[("camera.png", include_bytes!("../../../res/icons/camera/camera.png"))], size)
+        .unwrap_or_else(|| Image { w: size, h: size, px: vec![pack(58, 58, 60, 255); size * size] })
 }
 
 #[cfg(test)]

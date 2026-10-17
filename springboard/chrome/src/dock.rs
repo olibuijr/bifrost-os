@@ -415,13 +415,17 @@ impl DockState {
     }
 }
 
-/// Loads an item's icon: an image file at its path (PNG or the shell's raw format), or None.
+/// Master size, in points, of the icons the Dock loads; the Dock scales them down to its tiles.
+const DOCK_ICON_PT: f32 = 128.0;
+
+/// Loads an item's icon through the shared icon renderer: the package's `icon.json` (layers) or its flat PNG.
 fn load_icon(item: &DockItem) -> Option<Image> {
     if item.icon_path.is_empty() {
         return None;
     }
-    let bytes = std::fs::read(&item.icon_path).ok()?;
-    bifrost_render::cg::imageio::decode(&bytes)
+    let (variant, _) = bifrost_render::icon_doc::current_style();
+    let icon = bifrost_render::icon_doc::app_icon(&item.app_id, std::path::Path::new(&item.icon_path), DOCK_ICON_PT, 1.0, variant)?;
+    Some((*icon).clone())
 }
 
 /// The face the Dock draws its text with (badges and menus), registered once per process.

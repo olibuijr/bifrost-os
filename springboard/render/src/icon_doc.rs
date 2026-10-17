@@ -598,6 +598,19 @@ pub fn app_icon(app: &str, path: &Path, size_pt: f32, scale: f32, variant: Varia
     c.get_or_try_insert_with(key, || Some(load_path(path)?.render(px, variant, tint)))
 }
 
+/// Renders an icon compiled into the binary: its `icon.json` text and its layer PNGs, keyed by the layer path.
+/// Uses the current style. None when the document is bad or a layer is missing or not a PNG.
+pub fn render_builtin(json: &str, layers: &[(&str, &[u8])], px: usize) -> Option<Image> {
+    let doc = IconDocument::parse(json).ok()?;
+    let mut decoded = Vec::with_capacity(doc.layers.len());
+    for l in &doc.layers {
+        let bytes = layers.iter().find(|(name, _)| *name == l.image)?.1;
+        decoded.push(crate::cg::imageio::decode(bytes)?);
+    }
+    let (variant, tint) = current_style();
+    Some(render(&doc, &decoded, px, variant, tint))
+}
+
 /// Minimal JSON reader for `icon.json` (objects, arrays, strings, finite numbers, booleans, null).
 mod json {
     #[derive(Debug, Clone, PartialEq)]
@@ -904,6 +917,23 @@ mod tests {
         // the body starts at 6.4 px and ends at 57.6 px; the shadow reaches 58 px and not row 0
         assert_eq!(at(&img, 32, 0) >> 24, 0, "nothing above the body");
         assert!(at(&img, 32, 58) >> 24 > 0, "shadow under the body");
+    }
+
+    #[test]
+    fn builtin_terminal_icon_draws_its_prompt_on_the_tile() {
+        let json = include_str!("../../res/icons/terminal/icon.json");
+        let layers: [(&str, &[u8]); 1] = [("prompt.png", include_bytes!("../../res/icons/terminal/prompt.png"))];
+        for px in [32usize, 100, 180] {
+            let img = render_builtin(json, &layers, px).expect("terminal icon renders");
+            assert_eq!((img.w, img.h), (px, px));
+            assert_eq!(at(&img, 0, 0) >> 24, 0, "corner outside the squircle at {px}");
+        }
+        // the prompt's vertex is the canvas centre, so the centre is white ink on the dark tile
+        let img = render_builtin(json, &layers, 180).unwrap();
+        let c = at(&img, 90, 90);
+        assert_eq!(c >> 24, 255);
+        assert!(c & 255 > 200, "ink red channel at the vertex: {c:#x}");
+        assert!(render_builtin(json, &[], 32).is_none(), "a missing layer is refused");
     }
 
     #[test]
