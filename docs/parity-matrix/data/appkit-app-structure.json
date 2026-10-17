@@ -40,7 +40,7 @@
       "apple": "NSApplication, NSWorkspace, NSRunningApplication, app delegate, process info",
       "bifrost": "springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
       "status": "partial",
-      "note": "Sudden termination, activity unions, thermal states, low power and workspace notification names are tested headless; memory-pressure callbacks exist through dispatch. Gap: occlusion-driven suspension is still planned (task/008-lifecycle-recovery.md) and needs the lab machine."
+      "note": "Sudden termination, activity unions, thermal states, low power and workspace notification names are tested headless; memory-pressure callbacks exist through dispatch. Gap: occlusion-driven suspension is still planned (task/008-lifecycle-recovery.md) and needs the lab machine. Refreshed 2026-10-17: memory-pressure callbacks are DispatchSource::memory_pressure in springboard/sdk/src/dispatch.rs and the level in springboard/sdk/src/memory_pressure.rs, so that part of the gap is closed."
     },
     {
       "feature": "Documents (NSDocument, NSDocumentController)",
@@ -111,7 +111,7 @@
     "nib/storyboard-style resource loading",
     "General app extension host and packaging",
     "iCloud-style document and key-value sync API",
-    "App memory-warning callbacks and occlusion suspension (task/008-lifecycle-recovery.md)",
+    "Occlusion-driven suspension (task/008-lifecycle-recovery.md). Memory-pressure callbacks exist (sdk/src/dispatch.rs memory_pressure).",
     "Multi-type pasteboard publishing to the Wayland selection"
   ]
 }
