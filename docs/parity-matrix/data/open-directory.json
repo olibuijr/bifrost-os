@@ -26,7 +26,7 @@
       "apple": "ODRecord, ODRecordRef, ODRecordCopyDetails, ODRecordSetValue, ODRecordAddMember, ODRecordDelete",
       "bifrost": "springboard/src/shell/account.rs (parse: full_name and username record fields)",
       "status": "partial",
-      "note": "The local account record is parsed, and its password rules are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: there is no record model for other people or groups and no write API."
+      "note": "The local account record is parsed, and its password rules are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: there is no record model for other people or groups and no write API. Built 2026-10-17: the local directory reads users and groups from /etc/passwd and /etc/group into a directory node (POSIX attribute names, members as memberUid), springboard/ui/src/directory_local.rs; tests there (fixtures, no live read). Gap: still read-only, no write API."
     },
     {
       "feature": "User authentication and password verification",
