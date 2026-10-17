@@ -1,7 +1,8 @@
 //! PDF documents for apps: open a file to read its pages (count, size, a rasterised picture of a page) and build a new
 //! file from drawn pages. The reader is `bifrost_render::cg::pdf` (`Doc`, `page`, `draw`); the writer is its
 //! `writer` module. Drawing is limited to what the writer emits: filled and stroked rectangles and lines, raster
-//! images, and the standard fonts (not used here yet). Text extraction and annotation editing stay in the PDF app.
+//! images, and text in the four standard faces ([`Face`], WinAnsi only). Text extraction and annotation editing stay
+//! in the PDF app.
 //!
 //! ```ignore
 //! let doc = graphics_pdf::Document::open(bytes)?;
@@ -88,6 +89,19 @@ impl Document {
     }
 }
 
+/// The standard faces a page can draw text in. Every page of a written file lists all four, so the index of a face
+/// is its resource name: `/F0` for Helvetica, up to `/F3` for Courier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Helvetica = 0,
+    HelveticaBold = 1,
+    Times = 2,
+    Courier = 3,
+}
+
+/// The standard font names, in the order of [`Face`].
+const FACES: [&str; 4] = ["Helvetica", "Helvetica-Bold", "Times-Roman", "Courier"];
+
 /// One page being drawn. Operations append to its content stream in call order.
 pub struct PdfPage {
     width: f64,
@@ -97,6 +111,19 @@ pub struct PdfPage {
 }
 
 impl PdfPage {
+    /// Draws `text` in `face` at `size` points with its baseline at (`x`, `y`). The text is written as a hex string of
+    /// WinAnsi bytes, so characters outside WinAnsi come out as `?`.
+    pub fn draw_text(&mut self, text: &str, x: f64, y: f64, size: f64, face: Face) {
+        let hex: String = text.chars().map(|c| format!("{:02X}", writer::winansi(c))).collect();
+        self.content.push_str(&format!(
+            "BT /F{} {} Tf {} {} Td <{hex}> Tj ET\n",
+            face as usize,
+            num(size.max(0.0)),
+            num(x),
+            num(y)
+        ));
+    }
+
     /// Fills the rectangle at (`x`, `y`) of size `w` x `h`.
     pub fn fill_rect(&mut self, x: f64, y: f64, w: f64, h: f64, rgb: [f64; 3]) {
         let [r, g, b] = rgb.map(clamp01);
@@ -168,7 +195,7 @@ impl PdfWriter {
                 images: p.images,
             })
             .collect();
-        writer::write(&out, &[])
+        writer::write(&out, &FACES)
     }
 }
 
@@ -223,6 +250,16 @@ mod tests {
         assert_eq!(w.pages[0].images.len(), 0);
         w.add_page(100.0, 100.0).draw_rgb_image(vec![255; 12], 2, 2, 0.0, 0.0, 10.0, 10.0);
         assert_eq!(w.pages[1].images.len(), 1);
+    }
+
+    #[test]
+    fn text_is_drawn_as_hex_in_a_standard_face() {
+        let mut w = PdfWriter::new();
+        w.add_page(200.0, 100.0).draw_text("Hi\u{20ac}", 10.0, 20.0, 12.0, Face::Times);
+        assert!(w.pages[0].content.contains("BT /F2 12.000 Tf 10.000 20.000 Td <486980> Tj ET"));
+        let bytes = w.finish();
+        assert!(bytes.windows(b"/BaseFont /Times-Roman".len()).any(|x| x == b"/BaseFont /Times-Roman"));
+        assert_eq!(Document::open(bytes).expect("reads back").page_count(), 1);
     }
 
     #[test]
