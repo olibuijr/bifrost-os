@@ -118,6 +118,7 @@ pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
+pub mod malware_gate;
 pub mod background;
 pub mod package_install_sheet;
 pub mod contact_pick_sheet;
@@ -773,6 +774,8 @@ pub struct Shell {
     /// in seconds, which the answer and the expiry use
     guardian_sheet: Option<guardian_sheet::GuardianSheet>,
     guardian_now: u64,
+    /// the malware gate's card for a file about to open (`malware_gate.rs`), and the open it holds back
+    malware_alert: Option<malware_gate::MalwareAlert>,
     /// background suspension of the external apps (`background.rs`), while Suspend Background Apps is on
     suspender: background::Suspender,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
@@ -1107,6 +1110,7 @@ impl Shell {
             permission_sheet: None,
             guardian_sheet: None,
             guardian_now: 0,
+            malware_alert: None,
             suspender: Default::default(),
             pick_sheet: None,
             auth_sheet: None,
@@ -1626,6 +1630,18 @@ impl Shell {
                     if let Some(sheet) = self.pick_sheet.take() {
                         self.pick_sheet = sheet.tapped(&self.ui, tap);
                     }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.malware_alert.is_some() {
+            // the malware card takes every touch until the person answers it
+            if matches!(ev, Event::Up(..)) {
+                if let Some(held) = self.malware_alert_touch(x, y) {
+                    let t = self.last_input;
+                    self.resume_open(held, t);
                 }
             }
             self.drawn = Drawn::Nothing;
@@ -3972,7 +3988,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3987,6 +4003,9 @@ impl Shell {
             }
             if let Some(g) = &self.guardian_sheet {
                 g.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(m) = &self.malware_alert {
+                m.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
@@ -4045,7 +4064,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4066,7 +4085,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4268,6 +4287,7 @@ impl Shell {
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
             ("crash-alert", self.crash_alert.is_some()),
+            ("malware-alert", self.malware_alert.is_some()),
             ("compose-sheet", self.compose_showing()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
