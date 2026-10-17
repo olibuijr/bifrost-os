@@ -630,6 +630,10 @@ impl Settings {
             PageId::Sharing => super::pages::sharing_spec(&self.opts, self.loads.sharing.get()),
             PageId::PrintScan => super::print_scan_page::spec(self.loads.printers.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
+            PageId::Assistant => {
+                let prefs = super::prefs::Prefs::load(self.data_dir.join("settings.ini"));
+                super::assistant_page::spec(&super::assistant::Settings::load(&prefs), &super::assistant_page::intent_apps())
+            }
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
@@ -1167,6 +1171,7 @@ impl Settings {
         self.stack.truncate(usize::from(self.side_w == 0));
         let id = match name {
             "Network" => PageId::Network,
+            "Assistant" => PageId::Assistant,
             "Ethernet" => PageId::Ethernet,
             "Wi-Fi" => PageId::Wifi,
             "Bluetooth" => PageId::Bluetooth,
@@ -2165,6 +2170,11 @@ impl Settings {
             }
             Action::GameController(edit) => {
                 let _ = super::game_controllers_page::apply(prefs, &edit);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::Assistant(edit) => {
+                let _ = super::assistant_page::apply(prefs, &edit);
                 self.rebuild_visible(ui);
                 vec![]
             }

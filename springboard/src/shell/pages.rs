@@ -115,6 +115,8 @@ pub enum PageId {
     HotCorners,
     /// Keyboard Shortcuts (desktop): the shortcuts the shell answers to
     Shortcuts,
+    /// Settings > Assistant: the assistant's switch, backend, history and per-app access to intents (`assistant_page`)
+    Assistant,
     /// Overview (desktop): how windows are grouped and when desktops switch
     Overview,
     /// Sharing (desktop): the computer name, the sharing services, Nearby Share and AirPlay & Handoff
@@ -413,6 +415,8 @@ pub enum Action {
     PrintScan(super::print_scan_page::Edit),
     /// Location Services: the switches, the place and the apps' access (see `location_page::Edit`)
     Location(super::location_page::Edit),
+    /// Settings > Assistant: a switch, the backend, or an app's access to its intents (see `assistant_page::Edit`)
+    Assistant(super::assistant_page::Edit),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -723,6 +727,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
                     Item::new("Print & Scan").icon(Icon::General).link(PageId::PrintScan),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
+                    Item::new("Assistant").icon(Icon::General).link(PageId::Assistant),
                     Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
                     Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
                     Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
@@ -1317,6 +1322,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Appearance => appearance_page(m, &DeskPrefs::default()),
         PageId::HotCorners => hot_corners_page(&DeskPrefs::default()),
         PageId::Shortcuts => shortcuts_page(o),
+        // the Settings window builds the live page from the saved settings (`settings::spec_for`)
+        PageId::Assistant => super::assistant_page::spec(&super::assistant::Settings::default(), &[]),
         PageId::Overview => overview_page(&DeskPrefs::default()),
         PageId::InterfaceScale => {
             let now = crate::layout::user_scale();
@@ -1826,7 +1833,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[2].items[13].value, "Lake Day");
