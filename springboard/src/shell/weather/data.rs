@@ -654,6 +654,11 @@ impl Store {
         std::fs::read_to_string(self.dir.join(name)).unwrap_or_default()
     }
 
+    /// True once the app has saved its place list.
+    pub fn has_places(&self) -> bool {
+        self.dir.join(LOCATIONS_FILE).is_file()
+    }
+
     /// The saved places; Reykjavik when there are none yet.
     pub fn load_locations(&self) -> Vec<Location> {
         let list: Vec<Location> = self
@@ -781,6 +786,10 @@ pub fn fetch_quotes(symbols: &[String], net: &dyn Fetch) -> io::Result<Vec<Quote
 /// window: it reads the selected place and units the app saved, reuses the cached forecast while it is younger
 /// than `max_age_s`, otherwise fetches a new one, and saves the summary for the readers.
 pub fn refresh_summary(store: &Store, net: &dyn Fetch, max_age_s: u64) -> io::Result<Summary> {
+    // a place is only fetched once the weather app has saved one: the default place is not asked for on its own
+    if !store.has_places() {
+        return Err(io::Error::other("no place saved yet"));
+    }
     let (units, selected) = store.load_settings();
     let places = store.load_locations();
     let loc = places.get(selected).or(places.first()).ok_or_else(|| io::Error::other("no place saved"))?;
@@ -1022,8 +1031,12 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("target/test-weather-service-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let st = Store::new(&dir);
+        // before the app has saved a place the service asks for nothing
+        assert!(refresh_summary(&st, &Canned("{}".into()), 900).is_err());
+        assert!(!st.has_places());
         let oslo = Location { name: "Oslo".into(), region: "Norway".into(), lat: 59.91, lon: 10.75 };
         st.save_locations(&[oslo.clone()]);
+        assert!(st.has_places());
         st.save_settings(Units::Celsius, 0);
         // no cache yet: the service fetches, saves the summary and the readers see it
         let fresh = refresh_summary(&st, &Canned(FORECAST.into()), 900).unwrap();

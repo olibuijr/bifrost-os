@@ -620,6 +620,8 @@ pub struct Shell {
     screen_zoom: accessibility::zoom::ScreenZoom,
     /// the background update checker; set once the data directory is loaded
     ota: Option<ota::Ota>,
+    /// the shared weather summary: refreshed hourly and on wake, with no app window open
+    weather_refresh: weather::Refresher,
     /// last time (ms) the apps registry was stat'ed for outside changes
     disk_check_ms: f64,
     /// Display & Brightness › Auto-Lock, ms; 0 never sleeps
@@ -989,6 +991,7 @@ impl Shell {
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
             ota: None,
+            weather_refresh: weather::Refresher::default(),
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
             grace_from: None,
@@ -2673,6 +2676,7 @@ impl Shell {
 
     /// The display came on: inside the grace the screen returns as it was, after it the screen is locked.
     fn screen_woke(&mut self, t: f64) {
+        self.weather_refresh.wake();
         let Some((off, before)) = self.grace_from.take() else { return };
         let grace_s = self.options().lock_grace_s;
         self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
@@ -3240,6 +3244,9 @@ impl Shell {
         self.split_tick();
         self.markup_tick();
         self.ota_tick(t);
+        if self.weather_refresh.due(t) {
+            self.weather_refresh.start(weather::data_path().into());
+        }
         if self.screen_on && !self.is_locked() {
             self.dirty |= self.assistive_touch.tick(t);
         }
