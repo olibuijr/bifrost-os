@@ -61,6 +61,7 @@ pub mod kit {
 
 pub mod watchdog;
 pub mod widgets;
+pub mod today_widgets;
 pub mod widgets_timeline;
 pub mod glyphs;
 pub mod glyph_draw;
@@ -428,6 +429,7 @@ pub mod photo_editing;
 pub mod photo_project;
 pub mod image_blur;
 pub mod image_filter;
+pub mod pixel_filter;
 pub mod image_effects;
 pub mod image_render;
 pub use restoration::RestorableState;

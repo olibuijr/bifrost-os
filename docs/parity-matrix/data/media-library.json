@@ -26,7 +26,7 @@
       "apple": "MLMediaGroup, root group, group type identifiers (folders, albums, moments)",
       "bifrost": "springboard/apps/music-desktop/src/music/library.rs (Album, Artist, Library::build); springboard/ui/src/media_group.rs (MediaGroup, GroupType)",
       "status": "partial",
-      "note": "media_group.rs is a tested group tree with group type identifiers, unique group ids, nested groups, removal and the item listing of a subtree (ui/tests/parity_sdk-complete-31.rs). Gap: the Music library still builds its albums and artists from tags without the tree, and smart groups that compute their items are not modelled."
+      "note": "media_group.rs is a tested group tree with group type identifiers, unique group ids, nested groups, removal and the item listing of a subtree (ui/tests/parity_sdk-complete-31.rs). Gap: the Music library still builds its albums and artists from tags without the tree, and smart groups that compute their items are not modelled. Built 2026-10-17: smart groups in ui smart_group (attribute rules with equals, contains, at least, flag, all and any compute the items of a group); tests smart_group::tests. Not yet used by the Music app."
     },
     {
       "feature": "Media objects (MLMediaObject)",

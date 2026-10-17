@@ -33,7 +33,7 @@
       "apple": "HangDiagnostic, HangTimeMetric",
       "bifrost": "springboard/sdk/src/diagnostic_report.rs (DiagnosticKind::Stall, longest_stall); springboard/src/bare/heartbeat.rs (STALL_MS 20 s, exit status 5); wired: springboard/apps/console-desktop/src/diagnostics.rs (HangSource, hang_rows)",
       "status": "partial",
-      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. Each stall record carries the whole seconds logged, and longest_stall gives the longest one; both are tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the watcher covers the shell loop only, there is no hang duration histogram, and no callback reaches an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "The shell's frozen-UI watcher appends a stall line to crash.log and exits after 20 s without a beat. Each stall record carries the whole seconds logged, and longest_stall gives the longest one; both are tested headless in springboard/sdk/tests/parity_sdk-os-05.rs. Gap: the watcher covers the shell loop only, there is no hang duration histogram, and no callback reaches an app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: stall_histogram in sdk diagnostic_report (buckets 0-5, 5-10, 10-30, 30-60 and 60 s or more); tests diagnostic_report::tests. No callback reaches an app yet."
     },
     {
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",

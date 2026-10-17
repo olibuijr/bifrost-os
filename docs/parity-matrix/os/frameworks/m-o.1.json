@@ -272,7 +272,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/media-library.json",
    "status": "partial",
-   "note": "from SDK matrix media-library.json",
+   "note": "from SDK matrix media-library.json Built 2026-10-17: smart groups in ui smart_group (attribute rules computing a group's items); tests smart_group::tests. The Music app does not use them yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -468,7 +468,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metal-performance-shaders.json",
    "status": "partial",
-   "note": "from SDK matrix metal-performance-shaders.json",
+   "note": "from SDK matrix metal-performance-shaders.json Built 2026-10-17: app-facing luma filters in sdk pixel_filter (threshold, histogram, equalize, erode, dilate, median, sobel, laplacian); tests pixel_filter::tests. Not wired into the shell or apps yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -510,7 +510,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metrickit.json",
    "status": "partial",
-   "note": "from SDK matrix metrickit.json",
+   "note": "from SDK matrix metrickit.json Built 2026-10-17: stall duration histogram in sdk diagnostic_report (stall_histogram); tests diagnostic_report::tests. No delivery to apps yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -738,7 +738,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/notification-center.json",
    "status": "partial",
-   "note": "from SDK matrix notification-center.json",
+   "note": "from SDK matrix notification-center.json Built 2026-10-17: SDK today_widgets::WidgetSet (ordered widgets with has-content flags); tests today_widgets::tests. Apps still have no widget view extension point.",
    "rea": [],
    "method": "assessed"
   },

@@ -12,7 +12,7 @@
       "apple": "NCWidgetProviding: widgetPerformUpdate(completionHandler:), widgetMarginInsets(forProposedMarginInsets:), widgetActiveDisplayModeDidChange(_:withMaximumSize:), NCWidgetDisplayMode, NCUpdateResult (https://developer.apple.com/documentation/notificationcenter/ncwidgetproviding)",
       "bifrost": "springboard/ui/src/widget.rs (DisplayMode, Insets, margin_insets, Limits), springboard/ui/src/widget_list.rs; tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding."
+      "note": "Display modes, margin insets and the per-mode maximum size are tested headless in ui/tests/parity_sdk-tests-15.rs. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. The shell renders its own widgets (battery, calendar, clock, deildu, weather and others). Apps cannot supply a widget: there is no extension point and no SDK type for NCWidgetProviding. Built 2026-10-17: SDK type sdk today_widgets::WidgetSet (ordered widgets, has-content flags, visible list); tests today_widgets::tests. Apps still have no widget view extension point."
     },
     {
       "feature": "Widget content controller (NCWidgetController)",
