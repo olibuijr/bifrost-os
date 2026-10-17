@@ -118,6 +118,9 @@ pub enum Action {
     InsertParagraph,
     /// Insert > Image...: an open panel for a PNG or JPEG file, which becomes an attachment
     InsertImage,
+    /// The Make Plain Text confirmation sheet (when the document has attachments): remove them, or cancel
+    PlainDone,
+    PlainCancel,
     /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
     AddLink,
     OpenLink,
@@ -226,6 +229,8 @@ impl Action {
             Action::SpeakStart => MENU_BASE + 0xe9,
             Action::SpeakStop => MENU_BASE + 0xea,
             Action::InsertImage => MENU_BASE + 0xeb,
+            Action::PlainDone => MENU_BASE + 0xec,
+            Action::PlainCancel => MENU_BASE + 0xed,
             Action::Transform(Transform::Upper) => MENU_BASE + 0x78,
             Action::Transform(Transform::Lower) => MENU_BASE + 0x79,
             Action::Transform(Transform::Capitalize) => MENU_BASE + 0x7a,
@@ -340,6 +345,8 @@ impl Action {
             0xe9 => Action::SpeakStart,
             0xea => Action::SpeakStop,
             0xeb => Action::InsertImage,
+            0xec => Action::PlainDone,
+            0xed => Action::PlainCancel,
             0x78 => Action::Transform(Transform::Upper),
             0x79 => Action::Transform(Transform::Lower),
             0x7a => Action::Transform(Transform::Capitalize),
@@ -881,6 +888,17 @@ pub fn spacing_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
 }
 
 /// The Select Line panel's buttons.
+/// The buttons of the Make Plain Text confirmation: Remove Attachments is the default.
+pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("Remove Attachments", Action::PlainDone, true)])
+}
+
+/// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
+pub fn draw_confirm(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
+    draw_sheet(c, ui, l, title, &[], 0, buttons);
+    text_at(c, ui, message, MAC_BODY_PT, Weight::Regular, LABEL.now(), l.labels_x, l.fields[0].y);
+}
+
 pub fn line_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
     sheet_buttons(ui, l, &[("Cancel", Action::LineCancel, false), ("Select", Action::LineDone, true)])
 }

@@ -98,6 +98,8 @@ struct TextEditApp {
     /// the open panel of Insert > Image, and the drag sessions this window accepted images from (kept after the drop,
     /// so the files that arrive after `Perform` still land)
     image_request: Option<u32>,
+    /// Format > Make Plain Text is asking to remove the attachments first
+    plain_sheet: bool,
     drop_sessions: Vec<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
@@ -266,6 +268,7 @@ impl TextEditApp {
             completion: None,
             export_request: None,
             image_request: None,
+            plain_sheet: false,
             drop_sessions: Vec::new(),
             props: None,
             link: None,
@@ -392,6 +395,15 @@ impl TextEditApp {
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
+        }
+        if matches!(action, Action::PlainDone) {
+            self.plain_sheet = false;
+            return self.make_plain_now();
+        }
+        if matches!(action, Action::PlainCancel) {
+            let was = self.plain_sheet;
+            self.plain_sheet = false;
+            return was;
         }
         // a paste with no text on the clipboard takes the picture on the pasteboard, if there is one
         if matches!(action, Action::Paste) && clipboard::text().filter(|s| !s.is_empty()).is_none() {
@@ -883,9 +895,9 @@ impl TextEditApp {
                 true
             }
             Action::MakePlain => {
-                // attachments are not dropped silently: the user deletes them first (the confirmation is still to come)
+                // attachments are dropped only after the confirmation sheet says so
                 if doc.rich && doc.text.has_attachments() {
-                    self.note = Some("This document has attachments. Delete them before choosing Make Plain Text.".into());
+                    self.plain_sheet = true;
                     return true;
                 }
                 let was_rich = doc.rich;
@@ -1431,6 +1443,33 @@ impl TextEditApp {
         }
     }
 
+    /// Makes the active document plain text now (the confirmed case); one undo entry, edited when it changed.
+    fn make_plain_now(&mut self) -> bool {
+        let was_rich = match active_doc_mut(&mut self.docs) {
+            Some(doc) => {
+                let was = doc.rich;
+                doc.set_rich(false);
+                was
+            }
+            None => false,
+        };
+        if was_rich {
+            self.edited();
+        }
+        was_rich
+    }
+
+    /// The Make Plain Text confirmation's touches: the buttons it shows.
+    fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+        let buttons = view::plain_buttons(&ctx.ui, &layout);
+        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            Some(action) => self.perform(ctx, action),
+            None => true,
+        }
+    }
+
     /// Insert > Image...: the open panel for PNG and JPEG files; the file it returns is inserted by `picture_event`.
     fn open_image_panel(&mut self, ctx: &Ctx) -> bool {
         if self.refuse_edit() {
@@ -1735,6 +1774,9 @@ impl TextEditApp {
                 }
                 if self.spelling_panel {
                     return self.touch_spelling(ctx, px, py);
+                }
+                if self.plain_sheet {
+                    return self.touch_plain(ctx, px, py);
                 }
                 if self.line.is_some() {
                     return self.touch_line(ctx, px, py);
@@ -2156,6 +2198,13 @@ impl App for TextEditApp {
                 if self.spelling_panel && code == 27 {
                     return self.perform(ctx, Action::SpellingDone);
                 }
+                if self.plain_sheet {
+                    return match code {
+                        13 => self.perform(ctx, Action::PlainDone),
+                        27 => self.perform(ctx, Action::PlainCancel),
+                        _ => false,
+                    };
+                }
                 if self.line.is_some() {
                     return match code {
                         8 => self.backspace(),
@@ -2378,6 +2427,11 @@ impl App for TextEditApp {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
             let buttons = view::link_buttons(ui, &layout, sheet.had_link);
             view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
+        }
+        if self.plain_sheet {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+            let buttons = view::plain_buttons(ui, &layout);
+            view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
         }
         if let Some(typed) = &self.line {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
