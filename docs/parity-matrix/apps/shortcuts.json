@@ -118,9 +118,18 @@
    "area": "view",
    "apple": "Automation",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:624 (Automation, due, battery_fell_below); springboard/src/shortcuts.rs:822 (next_automation); springboard/apps/shortcuts-desktop/src/widget.rs:1295 (Target::Automation, the editor's Automation row); springboard/tests/parity_app-shortcuts.rs",
-   "note": "The editor's Automation row steps through none, each app opening and the charge falling below 10, 20, 30 or 50 percent, saved in the list file; due returns the shortcuts that an app opening or a battery change starts, tested headless. Gap: the app feeds no app-open or battery events to due, so an automation does not run on its own yet.",
-   "wire": "The shell's battery reading and app-open events passed to shortcuts::due, so the stored automation runs while the app is open"
+   "bifrost": "springboard/src/shortcuts.rs (Automation, Event, starts, due, dispatch, Run); springboard/apps/shortcuts-desktop/src/widget.rs (Target::Automation, Target::AskBeforeRunning)",
+   "note": "The editor's Automation row steps through: at login; when a Focus turns on or off; a daily or weekday time of day (from the Daily Reminder times); each app opening and each app closing; and the charge falling below 10, 20, 30 or 50 percent. Each automation has Ask Before Running (on by default), a row under Automation that switches it off. The choice is saved in the list file (automation, ask and confirmation columns). Dispatch is tested headless (`dispatch` gives each started shortcut its ask flag). Gap: the shell sends no app-open, app-close, login, Focus or time events to the app, and no notification has Run and Don't Run actions, so nothing runs by itself on the device yet.",
+   "wire": "The shell delivers app-open, app-close, battery, login, Focus and time events to the app, and runs the shortcut on each; a notification with Run and Don't Run actions for an asking automation (the notification category needs action support in the shell)."
+  },
+  {
+   "feature": "Menu bar Shortcuts status item",
+   "area": "menu",
+   "apple": "menu bar status item listing shortcuts",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Not built. The status item would list the pinned shortcuts and run one on choice; the shell has no per-app menu bar item yet.",
+   "wire": "A shell menu bar item hosted for the Shortcuts app, listing pinned shortcuts and running the chosen one."
   },
   {
    "feature": "Open at login",
@@ -203,5 +212,13 @@
    "note": "Vendor cloud",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 23,
+  "parity": 7,
+  "partial": 14,
+  "gap": 1,
+  "n/a": 1,
+  "coverage_pct": 63.6
+ }
 }
