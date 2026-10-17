@@ -319,6 +319,33 @@ pub fn latest(dir: &Path) -> Option<(PathBuf, u64)> {
         .max_by_key(|&(_, t)| t)
 }
 
+/// The backup diagnostics: how many archives are kept, the newest one's time and size, and whether the newest one
+/// opens and decodes (its checksums and, for a version 2 archive, its seal).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupStatus {
+    pub count: usize,
+    pub latest_unix: Option<u64>,
+    pub latest_bytes: u64,
+    /// `None` when there is no archive to check.
+    pub verified: Option<bool>,
+}
+
+/// Reads the backup status under `dir/backups`, checking the newest archive with `key`.
+pub fn status_with(dir: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> BackupStatus {
+    let count = archive_times(dir).len();
+    let Some((path, unix)) = latest(dir) else {
+        return BackupStatus { count, latest_unix: None, latest_bytes: 0, verified: None };
+    };
+    let latest_bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
+    let verified = std::fs::read(&path).ok().map(|bytes| open(&bytes, key).and_then(|body| decode(&body)).is_ok());
+    BackupStatus { count, latest_unix: Some(unix), latest_bytes, verified }
+}
+
+/// The backup status of `dir`, with the keychain's archive key.
+pub fn status(dir: &Path) -> BackupStatus {
+    status_with(dir, &|| backup_key(dir))
+}
+
 /// Deletes every backup archive in `dir/backups`, as the user asks for; returns how many were removed. Only
 /// `backup-<unix>.sbk` files are touched, so the live data and anything else in the folder stay. A missing folder
 /// holds no backups.
@@ -482,6 +509,29 @@ mod tests {
             std::fs::write(backup_path(&d, t), b"x").unwrap();
         }
         assert_eq!(latest(&d).unwrap().1, 100);
+    }
+
+    #[test]
+    fn status_counts_archives_and_checks_the_newest() {
+        let d = scratch("status");
+        std::fs::create_dir_all(d.join(BACKUP_DIR)).unwrap();
+        assert_eq!(status_with(&d, &key_a), BackupStatus { count: 0, latest_unix: None, latest_bytes: 0, verified: None });
+        std::fs::write(d.join("settings.ini"), "v=1\n").unwrap();
+        create_with(&d, &backup_path(&d, 10), &key_a).unwrap();
+        create_with(&d, &backup_path(&d, 20), &key_a).unwrap();
+        let s = status_with(&d, &key_a);
+        assert_eq!(s.count, 2);
+        assert_eq!(s.latest_unix, Some(20));
+        assert!(s.latest_bytes > 0);
+        assert_eq!(s.verified, Some(true));
+        // The wrong key does not verify the newest archive, and a tampered archive does not either.
+        assert_eq!(status_with(&d, &no_key).verified, Some(false));
+        let newest = backup_path(&d, 20);
+        let mut bytes = std::fs::read(&newest).unwrap();
+        let last = bytes.len() - 1;
+        bytes[last] ^= 1;
+        std::fs::write(&newest, bytes).unwrap();
+        assert_eq!(status_with(&d, &key_a).verified, Some(false));
     }
 
     #[test]
