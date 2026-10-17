@@ -537,6 +537,8 @@ pub mod errno {
 pub mod volume;
 pub mod identity;
 pub mod reachability;
+/// The route flags for a host or address, computed from the network path (`SCNetworkReachabilityFlags`).
+pub mod reachability_flags;
 pub mod auth_events;
 pub mod identity_events;
 pub mod memory_events;

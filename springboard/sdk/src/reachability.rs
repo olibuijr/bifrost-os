@@ -9,6 +9,7 @@
 //!     Reach::Refused | Reach::TimedOut | Reach::NoAddress | Reach::Failed(_) => { /* not reachable now */ }
 //! }
 //! ```
-//! Gap: this is a TCP probe of one host and port. It does not report the system's route flags for a named host, the
-//! interface a route uses, or the change events the system's reachability observers give.
+//! The route flags for a host or address (reachable, connection required, local, cellular) are in
+//! [`reachability_flags`], computed from the network path with no probe. Gap: the interface a route uses and the change
+//! events the system's reachability observers give are not reported.
 pub use bifrost_core::reachability::{classify, default_route_present, has_default_route, probe, Reach, ROUTE_TABLE};
