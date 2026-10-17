@@ -13,6 +13,7 @@ pub mod gpu;
 pub mod gvar;
 pub mod cg;
 pub mod imgdec;
+pub mod cloud_session;
 pub mod keychain;
 pub mod credentials;
 pub mod installer;
