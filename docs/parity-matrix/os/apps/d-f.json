@@ -317,7 +317,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/folder_actions.rs",
    "status": "partial",
-   "note": "The folder action runtime exists: springboard/src/shell/folder_actions.rs keeps the attachments (saved as text under the shell data dir) and the shell tick starts the attached intent for each new file. Gap: there is no Folder Actions Setup app yet to attach or detach a folder, so nothing can be set up from the UI.",
+   "note": "The folder action runtime exists: springboard/src/shell/folder_actions.rs keeps the attachments (saved as text under the shell data dir) and the shell tick starts the attached intent for each new file. Gap: there is no Folder Actions Setup app yet to attach or detach a folder, so nothing can be set up from the UI. Built 2026-10-17: Registry::remove_folder detaches every action on a folder; tests shell::folder_actions::tests. Still missing: the setup app itself.",
    "rea": [],
    "method": "assessed"
   }

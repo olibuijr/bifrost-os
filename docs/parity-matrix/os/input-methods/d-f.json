@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/recognition_task.rs, springboard/ui/src/recognition.rs",
    "status": "partial",
-   "note": "existing speech task and result models; no recognizer engine and no insertion into text fields",
+   "note": "existing speech task and result models; no recognizer engine and no insertion into text fields Built 2026-10-17: dictation_insert places a reading at the caret and keeps partial readings in place; tests dictation_insert::tests. Still missing: the recognizer engine.",
    "rea": [],
    "method": "manual"
   },
