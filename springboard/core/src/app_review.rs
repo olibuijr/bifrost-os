@@ -45,6 +45,37 @@ pub fn validate(review: &Review) -> Result<(), Error> {
     Ok(())
 }
 
+/// The request body for sending a review to the catalogue: `{"stars":N,"nickname":"...","body":"..."}`. The review is
+/// validated first, and the text fields are trimmed and JSON-escaped, so no input can change the shape of the object.
+pub fn to_json(review: &Review) -> Result<String, Error> {
+    validate(review)?;
+    Ok(format!(
+        "{{\"stars\":{},\"nickname\":{},\"body\":{}}}",
+        review.stars,
+        json_string(review.nickname.trim()),
+        json_string(review.body.trim())
+    ))
+}
+
+/// A JSON string literal for `text`, with quotes, backslashes and control characters escaped.
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// The rating summary for one product: the number of ratings at each star count (index 0 is one star) and the average.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Summary {
@@ -101,6 +132,23 @@ mod tests {
         assert_eq!(validate(&review(3, &padded, "")), Ok(()), "spaces around the nickname do not count");
         let long_body = "b".repeat(MAX_BODY + 1);
         assert_eq!(validate(&review(3, "", &long_body)), Err(Error::BodyTooLong(MAX_BODY + 1)));
+    }
+
+    #[test]
+    fn a_review_becomes_a_json_body_with_escaped_text() {
+        let body = to_json(&review(4, "  Ana \"A\"  ", "line one\nline \\two\tx  ")).unwrap();
+        assert_eq!(body, r#"{"stars":4,"nickname":"Ana \"A\"","body":"line one\nline \\two\tx"}"#);
+    }
+
+    #[test]
+    fn an_invalid_review_has_no_json_body() {
+        assert_eq!(to_json(&review(0, "", "")), Err(Error::Stars(0)));
+        assert!(to_json(&review(5, &"n".repeat(MAX_NICKNAME + 1), "")).is_err());
+    }
+
+    #[test]
+    fn control_characters_are_escaped_as_unicode() {
+        assert_eq!(json_string("a\u{1}b"), r#""a\u0001b""#);
     }
 
     #[test]
