@@ -122,6 +122,8 @@ pub mod guardian_sheet;
 pub mod background;
 pub mod package_install_sheet;
 pub mod contact_pick_sheet;
+pub mod photo_pick;
+pub mod photo_pick_sheet;
 mod auth_sheet;
 mod volume_sheet;
 mod account_access_sheet;
@@ -780,6 +782,8 @@ pub struct Shell {
     suspender: background::Suspender,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
+    /// the photo picker sheet for an app's open photo pick (see `photo_pick_sheet.rs`)
+    photo_pick_sheet: Option<photo_pick_sheet::PhotoPickSheet>,
     /// the password sheet an app's local authentication asks for (see `auth_sheet.rs`)
     auth_sheet: Option<auth_sheet::AuthSheet>,
     volume_sheet: Option<volume_sheet::VolumeSheet>,
@@ -1113,6 +1117,7 @@ impl Shell {
             guardian_now: 0,
             suspender: Default::default(),
             pick_sheet: None,
+            photo_pick_sheet: None,
             auth_sheet: None,
             volume_sheet: None,
             auth_clock: 0.0,
@@ -1476,6 +1481,7 @@ impl Shell {
     fn permission_tick(&mut self, t: f64) {
         services::privacy_permissions::persist_grants(&self.data_dir);
         self.pick_tick();
+        self.photo_pick_tick();
         // PermissionKit: drop the questions no guardian answered in time, and show the next one when no sheet is up
         self.guardian_now = t.max(0.0) as u64;
         if services::permission_kit::expire(self.guardian_now) > 0 {
@@ -1511,6 +1517,21 @@ impl Shell {
         }
         let Some((app, name)) = contactpick::open_app() else { return };
         self.pick_sheet = contact_pick_sheet::PickSheet::new(&self.ui, &app, &name);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
+    /// Shows the photo picker sheet for an app's open photo pick when none is on screen, and feeds the sheet on screen its
+    /// thumbnails.
+    fn photo_pick_tick(&mut self) {
+        if let Some(sheet) = self.photo_pick_sheet.as_mut() {
+            if sheet.prepare(&self.ui, self.w, self.h) {
+                self.dirty = true;
+            }
+            return;
+        }
+        let Some(pick) = photo_pick::take_waiting() else { return };
+        self.photo_pick_sheet = Some(photo_pick_sheet::PhotoPickSheet::new(pick, self.data_dir.join(photos::THUMB_DIR)));
         self.dirty = true;
         self.drawn = Drawn::Nothing;
     }
@@ -1631,6 +1652,29 @@ impl Shell {
                         self.pick_sheet = sheet.tapped(&self.ui, tap);
                     }
                 }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.photo_pick_sheet.is_some() {
+            // the photo picker takes every touch until the person adds the pictures or cancels
+            let outcome = match self.photo_pick_sheet.as_mut() {
+                Some(sheet) => sheet.event(&self.ui, self.w, self.h, ev),
+                None => photo_pick_sheet::Outcome::Idle,
+            };
+            match outcome {
+                photo_pick_sheet::Outcome::Add => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.finish();
+                    }
+                }
+                photo_pick_sheet::Outcome::Cancel => {
+                    if let Some(sheet) = self.photo_pick_sheet.take() {
+                        sheet.cancel();
+                    }
+                }
+                photo_pick_sheet::Outcome::Idle | photo_pick_sheet::Outcome::Redraw => {}
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -3983,7 +4027,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.photo_pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4000,6 +4044,9 @@ impl Shell {
                 g.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.photo_pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
             if self.auth_showing() {

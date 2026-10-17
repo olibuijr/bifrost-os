@@ -7,15 +7,23 @@
 //! config.filters = vec![PHPickerFilter::Images];
 //! config.selection_limit = 3;
 //! let id = PHPickerViewController::present(ctx, &config);
-//! // App::service_reply: let results = PHPickerResult::decode_reply(&reply)?;
+//! // App::service_reply: PHPickerViewController::is_pending(&reply) is true: the sheet is up.
+//! // App::service_event: let results = PHPickerResult::decode_event(service, event, &body)?;
 //! ```
 //!
-//! Gaps: the shell does not yet answer the `picker` call; until it does, the reply is an error and apps should fall
-//! back to their own picker. Live Photos and video assets are filtered by name only, as the library has no such assets.
+//! The shell answers `picker` at once with `{status: "pending"}` and shows its picker sheet over the app. The person
+//! chooses from the whole library; the app needs no photos permission and learns only the identifiers of the pictures
+//! chosen, which arrive as the `picker_did_finish` event (an empty list for Cancel). The app then reads exactly those
+//! assets through the `image` call of [`crate::photo_library`]; the rest of the library stays closed to it.
+//!
+//! Gaps: the sheet shows a still for a Live Photo and the first frame of a movie; neither plays in the sheet.
 
 use crate::runtime::Ctx;
 use crate::service;
 use bifrost_core::json::Json;
+
+/// The event the shell pushes when the person ends the picker.
+pub const PICKER_DID_FINISH: &str = "picker_did_finish";
 
 /// `PHPickerFilter`: the kinds of asset a picker shows. A configuration keeps a list, and an asset passes when it
 /// matches any entry; an empty list shows everything.
@@ -78,9 +86,15 @@ pub struct PHPickerResult {
 pub struct PHPickerViewController;
 
 impl PHPickerViewController {
-    /// Asks the shell to show a picker. The reply decodes with [`PHPickerResult::decode_reply`].
+    /// Asks the shell to show a picker. The reply says the sheet is up ([`PHPickerViewController::is_pending`]); the
+    /// choice arrives later as the `picker_did_finish` event ([`PHPickerResult::decode_event`]).
     pub fn present(ctx: &Ctx, config: &PHPickerConfiguration) -> u32 {
         service::call(ctx, crate::photo_library::SERVICE, "picker", &config.to_params())
+    }
+
+    /// True when `reply` to [`PHPickerViewController::present`] says the picker sheet is open.
+    pub fn is_pending(reply: &Json) -> bool {
+        reply.get("status").and_then(Json::as_str) == Some("pending")
     }
 }
 
@@ -101,6 +115,15 @@ impl PHPickerResult {
                 Some(PHPickerResult { asset_identifier })
             })
             .collect()
+    }
+
+    /// The results a pushed `ServiceEvent` carries: the person's choice in pick order, empty when they cancelled. `None`
+    /// when the event is not the end of a picker or the body is malformed.
+    pub fn decode_event(service: &str, event: &str, body: &Json) -> Option<Vec<PHPickerResult>> {
+        if service != crate::photo_library::SERVICE || event != PICKER_DID_FINISH {
+            return None;
+        }
+        PHPickerResult::decode_reply(body)
     }
 
     /// True when the selection fits `config.selection_limit` (0 means no limit).
@@ -141,6 +164,23 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].asset_identifier.as_deref(), Some("b"));
         assert_eq!(results[1].asset_identifier, None);
+    }
+
+    #[test]
+    fn the_pending_reply_and_the_finish_event_are_told_apart() {
+        let pending = Json::Obj(vec![("status".into(), Json::Str("pending".into()))]);
+        assert!(PHPickerViewController::is_pending(&pending));
+        assert!(!PHPickerViewController::is_pending(&Json::Null));
+        let body = Json::Obj(vec![
+            ("results".into(), Json::Arr(vec![Json::Obj(vec![("id".into(), Json::Str("PH-1".into()))])])),
+            ("cancelled".into(), Json::Bool(false)),
+        ]);
+        let results = PHPickerResult::decode_event(crate::photo_library::SERVICE, PICKER_DID_FINISH, &body).unwrap();
+        assert_eq!(results, vec![PHPickerResult { asset_identifier: Some("PH-1".into()) }]);
+        let cancelled = Json::Obj(vec![("results".into(), Json::Arr(vec![])), ("cancelled".into(), Json::Bool(true))]);
+        assert_eq!(PHPickerResult::decode_event(crate::photo_library::SERVICE, PICKER_DID_FINISH, &cancelled), Some(vec![]));
+        assert!(PHPickerResult::decode_event("power", PICKER_DID_FINISH, &body).is_none());
+        assert!(PHPickerResult::decode_event(crate::photo_library::SERVICE, "library_did_change", &body).is_none());
     }
 
     #[test]

@@ -21,8 +21,13 @@
 //! - `editing {op, id, format_identifier?, format_version?, data?}`: `get` returns `{adjustment}` (null or
 //!   `{format_identifier, format_version, data}`), `commit` stores the adjustment record as a sidecar file next to the
 //!   picture (the original is never rewritten), `revert` removes the sidecar. `data` is lower-case hex. Needs access.
-//! - `picker {filters?, limit?}` checks its params and then refuses: a picker needs the person's own choice and the
-//!   shell has no picker sheet yet, so no asset is ever chosen for the app.
+//! - `picker {filters?, limit?}` opens the shell's photo picker sheet (`photo_pick_sheet`) and returns
+//!   `{status: "pending"}` at once. `filters` are `images`, `videos` and `live_photos`; `limit` is the most pictures the
+//!   person may choose (0: no limit, absent: 1). The person chooses in the sheet, from the whole library: the app needs
+//!   no photos permission and sees nothing of the library. When the person ends the sheet the shell pushes
+//!   `picker_did_finish` with `{results: [{id}], cancelled}` (ids in the order picked; none and `cancelled: true` for
+//!   Cancel) and lets the app read exactly those pictures with `image {id}`. A second `picker` while the sheet is up is
+//!   an error.
 //! - `project {op, id, title?, changes?}` with `op` `create`, `get` or `apply` (a list of change objects, all or
 //!   nothing). Projects are kept per app for the session only; they are not written to disk yet. Needs the permission.
 use super::{app_has_permission, Event, Shell, SystemService};
@@ -35,6 +40,7 @@ use bifrost_ui::photo_changes::{self, Asset};
 use bifrost_ui::photo_fetch::{self, FetchOptions, Item, Sort};
 use bifrost_ui::photo_media::{self, kind_for_name, Kind};
 use bifrost_ui::photo_project::{Change, Project};
+use crate::shell::photo_pick::{self, Entry as PickEntry, Filter as PickFilter, Pick};
 use bifrost_ui::photo_request::Request;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -48,6 +54,10 @@ const HEADER_BYTES: u64 = 256 * 1024;
 pub const OBSERVE_INTERVAL: f64 = 2.0;
 /// The event a change observer receives.
 pub const LIBRARY_DID_CHANGE: &str = "library_did_change";
+/// The event an app receives when the person ends its photo picker.
+pub const PICKER_DID_FINISH: &str = "picker_did_finish";
+/// The most assets one app may hold from its pickers.
+const MAX_PICKED: usize = 4096;
 /// The suffix of the sidecar file that holds an adjustment record.
 const SIDECAR_SUFFIX: &str = ".adjust.json";
 
@@ -57,6 +67,42 @@ thread_local! {
     static OBSERVERS: RefCell<BTreeMap<String, Vec<Asset>>> = RefCell::new(BTreeMap::new());
     /// The projects of each app, keyed by (app id, project id).
     static PROJECTS: RefCell<BTreeMap<(String, String), Project>> = RefCell::new(BTreeMap::new());
+    /// The assets each app was given by its photo pickers: it may read these and no others without library access.
+    static PICKED: RefCell<BTreeMap<String, BTreeSet<String>>> = RefCell::new(BTreeMap::new());
+}
+
+/// Lets `app_id` read the assets the person chose in its picker (`image {id}`), whatever its library access.
+pub fn grant_picked(app_id: &str, ids: &[String]) {
+    PICKED.with(|p| {
+        let mut all = p.borrow_mut();
+        let set = all.entry(app_id.to_string()).or_default();
+        for id in ids {
+            if set.len() < MAX_PICKED {
+                set.insert(id.clone());
+            }
+        }
+    });
+}
+
+/// The assets the person chose for `app_id` so far.
+pub fn picked_of(app_id: &str) -> BTreeSet<String> {
+    PICKED.with(|p| p.borrow().get(app_id).cloned().unwrap_or_default())
+}
+
+/// The access that applies to `image {id}`: the app's own access, plus the assets it was given by a picker. A picker
+/// works whatever the library answer (the person chose the pictures, not the app).
+fn image_access(app_id: &str, own: &Access) -> Access {
+    let picked = picked_of(app_id);
+    let mut ids = match own.status() {
+        Status::Authorized => return own.clone(),
+        Status::Limited => own.chosen(),
+        _ if picked.is_empty() => return own.clone(),
+        _ => Vec::new(),
+    };
+    ids.extend(picked);
+    let mut access = Access::new(Status::NotDetermined);
+    let _ = access.request(Answer::AllowLimited(ids));
+    access
 }
 
 /// The stable asset identifier of a photo: it depends on the path only.
@@ -341,17 +387,29 @@ fn project_call(app_id: &str, params: &Json) -> Result<Json, String> {
     })
 }
 
-/// The `picker` call: its params are checked, then refused, because only the person can choose a picture.
-fn picker_call(params: &Json) -> Result<Json, String> {
+/// The `picker` call: checks the params and opens the picker sheet for the app over the whole library. The person
+/// chooses; the answer comes later as `picker_did_finish` (see `Photos::tick`).
+fn picker_call(app_id: &str, params: &Json, photos: &[Photo]) -> Result<Json, String> {
+    let mut filters = Vec::new();
     if let Some(list) = params.get("filters") {
         for f in list.as_array().ok_or("filters must be a list")? {
             let name = f.as_str().ok_or("a filter must be a name")?;
-            if !matches!(name, "images" | "videos" | "live_photos") {
-                return Err(format!("no picker filter {name}"));
-            }
+            filters.push(PickFilter::from_name(name).ok_or_else(|| format!("no picker filter {name}"))?);
         }
     }
-    Err("the photo picker needs the person's own choice, and the shell has no picker sheet yet".into())
+    let limit = match params.get("limit") {
+        None | Some(Json::Null) => 1,
+        Some(v) => v.as_u64().ok_or("limit must be a whole number")? as usize,
+    };
+    // the sheet lists everything the library holds: the person is choosing, not the app
+    let everything = Access::new(Status::Authorized);
+    let entries: Vec<PickEntry> = listed(photos, &everything)
+        .into_iter()
+        .map(|(p, live)| PickEntry { id: local_identifier(p), path: p.path.clone(), key: p.key(), kind: kind_for_name(&p.name()), live, mtime: p.mtime })
+        .collect();
+    let name = crate::shell::apphost::installed().iter().find(|a| a.manifest.id == app_id).map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+    photo_pick::start(Pick::new(app_id, &name, filters, limit, entries)).map_err(|_| "a photo picker is already open for this app".to_string())?;
+    Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))]))
 }
 
 /// Checks a batch of library changes (`ops`: create, favourite or trash) against the assets the app can see and reports
@@ -405,6 +463,8 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
         "authorization" => Ok(status),
         "request_authorization" => Ok(Json::Obj(vec![("status".into(), Json::Str(status_name(request(app_id, has_permission)).into()))])),
         "fetch" | "image" => {
+            // `image` also serves the assets the app's picker gave it, which need no library access
+            let access = if method == "image" { image_access(app_id, &access) } else { access };
             if !matches!(access.status(), Status::Authorized | Status::Limited) {
                 return Err("photo library access is not granted".into());
             }
@@ -465,7 +525,7 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
                 _ => Err("editing needs op get, commit or revert".into()),
             }
         }
-        "picker" => picker_call(params),
+        "picker" => picker_call(app_id, params, photos),
         "perform" => {
             if !granted(&access) {
                 return Err("photo library access is not granted".into());
@@ -481,6 +541,14 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
         }
         _ => Err(format!("photos has no method {method}")),
     }
+}
+
+/// The `picker_did_finish` event for a picker the person ended, after granting the app the chosen assets.
+fn finish_event(app: &str, ids: &[String]) -> Event {
+    grant_picked(app, ids);
+    let results = ids.iter().map(|id| Json::Obj(vec![("id".into(), Json::Str(id.clone()))])).collect();
+    let body = Json::Obj(vec![("results".into(), Json::Arr(results)), ("cancelled".into(), Json::Bool(ids.is_empty()))]);
+    Event { app: Some(app.to_string()), event: PICKER_DID_FINISH.into(), body }
 }
 
 /// The photos service. Keeps the change observers' listings and the per-app projects.
@@ -499,23 +567,26 @@ impl SystemService for Photos {
         let has_permission = app_has_permission(app_id, PERMISSION);
         let is_granted = granted(&access_of(app_id, has_permission));
         let reads_library = matches!(method, "fetch" | "image" | "observe" | "editing" | "perform");
-        let library = if reads_library && is_granted { library::scan(&library::dirs()) } else { Vec::new() };
+        // a picker lists the library for the person, and a picked asset is read without library access
+        let may_read = is_granted || method == "picker" || (method == "image" && !picked_of(app_id).is_empty());
+        let library = if (reads_library || method == "picker") && may_read { library::scan(&library::dirs()) } else { Vec::new() };
         answer(app_id, has_permission, method, params, &library)
     }
 
     /// Looks at the library for the change observers every `OBSERVE_INTERVAL` seconds and pushes what changed to each.
     /// An observer whose access was taken away is dropped without an event.
     fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
+        // the pickers the person ended: the app may read what was chosen, then it hears of it
+        let mut out: Vec<Event> = photo_pick::take_finished().into_iter().map(|(app, ids)| finish_event(&app, &ids)).collect();
         if t - self.last_look < OBSERVE_INTERVAL {
-            return Vec::new();
+            return out;
         }
         self.last_look = t;
         let observers: Vec<String> = OBSERVERS.with(|o| o.borrow().keys().cloned().collect());
         if observers.is_empty() {
-            return Vec::new();
+            return out;
         }
         let library = library::scan(&library::dirs());
-        let mut out = Vec::new();
         for app in observers {
             let access = access_of(&app, app_has_permission(&app, PERMISSION));
             if !granted(&access) {
@@ -737,12 +808,65 @@ mod tests {
     }
 
     #[test]
-    fn the_picker_checks_its_filters_and_then_refuses() {
-        let good = params(vec![("filters", Json::Arr(vec![Json::Str("images".into())])), ("limit", Json::Num(1.0))]);
-        assert!(answer("is.example.photos-picker", true, "picker", &good, &[]).is_err());
+    fn the_picker_checks_its_filters_and_opens_a_pending_pick() {
+        let app = "is.example.photos-picker";
+        let good = params(vec![("filters", Json::Arr(vec![Json::Str("images".into())])), ("limit", Json::Num(3.0))]);
+        let reply = answer(app, true, "picker", &good, &library()).unwrap();
+        assert_eq!(reply.str_field("status").as_deref(), Some("pending"), "the person has not chosen yet");
+        let pick = photo_pick::take_waiting().expect("the sheet has a pick to show");
+        assert_eq!((pick.app_id.as_str(), pick.limit, pick.allowed.clone()), (app, 3, vec![PickFilter::Images]));
+        let shown: Vec<&str> = pick.visible().into_iter().map(|i| pick.entries[i].id.as_str()).collect();
+        assert_eq!(shown, [id("b.png", 300), id("d.png", 200), id("a.png", 100)], "pictures only, newest first");
         let bad = params(vec![("filters", Json::Arr(vec![Json::Str("holograms".into())]))]);
-        let err = answer("is.example.photos-picker", true, "picker", &bad, &[]).unwrap_err();
+        let err = answer(app, true, "picker", &bad, &library()).unwrap_err();
         assert!(err.contains("holograms"), "{err}");
+        assert!(photo_pick::take_waiting().is_none(), "a refused call opens nothing");
+    }
+
+    #[test]
+    fn the_picker_defaults_to_one_choice_and_refuses_a_second_sheet() {
+        let app = "is.example.photos-picker-one";
+        answer(app, false, "picker", &Json::Null, &library()).unwrap();
+        let pick = photo_pick::take_waiting().unwrap();
+        assert_eq!((pick.limit, pick.allowed.len(), pick.visible().len()), (1, 0, 4), "no filter lists everything");
+        let err = answer(app, false, "picker", &Json::Null, &library()).unwrap_err();
+        assert!(err.contains("already open"), "{err}");
+    }
+
+    #[test]
+    fn what_the_person_chose_is_readable_and_nothing_else() {
+        let app = "is.example.photos-picked";
+        let (chosen, other) = (id("b.png", 300), id("d.png", 200));
+        let read = |asset: &str| answer(app, false, "image", &params(vec![("id", Json::Str(asset.into()))]), &library());
+        assert!(read(&chosen).is_err(), "no library access, no pick yet");
+        answer(app, false, "picker", &params(vec![("limit", Json::Num(2.0))]), &library()).unwrap();
+        let mut pick = photo_pick::take_waiting().unwrap();
+        pick.toggle(&chosen);
+        photo_pick::finish(app, pick.selected().to_vec());
+        let mut shell = crate::shell::tests::shell();
+        let events = Photos::default().tick(&mut shell, 10.0);
+        assert_eq!(events.len(), 1);
+        assert_eq!((events[0].app.as_deref(), events[0].event.as_str()), (Some(app), PICKER_DID_FINISH));
+        let results = events[0].body.get("results").and_then(Json::as_array).unwrap();
+        assert_eq!(results.iter().filter_map(|r| r.str_field("id")).collect::<Vec<_>>(), [chosen.clone()]);
+        assert_eq!(events[0].body.get("cancelled"), Some(&Json::Bool(false)));
+        assert!(read(&chosen).is_ok(), "the chosen picture is readable without library access");
+        assert!(read(&other).is_err(), "a picture the person did not choose is not");
+        assert!(answer(app, false, "fetch", &Json::Null, &library()).is_err(), "the app still cannot list the library");
+        assert_eq!(answer(app, false, "authorization", &Json::Null, &[]).unwrap().str_field("status").as_deref(), Some("denied"));
+    }
+
+    #[test]
+    fn a_cancelled_picker_tells_the_app_and_grants_nothing() {
+        let app = "is.example.photos-cancelled";
+        answer(app, true, "picker", &Json::Null, &library()).unwrap();
+        photo_pick::take_waiting().unwrap();
+        photo_pick::cancel(app);
+        let mut shell = crate::shell::tests::shell();
+        let events = Photos::default().tick(&mut shell, 10.0);
+        assert_eq!(events[0].body.get("cancelled"), Some(&Json::Bool(true)));
+        assert_eq!(events[0].body.get("results").and_then(Json::as_array).map(|r| r.len()), Some(0));
+        assert!(picked_of(app).is_empty());
     }
 
     #[test]
