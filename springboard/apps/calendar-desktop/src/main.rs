@@ -13,6 +13,7 @@ use bifrost_app::mail_compose;
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_calendar::calendar::archive;
+use bifrost_calendar::calendar::ics;
 use bifrost_calendar::calendar::extras;
 use bifrost_calendar::calendar::subscribe::{self, Fetcher};
 use std::collections::HashMap;
@@ -57,6 +58,16 @@ enum Job {
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
+/// The stamp of the iCalendar text sent for each synced event. It is fixed, so an event that did not change keeps its
+/// text and is not sent again.
+const SYNC_STAMP: &str = "19700101T000000Z";
+
+/// Every event of the calendar as (UID, iCalendar text), for the Internet Accounts sync to find its edits.
+fn local_objects(c: &calendar::Calendar) -> Vec<(String, String)> {
+    let rich = c.rich_events();
+    rich.events.iter().map(|e| (e.uid.clone(), ics::write_single(e, &rich.timezones, SYNC_STAMP))).collect()
+}
+
 fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {
     if let Some(text) = c.take_copied() {
         ctx.set_pasteboard_string(&text);
@@ -398,7 +409,7 @@ impl App for CalendarApp {
             }
         }
         // Internet Accounts: a finished CalDAV sync imports its calendar objects into the store.
-        if let Some(done) = self.dav.poll(ctx, t, now) {
+        if let Some(done) = self.dav.poll_local(ctx, t, now, &mut || local_objects(&*c)) {
             if let Ok(texts) = done.result {
                 for text in &texts {
                     let _ = c.import_ics(text);
