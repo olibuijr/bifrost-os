@@ -269,28 +269,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation.rs",
    "status": "partial",
-   "note": "from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "note": "from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired. Lead 2026-10-17: not ready: no language-pack data ships and the shell does not draw the popover.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "translation_popover::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "translation::run_tests"
-    }
-   ],
-   "ready_note": "Language availability, translation sessions and tasks, formatted text and errors over on-device phrase-table language packs (bifrost_app::translation, translation_popover). Host tests only. Not covered: a neural translation engine (none is packaged for Arch) and the shell drawing the popover."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/USDKit.framework",

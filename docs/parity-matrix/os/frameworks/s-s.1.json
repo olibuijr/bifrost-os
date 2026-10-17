@@ -41,78 +41,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
-   "note": "from SDK matrix scenekit.json",
+   "note": "from SDK matrix scenekit.json Lead 2026-10-17: not ready: no renderer hosts a scene in an app window (CPU rasteriser only, no hosting view).",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "scene3d::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "scene_view::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "raster3d::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "shading::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "primitives3d::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "physics3d::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "particle_system3d::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "morph_skin::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "scene_audio::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "scene_source::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "shader_library::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "linalg::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "framework_kits::tests"
-    }
-   ],
-   "ready_note": "The 3D scene graph with cameras, lights, constraints, geometry, skinning and morphing, rigid body physics, particles, positional audio, OBJ import, hit testing, a shader library and a CPU triangle rasteriser, all under bifrost_app::framework_kits::scenekit. Host tests only. Not covered: a GPU renderer for scenes in app windows; Apple deprecated this framework."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ScreenCaptureKit.framework",
@@ -497,48 +428,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
-   "note": "from SDK matrix security-interface.json",
+   "note": "from SDK matrix security-interface.json Lead 2026-10-17: not ready: the shell does not draw the certificate, trust or identity panels.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "certificate_panel::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "certificate_trust::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "identity_chooser::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "keychain_save::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "keychain_settings::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "trust::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "framework_kits::tests"
-    }
-   ],
-   "ready_note": "The certificate panel and view, the trust editor, the choose-identity panel and the keychain save and settings panels, as models under bifrost_app::framework_kits::security_interface. Host tests only. Not covered: the shell drawing the panels."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/SecurityUI.framework",
@@ -807,28 +699,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/sound_classify.rs, springboard/ui/src/sound_analyzer.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
-   "note": "from SDK matrix sound-analysis.json Refreshed 2026-10-17: not ready, remaining: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path | No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream | No analysis of audio files: springboard/src/media/audiofile.rs decodes files only | No result types for time-ranged classifications with confidences, and no observer delivery to apps",
+   "note": "from SDK matrix sound-analysis.json Refreshed 2026-10-17: not ready, remaining: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path | No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream | No analysis of audio files: springboard/src/media/audiofile.rs decodes files only | No result types for time-ranged classifications with confidences, and no observer delivery to apps Lead 2026-10-17: not ready: no live audio input stream for apps and no built-in classifier.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "sound_classify::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "sound_analyzer::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "framework_kits::tests"
-    }
-   ],
-   "ready_note": "File and stream analysis requests with windows, overlap, top candidates, results, observers and errors (bifrost_app::framework_kits::sound_analysis); a classifier is supplied by the app as a function, so any model can plug in. Host tests only. Not covered: a built-in label set and a live audio input stream for apps."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/SpatialPreview.framework",

@@ -537,43 +537,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/pane.rs, springboard/ui/src/pane_link.rs, springboard/ui/src/focus.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/sdk/src/framework_kits.rs",
    "status": "partial",
-   "note": "from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
+   "note": "from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format. Lead 2026-10-17: not ready: third-party panes cannot be loaded, which is the framework job for apps.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "pane::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "pane_link::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "focus::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "pages::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "settings::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "framework_kits::tests"
-    }
-   ],
-   "ready_note": "The pane host (add, select with veto, deselect, notifications, key view chain, saved text fields, help menu entries, text manifest) is bifrost_app::framework_kits::preference_panes over ui pane; the Settings app's pages (shell pages and settings) are the shell-owned panes, with pane links. Host tests only. Not covered: loading a third-party pane into Settings."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ProximityReaderStub.framework",
