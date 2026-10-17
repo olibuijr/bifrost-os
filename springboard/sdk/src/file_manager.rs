@@ -31,7 +31,7 @@ use std::fs;
 use std::io;
 use std::os::raw::{c_char, c_int};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
@@ -301,6 +301,16 @@ impl NativeFileManager {
         env::temp_dir()
     }
 
+    /// The per-user directories a login creates before any app runs: the application support directory and the
+    /// cache directory, which is made private (mode 0700) as the per-user cache helper makes it. Existing
+    /// directories are left alone. Returns the two paths in that order. The XDG values are read as `url_for` reads them.
+    pub fn ensure_login_directories(&self) -> io::Result<Vec<PathBuf>> {
+        let home = home_dir()?;
+        let data_home = env::var_os("XDG_DATA_HOME");
+        let cache_home = env::var_os("XDG_CACHE_HOME");
+        ensure_login_directories_under(&home, data_home.as_deref(), cache_home.as_deref())
+    }
+
     /// `removeItem(at:)`: removes a file, a link (not its target) or a directory with everything in it.
     pub fn remove_item(&self, path: &Path) -> io::Result<()> {
         match kind_of(&fs::symlink_metadata(path)?) {
@@ -536,6 +546,15 @@ fn base_dir(var: Option<&OsStr>, home: &Path, fallback: &str) -> PathBuf {
         Some(p) if p.is_absolute() => p.to_path_buf(),
         _ => home.join(fallback),
     }
+}
+
+/// Creates the login directories under `home` (see [`NativeFileManager::ensure_login_directories`]).
+fn ensure_login_directories_under(home: &Path, data_home: Option<&OsStr>, cache_home: Option<&OsStr>) -> io::Result<Vec<PathBuf>> {
+    let support = base_dir(data_home, home, ".local/share");
+    let cache = base_dir(cache_home, home, ".cache");
+    fs::create_dir_all(&support)?;
+    fs::DirBuilder::new().recursive(true).mode(0o700).create(&cache)?;
+    Ok(vec![support, cache])
 }
 
 fn item_replacement_directory(appropriate_for: Option<&Path>) -> io::Result<PathBuf> {
@@ -816,6 +835,31 @@ mod tests {
         assert_eq!(at(SearchPathDirectory::Caches, None, Some("/cache")), PathBuf::from("/cache"));
         assert_eq!(at(SearchPathDirectory::Caches, None, Some("relative")), PathBuf::from("/home/ada/.cache"), "relative XDG values are ignored");
         assert_eq!(user_directory(SearchPathDirectory::ItemReplacement, home, None, None), None);
+    }
+
+    #[test]
+    fn ensure_login_directories_creates_support_and_private_cache_directories() {
+        let s = Scratch::new();
+        let home = s.0.join("home");
+        let dirs = ensure_login_directories_under(&home, None, None).unwrap();
+        assert_eq!(dirs, vec![home.join(".local/share"), home.join(".cache")]);
+        assert!(dirs[0].is_dir() && dirs[1].is_dir());
+        assert_eq!(fs::metadata(&dirs[1]).unwrap().permissions().mode() & 0o777, 0o700, "the cache directory is private");
+        // A second login finds them in place and changes nothing.
+        touch(&dirs[1].join("entry"), "kept");
+        assert_eq!(ensure_login_directories_under(&home, None, None).unwrap(), dirs);
+        assert_eq!(fs::read_to_string(dirs[1].join("entry")).unwrap(), "kept");
+    }
+
+    #[test]
+    fn ensure_login_directories_honours_absolute_xdg_values_only() {
+        let s = Scratch::new();
+        let home = s.0.join("home");
+        let data = s.0.join("xdg-data");
+        let dirs = ensure_login_directories_under(&home, Some(data.as_os_str()), Some(OsStr::new("relative"))).unwrap();
+        assert_eq!(dirs, vec![data.clone(), home.join(".cache")], "a relative XDG value falls back to the home default");
+        assert!(data.is_dir());
+        assert!(!home.join(".local").exists(), "the overridden data home is the only support directory made");
     }
 
     #[test]
