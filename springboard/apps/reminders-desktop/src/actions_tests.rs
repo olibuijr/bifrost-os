@@ -454,13 +454,14 @@ fn creation_dates_are_kept_and_sort_by_creation_date_puts_the_oldest_first() {
 #[test]
 fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
     let (mut app, ui, path) = app("tiles");
-    assert_eq!(app.tiles().len(), 5);
+    // five smart tiles and Recently Deleted
+    assert_eq!(app.tiles().len(), 6);
     app.toggle_smart(Smart::Flagged);
     assert!(!app.smart_shown(Smart::Flagged));
-    assert_eq!(app.tiles().len(), 4);
+    assert_eq!(app.tiles().len(), 5);
     assert!(!app.tiles().contains(&chrome::Tile::Smart(Smart::Flagged)));
     app.toggle_smart(Smart::Flagged);
-    assert_eq!(app.tiles().len(), 5);
+    assert_eq!(app.tiles().len(), 6);
 
     assert!(!app.toggle_pin(), "no list is open");
     app.activate(&ui, Target::List(1), 1.0);
@@ -472,14 +473,15 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
         let r = app.tile_rect(&ui, i);
         app.sidebar_target(&ui, (r.x + r.w / 2.0) * k, (r.y + r.h / 2.0) * k)
     };
-    assert_eq!(at(&app, 5), Some(Target::List(1)), "the pinned tile opens the list");
+    assert_eq!(at(&app, 6), Some(Target::List(1)), "the pinned tile opens the list");
+    assert_eq!(at(&app, 5), Some(Target::Deleted));
     assert_eq!(at(&app, 0), Some(Target::Smart(Smart::Today)));
     let tiles: Vec<_> = app.controls(&ui).into_iter().filter(|n| (100..200).contains(&n.id)).map(|n| n.label).collect();
-    assert_eq!(tiles, ["Today", "Scheduled", "All", "Flagged", "Completed", "Reminders"]);
+    assert_eq!(tiles, ["Today", "Scheduled", "All", "Flagged", "Completed", "Recently Deleted", "Reminders"]);
     render(&mut app, &ui);
     assert_eq!(app.edit_titles().0, "Undo Pin List");
     assert!(app.toggle_pin());
-    assert_eq!(app.tiles().len(), 5);
+    assert_eq!(app.tiles().len(), 6);
     cleanup(&path);
 }
 
