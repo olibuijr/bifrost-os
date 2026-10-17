@@ -33,7 +33,7 @@
       "apple": "View.popoverTip(_:arrowEdge:action:), TipNSPopover",
       "bifrost": "springboard/ui/src/split.rs (place_popover); springboard/ui/src/tip.rs (Tip, TipStore, Rules); springboard/sdk/src/widgets.rs (popover); springboard/render/src/ui.rs (MATERIAL_POPOVER); springboard/ui/tests/parity_sdk-tests-01d.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Popover placement is tested headless (a_popover_goes_below_its_anchor_when_there_is_room, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, a_popover_on_the_right_edge_opens_to_the_left, a_popover_stays_on_screen), and tip content, display limits, required events, invalidation and one-tip-at-a-time presentation are tested headless in tip.rs. Gap: no anchor modifier on SDK views and no action callback reaches the app yet, so an app wires the popover to its anchor by hand; the on-screen check needs Midget."
+      "note": "Popover placement is tested headless (a_popover_goes_below_its_anchor_when_there_is_room, a_popover_flips_to_the_opposite_edge_when_the_preferred_side_has_no_room, a_popover_on_the_right_edge_opens_to_the_left, a_popover_stays_on_screen), and tip content, display limits, required events, invalidation and one-tip-at-a-time presentation are tested headless in tip.rs. Gap: no anchor modifier on SDK views and no action callback reaches the app yet, so an app wires the popover to its anchor by hand; the on-screen check needs Midget. Built 2026-10-17: springboard/sdk/src/tips.rs re-exports the TipKit model, present_first (picks the first eligible tip and records the display) and tip_popover_frame (placement next to the anchor); tests tips::tests."
     },
     {
       "feature": "Tip groups",
@@ -61,7 +61,7 @@
       "apple": "No TipKit symbol. Tooltips are an AppKit behaviour (NSView.toolTip), not part of TipKit.",
       "bifrost": "springboard/sdk/src/widgets.rs (Material::ToolTip, model_kind, blur_pt); springboard/render/src/glass.rs; springboard/ui/src/tooltip.rs (Tooltips, Timing); springboard/sdk/tests/parity_sdk-tests-01d.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "The ToolTip material has its window-model kind and six-point blur, and hover timing (show after the delay, cancel on leave, hand-off to a neighbour, grace period after a close) is a tested state machine in tooltip.rs. Gap: no control draws a tooltip on hover and menu items have no tooltips yet; the pointer wiring and the drawn tooltip need Midget."
+      "note": "The ToolTip material has its window-model kind and six-point blur, and hover timing (show after the delay, cancel on leave, hand-off to a neighbour, grace period after a close) is a tested state machine in tooltip.rs. Gap: no control draws a tooltip on hover and menu items have no tooltips yet; the pointer wiring and the drawn tooltip need Midget. Built 2026-10-17: springboard/sdk/src/tooltips.rs re-exports the Tooltips timing state machine for apps; tests tooltips::tests. Drawing on hover is still missing."
     },
     {
       "feature": "UIKit and AppKit tip views",
