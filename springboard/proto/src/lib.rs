@@ -381,6 +381,12 @@ impl WindowLevel {
     }
 }
 
+/// Flags of `ToShell::WindowOpen`.
+pub mod window_flags {
+    /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom when the title bar is double-clicked.
+    pub const TITLE_DOUBLE_CLICK: u32 = 1;
+}
+
 /// Shell -> app.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToApp {
@@ -404,6 +410,12 @@ pub enum ToApp {
     WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32 },
     /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
     WindowRelease { id: u32, buf: u32, generation: u32 },
+    /// Several windows: the person dragged window `window` to (x, y) points relative to the visible desktop area (the
+    /// shell's clamped position). Tag 0x1cd.
+    WindowMoved { window: u32, x: f32, y: f32 },
+    /// Several windows: the person double-clicked the title bar of window `window`. Only sent to windows opened with
+    /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x1ce.
+    WindowTitleDoubleClick { window: u32 },
     Resume,
     Suspend,
     Quit,
@@ -648,7 +660,9 @@ pub enum ToShell {
     Frame { buf: u32, damage: Vec<Rect> },
     /// Several windows: open window `id` (the app chose the id; the shell never invents one). The title is at most 512
     /// bytes; the size is in points. The window has no pixels until `WindowBuffers` and `WindowFrame` arrive.
-    WindowOpen { id: u32, title: String, w: f32, h: f32 },
+    /// `position` (optional, points relative to the visible desktop area) asks where the window goes; the shell clamps it to
+    /// the screen. `flags` is a `window_flags` set. Tag 0x1c0.
+    WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
     /// Several windows: close window `id`. The shell drops its frames.
     WindowClose { id: u32 },
     /// Several windows: the window's title.
@@ -742,6 +756,11 @@ pub enum ToShell {
     /// The level of one of the app's extra windows (`WindowOpen`'s id). Id 0 is the main window and is refused by the
     /// shell (use `WindowLevel`). Tag 0x1cc.
     WindowLevelOf { id: u32, level: WindowLevel },
+    /// Several windows: move window `window` to (x, y) points relative to the visible desktop area. The shell clamps it
+    /// to the screen. Tag 0x1c6.
+    WindowMove { window: u32, x: f32, y: f32 },
+    /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x1c7.
+    WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
     NotifyCategories(Vec<NotifCategory>),
     /// `CSSearchableIndex.indexSearchableItems`: at most `quicksearch::MAX_ITEMS` per message. 0x1c0.
@@ -943,6 +962,10 @@ mod tag {
     pub const ACTIVITY: u32 = 0x161;
     pub const WINDOW_LEVEL: u32 = 0x165;
     pub const WINDOW_LEVEL_OF: u32 = 0x1cc;
+    pub const WINDOW_MOVE: u32 = 0x1c6;
+    pub const WINDOW_COLLAPSE: u32 = 0x1c7;
+    pub const WINDOW_MOVED: u32 = 0x1cd;
+    pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x1ce;
 }
 
 /// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
@@ -1165,6 +1188,16 @@ impl ToApp {
                 u32_(&mut b, *buf);
                 u32_(&mut b, *generation);
             }
+            ToApp::WindowMoved { window, x, y } => {
+                u32_(&mut b, tag::WINDOW_MOVED);
+                u32_(&mut b, *window);
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+            }
+            ToApp::WindowTitleDoubleClick { window } => {
+                u32_(&mut b, tag::WINDOW_TITLE_DOUBLE_CLICK);
+                u32_(&mut b, *window);
+            }
             ToApp::WindowClosed { id } => {
                 u32_(&mut b, tag::WINDOW_CLOSED);
                 u32_(&mut b, *id);
@@ -1331,6 +1364,15 @@ impl ToApp {
             tag::RELEASE => ToApp::Release { buf: r.u32()?, generation: r.u32()? },
             tag::WINDOW_CLOSED => ToApp::WindowClosed { id: r.u32()? },
             tag::FULL_SCREEN => ToApp::FullScreen { on: r.u8()? != 0 },
+            tag::WINDOW_MOVED => {
+                let window = r.u32()?;
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToApp::WindowMoved { window, x, y }
+            }
+            tag::WINDOW_TITLE_DOUBLE_CLICK => ToApp::WindowTitleDoubleClick { window: r.u32()? },
             tag::WINDOW_CONFIGURE => {
                 let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
                 if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
@@ -1468,12 +1510,32 @@ impl ToShell {
                 u32_(&mut b, *h);
                 u32_(&mut b, *generation);
             }
-            ToShell::WindowOpen { id, title, w, h } => {
+            ToShell::WindowOpen { id, title, w, h, position, flags } => {
                 u32_(&mut b, tag::WINDOW_OPEN);
                 u32_(&mut b, *id);
                 str_(&mut b, &short_title(title));
                 f32_(&mut b, *w);
                 f32_(&mut b, *h);
+                match position {
+                    Some((x, y)) => {
+                        b.push(1);
+                        f32_(&mut b, *x);
+                        f32_(&mut b, *y);
+                    }
+                    None => b.push(0),
+                }
+                u32_(&mut b, *flags);
+            }
+            ToShell::WindowMove { window, x, y } => {
+                u32_(&mut b, tag::WINDOW_MOVE);
+                u32_(&mut b, *window);
+                f32_(&mut b, *x);
+                f32_(&mut b, *y);
+            }
+            ToShell::WindowCollapse { window, collapsed } => {
+                u32_(&mut b, tag::WINDOW_COLLAPSE);
+                u32_(&mut b, *window);
+                b.push(*collapsed as u8);
             }
             ToShell::WindowClose { id } => {
                 u32_(&mut b, tag::WINDOW_CLOSE);
@@ -1841,9 +1903,38 @@ impl ToShell {
                 if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
                     return Err(DecodeError::BadValue);
                 }
-                ToShell::WindowOpen { id, title, w, h }
+                let position = match r.u8()? {
+                    0 => None,
+                    1 => {
+                        let (x, y) = (r.f32()?, r.f32()?);
+                        if !x.is_finite() || !y.is_finite() {
+                            return Err(DecodeError::BadValue);
+                        }
+                        Some((x, y))
+                    }
+                    _ => return Err(DecodeError::BadValue),
+                };
+                let flags = r.u32()?;
+                ToShell::WindowOpen { id, title, w, h, position, flags }
             }
             tag::WINDOW_CLOSE => ToShell::WindowClose { id: r.u32()? },
+            tag::WINDOW_MOVE => {
+                let window = r.u32()?;
+                let (x, y) = (r.f32()?, r.f32()?);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::WindowMove { window, x, y }
+            }
+            tag::WINDOW_COLLAPSE => {
+                let window = r.u32()?;
+                let collapsed = match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err(DecodeError::BadValue),
+                };
+                ToShell::WindowCollapse { window, collapsed }
+            }
             tag::WINDOW_TITLE => {
                 let id = r.u32()?;
                 ToShell::WindowTitle { id, title: checked_title(r.str()?)? }
@@ -2718,7 +2809,7 @@ mod quick_action_tests {
     #[test]
     fn window_messages_round_trip_through_the_codec() {
         let shell = [
-            ToShell::WindowOpen { id: 3, title: "Ada Lovelace".into(), w: 480.0, h: 560.0 },
+            ToShell::WindowOpen { id: 3, title: "Ada Lovelace".into(), w: 480.0, h: 560.0, position: None, flags: 0 },
             ToShell::WindowClose { id: 3 },
             ToShell::WindowTitle { id: 3, title: "Grace".into() },
             ToShell::WindowResize { id: 3, w: 320.0, h: 240.0 },
@@ -2743,7 +2834,7 @@ mod quick_action_tests {
 
     #[test]
     fn window_open_has_the_documented_layout() {
-        let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0 }.encode();
+        let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0, position: None, flags: 0 }.encode();
         // tag 0x1c0, id 2, title length 2 and "ab", then the two floats
         assert_eq!(&bytes[..4], &0x1c0u32.to_le_bytes());
         assert_eq!(&bytes[4..8], &2u32.to_le_bytes());
@@ -2751,6 +2842,37 @@ mod quick_action_tests {
         assert_eq!(&bytes[12..14], b"ab");
     }
 
+    #[test]
+    fn window_placement_and_collapse_round_trip() {
+        let shell = [
+            ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.5, 40.0)), flags: window_flags::TITLE_DOUBLE_CLICK },
+            ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 1.0, h: 1.0, position: None, flags: 0 },
+            ToShell::WindowMove { window: 4, x: -3.0, y: 88.0 },
+            ToShell::WindowCollapse { window: 4, collapsed: true },
+            ToShell::WindowCollapse { window: 4, collapsed: false },
+        ];
+        for m in shell {
+            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+        let app = [ToApp::WindowMoved { window: 4, x: 10.0, y: 20.0 }, ToApp::WindowTitleDoubleClick { window: 4 }];
+        for m in app {
+            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
+        }
+    }
+
+    #[test]
+    fn window_placement_refuses_a_bad_flag_or_a_non_finite_position() {
+        let mut bad = ToShell::WindowCollapse { window: 4, collapsed: true }.encode();
+        let n = bad.len();
+        bad[n - 1] = 2;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+        let nan = ToShell::WindowMove { window: 4, x: f32::NAN, y: 0.0 }.encode();
+        assert_eq!(ToShell::decode(&nan), Err(DecodeError::BadValue));
+        let open = ToShell::WindowOpen { id: 4, title: "a".into(), w: 1.0, h: 1.0, position: Some((f32::INFINITY, 0.0)), flags: 0 }.encode();
+        assert_eq!(ToShell::decode(&open), Err(DecodeError::BadValue));
+    }
+
+    #[test]
     #[test]
     fn an_overlong_or_non_finite_window_message_is_refused() {
         let long = ToShell::WindowTitle { id: 1, title: "x".repeat(MAX_WINDOW_TITLE + 1) };

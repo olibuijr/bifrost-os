@@ -584,6 +584,16 @@ pub trait App {
     fn window_closed(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
         false
     }
+    /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
+    /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
+    fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {
+        false
+    }
+    /// The person double-clicked the title bar of a window opened with `WindowSpec::with_title_double_click` (the shell
+    /// zooms every other window). True when the app needs a new frame.
+    fn window_title_double_click(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
+        false
+    }
     /// Whether the app draws through `draw_canvas` (the GPU path, docs/graphics-architecture.md). Apps that return
     /// `true` are drawn with `draw_canvas` on the direct path and with `draw_canvas` on a CPU `Surface` (which
     /// implements `Canvas`) on the shared-memory path, so one drawing routine serves both. The default `false` keeps

@@ -347,8 +347,10 @@ impl Ctx {
     /// Opens a window of the app's own (`AppWindows::open`) and asks the shell to show it. The id is the app's; the shell
     /// draws the window under it.
     pub fn open_window(&self, spec: crate::app_windows::WindowSpec) -> Result<crate::app_windows::WindowId, crate::app_windows::WindowError> {
+        let flags = if spec.title_double_click { crate::proto::window_flags::TITLE_DOUBLE_CLICK } else { 0 };
+        let position = spec.position;
         let id = self.windows.borrow_mut().open(spec.clone())?;
-        self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height });
+        self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height, position, flags });
         Ok(id)
     }
 
@@ -357,6 +359,21 @@ impl Ctx {
         let closed = self.windows.borrow_mut().close(id)?;
         self.send(ToShell::WindowClose { id: id.0 });
         Ok(closed)
+    }
+
+    /// Moves one of the app's windows to (x, y) points relative to the visible desktop area. The shell clamps it to the
+    /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it.
+    pub fn move_window(&self, id: crate::app_windows::WindowId, x: f32, y: f32) -> Result<(), crate::app_windows::WindowError> {
+        self.windows.borrow_mut().set_position(id, x, y)?;
+        self.send(ToShell::WindowMove { window: id.0, x, y });
+        Ok(())
+    }
+
+    /// Collapses one of the app's windows to its title bar, or expands it back (the shell keeps the height it had).
+    pub fn set_window_collapsed(&self, id: crate::app_windows::WindowId, collapsed: bool) -> Result<(), crate::app_windows::WindowError> {
+        self.windows.borrow_mut().set_collapsed(id, collapsed)?;
+        self.send(ToShell::WindowCollapse { window: id.0, collapsed });
+        Ok(())
     }
 
     /// Changes the title of one of the app's windows.
@@ -742,7 +759,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         }
                     }
                 }
-                m @ (ToApp::WindowClosed { .. } | ToApp::WindowConfigure { .. } | ToApp::WindowTouch { .. }) => {
+                m @ (ToApp::WindowClosed { .. }
+                | ToApp::WindowConfigure { .. }
+                | ToApp::WindowTouch { .. }
+                | ToApp::WindowMoved { .. }
+                | ToApp::WindowTitleDoubleClick { .. }) => {
                     if let Some(c) = &ctx {
                         need_frame |= crate::app_windows::deliver_window(&mut app, c, &m, now_ms()).unwrap_or(false);
                     }

@@ -156,7 +156,8 @@ const B: u8 = 8;
 
 #[derive(Clone, Copy, Debug)]
 enum Grab {
-    Move { dx: f32, dy: f32 },
+    /// a title bar drag; `app` is the window moved (the stack can put other windows after it)
+    Move { dx: f32, dy: f32, app: AppId },
     Resize { edges: u8, start: Rect, x: f32, y: f32 },
     /// a press on a traffic light that acts on release
     Light(usize, Light),
@@ -183,6 +184,8 @@ pub struct Desk {
     pub wins: Vec<Win>,
     /// the apps whose windows float (their host asked for `ToShell::WindowLevel`), as of the last `sync_levels`
     pub(super) floating: Vec<AppId>,
+    /// the extra windows collapsed to their title bars, with the height each had before it collapsed
+    pub(super) collapsed: std::collections::HashMap<AppId, i32>,
     pub(super) dock_preferences:super::desktop_dock::Preferences,
     pub(super) dock_visible:bool,
     /// the window whose traffic lights the pointer is over; its lights show their glyphs
@@ -603,7 +606,28 @@ impl Desk {
         let r = if w.maximized { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
         self.release_app_buffers(w.app);
+        self.collapsed.remove(&w.app);
         w.app
+    }
+
+    /// Whether an extra window is collapsed to its title bar.
+    pub(super) fn is_collapsed(&self, app: AppId) -> bool {
+        self.collapsed.contains_key(&app)
+    }
+
+    /// Collapses window `i` to its title bar, or expands it to the height it had. The app's body is not resized here: the
+    /// caller relays the size (`desk_layout`).
+    pub(super) fn set_collapsed(&mut self, m: &Metrics, i: usize, on: bool) {
+        let app = self.wins[i].app;
+        if on {
+            if !self.is_collapsed(app) {
+                let title = title_of(app, m).max(1);
+                self.collapsed.insert(app, self.wins[i].r.h);
+                self.wins[i].r.h = title;
+            }
+        } else if let Some(h) = self.collapsed.remove(&app) {
+            self.wins[i].r.h = h;
+        }
     }
 
     /// Drops the per-window pixel caches and stale dock icon resizes; true when something was freed.
@@ -1255,7 +1279,10 @@ impl Shell {
         let m = self.desk_metrics();
         let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { return };
         let b = w.body(&m);
-        self.resize_app(w.app, b.w, b.h);
+        // a collapsed window keeps the size its app had: the title bar alone is not a size to give the app
+        if !self.desk.as_ref().is_some_and(|d| d.is_collapsed(w.app)) {
+            self.resize_app(w.app, b.w, b.h);
+        }
         if w.app == AppId::Terminal {
             self.with_size(b.w, b.h, |sh| {
                 sh.resize_terminals();
@@ -1468,9 +1495,6 @@ impl Shell {
         if let Some(d) = self.desk.as_mut() {
             d.sync_levels(floating);
         }
-        if plan.is_empty() {
-            return;
-        }
         let m = self.desk_metrics();
         for (slot, open, close, sizes) in plan {
             for id in &close {
@@ -1489,8 +1513,67 @@ impl Shell {
                 }
             }
         }
+        // the placement and collapse the table asks for (`WindowMove`, `WindowCollapse`), on every window the desk shows
+        let mut asks = Vec::new();
+        for (slot, host) in self.ext.iter_mut().enumerate() {
+            let Some(h) = host else { continue };
+            let ids: Vec<u32> = h.windows.of_app(&h.id).iter().map(|w| w.id).collect();
+            for id in ids {
+                let pending = h.windows.take_pending_move(&h.id, id);
+                let collapsed = h.windows.of_app(&h.id).iter().any(|w| w.id == id && w.collapsed);
+                asks.push((slot as u8, id, pending, collapsed));
+            }
+        }
+        for (slot, id, pending, collapsed) in asks {
+            if let Ok(id16) = u16::try_from(id) {
+                self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
+            }
+        }
         self.desk_refocus();
         self.dirty = true;
+    }
+
+    /// Applies the placement and collapse the table asks for to one extra window's desk window. A requested position is
+    /// clamped to the visible area (points, relative to the work area) and the window moves there.
+    pub(super) fn ext_window_place(&mut self, app: AppId, pending: Option<(f32, f32)>, collapsed: bool) {
+        let m = self.desk_metrics();
+        let k = self.ui.pt(1.0) as f32;
+        let a = Desk::area(&m);
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.index_of(app) else { return };
+        if let Some((x, y)) = pending {
+            let win_w = d.wins[i].r.w as f32 / k;
+            if let Some((cx, cy)) = super::app_window_table::clamp_to_screen(x, y, a.w as f32 / k, a.h as f32 / k, win_w) {
+                d.move_to(&m, i, a.x + (cx * k).round() as i32, a.y + (cy * k).round() as i32);
+            }
+        }
+        if d.is_collapsed(app) != collapsed {
+            d.set_collapsed(&m, i, collapsed);
+            self.desk_layout(i);
+        }
+        self.dirty = true;
+    }
+
+    /// A drag of an extra window ended: its app is told where the window is now (`WindowMoved`), in points relative to the
+    /// visible desktop area.
+    pub(super) fn ext_window_dropped(&mut self, app: AppId) {
+        let m = self.desk_metrics();
+        let AppId::ExternalWindow(slot, id) = app else { return };
+        let Some(r) = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].r)) else { return };
+        let k = self.ui.pt(1.0) as f32;
+        let a = Desk::area(&m);
+        let (x, y) = ((r.x - a.x) as f32 / k, (r.y - a.y) as f32 / k);
+        if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+            host.window_dragged(u32::from(id), x, y);
+        }
+    }
+
+    /// The title bar of extra window `id` was double-clicked: true when its app opted in and was told.
+    pub(super) fn ext_window_title_double_click(&mut self, slot: usize, id: u32) -> bool {
+        match self.ext.get_mut(slot) {
+            Some(Some(host)) => host.window_title_double_clicked(id),
+            _ => false,
+        }
     }
 
     /// Removes an extra window's desk window without telling its app (the app's table already dropped it).
@@ -1554,6 +1637,10 @@ impl Shell {
                 self.desk_keyboard_lift();
                 let w = self.desk.as_ref()?.wins[i];
                 let mut hit = hit;
+                // a collapsed window has no edges to resize: its title bar is all there is
+                if matches!(hit, Hit::Edge(_)) && self.desk.as_ref()?.is_collapsed(app) {
+                    hit = Hit::Title;
+                }
                 if hit == Hit::Title {
                     if let AppId::External(slot) = app {
                         let controls = self.ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..], |h| &h.controls[..]);
@@ -1565,19 +1652,26 @@ impl Shell {
                     }
                 }
                 if hit == Hit::Title {
-                    let d = self.desk.as_mut()?;
-                    if d.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= DOUBLE_CLICK_MS) {
-                        d.last_title = None;
-                        d.toggle_zoom(&m, i);
-                        self.desk_layout(i);
+                    let double = self.desk.as_ref()?.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= DOUBLE_CLICK_MS);
+                    if double {
+                        self.desk.as_mut()?.last_title = None;
+                        // an app that opted in gets the double-click itself; any other window zooms
+                        let told = match app {
+                            AppId::ExternalWindow(slot, id) => self.ext_window_title_double_click(slot as usize, u32::from(id)),
+                            _ => false,
+                        };
+                        if !told {
+                            self.desk.as_mut()?.toggle_zoom(&m, i);
+                            self.desk_layout(i);
+                        }
                         self.dirty = true;
                         return Some(vec![]);
                     }
-                    d.last_title = Some((app, t));
+                    self.desk.as_mut()?.last_title = Some((app, t));
                 }
                 let grab = match hit {
                     Hit::Light(l) => Grab::Light(i, l),
-                    Hit::Title => Grab::Move { dx: x - w.r.x as f32, dy: y - w.r.y as f32 },
+                    Hit::Title => Grab::Move { dx: x - w.r.x as f32, dy: y - w.r.y as f32, app },
                     Hit::Edge(edges) => Grab::Resize { edges, start: w.r, x, y },
                     Hit::Content => {
                         self.desk.as_mut()?.grab = Some(Grab::Content(i));
@@ -1594,8 +1688,8 @@ impl Shell {
                 // a press that landed on the empty desktop has no grab: swallow the drag like its Down and Up
                 let Some(grab) = self.desk.as_ref()?.grab else { return Some(vec![]) };
                 match grab {
-                    Grab::Move { dx, dy } => {
-                        let i = self.desk.as_ref()?.wins.len().checked_sub(1)?;
+                    Grab::Move { dx, dy, app } => {
+                        let i = self.desk.as_ref()?.index_of(app)?;
                         self.desk.as_mut()?.move_to(&m, i, (x - dx) as i32, (y - dy) as i32);
                         self.dirty = true;
                         Some(vec![])
@@ -1662,14 +1756,16 @@ impl Shell {
                         }
                         Some(vec![])
                     }
-                    Some(Grab::Move { .. }) => {
+                    Some(Grab::Move { app: moved, .. }) => {
                         // a title bar dropped on a screen edge or corner tiles the window there (snap_zone)
                         let band = self.ui.pt(8.).round() as i32;
-                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.wins.len().checked_sub(1)) {
+                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.index_of(moved)) {
                             if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
                             self.desk_layout(i);
                             self.desk_frame_changed(i);
                         }
+                        // the person dropped a window: its app learns where it is now (`WindowMoved`, in points)
+                        self.ext_window_dropped(moved);
                         Some(vec![])
                     }
                     Some(Grab::DockDrag{from:k,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
@@ -2541,6 +2637,36 @@ mod tests {
 
     fn metrics() -> Metrics {
         Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 100, pt: 1.0 }
+    }
+
+    #[test]
+    fn a_window_collapses_to_its_title_bar_and_expands_to_the_height_it_had() {
+        let m = metrics();
+        let app = AppId::ExternalWindow(0, 4);
+        let mut d = Desk::new();
+        let i = d.open(&m, app, (300, 400));
+        let h = d.wins[i].r.h;
+        d.set_collapsed(&m, i, true);
+        assert_eq!(d.wins[i].r.h, title_of(app, &m));
+        assert!(d.is_collapsed(app));
+        d.set_collapsed(&m, i, true);
+        assert_eq!(d.wins[i].r.h, title_of(app, &m), "collapsing twice keeps the height it had");
+        d.set_collapsed(&m, i, false);
+        assert_eq!(d.wins[i].r.h, h);
+        assert!(!d.is_collapsed(app));
+    }
+
+    #[test]
+    fn a_floating_extra_window_is_stacked_last_while_its_app_keeps_its_other_windows_normal() {
+        let m = metrics();
+        let (a, b) = (AppId::ExternalWindow(0, 1), AppId::ExternalWindow(0, 2));
+        let mut d = Desk::new();
+        d.open(&m, a, (200, 200));
+        d.open(&m, b, (200, 200));
+        d.sync_levels(vec![a]);
+        assert_eq!(d.wins.last().map(|w| w.app), Some(a), "the floating window is above the normal ones");
+        d.sync_levels(vec![]);
+        assert!(!d.is_floating(a), "dropping the level puts the window back in the normal band");
     }
 
     #[test]

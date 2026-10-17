@@ -993,12 +993,28 @@ impl AppHost {
                 }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
-            ToShell::WindowOpen { id, title, w, h } => {
+            ToShell::WindowOpen { id, title, w, h, position, flags } => {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
                 if self.windows.open(&self.id, id, &title, w, h).is_err() {
                     self.send(&ToApp::WindowClosed { id });
+                } else {
+                    if let Some((x, y)) = position {
+                        self.windows.request_position(&self.id, id, x, y);
+                    }
+                    self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
                 }
                 out.frame = true;
+            }
+            ToShell::WindowMove { window, x, y } => {
+                // an unknown window is ignored; the desk applies the position on its next sync
+                if self.windows.request_position(&self.id, window, x, y) {
+                    out.frame = true;
+                }
+            }
+            ToShell::WindowCollapse { window, collapsed } => {
+                if self.windows.set_collapsed(&self.id, window, collapsed) {
+                    out.frame = true;
+                }
             }
             ToShell::WindowClose { id } => {
                 self.windows.close(&self.id, id);
@@ -1140,6 +1156,27 @@ impl AppHost {
             return false;
         }
         self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms });
+        true
+    }
+
+    /// The person dragged window `id` to (x, y) points (the shell's clamped position): the table keeps it and the app is
+    /// told (`WindowMoved`). False when the window is not open.
+    pub fn window_dragged(&mut self, id: u32, x: f32, y: f32) -> bool {
+        if !self.windows.note_position(&self.id, id, x, y) {
+            return false;
+        }
+        self.send(&ToApp::WindowMoved { window: id, x, y });
+        true
+    }
+
+    /// The person double-clicked the title bar of window `id`. True when the app opted in and was told; otherwise the
+    /// shell keeps its own handling (zoom).
+    pub fn window_title_double_clicked(&mut self, id: u32) -> bool {
+        let wanted = self.windows.of_app(&self.id).iter().any(|w| w.id == id && w.title_double_click);
+        if !wanted {
+            return false;
+        }
+        self.send(&ToApp::WindowTitleDoubleClick { window: id });
         true
     }
 
@@ -2301,12 +2338,31 @@ mod window_table_tests {
     }
 
     #[test]
+    fn a_window_takes_a_position_collapses_and_opts_in_to_the_title_double_click() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let flags = bifrost_proto::window_flags::TITLE_DOUBLE_CLICK;
+        host.handle(ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.0, 40.0)), flags }, Vec::new(), &mut out);
+        assert_eq!(host.windows.take_pending_move("fixture", 4), Some((12.0, 40.0)), "the requested position is applied once");
+        host.handle(ToShell::WindowCollapse { window: 4, collapsed: true }, Vec::new(), &mut out);
+        assert!(host.windows.of_app("fixture")[0].collapsed);
+        assert!(host.window_title_double_clicked(4));
+        assert_eq!(sent(&peer), vec![ToApp::WindowTitleDoubleClick { window: 4 }]);
+        assert!(host.window_dragged(4, 100.0, 60.0));
+        assert_eq!(sent(&peer), vec![ToApp::WindowMoved { window: 4, x: 100.0, y: 60.0 }]);
+        host.handle(ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert!(!host.window_title_double_clicked(5), "an app that did not opt in gets no message");
+        assert!(sent(&peer).is_empty());
+    }
+
+    #[test]
     fn the_window_table_follows_the_messages_the_app_sends() {
         let (channel, _peer) = sys::socketpair_pair().unwrap();
         let mut host = AppHost::with_channel("fixture", channel, None, cfg());
         let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0 }, Vec::new(), &mut out);
-        host.handle(ToShell::WindowOpen { id: 2, title: "Grace".into(), w: 480.0, h: 560.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 2, title: "Grace".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
         let ids = |h: &AppHost| h.windows.of_app("fixture").iter().map(|w| w.id).collect::<Vec<u32>>();
         assert_eq!(ids(&host), vec![2, 1], "the newest window is in front");
         assert!(out.frame, "a window change asks the desk for a frame");
@@ -2325,7 +2381,7 @@ mod window_table_tests {
         let mut out = Pumped::default();
         let refused = crate::shell::app_window_table::MAX_PER_APP as u32 + 1;
         for id in 1..=refused {
-            host.handle(ToShell::WindowOpen { id, title: "w".into(), w: 10.0, h: 10.0 }, Vec::new(), &mut out);
+            host.handle(ToShell::WindowOpen { id, title: "w".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
         }
         assert_eq!(host.windows.of_app("fixture").len(), crate::shell::app_window_table::MAX_PER_APP);
         assert_eq!(sent(&peer), vec![ToApp::WindowClosed { id: refused }]);
@@ -2336,7 +2392,7 @@ mod window_table_tests {
         let (channel, peer) = sys::socketpair_pair().unwrap();
         let mut host = AppHost::with_channel("fixture", channel, None, cfg());
         let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 2.0, h: 2.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
         let bytes = 2 * 2 * 4;
         let fds = vec![sys::shm_create("test-window-0", bytes).unwrap(), sys::shm_create("test-window-1", bytes).unwrap()];
         host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 7 }, fds, &mut out);
@@ -2356,7 +2412,7 @@ mod window_table_tests {
         let (channel, peer) = sys::socketpair_pair().unwrap();
         let mut host = AppHost::with_channel("fixture", channel, None, cfg());
         let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
         assert!(host.configure_window(3, 20.0, 30.0));
         assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5));
         assert!(host.close_window_from_shell(3));
@@ -2597,7 +2653,7 @@ mod route_tests {
     fn a_window_level_of_an_extra_window_is_kept_in_the_table() {
         let (mut host, _peer) = fixture_host();
         let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 2, title: "CPU".into(), w: 300.0, h: 200.0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 2, title: "CPU".into(), w: 300.0, h: 200.0, position: None, flags: 0 }, Vec::new(), &mut out);
         host.handle(ToShell::WindowLevelOf { id: 2, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
         assert_eq!(host.windows.floating_ids(&host.id), vec![2]);
         assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal, "the main window keeps its level");

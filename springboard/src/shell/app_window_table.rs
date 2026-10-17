@@ -22,6 +22,33 @@ pub struct ExtraWindow {
     pub h: f32,
     /// The window floats above the app's normal windows (`ToShell::WindowLevelOf`); a new window is normal.
     pub floating: bool,
+    /// The window's position in points relative to the visible desktop area, as the app asked or the person dragged it.
+    pub position: Option<(f32, f32)>,
+    /// A position the app asked for that the desk has not applied yet (`take_pending_move`).
+    pending: Option<(f32, f32)>,
+    /// The window is collapsed to its title bar (`ToShell::WindowCollapse`).
+    pub collapsed: bool,
+    /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom (`window_flags::TITLE_DOUBLE_CLICK`).
+    pub title_double_click: bool,
+}
+
+/// The part of a title bar, in points, that stays reachable on screen: a window keeps this much of its width inside
+/// the visible area on each side, so its title bar can always be grabbed.
+pub const GRAB_KEEP_PT: f32 = 48.0;
+
+/// The height of a title bar in points: the top edge of a window stays at or above `area_h - TITLE_PT`.
+pub const TITLE_PT: f32 = 28.0;
+
+/// Clamps a window's top left corner (points, relative to the visible desktop area of `area_w` x `area_h` points) so the
+/// window stays on screen. None for a non-finite value or an empty area.
+pub fn clamp_to_screen(x: f32, y: f32, area_w: f32, area_h: f32, win_w: f32) -> Option<(f32, f32)> {
+    if ![x, y, area_w, area_h, win_w].iter().all(|v| v.is_finite()) || area_w <= 0.0 || area_h <= 0.0 {
+        return None;
+    }
+    let lo_x = GRAB_KEEP_PT - win_w;
+    let hi_x = (area_w - GRAB_KEEP_PT).max(lo_x);
+    let hi_y = (area_h - TITLE_PT).max(0.0);
+    Some((x.max(lo_x).min(hi_x), y.max(0.0).min(hi_y)))
 }
 
 /// Why a window request was refused.
@@ -61,7 +88,18 @@ impl WindowTable {
         if self.of_app(app).len() >= MAX_PER_APP {
             return Err(TableError::TooMany);
         }
-        let window = ExtraWindow { app: app.to_string(), id, title: title.to_string(), w, h, floating: false };
+        let window = ExtraWindow {
+            app: app.to_string(),
+            id,
+            title: title.to_string(),
+            w,
+            h,
+            floating: false,
+            position: None,
+            pending: None,
+            collapsed: false,
+            title_double_click: false,
+        };
         let at = self.windows.iter().position(|x| x.app == app).unwrap_or(self.windows.len());
         self.windows.insert(at, window);
         Ok(())
@@ -134,6 +172,64 @@ impl WindowTable {
     }
 
     /// The windows of one app, front to back: the Window menu and the Dock list show them in this order.
+    /// The app asked for window `id` to move to (x, y) points. The desk applies it once (`take_pending_move`). False for a
+    /// window that is not open or a non-finite position.
+    pub fn request_position(&mut self, app: &str, id: u32, x: f32, y: f32) -> bool {
+        if !(x.is_finite() && y.is_finite()) {
+            return false;
+        }
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].position = Some((x, y));
+                self.windows[index].pending = Some((x, y));
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The person dragged window `id` to (x, y) points: the position is kept, and nothing is pending. False when not open.
+    pub fn note_position(&mut self, app: &str, id: u32, x: f32, y: f32) -> bool {
+        if !(x.is_finite() && y.is_finite()) {
+            return false;
+        }
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].position = Some((x, y));
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The app's requested position for window `id`, once: the desk applies it and it is not given again.
+    pub fn take_pending_move(&mut self, app: &str, id: u32) -> Option<(f32, f32)> {
+        let index = self.index_of(app, id)?;
+        self.windows[index].pending.take()
+    }
+
+    /// Collapses (or expands) window `id`. False when the window is not open.
+    pub fn set_collapsed(&mut self, app: &str, id: u32, collapsed: bool) -> bool {
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].collapsed = collapsed;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Whether window `id` gets the title bar double-click message. False when the window is not open.
+    pub fn set_title_double_click(&mut self, app: &str, id: u32, on: bool) -> bool {
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].title_double_click = on;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn of_app(&self, app: &str) -> Vec<&ExtraWindow> {
         self.windows.iter().filter(|x| x.app == app).collect()
     }
@@ -285,5 +381,72 @@ mod tests {
         assert_eq!(t.desk_changes("a", &[1]), (vec![], vec![]));
         // another app's windows are not the desk's concern
         assert_eq!(t.desk_changes("b", &[1]), (vec![], vec![1]));
+    }
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use super::*;
+
+    const APP: &str = "is.olibuijr.notes.desktop";
+
+    #[test]
+    fn a_requested_position_is_pending_once_and_the_drag_is_kept_without_pending() {
+        let mut t = WindowTable::new();
+        t.open(APP, 1, "Note", 200.0, 150.0).unwrap();
+        assert!(t.request_position(APP, 1, 12.0, 40.0));
+        assert_eq!(t.take_pending_move(APP, 1), Some((12.0, 40.0)));
+        assert_eq!(t.take_pending_move(APP, 1), None, "a position is applied once");
+        assert!(t.note_position(APP, 1, 300.0, 90.0));
+        assert_eq!(t.take_pending_move(APP, 1), None, "a drag is not sent back to the desk");
+        assert_eq!(t.of_app(APP)[0].position, Some((300.0, 90.0)));
+    }
+
+    #[test]
+    fn a_non_finite_or_unknown_position_is_refused() {
+        let mut t = WindowTable::new();
+        t.open(APP, 1, "Note", 200.0, 150.0).unwrap();
+        assert!(!t.request_position(APP, 1, f32::NAN, 0.0));
+        assert!(!t.note_position(APP, 1, 0.0, f32::INFINITY));
+        assert!(!t.request_position(APP, 9, 1.0, 1.0), "an unknown window");
+        assert_eq!(t.take_pending_move(APP, 1), None);
+    }
+
+    #[test]
+    fn collapse_and_the_double_click_opt_in_are_per_window() {
+        let mut t = WindowTable::new();
+        t.open(APP, 1, "A", 200.0, 150.0).unwrap();
+        t.open(APP, 2, "B", 200.0, 150.0).unwrap();
+        assert!(t.set_collapsed(APP, 1, true));
+        assert!(t.set_title_double_click(APP, 2, true));
+        assert!(!t.set_collapsed(APP, 9, true));
+        let windows = t.of_app(APP);
+        let one = windows.iter().find(|w| w.id == 1).unwrap();
+        let two = windows.iter().find(|w| w.id == 2).unwrap();
+        assert!(one.collapsed && !one.title_double_click);
+        assert!(!two.collapsed && two.title_double_click);
+    }
+
+    #[test]
+    fn a_position_is_clamped_to_the_visible_area() {
+        // a window far off the right and bottom edges comes back to the last place its grab strip stays visible
+        let (x, y) = clamp_to_screen(5000.0, 5000.0, 1280.0, 800.0, 480.0).unwrap();
+        assert_eq!(x, 1280.0 - GRAB_KEEP_PT);
+        assert_eq!(y, 800.0 - TITLE_PT);
+        // off the left edge: only the grab strip of the window must stay on screen
+        let (x, _) = clamp_to_screen(-5000.0, 10.0, 1280.0, 800.0, 480.0).unwrap();
+        assert_eq!(x, GRAB_KEEP_PT - 480.0);
+        // a point already on screen is kept
+        assert_eq!(clamp_to_screen(100.0, 50.0, 1280.0, 800.0, 480.0), Some((100.0, 50.0)));
+        // above the top edge the window goes back to the top
+        assert_eq!(clamp_to_screen(100.0, -40.0, 1280.0, 800.0, 480.0), Some((100.0, 0.0)));
+    }
+
+    #[test]
+    fn a_clamp_refuses_a_non_finite_value_or_an_empty_area() {
+        assert_eq!(clamp_to_screen(f32::NAN, 0.0, 1280.0, 800.0, 480.0), None);
+        assert_eq!(clamp_to_screen(0.0, 0.0, 0.0, 800.0, 480.0), None);
+        // a very narrow area never gives an inverted range
+        assert!(clamp_to_screen(10.0, 10.0, 20.0, 800.0, 480.0).is_some());
     }
 }

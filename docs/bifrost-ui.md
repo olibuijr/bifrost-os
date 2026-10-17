@@ -1099,6 +1099,8 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
   (or the topmost shown window when it is minimized or closed). Menus, panels and the menu bar are above both bands
   and are not modelled here.
+- Each window has its own level. The main `WindowLevel` lifts only the main window, and a floating extra window does not
+  lift the main window or its siblings. Stacking follows the window's own level in `Desk::floating_apps`.
 - Focus and stacking: the window server's focus raises through the model and then restores the space order from
   the model, so a floating window stays above the normal ones.
 - Extra windows (`app_windows`): `windows::set_level` levels only the main window. An extra window floats with
@@ -4336,12 +4338,24 @@ cannot be closed) and the windows the app opens, front to back, the first one fo
   and other windows to nothing; `draw_window(ctx, window, surface, t)` sends the main window to `draw` and others to an empty
   damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
 
-Wire protocol (`springboard/proto`, tags 0x1c0 to 0x1cb): the app sends `WindowOpen {id, title, w, h}`, `WindowClose {id}`,
+Wire protocol (`springboard/proto`, tags 0x1c0 to 0x1ce): the app sends `WindowOpen {id, title, w, h, position, flags}`, `WindowClose {id}`,
 `WindowTitle {id, title}`, `WindowResize {id, w, h}`, and for the pixels `WindowBuffers {id, w, h, generation}` and `WindowFrame {id, buf, damage}`.
 The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
 t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
-SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window` change the app's registry and send the message;
+Placement, collapse and title double-click (tags 0x1c6, 0x1c7, 0x1cd, 0x1ce). `WindowOpen` carries an optional `position`
+(points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
+`WindowMove {window, x, y}` to place a window and `WindowCollapse {window, collapsed}` to fold it to its title bar. The shell
+sends `WindowMoved {window, x, y}` when the person drags a window (the position is in points and clamped to the screen), and
+`WindowTitleDoubleClick {window}` on a title bar double-click, only for windows opened with the flag. Other windows still
+zoom. The table (`app_window_table.rs`) keeps the position, a pending app move (applied once), the collapsed flag and the
+opt-in; `clamp_to_screen` keeps a grab strip of the title bar on screen. A collapsed desk window is its title bar only: its
+app keeps its size, and edge grabs are ignored. Tests: proto `window_placement_*`, `app_window_table`
+`placement_tests`, `desk` `a_window_collapses_*`, `app_windows` `a_window_moves_collapses_*`.
+
+SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window`, `move_window`, `set_window_collapsed` change the app's
+registry and send the message; `WindowSpec::at(x, y)` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
+The hooks `App::window_moved` and `App::window_title_double_click` default to no-ops;
 `windows()` reads it. The run loop routes `WindowClosed`, `WindowConfigure` and `WindowTouch` through
 `app_windows::deliver_window`: a closed window gets no touch, a closed window's close is applied once, and the app's
 `window_event` and `window_closed` run with no registry borrow held.
