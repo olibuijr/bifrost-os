@@ -18,7 +18,7 @@ pub const JOURNAL_SOCKET: &str = "/run/systemd/journal/socket";
 /// Entitlement a `system-app` needs in its manifest for `LogStore::local()`.
 pub const ENTITLEMENT: &str = "log-store";
 pub const SHELL_SUBSYSTEM: &str = "is.olibuijr.springboard";
-pub const SHELL_CATEGORIES: &[&str] = &["ota", "store", "apphost", "presenter"];
+pub const SHELL_CATEGORIES: &[&str] = &["ota", "store", "apphost", "presenter", "notify"];
 
 fn registry_path() -> String {
     std::env::var("BIFROST_LOG_REGISTRY").unwrap_or_else(|_| REGISTRY_PATH.into())
@@ -479,7 +479,7 @@ impl Logger {
     }
 }
 
-/// The shell's loggers (`is.olibuijr.springboard`, categories `ota`, `store`, `apphost`, `presenter`), created once.
+/// The shell's loggers (`is.olibuijr.springboard`, categories `ota`, `store`, `apphost`, `presenter`, `notify`), created once.
 pub fn shell_logger(category: &'static str) -> &'static Logger {
     static LOGGERS: Mutex<Vec<(&'static str, &'static Logger)>> = Mutex::new(Vec::new());
     let mut all = LOGGERS.lock().unwrap_or_else(|e| e.into_inner());
@@ -916,5 +916,14 @@ mod tests {
         let mut e = entry(Level::Error, "x");
         e.date = UNIX_EPOCH + Duration::from_secs(86400 * 365);
         assert_eq!(format_entry(&e), "1971-01-01 00:00:00.000 E  notes[1] (a.b:sync) x");
+    }
+
+    #[test]
+    fn the_shell_registry_lists_the_notification_category() {
+        let builtin: Vec<&str> = SHELL_CATEGORIES.to_vec();
+        assert!(builtin.contains(&"notify"), "notifications log under the shell subsystem");
+        let reg = merge(&[Spec { id: SHELL_SUBSYSTEM.into(), categories: builtin.iter().map(|c| c.to_string()).collect(), level: Some(Level::Notice), private: Some(false), owner: None }], &[]);
+        assert_eq!(reg[0].categories.len(), builtin.len());
+        assert!(reg[0].categories.iter().any(|c| c == "notify"));
     }
 }
