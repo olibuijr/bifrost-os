@@ -1553,11 +1553,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/src/install_log.rs, springboard/src/shell/diagnostics_page.rs, springboard/updated/src/main.rs",
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "install_log::tests"
+    }
+   ],
+   "ready_note": "Failed system updates (updated) and app installs (store) are appended to install-failures.log and listed newest first on the diagnostics page; install_log::tests cover the line format, the newest-first read, malformed lines and rotation."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.InstallerDiagnostics.installerdiagwatcher.plist",
@@ -2247,7 +2256,7 @@
    "doc": "",
    "bifrost": "springboard/src/net/mod.rs",
    "status": "partial",
-   "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated.",
+   "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated. Built 2026-10-17: privd method network.dns_set writes the user's DNS servers as a systemd-resolved drop-in (validated IPv4/IPv6 addresses, at most four; an empty list removes it); tests privd::methods::tests.",
    "rea": []
   },
   {
@@ -3820,7 +3829,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/file_manager.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "systemd covers the per-user runtime directory (/run/user/UID). ensure_login_directories (sdk file_manager.rs) now creates the per-user cache directory (0700) and the application support directory; nothing calls it at login yet, so wiring it into the session start is open.",
+   "note": "systemd covers the per-user runtime directory (/run/user/UID). ensure_login_directories (sdk file_manager.rs) now creates the per-user cache directory (0700) and the application support directory; nothing calls it at login yet, so wiring it into the session start is open. Blocked 2026-10-17: the shell (springboard) does not depend on the SDK crate that holds ensure_login_directories, and the SDK depends on springboard, so the shell cannot call it; the call needs an SDK-side session start or a shared crate.",
    "rea": []
   },
   {
