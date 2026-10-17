@@ -203,6 +203,8 @@ pub enum Shortcut {
     Photo(PhotoCommand),
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
     ZoomToggle,
+    /// Cmd+Shift+A: opens the assistant panel (`assistant_panel`); with the assistant off, Settings > Assistant instead
+    Assistant,
     /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
     ZoomStep(bool),
 }
@@ -217,7 +219,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -347,6 +349,8 @@ impl HwKeys {
             KEY_SPACE if meta && !alt => Some(Shortcut::QuickSearch),
             // Ctrl+Space switches the input source (the input menu's next keyboard), as on the reference platform
             KEY_SPACE if ctrl && !alt => Some(Shortcut::InputSource),
+            // Cmd+Shift+A opens the assistant panel (its chord is switched off in Settings > Assistant)
+            KEY_A if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Assistant),
             KEY_TAB if alt || meta || ctrl => Some(Shortcut::AppSwitch),
             KEY_ESC if !ctrl && !alt && !meta => Some(Shortcut::Back),
             // Cmd on a Mac keyboard is Meta here, so it works for edits too
@@ -575,6 +579,8 @@ impl Shell {
         }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
+            // an open assistant panel takes the typing too, as Search does
+            _ if self.assistant.is_shown() => self.assistant_key(out, t),
             _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
                 self.type_out(out, t);
@@ -647,6 +653,10 @@ impl Shell {
         if self.center_active() {
             self.notify.center.hide();
             self.dirty = true;
+            return vec![];
+        }
+        if self.assistant.is_shown() {
+            self.assistant_hide();
             return vec![];
         }
         if self.quicksearch.is_shown() {
@@ -749,6 +759,7 @@ impl Shell {
                 self.show_input_source(source, t);
                 vec![]
             }
+            Shortcut::Assistant => self.assistant_hotkey(t),
             Shortcut::AppSwitch => {
                 if self.screen != Screen::Switcher {
                     self.open_app_switcher(t);
