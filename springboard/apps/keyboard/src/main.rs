@@ -55,6 +55,9 @@ struct Dictation {
     /// true from `start` until the shell reports the pipeline ended
     active: bool,
     next_poll: f64,
+    /// Reads the spoken punctuation and editing words ("comma", "new line", "scratch that") in the transcripts and
+    /// keeps the text typed so far, so a take-back can be sent as backspaces.
+    commands: bifrost_app::controls::dictation_commands::Interpreter,
 }
 
 fn mode_of(layout: KeyboardLayout) -> Mode {
@@ -109,7 +112,7 @@ impl KeyboardApp {
         }
         let mut request = SFSpeechAudioBufferRecognitionRequest::new();
         request.should_report_partial_results = false;
-        self.dictation = Dictation { start: Some(speech_whisper::start(ctx, DICTATION_LOCALE, &request)), poll: None, active: true, next_poll: 0.0 };
+        self.dictation = Dictation { start: Some(speech_whisper::start(ctx, DICTATION_LOCALE, &request)), poll: None, active: true, next_poll: 0.0, commands: Default::default() };
     }
 }
 
@@ -236,7 +239,13 @@ impl App for KeyboardApp {
             match speech_whisper::poll_from_reply(result) {
                 Ok(reply) => {
                     for t in reply.transcripts.iter().filter(|t| t.is_final) {
-                        send_out(ctx, Out::Text(format!("{} ", t.text)));
+                        let edit = self.dictation.commands.feed_edit(&t.text);
+                        for _ in 0..edit.backspaces {
+                            send_out(ctx, Out::Backspace);
+                        }
+                        if !edit.insert.is_empty() {
+                            send_out(ctx, Out::Text(edit.insert));
+                        }
                     }
                     if !reply.running {
                         self.dictation.active = false;
