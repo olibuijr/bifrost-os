@@ -321,12 +321,13 @@ fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-/// How long a query waits for its sources before the panel shows what has come in. The rest streams in afterwards.
-const RUN_GRACE: std::time::Duration = std::time::Duration::from_millis(12);
+/// How long a query waits for its sources before the panel shows what has come in (kept small: it runs on the UI
+/// thread inside a frame). The rest streams in afterwards.
+const RUN_GRACE: std::time::Duration = std::time::Duration::from_millis(4);
 /// The longest a query waits for its slowest source before it goes on without it.
 const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
 /// The wait of a query merged at once (`results`, used by the look-up popover and by tests).
-const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
+const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// One section of results as a search source: its rows (the item the ranker sees, and the folded text the fuzzy matcher
 /// tests). It owns its rows, so a query can run it on its own thread. The hit a row opens is kept by `build_tables`.
