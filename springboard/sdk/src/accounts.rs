@@ -10,6 +10,8 @@
 //! `docs/parity/accounts.md`). The framework is deprecated by its vendor, so this exists for apps that still read it.
 
 use crate::error::ErrorCode;
+use crate::keychain::{self, Reply};
+use crate::Ctx;
 use bifrost_core::fsutil;
 use std::ffi::OsString;
 use std::fmt;
@@ -491,6 +493,39 @@ impl fmt::Debug for AccountStore {
     }
 }
 
+/// The keychain service every saved account credential is stored under.
+pub const CREDENTIAL_SERVICE: &str = "bifrost.accounts";
+
+/// The keychain account name of one saved account's credential: `credential:<identifier>`.
+pub fn credential_account(identifier: &str) -> String {
+    format!("credential:{identifier}")
+}
+
+/// Replaces the keychain secret of an account's credential with `credential`. The reply is `ItemNotFound` when the
+/// account has no item yet; the app then calls [`save_credential_add`] with the same arguments.
+pub fn save_credential(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::update(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Adds the keychain item of an account's credential. The reply is `DuplicateItem` when the item exists.
+pub fn save_credential_add(ctx: &Ctx, identifier: &str, credential: &Credential) -> u32 {
+    keychain::add(ctx, CREDENTIAL_SERVICE, &credential_account(identifier), &credential.encode())
+}
+
+/// Reads an account's credential back from the keychain. Its reply goes through [`credential_from_reply`].
+pub fn read_credential(ctx: &Ctx, identifier: &str) -> u32 {
+    keychain::get(ctx, CREDENTIAL_SERVICE, &credential_account(identifier))
+}
+
+/// The credential a keychain reply to [`read_credential`] carries. A reply that is not a success, or whose secret is
+/// not a credential, is `CredentialNotFound`, so the app signs the user in again.
+pub fn credential_from_reply(reply: &Reply) -> Result<Credential, AccountError> {
+    match &reply.result {
+        Ok(bytes) => Credential::decode(bytes).map_err(|_| AccountError::CredentialNotFound),
+        Err(_) => Err(AccountError::CredentialNotFound),
+    }
+}
+
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
 pub const SHARED_FILE: &str = "accounts.ini";
 
@@ -679,6 +714,24 @@ mod tests {
         let mut store = AccountStore::new();
         store.register_type("mail.example", "Mail").unwrap();
         store
+    }
+
+    #[test]
+    fn a_keychain_reply_carries_the_credential_back() {
+        let c = Credential::oauth2("tok", "ref", at(1_000));
+        let ok = Reply { request: 1, result: Ok(c.encode()) };
+        assert_eq!(credential_from_reply(&ok), Ok(c));
+        let missing = Reply { request: 2, result: Err(keychain::Error::ItemNotFound) };
+        assert_eq!(credential_from_reply(&missing), Err(AccountError::CredentialNotFound));
+        let junk = Reply { request: 3, result: Ok(b"not a credential".to_vec()) };
+        assert_eq!(credential_from_reply(&junk), Err(AccountError::CredentialNotFound));
+    }
+
+    #[test]
+    fn credential_items_are_named_per_account() {
+        assert_eq!(CREDENTIAL_SERVICE, "bifrost.accounts");
+        assert_eq!(credential_account("mail-1"), "credential:mail-1");
+        assert_ne!(credential_account("a"), credential_account("b"));
     }
 
     #[test]
