@@ -4361,9 +4361,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pasteboard.rs",
+   "bifrost": "springboard/src/shell/pasteboard.rs, springboard/src/shell/pasteboard_transfer.rs",
    "status": "partial",
-   "note": "Pasteboard contents and Wayland offers only (shell/pasteboard.rs). Not built: the transfer progress panel for a shared clipboard item that is still arriving.",
+   "note": "Pasteboard contents and Wayland offers (shell/pasteboard.rs). The transfer model is built (shell/pasteboard_transfer.rs): byte progress, a 600 ms delay so quick pastes never show a panel, finish, and decimal size labels. Not built: the overlay that draws it, and the hook that feeds byte counts from the clipboard service's large transfers.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4526,9 +4526,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock",
+   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock, springboard/core/src/volume_unlock.rs",
    "status": "partial",
-   "note": "The initramfs hook unlocks the encrypted system volume at boot. There is no prompt in the user session to unlock other encrypted volumes after login.",
+   "note": "The initramfs hook unlocks the encrypted system volume at boot. After login, core volume_unlock.rs finds LUKS volumes with no open mapping and checks device names for the helper. Not built: the privileged disk.unlock_volume method that opens one with the password on stdin, the queue that shows the password sheet (auth_sheet.rs pattern, needs a forms Purpose for volumes), and the mount after a successful unlock.",
    "rea": [],
    "method": "audit"
   },
