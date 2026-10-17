@@ -1004,7 +1004,16 @@ pub const SCAN_MAX_DEPTH: usize = 6;
 /// skipped, and so are devices, sockets and pipes, so a scan never blocks on a special file. A file that cannot be
 /// read is left out. The scan stops at [`SCAN_MAX_FILES`] files and enters folders no deeper than [`SCAN_MAX_DEPTH`].
 pub fn scan_folder(domain: &str, root: &Path) -> Vec<SearchableItem> {
+    scan_folder_limited(domain, root, SCAN_MAX_FILES)
+}
+
+/// Like [`scan_folder`], stopping at `max` files (at most [`SCAN_MAX_FILES`]), so several folders can share one app's budget.
+pub fn scan_folder_limited(domain: &str, root: &Path, max: usize) -> Vec<SearchableItem> {
+    let max = max.min(SCAN_MAX_FILES);
     let mut items = Vec::new();
+    if max == 0 {
+        return items;
+    }
     let mut level = vec![root.to_path_buf()];
     for depth in 0..=SCAN_MAX_DEPTH {
         let mut next = Vec::new();
@@ -1025,7 +1034,7 @@ pub fn scan_folder(domain: &str, root: &Path) -> Vec<SearchableItem> {
                 } else if meta.is_file() {
                     if let Ok(item) = file_item(domain, &path) {
                         items.push(item);
-                        if items.len() >= SCAN_MAX_FILES {
+                        if items.len() >= max {
                             return items;
                         }
                     }
@@ -1045,6 +1054,19 @@ pub fn index_folder(app_id: &str, domain: &str, root: &Path) -> usize {
     let items = scan_folder(domain, root);
     let n = items.len();
     index_items(app_id, items.into_iter().map(|i| (i, None)).collect());
+    n
+}
+
+/// Scans `root` for at most `max` files ([`scan_folder_limited`]) and replaces the items of `app_id` in `domain` with what
+/// it finds, in one step, so a file that was deleted or renamed leaves the index. The scan runs before the index lock is
+/// taken. Returns the number of files indexed.
+pub fn reindex_folder(app_id: &str, domain: &str, root: &Path, max: usize) -> usize {
+    let items = scan_folder_limited(domain, root, max);
+    let n = items.len();
+    with(|ix| {
+        ix.delete(app_id, DELETE_DOMAINS, &[domain.to_string()]);
+        ix.index(app_id, items);
+    });
     n
 }
 
