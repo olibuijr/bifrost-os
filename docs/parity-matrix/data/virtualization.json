@@ -96,7 +96,7 @@
       "apple": "Memory (VZMemoryBalloonDevice)",
       "bifrost": "springboard/core/src/guest_vm.rs (Device::MemoryBalloon, MemoryBalloon); tools/arch-vm.sh virtio-balloon-pci with free-page-reporting",
       "status": "partial",
-      "note": "The guest model has at most one balloon with a free page reporting flag, tested in springboard/core/tests/parity_sdk-tests-08.rs. Gap: no runtime resize API and no balloon target is applied to a running guest."
+      "note": "The guest model has at most one balloon with a free page reporting flag, tested in springboard/core/tests/parity_sdk-tests-08.rs. Built 2026-10-17: GuestConfig::balloon_reclaim checks a target (balloon device present, whole MiB, between the minimum and the configured memory) and returns the memory to reclaim; tests guest_vm::tests::a_balloon_target_*. Gap: no runtime resize API and the target is not applied to a running guest."
     },
     {
       "feature": "Randomization",
