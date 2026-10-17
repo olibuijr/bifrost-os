@@ -3572,6 +3572,10 @@ impl Shell {
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
+        // a first-party app asked to lock the screen (services/system_intents.rs)
+        if services::system_intents::take_lock() {
+            effects.extend(self.lock_screen());
+        }
         self.perf_only = perf_changed && !self.dirty;
         self.dirty |= perf_changed;
         effects

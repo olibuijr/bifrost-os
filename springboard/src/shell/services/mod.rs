@@ -101,6 +101,7 @@ pub mod trust_eval;
 pub mod obex_codec;
 pub mod domains;
 pub mod peer_hub;
+pub mod system_intents;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -196,6 +197,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(obex_codec::ObexCodec::default()),
         Box::new(domains::Domains),
         Box::new(peer_hub::PeerHub::new()),
+        Box::new(system_intents::SystemIntents),
     ]
 }
 

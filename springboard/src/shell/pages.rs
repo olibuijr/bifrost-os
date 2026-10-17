@@ -2456,5 +2456,5 @@ fn desktop_ethernet_page(info:&Info)->Spec {
 fn desktop_vpn_page(_info:&Info)->Spec {
     let profiles=super::desktop_network::vpn_profiles();
     let items:Vec<Item>=if profiles.is_empty(){vec![Item::new("No VPN Configurations").tint(Tint::Dim)]}else{profiles.iter().map(|p|Item::new(p.name.clone()).value(super::desktop_network::vpn_summary(p))).collect()};
-    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service. Adding one needs the tunnel client, which is not built yet, so this list stays empty.")]}
+    Spec{id:PageId::Vpn,title:"VPN".into(),large:false,groups:vec![Group::new(items).header("CONFIGURATIONS").footer("VPN configurations are kept by the system network service (NetworkManager). Shortcuts and Search connect and disconnect one by its name; this list does not show them yet.")]}
 }
