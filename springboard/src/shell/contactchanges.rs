@@ -3,6 +3,7 @@
 //! saw, which is the last sequence number, and asks for the events after it. The log keeps the newest `KEEP` events; a
 //! token older than the oldest kept event is expired and the client must read the whole book again.
 use super::contactstore::Contact;
+use bifrost_ui::contact_groups::Groups;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -134,6 +135,27 @@ pub fn parse(text: &str) -> Result<Log, String> {
     Ok(log)
 }
 
+/// Appends changes to the log beside `contacts_file`, and writes it. Nothing is written when there are no changes.
+pub fn record_for(contacts_file: &Path, changes: &[(Kind, u64)]) -> io::Result<()> {
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let path = path_for(contacts_file);
+    let mut log = load(&path);
+    log.append(changes);
+    save(&path, &log)
+}
+
+/// The contacts whose groups changed between two sets of groups: each is an update, so the change log tells apps
+/// that the contact changed. A deleted group's members count too.
+pub fn group_changes(before: &Groups, after: &Groups, contacts: &[Contact]) -> Vec<(Kind, u64)> {
+    contacts
+        .iter()
+        .filter(|c| before.groups_of(c.id) != after.groups_of(c.id))
+        .map(|c| (Kind::Updated, c.id))
+        .collect()
+}
+
 /// The log at `path`; empty when it is missing or unreadable.
 pub fn load(path: &Path) -> Log {
     std::fs::read_to_string(path).ok().and_then(|t| parse(&t).ok()).unwrap_or_default()
@@ -188,5 +210,35 @@ mod tests {
         assert_eq!(back, log);
         assert!(parse("garbage").is_err());
         assert_eq!(path_for(Path::new("/d/Contacts/contacts.tsv")), PathBuf::from("/d/Contacts/contact-changes.tsv"));
+    }
+}
+
+#[cfg(test)]
+mod record_tests {
+    use super::*;
+
+    #[test]
+    fn a_group_membership_change_is_an_update_of_that_contact() {
+        let contacts = vec![Contact { id: 1, name: "Ada".into(), ..Contact::default() }, Contact { id: 2, name: "Grace".into(), ..Contact::default() }];
+        let before = Groups::new();
+        let mut after = before.clone();
+        let family = after.add("Family", None).unwrap();
+        assert!(group_changes(&before, &after, &contacts).is_empty(), "a new empty group changes no contact");
+        let snapshot = after.clone();
+        after.add_member(family, 2).unwrap();
+        assert_eq!(group_changes(&snapshot, &after, &contacts), vec![(Kind::Updated, 2)]);
+    }
+
+    #[test]
+    fn record_for_appends_to_the_log_beside_the_contacts_file() {
+        let dir = std::env::temp_dir().join(format!("contact-changes-record-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let contacts_file = dir.join("contacts.tsv");
+        record_for(&contacts_file, &[(Kind::Updated, 7)]).unwrap();
+        record_for(&contacts_file, &[]).unwrap();
+        let log = load(&path_for(&contacts_file));
+        assert_eq!(log.last_seq, 1);
+        assert_eq!(log.events, vec![Event { seq: 1, kind: Kind::Updated, id: 7 }]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
