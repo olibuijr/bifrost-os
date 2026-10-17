@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.12.0 — 2026-10-17
+
+- Window > MiniPlayer (Option+Cmd+M) opens a small extra window with the artwork, title and artist, the transport, a
+  scrubber and the volume. Closing it returns to the main window. Window > Keep MiniPlayer on Top floats it. The window
+  is `music/miniplayer.rs`, drawn and routed from `app.rs` through the SDK's extra windows.
+- The ReplayGain track tag is read from ID3 `TXXX` and MP4 `----` freeform items (`media/id3.rs`, `media/ilst.rs`) and
+  maps to a Sound Check loudness. The engine does not use it yet.
+- Crossfade and Sound Check are still not heard: no Settings page sets them and the audio service has one decoder and no
+  gain stage per track.
+
 ## 1.11.0 — 2026-10-17
 
 - Lyrics fall back to the lyrics tagged in the file (ID3 USLT) when there is no `.lrc` file beside the song. The tag is read by
