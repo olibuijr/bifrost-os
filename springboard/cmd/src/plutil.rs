@@ -1,8 +1,8 @@
 //! `plutil`: checks, prints, converts and edits property lists. Logic lives here; the binary reads the files and writes
 //! the results (see `bifrost_core::plist` for the value model and the text forms).
 //!
-//! Supported: `-lint` (the default), `-p`, `-convert xml1|json`, `-insert`, `-replace`, `-remove`, `-extract` (to `xml1`,
-//! `json` or `raw`), `-type`, `-create xml1|json`, with `-s`, `-r`, `-n`, `-o path`, `-e ext`, `-expect type`, `-append`,
+//! Supported: `-lint` (the default), `-p`, `-convert xml1|binary1|json`, `-insert`, `-replace`, `-remove`, `-extract` (to
+//! `xml1`, `binary1`, `json` or `raw`), `-type`, `-create xml1|binary1|json`, with `-s`, `-r`, `-n`, `-o path`, `-e ext`, `-expect type`, `-append`,
 //! `--`, and `-` for standard input. Edits write XML text; `-convert binary1` and `-create binary1` write `bplist00`
 //! (see `bifrost_core::plist_binary::write`). The `swift` and `objc` forms are refused with a message rather than
 //! written wrong.
@@ -15,7 +15,7 @@ pub const USAGE: &str = "usage: plutil [command_option] [other_options] file ...
   commands: -help | -lint | -p | -convert fmt | -insert keypath -type [value] [-append] | -replace keypath -type value\n\
             -remove keypath | -extract keypath fmt [-expect type] | -type keypath [-expect type] | -create fmt\n\
   options:  -s (silent on success) -r (readable JSON) -n (raw without newline) -o path -e extension -- (end of options)\n\
-  formats:  xml1 binary1 json raw swift objc      types: -bool -integer -float -string -date -data -xml -json -array -dictionary";
+  formats:  xml1 binary1 json raw (swift and objc are refused)      types: -bool -integer -float -string -date -data -xml -json -array -dictionary";
 
 /// The output formats the tool names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
