@@ -17,6 +17,24 @@ pub enum TextSize {
 }
 
 impl TextSize {
+    /// The next size in the Settings pane (Small, Medium, Large, then Small again).
+    pub fn next(self) -> Self {
+        match self {
+            TextSize::Small => TextSize::Medium,
+            TextSize::Medium => TextSize::Large,
+            TextSize::Large => TextSize::Small,
+        }
+    }
+
+    /// The name shown in the Settings pane.
+    pub fn label(self) -> &'static str {
+        match self {
+            TextSize::Small => "Small",
+            TextSize::Medium => "Medium",
+            TextSize::Large => "Large",
+        }
+    }
+
     /// Body size in points.
     pub fn body_pt(self) -> f32 {
         match self {
@@ -50,6 +68,25 @@ pub enum NewNoteStart {
 }
 
 impl NewNoteStart {
+    /// The next choice in the Settings pane (Title, Heading, Body, then Title again). Checklist is not offered there: a
+    /// checklist start is set by the Format menu, and a Checklist value from the file cycles to Title.
+    pub fn next(self) -> Self {
+        match self {
+            NewNoteStart::Title => NewNoteStart::Heading,
+            NewNoteStart::Heading => NewNoteStart::Body,
+            NewNoteStart::Body | NewNoteStart::Checklist => NewNoteStart::Title,
+        }
+    }
+
+    /// The name shown in the Settings pane.
+    pub fn label(self) -> &'static str {
+        match self {
+            NewNoteStart::Title => "Title",
+            NewNoteStart::Heading => "Heading",
+            NewNoteStart::Body | NewNoteStart::Checklist => "Body",
+        }
+    }
+
     /// The Markdown prefix of the first line of a new note.
     pub fn prefix(self) -> &'static str {
         match self {
@@ -157,4 +194,32 @@ pub fn load(dir: &Path) -> Settings {
 /// Saves `s` in `dir`, atomically.
 pub fn save(dir: &Path, s: Settings) -> io::Result<()> {
     springboard::shell::fsutil::write_atomic(&dir.join(SETTINGS_FILE), render(&s))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_size_cycles_through_the_three_sizes_and_back() {
+        assert_eq!(TextSize::Small.next(), TextSize::Medium);
+        assert_eq!(TextSize::Medium.next(), TextSize::Large);
+        assert_eq!(TextSize::Large.next(), TextSize::Small);
+        assert_eq!(TextSize::Medium.label(), "Medium");
+    }
+
+    #[test]
+    fn a_new_note_start_cycles_title_heading_body_and_a_checklist_goes_to_title() {
+        assert_eq!(NewNoteStart::Title.next(), NewNoteStart::Heading);
+        assert_eq!(NewNoteStart::Heading.next(), NewNoteStart::Body);
+        assert_eq!(NewNoteStart::Body.next(), NewNoteStart::Title);
+        assert_eq!(NewNoteStart::Checklist.next(), NewNoteStart::Title);
+        assert_eq!(NewNoteStart::Checklist.label(), "Body");
+    }
+
+    #[test]
+    fn a_saved_settings_file_reads_back_the_same() {
+        let s = Settings { text_size: TextSize::Large, dark_background: true, new_note_start: NewNoteStart::Heading, attachment_size: AttachmentSize::Large };
+        assert_eq!(parse(&render(&s)), s);
+    }
 }

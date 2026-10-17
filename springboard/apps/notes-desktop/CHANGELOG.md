@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.22.0 — 2026-10-17
+
+- Open in Separate Window: a double-click on a note row, or Note > Open in Separate Window, opens the note in a window of its own (`notes/note_windows.rs`). The window shows the note's text read-only: keyboard input is not routed to extra windows yet. Window > Float on Top stacks the focused note window above the others (`windows::set_window_level`).
+- Settings: Note > Settings... opens a pane over the window with Text Size, New Notes Start With (Title, Heading, Body), Sort Notes By, Oldest First, Group by Date and Dark Note Background. Each tap saves at once (`notes/settings.rs`, `notes/settings_pane.rs`). Text size and the dark background apply to the editor and the note windows.
+- New Notes start with the style chosen in the pane.
+- Checklists: Mark All and Unmark All apply Move Checked to Bottom when it is on.
+
 ## 1.21.0 — 2026-10-17
 
 - Math: `$x^2$` in a note is typeset inline, in place of its source (fractions, roots, scripts, sums and integrals with limits, Greek letters, matrices). A `$$...$$` paragraph is display math, centred on its own line. The source stays in the note file; a formula that does not parse shows as text. Typesetting is in `bifrost-render` `math` (textarea.rs `formula`, md.rs `Style::Math`).
