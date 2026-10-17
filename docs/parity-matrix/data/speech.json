@@ -74,10 +74,8 @@
   "gaps": [
     "Live recognition is an SDK model over the shell's whisper recognizer (sdk speech_whisper.rs), but there are no SpeechAnalyzer, SpeechTranscriber or DictationTranscriber types.",
     "No SDK API that streams time-coded microphone audio to an app, so a recognizer cannot be fed from an app.",
-    "No recognition result type with alternatives, confidence or time ranges.",
+    "No alternatives list on recognition results: SFTranscription carries segments with timing and confidence (sdk speech_recognizer.rs) but no alternative transcriptions.",
     "No custom vocabulary or contextual strings for recognition.",
-    "No on-device speech model install or inventory path.",
-    "Keyboard Mic key is inert; system dictation is missing.",
     "No app-facing microphone permission prompt. The audio service records only on an explicit user action (springboard/proto/src/svc.rs:218)."
   ]
 }

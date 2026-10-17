@@ -79,7 +79,7 @@
   }
  ],
  "gaps": [
-  "The compose sheet is edited by typing (springboard/src/shell/compose_sheet.rs, with_text) but Post copies the draft to the clipboard and does not post it through social::draft_request, because no social account is signed in.",
+  "Compose Post copies the draft to the clipboard and does not post it through social::draft_request, because no social account is signed in (typing into the sheet is built).",
   "No sign-in flow or account provider: accounts can be modelled and signed, but the user cannot add one from the shell (SLRequest.account equivalent).",
   "OAuth 2 tokens are read, refreshed and used for bearer signing (social_oauth2); the sign-in flow that obtains the first token is not in the shell.",
   "The share services have no image property and perform(withItems:) reaches only Copy; an app or Compose Post is performed through the menu, because the shell has no message for one named target (see docs/bifrost-ui.md, 'Share sheet' gaps)."

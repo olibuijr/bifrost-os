@@ -1351,11 +1351,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/sdk/src/speech_whisper.rs",
    "status": "partial",
    "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: recognition results are SFTranscription with segments and alternatives; no further object model is audited here (speech.json).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    }
+   ],
+   "ready_note": "Host tests for the SFTranscription result types (segments with timing and confidence, partial then final results) and the whisper backend over them. Not verified on Midget; no alternatives list yet (speech.json)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpeechRecognitionCommandServices.framework",
@@ -1374,7 +1383,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/speech.json",
    "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the Keyboard Mic key is inert and system dictation is missing (speech.json gaps).",
+   "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the keyboard Mic key now emits Dictate and starts a dictation session (built 2026-10-17, not verified on Midget); system-wide dictation commands are still missing (speech.json gaps).",
    "rea": [],
    "method": "assessed"
   },
@@ -1433,11 +1442,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/ui/src/speech_assets.rs, springboard/src/shell/services/recognizer.rs",
    "status": "partial",
    "note": "private framework, owner Speech; from SDK matrix speech.json. Not ready: the model install path (speech_assets) exists but is not verified on Midget (speech.json).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech_assets::tests"
+    }
+   ],
+   "ready_note": "Host tests for the per-locale speech asset inventory (install states, reservations, eviction). Consent and download run in the shell recognizer service. Not verified on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpeechRuntime.framework",

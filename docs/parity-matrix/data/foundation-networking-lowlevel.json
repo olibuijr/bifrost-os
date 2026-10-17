@@ -102,10 +102,10 @@
   "gaps": [
     "Bonjour mDNS responder (advertise on the wire)",
     "wss:// WebSocket and StartSecureConnection on stream tasks",
-    "Digest, client-certificate and server-trust authentication challenges",
+    "Client-certificate and server-trust challenges. Digest is parsed and answered headless (sdk http_digest.rs), but ConfiguredSession does not send it yet.",
     "OS-level background transfers",
     "General XPC-style service connections",
-    "Operation dependencies and quality-of-service classes for OperationQueue (the queue itself is sdk operation_queue, built 2026-10-17; RunLoop and Timer exist in sdk run_loop and timer_source)",
+    "Operation dependencies and quality-of-service classes for OperationQueue (sdk operation_queue.rs has the queue and its tests, operation_queue::tests, but no dependency graph or QoS).",
     "Stream and Port abstractions"
   ]
 }
