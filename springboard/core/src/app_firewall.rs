@@ -210,9 +210,110 @@ pub fn parse_port_list(text: &str) -> Result<Vec<Port>, String> {
     text.split(',').map(parse_port).collect()
 }
 
+/// The first port the kernel hands to a connecting socket (`ip_local_port_range`, 32768 by default). A UDP socket bound
+/// below it chose its port; one above it is almost always a client, which waits for no one.
+pub const EPHEMERAL_START: u16 = 32768;
+
+/// One socket that waits for incoming traffic: its port and the socket inode that names its owner under `/proc`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Listening {
+    pub port: Port,
+    pub inode: u64,
+}
+
+/// True for a local address text from `/proc/net/{tcp,udp}` (8 hex digits) or `{tcp6,udp6}` (32) that only the machine
+/// itself can reach: 127.0.0.0/8, `::1`, or the IPv4-mapped form of 127.0.0.0/8. The kernel prints each 32-bit word
+/// in host order, so on a little-endian machine the first octet is the last two digits of the word.
+fn loopback_address(hex: &str) -> bool {
+    match hex.len() {
+        8 => hex.ends_with("7F"),
+        32 => hex == "00000000000000000000000001000000" || (hex.starts_with("0000000000000000FFFF0000") && hex.ends_with("7F")),
+        _ => false,
+    }
+}
+
+/// The sockets in the text of `/proc/net/tcp`, `tcp6`, `udp` or `udp6` (`proto` says which) that wait for traffic from
+/// elsewhere. TCP counts the sockets in the LISTEN state; UDP the unconnected sockets bound to a port below
+/// [`EPHEMERAL_START`]. A socket bound only to the loopback address is left out, as is a line that does not parse.
+pub fn parse_listeners(text: &str, proto: Proto) -> Vec<Listening> {
+    let mut out = Vec::new();
+    for line in text.lines().skip(1) {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        if f.len() < 10 {
+            continue;
+        }
+        let Some((addr, port)) = f[1].split_once(':') else { continue };
+        let Ok(number) = u16::from_str_radix(port, 16) else { continue };
+        let Ok(inode) = f[9].parse::<u64>() else { continue };
+        let waiting = match proto {
+            Proto::Tcp => f[3] == "0A",
+            Proto::Udp => f[3] == "07" && number < EPHEMERAL_START,
+        };
+        if waiting && number != 0 && inode != 0 && !loopback_address(addr) {
+            out.push(Listening { port: Port { proto, number }, inode });
+        }
+    }
+    out
+}
+
+/// The inode in the target of a `/proc/<pid>/fd/<n>` link (`socket:[12345]`); None for any other kind of file.
+pub fn socket_inode(link: &str) -> Option<u64> {
+    link.strip_prefix("socket:[")?.strip_suffix(']')?.parse().ok()
+}
+
+/// The ports as the service writes them (`tcp/80`), comma separated.
+pub fn format_ports(ports: &[Port]) -> String {
+    ports.iter().map(|p| format!("{}/{}", p.proto.keyword(), p.number)).collect::<Vec<_>>().join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TCP: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 11111 1 0000000000000000 100 0 0 10 0
+   1: 0100007F:0277 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 22222 1 0000000000000000 100 0 0 10 0
+   2: 0100A8C0:C350 0100A8C0:01BB 01 00000000:00000000 00:00000000 00000000  1000        0 33333 1 0000000000000000 100 0 0 10 0
+   3: 0100A8C0:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 44444 1 0000000000000000 100 0 0 10 0
+";
+    const TCP6: &str = "  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000000000000000000000000000:1F91 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 55555 1 0000000000000000 100 0 0 10 0
+   1: 00000000000000000000000001000000:0CEA 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 66666 1 0000000000000000 100 0 0 10 0
+   2: 0000000000000000FFFF00000100007F:0CEB 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 77777 1 0000000000000000 100 0 0 10 0
+";
+    const UDP: &str = "   sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+  100: 00000000:14E9 00000000:0000 07 00000000:00000000 00:00000000 00000000  1000        0 88888 2 0000000000000000 0
+  101: 00000000:E000 00000000:0000 07 00000000:00000000 00:00000000 00000000  1000        0 99999 2 0000000000000000 0
+  102: 0100A8C0:0044 0100A8C0:0035 01 00000000:00000000 00:00000000 00000000  1000        0 10101 2 0000000000000000 0
+";
+
+    #[test]
+    fn tcp_listeners_skip_loopback_and_connected_sockets() {
+        let got = parse_listeners(TCP, Proto::Tcp);
+        assert_eq!(got.iter().map(|l| (l.port.number, l.inode)).collect::<Vec<_>>(), vec![(8080, 11111), (80, 44444)]);
+        assert!(got.iter().all(|l| l.port.proto == Proto::Tcp));
+    }
+
+    #[test]
+    fn tcp6_listeners_skip_the_loopback_forms() {
+        let got = parse_listeners(TCP6, Proto::Tcp);
+        assert_eq!(got.iter().map(|l| (l.port.number, l.inode)).collect::<Vec<_>>(), vec![(8081, 55555)]);
+    }
+
+    #[test]
+    fn udp_listeners_are_the_unconnected_sockets_on_a_chosen_port() {
+        let got = parse_listeners(UDP, Proto::Udp);
+        assert_eq!(got.iter().map(|l| (l.port.number, l.inode)).collect::<Vec<_>>(), vec![(5353, 88888)], "an ephemeral client port and a connected socket wait for no one");
+    }
+
+    #[test]
+    fn bad_lines_are_skipped_and_socket_links_parse() {
+        assert!(parse_listeners("header\nnot a line\n 0: zz:zz 0:0 0A a b c d e f g\n", Proto::Tcp).is_empty());
+        assert_eq!(socket_inode("socket:[12345]"), Some(12345));
+        assert_eq!(socket_inode("pipe:[12345]"), None);
+        assert_eq!(socket_inode("/dev/null"), None);
+        assert_eq!(format_ports(&[Port { proto: Proto::Tcp, number: 80 }, Port { proto: Proto::Udp, number: 5353 }]), "tcp/80, udp/5353");
+    }
 
     #[test]
     fn set_policy_replaces_an_app_and_refuses_a_conflict() {
