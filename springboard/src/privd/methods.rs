@@ -66,6 +66,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         }
         "store.install" => store_install(p),
         "package.remove" => package_remove(str_param(p, "name")?),
+        bifrost_core::usb_approval::M_USB_AUTHORIZE => usb_authorize(Path::new(bifrost_core::usb_approval::SYSFS_USB_DEVICES), str_param(p, "port")?, p.get("allow")),
         "store.uninstall" => {
             let id = str_param(p, "id")?;
             if !install::valid_id(id) {
@@ -95,6 +96,23 @@ fn package_remove(name: &str) -> Result<Json, PErr> {
     let args = pacman_update::remove_args(name).map_err(PErr::bad)?;
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     run("pacman", &args).map(|_| obj(vec![]))
+}
+
+/// `usb.authorize {port, allow}`: writes a device's `authorized` attribute for the shell's accessory approval. Only a
+/// device port (`1-2`, `1-2.4`) is written: a root hub (`usbN`) carries every device below it, and anything that is not a
+/// port name is refused before a path is built (`usb_approval::authorized_path`).
+fn usb_authorize(devices_root: &Path, port: &str, allow: Option<&Json>) -> Result<Json, PErr> {
+    use bifrost_core::usb_approval::{enforce, Decision};
+    let Some(Json::Bool(allow)) = allow else { return Err(PErr::bad("allow must be a boolean")) };
+    if port.starts_with("usb") {
+        return Err(PErr::bad("not a USB device port"));
+    }
+    let decision = if *allow { Decision::Allow } else { Decision::Deny };
+    match enforce(devices_root, port, decision) {
+        Ok(_) => Ok(obj(vec![])),
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => Err(PErr::bad("not a USB device port")),
+        Err(e) => Err(PErr::internal(format!("usb {port}: {e}"))),
+    }
 }
 
 fn power(verb: &str) -> Result<Json, PErr> {
@@ -282,6 +300,28 @@ fn network_dns_set(p: &Json) -> Result<Json, PErr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usb_authorize_writes_a_device_port_and_refuses_hubs_and_paths() {
+        let root = std::env::temp_dir().join(format!("privd-usb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("1-2")).unwrap();
+        std::fs::create_dir_all(root.join("usb1")).unwrap();
+        std::fs::write(root.join("1-2").join("authorized"), "0").unwrap();
+        std::fs::write(root.join("usb1").join("authorized"), "1").unwrap();
+        let yes = Json::Bool(true);
+        usb_authorize(&root, "1-2", Some(&yes)).unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("1-2").join("authorized")).unwrap(), "1");
+        usb_authorize(&root, "1-2", Some(&Json::Bool(false))).unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("1-2").join("authorized")).unwrap(), "0");
+        for bad in ["usb1", "../x", "1-2/../../etc", "1-2:1.0", ""] {
+            assert_eq!(usb_authorize(&root, bad, Some(&yes)).unwrap_err().code, "bad_params", "{bad}");
+        }
+        assert_eq!(std::fs::read_to_string(root.join("usb1").join("authorized")).unwrap(), "1", "a root hub is never written");
+        assert_eq!(usb_authorize(&root, "1-2", Some(&Json::Str("1".into()))).unwrap_err().code, "bad_params");
+        assert_eq!(usb_authorize(&root, "1-2", None).unwrap_err().code, "bad_params");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn dns_servers_must_be_plain_addresses() {

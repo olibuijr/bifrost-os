@@ -282,6 +282,12 @@ impl Client {
         self.call_timeout("package.remove", vec![("name", privd::s(name))], Duration::from_secs(600)).map(|_| ())
     }
 
+    /// Asks privd to authorize (`allow`) or block a USB device port, for the accessory approval sheet. privd writes only
+    /// device ports, never a root hub.
+    pub fn usb_authorize(&self, port: &str, allow: bool) -> Result<(), ClientError> {
+        self.call(bifrost_core::usb_approval::M_USB_AUTHORIZE, vec![("port", privd::s(port)), ("allow", Json::Bool(allow))]).map(|_| ())
+    }
+
     pub fn store_uninstall(&self, id: &str) -> Result<(), ClientError> {
         self.call("store.uninstall", vec![("id", privd::s(id))]).map(|_| ())
     }
