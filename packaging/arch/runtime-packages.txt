@@ -86,6 +86,7 @@ ncompress
 net-snmp
 nethogs
 nfs-utils
+nftables
 ntp
 openbsd-netcat
 openldap

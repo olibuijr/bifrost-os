@@ -1,14 +1,19 @@
-//! Virtual audio devices (what an audio server driver plug-in would publish), as a pure model. The reference platform
-//! loads a user-space plug-in that adds devices to the HAL. Here the sound server owns the hardware, so a virtual
-//! device is only a description: its name, uid, channel count and sample rate, checked the way the HAL checks a
-//! plug-in's device before it publishes it. Nothing in this module creates a device or moves audio. The driver
-//! status records that no plug-in loader exists, so an app can tell a refused device from a missing loader.
+//! Virtual audio devices (what an audio server driver plug-in publishes). The reference platform loads a user-space
+//! plug-in that adds devices to the HAL. Here the sound server owns the hardware, so a virtual device is a description:
+//! its name, uid, channel count and sample rate, checked the way the HAL checks a plug-in's device before it publishes
+//! it. This module is the app side: it checks and writes descriptions. The server side is the plug-in driver of
+//! `bifrost-audio-driver` (`plugin`), which `bifrost-audiod` runs: it reads every `*.vdev` file of [`PLUGIN_DIR`]
+//! and publishes each device as a playback and a capture device (`<uid>:out`, `<uid>:in`) that loop into each other.
+//! Nothing in this module creates a device or moves audio; a description file is installed with [`VirtualDevice::to_descriptor`].
 use bifrost_audio_types::StreamFormat;
 
 /// The sample rates a virtual device may run at, in hertz.
 pub const SUPPORTED_RATES: [f64; 11] = [
     8_000.0, 11_025.0, 16_000.0, 22_050.0, 32_000.0, 44_100.0, 48_000.0, 88_200.0, 96_000.0, 176_400.0, 192_000.0,
 ];
+
+/// The folder the sound server reads device descriptions from, one `<name>.vdev` file per device.
+pub const PLUGIN_DIR: &str = "/etc/bifrost/audio/plugins";
 
 /// Most channels one virtual device may carry.
 pub const MAX_CHANNELS: u32 = 64;
@@ -27,6 +32,9 @@ impl VirtualDevice {
     pub fn validate(&self) -> Result<(), String> {
         if self.uid.is_empty() {
             return Err("the virtual device has no uid".into());
+        }
+        if self.uid.chars().any(|c| c.is_whitespace() || c == ':') {
+            return Err("the uid has a space or a colon".into());
         }
         if self.name.is_empty() {
             return Err("the virtual device has no name".into());
@@ -123,19 +131,27 @@ impl VirtualDeviceSet {
 /// The state of plug-in loading on this platform.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DriverStatus {
-    /// No user-space plug-in loader is present, so nothing can publish devices.
-    NoLoader,
+    /// The sound server loads description files from [`PLUGIN_DIR`] with its plug-in driver.
+    Loader,
 }
 
 impl DriverStatus {
-    /// The status that applies here. The sound server owns the hardware and there is no loader.
+    /// The status that applies here.
     pub fn current() -> Self {
-        DriverStatus::NoLoader
+        DriverStatus::Loader
     }
 
-    /// Whether a device set can reach the HAL. It cannot while no loader is present.
+    /// Whether a device set can reach the HAL: a description written to [`PLUGIN_DIR`] is published when the sound
+    /// server starts.
     pub fn can_publish(self) -> bool {
-        false
+        true
+    }
+}
+
+impl VirtualDevice {
+    /// The file name the sound server reads this device's description from, inside [`PLUGIN_DIR`].
+    pub fn file_name(&self) -> String {
+        format!("{}.vdev", self.uid)
     }
 }
 
@@ -190,8 +206,22 @@ mod tests {
     }
 
     #[test]
-    fn without_a_loader_nothing_can_publish() {
-        assert_eq!(DriverStatus::current(), DriverStatus::NoLoader);
-        assert!(!DriverStatus::current().can_publish());
+    fn the_sound_server_has_a_loader_and_names_the_description_file() {
+        assert_eq!(DriverStatus::current(), DriverStatus::Loader);
+        assert!(DriverStatus::current().can_publish());
+        assert_eq!(device("loop-1").file_name(), "loop-1.vdev");
+    }
+
+    #[test]
+    fn a_uid_with_a_colon_or_a_space_is_refused_because_the_server_names_devices_uid_colon_out() {
+        assert!(device("a:b").validate().is_err());
+        assert!(device("a b").validate().is_err());
+    }
+
+    #[test]
+    fn a_description_the_sdk_writes_is_the_one_the_driver_reads() {
+        let text = device("loop-1").to_descriptor();
+        assert_eq!(VirtualDevice::from_descriptor(&text), Ok(device("loop-1")));
+        assert!(text.contains("uid=loop-1") && text.contains("sample_rate=48000"));
     }
 }

@@ -1,7 +1,7 @@
 //! `TranslationSession` parity: a session between one installed source and target language that translates single
-//! strings or batches through an engine the app supplies (`Translator`), and can be cancelled. BifrOSt has no
-//! language packs or system translation popover; `TranslationMemory` is the built-in engine, a table of strings
-//! translated ahead of time.
+//! strings or batches through an engine the app supplies (`Translator`), and can be cancelled. The built-in engines are
+//! `TranslationMemory` (a table of strings translated ahead of time, exact matches) and `GlossaryTranslator` (running
+//! text from the phrases of a language pack, longest phrase first); `LanguagePack` reads packs from a folder.
 
 use crate::attributed::{AttributedString, Attrs};
 use crate::error::ErrorCode;
@@ -387,5 +387,204 @@ mod tests {
         assert_eq!(packs.engine("en", "is").err(), Some(TranslationError::NotInstalled));
         std::fs::write(dir.path().join("en-is.tsv"), "broken line\n").unwrap();
         assert_eq!(packs.engine("en", "is").err(), Some(TranslationError::InternalError));
+    }
+}
+
+/// One pair's phrases keyed by their lower-case words, and how many words the longest has.
+#[derive(Default)]
+struct Glossary {
+    phrases: HashMap<String, String>,
+    max_words: usize,
+}
+
+/// An engine that translates running text from a language pack's phrases, with no network and no model: the text is
+/// cut into words and separators, each stretch of words is matched against the longest phrase of the pack that fits
+/// (case and punctuation do not matter), the match is replaced and the separators stay where they were. Capital
+/// letters carry over (`Hello` gives `Halló`). Words the pack does not know are left as written, so a text the pack
+/// barely covers would mislead: when fewer than half the words matched the translation fails with `InternalError`,
+/// like a phrase table does for a text it cannot translate.
+#[derive(Default)]
+pub struct GlossaryTranslator {
+    pairs: HashMap<(String, String), Glossary>,
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '\'' || c == '\u{2019}'
+}
+
+/// The text as (is a word, slice) pieces in order.
+fn pieces(text: &str) -> Vec<(bool, &str)> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut word: Option<bool> = None;
+    for (i, c) in text.char_indices() {
+        let w = is_word_char(c);
+        let prev = word;
+        match prev {
+            Some(p) if p == w => {}
+            Some(p) => {
+                out.push((p, &text[start..i]));
+                start = i;
+                word = Some(w);
+            }
+            None => word = Some(w),
+        }
+    }
+    if let Some(p) = word {
+        out.push((p, &text[start..]));
+    }
+    out
+}
+
+fn phrase_key(text: &str) -> (String, usize) {
+    let words: Vec<String> = pieces(text).into_iter().filter(|(w, _)| *w).map(|(_, s)| s.to_lowercase()).collect();
+    let n = words.len();
+    (words.join(" "), n)
+}
+
+/// Gives `translation` the capitals of `source`: all capitals stay all capitals, an initial capital stays one.
+fn recase(source: &str, translation: &str) -> String {
+    let letters: Vec<char> = source.chars().filter(|c| c.is_alphabetic()).collect();
+    if letters.len() > 1 && letters.iter().all(|c| c.is_uppercase()) {
+        return translation.to_uppercase();
+    }
+    if source.chars().next().map_or(false, |c| c.is_uppercase()) {
+        let mut chars = translation.chars();
+        if let Some(first) = chars.next() {
+            return first.to_uppercase().chain(chars).collect();
+        }
+    }
+    translation.to_string()
+}
+
+impl GlossaryTranslator {
+    /// An engine over the phrases of `memory` (every pair in it).
+    pub fn new(memory: &TranslationMemory) -> Self {
+        let mut engine = GlossaryTranslator::default();
+        for ((source, target, text), translation) in &memory.phrases {
+            let (key, words) = phrase_key(text);
+            if words == 0 {
+                continue;
+            }
+            let glossary = engine.pairs.entry((source.clone(), target.clone())).or_default();
+            glossary.max_words = glossary.max_words.max(words);
+            glossary.phrases.insert(key, translation.clone());
+        }
+        engine
+    }
+
+    /// How many language pairs have phrases.
+    pub fn pair_count(&self) -> usize {
+        self.pairs.len()
+    }
+}
+
+impl Translator for GlossaryTranslator {
+    fn translate(&self, source: &str, target: &str, text: &str) -> Result<String, TranslationError> {
+        let glossary = self.pairs.get(&(source.to_string(), target.to_string())).ok_or(TranslationError::InternalError)?;
+        let parts = pieces(text);
+        let word_at: Vec<usize> = parts.iter().enumerate().filter(|(_, (w, _))| *w).map(|(i, _)| i).collect();
+        let mut out = String::with_capacity(text.len());
+        let (mut matched, mut next_part, mut w) = (0usize, 0usize, 0usize);
+        while w < word_at.len() {
+            // the longest run of words from w that is a phrase; only blanks may sit between its words
+            let mut hit = None;
+            let longest = glossary.max_words.min(word_at.len() - w);
+            for n in (1..=longest).rev() {
+                let first = word_at[w];
+                let last = word_at[w + n - 1];
+                let blanks_only = parts[first..=last].iter().all(|(is_word, s)| *is_word || s.chars().all(char::is_whitespace));
+                if !blanks_only {
+                    continue;
+                }
+                let words: Vec<String> = word_at[w..w + n].iter().map(|i| parts[*i].1.to_lowercase()).collect();
+                if let Some(translation) = glossary.phrases.get(&words.join(" ")) {
+                    hit = Some((n, last, translation));
+                    break;
+                }
+            }
+            let first = word_at[w];
+            for (_, s) in &parts[next_part..first] {
+                out.push_str(s);
+            }
+            match hit {
+                Some((n, last, translation)) => {
+                    let original: String = parts[first..=last].iter().map(|(_, s)| *s).collect();
+                    out.push_str(&recase(&original, translation));
+                    matched += n;
+                    next_part = last + 1;
+                    w += n;
+                }
+                None => {
+                    out.push_str(parts[first].1);
+                    next_part = first + 1;
+                    w += 1;
+                }
+            }
+        }
+        for (_, s) in &parts[next_part..] {
+            out.push_str(s);
+        }
+        if word_at.is_empty() || matched * 2 < word_at.len() {
+            return Err(TranslationError::InternalError);
+        }
+        Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod glossary_tests {
+    use super::*;
+
+    fn engine() -> GlossaryTranslator {
+        let mut m = TranslationMemory::new();
+        m.insert("en", "is", "good morning", "góðan daginn");
+        m.insert("en", "is", "hello", "halló");
+        m.insert("en", "is", "world", "heimur");
+        m.insert("is", "en", "heimur", "world");
+        GlossaryTranslator::new(&m)
+    }
+
+    #[test]
+    fn words_are_replaced_and_punctuation_and_spacing_stay() {
+        let e = engine();
+        assert_eq!(e.translate("en", "is", "Hello, world!").unwrap(), "Halló, heimur!");
+        assert_eq!(e.translate("en", "is", "hello   world").unwrap(), "halló   heimur");
+    }
+
+    #[test]
+    fn the_longest_phrase_wins_and_capitals_carry_over() {
+        let e = engine();
+        assert_eq!(e.translate("en", "is", "Good morning, world").unwrap(), "Góðan daginn, heimur");
+        assert_eq!(e.translate("en", "is", "GOOD MORNING world").unwrap(), "GÓÐAN DAGINN heimur");
+        // a break that is not a blank stops a phrase, so "good" and "morning" are left alone
+        assert_eq!(e.translate("en", "is", "good, morning hello world").unwrap(), "good, morning halló heimur");
+    }
+
+    #[test]
+    fn unknown_words_pass_through_when_half_the_text_matched() {
+        let e = engine();
+        assert_eq!(e.translate("en", "is", "hello everyone").unwrap(), "halló everyone");
+        assert_eq!(e.translate("en", "is", "hello to everyone").err(), Some(TranslationError::InternalError));
+    }
+
+    #[test]
+    fn a_text_without_matches_or_without_a_pair_fails() {
+        let e = engine();
+        assert_eq!(e.translate("en", "is", "zzz qqq").err(), Some(TranslationError::InternalError));
+        assert_eq!(e.translate("en", "is", "123 !!!").err(), Some(TranslationError::InternalError));
+        assert_eq!(e.translate("en", "de", "hello").err(), Some(TranslationError::InternalError));
+        assert_eq!(e.pair_count(), 2);
+        assert_eq!(e.translate("is", "en", "heimur").unwrap(), "world");
+    }
+
+    #[test]
+    fn a_session_translates_a_batch_with_it() {
+        let mut availability = LanguageAvailability::new(&["en", "is"]);
+        availability.install("en", "is");
+        let session = TranslationSession::new(&availability, "en", "is", Box::new(engine())).unwrap();
+        let out = session.translate_batch(&["Hello world", "world"]);
+        assert_eq!(out[0], Ok("Halló heimur".to_string()));
+        assert_eq!(out[1], Ok("heimur".to_string()));
     }
 }

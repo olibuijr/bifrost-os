@@ -1,0 +1,20 @@
+[Unit]
+Description=BifrOSt application firewall (per-app inbound policies as nftables rules)
+Documentation=file:///usr/share/doc/bifrost/services.md
+# Loaded before the network comes up so a blocked port is never open. A missing policy file is an empty policy; a bad
+# file leaves the rules in place and fails the unit, which shows in the journal.
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+ConditionPathExists=/usr/bin/nft
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bifrost-firewall apply
+ExecReload=/usr/bin/bifrost-firewall apply
+ExecStop=/usr/bin/bifrost-firewall clear
+
+[Install]
+WantedBy=sysinit.target

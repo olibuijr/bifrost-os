@@ -157,3 +157,9 @@ pub mod null;
 
 /// A driver whose output devices loop back into a paired input device (the `snd-aloop` shape, in memory).
 pub mod loopback;
+
+/// A driver that publishes virtual devices from description files, each as a loopback pair (the plug-in loader).
+pub mod plugin;
+
+/// The transport names of devices and the composite driver that serves devices from several providers.
+pub mod transport;

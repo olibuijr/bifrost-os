@@ -14,6 +14,7 @@ pub mod notifyutil;
 pub mod networksetup;
 pub mod newsyslog;
 pub mod diskutil;
+pub mod firewall;
 pub mod launchctl;
 pub mod leave;
 pub mod lastcomm;
