@@ -63,6 +63,18 @@ pub fn file_stem(app_id: &str) -> String {
     }
 }
 
+/// A copy of `base` with the pointer arrow drawn at `pointer` (display pixels). The pointer is left out when it is
+/// off the display or unknown. `base` itself is not changed, so the presented picture stays clean.
+pub fn with_pointer(base: &Image, pointer: Option<(i32, i32)>) -> Image {
+    let mut img = Image { w: base.w, h: base.h, px: base.px.clone() };
+    if let Some((x, y)) = pointer {
+        if x >= 0 && y >= 0 && (x as usize) < base.w && (y as usize) < base.h {
+            super::super::capture::draw_pointer(&mut img, x as f32, y as f32, 1.0);
+        }
+    }
+    img
+}
+
 /// Removes the streams whose app is no longer running (`running` is false for it) and returns their app ids, sorted.
 fn stop_exited(active: &mut HashMap<String, Active>, running: impl Fn(&str) -> bool) -> Vec<String> {
     let mut gone: Vec<String> = active.keys().filter(|app| !running(app)).cloned().collect();
@@ -129,7 +141,9 @@ impl SystemService for ScreenStreamService {
         shell.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
         shell.drawn = super::super::Drawn::Nothing;
         shell.dirty = true;
-        let hash = frame_hash(&img.px);
+        // the pointer is part of the picture: a moved pointer makes a fresh frame
+        let framed = with_pointer(&img, super::screen_sample::pointer_position());
+        let hash = frame_hash(&framed.px);
         let (unix, _) = shell.wall_now(t);
         let dir = shell.data_dir.join("ScreenStream");
         let mut out = Vec::new();
@@ -140,7 +154,7 @@ impl SystemService for ScreenStreamService {
             a.hash = Some(hash);
             if frame.kind == FrameKind::Fresh {
                 let name = format!("{}.png", file_stem(&app));
-                match super::super::screenshot::write(&dir, &name, &super::super::screenshot::encode(&img), unix) {
+                match super::super::screenshot::write(&dir, &name, &super::super::screenshot::encode(&framed), unix) {
                     Ok(path) => a.path = Some(path),
                     Err(e) => {
                         eprintln!("springboard: screen stream {app}: {e}");
@@ -184,6 +198,18 @@ mod tests {
         assert_eq!(file_stem("is.olibuijr.mail"), "is.olibuijr.mail");
         assert_eq!(file_stem("../etc/passwd"), ".._etc_passwd");
         assert_eq!(file_stem(""), "app");
+    }
+
+    #[test]
+    fn the_pointer_is_drawn_on_a_copy_of_the_frame() {
+        let base = Image { w: 4, h: 4, px: vec![0u32; 16] };
+        let drawn = with_pointer(&base, Some((1, 1)));
+        assert_ne!(drawn.px[5], 0, "the arrow tip at (1, 1)");
+        assert_eq!(drawn.px[0], 0, "pixels away from the arrow are unchanged");
+        assert!(base.px.iter().all(|&p| p == 0), "the presented frame is not changed");
+        assert_eq!(with_pointer(&base, None).px, base.px);
+        assert_eq!(with_pointer(&base, Some((9, 9))).px, base.px, "off the display draws nothing");
+        assert_eq!(with_pointer(&base, Some((-1, 0))).px, base.px);
     }
 
     #[test]
