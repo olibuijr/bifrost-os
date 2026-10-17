@@ -56,6 +56,38 @@ impl RemoteDevice {
     pub fn major_class(&self) -> Option<MajorClass> {
         self.class.map(|c| c.major())
     }
+
+    /// The rows of the device's properties sheet, in display order: name, address, type, paired, connected and signal.
+    /// A value the device never reported reads "Not reported".
+    pub fn properties(&self) -> Vec<(&'static str, String)> {
+        let yes_no = |on: bool| (if on { "Yes" } else { "No" }).to_string();
+        vec![
+            ("Name", self.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| "Not reported".to_string())),
+            ("Address", self.address.to_string()),
+            ("Type", self.major_class().map_or("Not reported".to_string(), |m| major_class_title(m).to_string())),
+            ("Paired", yes_no(self.paired)),
+            ("Connected", yes_no(self.connected)),
+            ("Signal", self.rssi.map_or("Not reported".to_string(), |r| format!("{r} dBm"))),
+        ]
+    }
+}
+
+/// The name of a major device class as the properties sheet shows it.
+pub fn major_class_title(class: MajorClass) -> &'static str {
+    match class {
+        MajorClass::Miscellaneous => "Miscellaneous",
+        MajorClass::Computer => "Computer",
+        MajorClass::Phone => "Phone",
+        MajorClass::NetworkAccess => "Network access",
+        MajorClass::AudioVideo => "Audio and video",
+        MajorClass::Peripheral => "Peripheral",
+        MajorClass::Imaging => "Imaging",
+        MajorClass::Wearable => "Wearable",
+        MajorClass::Toy => "Toy",
+        MajorClass::Health => "Health",
+        MajorClass::Uncategorized => "Uncategorized",
+        MajorClass::Reserved(_) => "Other",
+    }
 }
 
 /// The remote devices this app knows about, one entry per address.
@@ -138,6 +170,38 @@ mod tests {
 
     fn class(raw: u32) -> Option<ClassOfDevice> {
         ClassOfDevice::new(raw)
+    }
+
+    #[test]
+    fn properties_sheet_lists_what_the_device_reported() {
+        let mut d = RemoteDevice::new(addr(7));
+        d.merge(class(0x240404), Some("Speaker"), Some(-55));
+        d.paired = true;
+        let rows = d.properties();
+        let get = |k: &str| rows.iter().find(|(label, _)| *label == k).map(|(_, v)| v.clone()).unwrap();
+        assert_eq!(rows.iter().map(|(k, _)| *k).collect::<Vec<_>>(), ["Name", "Address", "Type", "Paired", "Connected", "Signal"]);
+        assert_eq!(get("Name"), "Speaker");
+        assert_eq!(get("Address"), addr(7).to_string());
+        assert_eq!(get("Type"), "Audio and video");
+        assert_eq!(get("Paired"), "Yes");
+        assert_eq!(get("Connected"), "No");
+        assert_eq!(get("Signal"), "-55 dBm");
+    }
+
+    #[test]
+    fn properties_sheet_says_not_reported_for_unknown_values() {
+        let d = RemoteDevice::new(addr(8));
+        let rows = d.properties();
+        for k in ["Name", "Type", "Signal"] {
+            let v = rows.iter().find(|(label, _)| *label == k).map(|(_, v)| v.as_str()).unwrap();
+            assert_eq!(v, "Not reported", "{k}");
+        }
+    }
+
+    #[test]
+    fn every_major_class_has_a_title() {
+        assert_eq!(major_class_title(MajorClass::Reserved(9)), "Other");
+        assert_eq!(major_class_title(MajorClass::Phone), "Phone");
     }
 
     #[test]
