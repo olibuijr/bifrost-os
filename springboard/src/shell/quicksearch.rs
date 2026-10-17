@@ -179,6 +179,8 @@ pub enum Hit {
     Reveal { folder: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
+    /// a Settings intent (`settings_intents`, "Open Keyboard"): opens the pane it names in Settings
+    SettingsIntent { id: &'static str, title: &'static str },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
@@ -229,6 +231,14 @@ fn shortcut_items() -> Vec<(Hit, String)> {
         }
     }
     v
+}
+
+/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description.
+fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    super::settings_intents::CATALOGUE
+        .iter()
+        .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
+        .collect()
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
@@ -397,7 +407,8 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
             table_row(&mut hits, format!("contact:{}", contact.id), &name, text, search_rank::Kind::Contact, hit, f.join(" "))
         })
         .collect();
-    let shortcut_rows = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
+    let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
+    shortcut_rows.extend(settings_intent_rows(&mut hits));
     let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
     let event_rows = c
         .events
@@ -1316,6 +1327,7 @@ impl QuickSearch {
                     Hit::File { name, .. } => name.clone(),
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
+                    Hit::SettingsIntent { title, .. } => title.to_string(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -1683,7 +1695,7 @@ impl QuickSearch {
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
-                        Hit::Settings(_) => None,
+                        Hit::Settings(_) | Hit::SettingsIntent { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
                     let thumb_img = match hit {
@@ -1887,6 +1899,12 @@ impl Shell {
                     f.show_folder(&self.ui, &folder, t);
                 }
             }
+            Hit::SettingsIntent { id, .. } => {
+                self.quicksearch.note_open(&format!("settings-intent:{id}"));
+                if let Some(page) = super::settings_intents::page_for(id) {
+                    return self.open_settings_intent_page(page, t);
+                }
+            }
             Hit::Shortcut { app_id, intent, .. } => {
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
@@ -1923,6 +1941,13 @@ impl Shell {
         self.open(AppId::Settings, t);
         let ui = &self.ui;
         self.settings.as_mut().map_or(vec![], |st| st.open_page(ui, name, t))
+    }
+
+    /// Launches Settings on the pane a Settings intent names (`settings_intents::page_for`).
+    fn open_settings_intent_page(&mut self, page: super::pages::PageId, t: f64) -> Vec<Effect> {
+        self.open(AppId::Settings, t);
+        let ui = &self.ui;
+        self.settings.as_mut().map_or(vec![], |st| st.open_page_id(ui, page, t))
     }
 
     /// Records a launch for the suggestions row (the shell does this on every open).
@@ -2029,6 +2054,15 @@ mod tests {
         let none = results("zzzz", &[]);
         assert_eq!(none.len(), 1, "only the terminal action: {none:?}");
         assert_eq!(none[0].hits, vec![Hit::Terminal("zzzz".into())]);
+    }
+
+    #[test]
+    fn settings_intents_are_found_as_shortcuts_and_open_their_pane() {
+        let groups = results("open keyboard", &[]);
+        let wanted = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
+        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
+        assert!(super::super::settings_intents::page_for("open-keyboard").is_some());
+        assert!(super::super::settings_intents::page_for("no-such-intent").is_none());
     }
 
     /// A one-piece torrent named `name`.

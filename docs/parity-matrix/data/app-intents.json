@@ -75,7 +75,7 @@
       "apple": "Spotlight integration, App Shortcuts in Spotlight and Shortcuts app",
       "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line_with, parse_reply)",
       "status": "partial",
-      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests."
+      "note": "Parameterless shortcuts are listed, and their request lines and replies are tested headless in springboard/tests/parity_sdk-tests-01.rs. Gap: the 8 s launch retry, parameter prompts and disambiguation have no tests. Built 2026-10-17: Search lists the Settings intents (settings_intents.rs CATALOGUE) in its Shortcuts section and opens their panes through Settings::open_page_id; tests quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane."
     },
     {
       "feature": "Indexing entities for Spotlight",
