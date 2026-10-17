@@ -185,6 +185,8 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
+    StickyKeys,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1337,6 +1339,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
+                    Group::new(vec![Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys))])
+                        .header("KEYBOARD")
+                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again."),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),
