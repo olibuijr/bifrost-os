@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calculator"
-version = "1.11.3"
+version = "1.12.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.8.4"
+version = "0.9.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

@@ -9,10 +9,10 @@
  "summary": {
   "features": 26,
   "parity": 11,
-  "partial": 11,
-  "gap": 3,
+  "partial": 12,
+  "gap": 2,
   "n/a": 1,
-  "coverage_pct": 66.0
+  "coverage_pct": 68.0
  },
  "features": [
   {
@@ -199,10 +199,10 @@
    "feature": "Always on top",
    "area": "menu",
    "apple": "Localizable: Always on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
-   "wire": "Add a checked Window > Always on Top item that sets the SDK window level for the calculator window."
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:150",
+   "note": "Window > Always on Top is a ticked item that calls bifrost_app::windows::set_level, which sends ToShell::WindowLevel (proto tag 0x165). The shell stores the level per app (apphost.rs window_level) and the window model (springboard/wm/src/wm.rs Level, set_level) keeps floating windows above normal ones. Not yet verified on Midget.",
+   "wire": "Route the app's stored window level to the window server's Wm::set_level for the app's toplevel, so the level reaches the compositor; then verify the item and the stacking on Midget."
   },
   {
    "feature": "Evaluate intent / Shortcuts",

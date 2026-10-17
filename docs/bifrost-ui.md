@@ -1055,6 +1055,27 @@ the windows behind the window. Ours, end to end:
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
 
+## Window level (`NSWindow.level`, floating windows; `bifrost_app::windows::set_level`)
+
+Apple parity: an app can ask for its window to float above the normal windows (Calculator's Always on Top, Stickies'
+Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
+
+- Protocol: `ToShell::WindowLevel(WindowLevel)`, tag 0x165, one byte (`Normal` = 0, `Floating` = 1); an unknown byte is
+  a bad value. `springboard/proto/src/lib.rs`.
+- SDK: `windows::set_level(ctx, Level::Floating)` (`Level` is `proto::WindowLevel`). It sends the message on every call;
+  the app keeps its own checked state. There is no standard Window menu in the SDK yet, so an app builds its own
+  item with `AppMenuItem::new(..).checked(on)` (Calculator and Stickies do).
+- Shell: `AppHost.window_level` keeps the level the app asked for while the app runs (`Normal` until it asks).
+- Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
+  window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
+  normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
+  (or the topmost shown window when it is minimized or closed). Menus, panels and the menu bar are above both bands
+  and are not modelled here.
+- Not matched yet: the shell does not route an app's `window_level` to the window server's `Wm::set_level` for the
+  app's toplevel, so the level is stored but not yet shown on screen; no Midget run. Notes still share one window
+  (Stickies' Float on Top applies to the board window). Apple's `NSWindow.Level` names (`.floating`, `.normal`,
+  `.statusBar`, `.modalPanel`) beyond these two are not exposed; the menu bar and panels keep their own layer.
+
 ## Web view (`WKWebView`, `WKProcessPool`, `WKNavigationDelegate`; Browser 0.3.0)
 
 `bifrost_app::webview` puts web content in an SDK app. Like WebKit, pages run out of process: a `WebProcessPool`

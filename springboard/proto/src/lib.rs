@@ -361,6 +361,26 @@ pub const MAX_DOC_TEXT: usize = 255;
 /// The longest path a `DocGrantPath` carries (bytes).
 pub const MAX_DOC_PATH: usize = 4096;
 
+/// The stacking level an app asks for its window (`ToShell::WindowLevel`). A floating window stays above the normal
+/// windows of the desktop, and below menus, panels and the menu bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WindowLevel {
+    #[default]
+    Normal = 0,
+    Floating = 1,
+}
+
+impl WindowLevel {
+    /// The wire byte; an unknown byte is a bad value.
+    pub fn from_wire(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(WindowLevel::Normal),
+            1 => Some(WindowLevel::Floating),
+            _ => None,
+        }
+    }
+}
+
 /// Shell -> app.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToApp {
@@ -687,6 +707,9 @@ pub enum ToShell {
     /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
     /// when it leaves the foreground. Sent only when the union changes. 0x161.
     Activity { options: u32 },
+    /// `NSWindow.level` for the app's window: `Floating` keeps it above the normal windows (the Calculator's
+    /// Always on Top, Stickies' Float on Top). Sent when it changes; the shell keeps it while the app lives. Tag 0x165.
+    WindowLevel(WindowLevel),
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
     NotifyCategories(Vec<NotifCategory>),
     /// `CSSearchableIndex.indexSearchableItems`: at most `quicksearch::MAX_ITEMS` per message. 0x1c0.
@@ -871,6 +894,7 @@ mod tag {
     pub const INPUT_ACCESSORY: u32 = 0x153;
     pub const SUDDEN_TERMINATION: u32 = 0x160;
     pub const ACTIVITY: u32 = 0x161;
+    pub const WINDOW_LEVEL: u32 = 0x165;
 }
 
 /// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
@@ -1473,6 +1497,10 @@ impl ToShell {
                 u32_(&mut b, tag::ACTIVITY);
                 u32_(&mut b, *options);
             }
+            ToShell::WindowLevel(level) => {
+                u32_(&mut b, tag::WINDOW_LEVEL);
+                b.push(*level as u8);
+            }
             ToShell::InputAccessory(items) => {
                 u32_(&mut b, tag::INPUT_ACCESSORY);
                 let n = items.len().min(MAX_ACCESSORY_ITEMS);
@@ -1772,6 +1800,7 @@ impl ToShell {
             }),
             tag::SUDDEN_TERMINATION => ToShell::SuddenTermination { enabled: r.u8()? != 0 },
             tag::ACTIVITY => ToShell::Activity { options: r.u32()? },
+            tag::WINDOW_LEVEL => ToShell::WindowLevel(WindowLevel::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?),
             tag::INPUT_ACCESSORY => {
                 let n = r.u32()? as usize;
                 if n > MAX_ACCESSORY_ITEMS {
@@ -2177,10 +2206,23 @@ mod ax_tree_tests {
             ToShell::SuddenTermination { enabled: false },
             ToShell::Activity { options: 0x3 },
             ToShell::Activity { options: 0 },
+            ToShell::WindowLevel(WindowLevel::Floating),
+            ToShell::WindowLevel(WindowLevel::Normal),
         ];
         for m in to_shell {
             assert_eq!(ToShell::decode(&m.encode()), Ok(m));
         }
+    }
+
+    #[test]
+    fn window_level_is_one_byte_and_rejects_an_unknown_level() {
+        let m = ToShell::WindowLevel(WindowLevel::Floating).encode();
+        assert_eq!(m.len(), 4 + 1, "the tag, then the level byte");
+        assert_eq!(*m.last().unwrap(), 1);
+        let mut bad = m.clone();
+        let n = bad.len();
+        bad[n - 1] = 7;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]

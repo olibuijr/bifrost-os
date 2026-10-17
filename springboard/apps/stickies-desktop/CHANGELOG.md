@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0 — 2026-10-17
+
+- Window > Float on Top: a checked item that keeps the sticky notes window above the other windows
+  (`bifrost_app::windows::set_level`).
+
 ## 0.8.4 — 2026-10-14
 
 - Write speech input on the shared utility dispatch queue; stopping speech closes the pipe and ends the writer.

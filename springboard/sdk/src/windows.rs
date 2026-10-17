@@ -15,6 +15,9 @@ use bifrost_core::json::Json;
 pub use bifrost_ui::window_list::*;
 use bifrost_ui::wire_json::*;
 
+/// The stacking level of this app's window: `Normal`, or `Floating` to stay above the normal windows.
+pub use crate::proto::WindowLevel as Level;
+
 /// The shell service this client calls.
 pub const SERVICE: &str = "windows";
 
@@ -35,6 +38,12 @@ pub fn info(ctx: &Ctx, number: u32) -> u32 {
 /// The image of a window as a PNG (screen recording permission). Answer: [`decode_image`].
 pub fn image(ctx: &Ctx, number: u32, options: ImageOptions) -> u32 {
     call(ctx, "image", obj(vec![("number", num(number)), ("options", options.to_json())]))
+}
+
+/// Stacks this app's window at `level` (`NSWindow.level`: a floating window stays above the normal windows and below
+/// menus and panels). The shell keeps the level for as long as the app runs; it is `Normal` until the app asks.
+pub fn set_level(ctx: &Ctx, level: Level) {
+    ctx.send_to_shell(crate::proto::ToShell::WindowLevel(level));
 }
 
 pub fn decode_list(result: &Result<Json, String>) -> Result<Vec<WindowInfo>, String> {
@@ -90,6 +99,14 @@ mod tests {
         let body = Ok(obj(vec![("width", num(3u32)), ("height", num(2u32)), ("png", text(&base64_encode(&[1, 2, 3])))]));
         assert_eq!(decode_image(&body).unwrap(), WindowImage { width: 3, height: 2, png: vec![1, 2, 3] });
         assert!(decode_image(&Ok(Json::Null)).is_err());
+    }
+
+    #[test]
+    fn set_level_sends_the_level_to_the_shell() {
+        let ctx = crate::runtime::test_ctx();
+        set_level(&ctx, Level::Floating);
+        set_level(&ctx, Level::Normal);
+        assert_eq!(ctx.take_sent(), vec![crate::proto::ToShell::WindowLevel(Level::Floating), crate::proto::ToShell::WindowLevel(Level::Normal)]);
     }
 
     #[test]

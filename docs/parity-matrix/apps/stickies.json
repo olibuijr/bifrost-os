@@ -11,10 +11,10 @@
  "summary": {
   "features": 33,
   "parity": 5,
-  "partial": 25,
-  "gap": 2,
+  "partial": 26,
+  "gap": 1,
   "n/a": 1,
-  "coverage_pct": 54.7
+  "coverage_pct": 56.3
  },
  "features": [
   {
@@ -210,10 +210,10 @@
    "feature": "Float on Top",
    "area": "menu",
    "apple": "MainMenu: Window > Float on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the shell protocol has no window level message, so an app cannot ask for an always-on-top window. Notes share one window.",
-   "wire": "Add a window level message to the shell protocol (proto) and the window manager; then make each note its own window or offer Float on Top for the board window, with a checked item."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1127",
+   "note": "Window > Float on Top is a ticked item for the board window. It calls bifrost_app::windows::set_level, which sends ToShell::WindowLevel (proto tag 0x165); the shell stores the level per app and the window model keeps floating windows above normal ones. Notes still share one window, and the level is not yet routed to the compositor, so it is not verified on Midget.",
+   "wire": "Route the app's stored window level to the window server's Wm::set_level for the app's toplevel; make each note its own window if the per-note float is wanted; verify the ticked item on Midget."
   },
   {
    "feature": "Translucent",

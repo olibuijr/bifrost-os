@@ -18,7 +18,8 @@ mod tape;
 
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{clipboard, Damage, Event, Surface};
-use bifrost_app::{App, AppMenu, Command, Commands, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::windows::{self, Level};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_core::json::Json;
@@ -27,12 +28,17 @@ use std::path::Path;
 
 struct CalculatorApp {
     calc: Option<calc::Calculator>,
+    /// Window > Always on Top: the window stays above the other windows.
+    floating: bool,
     /// Copies sent to the shell's pasteboard that have not been answered yet: (request, number).
     copies: Vec<(u32, String)>,
 }
 
 /// How many unanswered copies are kept; the oldest is dropped beyond this.
 const MAX_PENDING_COPIES: usize = 16;
+
+/// Window > Always on Top (a checked item; `windows::set_level`). Outside the calculator's own menu ids.
+const MENU_ALWAYS_ON_TOP: u32 = 300;
 
 impl CalculatorApp {
     /// Sends the calculator's pending Copy (if any) to the general board through the `pasteboard` service.
@@ -131,11 +137,19 @@ impl App for CalculatorApp {
     }
 
     /// The Edit (Copy Expression, Copy Last Result), View and Stack menus.
+    /// The calculator's menus, then the Window menu with Always on Top (a checked item).
     fn main_menu(&self, ctx: &Ctx) -> Vec<AppMenu> {
-        self.calc.as_ref().map(|c| c.menus(&ctx.ui)).unwrap_or_default()
+        let mut menus = self.calc.as_ref().map(|c| c.menus(&ctx.ui)).unwrap_or_default();
+        menus.push(AppMenu { title: "Window".into(), items: vec![AppMenuItem::new(MENU_ALWAYS_ON_TOP, "Always on Top").checked(self.floating)] });
+        menus
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id == MENU_ALWAYS_ON_TOP {
+            self.floating = !self.floating;
+            windows::set_level(ctx, if self.floating { Level::Floating } else { Level::Normal });
+            return true;
+        }
         let Some(calc) = &mut self.calc else { return false };
         let changed = calc.menu_action(&ctx.ui, id);
         self.send_copy(ctx);
@@ -214,5 +228,5 @@ pub fn test_ui() -> bifrost_app::Ui {
 }
 
 fn main() {
-    bifrost_app::run(CalculatorApp { calc: None, copies: Vec::new() });
+    bifrost_app::run(CalculatorApp { calc: None, floating: false, copies: Vec::new() });
 }
