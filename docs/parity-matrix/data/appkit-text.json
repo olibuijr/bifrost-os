@@ -98,6 +98,6 @@
   "Paragraph styles, text lists, tables and attachments in attributed text (modelled in bifrost-ui; attributed strings in the SDK do not carry them yet)",
   "Writing Tools integration for text views",
   "Text finder (find bar) (find bar model and view wiring exist; no drawn find bar, no regex)",
-  "Font descriptors and font collections"
+  "Font collections and full NSFontDescriptor attributes. sdk font_descriptor.rs (UserFonts) covers only the Settings font choice."
  ]
 }
