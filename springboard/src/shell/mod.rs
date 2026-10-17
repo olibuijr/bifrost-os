@@ -122,6 +122,7 @@ pub mod crash_alert;
 pub mod permission_sheet;
 pub mod guardian_sheet;
 pub mod malware_gate;
+pub mod trust_sheet;
 pub mod background;
 pub mod package_install_sheet;
 pub mod contact_pick_sheet;
@@ -803,6 +804,8 @@ pub struct Shell {
     guardian_now: u64,
     /// the malware gate's card for a file about to open (`malware_gate.rs`), and the open it holds back
     malware_alert: Option<malware_gate::MalwareAlert>,
+    /// the sheet for a site whose TLS certificate the system refused in the Browser (`trust_sheet.rs`)
+    trust_sheet: Option<trust_sheet::TrustSheet>,
     /// background suspension of the external apps (`background.rs`), while Suspend Background Apps is on
     suspender: background::Suspender,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
@@ -1153,6 +1156,7 @@ impl Shell {
             guardian_sheet: None,
             guardian_now: 0,
             malware_alert: None,
+            trust_sheet: None,
             suspender: Default::default(),
             pick_sheet: None,
             photo_pick_sheet: None,
@@ -1759,6 +1763,20 @@ impl Shell {
                     }
                 }
                 photo_pick_sheet::Outcome::Idle | photo_pick_sheet::Outcome::Redraw => {}
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.trust_sheet.is_some() {
+            // the trust sheet takes every touch until it is dismissed
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.trust_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(hit) = hit {
+                    if self.trust_sheet.as_mut().is_some_and(|s| s.press(hit)) {
+                        self.trust_sheet = None;
+                    }
+                }
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -3738,8 +3756,17 @@ impl Shell {
         self.tick_camera(t);
         self.tick_magnifier(t);
         if self.screen == Screen::App(AppId::Browser) {
+            let (unix, _) = self.wall_now(t);
             if let Some(b) = &mut self.browser {
                 self.dirty |= b.tick(&self.ui, t);
+                // a site whose certificate the system refused: say so, and show the chain on request
+                if self.trust_sheet.is_none() {
+                    if let Some(refused) = b.take_trust_prompt() {
+                        self.trust_sheet = Some(trust_sheet::TrustSheet::new(&self.ui, &refused, unix));
+                        self.dirty = true;
+                        self.drawn = Drawn::Nothing;
+                    }
+                }
             }
         }
         if self.screen == Screen::App(AppId::Settings) {
@@ -4205,7 +4232,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4223,6 +4250,9 @@ impl Shell {
             }
             if let Some(m) = &self.malware_alert {
                 m.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(t) = &self.trust_sheet {
+                t.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
@@ -4293,7 +4323,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4314,7 +4344,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4570,6 +4600,7 @@ impl Shell {
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
+            ("trust-sheet", self.trust_sheet.is_some()),
             ("crash-alert", self.crash_alert.is_some()),
             ("malware-alert", self.malware_alert.is_some()),
             ("compose-sheet", self.compose_showing()),

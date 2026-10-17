@@ -39,11 +39,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs",
+   "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/scene_widget.rs",
    "status": "partial",
-   "note": "from SDK matrix scenekit.json Lead 2026-10-17: not ready: no renderer hosts a scene in an app window (CPU rasteriser only, no hosting view).",
+   "note": "from SDK matrix scenekit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::scene_widget::tests"
+    }
+   ],
+   "ready_note": "A SceneWidget view in the SDK (bifrost_app::view::SceneWidget) renders a scene3d Scene through its camera into the app window with the CPU triangle rasteriser (raster3d: flat shading and a depth buffer; drawables tie scene nodes to primitives3d geometry and materials), redrawing only when something changed. Dragging orbits the camera, scroll() and the + and - keys zoom, and a click picks the nearest drawable by bounding sphere through SceneView and sends an action. Host tests only. Not covered: GPU rendering, per-triangle picking, clipping of triangles that cross the near plane (they are dropped), textures, a wheel event (the SDK delivers none to views yet, so scroll() is for the app to call) and importing a scene file into drawables."
   },
   {
    "id": "path:/System/Library/Frameworks/ScreenCaptureKit.framework",
@@ -426,11 +435,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs",
+   "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/security_views.rs, springboard/src/shell/trust_sheet.rs, springboard/src/deildu/http.rs, springboard/src/shell/browser/mod.rs",
    "status": "partial",
-   "note": "from SDK matrix security-interface.json Lead 2026-10-17: not ready: the shell does not draw the certificate, trust or identity panels.",
+   "note": "from SDK matrix security-interface.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::security_views::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::trust_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::browser::tests::a_page_the_tls_stack_refused_keeps_its_chain_for_the_shell_and_says_why"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "deildu::http::tests"
+    }
+   ],
+   "ready_note": "Apps get three drawn views over the models: CertificatePanelView (chain, validity dots, Details disclosure), TrustEditorView (Default, Always or Never for each certificate, the chain verdict, Reset to Defaults) and IdentityChooserView (the identities that pass the policy, Choose and Cancel), each sending action strings through the responder chain. The shell shows the certificate panel when the TLS stack refuses a site in the Browser: the verifier remembers the refused chain, the Browser hands it over when the page fails, and the trust sheet offers Cancel and Show Certificate. Host tests only. Not covered: the shell does not show the trust editor or the identity chooser itself, there is no trust exception for a refused site (the connection stays refused), and a chain the strict DER reader cannot parse offers only Cancel."
   },
   {
    "id": "path:/System/Library/Frameworks/SecurityUI.framework",

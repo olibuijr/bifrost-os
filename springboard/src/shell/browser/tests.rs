@@ -183,6 +183,26 @@ fn unreachable_pages_show_an_error_that_is_not_remembered() {
 }
 
 #[test]
+fn a_page_the_tls_stack_refused_keeps_its_chain_for_the_shell_and_says_why() {
+    use crate::deildu::http::{record_rejection, TlsRejection};
+    let ui = ui();
+    let mut b = browser(&ui, &scratch("tls-refused"), &[]);
+    record_rejection(TlsRejection { host: "refused.test".into(), chain: vec![vec![1, 2, 3]], reason: "The certificate has expired.".into() });
+    b.navigate(&ui, "https://refused.test/", 100.0);
+    let t = settle(&mut b, &ui, 100.0);
+    let v = b.tabs[0].view.as_ref().unwrap();
+    assert!(v.failed, "the page was not shown");
+    let text = v.page.text();
+    assert!(text.contains("identity of refused.test could not be verified") && text.contains("has expired"), "{text}");
+    let prompt = b.take_trust_prompt().expect("the shell is told");
+    assert_eq!((prompt.host.as_str(), prompt.chain.len()), ("refused.test", 1));
+    assert!(b.take_trust_prompt().is_none(), "once");
+    b.navigate(&ui, "https://other.test/", t + 100.0);
+    settle(&mut b, &ui, t + 100.0);
+    assert!(b.take_trust_prompt().is_none(), "a failure with no refused certificate behind it raises no prompt");
+}
+
+#[test]
 fn reader_mode_shows_only_the_article_and_toggles_back() {
     let ui = ui();
     let page = format!("<title>Story</title><nav>site menu</nav><article><h1>Big News</h1><p>{LOREM}</p><p>{LOREM}</p></article><div id=footer>legal</div>");

@@ -7,6 +7,7 @@ use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use rustls::client::danger::ServerCertVerifier as _;
 use url::Url;
 
 const USER_AGENT: &str = "Mozilla/5.0 (bifrost; CPU OS 15_7 like Golden Gate) WebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Browser/604.1";
@@ -29,6 +30,103 @@ pub trait Transport: Send + Sync {
     }
 }
 
+/// A server certificate chain that the TLS stack refused: the host asked for, the DER of each certificate (the
+/// server's own first) and a sentence for the person that says why.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TlsRejection {
+    pub host: String,
+    pub chain: Vec<Vec<u8>>,
+    pub reason: String,
+}
+
+/// The most refused chains kept at once; the oldest goes first.
+const MAX_REJECTIONS: usize = 8;
+
+static REJECTIONS: Mutex<Vec<TlsRejection>> = Mutex::new(Vec::new());
+
+/// Remembers a refused chain for `r.host`, replacing an earlier one for the same host.
+pub fn record_rejection(r: TlsRejection) {
+    insert_rejection(&mut REJECTIONS.lock().unwrap_or_else(|e| e.into_inner()), r);
+}
+
+fn insert_rejection(all: &mut Vec<TlsRejection>, r: TlsRejection) {
+    all.retain(|x| !x.host.eq_ignore_ascii_case(&r.host));
+    all.push(r);
+    if all.len() > MAX_REJECTIONS {
+        all.remove(0);
+    }
+}
+
+/// Takes the refused chain remembered for `host`, if the TLS stack refused one since the last call.
+pub fn take_rejection(host: &str) -> Option<TlsRejection> {
+    let mut all = REJECTIONS.lock().unwrap_or_else(|e| e.into_inner());
+    let i = all.iter().position(|x| x.host.eq_ignore_ascii_case(host))?;
+    Some(all.remove(i))
+}
+
+/// The sentence for why a chain was refused.
+fn rejection_reason(e: &rustls::Error) -> &'static str {
+    use rustls::CertificateError as C;
+    match e {
+        rustls::Error::InvalidCertificate(c) => match c {
+            C::Expired | C::ExpiredContext { .. } => "The certificate has expired.",
+            C::NotValidYet | C::NotValidYetContext { .. } => "The certificate is not valid yet.",
+            C::UnknownIssuer => "The certificate was issued by an authority this system does not trust.",
+            C::NotValidForName | C::NotValidForNameContext { .. } => "The certificate was not issued for this site.",
+            C::Revoked => "The certificate was revoked by its issuer.",
+            C::BadSignature => "The signature on the certificate is not valid.",
+            _ => "The certificate could not be verified.",
+        },
+        _ => "The secure connection could not be set up.",
+    }
+}
+
+/// The webpki verifier, plus a record of every certificate chain it refuses (see [`take_rejection`]).
+#[derive(Debug)]
+struct RecordingVerifier {
+    inner: Arc<rustls::client::WebPkiServerVerifier>,
+}
+
+impl rustls::client::danger::ServerCertVerifier for RecordingVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &rustls::pki_types::CertificateDer<'_>,
+        intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        server_name: &rustls::pki_types::ServerName<'_>,
+        ocsp_response: &[u8],
+        now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        let verdict = self.inner.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now);
+        if let Err(e @ rustls::Error::InvalidCertificate(_)) = &verdict {
+            let chain = std::iter::once(end_entity).chain(intermediates).map(|c| c.as_ref().to_vec()).collect();
+            record_rejection(TlsRejection { host: server_name.to_str().into_owned(), chain, reason: rejection_reason(e).to_string() });
+        }
+        verdict
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.inner.supported_verify_schemes()
+    }
+}
+
 /// TCP with rustls (graviola provider, webpki roots) through the UDP resolver.
 pub struct Tls {
     config: Arc<rustls::ClientConfig>,
@@ -37,11 +135,18 @@ pub struct Tls {
 
 impl Tls {
     pub fn new() -> Self {
-        let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
-        let config = rustls::ClientConfig::builder_with_provider(Arc::new(rustls_graviola::default_provider()))
+        let roots = Arc::new(rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() });
+        let provider = Arc::new(rustls_graviola::default_provider());
+        let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(roots, provider.clone())
+            .build()
+            .expect("the webpki roots are a valid trust store");
+        // The same verification as `with_root_certificates`; the wrapper only remembers a chain it refused, so the
+        // shell can show it. It never turns a refusal into an acceptance.
+        let config = rustls::ClientConfig::builder_with_provider(provider)
             .with_safe_default_protocol_versions()
             .expect("graviola supports TLS 1.2 and 1.3")
-            .with_root_certificates(roots)
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(RecordingVerifier { inner }))
             .with_no_client_auth();
         Tls { config: Arc::new(config), resolver: Resolver::default() }
     }
@@ -825,6 +930,50 @@ pub(crate) mod tests {
     fn tls_transport_builds_and_rejects_unresolvable_hosts() {
         let t = Tls::new();
         assert!(t.connect("127.0.0.1", 9, true).is_err(), "nothing listens on the discard port");
+    }
+
+    #[test]
+    fn a_chain_the_webpki_verifier_refuses_is_remembered_for_the_shell_and_still_refused() {
+        use rustls::client::danger::ServerCertVerifier;
+        let roots = Arc::new(rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() });
+        let provider = Arc::new(rustls_graviola::default_provider());
+        let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(roots, provider).build().unwrap();
+        let verifier = RecordingVerifier { inner };
+        let der = crate::shell::trust_sheet::test_certificate("self-signed.test", "self-signed.test", 1_000_000_000, 2_000_000_000);
+        let cert = rustls::pki_types::CertificateDer::from(der.clone());
+        let name = rustls::pki_types::ServerName::try_from("self-signed.test").unwrap();
+        let now = rustls::pki_types::UnixTime::since_unix_epoch(Duration::from_secs(1_500_000_000));
+        let verdict = verifier.verify_server_cert(&cert, &[], &name, &[], now);
+        assert!(verdict.is_err(), "a certificate no authority signed is refused, whatever is recorded");
+        let refused = take_rejection("SELF-SIGNED.test").expect("the refusal is remembered, whatever the case of the host");
+        assert_eq!((refused.host.as_str(), refused.chain), ("self-signed.test", vec![der]));
+        assert!(!refused.reason.is_empty());
+        assert!(take_rejection("self-signed.test").is_none(), "taken once");
+    }
+
+    #[test]
+    fn only_the_newest_refusals_are_kept_and_a_host_has_one() {
+        let mut all = Vec::new();
+        let refusal = |host: String, reason: &str| TlsRejection { host, chain: vec![], reason: reason.into() };
+        for i in 0..(MAX_REJECTIONS + 3) {
+            insert_rejection(&mut all, refusal(format!("many-{i}.test"), "r"));
+        }
+        assert_eq!(all.len(), MAX_REJECTIONS);
+        assert_eq!(all[0].host, "many-3.test", "the oldest went first");
+        insert_rejection(&mut all, refusal("MANY-5.test".into(), "again"));
+        assert_eq!(all.len(), MAX_REJECTIONS, "a host's later refusal replaces its earlier one");
+        assert_eq!(all.last().unwrap().reason, "again");
+    }
+
+    #[test]
+    fn the_reason_names_what_was_wrong_with_the_certificate() {
+        use rustls::CertificateError as C;
+        let reason = |c: C| rejection_reason(&rustls::Error::InvalidCertificate(c));
+        assert!(reason(C::Expired).contains("expired"));
+        assert!(reason(C::UnknownIssuer).contains("authority"));
+        assert!(reason(C::NotValidForName).contains("not issued for this site"));
+        assert!(reason(C::BadEncoding).contains("could not be verified"));
+        assert!(rejection_reason(&rustls::Error::HandshakeNotComplete).contains("connection"));
     }
 }
 

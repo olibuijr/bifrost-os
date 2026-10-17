@@ -1355,6 +1355,31 @@ starts on it does not pan. No tracking areas or hover, no `nextKeyView` override
 drag and drop, no `NSTextView`-style first responder for text (use `text_field` inside a custom view), and the
 accessibility `Node` is flat, so nesting is reported only by `ax_tree()`.
 
+### Framework views: security panels, `SceneView`, `SpriteView` (wiring wave 14)
+
+Three groups of retained views host models that existed before only as tested logic. All are in `bifrost_app::view`; each
+sends action strings through the responder chain and reads back through `Window::view`.
+
+- **Security panels** (`view/security_views.rs`, over `framework_kits::security_interface`): `CertificatePanelView` shows the
+  chain leaf first with a validity dot and word on each row, a Details disclosure and the selected certificate's subject,
+  issuer, serial number and status; `TrustEditorView` shows one Default, Always or Never control for each certificate, the
+  verdict of the chain and Reset to Defaults; `IdentityChooserView` lists the identities that passed the policy with Choose
+  and Cancel. The shell does not use these views (it cannot depend on the SDK); it draws its own copy of the certificate
+  panel in `shell/trust_sheet.rs` when the Browser's TLS client refuses a certificate. `deildu::http::Tls` wraps the webpki
+  verifier, keeps the chain it refused (`take_rejection`), and the Browser takes it when the page fails. The sheet offers
+  Cancel and Show Certificate and never loads the page anyway: there is no per-site trust exception yet, so the
+  trust editor is an app view only.
+- **`SceneWidget`** (`view/scene_widget.rs`, `SceneView`): renders a `scene3d::Scene` through its camera with the CPU
+  rasteriser (`raster3d`), at most 640 by 480 pixels, only when the scene, light, camera or size changed. A
+  `SceneDrawable` ties a node to `primitives3d` geometry and a material. Drag orbits (never past the poles), `+`, `-` and
+  `scroll()` zoom, arrow keys orbit, and a click picks the nearest bounding sphere (`ACTION_PICK`). Gaps: no wheel event
+  reaches views (see above), triangles that cross the near plane are dropped, picking is per sphere, no textures.
+- **`SpriteWidget`** (`view/sprite_widget.rs`, `SpriteView`): hosts a `sk_node::NodeTree` with `Scene2d` scaling and a
+  `SceneLoop`. `NodeTree::draw_quads` gives each node's rotated box; rectangles and images draw rotated, circles as discs,
+  labels upright. `on_step` receives every frame phase, node actions advance in the loop and their reports come from
+  `take_reports()`, and a click picks the topmost node by its own shape (`ACTION_TOUCH`). Gaps: shader nodes, rotated
+  labels, the physics world (the app steps `physics` in `on_step`), and per-node colour lives in the view, not the model.
+
 ## Animation (Core Animation parity)
 
 Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springboard/ui/src/anim.rs`.

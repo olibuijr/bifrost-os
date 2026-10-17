@@ -84,6 +84,19 @@ pub struct DrawItem {
     pub alpha: f64,
 }
 
+/// One item of the quad list: a node with visible content and the four corners of its box in view coordinates. The
+/// corners follow the node's own axes after its world transform and the camera, so a rotated node is a rotated
+/// quad, where [`DrawItem`] holds only its bounds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DrawQuad {
+    pub node: NodeId,
+    pub content: Content,
+    /// The box corners in the order of the node's own axes: (-x, -y), (+x, -y), (+x, +y), (-x, +y). With y pointing up
+    /// that is bottom-left, bottom-right, top-right, top-left. A circle's box is its bounding square.
+    pub corners: [Point; 4],
+    pub alpha: f64,
+}
+
 /// An affine map of the plane: a 2x2 linear part and a translation. A point `p` maps to
 /// `(m11 x + m12 y + tx, m21 x + m22 y + ty)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -380,6 +393,14 @@ impl NodeTree {
         items
     }
 
+    /// The visible items in paint order, as [`DrawQuad`]s: the same nodes in the same order as [`NodeTree::draw_list`],
+    /// each with its box corners in view coordinates instead of the bounds of the box.
+    pub fn draw_quads(&self, view: Size) -> Vec<DrawQuad> {
+        let mut items = Vec::new();
+        self.collect_quads(ROOT, Affine::IDENTITY, 1.0, view, &mut items);
+        items
+    }
+
     /// Starts an action on a node. Returns `None` for an unknown id.
     pub fn run_action(&mut self, id: NodeId, action: &Action) -> Option<Handle> {
         self.nodes.get_mut(&id).map(|n| n.actions.run(action))
@@ -465,6 +486,40 @@ impl NodeTree {
         }
     }
 
+    fn collect_quads(&self, id: NodeId, parent_world: Affine, parent_alpha: f64, view: Size, out: &mut Vec<DrawQuad>) {
+        let Some(node) = self.nodes.get(&id) else {
+            return;
+        };
+        if node.hidden {
+            return;
+        }
+        let world = parent_world.then(node.local());
+        let alpha = parent_alpha * node.alpha;
+        if alpha > 0.0 {
+            if let Some(size) = node.content.bounding_size() {
+                let (hw, hh) = (size.width / 2.0, size.height / 2.0);
+                let local = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)];
+                let mapped: Option<Vec<Point>> = local
+                    .iter()
+                    .map(|&(x, y)| self.view_point(world.apply(Point { x, y }), view))
+                    .collect();
+                if let Some(m) = mapped {
+                    out.push(DrawQuad {
+                        node: id,
+                        content: node.content.clone(),
+                        corners: [m[0], m[1], m[2], m[3]],
+                        alpha,
+                    });
+                }
+            }
+        }
+        let mut children: Vec<NodeId> = node.children.clone();
+        children.sort_by(|a, b| self.nodes[a].z_position.total_cmp(&self.nodes[b].z_position));
+        for child in children {
+            self.collect_quads(child, world, alpha, view, out);
+        }
+    }
+
     /// The bounds of a scene frame in view coordinates, or `None` when the camera collapses a direction.
     fn view_frame(&self, frame: Frame, view: Size) -> Option<Frame> {
         let corners = [
@@ -540,5 +595,73 @@ fn bounds(points: &[Point]) -> Frame {
             width: max_x - min_x,
             height: max_y - min_y,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn close(a: Point, x: f64, y: f64) -> bool {
+        (a.x - x).abs() < 1e-9 && (a.y - y).abs() < 1e-9
+    }
+
+    #[test]
+    fn a_rotated_node_is_a_rotated_quad_with_corners_in_the_order_of_its_axes() {
+        let mut tree = NodeTree::new();
+        let root = tree.root();
+        let n = tree.add(root, Content::Rect(Size { width: 40.0, height: 20.0 })).unwrap();
+        tree.set_position(n, Point { x: 10.0, y: 0.0 });
+        let view = Size { width: 100.0, height: 100.0 };
+        let q = tree.draw_quads(view);
+        assert_eq!(q.len(), 1);
+        assert!(close(q[0].corners[0], 40.0, 40.0), "(-x, -y) corner: {:?}", q[0].corners);
+        assert!(close(q[0].corners[1], 80.0, 40.0));
+        assert!(close(q[0].corners[2], 80.0, 60.0));
+        assert!(close(q[0].corners[3], 40.0, 60.0));
+        tree.set_rotation(n, std::f64::consts::FRAC_PI_2);
+        let q = tree.draw_quads(view);
+        assert!(close(q[0].corners[0], 70.0, 30.0), "the (-x, -y) corner turned a quarter: {:?}", q[0].corners);
+        assert!(close(q[0].corners[1], 70.0, 70.0));
+        let frame = tree.draw_list(view)[0].frame;
+        assert!((frame.size.width - 20.0).abs() < 1e-9 && (frame.size.height - 40.0).abs() < 1e-9, "the bounds hold the same box");
+    }
+
+    #[test]
+    fn quads_come_in_the_paint_order_of_the_draw_list_and_skip_what_does_not_draw() {
+        let mut tree = NodeTree::new();
+        let root = tree.root();
+        let size = Size { width: 10.0, height: 10.0 };
+        let back = tree.add(root, Content::Rect(size)).unwrap();
+        let front = tree.add(root, Content::Circle(5.0)).unwrap();
+        let hidden = tree.add(root, Content::Rect(size)).unwrap();
+        let empty = tree.add(root, Content::Empty).unwrap();
+        tree.set_z_position(front, 2.0);
+        tree.set_z_position(back, 1.0);
+        tree.set_hidden(hidden, true);
+        let view = Size { width: 50.0, height: 50.0 };
+        let quads: Vec<NodeId> = tree.draw_quads(view).iter().map(|q| q.node).collect();
+        let items: Vec<NodeId> = tree.draw_list(view).iter().map(|i| i.node).collect();
+        assert_eq!(quads, items);
+        assert_eq!(quads, [back, front]);
+        assert!(!quads.contains(&empty));
+    }
+
+    #[test]
+    fn the_camera_moves_and_zooms_the_quads_like_the_draw_list() {
+        let mut tree = NodeTree::new();
+        let root = tree.root();
+        let n = tree.add(root, Content::Rect(Size { width: 10.0, height: 10.0 })).unwrap();
+        let cam = tree.add(root, Content::Empty).unwrap();
+        tree.set_camera(Some(cam));
+        tree.set_position(cam, Point { x: 5.0, y: 0.0 });
+        tree.set_scale(cam, Point { x: 0.5, y: 0.5 });
+        let view = Size { width: 100.0, height: 100.0 };
+        let q = &tree.draw_quads(view)[0];
+        let f = tree.draw_list(view)[0].frame;
+        assert_eq!(q.node, n);
+        assert!(close(q.corners[0], f.origin.x, f.origin.y));
+        assert!(close(q.corners[2], f.origin.x + f.size.width, f.origin.y + f.size.height));
+        assert!((f.size.width - 20.0).abs() < 1e-9, "a camera scale of one half zooms in: the box is twice as wide on screen");
     }
 }
