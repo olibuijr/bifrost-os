@@ -625,6 +625,17 @@ impl MessagesWindow {
         let right = if has_room { lay.info_w + lay.gap } else { 0.0 };
         let title = fit(ui, &title, MAC_TITLE1_PT, Weight::Semibold, (width / 2.0 - lay.pad).max(0.0));
         put_mid(s, &mut self.labels, ui, &title, MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x0 + lay.pad, lay.header / 2.0);
+        if self.model.selected_room().is_some_and(|r| r.encrypted) {
+            // A padlock drawn from rectangles in the secondary label colour, after the title, for an end to end encrypted
+            // room.
+            let lock = LABEL_2.now();
+            let lx = x0 + lay.pad + ui.measure(&title, MAC_TITLE1_PT, Weight::Semibold) + lay.gap;
+            let ly = lay.header / 2.0 - 6.0;
+            s.fill_rect(px(lx + 2.0), px(ly), px(6.0), px(2.0), lock);
+            s.fill_rect(px(lx + 2.0), px(ly), px(2.0), px(5.0), lock);
+            s.fill_rect(px(lx + 6.0), px(ly), px(2.0), px(5.0), lock);
+            s.fill_rect(px(lx), px(ly + 4.0), px(10.0), px(8.0), lock);
+        }
         let status = self.model.status.clone();
         if !status.is_empty() {
             let shown = fit(ui, &status, MAC_FOOTNOTE_PT, Weight::Regular, (width / 2.0 - right).max(0.0));

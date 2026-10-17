@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod api;
+pub mod crypto;
 pub mod draw;
 pub mod model;
 pub mod protocol;

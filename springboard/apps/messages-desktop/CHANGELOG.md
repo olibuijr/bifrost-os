@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-10-17
+
+- End-to-end encryption on vodozemac (Olm and Megolm), in src/crypto.rs. Each sign-in makes a device with an Olm account; its device keys and signed one-time keys are uploaded (`/keys/upload`), the members' devices are queried (`/keys/query`) and checked against their self-signatures, and one-time keys are claimed (`/keys/claim`) for the devices without a session.
+- Room keys travel as Olm `m.room.encrypted` to-device messages (`m.room_key`) and are taken in from the sync. Encrypted rooms (`m.room.encryption`) are sent as `m.room.encrypted` Megolm events, and incoming ones are decrypted before the window sees them.
+- The Megolm session of a room rotates after 100 messages, after a week, or when the membership changes.
+- A lock is drawn in the header of an encrypted room. A message this device cannot open shows "Unable to decrypt message", never the ciphertext.
+- Pictures, files and reactions are refused in encrypted rooms for now, rather than sent in the clear.
+- Not yet: device verification (every device is unverified, and nothing is shown as verified), key backup, cross-signing, the keychain store of the pickle (the account is kept in memory for the run), pickled Megolm sessions, encrypted pictures and reactions.
+- Headless tests in src/crypto.rs and src/protocol.rs cover the key request and answer shapes, the to-device payloads, the rotation policy, the decrypt placeholder and a full room-key round trip.
+
 ## 0.5.4 — 2026-10-14
 
 - Replaced the hand-drawn conversation list with the shared Golden Gate source-list widget and its matching row hit-testing.
