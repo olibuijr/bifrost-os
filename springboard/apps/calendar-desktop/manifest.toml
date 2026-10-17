@@ -33,3 +33,14 @@ title = "Create Event"
 description = "Adds an event to the calendar."
 shortcut = false
 params = ["title:string", "start:date?", "minutes:int?", "location:string?", "notes:string?", "all_day:bool?"]
+
+[[script.command]]
+name = "make new event"
+event = "calendar.make"
+params = ["title", "start", "minutes", "location", "notes", "all_day"]
+result = "event"
+
+[[script.class]]
+name = "event"
+properties = []
+elements = []

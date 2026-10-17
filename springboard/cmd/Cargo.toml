@@ -10,3 +10,5 @@ bifrost-ui = { path = "../ui" }
 # the shell's PNG writer, settings store and data directory (screencapture, pmset)
 springboard = { path = ".." }
 bifrost-proto = { path = "../proto" }
+# the AppEvent client `osascript` sends `tell app` commands with (bifrost_app::app_events)
+bifrost-app = { path = "../sdk" }

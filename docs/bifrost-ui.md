@@ -4637,3 +4637,68 @@ Decisions and gaps:
 * Tests: parser trees, errors, fake-font fraction and script metrics, spacing between classes, delimiter sizing, matrix
   and radical geometry, and the `MATH` table reader on a synthetic table. Not run in the session that wrote them; run
   `cargo test -p <render crate> math::` before relying on them.
+
+
+## Scripting (`bifrost_core::script`, `osascript`, `osacompile`, the `scripting` service)
+
+Apps declare what a script can ask them to do in `manifest.toml`, and a small scripting language sends those
+requests as typed AppEvents with replies (`bifrost_app::app_events`, over the app control socket).
+
+**Dictionaries.** `[[script.command]]` and `[[script.class]]` tables are parsed by `bifrost_core::script::dictionary`:
+
+```toml
+[[script.command]]
+name = "make new note"        # lowercase words; a script says this phrase
+event = "notes.make"          # sent as the AppEvent ae.notes.make
+params = ["title", "body"]    # labels a script may pass; a direct argument goes to the first one
+result = "note"
+
+[[script.class]]
+name = "note"
+properties = ["name", "id", "folder", "modified"]
+elements = []
+```
+
+A table with a missing name or event is dropped, the rest of the manifest is unaffected, and the other manifest tables
+(`[privacy]`, `[[service]]`, `[[intent]]`) are read as before. The shell's `scripting` service answers `list {}` (the
+installed apps with a dictionary) and `dictionary {app}` (its `commands` and `classes`).
+
+**Language.** `springboard/core/src/script/` has a lexer, a recursive-descent parser (`parser.rs`, `ast.rs`) and a
+tree-walking interpreter (`interp.rs`). Supported: `set`, `get`, `make new X with properties {...}`, `delete`,
+`tell app "Name" [to statement | ... end tell]`, `if ... then ... else if ... else ... end if` and the one-line form,
+`repeat` (forever, `n times`, `with i from a to b`, `with x in list`, `exit repeat`), `on name(args) ... end`,
+`on run argv`, `return`, `try ... on error e ... end try`, `display dialog` and `display notification` (with `with title`),
+`do shell script`, `delay`, `&`, comparisons (`=`, `≠`, `is`, `is not`, `<`, `<=`, `>`, `>=`), `and`, `or`, `not`,
+`+ - * /`, `mod`, lists `{a, b}`, records `{name:value}`, `item n of list`, `length of` and `count of` for lists and
+text, and `prop of object`. Names and keywords are case-insensitive; `--` starts a comment; a `¬` at a line end
+continues it.
+
+Commands in a `tell` block resolve through the target app's dictionary: an unknown phrase is error -1708 ("doesn't
+understand the message"), an undeclared label is an error before anything is sent, and the parameter record is built by
+`dictionary::command_params` (the direct argument goes to the first declared parameter). `get`, `set`, `make` and
+`delete` of objects send the core events `getd`, `setd`, `crel` and `delt`, whose `object` is the specifier record
+`{class, index | name | all | whose: {property, value}, property?}`. A `make new X` that the dictionary declares as a
+command uses that command instead. A class or property the dictionary does not declare is error -1728. An error reply
+keeps its number and message, and `on error` sees them as `number` and `message`.
+
+The host (`interp::Host`) owns every side effect, so the same script runs against a fake host in the tests. The tool's
+host (`cmd/src/osascript.rs`) finds the app in the installed manifests, sends the event to the app's socket with
+`app_events::send_message` (120 s timeout) and runs `/bin/sh -c` for `do shell script`.
+
+**Tools.** `osascript [-s s|o] [-e statement]... [file [argument ...]]` runs `-e` lines, a file or standard input; the
+arguments are `argv` for `on run argv`. A file holding an `osacompile` output runs from its canonical source.
+`osacompile [-o output] (-e statement... | file)` checks the syntax and writes a JSON document,
+`{"format": "bifrost-osa", "version": 1, "source": <canonical source>, "ast": <syntax tree>}`. The canonical source has LF
+line ends, no trailing blanks and one final newline. Each AST node is an object with a `node` field naming its kind
+(`set`, `tell`, `command`, `repeat`, `specifier`, and so on; `script::ast::program_json` is the reference).
+
+**Apps.** Notes declares `make new note` (answered through the Create Note intent; the title becomes the first line)
+and the `note` class, whose `name`, `id`, `folder` and `modified` properties are read from the note list, so
+`get name of every note` works. Calendar declares `make new event`, answered through the Create Event intent.
+
+**Gaps (recorded decisions).** The tools do not launch an app that is not running (error -600). `display dialog` and
+`display notification` print on standard error, because the shell has no request path for a command-line tool yet.
+Descriptors travel as JSON, not Apple event descriptors; there is no sdef file and no generated proxy. The reference
+JavaScript (`JavaScriptOSA`, `JavaScriptAppleEvents`) is not built, and `osascript -l JavaScript` is refused. Setting
+properties and deleting notes or events from a script are refused by the apps for now. The language has no
+`repeat while`, no `considering`, and no object references beyond specifiers.

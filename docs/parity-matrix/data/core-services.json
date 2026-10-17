@@ -73,9 +73,9 @@
     {
       "feature": "Apple Events (inter-process messages with replies)",
       "apple": "AESendMessage, AEInstallEventHandler, AECreateAppleEvent, AEProcessMessage",
-      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve)",
+      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over an owner-only socket); springboard/sdk/src/intents.rs (App Intents); springboard/sdk/src/runtime.rs (document requests and replies); springboard/sdk/src/app_events.rs; springboard/sdk/src/event_descriptor.rs (Descriptor::coerce, ObjectSpecifier::resolve); springboard/core/src/script/ (scripting language, dictionaries); springboard/cmd/src/osascript.rs and osacompile.rs; springboard/src/shell/services/scripting.rs",
       "status": "partial",
-      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Gap: no wire encoding of descriptors into the control socket and no Midget check."
+      "note": "springboard/sdk/src/app_events.rs sends a typed AppEvent (class, id, record) over the control socket with reply descriptor and timeout, plus AppleEventHandlers. event_descriptor.rs adds typed descriptors with coercion (text, integer, real, boolean, list) and object specifiers (index, name, identifier, first, last, nested in a container), tested headless in springboard/sdk/tests/parity_sdk-complete-44.rs. Scripting: apps declare [[script.command]] and [[script.class]] tables in manifest.toml (springboard/core/src/script/dictionary.rs); the shell's scripting service lists them. osascript (springboard/cmd) runs tell app blocks and sends each command as an AppEvent with a reply and a 120 s timeout (springboard/core/src/script/interp.rs), and Notes and Calendar answer their dictionaries. Gaps: events carry JSON parameters, not Apple event descriptors; osascript does not launch apps; display dialog and notification print on standard error; no Midget check yet."
     },
     {
       "feature": "Search index of documents (Search Kit)",
@@ -135,7 +135,7 @@
     }
   ],
   "gaps": [
-    "Apple Events: no typed inter-app messages with reply descriptors; the control socket and intents do not replace them.",
+    "Apple Events: typed inter-app messages with replies exist (app_events, dictionaries, osascript) but use JSON parameters rather than Apple event descriptors, and the scripting path is not yet verified on Midget.",
     "File metadata: no attribute store or MDQuery-style query API for apps.",
     "Dictionary Services: no definition lookup (spellcheck.rs covers spelling only).",
     "Backup Core: no per-item backup exclusion.",

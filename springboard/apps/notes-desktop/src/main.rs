@@ -11,6 +11,8 @@ use bifrost_app::KeyInput;
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::app_events::AppEvent;
+use notes::scripting;
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::status_item::{MenuItem as StatusMenuItem, StatusBar, StatusItem, StatusItemLength};
 use bifrost_core::json::Json;
@@ -278,6 +280,27 @@ impl NotesApp {
     }
 }
 
+/// The AppEvents Notes answers: `make new note` (`notes.make`, through the Create Note intent) and the core `getd` read
+/// of a note property. Setting properties and deleting notes from a script are refused for now.
+fn app_event(app: &mut NotesApp, ctx: Option<&Ctx>, data_dir: &std::path::Path, ev: &AppEvent) -> Result<bifrost_core::json::Json, RpcError> {
+    use bifrost_core::json::Json;
+    match (ev.class.as_str(), ev.id.as_str()) {
+        ("notes", "make") => {
+            let text = scripting::note_text(&ev.params)?;
+            let made = app.perform_intent(ctx, data_dir, "create-note", &Json::Obj(vec![("text".into(), Json::Str(text))]))?;
+            Ok(made.to_json())
+        }
+        ("core", "getd") => {
+            let object = ev.params.get("object").cloned().ok_or_else(|| RpcError::new(INVALID_PARAMS, "getd needs an object"))?;
+            let property = object.str_field("property");
+            let rows = notes::rpc::call(data_dir, "notes.list", &Json::Obj(vec![]))?;
+            scripting::get_property(&rows, &object, property.as_deref())
+        }
+        ("core", "setd") | ("core", "delt") => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, "Notes cannot change notes from a script yet")),
+        _ => Err(scripting::unhandled(&ev.method())),
+    }
+}
+
 impl App for NotesApp {
     fn id(&self) -> &str {
         "is.olibuijr.notes.desktop"
@@ -509,9 +532,13 @@ impl App for NotesApp {
         }
     }
 
-    fn rpc(&mut self, _ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
+    fn rpc(&mut self, ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
         if method == "notes.state" {
             return Ok(bifrost_core::json::Json::Str(self.notes.as_ref().map_or_else(String::new, |n| n.describe())));
+        }
+        // scripting: `tell app "Notes"` commands arrive as AppEvents (see `scripting` and the manifest's [[script.*]])
+        if let Some(ev) = AppEvent::from_method(method, params) {
+            return app_event(self, ctx, data_dir, &ev);
         }
         notes::rpc::call(data_dir, method, params)
     }

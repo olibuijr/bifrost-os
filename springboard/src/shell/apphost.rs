@@ -71,6 +71,8 @@ pub struct Manifest {
     /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
     /// location request without it is refused, so no prompt shows without a reason.
     pub location_purpose: String,
+    /// `[[script.command]]` and `[[script.class]]` tables: the scripting dictionary (`bifrost_core::script`).
+    pub scripting: bifrost_core::script::dictionary::Dictionary,
 }
 
 impl Manifest {
@@ -178,6 +180,8 @@ impl Manifest {
         }
         m.quick_actions = super::quick_actions::parse_static(text);
         m.background_tasks = super::services::background::parse_tasks(text);
+        // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here
+        m.scripting = bifrost_core::script::dictionary::Dictionary::parse(text);
         // ids become directory names: keep them to a safe alphabet
         let safe = !m.id.is_empty() && m.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
         if super::kinds::Kind::parse(&m.kind).is_none() {

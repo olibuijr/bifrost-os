@@ -18,6 +18,8 @@ pub mod mtree;
 pub mod hdiutil;
 pub mod iconutil;
 pub mod open;
+pub mod osascript;
+pub mod osacompile;
 pub mod plistbuddy;
 pub mod plutil;
 pub mod pasteboard;

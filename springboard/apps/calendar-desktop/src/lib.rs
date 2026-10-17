@@ -3,6 +3,7 @@
 
 pub mod calendar;
 pub mod icon;
+pub mod scripting;
 
 #[cfg(test)]
 pub fn test_ui() -> bifrost_app::Ui {
