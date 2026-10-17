@@ -8,6 +8,11 @@
 //! extension as another package or declare a point in another developer's namespace. The system declares the points
 //! that belong to no app ([`system_points`], for example [`FILE_PROVIDER_POINT`]).
 //!
+//! An app that declares `file_manager_folders` (the folders its file-manager sync extension watches, read by the app
+//! host) is also an extension of [`FILE_MANAGER_POINT`] without writing the table: [`parse`] adds one named after the
+//! app, unless the manifest has its own `[[extension]]` for that point. The host can then start it on demand like any
+//! other extension; the folder list stays the `file_manager_folders` key.
+//!
 //! ```toml
 //! [[extension]]
 //! point = "is.bifrost.file-provider"   # required
@@ -20,12 +25,16 @@ use crate::extension::{Identity, Point, Registry, Scope};
 /// The system extension point of file providers (`FileProvider`): an extension that serves a domain of items to Files.
 pub const FILE_PROVIDER_POINT: &str = "is.bifrost.file-provider";
 
+/// The system extension point of file-manager sync extensions (badges and shortcut-menu items for the folders an app
+/// watches, `bifrost_app::file_manager_sync`).
+pub const FILE_MANAGER_POINT: &str = "is.bifrost.file-manager-sync";
+
 /// The namespace the system's own points sit under.
 pub const SYSTEM_OWNER: &str = "is.bifrost";
 
 /// The points the system declares itself.
 pub fn system_points() -> Vec<Point> {
-    Point::new(SYSTEM_OWNER, FILE_PROVIDER_POINT, Scope::Any).into_iter().collect()
+    [FILE_PROVIDER_POINT, FILE_MANAGER_POINT].into_iter().filter_map(|id| Point::new(SYSTEM_OWNER, id, Scope::Any).ok()).collect()
 }
 
 /// `id` is `owner` itself or sits under its namespace.
@@ -56,6 +65,26 @@ fn tables(text: &str) -> Vec<(String, Vec<(String, String)>)> {
 
 fn field<'a>(pairs: &'a [(String, String)], key: &str) -> Option<&'a str> {
     pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).filter(|v| !v.is_empty())
+}
+
+/// The top-level keys of `text`: the lines before the first table, as `(key, value)` pairs.
+fn top_level(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.starts_with("[[") || (line.starts_with('[') && line.ends_with(']') && !line.contains('"') && !line.contains('=')) {
+            break;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            out.push((key.trim().to_string(), value.trim().to_string()));
+        }
+    }
+    out
+}
+
+/// True when `file_manager_folders` names at least one folder (or opens a list on following lines).
+fn declares_folders(top: &[(String, String)]) -> bool {
+    top.iter().any(|(k, v)| k == "file_manager_folders" && (v.contains('"') || v == "["))
 }
 
 /// Reads the extension tables of the manifest of the app `app_id`. A table that is malformed, or that names a
@@ -92,6 +121,13 @@ pub fn parse(app_id: &str, text: &str) -> Declared {
                 }
             }
             _ => {}
+        }
+    }
+    let top = top_level(text);
+    if declares_folders(&top) && !out.extensions.iter().any(|i| i.bundle_id == app_id && i.point == FILE_MANAGER_POINT) {
+        let name = top.iter().find(|(k, _)| k == "name").map(|(_, v)| v.trim_matches('"')).filter(|v| !v.is_empty()).unwrap_or(app_id);
+        if let Ok(identity) = Identity::new(app_id, FILE_MANAGER_POINT, name) {
+            out.extensions.push(identity);
         }
     }
     out
@@ -172,6 +208,37 @@ mod tests {
         let d = parse("com.example.notes", &text);
         assert_eq!(d.points, vec![point]);
         assert_eq!(d.extensions, vec![identity]);
+    }
+
+    #[test]
+    fn file_manager_folders_make_the_app_a_file_manager_extension() {
+        let text = "id = \"is.o.cloud\"\nname = \"Cloud\"\nfile_manager_folders = [\"~/Cloud\"]\n\n[[extension]]\npoint = \"is.bifrost.file-provider\"\nname = \"Cloud Drive\"\n";
+        let d = parse("is.o.cloud", text);
+        let points: Vec<(&str, &str)> = d.extensions.iter().map(|i| (i.point.as_str(), i.name.as_str())).collect();
+        assert_eq!(points, [(FILE_PROVIDER_POINT, "Cloud Drive"), (FILE_MANAGER_POINT, "Cloud")]);
+        assert_eq!(d.extensions[1].bundle_id, "is.o.cloud");
+        let s = scan([("is.o.cloud", text)]);
+        assert_eq!(s.registry.discover(FILE_MANAGER_POINT).len(), 1);
+        assert_eq!(s.owner("is.o.cloud", FILE_MANAGER_POINT), Some("is.o.cloud"));
+    }
+
+    #[test]
+    fn a_list_on_following_lines_counts_and_other_manifests_do_not() {
+        let multi = "id = \"is.o.cloud\"\nfile_manager_folders = [\n  \"~/Cloud\",\n]\n";
+        assert_eq!(parse("is.o.cloud", multi).extensions.len(), 1);
+        assert_eq!(parse("is.o.cloud", multi).extensions[0].name, "is.o.cloud", "no name falls back to the app id");
+        assert!(parse("is.o.cloud", "id = \"is.o.cloud\"\nfile_manager_folders = []\n").extensions.is_empty());
+        assert!(parse("is.o.calc", "id = \"is.o.calc\"\nname = \"Calc\"\n").extensions.is_empty());
+        // a key inside a later table is not the app's declaration
+        assert!(parse("is.o.calc", "id = \"is.o.calc\"\n\n[other]\nfile_manager_folders = [\"~/x\"]\n").extensions.is_empty());
+    }
+
+    #[test]
+    fn an_explicit_table_for_the_point_is_not_doubled() {
+        let text = "id = \"is.o.cloud\"\nfile_manager_folders = [\"~/Cloud\"]\n\n[[extension]]\npoint = \"is.bifrost.file-manager-sync\"\nname = \"Cloud Sync\"\n";
+        let d = parse("is.o.cloud", text);
+        assert_eq!(d.extensions.len(), 1);
+        assert_eq!(d.extensions[0].name, "Cloud Sync");
     }
 
     #[test]

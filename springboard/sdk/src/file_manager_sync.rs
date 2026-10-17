@@ -14,12 +14,16 @@
 //! remotely and no extension code runs in the file manager's process: the extension host speaks this same API over a
 //! socket.
 //!
-//! Out of process: an extension app declares its folders in `manifest.toml` (`file_manager_folders`) and answers
-//! `ae.filemanager.*` events on its control socket with [`serve`]; the file manager keeps a [`RemoteExtension`] for it
-//! (see the notes above that type). The Files app is the host.
+//! Out of process: an extension app declares its folders in `manifest.toml` (`file_manager_folders`), which also makes it
+//! an extension of the system point `is.bifrost.file-manager-sync` (`bifrost_ui::extension_manifest::FILE_MANAGER_POINT`).
+//! The extension host (`springboard::shell::extension_host`) starts the app in extension mode when the file manager first
+//! needs it and stops it when it has been idle; in extension mode the app runs [`SyncService`] with
+//! `bifrost_app::extension_service::serve`, which answers the `ae.filemanager.*` calls with [`serve`]. The file manager
+//! keeps a [`RemoteExtension`] for it (see the notes above that type) over a [`Transport`] that goes through the host.
+//! An app that handles the same events on its own control socket ([`socket_transport`]) still works while it is running.
 //!
-//! Gaps: no enable screen in Settings, no service-name list, badge images are names for the shell's icon set (there is
-//! no image data path), and nothing starts an extension app that is not running.
+//! Gaps: no enable screen in Settings, no service-name list, and badge images are names for the shell's icon set (there
+//! is no image data path).
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
@@ -382,6 +386,9 @@ pub const MAX_SELECTED: usize = 256;
 pub const STALE_AFTER: Duration = Duration::from_secs(5);
 /// An app that did not answer a menu request is not asked again for this long.
 pub const MUTE_FOR: Duration = Duration::from_secs(30);
+/// The error number of a call that was not made because the extension is being started: ask again in a moment. It
+/// does not mute the extension (a [`Transport`] returns it for a caller that cannot wait for a launch).
+pub const ERR_STARTING: i64 = -601;
 const BADGE_TIMEOUT: Duration = Duration::from_secs(2);
 const MENU_TIMEOUT: Duration = Duration::from_millis(200);
 const PERFORM_TIMEOUT: Duration = Duration::from_secs(5);
@@ -494,7 +501,31 @@ pub fn serve(ev: &AppEvent, controller: &mut SyncController, ext: &mut dyn SyncE
     }
 }
 
-/// How a request reaches the extension app: the event and how long to wait. The real one is [`socket_transport`].
+/// The extension side behind the extension host: a [`crate::extension_service::Service`] that answers the
+/// `ae.filemanager.*` calls with [`serve`]. In extension mode an extension app runs
+/// `bifrost_app::extension_service::serve(&mut SyncService::new(controller, extension))` instead of its window.
+pub struct SyncService<E: SyncExtension> {
+    pub controller: SyncController,
+    pub extension: E,
+}
+
+impl<E: SyncExtension> SyncService<E> {
+    pub fn new(controller: SyncController, extension: E) -> SyncService<E> {
+        SyncService { controller, extension }
+    }
+}
+
+impl<E: SyncExtension> crate::extension_service::Service for SyncService<E> {
+    fn call(&mut self, method: &str, params: &Json) -> Result<Json, RpcError> {
+        let ev = AppEvent::from_method(method, params).ok_or_else(|| RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}")))?;
+        serve(&ev, &mut self.controller, &mut self.extension)
+    }
+}
+
+/// How a request reaches the extension app: the event and how long to wait. The real ones are [`socket_transport`] (the
+/// app's own control socket, which has to be running) and the extension host's (starts the app on demand).
+/// A transport for a caller that cannot wait (the menu is asked for with a 200 ms timeout on the UI thread) may answer
+/// [`ERR_STARTING`] instead of waiting for a launch.
 pub type Transport = Arc<dyn Fn(&AppEvent, Duration) -> AppEventReply + Send + Sync>;
 
 /// The transport over the control socket of the extension app.
@@ -510,6 +541,8 @@ enum Job {
 }
 
 enum Answer {
+    /// the describe call failed (the extension did not start or answer); it is sent again after [`MUTE_FOR`]
+    DescribeFailed,
     Described { badges: Vec<Badge>, toolbar: Option<ToolbarButton> },
     Badges(Vec<(PathBuf, Option<String>)>),
 }
@@ -548,6 +581,8 @@ fn work(transport: Transport, jobs: Receiver<Job>, answers: Sender<Answer>) {
                     });
                     let _ = answers.send(Answer::Described { badges, toolbar });
                     wake();
+                } else {
+                    let _ = answers.send(Answer::DescribeFailed);
                 }
             }
             Job::Observe { dir, begin } => {
@@ -604,17 +639,35 @@ pub struct RemoteExtension {
     toolbar: Option<ToolbarButton>,
     muted_until: Option<Instant>,
     stale_after: Duration,
+    /// whether the describe request has been sent (a lazy connection sends it with the first real request)
+    described: bool,
+    /// a failed describe is not repeated before this
+    describe_after: Option<Instant>,
 }
 
 impl RemoteExtension {
-    /// Connects through `transport` and asks the app to describe its badges and toolbar button.
+    /// Connects through `transport` and asks the app to describe its badges and toolbar button now.
     pub fn connect(transport: Transport) -> RemoteExtension {
+        let mut remote = RemoteExtension::connect_lazy(transport);
+        remote.ensure_described();
+        remote
+    }
+
+    /// Connects through `transport` without calling the app: the describe request goes out with the first request that
+    /// needs the app, so an extension host starts it only when the file manager shows one of its folders.
+    pub fn connect_lazy(transport: Transport) -> RemoteExtension {
         let (jobs, job_rx) = channel();
         let (answer_tx, answers) = channel();
         let worker = transport.clone();
         std::thread::spawn(move || work(worker, job_rx, answer_tx));
-        let _ = jobs.send(Job::Describe);
-        RemoteExtension { jobs, answers, transport, cache: HashMap::new(), asked: HashSet::new(), toolbar: None, muted_until: None, stale_after: STALE_AFTER }
+        RemoteExtension { jobs, answers, transport, cache: HashMap::new(), asked: HashSet::new(), toolbar: None, muted_until: None, stale_after: STALE_AFTER, described: false, describe_after: None }
+    }
+
+    fn ensure_described(&mut self) {
+        if !self.described && self.describe_after.map_or(true, |t| Instant::now() >= t) {
+            self.described = true;
+            let _ = self.jobs.send(Job::Describe);
+        }
     }
 
     /// How long a badge answer is trusted before it is asked for again.
@@ -635,6 +688,7 @@ impl RemoteExtension {
 
 impl SyncExtension for RemoteExtension {
     fn begin_observing(&mut self, dir: &Path) {
+        self.ensure_described();
         let _ = self.jobs.send(Job::Observe { dir: dir.to_path_buf(), begin: true });
     }
 
@@ -643,6 +697,7 @@ impl SyncExtension for RemoteExtension {
     }
 
     fn request_badge(&mut self, controller: &mut SyncController, path: &Path) {
+        self.ensure_described();
         if let Some((badge, at)) = self.cache.get(path) {
             Self::apply(controller, path, badge.as_deref());
             if at.elapsed() < self.stale_after {
@@ -693,6 +748,10 @@ impl SyncExtension for RemoteExtension {
         let mut changed = false;
         while let Ok(answer) = self.answers.try_recv() {
             match answer {
+                Answer::DescribeFailed => {
+                    self.described = false;
+                    self.describe_after = Some(Instant::now() + MUTE_FOR);
+                }
                 Answer::Described { badges, toolbar } => {
                     for b in badges {
                         let _ = controller.set_badge_image(&b.id, &b.label, &b.image);
@@ -1067,6 +1126,68 @@ mod tests {
         std::thread::sleep(Duration::from_millis(50));
         let menus_asked = *calls.lock().unwrap() - after_first;
         assert!(menus_asked <= 1, "the muted app is not asked for a menu again ({menus_asked})");
+    }
+
+    #[test]
+    fn a_lazy_connection_calls_nothing_until_the_first_request_needs_the_app() {
+        let (transport, state, _) = served(&["/home/a/Sync"]);
+        let mut c = SyncController::default();
+        c.set_directory_urls(&[PathBuf::from("/home/a/Sync")]).unwrap();
+        let mut host = SyncHost::new();
+        host.register("cloud", c, Box::new(RemoteExtension::connect_lazy(transport)));
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(state.lock().unwrap().asked.is_empty(), "registering does not start the app");
+        // a folder the extension does not watch is not a reason to start it either
+        assert_eq!(host.folder_opened(Path::new("/home/a/Documents")), Ok(0));
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(state.lock().unwrap().asked.is_empty());
+        host.folder_opened(Path::new("/home/a/Sync")).unwrap();
+        until(&mut host, "the badge descriptions", |h| h.controller("cloud").is_some_and(|c| c.badges().len() == 2));
+        let asked = state.lock().unwrap().asked.clone();
+        assert!(asked[0].starts_with("describe"), "{asked:?}");
+        assert!(asked.iter().any(|a| a.starts_with("observe")), "{asked:?}");
+    }
+
+    #[test]
+    fn a_describe_that_failed_is_not_repeated_at_once_but_does_not_stay_failed() {
+        let calls = Arc::new(Mutex::new(0usize));
+        let seen = calls.clone();
+        let starting: Transport = Arc::new(move |_: &AppEvent, _: Duration| {
+            *seen.lock().unwrap() += 1;
+            AppEventReply { error_number: ERR_STARTING, error_string: Some("starting".into()), result: Json::Null }
+        });
+        let mut c = SyncController::default();
+        c.set_directory_urls(&[PathBuf::from("/home/a/Sync")]).unwrap();
+        let mut host = SyncHost::new();
+        host.register("cloud", c, Box::new(RemoteExtension::connect_lazy(starting)));
+        let item = Path::new("/home/a/Sync/a.tmp");
+        host.badges_for(item);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while *calls.lock().unwrap() < 2 && Instant::now() < deadline {
+            host.poll();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // describe and the badge batch were tried; further draws within the back-off do not describe again
+        host.poll();
+        let tried = *calls.lock().unwrap();
+        for _ in 0..5 {
+            host.badges_for(item);
+            host.poll();
+        }
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(*calls.lock().unwrap() <= tried + 1, "only the badge batch may be asked again");
+    }
+
+    #[test]
+    fn the_sync_service_answers_events_for_the_extension_host() {
+        use crate::extension_service::Service;
+        let mut service = SyncService::new(controller(&["/home/a/Sync"]), App { performed: Arc::new(Mutex::new(Vec::new())) });
+        let described = service.call("ae.filemanager.describe", &Json::Obj(vec![])).unwrap();
+        assert_eq!(described.get("badges").and_then(Json::as_array).map(|b| b.len()), Some(2));
+        let badges = service.call("ae.filemanager.badges", &obj(vec![("paths", Json::Arr(vec![Json::Str("/home/a/Sync/draft.tmp".into())]))])).unwrap();
+        assert_eq!(badges.get("items").and_then(Json::as_array).map(|i| i.len()), Some(1));
+        assert_eq!(service.call("provider.enumerate", &Json::Obj(vec![])).unwrap_err().code, METHOD_NOT_FOUND);
+        assert_eq!(service.call("ae.other.describe", &Json::Obj(vec![])).unwrap_err().code, METHOD_NOT_FOUND);
     }
 
     #[test]

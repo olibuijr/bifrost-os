@@ -11,8 +11,9 @@ pub use bifrost_core::extension_process::{ConnectionId, Key, ProcessId, ProcessT
 pub use bifrost_ui::actionrequest::{ActionRequest, Outcome, RequestError};
 pub use bifrost_ui::extension::{valid_bundle_id, Error, Identity, Point, Registry, Scope};
 /// Reading the extension tables of installed manifests: `scan_manifests` builds the registry from `(app id, manifest
-/// text)` pairs, `FILE_PROVIDER_POINT` is the system point of file providers.
-pub use bifrost_ui::extension_manifest::{parse as parse_manifest, scan as scan_manifests, Declared, Owned, Scan, FILE_PROVIDER_POINT};
+/// text)` pairs, `FILE_PROVIDER_POINT` is the system point of file providers and `FILE_MANAGER_POINT` the one of file-manager sync
+/// extensions (`file_manager_sync`).
+pub use bifrost_ui::extension_manifest::{parse as parse_manifest, scan as scan_manifests, Declared, Owned, Scan, FILE_MANAGER_POINT, FILE_PROVIDER_POINT};
 
 /// The `[[extension_point]]` and `[[extension]]` tables for a manifest: every point, then every identity, in order.
 pub fn manifest(points: &[Point], identities: &[Identity]) -> String {

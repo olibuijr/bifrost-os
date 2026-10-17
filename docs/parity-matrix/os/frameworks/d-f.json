@@ -6447,9 +6447,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs; springboard/apps/files/src/extensions.rs; springboard/src/shell/apphost.rs",
+   "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs; springboard/apps/files/src/extensions.rs; springboard/src/shell/apphost.rs; springboard/src/shell/extension_host.rs; springboard/ui/src/extension_manifest.rs",
    "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Wired 2026-10-17 (wave 14): Files hosts the extension apps that declare file_manager_folders and draws their badges and menu rows (extensions.rs).",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Wired 2026-10-17 (wave 14): Files hosts the extension apps that declare file_manager_folders and draws their badges and menu rows (extensions.rs). Launch on demand 2026-10-17: the declaration makes the app an extension of the system point is.bifrost.file-manager-sync, and Files reaches it through the shared extension host (extension_host.rs), which starts it in extension mode when one of its folders is shown and stops it when idle; the app no longer has to be running (the menu never waits for a launch and shows its rows from the next menu). Host tests only, not run on Midget; no Settings enable screen, toolbar button not drawn.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -6468,9 +6468,19 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "apphost::tests::file_manager_extensions_declare_the_folders_they_watch"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "extension_manifest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "extension_host::tests"
     }
    ],
-   "ready_note": "An app whose manifest.toml has file_manager_folders = [\"~/Cloud\"] is an extension for those folders. Files finds it at start, tells it which folder is shown, asks it for badges on a worker thread (drawn on icon, list and column items on the next frame) and for menu rows when a shortcut menu opens, and sends the chosen row back, all over the app's control socket and only for paths inside the declared folders. The extension app must already be running (nothing launches it) and the toolbar button it can describe is not drawn. Tested with an in-process extension behind the real request and answer path; verify with a running extension app on Midget."
+   "ready_note": "An app whose manifest.toml has file_manager_folders = [\"~/Cloud\"] is an extension of the system point is.bifrost.file-manager-sync for those folders. Files finds it at start, but the shared extension host starts it (in extension mode, running SyncService) only when one of its folders is shown, and stops it after 30 s idle; the app does not have to be running. Files tells it which folder is shown, asks it for badges on a worker thread (drawn on icon, list and column items on the next frame) and for menu rows when a shortcut menu opens (the menu never waits for a launch: an extension that is not running is started in the background and shows its rows from the next menu), and sends the chosen row back, only for paths inside the declared folders. The toolbar button it can describe is not drawn and Settings has no enable screen. Tested with an in-process extension launched and reaped by a real host over real sockets; verify with an extension app on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FlexMusicKit.framework",

@@ -5374,14 +5374,22 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   toolbar button), `SyncController` (observed folders, registered badges, per-item badges limited to the observed folders, the host's
   selection) and `SyncHost` (what the Files app asks). Parity row: `FinderSyncPriv`. Wired in wave 14: an extension app declares
   `file_manager_folders = ["~/Cloud"]` in its manifest (`~/` is home; `/`, home itself, relative paths and `..` are refused) and answers
-  `ae.filemanager.*` events on its control socket with `file_manager_sync::serve` (describe, observe, badges, menu, perform).
-  `RemoteExtension` is the host side: badges are asked for on a worker thread in batches and cached (asked again after 5 s), menu
+  `ae.filemanager.*` calls with `file_manager_sync::serve` (describe, observe, badges, menu, perform). Since the extension-host
+  unification (Files 1.32.0) the declaration also makes the app an extension of the system point `is.bifrost.file-manager-sync`
+  (`extension_manifest::FILE_MANAGER_POINT`; `parse` adds the `[[extension]]` itself, `file_manager_folders` stays the folder list),
+  and the app runs `bifrost_app::extension_service::serve(&mut SyncService::new(controller, extension))` when it is started in
+  extension mode (see "App extension host and file providers" below). `RemoteExtension` is the host side: badges are asked for on a worker thread in batches and cached (asked again after 5 s), menu
   items are asked for with a 200 ms timeout and an app that does not answer is skipped for 30 s, and only paths inside the declared
   folders are ever sent. Files (`apps/files/src/extensions.rs`) discovers the apps at start, tells them which folder is shown, draws
   their badges on icon, list and column items, adds their rows to the item and folder shortcut menus and sends the choice back.
-  Gaps: no enable screen in Settings (declaring the folders is the enabling), nothing starts an extension app that is not running (no
-  SDK call launches an app by id), the toolbar button an extension describes is not drawn, the app list is read at start, and badge
-  images are symbol names.
+  Launch on demand: Files reaches each extension through the shared `extension_host::Host` (`extensions::host_transport`, the same host
+  and reaper thread as file providers), so showing one of the extension's folders starts the app in extension mode and the host stops
+  it after 30 s idle; `RemoteExtension::connect_lazy` sends nothing until the first request needs the app, and a failed describe is
+  retried after 30 s. The 200 ms menu request is made on the UI thread and never waits for a launch: when the extension is not
+  running (`Host::is_ready`) the transport starts it on a thread and answers `ERR_STARTING` (no mute), so the rows appear on the next
+  menu. Gaps: no enable screen in Settings (declaring the folders is the enabling; Login Items does not list the kind), the toolbar button
+  an extension describes is not drawn, the app list is read at start, the extension runs with the host's rights (no sandbox, as for
+  every extension), and badge images are symbol names. Host tests only, not run on Midget.
 - **Exchange notes (`bifrost_app::exchange_notes`, wave 14)**: Settings > Internet Accounts offers Notes (Exchange) (`Kind::Exchange`,
   account type `bifrost.exchange`, service `Notes`; the server address must be `https://`, the password goes to Passwords). The Notes
   app (1.23.0) mirrors the Notes folder of the first Exchange account with Notes switched on into a Notes folder named after the account
@@ -5451,7 +5459,9 @@ An installed app can provide an extension and another can use it. Wired path, fi
   `[[extension]] point = "..."` (an extension it provides; `bundle_id` defaults to the app id and must sit under it). The system
   declares `is.bifrost.file-provider` (`bifrost_ui::extension_manifest::FILE_PROVIDER_POINT`). `extension_manifest::scan`
   builds the `extension::Registry` from every installed manifest; Settings > Login Items & Extensions lists a provider
-  under FILE PROVIDER and its switch (`login.extensions.off`) hides it from the host.
+  under FILE PROVIDER and its switch (`login.extensions.off`) hides it from the host. The system also declares
+  `is.bifrost.file-manager-sync` (`FILE_MANAGER_POINT`) for file-manager sync extensions; an app with a `file_manager_folders` key is an
+  extension of it without writing the table.
 - **Host.** `springboard::shell::extension_host::Host` (shell crate, used by the shell process and by Files) launches the package's
   own binary on the first call with `--extension <point>`, `BIFROST_EXTENSION_POINT` and `BIFROST_CONTROL=<socket>`, waits for
   `extension.ping`, calls it with one JSON-RPC request per connection, and `reap` stops it after 30 s with no call in
@@ -5459,6 +5469,8 @@ An installed app can provide an extension and another can use it. Wired path, fi
 - **Extension side.** In `main`, `if bifrost_app::extension_service::requested().is_some() { serve(&mut service) } else { run(app) }`.
   `FileProviderService(provider)` answers `provider.enumerate` and `provider.fetch` for a `Provider` (`bifrost_ui::file_provider_wire`
   has the wire format).
+- **Files (sync extensions).** `apps/files/src/extensions.rs` talks to file-manager sync extensions through the same host
+  (`provider::shared_host()`, one process-wide host with one reaper); see "Private framework wave 12" above.
 - **Files.** Each enabled provider is a row under Locations (`apps/files/src/provider.rs`). Its items live at stand-in paths
   `/.provider/<domain>/<names>`; a listing calls `provider.enumerate`, opening a file calls `provider.fetch` into
   `~/.cache/bifrost/providers/...` (placeholders are downloaded on open) and then opens the local copy.
