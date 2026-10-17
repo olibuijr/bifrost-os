@@ -152,6 +152,28 @@ pub fn area_outline(plot: &Plot, data: &[(f64, f64)], method: Interpolation, bas
     outline
 }
 
+/// Opacity of an area mark's fill at its top edge. The fill fades linearly to clear at the baseline.
+pub const AREA_FILL_TOP_ALPHA: f64 = 0.35;
+
+/// Opacity of an area mark's fill at height `y` in plot points, for a mark spanning `top..bottom` (y grows
+/// downward, so `bottom` is the baseline). 0 for a degenerate or non-finite span; `y` outside the span is clamped.
+pub fn area_fill_alpha(y: f64, top: f64, bottom: f64) -> f64 {
+    if !(y.is_finite() && top.is_finite() && bottom.is_finite()) || bottom <= top {
+        return 0.0;
+    }
+    ((bottom - y) / (bottom - top)).clamp(0.0, 1.0) * AREA_FILL_TOP_ALPHA
+}
+
+/// Opacity of a glow around a mark at `distance` points from its edge: `peak` on the edge, falling off with a
+/// quadratic curve to 0 at `radius`. 0 beyond the radius, for a non-positive radius, or for non-finite input.
+pub fn glow_alpha(distance: f64, radius: f64, peak: f64) -> f64 {
+    if !(distance.is_finite() && radius.is_finite() && peak.is_finite()) || radius <= 0.0 || distance >= radius {
+        return 0.0;
+    }
+    let t = (distance.max(0.0) / radius).clamp(0.0, 1.0);
+    peak * (1.0 - t) * (1.0 - t)
+}
+
 /// The outline of one pie or donut sector around `center`, with radii `inner..outer` in points. `inset` (radians) is
 /// shaved from both ends of the sector, leaving a gap between neighbours. `segments` sets how finely each arc is
 /// sampled. The outer arc runs clockwise, then the inner arc back. Empty for bad radii or when no angle is left.
@@ -360,5 +382,25 @@ mod tests {
         let at_top = Frame::new(40.0, 0.0, 20.0, 10.0);
         let down = place_annotation(at_top, (30.0, 10.0), Position::Automatic, 2.0, bounds, Overflow::Fit);
         assert!((down.y - 12.0).abs() < 1e-9, "no room above, so it goes below");
+    }
+
+    #[test]
+    fn area_fill_fades_from_the_top_to_clear_at_the_baseline() {
+        assert!((area_fill_alpha(10.0, 10.0, 110.0) - AREA_FILL_TOP_ALPHA).abs() < 1e-12);
+        assert!(area_fill_alpha(110.0, 10.0, 110.0).abs() < 1e-12);
+        assert!((area_fill_alpha(60.0, 10.0, 110.0) - AREA_FILL_TOP_ALPHA / 2.0).abs() < 1e-12);
+        assert!((area_fill_alpha(-50.0, 10.0, 110.0) - AREA_FILL_TOP_ALPHA).abs() < 1e-12, "above the mark clamps to the top");
+        assert_eq!(area_fill_alpha(60.0, 110.0, 10.0), 0.0, "an inverted span draws nothing");
+        assert_eq!(area_fill_alpha(f64::NAN, 10.0, 110.0), 0.0);
+    }
+
+    #[test]
+    fn glow_is_strongest_on_the_edge_and_gone_past_its_radius() {
+        assert!((glow_alpha(0.0, 8.0, 0.6) - 0.6).abs() < 1e-12);
+        assert!((glow_alpha(4.0, 8.0, 0.6) - 0.15).abs() < 1e-12, "quadratic falloff: (1 - 0.5)^2 of the peak");
+        assert_eq!(glow_alpha(8.0, 8.0, 0.6), 0.0);
+        assert_eq!(glow_alpha(20.0, 8.0, 0.6), 0.0);
+        assert_eq!(glow_alpha(1.0, 0.0, 0.6), 0.0, "no radius, no glow");
+        assert_eq!(glow_alpha(-3.0, 8.0, 0.6), glow_alpha(0.0, 8.0, 0.6), "inside the edge counts as the edge");
     }
 }
