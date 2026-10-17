@@ -14,7 +14,7 @@
 
 use super::apphost::unquote;
 use super::intents;
-use bifrost_ui::control_widget::{ControlError, ControlKind, ControlRegistry, StaticControlConfiguration, MAX_IDENTIFIER_LEN};
+use bifrost_ui::control_widget::{toggle_param_value, ControlError, ControlKind, ControlRegistry, StaticControlConfiguration, MAX_IDENTIFIER_LEN, TOGGLE_PARAM};
 use std::time::Duration;
 
 /// One `[[control]]` table of a manifest, already checked: a known kind, a title, and a safe intent id.
@@ -99,13 +99,110 @@ impl ManifestControl {
     pub fn request_line(&self, on: bool) -> String {
         match self.kind {
             ControlKind::Button => intents::request_line(&self.intent),
-            ControlKind::Toggle => intents::request_line_with(&self.intent, &[("on", if on { "true" } else { "false" })]),
+            ControlKind::Toggle => intents::request_line_with(&self.intent, &[(TOGGLE_PARAM, toggle_param_value(on))]),
         }
     }
 
     /// Sends the control's request to the app's control socket and returns the app's dialog text, if any.
     pub fn invoke(&self, app_id: &str, on: bool, wait: Duration) -> Result<Option<String>, String> {
         intents::parse_reply(&intents::exchange(app_id, &self.request_line(on), wait)?)
+    }
+}
+
+/// The prefix that marks an app control inside the `control_center_modules` pref (`app:<identifier>`).
+pub const APP_KEY_PREFIX: &str = "app:";
+
+/// The app-control identifiers stored in the modules pref, in order. Module keys are left to `parse_slots`.
+pub fn pref_app_keys(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for item in text.split(',').map(str::trim) {
+        if let Some(id) = item.strip_prefix(APP_KEY_PREFIX) {
+            if !id.is_empty() && !out.iter().any(|k| k == id) {
+                out.push(id.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// The modules pref text with the app-control keys set to `app_keys`. Any app keys already in `modules` are
+/// replaced, so saving the module list never drops an app control.
+pub fn join_pref(modules: &str, app_keys: &[String]) -> String {
+    let mut parts: Vec<String> = modules.split(',').map(str::trim).filter(|s| !s.is_empty() && !s.starts_with(APP_KEY_PREFIX)).map(str::to_string).collect();
+    let mut seen: Vec<&str> = Vec::new();
+    for key in app_keys {
+        if !seen.contains(&key.as_str()) {
+            seen.push(key);
+            parts.push(format!("{APP_KEY_PREFIX}{key}"));
+        }
+    }
+    parts.join(",")
+}
+
+/// One app control on the panel: the app that declared it, the declaration, and its registry identifier.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppControlEntry {
+    pub app_id: String,
+    pub control: ManifestControl,
+    pub identifier: String,
+}
+
+/// The app controls the panel shows, in the order the user added them. The registry keeps each toggle's value.
+#[derive(Debug, Default)]
+pub struct AppControls {
+    registry: ControlRegistry,
+    entries: Vec<AppControlEntry>,
+}
+
+impl AppControls {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a control of an app. Refused when the identifier is already on the panel.
+    pub fn add(&mut self, app_id: &str, control: ManifestControl) -> Result<(), ControlError> {
+        let configuration = control.configuration(app_id);
+        let identifier = configuration.identifier.clone();
+        self.registry.register(configuration)?;
+        self.entries.push(AppControlEntry { app_id: app_id.to_string(), control, identifier });
+        Ok(())
+    }
+
+    /// Removes a control from the panel. Returns false when it was not there.
+    pub fn remove(&mut self, identifier: &str) -> bool {
+        self.entries.retain(|e| e.identifier != identifier);
+        self.registry.unregister(identifier)
+    }
+
+    /// The controls, in panel order.
+    pub fn entries(&self) -> &[AppControlEntry] {
+        &self.entries
+    }
+
+    /// The identifiers in panel order, for the modules pref (`join_pref`).
+    pub fn keys(&self) -> Vec<String> {
+        self.entries.iter().map(|e| e.identifier.clone()).collect()
+    }
+
+    /// A toggle's value. A button, or an unknown identifier, is off.
+    pub fn value(&self, identifier: &str) -> bool {
+        self.registry.value(identifier).unwrap_or(false)
+    }
+
+    /// Uses a control and returns the request to send with `ManifestControl::invoke`, off the UI thread. A button
+    /// returns the request that runs its intent. A toggle flips its value and the request carries the new state.
+    pub fn press(&mut self, identifier: &str) -> Result<String, ControlError> {
+        let entry = self.entries.iter().find(|e| e.identifier == identifier).cloned().ok_or_else(|| ControlError::Unknown { identifier: identifier.into() })?;
+        match entry.control.kind {
+            ControlKind::Button => {
+                self.registry.press(identifier)?;
+                Ok(entry.control.request_line(false))
+            }
+            ControlKind::Toggle => {
+                let on = self.registry.toggle(identifier)?;
+                Ok(entry.control.request_line(on))
+            }
+        }
     }
 }
 
@@ -192,5 +289,33 @@ mod tests {
         let control = ManifestControl { kind: ControlKind::Button, title: "T".into(), symbol: String::new(), intent: "i".repeat(200) };
         let mut registry = ControlRegistry::new();
         assert!(matches!(register(&mut registry, "app", &[control]), Err(ControlError::IdentifierTooLong { .. })));
+    }
+
+    #[test]
+    fn panel_state_adds_presses_and_removes() {
+        let controls = parse_controls(MANIFEST);
+        let mut panel = AppControls::new();
+        panel.add("is.olibuijr.notes", controls[0].clone()).unwrap();
+        panel.add("is.olibuijr.notes", controls[1].clone()).unwrap();
+        assert_eq!(panel.keys(), vec!["is.olibuijr.notes.set-quiet", "is.olibuijr.notes.new-note"]);
+        assert!(!panel.value("is.olibuijr.notes.set-quiet"));
+        let line = panel.press("is.olibuijr.notes.set-quiet").unwrap();
+        assert!(line.contains("\"on\":\"true\""));
+        assert!(panel.value("is.olibuijr.notes.set-quiet"));
+        assert!(panel.press("is.olibuijr.notes.new-note").unwrap().contains("intent.new-note"));
+        assert!(panel.press("nope").is_err());
+        assert!(panel.add("is.olibuijr.notes", controls[0].clone()).is_err());
+        assert!(panel.remove("is.olibuijr.notes.set-quiet"));
+        assert!(!panel.remove("is.olibuijr.notes.set-quiet"));
+        assert_eq!(panel.keys(), vec!["is.olibuijr.notes.new-note"]);
+    }
+
+    #[test]
+    fn pref_keys_round_trip_beside_module_keys() {
+        let keys = vec!["a.b.c".to_string(), "x.y.z".to_string(), "a.b.c".to_string()];
+        let text = join_pref("wifi,-camera,app:old.one", &keys);
+        assert_eq!(text, "wifi,-camera,app:a.b.c,app:x.y.z");
+        assert_eq!(pref_app_keys(&text), vec!["a.b.c", "x.y.z"]);
+        assert_eq!(join_pref("", &[]), "");
     }
 }
