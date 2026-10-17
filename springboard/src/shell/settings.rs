@@ -1796,6 +1796,9 @@ impl Settings {
                             if let Some(tap) = page.tap(ui, w, h, x, y) {
                                 return Outcome::Wallpaper(tap);
                             }
+                        } else if matches!(page.tap(ui, w, h, x, y), Some(Tap::Dynamic)) {
+                            // the Dynamic Wallpaper switch row sits above the grid and is not a thumbnail
+                            return Outcome::Wallpaper(Tap::Dynamic);
                         } else if let Some(i) = held.filter(|&i| page.hit(ui, w, h, x, y) == Some(i)) {
                             return Outcome::Wallpaper(Tap::Thumb(i));
                         }
@@ -3788,7 +3791,8 @@ mod tests {
         let ui = super::super::tests::ui();
         let (mut st, mut prefs) = settings(&ui, &wifi_info());
         tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        assert_eq!(st.list().unwrap().spec().groups.len(), 2);
+        // the switch, the networks, and the Country or Region group
+        assert_eq!(st.list().unwrap().spec().groups.len(), 3);
         let fx = tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
         assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(false))]);
         assert_eq!(st.list().unwrap().spec().groups.len(), 1, "no networks while off");
