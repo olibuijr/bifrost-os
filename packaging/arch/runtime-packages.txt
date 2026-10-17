@@ -146,3 +146,6 @@ ttf-nunito
 ttf-libertinus
 ttf-charis
 ttf-ibm-plex
+inter-font
+ttf-jetbrains-mono
+ttf-nunito

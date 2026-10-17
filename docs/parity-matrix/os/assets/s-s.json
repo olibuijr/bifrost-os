@@ -51,7 +51,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-BoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) bold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Heavy.otf",
@@ -101,7 +114,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-ExtraBoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) extrabold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Light.otf",
@@ -151,7 +177,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-LightItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) light italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Medium.otf",
@@ -201,7 +240,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-MediumItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) medium italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Regular.otf",
@@ -251,7 +303,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Semibold.otf",
@@ -301,7 +366,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-SemiBoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) semibold italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMono-Terminal.ttf",
@@ -351,7 +429,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Desktop Pictures/.thumbnails/Solar Gradients.heic",
@@ -635,7 +726,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFCompact.ttf",
@@ -893,7 +997,20 @@
    "status": "partial",
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMono.ttf",
@@ -943,7 +1060,20 @@
    "status": "partial",
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/JetBrainsMono-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute JetBrains Mono (ttf-jetbrains-mono, OFL-1.1) italic for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSRounded.ttf",
@@ -964,7 +1094,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Light.ttc",
@@ -985,7 +1128,20 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Light.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans CJK (noto-fonts-cjk, OFL-1.1) Light for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Medium.ttc",
@@ -1006,7 +1162,20 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Medium.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans CJK (noto-fonts-cjk, OFL-1.1) Medium for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneral.otf",
@@ -1027,7 +1196,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBol.otf",
@@ -1048,7 +1230,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Bold.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBolIta.otf",
@@ -1069,7 +1264,20 @@
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-BoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1-no-RFN) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralItalic.otf",
