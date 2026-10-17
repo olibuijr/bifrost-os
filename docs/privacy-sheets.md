@@ -54,6 +54,13 @@ All sheets default to refusal: an unanswered question never grants.
   store link `bifrost-package:install/name,name`, opens the sheet. Install runs `pacman -U` or `pacman -S --needed`
   through privd (`package.install_file`, `package.install_repo`) on a worker thread; the sheet follows the pacman log for
   its progress and then shows the result. Return never installs: only the Install button does.
+- Installing needs the administrator's password. The confirmation names the package, its version and, for a package
+  file, that it is unsigned (`Source::describe`). Install opens the password sheet (the one-field prompt of
+  `auth_sheet.rs`, `forms::Purpose::InstallAuthentication`); the password goes to privd's `auth.elevate`, which answers
+  with a single-use grant, and only then does the install request go out carrying that grant. privd refuses
+  `package.install_file` and `package.install_repo` without one, so the shell alone cannot install (see
+  `privd-protocol.md`, "Elevation"). Cancel, Escape and three wrong passwords end the sheet with nothing installed and
+  no install request sent. A root shell with no privd has no password to check and installs after the confirmation.
 
 ## Contacts picker (`contactpick.rs`)
 

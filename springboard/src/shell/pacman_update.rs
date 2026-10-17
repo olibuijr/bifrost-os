@@ -149,10 +149,16 @@ pub const PACKAGE_EXTENSIONS: [&str; 2] = [".pkg.tar.zst", ".pkg.tar.xz"];
 /// The package name in a package archive's file name (`name-version-release-arch.pkg.tar.zst`), or `None` when the file is
 /// not named like a package. The name is checked like a name given to `remove_args`.
 pub fn package_file_name(file: &str) -> Option<String> {
+    package_file_info(file).map(|(name, _, _)| name)
+}
+
+/// The name, version (with the release, `3.3.0-1`) and architecture a package archive's file name carries
+/// (`name-version-release-arch.pkg.tar.zst`), or `None` when the file is not named like a package.
+pub fn package_file_info(file: &str) -> Option<(String, String, String)> {
     let base = PACKAGE_EXTENSIONS.iter().find_map(|e| file.strip_suffix(e))?;
     let mut parts = base.rsplitn(4, '-');
     let (arch, release, version, name) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
-    (!arch.is_empty() && !release.is_empty() && !version.is_empty() && plain_name(name)).then(|| name.to_string())
+    (!arch.is_empty() && !release.is_empty() && !version.is_empty() && plain_name(name)).then(|| (name.to_string(), format!("{version}-{release}"), arch.to_string()))
 }
 
 /// Whether a file is named like a package archive.
@@ -215,15 +221,33 @@ impl Source {
         }
     }
 
-    /// Runs the install: through privd for a user session, in this process for the root shell and host tests. Blocking;
+    /// What the confirmation sheet tells the person about the source before they authenticate: for a package file its
+    /// name, version and that it is unsigned (a local file is not checked against a trusted signature); for repository
+    /// packages that pacman checks their signatures.
+    pub fn describe(&self) -> String {
+        let clean = |s: &str| s.chars().filter(|c| !c.is_control()).collect::<String>();
+        match self {
+            Source::File(path) => {
+                let file = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                match package_file_info(file) {
+                    Some((name, version, arch)) => format!("{name} {} ({}). Unsigned: a package file you opened is not checked against a trusted signature (pacman -U).", clean(&version), clean(&arch)),
+                    None => "Unknown package file.".to_string(),
+                }
+            }
+            Source::Repo(names) => format!("From the package repository: {}. pacman checks their signatures.", names.join(", ")),
+        }
+    }
+
+    /// Runs the install: through privd for a user session (with the `grant` of a fresh administrator password), in this
+    /// process for the root shell and host tests (which ignore the grant). Blocking;
     /// the caller has asked the person.
-    pub fn run(&self) -> Result<(), String> {
+    pub fn run(&self, grant: &str) -> Result<(), String> {
         self.packages()?;
         let c = crate::privd_client::connect();
         if !c.is_local() {
             return match self {
-                Source::File(path) => c.package_install_file(&path.to_string_lossy()),
-                Source::Repo(names) => c.package_install_repo(names),
+                Source::File(path) => c.package_install_file(&path.to_string_lossy(), grant),
+                Source::Repo(names) => c.package_install_repo(names, grant),
             }
             .map_err(|e| e.to_string());
         }

@@ -314,14 +314,28 @@ impl Client {
 
     /// Asks privd to install the package archive at `path` with pacman (`package.install_file`). privd copies the file
     /// into its own staging folder before pacman reads it.
-    pub fn package_install_file(&self, path: &str) -> Result<(), ClientError> {
-        self.call_timeout("package.install_file", vec![("path", privd::s(path))], Duration::from_secs(3600)).map(|_| ())
+    /// `grant` is the single-use proof of a fresh administrator password from [`Client::elevate`]; privd refuses the
+    /// install without it.
+    pub fn package_install_file(&self, path: &str, grant: &str) -> Result<(), ClientError> {
+        self.call_timeout("package.install_file", vec![("path", privd::s(path)), ("grant", privd::s(grant))], Duration::from_secs(3600)).map(|_| ())
     }
 
-    /// Asks privd to install packages from the sync databases (`package.install_repo`).
-    pub fn package_install_repo(&self, names: &[String]) -> Result<(), ClientError> {
+    /// Asks privd to install packages from the sync databases (`package.install_repo`), with the `grant` of
+    /// [`Client::elevate`].
+    pub fn package_install_repo(&self, names: &[String], grant: &str) -> Result<(), ClientError> {
         let names = Json::Arr(names.iter().map(|n| privd::s(n.as_str())).collect());
-        self.call_timeout("package.install_repo", vec![("names", names)], Duration::from_secs(3600)).map(|_| ())
+        self.call_timeout("package.install_repo", vec![("names", names), ("grant", privd::s(grant))], Duration::from_secs(3600)).map(|_| ())
+    }
+
+    /// Re-checks the administrator's password with privd (`auth.elevate`) and returns the single-use grant for `scope`
+    /// (`privd::SCOPE_PACKAGE_INSTALL` for installs). The error code is `wrong_password` or `locked_out` when the
+    /// password was not accepted. The in-process client (a root shell) has no daemon to ask and returns an empty grant.
+    pub fn elevate(&self, scope: &str, password: &str) -> Result<String, ClientError> {
+        if self.is_local() {
+            return Ok(String::new());
+        }
+        let reply = self.call("auth.elevate", vec![("scope", privd::s(scope)), ("password", privd::s(password))])?;
+        reply.str_field("grant").ok_or_else(|| ClientError { code: "internal".into(), message: "privd sent no grant".into() })
     }
 
     pub fn store_uninstall(&self, id: &str) -> Result<(), ClientError> {
