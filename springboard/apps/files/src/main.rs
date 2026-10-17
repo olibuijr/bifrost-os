@@ -221,8 +221,7 @@ impl Files {
         }
         let tag_index = TagIndex::load(&sidecar_path(&home));
         let smart = smart::load(&home);
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
-        let ext = std::cell::RefCell::new(Extensions::discover(&springboard::shell::apphost::root(), &home, runtime.as_deref(), "is.olibuijr.files.desktop"));
+        let ext = std::cell::RefCell::new(Extensions::discover(&springboard::shell::apphost::root(), &home, &provider::shared_host(), "is.olibuijr.files.desktop"));
         let mut f = Self {
             path: home.clone(),
             tabs: tabs::TabStrip::new(tabs::TabState { path: home.clone(), history: vec![], at: 0 }),

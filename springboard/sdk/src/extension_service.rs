@@ -19,7 +19,8 @@
 //! [`serve`] answers one JSON-RPC request per connection on the control socket until the host sends
 //! `extension.shutdown` or the host process is gone. [`FileProviderService`] is the [`Service`] of the
 //! `is.bifrost.file-provider` point: it decodes `provider.enumerate` and `provider.fetch`
-//! (`bifrost_ui::file_provider_wire`) and calls a [`Provider`]. No window is made and no shell channel is opened in
+//! (`bifrost_ui::file_provider_wire`) and calls a [`Provider`]. `bifrost_app::file_manager_sync::SyncService` is the [`Service`] of the
+//! `is.bifrost.file-manager-sync` point: it answers the `ae.filemanager.*` calls of the file manager. No window is made and no shell channel is opened in
 //! extension mode, so an extension cannot draw; presenting an extension's scene is `remote_view`, which this host does
 //! not use yet.
 

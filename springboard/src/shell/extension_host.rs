@@ -15,6 +15,9 @@
 //!   `extension.shutdown`, then kills a process that does not leave. A process that died is dropped and started again
 //!   by the next call. Dropping the host stops everything it started.
 //!
+//! `is_ready` tells a caller that cannot wait for a launch whether a call would start the process. The file-manager sync
+//! extensions of Files use the host the same way as file providers (`apps/files/src/extensions.rs`).
+//!
 //! Process and socket go through the [`Launcher`] and [`Transport`] traits, so tests run a real socket server in a
 //! thread instead of a binary. Gaps: the extension runs with the host's rights, not in the app sandbox
 //! (`bare::app_policy`), because the sandbox does not bind the socket directory; and a scene is not presented
@@ -314,6 +317,12 @@ impl Host {
         self.running.iter().any(|r| r.key.bundle_id == bundle_id && r.key.point == point)
     }
 
+    /// True while a process runs for this extension and has not exited, so a call needs no launch. A caller that must not
+    /// wait for a launch (a menu on the UI thread) checks this first.
+    pub fn is_ready(&mut self, bundle_id: &str, point: &str) -> bool {
+        self.running.iter_mut().find(|r| r.key.bundle_id == bundle_id && r.key.point == point).is_some_and(|r| r.instance.alive())
+    }
+
     /// How many extension processes this host has started and not stopped.
     pub fn live(&self) -> usize {
         self.table.live_processes()
@@ -581,6 +590,18 @@ mod tests {
         assert_eq!(host.live(), 0);
         echo(&mut host, t0 + Duration::from_secs(40)).unwrap();
         assert_eq!(launcher.launches.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn an_extension_is_ready_only_while_its_process_runs() {
+        let launcher = FakeLauncher::default();
+        let mut host = host_with(launcher.clone(), "ready");
+        let t0 = Instant::now();
+        assert!(!host.is_ready(DRIVE_ID, FILE_PROVIDER_POINT), "nothing is started until a call");
+        echo(&mut host, t0).unwrap();
+        assert!(host.is_ready(DRIVE_ID, FILE_PROVIDER_POINT));
+        launcher.last_stop.lock().unwrap().as_ref().unwrap().store(true, Ordering::SeqCst);
+        assert!(!host.is_ready(DRIVE_ID, FILE_PROVIDER_POINT), "a process that left is not ready");
     }
 
     #[test]

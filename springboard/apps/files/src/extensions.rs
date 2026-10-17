@@ -1,22 +1,100 @@
-//! File-manager sync extensions in Files. An app whose manifest declares `file_manager_folders` is an extension for those
-//! folders: Files runs it through the app's control socket (`bifrost_app::file_manager_sync`) and, for the items inside
-//! the folders, draws the badges it returns, adds its menu items to the item and folder shortcut menus, and sends it
-//! the choice back.
+//! File-manager sync extensions in Files. An app whose manifest declares `file_manager_folders` is an extension of the
+//! system point `is.bifrost.file-manager-sync` for those folders (`bifrost_ui::extension_manifest`): Files reaches it
+//! through the shared extension host (`springboard::shell::extension_host`, the one file providers use), so the app is
+//! started in extension mode when Files first needs it and stopped when it has been idle. For the items inside the
+//! folders Files draws the badges it returns, adds its menu items to the item and folder shortcut menus, and sends it
+//! the choice back (`bifrost_app::file_manager_sync`).
 //!
 //! Files never waits on an extension while it draws: a badge is asked for on a worker thread and shows on the next draw
-//! after the answer (the answer wakes the loop, and `tick` hands it over through [`Extensions::poll`]). The shortcut
-//! menu asks with a short timeout, and an extension that does not answer is skipped for a while. Nothing outside the
-//! folders the manifest names is ever sent to an extension, and an extension app that is not running simply adds
-//! nothing.
+//! after the answer (the answer wakes the loop, and `tick` hands it over through [`Extensions::poll`]). Showing one of
+//! the extension's folders is what starts it. The shortcut menu is asked on the UI thread with a short timeout, so it
+//! never waits for a launch: when the extension is not running the menu starts it in the background and shows no rows
+//! this time. An extension that does not answer is skipped for a while. Nothing outside the folders the manifest names
+//! is ever sent to an extension.
+use crate::provider::locked;
 use crate::*;
-use bifrost_app::file_manager_sync::{socket_transport, Badge, MenuKind, RemoteExtension, SyncController, SyncHost};
+use bifrost_app::app_events::{AppEvent, AppEventReply, ERR_EVENT_NOT_HANDLED, ERR_TARGET_UNREACHABLE, ERR_TIMEOUT};
+use bifrost_app::extension::FILE_MANAGER_POINT;
+use bifrost_app::file_manager_sync::{Badge, MenuKind, RemoteExtension, SyncController, SyncHost, Transport, ERR_STARTING};
+use bifrost_core::json::Json;
 use springboard::shell::apphost;
+use springboard::shell::extension_host::{Host, HostError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, TryLockError};
 
 /// The first id given to an extension's menu row; the rows of one menu follow, so they never meet the Files ids.
 pub(crate) const MENU_EXT_BASE: u32 = 1000;
 
+/// A call with less time than this is made on the UI thread (the shortcut menu): it never waits for a launch.
+const LAUNCH_BUDGET: Duration = Duration::from_millis(1000);
+
 /// Side of a badge, in points.
 const BADGE_PT: f32 = 14.;
+
+fn failed(code: i64, text: &str) -> AppEventReply {
+    AppEventReply { error_number: code, error_string: Some(text.into()), result: Json::Null }
+}
+
+/// The event reply of a host call. A reply that did not come in time is a timeout, the others that the app was not
+/// reachable, and an error answer from the extension itself is "not handled".
+fn reply_of(result: Result<Json, HostError>) -> AppEventReply {
+    match result {
+        Ok(result) => AppEventReply { error_number: 0, error_string: None, result },
+        Err(HostError::Remote(message)) => failed(ERR_EVENT_NOT_HANDLED, &message),
+        Err(HostError::Unreachable(message)) if message.contains("temporarily unavailable") || message.contains("timed out") => failed(ERR_TIMEOUT, &message),
+        Err(e) => failed(ERR_TARGET_UNREACHABLE, &e.to_string()),
+    }
+}
+
+/// The host, when it is free and `bundle_id` runs; otherwise the extension is started on a thread of its own (once at
+/// a time) and None is returned.
+fn running_host<'a>(host: &'a Arc<Mutex<Host>>, bundle_id: &str, warming: &Arc<AtomicBool>) -> Option<std::sync::MutexGuard<'a, Host>> {
+    let guard = match host.try_lock() {
+        Ok(g) => Some(g),
+        Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
+        Err(TryLockError::WouldBlock) => None, // a launch or another call holds the host: ask again next time
+    };
+    if let Some(mut g) = guard {
+        if g.is_ready(bundle_id, FILE_MANAGER_POINT) {
+            return Some(g);
+        }
+    }
+    if !warming.swap(true, Ordering::SeqCst) {
+        let (host, bundle_id, warming) = (Arc::clone(host), bundle_id.to_string(), Arc::clone(warming));
+        std::thread::spawn(move || {
+            let started = locked(&host).begin(&bundle_id, FILE_MANAGER_POINT, Instant::now());
+            if let Ok(lease) = started {
+                locked(&host).end(lease, Instant::now());
+            }
+            warming.store(false, Ordering::SeqCst);
+        });
+    }
+    None
+}
+
+/// The transport of the extension `bundle_id`: each request is one call through the extension host, which starts the
+/// extension if it is not running. A request with less than [`LAUNCH_BUDGET`] to wait never waits for a launch: it
+/// starts the extension in the background and answers [`ERR_STARTING`].
+pub(crate) fn host_transport(host: Arc<Mutex<Host>>, bundle_id: String) -> Transport {
+    let warming = Arc::new(AtomicBool::new(false));
+    Arc::new(move |ev: &AppEvent, timeout: Duration| {
+        let begun = if timeout < LAUNCH_BUDGET {
+            match running_host(&host, &bundle_id, &warming) {
+                Some(mut g) => g.begin(&bundle_id, FILE_MANAGER_POINT, Instant::now()),
+                None => return failed(ERR_STARTING, "the extension is starting"),
+            }
+        } else {
+            locked(&host).begin(&bundle_id, FILE_MANAGER_POINT, Instant::now())
+        };
+        let lease = match begun {
+            Ok(lease) => lease,
+            Err(e) => return reply_of(Err(e)),
+        };
+        let result = lease.exchange(&ev.method(), ev.params.clone(), timeout);
+        locked(&host).end(lease, Instant::now());
+        reply_of(result)
+    })
+}
 
 /// The extensions Files hosts and the menu rows they added to the menu that is open.
 #[derive(Default)]
@@ -29,23 +107,27 @@ pub(crate) struct Extensions {
 }
 
 impl Extensions {
-    /// The extension apps installed under `root` (those that declare `file_manager_folders`), connected through their
-    /// control sockets in `runtime` (`$XDG_RUNTIME_DIR`). Without a runtime directory there are none.
-    pub(crate) fn discover(root: &Path, home: &Path, runtime: Option<&Path>, own_id: &str) -> Extensions {
+    /// The extension apps installed under `root` that `host` offers as file-manager sync extensions and that declare
+    /// `file_manager_folders`. Nothing is started here: the host starts an extension on the first request for one of its
+    /// folders.
+    pub(crate) fn discover(root: &Path, home: &Path, host: &Arc<Mutex<Host>>, own_id: &str) -> Extensions {
         let mut ext = Extensions::default();
-        let Some(runtime) = runtime else { return ext };
+        let offered: Vec<String> = locked(host).discover(FILE_MANAGER_POINT).into_iter().map(|e| e.bundle_id).collect();
+        if offered.is_empty() {
+            return ext;
+        }
         for app in apphost::scan(root) {
             let m = &app.manifest;
             let dirs = m.file_manager_dirs(home);
-            if m.id == own_id || dirs.is_empty() {
+            if m.id == own_id || dirs.is_empty() || !offered.contains(&m.id) {
                 continue;
             }
             let mut controller = SyncController::default();
             if controller.set_directory_urls(&dirs).is_err() {
                 continue;
             }
-            let socket = bifrost_app::script_target::socket_path(&m.id, None, Some(runtime), Path::new(""));
-            ext.host.register(&m.id, controller, Box::new(RemoteExtension::connect(socket_transport(socket))));
+            let transport = host_transport(Arc::clone(host), m.id.clone());
+            ext.host.register(&m.id, controller, Box::new(RemoteExtension::connect_lazy(transport)));
         }
         ext
     }
@@ -154,8 +236,14 @@ impl Files {
 mod tests {
     use super::*;
     use bifrost_app::app_events::{AppEvent, AppEventReply};
-    use bifrost_app::file_manager_sync::{serve, MenuItem, SyncExtension, Transport};
+    use bifrost_app::extension::scan_manifests;
+    use bifrost_app::extension_service::serve_at;
+    use bifrost_app::file_manager_sync::{serve, MenuItem, SyncExtension, SyncService, Transport};
     use bifrost_core::json::Json;
+    use springboard::shell::extension_host::{Entry as HostEntry, Instance, Launcher, Package, Sockets};
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+    use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex;
 
     /// An extension app: badges `.tmp` files, adds a row to each menu, and records what it was told to do.
@@ -281,6 +369,192 @@ mod tests {
         assert!(done.lock().unwrap().is_empty());
     }
 
+    // --- through the extension host: launch on demand, reap when idle ---
+
+    const CLOUD_ID: &str = "is.example.cloud";
+    const CLOUD_MANIFEST: &str = "id = \"is.example.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"/fixture\"]\n";
+
+    /// The extension process of the tests: the real SDK service in a thread on the socket the host names.
+    struct InProcess {
+        socket: PathBuf,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl Instance for InProcess {
+        fn alive(&mut self) -> bool {
+            self.thread.as_ref().is_some_and(|t| !t.is_finished())
+        }
+        fn stop(&mut self) {
+            if let Ok(mut s) = UnixStream::connect(&self.socket) {
+                let _ = s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"extension.shutdown\",\"params\":{}}\n");
+                let _ = s.shutdown(std::net::Shutdown::Write);
+                let _ = std::io::Read::read_to_end(&mut s, &mut Vec::new());
+            }
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
+        }
+    }
+
+    /// Starts the cloud extension as a `SyncService` (what an extension app runs in extension mode) and counts launches.
+    struct CloudLauncher {
+        launches: Arc<AtomicUsize>,
+        done: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl Launcher for CloudLauncher {
+        fn launch(&self, _entry: &HostEntry, socket: &Path) -> std::io::Result<Box<dyn Instance>> {
+            self.launches.fetch_add(1, Ordering::SeqCst);
+            let (path, done) = (socket.to_path_buf(), self.done.clone());
+            let thread = std::thread::spawn(move || {
+                let mut served = SyncController::default();
+                served.set_directory_urls(&[PathBuf::from("/fixture")]).unwrap();
+                served.set_badge_image("pending", "Waiting to sync", "arrow.clockwise").unwrap();
+                let _ = serve_at(&path, &mut SyncService::new(served, Cloud { done }), false);
+            });
+            Ok(Box::new(InProcess { socket: socket.to_path_buf(), thread: Some(thread) }))
+        }
+    }
+
+    struct Hosted {
+        ext: Extensions,
+        host: Arc<Mutex<Host>>,
+        launches: Arc<AtomicUsize>,
+        done: Arc<Mutex<Vec<String>>>,
+        dir: PathBuf,
+    }
+
+    /// A host over the packages `manifests`, plus the same manifests written under an app root.
+    fn host_over(dir: &Path, manifests: &[(&str, &str)], launcher: CloudLauncher) -> (Arc<Mutex<Host>>, PathBuf) {
+        let root = dir.join("root");
+        for (id, text) in manifests {
+            let d = root.join("apps").join(id).join("current");
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("manifest.toml"), text).unwrap();
+            std::fs::write(d.join("x"), b"ELF").unwrap();
+        }
+        let scan = scan_manifests(manifests.iter().map(|(id, text)| (*id, *text)));
+        let packages = manifests.iter().map(|(id, _)| Package { app_id: (*id).into(), exec: "/bin/true".into(), data_dir: dir.join("data") }).collect();
+        let mut host = Host::new(scan, packages, Box::new(launcher), Arc::new(Sockets), dir.join("sock"));
+        host.set_start_wait(Duration::from_secs(3));
+        (Arc::new(Mutex::new(host)), root)
+    }
+
+    fn hosted(tag: &str) -> Hosted {
+        let dir = std::env::temp_dir().join(format!("files-fm-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (launches, done) = (Arc::new(AtomicUsize::new(0)), Arc::new(Mutex::new(Vec::new())));
+        let launcher = CloudLauncher { launches: launches.clone(), done: done.clone() };
+        let (host, root) = host_over(&dir, &[(CLOUD_ID, CLOUD_MANIFEST)], launcher);
+        let ext = Extensions::discover(&root, Path::new("/home/ann"), &host, "is.olibuijr.files.desktop");
+        Hosted { ext, host, launches, done, dir }
+    }
+
+    impl Hosted {
+        fn running(&self) -> bool {
+            locked(&self.host).is_running(CLOUD_ID, FILE_MANAGER_POINT)
+        }
+
+        fn finish(self) {
+            locked(&self.host).stop_all();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn until(ext: &mut Extensions, what: &str, mut done: impl FnMut(&mut Extensions) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            ext.poll();
+            if done(ext) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("timed out waiting for {what}");
+    }
+
+    #[test]
+    fn nothing_starts_until_a_watched_folder_is_shown_and_then_the_host_launches_it() {
+        let mut h = hosted("lazy");
+        assert!(!h.ext.is_empty(), "the declared folders make the app a file-manager extension");
+        assert_eq!(locked(&h.host).live(), 0, "discovery starts nothing");
+        // a folder the extension does not watch, and an item outside its folders: still nothing
+        h.ext.show(Path::new("/elsewhere"));
+        assert!(h.ext.badges(Path::new("/elsewhere/a.tmp")).is_empty());
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(h.launches.load(Ordering::SeqCst), 0);
+        assert!(!h.running());
+        // showing a watched folder and asking for a badge starts it through the host
+        h.ext.show(Path::new("/fixture"));
+        let tmp = Path::new("/fixture/draft.tmp");
+        h.ext.badges(tmp);
+        until(&mut h.ext, "the badge", |e| e.badges(tmp).len() == 1);
+        assert_eq!(h.launches.load(Ordering::SeqCst), 1);
+        assert!(h.running());
+        assert_eq!(locked(&h.host).live(), 1);
+        h.finish();
+    }
+
+    #[test]
+    fn an_idle_extension_is_reaped_and_the_next_request_starts_it_again() {
+        let mut h = hosted("reap");
+        h.ext.show(Path::new("/fixture"));
+        let first = Path::new("/fixture/draft.tmp");
+        h.ext.badges(first);
+        until(&mut h.ext, "the first badge", |e| e.badges(first).len() == 1);
+        assert_eq!(locked(&h.host).reap(Instant::now() + Duration::from_secs(1)), Vec::<String>::new(), "not idle long enough");
+        assert_eq!(locked(&h.host).reap(Instant::now() + Duration::from_secs(120)), vec![CLOUD_ID.to_string()]);
+        assert!(!h.running());
+        assert_eq!(locked(&h.host).live(), 0);
+        let second = Path::new("/fixture/other.tmp");
+        h.ext.badges(second);
+        until(&mut h.ext, "the badge after the restart", |e| e.badges(second).len() == 1);
+        assert_eq!(h.launches.load(Ordering::SeqCst), 2, "the host started it again");
+        assert!(h.running());
+        h.finish();
+    }
+
+    #[test]
+    fn the_menu_never_waits_for_a_launch_and_shows_rows_once_the_extension_runs() {
+        let mut h = hosted("menu");
+        let started = Instant::now();
+        assert!(h.ext.menu_items(false, Path::new("/fixture"), &[]).is_empty(), "no rows while the extension is not running");
+        assert!(started.elapsed() < Duration::from_millis(900), "the menu did not wait for the launch");
+        // the menu started the extension in the background
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while !h.running() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(h.running());
+        assert_eq!(h.launches.load(Ordering::SeqCst), 1);
+        // "starting" does not mute the extension: the next menu has its rows
+        let rows = h.ext.menu_items(false, Path::new("/fixture"), &[]);
+        assert_eq!(rows.iter().map(|r| (r.id, r.label.as_str())).collect::<Vec<_>>(), vec![(MENU_EXT_BASE, "Sync This Folder")]);
+        assert!(h.ext.perform(rows[0].id, Path::new("/fixture"), &[]));
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while h.done.lock().unwrap().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(*h.done.lock().unwrap(), vec!["container 8 [] in /fixture".to_string()]);
+        assert_eq!(h.launches.load(Ordering::SeqCst), 1, "one process served the menu and the choice");
+        h.finish();
+    }
+
+    #[test]
+    fn host_errors_become_event_errors_and_an_unknown_extension_is_unreachable() {
+        assert!(reply_of(Ok(Json::Bool(true))).ok());
+        assert_eq!(reply_of(Err(HostError::Unreachable("Resource temporarily unavailable (os error 11)".into()))).error_number, ERR_TIMEOUT);
+        assert_eq!(reply_of(Err(HostError::Unreachable("/x.sock: No such file".into()))).error_number, ERR_TARGET_UNREACHABLE);
+        assert_eq!(reply_of(Err(HostError::NotAvailable)).error_number, ERR_TARGET_UNREACHABLE);
+        assert_eq!(reply_of(Err(HostError::Remote("bad".into()))).error_number, ERR_EVENT_NOT_HANDLED);
+        let h = hosted("err");
+        let transport = host_transport(h.host.clone(), "com.nobody.x".into());
+        let reply = transport(&AppEvent::new("filemanager", "describe", Json::Obj(vec![])), Duration::from_secs(2));
+        assert_eq!(reply.error_number, ERR_TARGET_UNREACHABLE);
+        assert_eq!(locked(&h.host).live(), 0);
+        h.finish();
+    }
+
     #[test]
     fn no_extension_means_no_work() {
         let mut none = Extensions::default();
@@ -289,26 +563,34 @@ mod tests {
         assert!(!none.poll());
         assert!(none.menu_items(true, Path::new("/x"), &[]).is_empty());
         assert!(!none.perform(MENU_EXT_BASE, Path::new("/x"), &[]));
-        // a missing runtime directory or an empty app root finds nothing
-        assert!(Extensions::discover(Path::new("/nonexistent-root"), Path::new("/home/a"), Some(Path::new("/run/user/1")), "is.olibuijr.files.desktop").is_empty());
-        assert!(Extensions::discover(Path::new("/nonexistent-root"), Path::new("/home/a"), None, "is.olibuijr.files.desktop").is_empty());
+        // a host that offers no file-manager extension, or an empty app root, finds nothing
+        let dir = std::env::temp_dir().join(format!("files-fm-none-{}", std::process::id()));
+        let launcher = CloudLauncher { launches: Arc::default(), done: Arc::default() };
+        let (host, _) = host_over(&dir, &[], launcher);
+        assert!(Extensions::discover(Path::new("/nonexistent-root"), Path::new("/home/a"), &host, "is.olibuijr.files.desktop").is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn installed_apps_that_declare_folders_become_extensions() {
-        let root = std::env::temp_dir().join(format!("files-ext-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let mk = |id: &str, manifest: &str| {
-            let d = root.join("apps").join(id).join("current");
-            std::fs::create_dir_all(&d).unwrap();
-            std::fs::write(d.join("manifest.toml"), manifest).unwrap();
-            std::fs::write(d.join("x"), b"ELF").unwrap();
-        };
-        mk("is.o.cloud", "id = \"is.o.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"~/Cloud\"]\n");
-        mk("is.o.calc", "id = \"is.o.calc\"\nname = \"Calc\"\nexec = \"x\"\n");
-        mk("is.o.wide", "id = \"is.o.wide\"\nname = \"Wide\"\nexec = \"x\"\nfile_manager_folders = [\"/\", \"~/\"]\n");
-        let ext = Extensions::discover(&root, Path::new("/home/ann"), Some(Path::new("/run/user/1000")), "is.olibuijr.files.desktop");
-        assert_eq!(ext.host.extension_ids(), ["is.o.cloud"], "Calc declares nothing and Wide names only folders that are refused");
-        let _ = std::fs::remove_dir_all(&root);
+        let dir = std::env::temp_dir().join(format!("files-fm-apps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cloud = "id = \"is.o.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"~/Cloud\"]\n";
+        let calc = "id = \"is.o.calc\"\nname = \"Calc\"\nexec = \"x\"\n";
+        let wide = "id = \"is.o.wide\"\nname = \"Wide\"\nexec = \"x\"\nfile_manager_folders = [\"/\", \"~/\"]\n";
+        let launcher = CloudLauncher { launches: Arc::default(), done: Arc::default() };
+        // the host knows the three; "is.o.late" is on disk but the host was built before it was installed
+        let (host, root) = host_over(&dir, &[("is.o.cloud", cloud), ("is.o.calc", calc), ("is.o.wide", wide)], launcher);
+        let late = root.join("apps/is.o.late/current");
+        std::fs::create_dir_all(&late).unwrap();
+        std::fs::write(late.join("manifest.toml"), "id = \"is.o.late\"\nname = \"Late\"\nexec = \"x\"\nfile_manager_folders = [\"~/Late\"]\n").unwrap();
+        std::fs::write(late.join("x"), b"ELF").unwrap();
+        let ext = Extensions::discover(&root, Path::new("/home/ann"), &host, "is.olibuijr.files.desktop");
+        assert_eq!(ext.host.extension_ids(), ["is.o.cloud"], "Calc declares nothing, Wide names only folders that are refused, Late is not offered by the host");
+        assert_eq!(locked(&host).live(), 0);
+        // Files itself is never its own extension
+        let own = Extensions::discover(&root, Path::new("/home/ann"), &host, "is.o.cloud");
+        assert!(own.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

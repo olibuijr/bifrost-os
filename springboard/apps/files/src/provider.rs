@@ -3,7 +3,8 @@
 //! provider's items, and opening a file downloads it first.
 //!
 //! The extension is started and called by the shared extension host (`springboard::shell::extension_host`): the first
-//! listing starts the package's binary in extension mode and the host stops it again after it has been idle.
+//! listing starts the package's binary in extension mode and the host stops it again after it has been idle. The file-manager
+//! sync extensions (`extensions.rs`) go through the same host.
 //! Each provider item lives at a stand-in path, `/.provider/<domain>/<folder names>/<file name>`, so the path bar, Back
 //! and Up work on names. [`Providers`] keeps the item behind every listed path (an item's identifier is what the
 //! provider knows it by) and talks to the extension with `bifrost_app::extension_service::wire`
@@ -90,20 +91,26 @@ pub(crate) struct Providers {
     cache: PathBuf,
 }
 
-fn locked<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn locked<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl Providers {
     /// The domains are the enabled file provider extensions of `host`; downloads go under `cache`.
+    #[cfg(test)]
     pub(crate) fn new(host: Host, cache: PathBuf) -> Providers {
+        Providers::with_host(Arc::new(Mutex::new(host)), cache)
+    }
+
+    /// The same over a host that other users share (the file-manager sync extensions use the one host too).
+    pub(crate) fn with_host(host: Arc<Mutex<Host>>, cache: PathBuf) -> Providers {
         let mut domains = DomainRegistry::default();
-        for e in host.discover(FILE_PROVIDER_POINT) {
+        for e in locked(&host).discover(FILE_PROVIDER_POINT) {
             if let Ok(domain) = Domain::new(&e.bundle_id, &e.name) {
                 let _ = domains.add(domain);
             }
         }
-        Providers { host: Arc::new(Mutex::new(host)), domains, items: Mutex::new(HashMap::new()), cache }
+        Providers { host, domains, items: Mutex::new(HashMap::new()), cache }
     }
 
     /// The sidebar rows: each visible, enabled domain with the stand-in folder it opens.
@@ -208,20 +215,25 @@ impl Providers {
     }
 }
 
-/// The providers of this Files process. The first use reads the installed packages and starts a thread that stops idle
-/// extensions.
-pub(crate) fn shared() -> Arc<Providers> {
-    static SHARED: OnceLock<Arc<Providers>> = OnceLock::new();
-    Arc::clone(SHARED.get_or_init(|| {
-        let cache = fs::home().join(".cache/bifrost/providers");
-        let providers = Arc::new(Providers::new(Host::installed(), cache));
-        let host = Arc::clone(&providers.host);
+/// The extension host of this Files process, for every kind of extension (file providers and file-manager sync
+/// extensions). The first use reads the installed packages and starts a thread that stops idle extensions.
+pub(crate) fn shared_host() -> Arc<Mutex<Host>> {
+    static HOST: OnceLock<Arc<Mutex<Host>>> = OnceLock::new();
+    Arc::clone(HOST.get_or_init(|| {
+        let host = Arc::new(Mutex::new(Host::installed()));
+        let reaped = Arc::clone(&host);
         std::thread::spawn(move || loop {
             std::thread::sleep(REAP_EVERY);
-            locked(&host).reap(Instant::now());
+            locked(&reaped).reap(Instant::now());
         });
-        providers
+        host
     }))
+}
+
+/// The providers of this Files process, over the shared extension host.
+pub(crate) fn shared() -> Arc<Providers> {
+    static SHARED: OnceLock<Arc<Providers>> = OnceLock::new();
+    Arc::clone(SHARED.get_or_init(|| Arc::new(Providers::with_host(shared_host(), fs::home().join(".cache/bifrost/providers")))))
 }
 
 /// Messages from provider threads for the footer: text to show, or empty text to clear it.
