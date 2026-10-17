@@ -394,6 +394,7 @@ pub mod url_cache;
 pub mod url_configuration;
 pub mod url_stream_task;
 pub mod http_log;
+pub mod http_message;
 pub mod net_service;
 pub mod service_discovery;
 pub mod local_auth;
