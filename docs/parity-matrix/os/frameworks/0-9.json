@@ -1717,9 +1717,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/audioplayer.rs; springboard/src/media/audio_out.rs",
+   "bifrost": "springboard/src/media/crossfade.rs",
    "status": "partial",
-   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built.",
+   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -1738,9 +1738,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs; springboard/sdk/src/widgets.rs",
+   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
    "status": "partial",
-   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built.",
+   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built. Built: speed picker model (speed.rs: steps, label, next, prev, nearest) and subtitle picker model (subtitles.rs Picker); tests media::speed::tests and media::subtitles::tests. The picker views are not drawn yet; route.rs holds the route model.",
    "rea": [],
    "method": "assessed"
   },
@@ -1759,9 +1759,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs",
+   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
    "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built.",
+   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1780,9 +1780,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/player.rs; springboard/src/media/pip.rs",
+   "bifrost": "springboard/src/media/speed.rs; springboard/src/media/subtitles.rs",
    "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built.",
+   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
    "rea": [],
    "method": "assessed"
   }

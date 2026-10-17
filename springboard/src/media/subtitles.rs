@@ -122,6 +122,62 @@ fn strip_tags(line: &str) -> String {
     out.trim().to_string()
 }
 
+/// The subtitle picker of the video player: "Off" first, then the subtitle files the owner found next to the movie
+/// (pass only the files that exist, from `sidecar_candidates`). Pure: choosing a row only records it, and the owner
+/// loads the chosen file with `Track::parse`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picker {
+    tracks: Vec<PathBuf>,
+    /// the index into `tracks` of the chosen file; `None` is Off
+    selected: Option<usize>,
+}
+
+impl Picker {
+    /// A picker over these subtitle files, with Off chosen.
+    pub fn new(tracks: Vec<PathBuf>) -> Picker {
+        Picker { tracks, selected: None }
+    }
+
+    /// The rows in picker order: the label of each and whether it is the chosen one. Off is the first row.
+    pub fn rows(&self) -> Vec<(String, bool)> {
+        let mut rows = vec![("Off".to_string(), self.selected.is_none())];
+        for (i, path) in self.tracks.iter().enumerate() {
+            let label = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Subtitles").to_string();
+            rows.push((label, self.selected == Some(i)));
+        }
+        rows
+    }
+
+    /// Chooses row `row` of `rows()` (0 is Off). Returns false when the row does not exist.
+    pub fn choose(&mut self, row: usize) -> bool {
+        if row == 0 {
+            self.selected = None;
+            true
+        } else if row <= self.tracks.len() {
+            self.selected = Some(row - 1);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// The subtitle file chosen, or `None` for Off.
+    pub fn selected(&self) -> Option<&Path> {
+        self.selected.and_then(|i| self.tracks.get(i)).map(PathBuf::as_path)
+    }
+
+    /// Moves the choice to the next row, wrapping from the last file back to Off.
+    pub fn cycle(&mut self) {
+        let next = match self.selected {
+            None if self.tracks.is_empty() => None,
+            None => Some(0),
+            Some(i) if i + 1 < self.tracks.len() => Some(i + 1),
+            Some(_) => None,
+        };
+        self.selected = next;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +236,43 @@ mod tests {
     fn sidecars_are_named_after_the_movie() {
         let c = sidecar_candidates(Path::new("/movies/Trip.mp4"));
         assert_eq!(c, vec![PathBuf::from("/movies/Trip.srt"), PathBuf::from("/movies/Trip.vtt")]);
+    }
+
+    #[test]
+    fn the_picker_starts_off_and_lists_each_file_by_its_name() {
+        let p = Picker::new(vec![PathBuf::from("/movies/Trip.srt"), PathBuf::from("/movies/Trip.vtt")]);
+        assert_eq!(p.rows(), vec![("Off".to_string(), true), ("Trip".to_string(), false), ("Trip".to_string(), false)]);
+        assert_eq!(p.selected(), None);
+    }
+
+    #[test]
+    fn choosing_a_row_selects_that_file_and_row_zero_is_off() {
+        let mut p = Picker::new(vec![PathBuf::from("/movies/a.srt"), PathBuf::from("/movies/b.vtt")]);
+        assert!(p.choose(2));
+        assert_eq!(p.selected(), Some(Path::new("/movies/b.vtt")));
+        assert_eq!(p.rows()[2], ("b".to_string(), true));
+        assert!(p.choose(0));
+        assert_eq!(p.selected(), None);
+        assert!(!p.choose(3), "row 3 does not exist");
+        assert_eq!(p.selected(), None);
+    }
+
+    #[test]
+    fn cycling_goes_off_then_each_file_then_off_again() {
+        let mut p = Picker::new(vec![PathBuf::from("/movies/a.srt"), PathBuf::from("/movies/b.vtt")]);
+        p.cycle();
+        assert_eq!(p.selected(), Some(Path::new("/movies/a.srt")));
+        p.cycle();
+        assert_eq!(p.selected(), Some(Path::new("/movies/b.vtt")));
+        p.cycle();
+        assert_eq!(p.selected(), None);
+    }
+
+    #[test]
+    fn cycling_with_no_files_stays_off() {
+        let mut p = Picker::new(Vec::new());
+        p.cycle();
+        assert_eq!(p.selected(), None);
+        assert_eq!(p.rows(), vec![("Off".to_string(), true)]);
     }
 }

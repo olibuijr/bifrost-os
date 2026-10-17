@@ -18,10 +18,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "bifrost": "springboard/src/shell/passwords_page.rs; springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: Passwords page (passwords_page.rs:46) and the SDK (sdk/src/passwords.rs); missing: App Intents declarations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::passwords_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "Passwords pane (passwords_page.rs) and the open-passwords settings intent (settings_intents.rs, listed in Search); the intents open the pane and never write a value."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PasswordSettingsAppIntentsExtension.appex",
@@ -38,10 +52,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "bifrost": "springboard/src/shell/passwords_page.rs; springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: Settings Passwords page (passwords_page.rs:46); missing: App Intents declarations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::passwords_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "Settings Passwords pane (passwords_page.rs) and its open-passwords intent (settings_intents.rs), which Search lists and runs."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PlaceholderSettingsSearchTermsIntents.appex",
@@ -58,10 +86,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_search.rs",
+   "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/quicksearch.rs; springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: settings search over pane titles and keywords; missing: the Apple search-term intents",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane"
+    }
+   ],
+   "ready_note": "Settings search over pane titles and keywords (settings_search.rs); Search lists the settings intents among its Shortcuts and opens their pane (quicksearch.rs)."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PowerPreferences.appex",
@@ -107,10 +149,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_search.rs",
+   "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "has: settings search; missing: intent listing in Search",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found_as_shortcuts_and_open_their_pane"
+    }
+   ],
+   "ready_note": "Settings search (settings_search.rs); the intent listing in Search is quicksearch.rs (settings_intent_rows), covered by the Shortcuts test."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PrinterScannerSettings.appex",

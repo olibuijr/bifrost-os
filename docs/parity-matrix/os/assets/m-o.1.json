@@ -418,8 +418,8 @@
    "role": "Desktop picture, content variant",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -439,8 +439,8 @@
    "role": "Desktop picture, content variant",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -460,8 +460,8 @@
    "role": "Desktop picture, content variant",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -481,8 +481,8 @@
    "role": "Desktop picture, content variant",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple desktop picture artwork. BifrOSt does not ship it and does not draw it; personal-use reference copies are not a shipped feature.",
    "rea": [],
    "method": "assessed"
   },

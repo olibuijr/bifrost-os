@@ -65,6 +65,42 @@ impl<'a> SvgTable<'a> {
     pub fn is_gzip(doc: &[u8]) -> bool {
         doc.starts_with(&[0x1f, 0x8b])
     }
+
+    /// The SVG text of the document that covers `gid`, gunzipped when the document is compressed. `None` when no
+    /// record covers the glyph, the document is damaged, or its bytes are not UTF-8.
+    pub fn document_text_for(&self, gid: u16) -> Option<String> {
+        let doc = self.document_for(gid)?;
+        let bytes = if Self::is_gzip(doc) { gunzip(doc)? } else { doc.to_vec() };
+        String::from_utf8(bytes).ok()
+    }
+}
+
+/// Gunzips one gzip member (RFC 1952) with the in-tree DEFLATE decoder. Reads the optional header fields (extra,
+/// name, comment, header CRC) and returns the inflated bytes. The trailing CRC and size are not checked. `None` when
+/// the header is not gzip deflate, is truncated, or the stream is damaged.
+pub fn gunzip(doc: &[u8]) -> Option<Vec<u8>> {
+    if !SvgTable::is_gzip(doc) || doc.len() < 10 || doc[2] != 8 {
+        return None;
+    }
+    let flags = doc[3];
+    let mut at = 10;
+    if flags & 0x04 != 0 {
+        let xlen = u16::from_le_bytes([*doc.get(at)?, *doc.get(at + 1)?]) as usize;
+        at += 2 + xlen;
+    }
+    for flag in [0x08u8, 0x10] {
+        // FNAME and FCOMMENT are zero-terminated strings
+        if flags & flag != 0 {
+            while *doc.get(at)? != 0 {
+                at += 1;
+            }
+            at += 1;
+        }
+    }
+    if flags & 0x02 != 0 {
+        at += 2;
+    }
+    crate::cg::pdf::inflate::inflate(doc.get(at..)?).ok()
 }
 
 #[cfg(test)]
@@ -121,5 +157,56 @@ mod tests {
     fn gzip_documents_are_recognised() {
         assert!(SvgTable::is_gzip(&[0x1f, 0x8b, 8, 0]));
         assert!(!SvgTable::is_gzip(b"<svg"));
+    }
+
+    /// A gzip member whose deflate data is one stored (uncompressed) block. `flags` may set FEXTRA (0x04),
+    /// FNAME (0x08) or FHCRC (0x02); the header fields are written in RFC 1952 order.
+    fn gzip_stored(payload: &[u8], flags: u8) -> Vec<u8> {
+        let mut g = vec![0x1f, 0x8b, 8, flags, 0, 0, 0, 0, 0, 0xff];
+        if flags & 0x04 != 0 {
+            g.extend_from_slice(&[2, 0, b'x', b'y']); // XLEN is little-endian
+        }
+        if flags & 0x08 != 0 {
+            g.extend_from_slice(b"icon.svg\0");
+        }
+        if flags & 0x02 != 0 {
+            g.extend_from_slice(&[0, 0]);
+        }
+        g.push(0x01); // BFINAL = 1, BTYPE = 00 (stored)
+        g.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        g.extend_from_slice(&(!(payload.len() as u16)).to_le_bytes());
+        g.extend_from_slice(payload);
+        g.extend_from_slice(&[0; 8]); // CRC-32 and size trailer, not checked
+        g
+    }
+
+    #[test]
+    fn a_gzip_member_gunzips_to_its_svg_text() {
+        let svg = b"<svg>gz</svg>";
+        assert_eq!(gunzip(&gzip_stored(svg, 0)).as_deref(), Some(&svg[..]));
+        assert_eq!(gunzip(&gzip_stored(svg, 0x04 | 0x08 | 0x02)).as_deref(), Some(&svg[..]));
+    }
+
+    #[test]
+    fn plain_or_truncated_input_does_not_gunzip() {
+        assert_eq!(gunzip(b"<svg>"), None);
+        assert_eq!(gunzip(&[0x1f, 0x8b, 8, 0x08, 0, 0, 0, 0, 0, 0xff, b'a']), None);
+    }
+
+    #[test]
+    fn the_document_text_of_a_glyph_is_gunzipped_when_compressed() {
+        let svg = b"<svg>glyph</svg>";
+        let doc = gzip_stored(svg, 0);
+        // one record: glyph 3, its document at list offset 14 (the list header is 2 + 12 bytes)
+        let mut t = vec![0, 0, 0, 0, 0, 6];
+        t.extend_from_slice(&1u16.to_be_bytes());
+        t.extend_from_slice(&3u16.to_be_bytes());
+        t.extend_from_slice(&3u16.to_be_bytes());
+        t.extend_from_slice(&14u32.to_be_bytes());
+        t.extend_from_slice(&(doc.len() as u32).to_be_bytes());
+        t.extend_from_slice(&doc);
+        let table = SvgTable::parse(&t).unwrap();
+        assert_eq!(table.document_text_for(3).as_deref(), Some("<svg>glyph</svg>"));
+        assert_eq!(table.document_text_for(4), None);
     }
 }
