@@ -265,6 +265,75 @@ fn resync(d: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Zero bytes left after the frames, so a later edit can grow the tag in place.
+const PADDING: usize = 512;
+
+/// The ID3v2.4 tag that stores `tags`: title, artist, album, album artist, track, year, lyrics (USLT) and cover (APIC),
+/// UTF-8 text, then padding. Fields that are `None` are left out. The audio is not included.
+pub fn build(tags: &Tags) -> Vec<u8> {
+    let mut frames = Vec::new();
+    let texts = [(b"TIT2", &tags.title), (b"TPE1", &tags.artist), (b"TALB", &tags.album), (b"TPE2", &tags.album_artist)];
+    for (id, value) in texts {
+        if let Some(text) = value {
+            push_frame(&mut frames, id, &text_body(text));
+        }
+    }
+    if let Some(track) = tags.track {
+        push_frame(&mut frames, b"TRCK", &text_body(&track.to_string()));
+    }
+    if let Some(year) = tags.year {
+        push_frame(&mut frames, b"TDRC", &text_body(&format!("{year:04}")));
+    }
+    if let Some(lyrics) = &tags.lyrics {
+        // encoding UTF-8, language, empty content descriptor, then the text
+        let mut body = vec![3];
+        body.extend(b"eng\0");
+        body.extend(lyrics.as_bytes());
+        push_frame(&mut frames, b"USLT", &body);
+    }
+    if let Some(cover) = &tags.cover {
+        let mime: &[u8] = if cover.starts_with(&[0x89, b'P', b'N', b'G']) { b"image/png" } else { b"image/jpeg" };
+        // encoding, MIME type, picture type 3 (front cover), empty description, then the picture
+        let mut body = vec![3];
+        body.extend(mime);
+        body.extend([0, 3, 0]);
+        body.extend(cover);
+        push_frame(&mut frames, b"APIC", &body);
+    }
+    let mut out = b"ID3\x04\x00\x00".to_vec();
+    out.extend(syncsafe_bytes(frames.len() + PADDING));
+    out.extend(frames);
+    out.resize(out.len() + PADDING, 0);
+    out
+}
+
+/// The file with its ID3v2 tag replaced by `build(tags)`: the audio frames and anything after them (an ID3v1 tag)
+/// are copied unchanged. Only the fields `Tags` knows are written; other frames of the old tag are dropped.
+pub fn replace_tag(file: &[u8], tags: &Tags) -> Vec<u8> {
+    let audio = &file[tag_len(file).min(file.len())..];
+    let mut out = build(tags);
+    out.extend_from_slice(audio);
+    out
+}
+
+fn push_frame(out: &mut Vec<u8>, id: &[u8; 4], body: &[u8]) {
+    out.extend_from_slice(id);
+    out.extend(syncsafe_bytes(body.len()));
+    out.extend([0, 0]);
+    out.extend_from_slice(body);
+}
+
+fn text_body(text: &str) -> Vec<u8> {
+    let mut body = vec![3];
+    body.extend(text.as_bytes());
+    body
+}
+
+fn syncsafe_bytes(n: usize) -> [u8; 4] {
+    let n = n as u32;
+    [(n >> 21) as u8 & 0x7f, (n >> 14) as u8 & 0x7f, (n >> 7) as u8 & 0x7f, n as u8 & 0x7f]
+}
+
 fn syncsafe(b: &[u8]) -> usize {
     b.iter().take(4).fold(0, |a, &x| a << 7 | (x & 0x7f) as usize)
 }
@@ -450,6 +519,31 @@ mod tests {
         // without a table of contents the chapters sort by start time
         let t = parse(&tag(4, 0, &frame(b"CHAP", &chap(b"x", 5, 6, &[]), true, 0))).unwrap();
         assert_eq!(t.chapters, vec![Chapter { start_ms: 5, end_ms: Some(6), title: None, image: None }]);
+    }
+
+    #[test]
+    fn written_tag_round_trips_and_keeps_the_audio_bytes() {
+        let tags = Tags {
+            title: Some("Höfði Round".into()),
+            artist: Some("Band".into()),
+            album: Some("Record".into()),
+            album_artist: Some("Various".into()),
+            track: Some(4),
+            year: Some(2020),
+            cover: Some(b"\x89PNG-cover".to_vec()),
+            lyrics: Some("line one\nline two".into()),
+            chapters: Vec::new(),
+        };
+        let out = replace_tag(V24, &tags);
+        assert_eq!(parse(&out).unwrap(), tags, "write, then read back");
+        // the audio (everything after the old tag) is byte-identical and follows the new tag
+        assert_eq!(&out[tag_len(&out)..], &V24[tag_len(V24)..]);
+        // replacing again keeps a single tag
+        let again = replace_tag(&out, &Tags { title: Some("Again".into()), ..Tags::default() });
+        assert_eq!(parse(&again).unwrap().title.as_deref(), Some("Again"));
+        assert_eq!(&again[tag_len(&again)..], &V24[tag_len(V24)..]);
+        // the padding is inside the tag, not after it
+        assert_eq!(tag_len(&build(&tags)), build(&tags).len());
     }
 
     #[test]
