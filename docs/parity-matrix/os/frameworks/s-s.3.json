@@ -2935,9 +2935,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/storekit.json",
-   "status": "partial",
-   "note": "private framework, owner StoreKit; from SDK matrix storekit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple App Store purchase helper and sheet. BifrOSt sells apps through its own PC App Store, not Apple's store.",
    "rea": [],
    "method": "assessed"
   },
@@ -2956,9 +2956,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/storekit.json",
-   "status": "partial",
-   "note": "private framework, owner StoreKit; from SDK matrix storekit.json",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple App Store purchase helper and sheet. BifrOSt sells apps through its own PC App Store, not Apple's store.",
    "rea": [],
    "method": "assessed"
   },
@@ -3348,11 +3348,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/tls_client.rs; springboard/ui/src/tls_options.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tls_client::tests"
+    }
+   ],
+   "ready_note": "TLS client transport (rustls, graviola) for the shell and apps is covered by sdk tls_client host tests. The reference Swift TLS stack itself is not reimplemented."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SwiftUIAccessibility.framework",
