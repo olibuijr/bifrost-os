@@ -300,6 +300,8 @@ pub struct Settings {
     wallpapers: Rc<Vec<Wallpaper>>,
     /// Dark Appearance Dims Wallpaper
     wallpaper_dim: bool,
+    /// Dynamic Wallpaper (`wallpaper_dynamic` pref): the shell changes the still with the time of day
+    wallpaper_dynamic: bool,
     stack: Vec<Entry>,
     transition: Option<Slide>,
     sheet: Option<Sheet>,
@@ -533,6 +535,7 @@ impl Settings {
             a11y: AccessibilitySettings::load(prefs),
             wallpapers,
             wallpaper_dim: prefs.get("wallpaper_dim") != Some("0"),
+            wallpaper_dynamic: prefs.get("wallpaper_dynamic") == Some("1"),
             stack: vec![],
             transition: None,
             sheet: None,
@@ -717,7 +720,9 @@ impl Settings {
     fn build(&self, ui: &Ui, id: PageId, back: Option<&str>) -> Entry {
         if id == PageId::Wallpaper {
             let title = "Wallpaper".to_string();
-            return Entry { id, nav: NavBar::new(ui, &title, back).height(self.pane().nav_pt), title, view: View::Wallpaper(WallpaperPage::new(ui, self.w, self.screen_aspect, &self.wallpapers, &self.info.wallpaper, self.wallpaper_dim)) };
+            let mut page = WallpaperPage::new(ui, self.w, self.screen_aspect, &self.wallpapers, &self.info.wallpaper, self.wallpaper_dim);
+            page.set_dynamic(self.wallpaper_dynamic);
+            return Entry { id, nav: NavBar::new(ui, &title, back).height(self.pane().nav_pt), title, view: View::Wallpaper(page) };
         }
         let spec = self.spec_for(id);
         let mut spec = spec;
@@ -2123,6 +2128,18 @@ impl Settings {
                 page.close_preview();
                 vec![]
             }
+            Tap::Dynamic => {
+                let on = !page.dynamic();
+                page.set_dynamic(on);
+                self.wallpaper_dynamic = on;
+                save(prefs, "wallpaper_dynamic", if on { "1" } else { "0" });
+                // off: the still the user picked comes back at once; on: the shell changes it on its next tick
+                if on {
+                    vec![]
+                } else {
+                    vec![Effect::Wallpaper(self.info.wallpaper.clone())]
+                }
+            }
             Tap::Dim => {
                 let on = !page.dim();
                 page.set_dim(on);
@@ -3124,6 +3141,7 @@ impl Settings {
                 self.dev.gpu_scanout = false;
                 self.info.wallpaper.clear();
                 self.wallpaper_dim = true;
+                self.wallpaper_dynamic = false;
                 self.rebuild(ui);
                 vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true)]
             }
@@ -3894,6 +3912,20 @@ mod tests {
             Wallpaper { id: "a".into(), name: "Desert Peak Day".into(), thumb: thumb(10) },
             Wallpaper { id: "b".into(), name: "Lake The Lake Night".into(), thumb: thumb(20) },
         ])
+    }
+
+    #[test]
+    fn dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still() {
+        let ui = super::super::tests::ui();
+        let mut prefs = Prefs::memory();
+        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
+        st.allow_split(&ui, false);
+        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
+        let (x, y, w, h) = super::super::wallpaper_page::dynamic_row(&ui, 1200);
+        assert!(tap(&mut st, &ui, &mut prefs, x + w / 2.0, y + h / 2.0).is_empty(), "on: the shell changes the still on its next tick");
+        assert_eq!(prefs.get("wallpaper_dynamic"), Some("1"));
+        assert_eq!(tap(&mut st, &ui, &mut prefs, x + w / 2.0, y + h / 2.0), vec![Effect::Wallpaper("a".into())], "off: the picked still comes back");
+        assert_eq!(prefs.get("wallpaper_dynamic"), Some("0"));
     }
 
     #[test]
