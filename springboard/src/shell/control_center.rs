@@ -1559,6 +1559,18 @@ mod tests {
     }
 
     #[test]
+    fn battery_label_needs_the_pref_and_a_battery() {
+        let mut sh = shell();
+        sh.info.battery_present = true;
+        sh.info.battery = 80;
+        assert_eq!(sh.battery_bar_label(), None, "off by default");
+        sh.prefs.set(BATTERY_PERCENT_PREF, "1").unwrap();
+        assert_eq!(sh.battery_bar_label().as_deref(), Some("80%"));
+        sh.info.battery_present = false;
+        assert_eq!(sh.battery_bar_label(), None, "no battery, no label");
+    }
+
+    #[test]
     fn a_toggle_bounces_its_glyph_once_and_only_toggles_bounce() {
         let mut cc = ControlCenter::default();
         cc.start_toggle_bounce(Tile::Wifi, 1000.0);
