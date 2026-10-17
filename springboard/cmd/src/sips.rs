@@ -9,11 +9,12 @@
 //! GIF is written back only with `--out` naming a `.png`, because resampling writes PNG or JPEG output only.
 //! Conversion: `-s format png|jpeg|gif FILE --out FILE` decodes the picture and writes it in the new format (`--out` is
 //! required, so the source is never overwritten). GIF output uses a fixed 3-3-2 palette (256 colours) and LZW.
+//! `-s formatOptions 0-100|default` sets the JPEG quality of a conversion (`default` is 80).
 //! Refused with a message: other properties to set, rotation, flips, DPI and colour profile properties,
 //! and every other option. Those need an image pipeline; the message names `magick` from the imagemagick package for them.
 //! Gap: TIFF, BMP, HEIC and the other formats are reported as unsupported.
 
-pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE\n       sips -s format png|jpeg|gif --out OUTFILE FILE";
+pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE\n       sips -s format png|jpeg|gif [-s formatOptions 0-100|default] --out OUTFILE FILE";
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -98,7 +99,7 @@ pub enum Action {
     Help,
     Query { keys: Vec<Key>, files: Vec<String> },
     Resample { target: Target, out: Option<String>, files: Vec<String> },
-    Convert { to: Format, out: String, file: String },
+    Convert { to: Format, out: String, file: String, quality: Option<u8> },
 }
 
 /// The format a `-s format VALUE` names. PNG, JPEG and GIF can be written.
@@ -108,6 +109,17 @@ fn output_format(value: &str) -> Result<Format, String> {
         "jpeg" | "jpg" => Ok(Format::Jpeg),
         "gif" => Ok(Format::Gif),
         other => Err(format!("format {other} cannot be written; sips here writes png, jpeg and gif")),
+    }
+}
+
+/// The value of `-s formatOptions`: `default` (None, the encoder's own quality) or a JPEG quality from 0 to 100.
+fn quality_value(value: &str) -> Result<Option<u8>, String> {
+    if value.eq_ignore_ascii_case("default") {
+        return Ok(None);
+    }
+    match value.parse::<u8>() {
+        Ok(q) if q <= 100 => Ok(Some(q)),
+        _ => Err(format!("formatOptions takes default or a number from 0 to 100, not {value}")),
     }
 }
 
@@ -128,6 +140,8 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
     let mut target = None;
     let mut out = None;
     let mut convert: Option<Format> = None;
+    let mut quality: Option<u8> = None;
+    let mut options_seen = false;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -157,10 +171,14 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
             "-s" | "--setProperty" => {
                 let name = args.get(i + 1).ok_or_else(|| format!("{arg} needs a property name and a value"))?;
                 let value = args.get(i + 2).ok_or_else(|| format!("{arg} {name} needs a value"))?;
-                if name != "format" {
-                    return Err(format!("property {name} cannot be set yet; sips here sets format"));
+                match name.as_str() {
+                    "format" => convert = Some(output_format(value)?),
+                    "formatOptions" => {
+                        quality = quality_value(value)?;
+                        options_seen = true;
+                    }
+                    _ => return Err(format!("property {name} cannot be set yet; sips here sets format and formatOptions")),
                 }
-                convert = Some(output_format(value)?);
                 i += 3;
                 continue;
             }
@@ -176,6 +194,9 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
         }
         i += 1;
     }
+    if options_seen && convert.is_none() {
+        return Err("formatOptions needs -s format png|jpeg|gif to say what it applies to".to_string());
+    }
     if let Some(to) = convert {
         if target.is_some() || !keys.is_empty() {
             return Err("a conversion is its own run: give -s alone".to_string());
@@ -184,7 +205,7 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
             return Err("a conversion takes one image file".to_string());
         }
         let out = out.ok_or_else(|| "a conversion needs --out FILE with the new extension".to_string())?;
-        return Ok(Action::Convert { to, out, file: files.remove(0) });
+        return Ok(Action::Convert { to, out, file: files.remove(0), quality });
     }
     if let Some(target) = target {
         if !keys.is_empty() {
@@ -243,19 +264,26 @@ pub fn resample(data: &[u8], target: Target, out_is_png: bool) -> Result<Vec<u8>
     Ok(springboard::pngenc::encode_rgb(img.w, img.h, &img.px))
 }
 
-/// The JPEG quality used by a conversion, 0.0 to 1.0.
+/// The JPEG quality used by a conversion when none is given, 0.0 to 1.0.
 const JPEG_QUALITY: f32 = 0.8;
 
-/// Converts the picture in `data` to `to` (PNG or JPEG) and returns the new file's bytes. The picture is decoded with the
-/// shell's image decoders; alpha is dropped, as a JPEG has none.
+/// Converts the picture in `data` to `to` at the default JPEG quality. See `convert_with`.
 pub fn convert(data: &[u8], to: Format) -> Result<Vec<u8>, String> {
+    convert_with(data, to, None)
+}
+
+/// Converts the picture in `data` to `to` (PNG, JPEG or GIF) and returns the new file's bytes. `quality` is the JPEG quality
+/// from 0 to 100 (None for the default). The picture is decoded with the shell's image decoders; alpha is dropped, as a
+/// JPEG has none.
+pub fn convert_with(data: &[u8], to: Format, quality: Option<u8>) -> Result<Vec<u8>, String> {
     info(data)?;
     let img = bifrost_ui::cg::imageio::decode(data).ok_or_else(|| "the picture could not be decoded".to_string())?;
     match to {
         Format::Png => Ok(springboard::pngenc::encode_rgb(img.w, img.h, &img.px)),
         Format::Jpeg => {
             let rgba: Vec<u8> = img.px.iter().flat_map(|&p| [p as u8, (p >> 8) as u8, (p >> 16) as u8, 255]).collect();
-            bifrost_app::graphics_imageio::encode_jpeg(img.w, img.h, &rgba, JPEG_QUALITY)
+            let q = quality.map_or(JPEG_QUALITY, |q| f32::from(q) / 100.0);
+            bifrost_app::graphics_imageio::encode_jpeg(img.w, img.h, &rgba, q)
                 .ok_or_else(|| "the picture could not be encoded as JPEG".to_string())
         }
         Format::Gif => Ok(gif_encode(img.w, img.h, &img.px)),
@@ -543,14 +571,35 @@ mod tests {
     fn parses_a_conversion_to_png_or_jpeg() {
         assert_eq!(
             parse(&args(&["-s", "format", "jpeg", "a.png", "--out", "b.jpg"])).unwrap(),
-            Action::Convert { to: Format::Jpeg, out: "b.jpg".to_string(), file: "a.png".to_string() }
+            Action::Convert { to: Format::Jpeg, out: "b.jpg".to_string(), file: "a.png".to_string(), quality: None }
         );
         assert_eq!(
             parse(&args(&["--setProperty", "format", "PNG", "a.gif", "--out", "b.png"])).unwrap(),
-            Action::Convert { to: Format::Png, out: "b.png".to_string(), file: "a.gif".to_string() }
+            Action::Convert { to: Format::Png, out: "b.png".to_string(), file: "a.gif".to_string(), quality: None }
         );
+        assert_eq!(
+            parse(&args(&["-s", "formatOptions", "50", "-s", "format", "jpeg", "a.png", "--out", "b.jpg"])).unwrap(),
+            Action::Convert { to: Format::Jpeg, out: "b.jpg".to_string(), file: "a.png".to_string(), quality: Some(50) }
+        );
+        assert_eq!(
+            parse(&args(&["-s", "format", "jpeg", "-s", "formatOptions", "default", "a.png", "--out", "b.jpg"])).unwrap(),
+            Action::Convert { to: Format::Jpeg, out: "b.jpg".to_string(), file: "a.png".to_string(), quality: None }
+        );
+        assert!(parse(&args(&["-s", "formatOptions", "101", "-s", "format", "jpeg", "a.png", "--out", "b.jpg"])).unwrap_err().contains("0 to 100"));
+        assert!(parse(&args(&["-s", "formatOptions", "50", "a.png", "--out", "b.jpg"])).unwrap_err().contains("needs -s format"));
+        assert!(parse(&args(&["-s", "dpiWidth", "72", "a.png", "--out", "b.png"])).unwrap_err().contains("dpiWidth"));
         assert!(parse(&args(&["-s", "format", "jpeg", "a.png", "b.png", "--out", "c.jpg"])).unwrap_err().contains("one image"));
         assert!(parse(&args(&["-s", "format", "jpeg", "-Z", "9", "a.png", "--out", "b.jpg"])).unwrap_err().contains("own run"));
+    }
+
+    #[test]
+    fn a_lower_jpeg_quality_writes_a_smaller_file() {
+        let px: Vec<u32> = (0..64 * 64u32).map(|i| 0xff00_0000 | (i.wrapping_mul(2_654_435_761) & 0x00ff_ffff)).collect();
+        let png = springboard::pngenc::encode_rgb(64, 64, &px);
+        let low = convert_with(&png, Format::Jpeg, Some(10)).unwrap();
+        let high = convert_with(&png, Format::Jpeg, Some(95)).unwrap();
+        assert_eq!(info(&low).unwrap(), Info { format: Format::Jpeg, width: 64, height: 64 });
+        assert!(low.len() < high.len());
     }
 
     #[test]
