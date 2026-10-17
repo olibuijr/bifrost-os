@@ -10,6 +10,7 @@
 //! The values are built here and sent by `main.rs` on real events (a copy, a change to the list); nothing is sent
 //! per frame.
 
+use crate::contacts::{tel_url, Handoff};
 use crate::exchange::{self, Version};
 use crate::extras::{Extra, Extras};
 use bifrost_app::pasteboard_types::{Board, Item, STRING};
@@ -50,6 +51,17 @@ pub fn contact_item(c: &Contact, extra: &[Extra]) -> Item {
     Item::default()
         .with(STRING, plain_text(c, extra).as_bytes())
         .with(VCARD, exchange::export(std::slice::from_ref(c), &values, Version::V3).as_bytes())
+}
+
+/// Carries a phone or email tap out of a card: a `tel:` link to the shell, or a new message in Mail (`mail_compose`).
+pub fn hand_off(ctx: &Ctx, handoff: &Handoff) {
+    match handoff {
+        Handoff::Call(number) => ctx.open_url(&tel_url(number)),
+        Handoff::Mail(address) => {
+            let draft = bifrost_app::controls::compose_handoff::Compose { to: vec![address.clone()], ..Default::default() };
+            let _ = bifrost_app::mail_compose::compose(ctx, &draft);
+        }
+    }
 }
 
 /// Writes a contact, with its extra values, to the general board. The reply (write result) arrives in `App::service_reply`.

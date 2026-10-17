@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0 — 2026-10-17
+
+- A tap on an email in a card opens a new message in Mail, prefilled with the address (`bifrost_app::mail_compose`); a tap on a phone number opens a `tel:` link through the shell. Other values still copy on a tap, and the Copy buttons still copy.
+
 ## 1.13.0 — 2026-10-17
 
 - Card windows take touches: the card scrolls on its own scroller, a tap on a value copies it, and Edit shows the contact in the main window and opens its editor (`touch_card`, `edit_from_card`, `window_event`). Touches do not change the main window's screen.
