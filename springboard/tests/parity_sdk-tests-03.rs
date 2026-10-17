@@ -292,7 +292,7 @@ fn a_file_with_another_header_is_refused_and_loads_as_empty() {
 
 #[test]
 fn rows_with_the_wrong_column_count_or_a_bad_id_are_skipped() {
-    let text = "springboard-contacts-v1\n1\tAda\t\t\t\n2\tToo\tmany\t\t\t0\t\t\t0\t0\t0\t9\n3\tOk\t\t\t\nx\tBad id\t\t\t\n";
+    let text = "springboard-contacts-v1\n1\tAda\t\t\t\n2\tToo\tmany\t\t\t0\t\t\t0\t0\t0\t9\t\t\n3\tOk\t\t\t\nx\tBad id\t\t\t\n";
     let book = contactstore::parse(text);
     let ids: Vec<u64> = book.iter().map(|c| c.id).collect();
     assert_eq!(ids, vec![1, 3]);
@@ -436,7 +436,8 @@ fn a_query_filters_the_readable_contacts_by_any_text() {
 #[test]
 fn a_contact_name_is_seen_as_given_and_family_name_split_on_the_last_space() {
     let r = record_of(&contact(1, "Ada Byron Lovelace", "", ""));
-    assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Ada Byron".into())));
+    assert_eq!(r.get(Key::GivenName), Some(&Value::Text("Ada".into())));
+    assert_eq!(r.get(Key::MiddleName), Some(&Value::Text("Byron".into())));
     assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("Lovelace".into())));
     let single = record_of(&contact(2, "Ada", "", ""));
     assert_eq!(single.get(Key::GivenName), Some(&Value::Text("Ada".into())));
@@ -503,7 +504,9 @@ fn an_add_gets_the_next_free_id_and_splits_its_name() {
     let (reply, next) = apply_save(id, &params, &book).unwrap();
     assert_eq!(reply.get("added"), Some(&Json::Arr(vec![Json::Num(2.0)])));
     assert_eq!(next.len(), 2);
-    assert_eq!(next[1], Contact { id: 2, name: "Grace Hopper".into(), phone: "+1 555".into(), email: "g@x.is".into(), ..Default::default() });
+    // the stable uid is made when the card is added
+    assert!(next[1].uid.ends_with("@bifrost"), "a new card gets a uid");
+    assert_eq!(next[1], Contact { id: 2, name: "Grace Hopper".into(), phone: "+1 555".into(), email: "g@x.is".into(), uid: next[1].uid.clone(), ..Default::default() });
 }
 
 #[test]

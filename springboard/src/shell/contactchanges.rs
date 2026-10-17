@@ -178,7 +178,7 @@ mod tests {
     fn a_save_is_diffed_into_added_updated_and_deleted() {
         let before = vec![contact(1, "Ada"), contact(2, "Grace")];
         let after = vec![contact(1, "Ada L."), contact(3, "Alan")];
-        assert_eq!(diff(&before, &after), vec![(Kind::Updated, 1), (Kind::Added, 3), (Kind::Deleted, 2)]);
+        assert_eq!(diff(&before, &after), vec![(Kind::Updated, 1), (Kind::Deleted, 2), (Kind::Added, 3)]);
     }
 
     #[test]

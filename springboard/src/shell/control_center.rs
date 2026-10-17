@@ -440,8 +440,10 @@ impl Shell {
     /// the card's title is cut short of it (see `draw_media_tile`), so nothing overlaps at any card width.
     fn up_next_button(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
         let ui = &self.ui;
-        let bw = self.measure_chrome("Up Next", 12.0, Weight::Semibold) + ui.pt(8.0);
-        (x + w - ui.pt(DK_PAD_PT) - bw, y + ui.pt(10.0), bw, ui.pt(20.0))
+        // The button never wider than the card's padded width, so it stays inside the card at any width.
+        let pad = ui.pt(DK_PAD_PT);
+        let bw = (self.measure_chrome("Up Next", 12.0, Weight::Semibold) + ui.pt(8.0)).min((w - 2.0 * pad).max(0.0));
+        (x + w - pad - bw, y + ui.pt(10.0), bw, ui.pt(20.0))
     }
 }
 

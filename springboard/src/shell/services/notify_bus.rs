@@ -790,7 +790,8 @@ mod tests {
     #[test]
     fn the_store_files_are_stat_d_at_most_once_a_second_and_a_save_is_seen_after_the_interval() {
         let data = scratch_data_dir("tick");
-        let contacts = crate::shell::contactstore::store_path(&data);
+        // The store is watched through its change log (`contacts_change_log`), not the contacts file itself.
+        let contacts = super::contacts_change_log(&data);
         std::fs::create_dir_all(contacts.parent().unwrap()).unwrap();
         let mut bus = NotifyBus::default();
         bus.stat_stores(&data, 0.0);

@@ -290,7 +290,7 @@ fn record_from(params: &Json) -> Result<Record, String> {
 
 fn record_json(record: &Record) -> Json {
     let fields = record.fields.iter().map(|(k, v)| (k.clone(), Json::Str(v.clone()))).collect();
-    Json::Obj(vec![("id".into(), Json::Num(record.id as f64)), ("fields".into(), Json::Obj(fields))])
+    Json::Obj(vec![("id".into(), Json::Num(record.id as f64)), ("entity".into(), Json::Str(record.entity.clone())), ("fields".into(), Json::Obj(fields))])
 }
 
 #[cfg(test)]

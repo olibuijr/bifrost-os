@@ -789,7 +789,8 @@ mod sensor_feed_tests {
         }
         assert!(samples.len() >= 2 && samples.len() <= 4, "one sample per 200 ms, got {}", samples.len());
         let (x, _) = *samples.last().unwrap();
-        assert!((x - 0.9).abs() < 0.2, "gravity x follows the tilt: {x}");
+        // Gravity points down, so it is the opposite of the accelerometer reading (a flat device reads (0, 0, -1)).
+        assert!((x + 0.9).abs() < 0.2, "gravity x is the opposite of the reading: {x}");
     }
 }
 

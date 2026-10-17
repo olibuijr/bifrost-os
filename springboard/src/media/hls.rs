@@ -217,6 +217,10 @@ pub fn parse_master(text: &str) -> Result<Master, Error> {
     if lines.next() != Some("#EXTM3U") {
         return Err(Error::NotAPlaylist);
     }
+    // A text with no variant tag is a media playlist (or nothing useful): it lists no variants.
+    if !text.lines().any(|l| l.trim().starts_with("#EXT-X-STREAM-INF")) {
+        return Err(Error::Master);
+    }
     let mut variants: Vec<Variant> = Vec::new();
     let mut pending: Option<(u64, Option<(u32, u32)>)> = None;
     for line in lines {

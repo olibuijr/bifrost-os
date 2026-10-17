@@ -1993,7 +1993,7 @@ mod tests {
         use bifrost_ui::location_auth::AuthorizationStatus;
         let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false }];
         let s = permissions_page(&rows);
-        assert_eq!(s.groups.len(), 4, "camera, microphone, screen recording, location");
+        assert_eq!(s.groups.len(), 5, "camera, microphone, screen recording, location, contacts");
         assert_eq!(s.groups[3].header.as_deref(), Some("LOCATION"));
         assert_eq!(s.groups[3].items[0].accessory, Accessory::Switch(true), "an app the person allowed while in use is on");
         assert_eq!(s.groups[3].items[0].action, Action::Toggle(Toggle::Location(0)));
@@ -2053,7 +2053,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..4], ["BifrOSt Account", "Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[4..8], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Spotlight", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[3].items[14].value, "Lake Day");
