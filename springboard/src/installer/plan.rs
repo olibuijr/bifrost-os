@@ -554,9 +554,9 @@ pub fn gpu_packages(lspci: &str) -> Vec<&'static str> {
     for l in lspci.lines().filter(display) {
         let l = l.to_lowercase();
         let add: &[&str] = if l.contains("[8086:") || l.contains("intel corporation") {
-            &["vulkan-intel", "intel-media-driver"]
+            &["vulkan-intel", "intel-media-driver", "opencl-mesa"]
         } else if l.contains("[1002:") || l.contains("advanced micro devices") || l.contains("[amd/ati]") {
-            &["vulkan-radeon"]
+            &["vulkan-radeon", "opencl-mesa"]
         } else if l.contains("[10de:") || l.contains("nvidia") {
             &["nvidia-open", "nvidia-utils", "libva-nvidia-driver"]
         } else {
@@ -1349,10 +1349,13 @@ mod tests {
     fn gpu_packages_follow_the_hardware() {
         let intel = "00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 530 [8086:1912] (rev 06)";
         assert!(gpu_packages(intel).contains(&"intel-media-driver") && gpu_packages(intel).contains(&"vulkan-intel"));
+        assert!(gpu_packages(intel).contains(&"opencl-mesa"), "Intel gets the rusticl OpenCL driver from mesa");
         let amd = "06:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [1002:73df]";
         assert!(gpu_packages(amd).contains(&"vulkan-radeon") && !gpu_packages(amd).contains(&"nvidia-open"));
+        assert!(gpu_packages(amd).contains(&"opencl-mesa"), "AMD gets the rusticl OpenCL driver from mesa");
         let nv = "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [10de:2216]";
         assert!(gpu_packages(nv).contains(&"nvidia-open") && gpu_packages(nv).contains(&"libva-nvidia-driver"));
+        assert!(!gpu_packages(nv).contains(&"opencl-mesa"), "NVIDIA keeps its own OpenCL");
         assert_eq!(kernel_for(&gpu_packages(nv)), KERNEL_FALLBACK, "nvidia-open matches the stock kernel only");
         assert_eq!(kernel_for(&gpu_packages(amd)), KERNEL_RT);
         assert_eq!(kernel_for(&gpu_packages(intel)), KERNEL_RT);
