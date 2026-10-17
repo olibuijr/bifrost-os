@@ -1273,6 +1273,8 @@ impl Shell {
 
     /// Shows the next app privacy request as an Allow / Don't Allow sheet when none is on screen.
     fn permission_tick(&mut self, t: f64) {
+        // an Allow Once grant ends when its app quits, so the next request asks again
+        let _ = services::privacy_permissions::expire_once(|app| self.ext.iter().flatten().any(|h| h.id == app && h.running()));
         if self.permission_sheet.is_some() {
             return;
         }
