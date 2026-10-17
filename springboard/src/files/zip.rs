@@ -1,7 +1,9 @@
 //! ZIP create and extract for the Files app: a seekable central-directory
 //! reader (stored and deflated members, CRC checked), a writer (stored, or
 //! LZ77 + fixed-Huffman deflate), and path handling that refuses zip-slip.
-//! No zip64. Progress callbacks return `false` to cancel.
+//! Members can be encrypted with the traditional ZIP cipher (ZipCrypto):
+//! `Writer::add_bytes_encrypted` seals them and `Archive::read_with_password`
+//! opens them. No zip64. Progress callbacks return `false` to cancel.
 
 use super::fs;
 use bifrost_render::cg::pdf::inflate;
@@ -97,6 +99,74 @@ pub fn safe_rel(name: &str) -> Option<PathBuf> {
     ok.then_some(out)
 }
 
+// ------------------------------------------------------- traditional cipher
+
+/// The three key words of the traditional ZIP cipher (PKWARE "ZipCrypto").
+struct ZipKeys {
+    k0: u32,
+    k1: u32,
+    k2: u32,
+}
+
+/// One CRC-32 step over a byte, the update the cipher uses for its first and third key words.
+fn crc_step(c: u32, b: u8) -> u32 {
+    CRC_TABLE[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8)
+}
+
+impl ZipKeys {
+    fn new(password: &[u8]) -> Self {
+        let mut k = ZipKeys { k0: 0x1234_5678, k1: 0x2345_6789, k2: 0x3456_7890 };
+        for &b in password {
+            k.update(b);
+        }
+        k
+    }
+
+    fn update(&mut self, b: u8) {
+        self.k0 = crc_step(self.k0, b);
+        self.k1 = self.k1.wrapping_add(self.k0 & 0xFF).wrapping_mul(134_775_813).wrapping_add(1);
+        self.k2 = crc_step(self.k2, (self.k1 >> 24) as u8);
+    }
+
+    /// The keystream byte for the next plain byte.
+    fn stream(&self) -> u8 {
+        let t = self.k2 | 2;
+        (t.wrapping_mul(t ^ 1) >> 8) as u8
+    }
+}
+
+/// Seals `header` (12 bytes) and `body` with the cipher. The header goes first, as the format requires.
+fn encrypt_member(header: &[u8; 12], body: &[u8], password: &[u8]) -> Vec<u8> {
+    let mut keys = ZipKeys::new(password);
+    let mut out = Vec::with_capacity(12 + body.len());
+    for &p in header.iter().chain(body) {
+        out.push(p ^ keys.stream());
+        keys.update(p);
+    }
+    out
+}
+
+/// Opens a sealed member: the 12-byte header is dropped after its check byte (the high byte of the
+/// member CRC) is compared, so a wrong password is refused here.
+fn decrypt_member(raw: &[u8], crc: u32, password: &[u8]) -> io::Result<Vec<u8>> {
+    if raw.len() < 12 {
+        return Err(bad("Damaged ZIP member"));
+    }
+    let mut keys = ZipKeys::new(password);
+    let plain: Vec<u8> = raw
+        .iter()
+        .map(|&c| {
+            let p = c ^ keys.stream();
+            keys.update(p);
+            p
+        })
+        .collect();
+    if plain[11] != (crc >> 24) as u8 {
+        return Err(bad("Wrong password"));
+    }
+    Ok(plain[12..].to_vec())
+}
+
 // ------------------------------------------------------------------ reader
 
 #[derive(Clone, Debug, PartialEq)]
@@ -107,6 +177,8 @@ pub struct Member {
     pub crc: u32,
     pub csize: u64,
     pub size: u64,
+    /// Sealed with the traditional ZIP cipher: needs a password (`read_with_password`).
+    pub encrypted: bool,
     offset: u64,
 }
 
@@ -165,10 +237,7 @@ impl<R: Read + Seek> Archive<R> {
             let offset = u32_at(&cd, p + 42).ok_or_else(h)? as u64;
             let raw = cd.get(p + 46..p + 46 + nlen).ok_or_else(h)?;
             let name = String::from_utf8_lossy(raw).into_owned();
-            if flags & 1 != 0 {
-                return Err(bad("Encrypted ZIP archives are not supported"));
-            }
-            members.push(Member { is_dir: name.ends_with('/'), name, method, crc, csize, size, offset });
+            members.push(Member { is_dir: name.ends_with('/'), name, method, crc, csize, size, encrypted: flags & 1 != 0, offset });
             p += 46 + nlen + xlen + clen;
         }
         Ok(Archive { r, members })
@@ -179,8 +248,18 @@ impl<R: Read + Seek> Archive<R> {
         self.members.iter().map(|m| m.size).sum()
     }
 
-    /// The decompressed, CRC-checked bytes of one member.
+    /// The decompressed, CRC-checked bytes of one member. An encrypted member is refused: use `read_with_password`.
     pub fn read(&mut self, m: &Member) -> io::Result<Vec<u8>> {
+        self.read_member(m, None)
+    }
+
+    /// Like `read`, for a member sealed by `Writer::add_bytes_encrypted`. A wrong password is refused by the
+    /// header check byte or by the CRC.
+    pub fn read_with_password(&mut self, m: &Member, password: &[u8]) -> io::Result<Vec<u8>> {
+        self.read_member(m, Some(password))
+    }
+
+    fn read_member(&mut self, m: &Member, password: Option<&[u8]>) -> io::Result<Vec<u8>> {
         // output is capped at the declared size, so a bomb cannot outgrow it
         if m.size > MEMBER_LIMIT || m.csize > MEMBER_LIMIT {
             return Err(bad("File too large to extract"));
@@ -195,6 +274,12 @@ impl<R: Read + Seek> Archive<R> {
         self.r.seek(SeekFrom::Current(skip))?;
         let mut raw = vec![0u8; m.csize as usize];
         self.r.read_exact(&mut raw)?;
+        let raw = if m.encrypted {
+            let password = password.ok_or_else(|| bad("Encrypted ZIP member needs a password"))?;
+            decrypt_member(&raw, m.crc, password)?
+        } else {
+            raw
+        };
         let out = match m.method {
             0 => raw,
             8 => inflate::inflate_limited(&raw, m.size as usize).map_err(|_| bad("Damaged compressed data"))?,
@@ -420,13 +505,12 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn header(&mut self, name: &str, method: u16, crc: u32, csize: u64, size: u64, mtime: i64, is_dir: bool) -> io::Result<()> {
+    fn header(&mut self, name: &str, method: u16, flags: u16, crc: u32, csize: u64, size: u64, mtime: i64, is_dir: bool) -> io::Result<()> {
         if self.count == u16::MAX || csize > u32::MAX as u64 || size > u32::MAX as u64 || self.pos > u32::MAX as u64 {
             return Err(bad("Archive too large (ZIP64 is not supported)"));
         }
         let (t, d) = dos_time(mtime);
         let offset = self.pos as u32;
-        let flags: u16 = 0x0800; // UTF-8 names
         let mut l = vec![];
         l.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
         l.extend_from_slice(&20u16.to_le_bytes());
@@ -464,7 +548,7 @@ impl<W: Write> Writer<W> {
 
     pub fn add_dir(&mut self, name: &str, mtime: i64) -> io::Result<()> {
         let n = if name.ends_with('/') { name.to_string() } else { format!("{name}/") };
-        self.header(&n, 0, 0, 0, 0, mtime, true)
+        self.header(&n, 0, UTF8_NAMES, 0, 0, 0, mtime, true)
     }
 
     /// Adds a file held in memory, deflated when that makes it smaller.
@@ -472,12 +556,25 @@ impl<W: Write> Writer<W> {
         let crc = crc32(data);
         let packed = deflate(data);
         if packed.len() < data.len() {
-            self.header(name, 8, crc, packed.len() as u64, data.len() as u64, mtime, false)?;
+            self.header(name, 8, UTF8_NAMES, crc, packed.len() as u64, data.len() as u64, mtime, false)?;
             self.put(&packed)
         } else {
-            self.header(name, 0, crc, data.len() as u64, data.len() as u64, mtime, false)?;
+            self.header(name, 0, UTF8_NAMES, crc, data.len() as u64, data.len() as u64, mtime, false)?;
             self.put(data)
         }
+    }
+
+    /// Adds a file held in memory, sealed with the traditional ZIP cipher under `password` and deflated when that
+    /// makes it smaller. `header` is the 12-byte encryption header: the caller fills the first 11 bytes with random
+    /// data; the last byte is set here to the high byte of the file CRC, which `Archive::read_with_password` checks.
+    pub fn add_bytes_encrypted(&mut self, name: &str, data: &[u8], mtime: i64, password: &[u8], mut header: [u8; 12]) -> io::Result<()> {
+        let crc = crc32(data);
+        header[11] = (crc >> 24) as u8;
+        let packed = deflate(data);
+        let (method, body) = if packed.len() < data.len() { (8, packed) } else { (0, data.to_vec()) };
+        let sealed = encrypt_member(&header, &body, password);
+        self.header(name, method, UTF8_NAMES | ENCRYPTED, crc, sealed.len() as u64, data.len() as u64, mtime, false)?;
+        self.put(&sealed)
     }
 
     /// Adds a large file stored (uncompressed) straight from `src` in chunks;
@@ -501,7 +598,7 @@ impl<W: Write> Writer<W> {
             return Err(bad("File changed while archiving"));
         }
         src.seek(SeekFrom::Start(0))?;
-        self.header(name, 0, crc.value(), size, size, mtime, false)?;
+        self.header(name, 0, UTF8_NAMES, crc.value(), size, size, mtime, false)?;
         loop {
             let n = src.read(&mut buf)?;
             if n == 0 {
@@ -533,6 +630,11 @@ impl<W: Write> Writer<W> {
         Ok(self.w)
     }
 }
+
+/// General-purpose flag: names are UTF-8.
+const UTF8_NAMES: u16 = 0x0800;
+/// General-purpose flag: the member is encrypted.
+const ENCRYPTED: u16 = 0x0001;
 
 /// Files above this are stored in chunks instead of deflated in memory.
 pub const STREAM_ABOVE: u64 = 32 << 20;
@@ -737,6 +839,46 @@ mod tests {
         let mut w = Writer::new(vec![]);
         let r = w.add_stored_stream("big", Cursor::new(data.clone()), data.len() as u64, 0, &mut |_| false);
         assert_eq!(r.unwrap_err().kind(), io::ErrorKind::Interrupted);
+    }
+
+    #[test]
+    fn encrypted_member_round_trips_with_its_password() {
+        let data = b"top secret ".repeat(300);
+        let header = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0];
+        let mut w = Writer::new(vec![]);
+        w.add_bytes_encrypted("vault/note.txt", &data, 0, b"hunter2", header).unwrap();
+        w.add_bytes("plain.txt", b"open", 0).unwrap();
+        let mut ar = Archive::open(Cursor::new(w.finish().unwrap())).unwrap();
+        assert!(ar.members[0].encrypted);
+        assert!(!ar.members[1].encrypted);
+        let m = ar.members[0].clone();
+        assert_eq!(ar.read(&m).unwrap_err().kind(), io::ErrorKind::InvalidData, "no password is refused");
+        assert_eq!(ar.read_with_password(&m, b"hunter2").unwrap(), data);
+        let plain = ar.members[1].clone();
+        assert_eq!(ar.read_with_password(&plain, b"ignored").unwrap(), b"open", "unencrypted members ignore the password");
+    }
+
+    #[test]
+    fn wrong_password_is_refused() {
+        let mut w = Writer::new(vec![]);
+        w.add_bytes_encrypted("s.txt", b"classified", 0, b"right", [9; 12]).unwrap();
+        let mut ar = Archive::open(Cursor::new(w.finish().unwrap())).unwrap();
+        let m = ar.members[0].clone();
+        assert!(ar.read_with_password(&m, b"wrong").is_err());
+        assert!(ar.read_with_password(&m, b"").is_err());
+        assert_eq!(ar.read_with_password(&m, b"right").unwrap(), b"classified");
+    }
+
+    #[test]
+    fn sealed_member_opens_only_with_its_check_byte() {
+        // the key schedule is a pure function of the password, and the check byte (the CRC's high byte) gates the open
+        let a = encrypt_member(&[7; 12], b"same bytes", b"pw");
+        assert_eq!(a, encrypt_member(&[7; 12], b"same bytes", b"pw"));
+        assert_ne!(a, encrypt_member(&[7; 12], b"same bytes", b"pX"));
+        assert_eq!(a.len(), 12 + 10);
+        assert_eq!(decrypt_member(&a, 7 << 24, b"pw").unwrap(), b"same bytes");
+        assert!(decrypt_member(&a, 0, b"pw").is_err(), "check byte 7 does not match a zero CRC");
+        assert!(decrypt_member(&a[..5], 0, b"pw").is_err(), "a short member is damaged");
     }
 
     #[test]
