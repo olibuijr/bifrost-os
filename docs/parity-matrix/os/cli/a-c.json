@@ -1479,11 +1479,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/bzgrep",
+   "bifrost": "springboard/cmd/src/bzegrep.rs, springboard/cmd/src/bin/bzegrep.rs",
    "status": "partial",
    "note": "provided by Arch package bzip2; not yet verified on Midget. bzgrep searches bzip2 files; the bzegrep name is not in the package",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "bzegrep::tests"
+    }
+   ],
+   "ready_note": "bzegrep runs bzgrep with -E first and passes its exit status back."
   },
   {
    "id": "path:/usr/bin/bzgrep",
@@ -1727,11 +1736,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/chattr",
+   "bifrost": "springboard/cmd/src/chflags.rs, springboard/cmd/src/bin/chflags.rs",
    "status": "partial",
    "note": "Midget 0.7.25: chattr installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "chflags::tests"
+    }
+   ],
+   "ready_note": "chflags sets and clears uchg/schg, uappnd/sappnd and nodump through chattr (0 clears all); hidden is refused."
   },
   {
    "id": "path:/usr/bin/chfn",
@@ -2406,11 +2424,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/picocom",
+   "bifrost": "springboard/cmd/src/cu.rs, springboard/cmd/src/bin/cu.rs",
    "status": "partial",
    "note": "provided by Arch package picocom; not yet verified on Midget. picocom is the serial terminal in the package; cu itself is not installed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "cu::tests"
+    }
+   ],
+   "ready_note": "cu -l line -s speed opens the line through picocom at 9600 baud by default; telephone numbers are refused."
   },
   {
    "id": "path:/usr/bin/cups-config",
@@ -4446,11 +4473,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/neighbors.rs, springboard/cmd/src/bin/arp.rs",
    "status": "partial",
    "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "neighbors::tests"
+    }
+   ],
+   "ready_note": "arp -a and arp host read ip -4 neigh show and print the arp listing shape; names are not resolved and -d/-s are refused."
   },
   {
    "id": "path:/usr/sbin/aslmanager",
