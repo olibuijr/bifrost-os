@@ -6,14 +6,14 @@
 //! Resampling: `-Z N` (or `--resampleHeightWidthMax N`) makes the largest side N, never enlarging; `--resampleWidth W`
 //! and `--resampleHeight H` set one side and keep the aspect. The picture is decoded with the shell's image decoders
 //! (`bifrost_ui::cg::imageio`), resized, and written as PNG: in place, or to `--out FILE.png` (one file only). A JPEG or
-//! GIF is written back only with `--out` naming a `.png`, because no JPEG or GIF encoder is built.
-//! Conversion: `-s format png|jpeg FILE --out FILE` decodes the picture and writes it in the new format (`--out` is
-//! required, so the source is never overwritten). Only PNG and JPEG are written; GIF is refused.
+//! GIF is written back only with `--out` naming a `.png`, because resampling writes PNG or JPEG output only.
+//! Conversion: `-s format png|jpeg|gif FILE --out FILE` decodes the picture and writes it in the new format (`--out` is
+//! required, so the source is never overwritten). GIF output uses a fixed 3-3-2 palette (256 colours) and LZW.
 //! Refused with a message: other properties to set, rotation, flips, DPI and colour profile properties,
 //! and every other option. Those need an image pipeline; the message names `magick` from the imagemagick package for them.
 //! Gap: TIFF, BMP, HEIC and the other formats are reported as unsupported.
 
-pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE\n       sips -s format png|jpeg --out OUTFILE FILE";
+pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE\n       sips -s format png|jpeg|gif --out OUTFILE FILE";
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -101,12 +101,13 @@ pub enum Action {
     Convert { to: Format, out: String, file: String },
 }
 
-/// The format a `-s format VALUE` names. Only PNG and JPEG can be written.
+/// The format a `-s format VALUE` names. PNG, JPEG and GIF can be written.
 fn output_format(value: &str) -> Result<Format, String> {
     match value.to_ascii_lowercase().as_str() {
         "png" => Ok(Format::Png),
         "jpeg" | "jpg" => Ok(Format::Jpeg),
-        other => Err(format!("format {other} cannot be written; sips here writes png and jpeg")),
+        "gif" => Ok(Format::Gif),
+        other => Err(format!("format {other} cannot be written; sips here writes png, jpeg and gif")),
     }
 }
 
@@ -257,8 +258,122 @@ pub fn convert(data: &[u8], to: Format) -> Result<Vec<u8>, String> {
             bifrost_app::graphics_imageio::encode_jpeg(img.w, img.h, &rgba, JPEG_QUALITY)
                 .ok_or_else(|| "the picture could not be encoded as JPEG".to_string())
         }
-        Format::Gif => Err("GIF is not written: sips here writes png and jpeg".to_string()),
+        Format::Gif => Ok(gif_encode(img.w, img.h, &img.px)),
     }
+}
+
+/// The GIF palette: 3 bits of red, 3 of green and 2 of blue, so index `i` is `r<<5 | g<<2 | b`.
+fn gif_palette() -> Vec<u8> {
+    (0..256u32)
+        .flat_map(|i| {
+            let r = ((i >> 5) & 7) * 255 / 7;
+            let g = ((i >> 2) & 7) * 255 / 7;
+            let b = (i & 3) * 255 / 3;
+            [r as u8, g as u8, b as u8]
+        })
+        .collect()
+}
+
+/// The palette index of a pixel in the 3-3-2 palette. Pixels are read the way the JPEG path reads them: low byte red.
+fn gif_index(p: u32) -> u8 {
+    let (r, g, b) = ((p & 0xff) as u8, ((p >> 8) & 0xff) as u8, ((p >> 16) & 0xff) as u8);
+    ((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6)
+}
+
+/// Writes a GIF89a of `w` x `h` pixels, one image with the 3-3-2 palette. Alpha is dropped.
+pub fn gif_encode(w: usize, h: usize, px: &[u32]) -> Vec<u8> {
+    let mut out = b"GIF89a".to_vec();
+    out.extend_from_slice(&(w as u16).to_le_bytes());
+    out.extend_from_slice(&(h as u16).to_le_bytes());
+    out.push(0xF7); // global colour table present, 8 bits per colour, 256 entries
+    out.push(0); // background colour index
+    out.push(0); // pixel aspect ratio
+    out.extend_from_slice(&gif_palette());
+    out.push(0x2C); // image descriptor
+    out.extend_from_slice(&[0, 0, 0, 0]); // left and top
+    out.extend_from_slice(&(w as u16).to_le_bytes());
+    out.extend_from_slice(&(h as u16).to_le_bytes());
+    out.push(0); // no local colour table, not interlaced
+    out.push(8); // minimum LZW code size
+    let indices: Vec<u8> = px.iter().take(w * h).map(|&p| gif_index(p)).collect();
+    for block in lzw_encode(&indices).chunks(255) {
+        out.push(block.len() as u8);
+        out.extend_from_slice(block);
+    }
+    out.push(0); // end of the image data
+    out.push(0x3B); // trailer
+    out
+}
+
+/// The width of a GIF code while the encoder's next free code is `next`: the decoder lags one entry behind, so it is
+/// the bits needed for `next - 1`, never less than 9 and never more than 12.
+fn code_width(next: u32) -> u32 {
+    let mut w = 9;
+    while w < 12 && next - 1 >= (1 << w) {
+        w += 1;
+    }
+    w
+}
+
+/// Packs GIF LZW codes least significant bit first.
+struct Bits {
+    out: Vec<u8>,
+    acc: u32,
+    n: u32,
+}
+
+impl Bits {
+    fn put(&mut self, code: u32, width: u32) {
+        self.acc |= code << self.n;
+        self.n += width;
+        while self.n >= 8 {
+            self.out.push(self.acc as u8);
+            self.acc >>= 8;
+            self.n -= 8;
+        }
+    }
+}
+
+/// The LZW stream for palette indices, with clear and end codes, as a GIF image needs it.
+fn lzw_encode(indices: &[u8]) -> Vec<u8> {
+    use std::collections::HashMap;
+    const CLEAR: u32 = 256;
+    const END: u32 = 257;
+    let mut bits = Bits { out: Vec::new(), acc: 0, n: 0 };
+    let mut dict: HashMap<(u32, u8), u32> = HashMap::new();
+    let mut next = 258u32;
+    bits.put(CLEAR, 9);
+    let mut cur: Option<u32> = None;
+    for &b in indices {
+        let Some(p) = cur else {
+            cur = Some(b as u32);
+            continue;
+        };
+        if let Some(&code) = dict.get(&(p, b)) {
+            cur = Some(code);
+            continue;
+        }
+        bits.put(p, code_width(next));
+        if next < 4096 {
+            dict.insert((p, b), next);
+            next += 1;
+        }
+        if next == 4096 {
+            bits.put(CLEAR, 12);
+            dict.clear();
+            next = 258;
+        }
+        cur = Some(b as u32);
+    }
+    if let Some(p) = cur {
+        bits.put(p, code_width(next));
+    }
+    // The decoder has one entry more than the encoder at the end, so the end code uses the width of `next + 1`.
+    bits.put(END, code_width(next + 1));
+    if bits.n > 0 {
+        bits.out.push(bits.acc as u8);
+    }
+    bits.out
 }
 
 /// Reads the format and size from the header of an image file's bytes.
@@ -448,9 +563,87 @@ mod tests {
         assert_eq!(info(&back).unwrap(), Info { format: Format::Png, width: 4, height: 2 });
     }
 
+    /// Decodes the LZW stream of a GIF written by `gif_encode` (one image, 8-bit minimum code size) into indices.
+    fn gif_indices(gif: &[u8]) -> Vec<u8> {
+        let start = 13 + 3 * (1 << ((gif[10] & 7) + 1)); // header, global colour table, then the image descriptor
+        assert_eq!(gif[start], 0x2C);
+        let mut data = Vec::new();
+        let mut at = start + 11;
+        loop {
+            let n = gif[at] as usize;
+            if n == 0 {
+                break;
+            }
+            data.extend_from_slice(&gif[at + 1..at + 1 + n]);
+            at += 1 + n;
+        }
+        let mut table: Vec<Vec<u8>> = (0..256).map(|i| vec![i as u8]).collect();
+        table.push(Vec::new());
+        table.push(Vec::new());
+        let (mut width, mut bit, mut out, mut prev) = (9usize, 0usize, Vec::new(), None::<Vec<u8>>);
+        while bit + width <= data.len() * 8 {
+            let mut code = 0usize;
+            for i in 0..width {
+                code |= (((data[(bit + i) / 8] >> ((bit + i) % 8)) & 1) as usize) << i;
+            }
+            bit += width;
+            if code == 256 {
+                table.truncate(258);
+                width = 9;
+                prev = None;
+                continue;
+            }
+            if code == 257 {
+                break;
+            }
+            let entry = match (code < table.len(), &prev) {
+                (true, _) => table[code].clone(),
+                (false, Some(p)) => {
+                    let mut e = p.clone();
+                    e.push(p[0]);
+                    e
+                }
+                (false, None) => panic!("first code after a clear is not in the table"),
+            };
+            out.extend_from_slice(&entry);
+            if let Some(p) = prev {
+                let mut ne = p;
+                ne.push(entry[0]);
+                table.push(ne);
+            }
+            prev = Some(entry);
+            if table.len() >= 1 << width && width < 12 {
+                width += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_png_converts_to_a_gif_with_the_332_palette() {
+        // 3 x 2: red, green, blue, white, black, red. Indices are r<<5 | g<<2 | b.
+        let px = [0x0000_00ffu32, 0x0000_ff00, 0x00ff_0000, 0x00ff_ffff, 0x0000_0000, 0x0000_00ff];
+        let png = springboard::pngenc::encode_rgb(3, 2, &px);
+        let gif = convert(&png, Format::Gif).unwrap();
+        assert_eq!(info(&gif).unwrap(), Info { format: Format::Gif, width: 3, height: 2 });
+        assert_eq!(gif_indices(&gif), vec![224, 28, 3, 255, 0, 224]);
+        // Palette entry 224 is red.
+        let palette = &gif[13..13 + 768];
+        assert_eq!(&palette[224 * 3..224 * 3 + 3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn a_large_gif_resets_its_code_table_and_round_trips() {
+        // Enough pixels to fill the 4096-entry LZW table several times over and grow the code width to 12 bits.
+        let (w, h) = (120usize, 100usize);
+        let px: Vec<u32> = (0..w * h).map(|i| (i as u32).wrapping_mul(2_654_435_761)).collect();
+        let expected: Vec<u8> = px.iter().map(|&p| gif_index(p)).collect();
+        assert_eq!(gif_indices(&gif_encode(w, h, &px)), expected);
+    }
+
     #[test]
     fn refuses_what_it_cannot_do() {
-        assert!(parse(&args(&["-s", "format", "gif", "a.png", "--out", "b.gif"])).unwrap_err().contains("gif"));
+        assert!(parse(&args(&["-s", "format", "bmp", "a.png", "--out", "b.bmp"])).unwrap_err().contains("bmp"));
         assert!(parse(&args(&["-s", "dpiWidth", "72", "a.png", "--out", "b.png"])).unwrap_err().contains("dpiWidth"));
         assert!(parse(&args(&["-s", "format", "jpeg", "a.png"])).unwrap_err().contains("--out"));
         assert!(parse(&args(&["-g", "dpiWidth", "a.png"])).unwrap_err().contains("dpiWidth"));

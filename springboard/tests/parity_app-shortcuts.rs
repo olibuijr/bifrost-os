@@ -128,15 +128,16 @@ fn the_automation_row_starts_at_sign_in_and_ends_with_no_automation() {
     assert_eq!(model::next_automation(Some(Automation::AppOpens(last_app))), Some(Automation::AppCloses(0)));
     assert_eq!(model::next_automation(Some(Automation::AppCloses(last_app))), Some(Automation::BatteryBelow(10)));
     assert_eq!(model::next_automation(Some(Automation::BatteryBelow(20))), Some(Automation::BatteryBelow(30)));
-    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), None);
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), Some(Automation::FileDropped));
+    assert_eq!(model::next_automation(Some(Automation::FileDropped)), None);
 }
 
 #[test]
 fn the_automation_row_cycles_through_every_offered_automation_once() {
     let mut seen = Vec::new();
     let mut cur = None;
-    // sign-in, two Focus changes, daily and weekday times, app opens and closes, battery levels
-    let expected = 3 + 2 * model::TIMES.len() + 2 * model::APP_CHOICES.len() + model::BATTERY_CHOICES.len();
+    // sign-in, two Focus changes, daily and weekday times, app opens and closes, battery levels, a dropped file
+    let expected = 3 + 2 * model::TIMES.len() + 2 * model::APP_CHOICES.len() + model::BATTERY_CHOICES.len() + 1;
     for _ in 0..=expected {
         cur = model::next_automation(cur);
         if cur.is_none() {

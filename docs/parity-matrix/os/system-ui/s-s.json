@@ -196,7 +196,7 @@
    "doc": "",
    "bifrost": "springboard/src/shortcuts.rs",
    "status": "partial",
-   "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: a dropped-file automation (shortcuts::Automation::FileDropped, Event::FileDropped; shortcuts::tests); the shell still has to send the event from the droplet icon.",
    "rea": []
   },
   {
