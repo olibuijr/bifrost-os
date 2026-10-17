@@ -38,7 +38,6 @@ otf-libertinus
 adobe-source-serif-fonts
 adobe-source-sans-fonts
 inter-font
-ttf-lato
 systemd-ukify
 alsa-utils
 apache
@@ -142,15 +141,11 @@ v4l-utils
 audit
 mandoc
 davfs2
-ttf-lato
 ttf-nunito
 ttf-libertinus
 ttf-charis
 ttf-ibm-plex
-inter-font
 ttf-jetbrains-mono
-ttf-nunito
 ttf-carlito
 ttf-roboto
 ttf-montserrat
-tex-gyre-fonts

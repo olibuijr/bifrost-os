@@ -208,6 +208,30 @@ const FACES: &[(&str, &str)] = &[
     ("graphik compact", "Inter"),
     ("headline a", "Inter"),
     ("kefa iii", "Noto Sans Ethiopic"),
+    ("bank gothic", "Roboto Condensed"),
+    ("bebas neue", "Roboto Condensed"),
+    ("din alternate", "Roboto Condensed"),
+    ("din condensed", "Roboto Condensed"),
+    ("druk", "Roboto Condensed"),
+    ("bodoni svtytwo", "Noto Serif Display"),
+    ("bodoni svtytwo os", "Noto Serif Display"),
+    ("bodoni svtytwo sc", "Noto Serif Display"),
+    ("didot", "Noto Serif Display"),
+    ("canela", "Noto Serif Display"),
+    ("canela deck", "Noto Serif Display"),
+    ("canela text", "Noto Serif Display"),
+    ("bordeaux roman bold let", "Libertinus Serif"),
+    ("bordeaux roman bold let fonts", "Libertinus Serif"),
+    ("brill", "Libertinus Serif"),
+    ("braganza", "TeX Gyre Chorus"),
+    ("carlito", "Carlito"),
+    ("calibri", "Carlito"),
+    ("adelle sans", "IBM Plex Sans"),
+    ("euphemia ucas", "Noto Sans"),
+    ("euphemiacas", "Noto Sans"),
+    ("coolvetica", "Montserrat"),
+    ("futura", "Montserrat"),
+    ("fakt slab stencil pro", "IBM Plex Serif"),
 ];
 
 /// The open face named for `family` in FACES, if any (case and surrounding space ignored).
@@ -222,30 +246,6 @@ pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
-/// Reference family name (lowercase) to the open face that stands in for it, tried before the class list. Each face
-/// is packaged on Arch (`packaging/arch/runtime-packages.txt`) and is the family name fontconfig reports for it.
-const FACES: &[(&str, &str)] = &[
-    ("avenir", "Lato"), ("avenir next", "Lato"), ("avenir next condensed", "Lato"),
-    ("arial black", "Noto Sans"), ("arial unicode ms", "Noto Sans"),
-    ("andale mono", "DejaVu Sans Mono"),
-    ("athelas", "Liberation Serif"),
-    ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
-    ("charter", "Charis SIL"),
-    ("american typewriter", "IBM Plex Serif"),
-    // reference typefaces shipped by macOS (licensed, never shipped here); open faces from packaged families
-    ("bank gothic", "Roboto Condensed"), ("bebas neue", "Roboto Condensed"), ("din alternate", "Roboto Condensed"),
-    ("din condensed", "Roboto Condensed"), ("druk", "Roboto Condensed"),
-    ("bodoni svtytwo", "Noto Serif Display"), ("bodoni svtytwo os", "Noto Serif Display"),
-    ("bodoni svtytwo sc", "Noto Serif Display"), ("didot", "Noto Serif Display"),
-    ("canela", "Noto Serif Display"), ("canela deck", "Noto Serif Display"), ("canela text", "Noto Serif Display"),
-    ("bordeaux roman bold let", "Libertinus Serif"), ("bordeaux roman bold let fonts", "Libertinus Serif"),
-    ("brill", "Libertinus Serif"),
-    ("braganza", "TeX Gyre Chorus"),
-    ("carlito", "Carlito"), ("calibri", "Carlito"),
-    ("adelle sans", "IBM Plex Sans"), ("euphemia ucas", "Noto Sans"), ("euphemiacas", "Noto Sans"),
-    ("coolvetica", "Montserrat"), ("futura", "Montserrat"),
-    ("fakt slab stencil pro", "IBM Plex Serif"),
-];
 
 
 /// The open families for `family`: its own face first, then the equivalents of its class. Empty when neither is known.
