@@ -78,6 +78,8 @@ pub struct Opts<'a> {
     /// lock-screen groups shown expanded
     pub expanded: &'a [AppId],
     pub muted: &'a [AppId],
+    /// apps whose Show Previews setting hides their titles and bodies in this list
+    pub hidden: &'a [AppId],
     /// hide titles and bodies (a passcode is set and the bifrost is locked)
     pub private: bool,
 }
@@ -219,7 +221,7 @@ impl ListView {
                     mute: ui.text(if muted { "Unmute" } else { "Mute" }, 13.0, Weight::Semibold, WHITE),
                     less: ui.text("Show Less", 13.0, Weight::Semibold, WHITE),
                     caption: (!expanded && g.items.len() > 1).then(|| ui.text(&format!("{} notifications", g.items.len()), 13.0, Weight::Regular, TIME)),
-                    cards: g.items[..shown].iter().map(|n| Card::new(ui, n, &img, now, opts.private)).collect(),
+                    cards: g.items[..shown].iter().map(|n| Card::new(ui, n, &img, now, opts.private || opts.hidden.contains(&g.app))).collect(),
                     more: (hidden > 0).then(|| ui.text(&format!("{hidden} more notification{}", if hidden == 1 { "" } else { "s" }), 13.0, Weight::Regular, TIME)),
                 }
             })
@@ -478,7 +480,7 @@ mod tests {
         Image { w: 100, h: 100, px: vec![WHITE; 10_000] }
     }
 
-    const NONE: Opts<'static> = Opts { expanded: &[], muted: &[], private: false };
+    const NONE: Opts<'static> = Opts { expanded: &[], muted: &[], hidden: &[], private: false };
 
     #[test]
     fn lock_list_stacks_one_card_per_app_with_peeks_and_a_count() {
@@ -567,6 +569,15 @@ mod tests {
         let empty = ListView::new(&ui, Mode::Lock, &[], &icon, 0, NONE);
         assert_eq!(empty.footer_h(&ui), 0.0);
         assert_eq!(empty.hit(&ui, 1200, top, bx + bw / 2.0, top + ui.pt(GROUP_GAP_PT) + 5.0), None, "nothing to clear");
+    }
+
+    #[test]
+    fn previews_hidden_per_app_hide_only_that_app_text() {
+        let ui = ui();
+        let icon = |_: AppId| Image::new(1, 1);
+        let opts = Opts { hidden: &[AppId::Settings], ..NONE };
+        let l = ListView::new(&ui, Mode::Center, &groups(), &icon, 0, opts);
+        assert!(l.groups.iter().all(|g| g.cards.iter().all(|c| c.private == (g.app == AppId::Settings))));
     }
 
     #[test]

@@ -401,8 +401,10 @@ impl Shell {
         let now = self.notify.now();
         let Some(n) = self.notify.store.get(id).cloned() else { return };
         let icon = self.notification_icon(app);
-        let alerts = self.app_notif(app).persistent;
-        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, false));
+        let page = self.app_notif(app);
+        // a banner shows once unlocked, so only Never hides its text
+        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, page.previews == 2));
+        let alerts = page.persistent;
         self.notify.banner = Some(Banner::new(id, self.notify.t).persistent(alerts));
     }
 
@@ -550,6 +552,16 @@ impl Shell {
     }
 
     /// Whether the lock screen hides what notifications and events say: a passcode is set.
+    /// Whether the app's Show Previews setting hides its text in a list of `mode`: Never hides it everywhere,
+    /// When Unlocked hides it on the lock screen and shows it once unlocked (`notify_page::PREVIEWS`).
+    fn previews_hidden(&self, app: AppId, mode: Mode) -> bool {
+        match self.app_notif(app).previews {
+            2 => true,
+            1 => mode == Mode::Lock,
+            _ => false,
+        }
+    }
+
     fn lock_private(&self) -> bool {
         self.screen == Screen::Lock && super::passcode::Lock::required(&self.passcode_path())
     }
@@ -568,7 +580,8 @@ impl Shell {
         let icons = &self.notify.icons;
         let icon = |app: AppId| icons.iter().find(|(a, _)| *a == app).map(|(_, i)| i.clone()).unwrap_or_else(|| Image::new(1, 1));
         let muted: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.notify.store.is_muted(a)).collect();
-        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, private };
+        let hidden: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.previews_hidden(a, mode)).collect();
+        let opts = Opts { expanded: &self.notify.expanded, muted: &muted, hidden: &hidden, private };
         ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts)
     }
 
@@ -1536,6 +1549,30 @@ mod tests {
             tap(&mut sh, tx, ty, 5000.0);
         }
         assert!(!sh.app_muted(AppId::Settings), "a second tap unmutes");
+    }
+
+    #[test]
+    fn show_previews_decides_what_banners_and_lists_reveal() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let set = |sh: &mut Shell, previews: u8| {
+            let page = AppNotif { previews, ..AppNotif::default() };
+            let _ = sh.prefs.set(&pref_key(AppId::Files), &page.encode());
+        };
+        set(&mut sh, 0);
+        sh.notify(note(AppId::Files, "Always"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private && !sh.previews_hidden(AppId::Files, Mode::Lock));
+        set(&mut sh, 1);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Lock), "When Unlocked hides the text on the lock screen");
+        assert!(!sh.previews_hidden(AppId::Files, Mode::Center), "and shows it once unlocked");
+        sh.notify(note(AppId::Files, "When unlocked"));
+        assert!(!sh.notify.banner_card.as_ref().unwrap().private);
+        set(&mut sh, 2);
+        assert!(sh.previews_hidden(AppId::Files, Mode::Center));
+        sh.notify.banner = None;
+        sh.notify(note(AppId::Files, "Never"));
+        assert!(sh.notify.banner_card.as_ref().unwrap().private, "Never hides the banner text too");
     }
 
     #[test]
