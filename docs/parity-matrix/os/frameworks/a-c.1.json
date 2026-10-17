@@ -1416,11 +1416,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts-ui.json",
+   "bifrost": "springboard/sdk/src/contacts.rs (picker module); springboard/ui/src/contact_picker.rs, contact_card.rs, contact_access.rs; springboard/src/shell/contact_pick_sheet.rs, contactpick.rs, services/contacts.rs",
    "status": "partial",
    "note": "from SDK matrix contacts-ui.json Refreshed 2026-10-17: not ready; open items are in data/contacts-ui.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_card::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contact_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactpick::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    }
+   ],
+   "ready_note": "An app asks for a contact and gets back only the one the person chose: the SDK picker (bifrost_app::contacts::picker over ui contact_picker) lists, searches and returns a whole contact or one value, and the shell draws the picker sheet (contact_pick_sheet.rs) without giving the app read access to the book. contact_card builds the card rows, contact_access is the limited-access grant (picked set, request, change in Settings). The embeddable viewer and editor views stay private to the Contacts app."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreAI.framework",
@@ -1437,11 +1476,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-ai.json",
+   "bifrost": "springboard/sdk/src/core_ai.rs (InferenceSession, InferenceModel), inference.rs (typed functions), ndarray.rs; springboard/ui/src/model_compile.rs, model_specialization.rs, model_assets.rs, work_stream.rs, ml_model.rs",
    "status": "partial",
-   "note": "from SDK matrix core-ai.json Refreshed 2026-10-17: Remaining: no on-device model runtime (load, specialize, run), no compute stream API, no model cache, no inference tracing; the AI features use the cloud API.",
+   "note": "from SDK matrix core-ai.json Refreshed 2026-10-17: Remaining: no on-device model runtime (load, specialize, run), no compute stream API, no model cache, no inference tracing; the AI features use the cloud API. Built 2026-10-17 (wave 13): core_ai.rs, the inference session over typed functions, the compile step and the specialization cache.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_ai::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "inference::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ndarray::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_compile::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_specialization::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "work_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_model::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17 (wave 13): core_ai::InferenceSession loads a model once, compiles its plan for the target into the specialization cache (reused on the next load, purgeable or persistent), checks every call against the typed function signature (named float32 array inputs, outputs) and runs the CPU evaluator, returning the output as an NDArray. Model download state is model_assets, ordered work with dependencies is work_stream. The runtime evaluates dense, relu and softmax chains on the CPU; there is no Neural Engine on this platform and no large-model or GPU kernel runtime."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreAudio.framework",
@@ -1458,11 +1541,85 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-audio.json",
+   "bifrost": "springboard/audiod (audio service); springboard/sdk/src/audio_hal.rs, audio_devices.rs, audio_session.rs, audio_aggregate.rs, audio_process.rs, audio_virtual.rs, audio_box.rs; springboard/src/media/volume.rs, route.rs, speaker.rs, capture.rs; springboard/src/shell/services/audio_devices.rs; springboard/ui/src/default_device.rs, volume_control.rs",
    "status": "partial",
    "note": "from SDK matrix core-audio.json Refreshed 2026-10-17: Remaining: no app device or stream I/O (audio_hal models only), no device property listeners, no virtual device publication (no plug-in loader), audio box state not applied to hardware.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_hal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_aggregate::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_process::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_virtual::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_box::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "default_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "volume_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::volume::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::speaker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::audio_devices::tests"
+    }
+   ],
+   "ready_note": "Apps list the audio devices and streams (audio_hal over the kernel PCM listing, now with host tests), read and set the default device, volume and mute, and receive route, device and volume change events through the shell audio service (audio_devices + shell::services::audio_devices); playback transport and recording go through the audio service client. Aggregate devices, process objects and virtual devices are SDK models. Remaining: no app-opened stream I/O callbacks, no virtual device plug-in loader, audio box state is not applied to hardware."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreAudioKit.framework",
@@ -1479,11 +1636,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/coreaudiokit.json",
+   "bifrost": "springboard/ui/src/param_view.rs (generic parameter view, used by springboard/apps/daw/src/rack.rs), panner.rs, route_picker.rs, network_audio_browser.rs, midi_ble_picker.rs, midi_ble.rs; springboard/src/shell/pickers.rs",
    "status": "partial",
    "note": "from SDK matrix coreaudiokit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "param_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "panner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "route_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "network_audio_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "midi_ble_picker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "midi_ble::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    }
+   ],
+   "ready_note": "The audio view layer: the generic parameter view for a processor (every parameter as a slider with linear or log mapping, expert parameters hidden) is used by the DAW rack; the panner view model, the audio route picker (drawn in the shell route menu), the network audio device browser and the Bluetooth MIDI peripheral picker are kit models with tests. Remaining: no third-party Audio Unit host loads custom plug-in views, and the BLE MIDI picker is not yet connected to the Bluetooth controller."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreAudioTypes.framework",
@@ -1537,9 +1738,9 @@
    "doc": "",
    "bifrost": "springboard/src/bare/bluetooth.rs (controller power, discovery, pairing, bonds, audio route); springboard/sdk/src/central.rs (ManagerState, ScanOptions)",
    "status": "partial",
-   "note": "The system layer drives the controller (power, discovery, pairing, bonds, audio route). The SDK central model keeps manager state and scan options as pure logic that no app uses yet. Not covered: GATT client and server, app-level advertising and an app-facing API.",
+   "note": "The system layer drives the controller (power, discovery, pairing, bonds, audio route). The SDK central model keeps manager state and scan options as pure logic that no app uses yet. Not covered: GATT client and server, app-level advertising and an app-facing API. Wave 13 (2026-10-17), not ready: The app-facing models exist (sdk central.rs scanner and link, ui gatt, gatt_server, peripheral and advertising, sdk bluetooth_service for radio state, scan, pair and connect), but no transport reads or writes GATT attributes: the shell services query answers an empty list labelled none, and nothing feeds Scanner::offer or Link. Missing: an LE transport (HCI or an L2CAP ATT socket) in springboard/src/bare/bluetooth.rs and a shell GATT service that the central model drives.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreData.framework",
@@ -1631,11 +1832,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-foundation.json",
+   "bifrost": "springboard/sdk/src/defaults.rs, time_zone.rs, url.rs, notification.rs, calendar_system.rs, locale.rs, cf_bundle.rs, coding.rs, dispatch.rs, attributed.rs, control.rs; springboard/ui/src/format.rs",
    "status": "partial",
    "note": "Refreshed 2026-10-17, still open: No CFURL value type for paths (appending or deleting components, standardizing); springboard/sdk/src/file_manager.rs covers paths, resource values and directory enumeration. UserDefaults (defaults.rs) is not yet backed by PrefStore domains; no suite or global-domain fallback for the per-app store. Calendar/TimeZone are not yet used by DateFormatter (it takes an explicit tz_offset).",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "time_zone::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::cookie_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::upload_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar_system::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cf_bundle::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "coding::binary_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "coding::uuid_decimal_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dispatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "format::tests"
+    }
+   ],
+   "ready_note": "The value-level C framework maps onto the SDK: preferences (defaults), notification centre, run loop and dispatch timers, URL access and components, locale, time zone and calendar, number and date formatting, property-list coding, attributed strings and bundles, each with host tests. The opaque CF object types, sockets, ports and byte-order helpers are n/a by design (Rust types and std replace them). Remaining: UserDefaults is not yet backed by the PrefStore domains and DateFormatter takes an explicit offset."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreGraphics.framework",
@@ -1833,11 +2103,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-location.json",
+   "bifrost": "springboard/sdk/src/core_location.rs; springboard/src/shell/services/location.rs, privacy_permissions.rs; springboard/ui/src/location_auth.rs, geofence.rs, reverse_lookup.rs; springboard/core/src/magnetometer.rs",
    "status": "partial",
    "note": "from SDK matrix core-location.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geofence::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "reverse_lookup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "magnetometer::tests"
+    }
+   ],
+   "ready_note": "Apps use LocationManager with a delegate (authorization, requestLocation, updates with distance filter, errors); the shell location service answers from the location the person sets in Settings (100 m; approximate apps get a 3 km grid), the privacy service queues the permission sheet, and Settings > Privacy has the switch. Reverse and forward geocoding work over the known places, region monitoring is the geofence model, compass heading comes from the magnetometer model. A PC has no GPS and no third-party positioning lookup is made by design (privacy); beacons and location push are n/a."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMIDI.framework",
@@ -1856,9 +2165,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-midi.json",
    "status": "partial",
-   "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs.",
+   "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs. Wave 13 (2026-10-17), not ready: The protocol layer is complete and tested (endpoints registry, hub routing, UMP and MIDI 1.0, thru, MIDI-CI, network packets), and bifrost-midid reads ALSA rawmidi and sequencer input into the hub, but it has no client IPC, no rawmidi output and no unit in packaging/arch, so an app gets only the in-process Hub (sdk/src/midi.rs) and never sees a hardware port. Missing: a midid client socket with an SDK client, rawmidi output, and the bifrost-midid.service unit.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMIDIServer.framework",
@@ -1875,11 +2184,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-midi.json",
-   "status": "partial",
-   "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs.",
+   "bifrost": "springboard/audio/midid/src/main.rs, rawmidi.rs, seq.rs; springboard/audio/midi/src/hub.rs",
+   "status": "n/a",
+   "note": "n/a: CoreMIDIServer is the driver-side plug-in interface of the MIDI server (the index holds only Info.plist and version.plist for it; the driver model is the same one the matrix lists as n/a under Core MIDI: MIDIDriverInterface device lists). On BifrOSt the kernel ALSA rawmidi and sequencer layers are the drivers, read by the bifrost-midid server (springboard/audio/midid), so no driver plug-in loader is offered. The client side is the CoreMIDI row.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreML.framework",
@@ -1896,11 +2205,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-ml.json",
+   "bifrost": "springboard/sdk/src/core_ml.rs; springboard/ui/src/ml_model.rs, ml_runtime.rs, features.rs, ml_tensor.rs, compute.rs, ml_state.rs, ml_update.rs, text_classifier.rs, sound_classify.rs, cnn_layers.rs, embedding.rs",
    "status": "partial",
    "note": "from SDK matrix core-ml.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_ml::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_runtime::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "features::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_tensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_state::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "text_classifier::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sound_classify::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "embedding::tests"
+    }
+   ],
+   "ready_note": "Apps load a model (text form or built in code), pass typed feature providers and tensors, and get predictions from the CPU evaluator through AnalysisRuntime; compute policy placement, model state, on-device update, a text classifier, a sound classifier, convolution layers and embeddings are built on it, with tests. Remaining: model formats other than the text form, GPU execution and a Neural Engine (none on this platform)."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMedia.framework",
@@ -1969,9 +2342,9 @@
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs; springboard/ui/src/camera_properties.rs (device property model)",
    "status": "partial",
-   "note": "The Camera app reads Linux V4L2 capture devices. Built 2026-10-17: CameraProperties, the device property model (identity, running flag, stream count, addressed by selector, scope and element; only running is writable, changes queued for listeners); tests camera_properties::tests. Not covered: publishing a camera device to other apps, camera extensions, and wiring the properties to the V4L2 capture code.",
+   "note": "The Camera app reads Linux V4L2 capture devices. Built 2026-10-17: CameraProperties, the device property model (identity, running flag, stream count, addressed by selector, scope and element; only running is writable, changes queued for listeners); tests camera_properties::tests. Not covered: publishing a camera device to other apps, camera extensions, and wiring the properties to the V4L2 capture code. Wave 13 (2026-10-17), not ready: The Camera app opens V4L2 nodes itself and CameraProperties (ui camera_properties.rs) is the device property model, but no camera service hands frames or device properties to other apps, nothing calls CameraProperties, and there is no camera extension or virtual camera path. Missing: a shell camera service (device list, property get and set, frame stream) over media/v4l2.rs with a per-app camera permission, and an SDK client.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMotion.framework",
@@ -1988,11 +2361,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-motion.json",
+   "bifrost": "springboard/core/src/motion_manager.rs, device_motion.rs, inertial_sensors.rs, magnetometer.rs, altitude.rs, motion_activity.rs, pedometer.rs, motion.rs; springboard/sdk/src/motion_raw.rs, sensors.rs; springboard/src/shell/rotate.rs",
    "status": "partial",
    "note": "from SDK matrix core-motion.json Refreshed 2026-10-17: the shell orientation feed is built (SensorFeed in springboard/src/shell/rotate.rs, not checked on hardware). Still open: an app-facing device-motion service, and the magnetometer, barometer, activity and pedometer readers.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "motion_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "device_motion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "inertial_sensors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "magnetometer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "altitude::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "motion_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pedometer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "motion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "motion_raw::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "sensors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::rotate::tests"
+    }
+   ],
+   "ready_note": "An app reads the kernel sensor tree itself: RawMotion starts accelerometer and gyroscope updates at the sensor sampling rates, the motion manager and device-motion estimator give attitude and gravity-free acceleration, and the magnetometer heading, altitude, activity classifier and pedometer models are in bifrost_app::sensors (permission \"sensors\"). The shell uses the same feed for screen rotation. Desktop hardware rarely has these sensors; heart rate, headphone and fall data are n/a."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreServices.framework",
@@ -2009,11 +2441,110 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-services.json",
+   "bifrost": "springboard/sdk/src/launch_services.rs, workspace.rs, fswatch.rs, quicksearch.rs, process_info.rs, app_events.rs, search_kit.rs, icon_images.rs, definitions.rs; springboard/ui/src/launch.rs, metaquery.rs, identity.rs, shared_list.rs; springboard/core/src/backup_exclusion.rs, quarantine.rs, script/dictionary.rs; springboard/src/shell/defaultapps.rs, recent_items.rs, services/launch_services.rs",
    "status": "partial",
    "note": "from SDK matrix core-services.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workspace::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "icon_images::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "definitions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "launch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "metaquery::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "identity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shared_list::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "quarantine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "script::dictionary::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::defaultapps::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::recent_items::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::launch_services::tests"
+    }
+   ],
+   "ready_note": "Launch Services (default app, apps that can open an item, open with, URL schemes, role handlers, quarantine), the file system change stream with event ids and replay, file metadata queries, dictionary lookup, backup exclusion, identity lookup, shared file lists, the document search index, typed app events with scripting dictionaries, and file icons are in the SDK and shell with host tests. Remaining: persisted event-journal replay after restart, scripting not yet verified on Midget, Carbon legacy managers are n/a."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreSpotlight.framework",
@@ -2111,11 +2642,105 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-text.json",
+   "bifrost": "springboard/render/src/font.rs, cff.rs, gvar.rs, kern.rs, fontobj.rs, fontfallback.rs, emoji.rs, fontprefs.rs; springboard/sdk/src/attributed.rs, font_descriptor.rs, font_substitution.rs; springboard/ui/src/bidi.rs, typeset.rs, text.rs, vertical_text.rs, ruby.rs, run_delegate.rs, textlayout.rs",
    "status": "partial",
    "note": "From SDK matrix core-text.json. Open: no GPOS reader or feature selection (kern table pairs only), no ligatures outside colour emoji; metrics not yet compared with the reference on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "font::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cff::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "gvar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kern::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontobj::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontfallback::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "emoji::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontprefs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "bidi::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "typeset::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "vertical_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ruby::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "run_delegate::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "textlayout::tests"
+    }
+   ],
+   "ready_note": "The text engine: TrueType and CFF fonts with cmap lookup, metrics, variable axes and kern pairs, font descriptors and substitution, attributed strings with paragraph styles and tab stops, line breaking and truncation, typesetter and run layout, bidirectional and vertical text, ruby and run delegates, all with host tests. Remaining: no GPOS reader or feature selection (kern table pairs only) and no ligatures outside colour emoji."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreTransferable.framework",
@@ -2339,11 +2964,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/sha256.rs; springboard/src/keychain.rs (HMAC-SHA256, ChaCha20)",
+   "bifrost": "springboard/sdk/src/crypto_kit.rs, digest.rs, chacha_poly.rs, kem.rs, crypto_key.rs, keychain_keys.rs; springboard/core/src/sha256.rs; springboard/src/keychain.rs",
    "status": "partial",
    "note": "SHA-256, HMAC-SHA256 and ChaCha20 protect the keychain file and check updates and backups inside the shell. Not covered: an app-facing hash, cipher, signature or key-agreement API and the other primitives. Updated 2026-10-17: app-facing digests, HMAC-SHA256 and constant-time compare are in the SDK (springboard/sdk/src/digest.rs); the remaining CryptoKit primitives are tracked in docs/parity-matrix/data/apple-cryptokit.json.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crypto_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "digest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "chacha_poly::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "kem::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crypto_key::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sha256::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Apps get SHA-2 digests, HMAC, HKDF-SHA256, AES-GCM and ChaCha20-Poly1305 sealed boxes, X25519 key agreement, Ed25519 signatures, ML-KEM key encapsulation, typed key objects with constant-time checks, and keychain-backed key storage, all on the shell own pure Rust primitives with host tests. Remaining: HPKE, NIST curves and hardware-backed keys (none on this platform)."
   },
   {
    "id": "path:/System/Library/Frameworks/CryptoTokenKit.framework",
@@ -2360,11 +3029,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cryptotokenkit.json",
+   "bifrost": "springboard/ui/src/smartcard_slot.rs, token_objects.rs, token_registration.rs, token_registry.rs, token_watch.rs; springboard/sdk/src/keychain.rs",
    "status": "partial",
    "note": "Remaining from data file cryptotokenkit (refreshed 2026-10-17): No smart card reader or PC/SC layer; springboard/ui/src/smartcard_slot.rs models slots and cards only. | No token driver or app extension mechanism for hardware tokens. | No way to store, list or use keys or certificates held by a token (keychain is generic-password only, per docs/bifrost-ui.md 'Keychain' section). | No token-based login or two-factor factor for springboard/src/shell/login.rs. | No token registration or managed-device policy for token authentication. | No persistent or HSM token support.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_objects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "The token API a driver or app uses: smart card slots and cards, token objects (keys and certificates held by a token), token registration and registry with the watcher that reports token insertion and removal, and the keychain client. Remaining: no PC/SC reader layer feeds the slots from real hardware, so a token appears only when an in-process driver registers it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AAAFoundation.framework",

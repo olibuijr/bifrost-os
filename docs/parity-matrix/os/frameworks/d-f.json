@@ -155,9 +155,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/devicediscoveryextension.json",
    "status": "partial",
-   "note": "Remaining from data file devicediscoveryextension (refreshed 2026-10-17): No system device picker or route picker view that lists third-party media receivers; the SDK feed is not wired to a shell browse service. | No sandboxed extension process or transport that feeds the modeled discovery point. | AirPlay & Handoff exists only as a settings page (springboard/src/shell/pages.rs:598) with no receiver discovery behind it.",
+   "note": "Remaining from data file devicediscoveryextension (refreshed 2026-10-17): No system device picker or route picker view that lists third-party media receivers; the SDK feed is not wired to a shell browse service. | No sandboxed extension process or transport that feeds the modeled discovery point. | AirPlay & Handoff exists only as a settings page (springboard/src/shell/pages.rs:598) with no receiver discovery behind it. Wave 13 (2026-10-17), not ready: sdk route_discovery.rs ReceiverFeed (checks, expiry, picker rows with authorization) and the media_receivers TXT model exist, but nothing calls ReceiverFeed::report: no shell browse service queries the network and no extension host runs a discovery extension. Missing: the mDNS browse service in the shell feeding ReceiverFeed into the route picker (shell/pickers.rs), plus the extension host noted on ExtensionFoundation.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/DirectoryService.framework",
@@ -174,10 +174,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/directory_node.rs, springboard/ui/src/directory_query.rs",
+   "bifrost": "springboard/ui/src/directory_node.rs, directory_query.rs; springboard/sdk/src/ldap_directory.rs, directory_servers.rs; springboard/src/shell/services/directory.rs",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_node::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "directory_servers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::directory::tests"
+    }
+   ],
+   "ready_note": "Directory nodes and record queries (ui) are used by the LDAP client in the SDK (ldap_directory, directory_servers) and by the shell directory service that answers app requests; host tests cover the query model, the LDAP encoding and the shell service. Not verified against a live directory server on Midget.",
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/DiscRecording.framework",
@@ -236,11 +266,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/disk-arbitration.json",
+   "bifrost": "springboard/core/src/disk_claims.rs, disk_commands.rs, disk_events.rs; springboard/sdk/src/disk_arbitration.rs; springboard/src/shell/services/disks.rs; springboard/src/installer/disks.rs",
    "status": "partial",
    "note": "from SDK matrix disk-arbitration.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_claims::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_commands::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::disks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::disks::tests"
+    }
+   ],
+   "ready_note": "Disk description and lookup, appear, disappear and change events, mount, unmount, eject and rename commands, approval callbacks and exclusive claims are modelled in bifrost_core and exposed to apps by bifrost_app::disk_arbitration; the shell disks service answers them from lsblk and findmnt. Remaining: Files shows no Volumes section and udev data is not yet reachable from the app sandbox."
   },
   {
    "id": "path:/System/Library/Frameworks/DiskImageKit.framework",
@@ -257,11 +321,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/diskimagekit.json; springboard/sdk/src/disk_image.rs",
+   "bifrost": "springboard/sdk/src/disk_image.rs; springboard/core/src/disk_image.rs, guest_vm.rs",
    "status": "partial",
    "note": "from SDK matrix diskimagekit.json Built 2026-10-17: SDK disk_image module (create_raw_file, open_raw_file, resize_raw_file, inspect_file) creates, opens, resizes and inspects RAW image files; tests disk_image::tests. Gap: mounting and ejecting images needs a loop-device or mount service, which is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_image::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_image::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_vm::tests"
+    }
+   ],
+   "ready_note": "Apps create, open, resize and inspect RAW disk images (create_raw_file, open_raw_file, resize_raw_file, inspect_file over core disk_image) and hand them to the virtual machine layer (guest_vm). Remaining: sparse and stacked image formats are n/a, and mounting an image needs a loop-device service that is not built."
   },
   {
    "id": "path:/System/Library/Frameworks/DockKit.framework",
@@ -320,11 +403,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/calendar.rs; springboard/ui/src/calendar_store.rs",
+   "bifrost": "springboard/sdk/src/calendar.rs, event_recurrence.rs; springboard/ui/src/calendar_store.rs; springboard/src/shell/services/calendar.rs",
    "status": "partial",
    "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Built 2026-10-17: apps can edit and delete events (SDK calendar::update_event and delete_event, service methods update_event and delete_event; tests calendar::tests in springboard/src/shell/services/calendar.rs and springboard/sdk/src/calendar.rs). Gap: account sources such as Exchange are missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "event_recurrence::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::calendar::tests"
+    }
+   ],
+   "ready_note": "Apps with the calendars permission read events and reminders by date range, save, update and delete events, and expand recurrence rules through the shell calendar service (calendar.rs in the SDK, shell::services::calendar, calendar_store). Remaining: account sources such as Exchange."
   },
   {
    "id": "path:/System/Library/Frameworks/ExceptionHandling.framework",
@@ -341,11 +448,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/exception-handling.json",
+   "bifrost": "springboard/sdk/src/exception_handler.rs, dispatch.rs; springboard/core/src/exception_policy.rs; springboard/src/bare/crashlog.rs; springboard/src/shell/diag.rs",
    "status": "partial",
    "note": "from SDK matrix exception-handling.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "exception_handler::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dispatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "exception_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::crashlog::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag::tests"
+    }
+   ],
+   "ready_note": "An app installs an ExceptionHandler (mask, delegate approval per failure, default handler) and captures failures into crash records; the system panic hook writes crash.log, the next start detects an unclean exit, and the shell diagnostics list the crash. Dispatch jobs isolate panics. Remaining: the handler is not a process-wide panic hook for arbitrary app code and the halt mask does not stop in a debugger."
   },
   {
    "id": "path:/System/Library/Frameworks/ExecutionPolicy.framework",
@@ -385,9 +521,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/extensionfoundation.json",
    "status": "partial",
-   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no shell wiring, no package loading, no XPC transport, no host-initiated extension launch, no share-sheet extensions; discovery is a registry over enabled extensions only.",
+   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no shell wiring, no package loading, no XPC transport, no host-initiated extension launch, no share-sheet extensions; discovery is a registry over enabled extensions only. Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view).",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/ExtensionKit.framework",
@@ -406,9 +542,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/extensionkit.json",
    "status": "partial",
-   "note": "from SDK matrix extensionkit.json",
+   "note": "from SDK matrix extensionkit.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). ExtensionKit additionally needs the host view (EXHostViewController equivalent) to draw the remote scene inside the host window.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/ExternalAccessory.framework",
@@ -425,11 +561,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/external-accessory.json",
-   "status": "partial",
-   "note": "from SDK matrix external-accessory.json",
+   "bifrost": "springboard/sdk/src/external_accessory.rs, serial_ports.rs, hid_devices.rs, bluetooth_picker.rs, wifi_accessory_browser.rs; springboard/core/src/accessory_manager.rs",
+   "status": "n/a",
+   "note": "n/a: ExternalAccessory serves MFi (Made for iPhone) accessories: EAAccessory sessions per vendor protocol string over Lightning, 30-pin or Bluetooth, authenticated by the Apple MFi coprocessor, an Apple-only protocol with no open equivalent (the index holds only localized pairing strings and BridgeSupport; Apple documents that iOS-family apps on Apple silicon Macs cannot use it). The open transports are served by their own modules: serial_ports and hid_devices (USB), bluetooth_picker, wifi_accessory_browser, accessory_manager (USB accessory attach and detach).",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/FSKit.framework",
@@ -446,11 +582,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/fskit.json",
+   "bifrost": "springboard/sdk/src/fs_module.rs, fuse.rs, fuse_mount.rs; springboard/ui/src/fs_volume.rs, fs_probe.rs, fs_maintenance.rs",
    "status": "partial",
    "note": "from SDK matrix fskit.json Refreshed 2026-10-17: not ready, remaining: No shell mount service or grant check for a user-space file system module (the read-only SDK module and FUSE session exist; write operations do not) | No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps | No probe, mount or maintenance request path for apps or daemons (FSClient equivalent) | No FSTask-style channel from a file system module to the shell for log and completion events | Mounted volumes are missing from the file panel sidebar (docs/bifrost-ui.md, file panel section)",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fs_module::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fuse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_volume::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_probe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_maintenance::tests"
+    }
+   ],
+   "ready_note": "An app implements UnaryFileSystem (lookup, attributes, directory listing, reads) and Mount::serve mounts it through fusermount3 and answers the kernel requests (Dispatcher over the FUSE protocol decoder); volumes, probing and maintenance requests are ui models. Remaining: read-only (writes answer EROFS), no shell mount service or grant check, and mounted volumes are not listed in the file panel."
   },
   {
    "id": "path:/System/Library/Frameworks/FamilyControls.framework",
@@ -490,9 +655,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/file-provider.json",
    "status": "partial",
-   "note": "from SDK matrix file-provider.json",
+   "note": "from SDK matrix file-provider.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). FileProvider additionally needs placeholder (dataless) files with on-demand hydration in Files and the document panel, which docs/file-portal-design.md does not plan yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/FileProviderUI.framework",
@@ -511,9 +676,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/file-provider-ui.json",
    "status": "partial",
-   "note": "from SDK matrix file-provider-ui.json",
+   "note": "from SDK matrix file-provider-ui.json Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). FileProviderUI additionally needs the Files context menu (springboard/src/files/mod.rs) to list actions declared by providers and to show the action view over the browser.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/FinanceKit.framework",
@@ -574,9 +739,9 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/finder-sync.json",
    "status": "partial",
-   "note": "from SDK matrix finder-sync.json Refreshed 2026-10-17: no change in code. Still open: the file-manager extension point, the selection API for other apps, tag and attribute sharing, and the extension host.",
+   "note": "from SDK matrix finder-sync.json Refreshed 2026-10-17: no change in code. Still open: the file-manager extension point, the selection API for other apps, tag and attribute sharing, and the extension host. Wave 13 (2026-10-17), not ready: Nothing in springboard/src or springboard/apps uses bifrost_core::extension_process, bifrost_ui::extension, extensions or remote_view, so no extension is ever discovered, launched or hosted. Missing, as one piece shared with ExtensionFoundation, ExtensionKit, FileProvider, FileProviderUI and FinderSync: the extension host in the shell (read [[extension]] and [[extension_point]] tables from installed manifests into the Registry, spawn the extension process, give it a socket connection for the ProcessTable, and present its scene through remote_view). FinderSync additionally needs the Files app to ask extensions for badges and menu items (ui filebadge.rs and fileaction.rs hold the models) and to pass the selection and target folder.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/ForceFeedback.framework",
@@ -593,11 +758,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/force-feedback.json",
+   "bifrost": "springboard/core/src/force_effect.rs, ff_device.rs, ff_escape.rs, haptic_request.rs, rumble.rs, gamepad.rs; springboard/sdk/src/gamepad_service.rs; springboard/src/bare/pad_rumble.rs; springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "from SDK matrix force-feedback.json",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "force_effect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "ff_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "ff_escape::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "haptic_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "rumble::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "gamepad::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::pad_rumble::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::gamepad_service::tests"
+    }
+   ],
+   "ready_note": "Game controller force feedback works end to end: an app in front calls gamepad_service::rumble (heavy and light motor, duration), the shell gamepad service plays it through pad_rumble (EVIOCSFF upload and EV_FF play events). Effect kinds (constant, periodic, ramp, condition), the effect-slot device with properties, gain and autocenter, and escape frames are the core models. Remaining: wheel and joystick effects are modelled but not uploaded to such devices, and the evdev scan does not yet probe force-feedback capability."
   },
   {
    "id": "path:/System/Library/Frameworks/Foundation.framework",
@@ -614,11 +828,125 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
+   "bifrost": "springboard/sdk/src/file_manager.rs, file_coordination.rs, url_components.rs, url_cache.rs, url_background.rs, value_types.rs, observable.rs, restoration.rs, error.rs, keyed_archive.rs, file_wrapper.rs, file_version.rs, decimal.rs, http_cookies.rs, http_auth.rs, operation_queue.rs, notification_queue.rs, process_info.rs, bookmark.rs, share.rs, url.rs, defaults.rs, notification.rs, dispatch.rs; springboard/ui/src/progress.rs, indexset.rs, geometry.rs",
    "status": "partial",
    "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing (springboard/sdk/src/notification_queue.rs) and the item provider (springboard/sdk/src/item_provider.rs) exist. Still open: progress publishing across processes, the recovery attempter, the extension host, Handoff, and scripting.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_components::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_cache::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "value_types::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "restoration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "error::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keyed_archive::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_wrapper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_version::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "decimal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_cookies::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "operation_queue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification_queue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bookmark::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "progress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "indexset::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geometry::tests"
+    }
+   ],
+   "ready_note": "The base layer for apps: file manager and coordination, URL components, caching and background transfers, cookies and HTTP authentication, value types and decimals, key-value observation, state restoration, keyed archives, file wrappers and versions, bookmarks, operation queues and notification queues, progress, index sets and geometry, with host tests per module. Remaining: progress publishing across processes, the recovery attempter, the extension host and scripting."
   },
   {
    "id": "path:/System/Library/Frameworks/FoundationModels.framework",
@@ -635,11 +963,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/sdk/src/language_model.rs; springboard/ui/src/model_session.rs, model_provider.rs, model_tool.rs, tool_calls.rs, transcript.rs, generation_schema.rs, guardrail.rs, context_window.rs, model_attachment.rs; springboard/apps/assistant-desktop/src/session.rs, model.rs",
    "status": "partial",
    "note": "from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_tool::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tool_calls::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "transcript::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "guardrail::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "context_window::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_attachment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The session API an app uses: sessions with profiles and dynamic instructions, transcripts, tool calling with the turn loop (run_turn), guided generation schemas with validation, guardrails and the context-window budget, driven end to end by the Assistant app. The model is a provider the app supplies (the SDK ships none); on_device_availability reports Unavailable because BifrOSt has no on-device language model, so apps must fall back, and any provider that leaves the device must be disclosed to the person. Remaining: streamed output and constrained decoding."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DAAPKit.framework",
