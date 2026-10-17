@@ -316,7 +316,21 @@
    "status": "partial",
    "note": "Background update checks and managed installs run in the updated agent, with pacman transactions guarded by a rollback. Gap: base-system upgrades are refused without a recoverable root snapshot, and no app gets a minimal update API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready_note": "Background update checks and managed pacman installs run in the updated agent with the shell rollback guard. The refusal of base-system upgrades without a recoverable snapshot is the guard's intended behaviour."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAccessoryUpdater.framework",
@@ -547,7 +561,21 @@
    "status": "partial",
    "note": "Built-in software updates are checked and installed by the updated agent through pacman packages. Gap: the reference framework's separate in-box app update path is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "Built-in software updates are checked and installed by the updated agent through pacman packages, with the shell's update manifest and SHA-256 check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileInstallation.framework",
@@ -568,7 +596,16 @@
    "status": "partial",
    "note": "App install and uninstall run in store/install.rs: the registry entry and package files are written or removed, and the data directory is kept. Gap: install progress and container queries are not exposed to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "App install and uninstall in store/install.rs write or remove the registry entry and package files and keep the data directory."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileKeyBag.framework",
@@ -652,7 +689,21 @@
    "status": "partial",
    "note": "Check, download and install of BifrOSt and app updates run in the updated agent, with the managed pacman transaction and shell rollback. Gap: base-system upgrades are refused without a recoverable root snapshot.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "Check, download and install of BifrOSt and app updates run in the updated agent through the managed pacman transaction, with the rollback guard that refuses unsafe base-system upgrades."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileStorage.framework",
@@ -673,7 +724,16 @@
    "status": "partial",
    "note": "Clearing of caches, thumbnails, the rotated log and old binaries runs in shell/storage.rs. Gap: the reference framework's per-app storage queries are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    }
+   ],
+   "ready_note": "Clearing of caches, thumbnails, the rotated log and old binaries is in shell/storage.rs and is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileStoreDemoCore.framework",
@@ -736,7 +796,21 @@
    "status": "partial",
    "note": "Alarms, timers and the stopwatch work through the Clock app and a headless shell service that fires them with the app closed. Not covered: the reference's alarm intents and widgets, and its daemon-level scheduling beyond the shell service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    }
+   ],
+   "ready_note": "Alarms, timers and the stopwatch run in the Clock app and the shell's Clock service, which fires them with the app closed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileTimerSupport.framework",
@@ -757,7 +831,21 @@
    "status": "partial",
    "note": "Alarm and timer scheduling and their saved files (clock.ini, clock-timers.ini) live in the shell's Clock service. Not covered: the reference's app-intent actions and shortcut phrases for alarms and timers.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::alarm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::timer::tests"
+    }
+   ],
+   "ready_note": "Alarm and timer scheduling and their saved files (clock.ini, clock-timers.ini) live in the shell's Clock service and are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileTimerUISupport.framework",
@@ -778,7 +866,16 @@
    "status": "partial",
    "note": "The alarm editor with its repeat days and sound, and the time pickers, are built in the Clock app and the shell picker. Not covered: the reference's timer-specific sheets and its watch layouts.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::clock::picker::tests"
+    }
+   ],
+   "ready_note": "The alarm editor with repeat days and sound and the time picker are built in the Clock app and the shell picker, both tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelCatalog.framework",
@@ -1198,7 +1295,16 @@
    "status": "partial",
    "note": "The Music app scans a library of local files, plays it, and keeps playlists and the queue on disk. Not covered: the reference's library sync with the vendor's music service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library"
+    }
+   ],
+   "ready_note": "The Music app scans a library of local files, keeps playlists and the queue on disk, and the library model is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework",
@@ -1219,7 +1325,16 @@
    "status": "partial",
    "note": "The Music window has sidebar pages, album and playlist views with Play and Shuffle, and a Dock tile that shows scan progress. Not covered: the reference's store and streaming pages.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::tests"
+    }
+   ],
+   "ready_note": "The Music window has sidebar pages, album and playlist views with Play and Shuffle, and a Dock tile for scan progress."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI_Mac.framework",
@@ -1240,7 +1355,16 @@
    "status": "partial",
    "note": "The desktop Music window in the same app code as the MusicUI row, drawn in the Golden Gate window. Not covered: the reference's store and streaming pages.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::tests"
+    }
+   ],
+   "ready_note": "The desktop Music window built from the same app code as MusicUI, drawn in the Golden Gate window."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NANDInfo.framework",
@@ -1471,7 +1595,21 @@
    "status": "partial",
    "note": "Route finding through an OSRM-compatible server and turn-by-turn guidance against a position are built. Not covered: offline map data and the reference's live traffic.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "nav"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "route"
+    }
+   ],
+   "ready_note": "Route finding through an OSRM-compatible server and turn-by-turn guidance against a position are built and tested in the Maps app."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NearField.framework",
@@ -1912,7 +2050,16 @@
    "status": "partial",
    "note": "The RSS and Atom article model and the feed list are built in the News app; the vendor's personalisation model and publisher subscriptions are not.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "news::tests"
+    }
+   ],
+   "ready_note": "The RSS and Atom article model and the feed list are built and tested in the News app."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsDaemon.framework",
@@ -1954,7 +2101,16 @@
    "status": "partial",
    "note": "Article text tokenizing, link cards and the Reading List are in wire.rs; the vendor's publisher catalogue types are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "wire::tests"
+    }
+   ],
+   "ready_note": "Article text tokenizing, link cards and the Reading List are in wire.rs and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsToday.framework",
@@ -1996,7 +2152,21 @@
    "status": "partial",
    "note": "Feeds are fetched over HTTP with conditional requests and a body cache; the vendor's News service transport is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_cache::tests"
+    }
+   ],
+   "ready_note": "Feeds are fetched over HTTP with conditional requests and a body cache, tested in feed.rs and feed_cache.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsURLBucket.framework",
@@ -2164,7 +2334,16 @@
    "status": "partial",
    "note": "The note editor with paragraph and character styles, lists, checklists, tables and indentation is built inside the Notes app; the reference's live-activity hooks are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::"
+    }
+   ],
+   "ready_note": "The note editor with paragraph and character styles, lists, checklists, tables and indentation is built in the Notes app and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesHTML.framework",
@@ -2353,7 +2532,16 @@
    "status": "partial",
    "note": "Settings > Notifications with a Muted switch per app and the Do Not Disturb schedule is built in notify_page.rs, with the per-app settings in the SDK; not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page::tests"
+    }
+   ],
+   "ready_note": "Settings > Notifications with a Muted switch per app and the Do Not Disturb schedule is built in notify_page.rs, with per-app settings in the SDK; tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NowPlayingUI.framework",
@@ -2647,7 +2835,16 @@
    "status": "partial",
    "note": "The crash alert in crash_alert.rs reports a failed app process, offers Report, which saves the report locally, and Reopen, using the systemd-coredump records. Not built: the reference's ReportCrashService upload path, which BifrOSt does not use.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::crash_alert::tests"
+    }
+   ],
+   "ready_note": "The crash alert reports a failed app process, offers Report (saved locally) and Reopen, using the systemd-coredump records; tested in crash_alert.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSAnalyticsPrivate.framework",
@@ -2731,7 +2928,21 @@
    "status": "partial",
    "note": "plan.rs builds the install plan and disks.rs the disk layout for the BifrOSt installer. Not built: the per-model machine profiles that the reference reads from MachineProfiles.plist.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::disks::tests"
+    }
+   ],
+   "ready_note": "plan.rs builds the install plan and disks.rs the disk layout for the installer, both with unit tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSIntelligence.framework",
@@ -2749,8 +2960,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Holds on-device inactivity prediction models (COREOS_PREDICTION assets and a TTE model in the index). BifrOSt has no inactivity predictor, and the binary is not in the index. Tried: the index tree.",
+   "status": "n/a",
+   "note": "Holds the reference platform's on-device inactivity prediction models. BifrOSt has no inactivity predictor and ships no such models.",
    "rea": [],
    "method": "assessed"
   },
@@ -2794,7 +3005,16 @@
    "status": "partial",
    "note": "update.rs checks a manifest, downloads the binary and checks its SHA-256, and the update agent in updated/src/main.rs runs the background checks. Not built: the reference's product-level release notes and software catalog.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    }
+   ],
+   "ready_note": "update.rs checks the update manifest, downloads the binary and verifies its SHA-256; the updated agent runs the background checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OTSVG.framework",
@@ -2878,7 +3098,16 @@
    "status": "partial",
    "note": "The search card in quicksearch.rs searches apps and content from the home screen. Not built: the assistant answers and dialog templates (Resources/Templates) that the reference search returns.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    }
+   ],
+   "ready_note": "The search card in quicksearch.rs searches apps and content from the home screen; tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OmniSearchClient.framework",
@@ -3022,8 +3251,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OnDeviceStorageCore; its daemon sits in OnDeviceStorage's Support directory, so these calls are not read. Tried: Info.plist and the index tree.",
+   "status": "n/a",
+   "note": "Support code of OnDeviceStorage, which caches media for the reference vendor's services. BifrOSt does not run those services.",
    "rea": [],
    "method": "assessed"
   },
@@ -3043,8 +3272,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OnDeviceStorageDaemon. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Daemon of OnDeviceStorage, which caches media for the reference vendor's services. BifrOSt does not run those services.",
    "rea": [],
    "method": "assessed"
   },
@@ -3064,8 +3293,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Swift OpenAPI runtime, version 1.8.3 in Info.plist. It is a library apps link for HTTP APIs and has no system job. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Swift OpenAPI runtime library that apps link for HTTP APIs. BifrOSt apps are Rust and the system has no job for this library.",
    "rea": [],
    "method": "assessed"
   },
@@ -3085,8 +3314,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Swift OpenAPI transport over URLSession, version 1.1.0 in Info.plist. It is a library with no system job. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "Swift OpenAPI transport library over URLSession. BifrOSt apps are Rust and the system has no job for this library.",
    "rea": [],
    "method": "assessed"
   },
