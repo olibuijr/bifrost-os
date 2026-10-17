@@ -15,6 +15,7 @@ use super::Shell;
 use crate::gfx::{Image, Surface};
 use bifrost_ui::cups::{Client, Printer, PrinterState};
 use bifrost_ui::print::{Destination, Orientation, PageImage, PaperSize, PdfPage, PrintError, PrintInfo, PrintOperation};
+use bifrost_ui::print_ranges::PageSelection;
 use std::path::Path;
 
 /// The last printer choice; it writes a PDF rather than sending the job to a queue.
@@ -66,6 +67,27 @@ pub fn default_index(printers: &[Printer]) -> usize {
     printers.iter().filter(|p| usable(p)).position(|p| p.is_default).unwrap_or(0)
 }
 
+/// Which pages the Pages row prints: every page, the page in the preview, or the odd or even pages (a page list of
+/// several ranges, for printing both sides by hand).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PageChoice {
+    All,
+    Current,
+    Odd,
+    Even,
+}
+
+impl PageChoice {
+    fn next(self) -> PageChoice {
+        match self {
+            PageChoice::All => PageChoice::Current,
+            PageChoice::Current => PageChoice::Odd,
+            PageChoice::Odd => PageChoice::Even,
+            PageChoice::Even => PageChoice::All,
+        }
+    }
+}
+
 /// What the page is printed on: the paper, the orientation and the scale it is drawn at.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Setup {
@@ -74,8 +96,8 @@ pub struct Setup {
     pub landscape: bool,
     pub scale: usize,
     pub copies: u32,
-    /// Print only the page in the preview instead of every page.
-    pub this_page: bool,
+    /// Which pages print (see [`PageChoice`]).
+    pub pages: PageChoice,
 }
 
 /// Where each page of the captured document starts, and how many points one document pixel takes on the paper.
@@ -252,7 +274,7 @@ impl PrintSheet {
     /// The sheet for `image` (the captured desktop) with the enabled `printers` and Save as PDF.
     pub fn new(ui: &Ui, image: Image, printers: &[Printer]) -> PrintSheet {
         let targets = targets(printers);
-        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1, this_page: false };
+        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1, pages: PageChoice::All };
         let mut sheet = PrintSheet {
             image,
             targets,
@@ -317,7 +339,12 @@ impl PrintSheet {
             if self.setup.landscape { "Landscape".to_string() } else { "Portrait".to_string() },
             format!("{}%", SCALES[self.setup.scale]),
             self.setup.copies.to_string(),
-            if self.setup.this_page { format!("Page {}", self.page + 1) } else { "All".to_string() },
+            match self.setup.pages {
+                PageChoice::All => "All".to_string(),
+                PageChoice::Current => format!("Page {}", self.page + 1),
+                PageChoice::Odd => "Odd pages".to_string(),
+                PageChoice::Even => "Even pages".to_string(),
+            },
         ];
         let mut labels = vec![ui.text("Print", MAC_TITLE3_PT, Weight::Semibold, WHITE)];
         for name in ROW_NAMES {
@@ -386,8 +413,8 @@ impl PrintSheet {
         }
     }
 
-    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9), all pages or the
-    /// page in the preview.
+    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9), or the page choice
+    /// (all, the previewed page, odd pages, even pages).
     fn cycle(&mut self, row: usize) {
         match row {
             0 => self.setup.target = (self.setup.target + 1) % self.targets.len(),
@@ -395,18 +422,35 @@ impl PrintSheet {
             2 => self.setup.landscape = !self.setup.landscape,
             3 => self.setup.scale = (self.setup.scale + 1) % SCALES.len(),
             4 => self.setup.copies = self.setup.copies % 9 + 1,
-            _ => self.setup.this_page = !self.setup.this_page,
+            _ => self.setup.pages = self.setup.pages.next(),
         }
     }
 
-    /// The job for the current settings: the pages (every page, or only the one in the preview), as one PDF.
+    /// The pages the Pages row picks, as a 1-based page list over the sheet's slices.
+    pub fn selection(&self) -> PageSelection {
+        let total = self.layout.slices.len() as u32;
+        let current = self.page as u32 + 1;
+        let every_other = |first: u32| PageSelection::Ranges((first..=total).step_by(2).map(|n| (n, n)).collect());
+        match self.setup.pages {
+            PageChoice::All => PageSelection::All,
+            PageChoice::Current => PageSelection::Ranges(vec![(current, current)]),
+            PageChoice::Odd => every_other(1),
+            PageChoice::Even => every_other(2),
+        }
+    }
+
+    /// The job for the current settings: the pages the Pages row picks, as one PDF.
     pub fn job(&self) -> Job {
         let info = self.info();
-        let slices: Vec<(usize, usize)> = if self.setup.this_page {
-            self.layout.slices.get(self.page).copied().into_iter().collect()
-        } else {
-            self.layout.slices.clone()
-        };
+        let selection = self.selection();
+        let slices: Vec<(usize, usize)> = self
+            .layout
+            .slices
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| selection.contains(*i as u32 + 1))
+            .map(|(_, slice)| *slice)
+            .collect();
         let pages: Vec<Image> = slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
         let (l, t, _, _) = info.imageable();
         let pages = pdf_pages(&pages, info.paper_size(), (l, t), self.layout.pt_per_px);
@@ -624,10 +668,14 @@ mod tests {
         assert_eq!(sheet.job().pages.len(), 3, "all pages by default");
         sheet.page = 1;
         sheet.cycle(5);
-        assert!(sheet.setup.this_page);
+        assert_eq!(sheet.setup.pages, PageChoice::Current);
         assert_eq!(sheet.job().pages.len(), 1, "only the previewed page");
         sheet.cycle(5);
-        assert!(!sheet.setup.this_page, "the row toggles back to all pages");
+        assert_eq!(sheet.job().pages.len(), 2, "odd pages of three: 1 and 3");
+        sheet.cycle(5);
+        assert_eq!(sheet.job().pages.len(), 1, "even pages of three: 2");
+        sheet.cycle(5);
+        assert_eq!(sheet.setup.pages, PageChoice::All, "the row cycles back to all pages");
     }
 
     #[test]
