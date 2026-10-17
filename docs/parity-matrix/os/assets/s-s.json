@@ -1338,11 +1338,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBolIta.otf",
@@ -1359,11 +1368,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniBolIta",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniIta.otf",
@@ -1380,11 +1398,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXNonUniIta",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFiveSymReg.otf",
@@ -1401,11 +1428,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFiveSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymBol.otf",
@@ -1422,11 +1458,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFourSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymReg.otf",
@@ -1443,11 +1488,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizFourSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymBol.otf",
@@ -1464,11 +1518,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizOneSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymReg.otf",
@@ -1485,11 +1548,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizOneSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymBol.otf",
@@ -1506,11 +1578,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizThreeSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymReg.otf",
@@ -1527,11 +1608,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizThreeSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymBol.otf",
@@ -1548,11 +1638,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizTwoSymBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymReg.otf",
@@ -1569,11 +1668,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXSizTwoSymReg",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoMath.otf",
@@ -1619,11 +1727,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoText-Italic",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText.ttf",
@@ -1640,11 +1757,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXTwoText",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVar.otf",
@@ -1661,11 +1787,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXVar",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVarBol.otf",
@@ -1682,11 +1817,20 @@
    "description": "",
    "role": "Symbol, dingbat or math font: STIXVarBol",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/core/src/ref_assets.rs",
    "status": "partial",
    "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "Reference-first resolution: the STIX face is drawn from bifrost-ref when installed (font_descriptor::tests a_reference_face_is_preferred_and_a_missing_one_falls_back); otherwise the packaged open otf-stix stand-in applies. The stand-in is not metric-identical to the reference glyphs."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sana.ttc",
@@ -2072,8 +2216,8 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Webfont inside Ruby's rdoc HTML template (ruby 2.6 darkfish); BifrOSt renders no rdoc pages. The same open family (Source Code Pro) is already a monospaced equivalent in the SDK font table.",
    "rea": [],
    "method": "assessed"
   },
@@ -2093,8 +2237,8 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Webfont inside Ruby's rdoc HTML template (ruby 2.6 darkfish); BifrOSt renders no rdoc pages. The same open family (Source Code Pro) is already a monospaced equivalent in the SDK font table.",
    "rea": [],
    "method": "assessed"
   },
