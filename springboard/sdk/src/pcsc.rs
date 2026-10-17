@@ -4,7 +4,7 @@
 //! implementation; the installer enables `pcscd.socket`. This module loads `libpcsclite.so.1` when it is first needed and
 //! calls the same functions the reference API names: establish a context, list readers, read reader states, connect to a
 //! card, transmit command APDUs, disconnect. The shell links nothing: a machine without the library gets
-//! `PcscError::NoService`. The parts that need no reader are pure and tested: the error codes, the reader state flags and
+//! `PcscError::LibraryMissing`. The parts that need no reader are pure and tested: the error codes, the reader state flags and
 //! their mapping onto `smartcard_slot::SlotState`, the multi-string reader list, and the APDU helpers.
 //!
 //! Card data never leaves the machine through this module. A sandboxed app sees the daemon's socket only when its sandbox

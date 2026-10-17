@@ -1154,6 +1154,7 @@ pub use bifrost_core::disk_image;
 // Media analysis: keyframe, highlight and face grouping models (parity wave 3)
 pub mod keyframe_pick;
 pub mod highlight_rank;
+pub mod video_analyzer;
 pub mod face_group;
 pub mod media_intelligence_error;
 pub mod emitter;
