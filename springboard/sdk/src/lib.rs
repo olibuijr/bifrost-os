@@ -856,6 +856,7 @@ pub mod gpu_pass;
 pub mod biquad;
 pub mod fft;
 pub mod dct;
+pub mod spectrogram;
 pub mod extent_map;
 pub mod os_services;
 pub mod buffer_handoff;
