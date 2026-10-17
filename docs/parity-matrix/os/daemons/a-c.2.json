@@ -3921,10 +3921,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/now_playing.rs",
+   "bifrost": "springboard/sdk/src/now_playing.rs, springboard/sdk/src/remote_routing.rs, springboard/src/shell/hwkeys.rs, springboard/src/shell/services/now_playing.rs",
    "status": "partial",
-   "note": "The Now Playing session and remote command model are in now_playing.rs, and the Music app routes system transport commands through them. Not built: keyboard media-key delivery, which no shell code handles.",
-   "rea": []
+   "note": "The Now Playing session and remote command model are in now_playing.rs. Hardware media keys reach it: the shell's input layer (hwkeys.rs hw_media_key, called from bin/shell.rs) maps play, pause, next, previous, fast-forward and rewind keys through services/now_playing.rs media_key_command and routing in sdk remote_routing.rs. The Music app takes these commands.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "remote_routing::tests"
+    }
+   ],
+   "ready_note": "Transport keys from the keyboard reach the Now Playing session through the shell's media key path, and the SDK routes the resulting command to the app's handlers. Both have tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.recentsd.plist",
@@ -3941,9 +3955,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/recent_items.rs",
+   "bifrost": "springboard/src/shell/recent_items.rs, springboard/sdk/src/document.rs",
    "status": "partial",
-   "note": "The shell keeps the recently used app list in recent_items.rs. Not built: a recent documents store and the Recents service that apps share.",
+   "note": "The shell keeps the recently used app list in recent_items.rs. The recent documents store is built in sdk document.rs (DocumentController recents, newest first, MAX_RECENTS, persisted under document.recents). Not built: the Recents service that apps share across processes.",
    "rea": []
   },
   {
@@ -5485,10 +5499,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Serves cross-document backlinks and link context to note and file apps; BifrOSt has no shared document link index, so build one in springboard/sdk and let the Notes app list backlinks.",
-   "rea": []
+   "bifrost": "springboard/core/src/link_index.rs, springboard/sdk/src/document_links.rs, springboard/apps/notes-desktop/src/notes/note_url.rs",
+   "status": "partial",
+   "note": "Shared document link index built: bifrost_core::link_index (outgoing [[Target]] and notes:// links, backlink queries) is re-exported by the SDK in document_links.rs. The Notes app lists its backlinks through that index. Not built: link context shown outside Notes.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document_links::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "note_url::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "a_document_lists_the_documents_that_link_to_it"
+    }
+   ],
+   "ready_note": "The shared link index with backlinks is in core and the SDK, and Notes lists backlinks through it. Session persistence stays with the caller, as the module documents."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.syncdefaultsd.plist",

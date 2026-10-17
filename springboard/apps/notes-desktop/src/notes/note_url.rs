@@ -37,8 +37,14 @@ pub fn linked_ids(text: &str) -> Vec<&str> {
 }
 
 /// The ids of the notes whose text links to `target`, in the order given. A note never lists itself.
+/// The answer comes from the shared document link index (`bifrost_core::link_index`), filled with each note's links.
 pub fn backlinks<'a>(notes: &[(&'a str, &str)], target: &str) -> Vec<&'a str> {
-    notes.iter().filter(|(id, body)| *id != target && linked_ids(body).contains(&target)).map(|(id, _)| *id).collect()
+    let mut index = bifrost_core::link_index::LinkIndex::new();
+    for (id, body) in notes {
+        index.set_links(*id, linked_ids(body));
+    }
+    let linking = index.backlinks(target);
+    notes.iter().filter(|(id, _)| linking.contains(id)).map(|(id, _)| *id).collect()
 }
 
 #[cfg(test)]
