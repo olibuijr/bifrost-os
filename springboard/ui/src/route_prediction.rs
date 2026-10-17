@@ -19,6 +19,15 @@ pub fn suggest<'a>(destinations: &'a [Destination], history: &[&str], limit: usi
     ranked.into_iter().take(limit).map(|(_, _, destination)| destination).collect()
 }
 
+/// `destinations` with the suggested ones first, in suggestion order (at most `limit` of them). The rest keep their
+/// order after them.
+pub fn lead_with_suggestions(destinations: Vec<Destination>, history: &[&str], limit: usize) -> Vec<Destination> {
+    let order: Vec<String> = suggest(&destinations, history, limit).into_iter().map(|d| d.id.clone()).collect();
+    let (mut first, rest): (Vec<Destination>, Vec<Destination>) = destinations.into_iter().partition(|d| order.contains(&d.id));
+    first.sort_by_key(|d| order.iter().position(|id| *id == d.id));
+    first.into_iter().chain(rest).collect()
+}
+
 /// The most destination choices kept. Older choices are dropped first, so the file stays small.
 pub const MAX_HISTORY: usize = 256;
 
@@ -109,6 +118,17 @@ mod tests {
         assert_eq!(ids.len(), MAX_HISTORY);
         assert_eq!(ids[0], "dest-10");
         assert_eq!(ids[MAX_HISTORY - 1], format!("dest-{}", MAX_HISTORY + 9));
+    }
+
+    #[test]
+    fn suggested_outputs_lead_the_menu_and_the_rest_keep_their_order() {
+        let dest = |id: &str| Destination { id: id.into(), name: id.into(), local: true, active: false };
+        let menu = vec![dest("speaker"), dest("headphones"), dest("receiver-hall"), dest("receiver-kitchen")];
+        let history = ["receiver-kitchen", "speaker", "receiver-kitchen"];
+        let ids: Vec<String> = lead_with_suggestions(menu.clone(), &history, 2).into_iter().map(|d| d.id).collect();
+        assert_eq!(ids, vec!["receiver-kitchen", "speaker", "headphones", "receiver-hall"]);
+        let untouched: Vec<String> = lead_with_suggestions(menu, &[], 3).into_iter().map(|d| d.id).collect();
+        assert_eq!(untouched, vec!["speaker", "headphones", "receiver-hall", "receiver-kitchen"]);
     }
 
     #[test]

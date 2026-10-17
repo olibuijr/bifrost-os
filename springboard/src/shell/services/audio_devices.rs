@@ -231,12 +231,12 @@ pub fn present(route: Route, bluetooth: Option<&str>, microphone: bool) -> Vec<D
 const SUGGESTIONS: usize = 3;
 
 /// The output choice history: the outputs the picker chose, one identifier per line, oldest first.
-fn history_path() -> std::path::PathBuf {
+pub fn history_path() -> std::path::PathBuf {
     crate::privd_client::user_data_dir().join("audio").join("route-history.txt")
 }
 
 /// The stored history; a missing or unreadable file is an empty history.
-fn load_history(path: &std::path::Path) -> RouteHistory {
+pub fn load_history(path: &std::path::Path) -> RouteHistory {
     std::fs::read_to_string(path).map(|text| RouteHistory::parse(&text)).unwrap_or_default()
 }
 
