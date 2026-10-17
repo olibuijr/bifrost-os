@@ -111,6 +111,7 @@ pub mod list;
 pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
+pub mod contact_pick_sheet;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -745,6 +746,8 @@ pub struct Shell {
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
+    pick_sheet: Option<contact_pick_sheet::PickSheet>,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
@@ -1057,6 +1060,7 @@ impl Shell {
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            pick_sheet: None,
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
@@ -1411,6 +1415,7 @@ impl Shell {
 
     /// Shows the next app privacy request as an Allow / Don't Allow sheet when none is on screen.
     fn permission_tick(&mut self, t: f64) {
+        self.pick_tick();
         // an Allow Once grant ends when its app quits, so the next request asks again
         let _ = services::privacy_permissions::expire_once(|app| self.ext.iter().flatten().any(|h| h.id == app && h.running()));
         if self.permission_sheet.is_some() {
@@ -1418,6 +1423,17 @@ impl Shell {
         }
         let Some(prompt) = services::privacy_permissions::take_prompt() else { return };
         self.permission_sheet = permission_sheet::Sheet::new(&self.ui, prompt, t.max(0.0) as u64);
+        self.dirty = true;
+        self.drawn = Drawn::Nothing;
+    }
+
+    /// Shows the contact picker sheet for an app's open pick when none is on screen.
+    fn pick_tick(&mut self) {
+        if self.pick_sheet.is_some() {
+            return;
+        }
+        let Some((app, name)) = contactpick::open_app() else { return };
+        self.pick_sheet = contact_pick_sheet::PickSheet::new(&self.ui, &app, &name);
         self.dirty = true;
         self.drawn = Drawn::Nothing;
     }
@@ -1509,6 +1525,20 @@ impl Shell {
             // the crash alert takes every touch until one of its buttons answers it
             if matches!(ev, Event::Up(..)) {
                 self.crash_alert_touch(x, y);
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.pick_sheet.is_some() {
+            // the picker sheet takes every touch until the person picks or cancels
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.pick_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(tap) = hit {
+                    if let Some(sheet) = self.pick_sheet.take() {
+                        self.pick_sheet = sheet.tapped(&self.ui, tap);
+                    }
+                }
             }
             self.drawn = Drawn::Nothing;
             self.dirty = true;
@@ -3754,7 +3784,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3765,6 +3795,9 @@ impl Shell {
                 m.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.permission_sheet {
+                p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(p) = &self.pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(a) = &self.crash_alert {
