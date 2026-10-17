@@ -3571,20 +3571,39 @@ persisted history or integration yet. These remain partial; see `docs/parity/os-
 `springboard/src/shell/gamemode.rs` is the shell's Game Mode: a pure state machine (`Model`) with a 3 s leave
 hysteresis, `plan` for the effects of a change, and `GamePref` (Settings > General > Game Mode: Automatic or Off,
 stored as `game_mode` in settings.ini). A game is an installed app in the Games category or with `game = true` in its
-manifest (`apphost::Manifest::game`), and it counts only while it is the one in front and full screen. The shell
-checks four times a second (`bin/shell.rs`); entering takes effect at once.
+manifest (`apphost::Manifest::game`). It counts while it is the app in front and full screen: a video's full-screen
+flag, or the front window taken full screen. The shell checks four times a second (`bin/shell.rs`); entering takes
+effect at once.
 
-Built: the CPU profile goes to Performance while Game Mode is on (`bare::boost::set_profile` writes the governor and
-clock window), except under Low Power Mode, which still wins. Tests cover the transitions with a fake clock, the
-effect plan, the category and flag rule and the preference round trip.
+**Full screen for app windows.** The green light of an external window toggles full screen (`Desk::set_full_screen`):
+the window takes the whole screen (its own space), has no title bar, and the menu bar is hidden until the pointer
+reaches the top edge (`desk::bar_hidden`). An app asks for it with `ToShell::SetFullScreen { on }` (SDK:
+`Ctx::set_full_screen`, tag 0x1c6); the shell answers with `ToApp::FullScreen { on }` (tag 0x1cc), which the SDK
+accepts and ignores for now. Fixed-size windows do not go full screen.
 
-Not built, and named in `gamemode::SKIPPED`: the background task and file indexing pause (the shell has no background
-scheduler to pause), raising the game's process priority (bifrostd has no privileged knob for it), the Bluetooth sniff
-interval change for controllers and headsets (the shell's mgmt socket has no connection parameter update), the one-time
-notice and the menu bar item with "Turn Off Game Mode" (the notice hook logs only). The "full screen" signal is the
-shell's existing full-screen flag, which only video sets today, so a game has to be full screen through that path to
-trigger Game Mode; an SDK request for full screen does not exist yet. No framework API exists for apps to read the
-state. The rows GamePolicy, GamePolicyFoundation, GamePolicyServices and com.apple.GamePolicyAgent are `partial`.
+**What Game Mode does while on:**
+- CPU profile Performance (`bare::boost::set_profile` writes the governor and clock window), except under Low Power Mode.
+- The game's nice and uclamp minimum are raised through bifrostd (`game_priority.rs` on the shell side,
+  `bifrostd/src/priority.rs` on the daemon side). The line protocol on `/var/lib/springboard/run/priority.sock` is
+  `priority <pid> <nice> <util_min>`, nice -5..0, util_min 0..1024, replied `ok` or `err <reason>`. bifrostd accepts
+  only a child of the caller, of the same user, whose executable is under `apps/`, and applies to every thread. Leaving
+  (or Turn Off Game Mode) sends nice 0 and util_min 0 for the pid the shell remembered.
+- The background task scheduler starts no new tasks (`Settings::paused` in `services/background.rs`); a running task
+  still ends on time.
+- Menu bar: a "Game Mode" extra shows while it is on; its one row, "Turn Off Game Mode", holds it off for the game in
+  front until that game leaves the front (`Model::turn_off`).
+- Notice: "Game Mode is on" is posted the first time it turns on, and `game_mode_notice_shown` in settings.ini keeps it
+  from repeating.
+
+**Not built:** the file indexing pause (no indexer runs in the shell, so nothing is reachable to pause), and the
+Bluetooth sniff interval change for controllers and headsets (the shell's mgmt socket has no connection parameter
+update). Both are named in `gamemode::SKIPPED`. No framework API exists for apps to read the Game Mode state. The
+priority request reaches only installed apps under the system data root; a user-installed app is refused.
+
+Tests cover the transitions with a fake clock, the turn-off hold, the effect plan, the category and flag rule, the
+preference round trip, the background pause, the desk full-screen state, the menu-bar reveal rule, the SDK message, the
+proto codec, and the bifrostd line parser, child and install checks. **None of it was compiled or run** in the session
+that wrote it; the lead runs the tests. The GamePolicy rows are `partial`.
 
 ## Unary file system module (FSKit `FSUnaryFileSystem`, `bifrost_app::fs_module`, `bifrost_app::fuse`)
 
