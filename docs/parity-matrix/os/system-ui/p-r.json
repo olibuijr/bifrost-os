@@ -307,7 +307,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/mod.rs",
    "status": "partial",
-   "note": "input source list and controllers; no plugin registration for third-party input method apps. built on arm; not yet verified on Midget. Built 2026-10-17: a manifest declares input_sources, install validates them against the built-in engines, and input_methods::plugins::installed lists the installed sources (tests input_methods::plugins::tests, store::install::tests). Gap: the shell's input source list (sources() is static) does not show them yet.",
+   "note": "input source list and controllers; no plugin registration for third-party input method apps. built on arm; not yet verified on Midget. Built 2026-10-17: a manifest declares input_sources, install validates them against the built-in engines, and input_methods::plugins::installed lists the installed sources (tests input_methods::plugins::tests, store::install::tests). Gap: the shell's input source list (sources() is static) does not show them yet. Built 2026-10-17: listed_sources (built-in sources, then plugin sources whose id is new) and controller_for (builds a built-in or plugin source); tests input_methods::plugins::tests. Still missing: no shell input source picker calls them yet, so the row stays open.",
    "rea": []
   },
   {
