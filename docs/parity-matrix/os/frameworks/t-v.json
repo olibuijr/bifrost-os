@@ -1651,8 +1651,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Intents of Apple's own Timer app, which BifrOSt does not port. The intent layer these would use is the App Intents framework row, which is partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1671,11 +1671,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/tipkit.json",
+   "bifrost": "springboard/ui/src/tips.rs (Rule, Tip, Priority, TipGroup, TipView); springboard/sdk/src/tips.rs (present_first)",
    "status": "partial",
    "note": "private framework, owner TipKit; from SDK matrix tipkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tips::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tip_view_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tips::tests"
+    }
+   ],
+   "ready_note": "The tip model: event-count, parameter and display-frequency rules, invalidation, ordered and first-available groups, and the standard and mini tip views, all tested headless. The SDK presents the first eligible tip through tips::present_first."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TipKitServices.framework",
@@ -1692,11 +1711,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/tipkit.json",
+   "bifrost": "springboard/ui/src/tips.rs (Datastore, configure, mark_shown, reset_datastore, testing overrides)",
    "status": "partial",
    "note": "private framework, owner TipKit; from SDK matrix tipkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tips::tests::the_datastore_round_trips"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tips::tests::a_missing_file"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tips::tests::testing_overrides"
+    }
+   ],
+   "ready_note": "The per-app tip datastore: state saved to its file with an atomic replace, reloaded on configure, reset on request, and the show and hide hooks for testing. Round trip and missing-file cases are tested headless."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TipsCore.framework",
@@ -1966,8 +2004,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/translation.json",
-   "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "status": "n/a",
+   "note": "Runs Apple's neural translation models, which ship as Apple ML model packs and have no BifrOSt counterpart. BifrOSt translates with its own phrase-table language packs (sdk translation LanguagePack), so this framework's job is not reproduced.",
    "rea": [],
    "method": "assessed"
   },
@@ -3643,11 +3681,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "springboard/sdk/src/usernotif.rs, springboard/sdk/src/usernotif_model.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/notify/mod.rs",
    "status": "partial",
    "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "notify::tests"
+    }
+   ],
+   "ready_note": "The local notification service: requests, categories and actions, responses, delivery to banner, lock screen and Notification Center, and removal of delivered and pending requests, all tested headless. Remote push and the other trigger kinds stay with the UserNotifications row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserNotificationsSettings.framework",
