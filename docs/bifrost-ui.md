@@ -850,10 +850,30 @@ each edit the app calls `note_change`. `handle` answers with `Notice` values (`C
 
 Gaps (not matched yet): no versions browser (`Revert To > Browse All Versions`, no version history at all), no iCloud documents,
 no `NSFileCoordinator` or file-presenter watching (an external change to an open file is noticed only as `Stale` on the next
-save), no document packages, no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
+save), document packages only in part (see "Folder packages" below), no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
 and Move To copy to the new name and leave the old file in place, because the broker has no rename or delete request yet;
 Open requests write access, so a read-only file does not open. Untitled documents are autosaved as private copies, not into a
 Documents folder as autosave-in-place does on macOS. First user: none yet.
+
+## Folder packages (`bifrost_app::document_package`, TextEdit RTFD)
+
+A folder package is a document whose on-disk form is a directory that the file panels and Files treat as one file (Apple's
+package document type, here `public.rtfd` for RTFD). Code: `springboard/sdk/src/document_package.rs`.
+
+| Piece | Bifrost |
+|---|---|
+| package types | `PACKAGE_TYPES`: extension to uniform type identifier (`rtfd` to `public.rtfd`); `package_type_for_name` and `is_package_name` decide by the extension alone |
+| manifest | `package_types = ["rtfd"]` in `manifest.toml` (shell `apphost::Manifest::package_types`); declares the packages an app reads and writes |
+| read | `read_package_dir(dir)`: regular files at the top level, sorted by name; subfolders and links skipped; refused past `MAX_PACKAGE_BYTES` (64 MiB) |
+| write | `write_package_dir(dir, files)`: files written into a temporary sibling folder, then the package is renamed into place; the old package is moved aside and removed only after the new one is in place, and restored if that rename fails. Names with a separator or `..` are refused before anything is written |
+
+The controller (`DocumentController`) still reads and writes one byte stream per document, so a package is not yet opened or
+saved through the panels: that needs the shell's open and save panels to hand back a directory grant, and Files to show a
+package as one item. Until then an app opens and saves a package with `open_package` and `save_package` on its own document
+type (TextEdit: `TextDocument::open_package`, `save_package`).
+
+Gaps: no package-aware Files row or icon, no open-panel directory selection for packages, no grant for a directory (the
+broker grants files), no package in Recents.
 
 ## On-screen keyboard API (`UIKeyInput`, `UIReturnKeyType`, 0.4.77)
 The keyboard becomes a system app (`docs/keyboard-system-app.md`). The SDK API exists first: `App::keyboard_config`,

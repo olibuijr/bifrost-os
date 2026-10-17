@@ -18,6 +18,7 @@ mod print;
 mod properties;
 mod replace;
 mod rtf;
+mod rtfd;
 mod spell;
 mod text;
 mod view;
@@ -829,6 +830,11 @@ impl TextEditApp {
                 true
             }
             Action::MakePlain => {
+                // attachments are not dropped silently: the user deletes them first (the confirmation is still to come)
+                if doc.rich && doc.text.has_attachments() {
+                    self.note = Some("This document has attachments. Delete them before choosing Make Plain Text.".into());
+                    return true;
+                }
                 let was_rich = doc.rich;
                 doc.set_rich(false);
                 was_rich

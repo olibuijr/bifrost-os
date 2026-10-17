@@ -7,7 +7,7 @@
 
 use crate::links;
 use crate::properties::Properties;
-use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_PARAGRAPH_SPACE, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
+use crate::text::{Align, Attachment, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_PARAGRAPH_SPACE, MAX_TAB, MIN_TAB, OBJECT, PAGE_BREAK, SPACINGS};
 
 /// Whether `bytes` are an RTF file (the header every RTF file starts with).
 pub fn is_rtf(bytes: &[u8]) -> bool {
@@ -34,7 +34,31 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
 }
 
 /// Writes the cells as RTF with an info group for the document properties (left out when they are all empty).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> {
+    write_with_attachments(cells, tab, props, &[])
+}
+
+/// The name an attachment is written under in RTF: its file name with the characters an RTF control word cannot
+/// carry (white space, the group and escape characters) replaced by underscores.
+pub fn safe_name(name: &str) -> String {
+    name.chars().map(|c| if c.is_whitespace() || matches!(c, '\\' | '{' | '}') { '_' } else { c }).collect()
+}
+
+/// The attachment an `OBJECT` cell's style numbers, if the list has it.
+fn attachment_at<'a>(attachments: &'a [Attachment], style: &Style) -> Option<&'a Attachment> {
+    (style.attachment as usize).checked_sub(1).and_then(|i| attachments.get(i))
+}
+
+/// An attachment as a NeXTGraphic group: its file name, then its size in twips (`\width`, `\height`). The
+/// `OBJECT` character it stands for is this group alone.
+fn picture_words(att: &Attachment) -> String {
+    format!("{{\\NeXTGraphic {} \\width{} \\height{}}}", safe_name(&att.file), (att.width * 20.0).round() as i64, (att.height * 20.0).round() as i64)
+}
+
+/// Writes the cells as RTF, with the info group, and each attachment the cells number as a NeXTGraphic group in place
+/// of its `OBJECT` character. The attachments' data is not written here (the package writer saves the files).
+pub fn write_with_attachments(cells: &[Cell], tab: f32, props: &Properties, attachments: &[Attachment]) -> Vec<u8> {
     let mut out = format!("{{\\rtf1\\ansi\\deff0\\deftab{}{{\\fonttbl", (tab * 20.0).round() as i32);
     for (i, family) in FAMILIES.iter().enumerate() {
         out += &format!("{{\\f{i} {family};}}");
@@ -64,6 +88,14 @@ pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> 
             }
             out += "\\par\n";
             para_start = true;
+            continue;
+        }
+        if c.ch == OBJECT {
+            // an attachment whose number no attachment has is dropped
+            if let Some(att) = attachment_at(attachments, &c.style) {
+                out += &picture_words(att);
+            }
+            last = None;
             continue;
         }
         if c.style.link != open_link {
@@ -255,10 +287,21 @@ pub fn read(bytes: &[u8]) -> Vec<Cell> {
 }
 
 /// Reads an RTF file: the cells and the distance between tab stops.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read_doc(bytes: &[u8]) -> (Vec<Cell>, f32) {
+    let (cells, tab, _) = read_doc_pictures(bytes);
+    (cells, tab)
+}
+
+/// The attachments an RTF file names: the file name and the size in points (zero where the file gives none).
+pub type PictureRef = (String, f32, f32);
+
+/// Reads an RTF file: the cells, the distance between tab stops, and the NeXTGraphic pictures in the order their
+/// `OBJECT` cells number them (`Style::attachment` is the picture's position plus one).
+pub fn read_doc_pictures(bytes: &[u8]) -> (Vec<Cell>, f32, Vec<PictureRef>) {
     let mut reader = Reader::default();
     reader.run(bytes);
-    (reader.cells, reader.tab.clamp(MIN_TAB, MAX_TAB))
+    (reader.cells, reader.tab.clamp(MIN_TAB, MAX_TAB), reader.pictures)
 }
 
 /// Reads plain text: UTF-8 (invalid bytes become the replacement character), with CR LF as one line break.
@@ -280,7 +323,7 @@ pub fn write_plain(cells: &[Cell]) -> Vec<u8> {
 
 /// The characters of the cells as plain text.
 pub fn plain_text(cells: &[Cell]) -> String {
-    cells.iter().map(|c| if c.ch == LINE_BREAK { '\n' } else { c.ch }).collect()
+    cells.iter().filter(|c| c.ch != OBJECT).map(|c| if c.ch == LINE_BREAK { '\n' } else { c.ch }).collect()
 }
 
 fn align_code(align: Align) -> char {
@@ -401,6 +444,19 @@ struct Reader {
     inst_text: String,
     /// the link a field instruction named, which the field's result takes
     pending_link: u16,
+    /// the NeXTGraphic group being read, and the pictures read so far (each one an `OBJECT` cell when its group closes)
+    picture: Option<Picture>,
+    pictures: Vec<PictureRef>,
+}
+
+/// A `{\NeXTGraphic name \width W \height H}` group in progress: the file name is the text before the first white
+/// space or control word, and the size is in twips.
+struct Picture {
+    depth: usize,
+    name: String,
+    width: f32,
+    height: f32,
+    reading_name: bool,
 }
 
 impl Reader {
@@ -424,6 +480,15 @@ impl Reader {
                     self.cur = self.stack.pop().unwrap_or_default();
                     if self.skip == Some(closing) {
                         self.skip = None;
+                    }
+                    if self.picture.as_ref().is_some_and(|p| p.depth == closing) {
+                        if let Some(p) = self.picture.take() {
+                            if !p.name.is_empty() {
+                                self.pictures.push((p.name, p.width, p.height));
+                                let style = Style { attachment: self.pictures.len() as u16, ..self.cur };
+                                self.cells.push(Cell { ch: OBJECT, style });
+                            }
+                        }
                     }
                     if self.table == Some(closing) {
                         self.table = None;
@@ -494,6 +559,19 @@ impl Reader {
             }
             let first = self.take_group_start();
             if self.skip.is_some() {
+                return i;
+            }
+            if first && name == "NeXTGraphic" && self.picture.is_none() {
+                self.picture = Some(Picture { depth: self.depth, name: String::new(), width: 0.0, height: 0.0, reading_name: true });
+                return i;
+            }
+            if let Some(p) = self.picture.as_mut() {
+                p.reading_name = false;
+                match (name.as_str(), param) {
+                    ("width", Some(v)) => p.width = v as f32 / 20.0,
+                    ("height", Some(v)) => p.height = v as f32 / 20.0,
+                    _ => {}
+                }
                 return i;
             }
             if first && name == "fonttbl" {
@@ -687,6 +765,20 @@ impl Reader {
 
     /// A character from the body text, unless it is the fallback of a `\u` escape.
     fn literal(&mut self, ch: char) {
+        if let Some(p) = self.picture.as_mut() {
+            // inside a picture group only its file name is text
+            if p.reading_name {
+                if ch.is_whitespace() {
+                    // white space before the name is skipped; after it, the name is over
+                    if !p.name.is_empty() {
+                        p.reading_name = false;
+                    }
+                } else {
+                    p.name.push(ch);
+                }
+            }
+            return;
+        }
         if self.uc_skip > 0 {
             self.uc_skip -= 1;
             return;

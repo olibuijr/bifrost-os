@@ -5,8 +5,9 @@
 use crate::encoding::{self, Encoding};
 use crate::properties::Properties;
 use crate::text::Text;
-use crate::{docx, html, odt, rtf, webarchive};
+use crate::{docx, html, odt, rtf, rtfd, webarchive};
 use bifrost_app::document::{Document, DocumentError};
+use bifrost_app::document_package;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Settings > Open and Save: RTF and HTML files open as plain text showing their markup. The document reader is a
@@ -21,6 +22,9 @@ pub fn set_markup_as_code(on: bool) {
 pub const RTF_TYPE: &str = "public.rtf";
 pub const PLAIN_TYPE: &str = "public.plain-text";
 pub const HTML_TYPE: &str = "public.html";
+/// A folder package: rich text with its attachments (see `rtfd`). Read and written as a folder, not as bytes.
+#[cfg_attr(not(test), allow(dead_code))]
+pub const RTFD_TYPE: &str = "public.rtfd";
 
 #[derive(Clone, Debug)]
 pub struct TextDocument {
@@ -79,8 +83,8 @@ impl TextDocument {
             properties = if docx::is_docx(bytes) { docx::read_properties(bytes) } else { odt::read_properties(bytes) };
             true
         } else if rtf::is_rtf(bytes) {
-            let (cells, tab) = rtf::read_doc(bytes);
-            text.load(cells);
+            let (cells, tab, pictures) = rtf::read_doc_pictures(bytes);
+            text.load_with_attachments(cells, rtfd::attachments_without_data(pictures));
             text.set_tab_width(tab);
             properties = rtf::read_info(bytes);
             true
@@ -97,6 +101,39 @@ impl TextDocument {
             false
         };
         Ok(TextDocument { text, rich, read_only: false, encoding, properties, code })
+    }
+
+    /// Reads a folder package (RTFD): its files by name, as `document_package::read_package_dir` gives them. The text
+    /// is rich text; its attachments are the files the package holds.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn read_package(files: &[(String, Vec<u8>)]) -> Result<Self, DocumentError> {
+        let Some(package) = rtfd::read(files) else { return Err(DocumentError::new("The document package has no readable text")) };
+        let mut text = Text::new();
+        text.load_with_attachments(package.cells, package.attachments);
+        text.set_tab_width(package.tab);
+        Ok(TextDocument { text, rich: true, read_only: false, encoding: Encoding::Utf8, properties: package.properties, code: false })
+    }
+
+    /// The files of the package this document is saved as: `TXT.rtf`, then each attachment the text holds. Save them
+    /// with `document_package::write_package_dir`, which replaces the package atomically.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn write_package(&self) -> Vec<(String, Vec<u8>)> {
+        rtfd::write(self.text.cells(), self.text.tab_width(), &self.properties, self.text.attachments())
+    }
+
+    /// Saves this document as the package at `dir`, atomically.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn save_package(&self, dir: &std::path::Path) -> std::io::Result<()> {
+        let files = self.write_package();
+        let refs: Vec<(&str, &[u8])> = files.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+        document_package::write_package_dir(dir, &refs)
+    }
+
+    /// Opens the package at `dir`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn open_package(dir: &std::path::Path) -> Result<Self, DocumentError> {
+        let files = document_package::read_package_dir(dir).map_err(|e| DocumentError::new(&e.to_string()))?;
+        Self::read_package(&files)
     }
 
     /// The text in the document's encoding. A character the encoding cannot hold stops the save, so nothing is lost
@@ -118,7 +155,7 @@ impl Document for TextDocument {
         match uttype {
             // markup opened as code is saved as the text it shows
             RTF_TYPE | HTML_TYPE if self.code && !self.rich => self.write_plain(),
-            RTF_TYPE => Ok(rtf::write_with_info(self.text.cells(), self.text.tab_width(), &self.properties)),
+            RTF_TYPE => Ok(rtf::write_with_attachments(self.text.cells(), self.text.tab_width(), &self.properties, self.text.attachments())),
             HTML_TYPE => Ok(html::write_with(self.text.cells(), self.text.tab_width(), &self.properties)),
             docx::TYPE => Ok(docx::write_with(self.text.cells(), &self.properties)),
             odt::TYPE => Ok(odt::write_with(self.text.cells(), &self.properties)),
@@ -265,6 +302,46 @@ mod tests {
         let formatted = TextDocument::read_bytes(&rtf_src, false).unwrap();
         assert!(formatted.rich && !formatted.code);
         assert_eq!(formatted.text.text(), "bold");
+    }
+
+    #[test]
+    fn an_rtfd_package_round_trips_its_text_and_attachment_through_a_folder() {
+        let png = {
+            let mut v = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+            v.extend_from_slice(&13u32.to_be_bytes());
+            v.extend_from_slice(b"IHDR");
+            v.extend_from_slice(&4u32.to_be_bytes());
+            v.extend_from_slice(&2u32.to_be_bytes());
+            v
+        };
+        let mut doc = TextDocument::untitled();
+        doc.text.load("see ".chars().map(|ch| crate::text::Cell { ch, style: Default::default() }).collect());
+        doc.text.select(4, 4);
+        doc.text.insert_attachment(crate::text::Attachment { file: "my photo.png".into(), width: 40.0, height: 20.0, data: png.clone() }, crate::text::Kind::Pasting);
+        let dir = std::env::temp_dir().join(format!("textedit-rtfd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let pkg = dir.join("Note.rtfd");
+        std::fs::create_dir_all(&dir).unwrap();
+        doc.save_package(&pkg).unwrap();
+        let back = TextDocument::open_package(&pkg).unwrap();
+        assert!(back.rich);
+        assert_eq!(back.text.text(), doc.text.text());
+        assert_eq!(back.text.attachments()[0].data, png);
+        assert_eq!(back.text.attachments()[0].file, "my_photo.png");
+        assert_eq!(back.text.attachments()[0].width, 40.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_rtf_file_with_a_picture_keeps_it_as_an_attachment() {
+        let doc = TextDocument::read(b"{\\rtf1 a{\\NeXTGraphic p.png \\width40\\height20}b}", RTF_TYPE).unwrap();
+        assert_eq!(doc.text.attachments().len(), 1);
+        assert!(doc.text.has_attachments());
+        let back = TextDocument::read(&doc.write(RTF_TYPE).unwrap(), RTF_TYPE).unwrap();
+        assert_eq!(back.text.attachments()[0].file, "p.png");
+        assert_eq!(back.text.attachments()[0].width, 40.0);
+        // plain text drops the attachment character
+        assert_eq!(doc.write(PLAIN_TYPE).unwrap(), b"ab".to_vec());
     }
 
     #[test]

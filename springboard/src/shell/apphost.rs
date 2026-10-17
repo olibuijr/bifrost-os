@@ -37,6 +37,10 @@ pub struct Manifest {
     /// `"app"` (default), `"system-app"`, `"system"` or `"service"`; see `shell::kinds`. Unknown kinds fail to parse.
     pub kind: String,
     pub provides: Vec<String>,
+    /// `package_types = ["rtfd"]`: the folder-package extensions the app reads and writes (`sdk::document_package`).
+    /// Files and the file panels treat a folder with a known extension as one document; declaring it here is what
+    /// lets the app open one.
+    pub package_types: Vec<String>,
     /// `"native"`: a native Wayland app owns its GPU surfaces instead of using SDK frames. `"full-size"`: an SDK app
     /// with a full-size-content window (no title row; the traffic lights sit over its sidebar).
     pub window: String,
@@ -153,6 +157,7 @@ impl Manifest {
                 "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),
                 "provides" => m.provides = strs(),
+                "package_types" => m.package_types = strs(),
                 "handles" => m.handles = strs(),
                 "schemes" => m.schemes = strs(),
                 "kind" => m.kind = unquote(v),
@@ -1998,6 +2003,13 @@ fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn package_types_are_declared_in_the_manifest() {
+        let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\npackage_types = [\"rtfd\"]\n").unwrap();
+        assert_eq!(m.package_types, vec!["rtfd".to_string()]);
+        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
+        assert!(none.package_types.is_empty());
+    }
     #[test]
     fn quit_plan_kills_terminable_apps_and_gives_the_rest_a_deadline() {
         assert_eq!(super::quit_plan(true), super::QuitPlan::KillNow);
