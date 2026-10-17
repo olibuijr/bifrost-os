@@ -3160,9 +3160,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/audio_unit_settings.rs (enable flags, run order, Settings rows)",
    "status": "gap",
-   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). springboard/ui/src/audio_extension.rs (manifest, registry, render session) and springboard/ui/src/plugin_host.rs (instances, parameters) are models with no install or list surface; no plug-in is loaded and no Settings page is drawn. Build the pane on plugin_host.rs.",
+   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). springboard/ui/src/audio_extension.rs (manifest, registry, render session) and springboard/ui/src/plugin_host.rs (instances, parameters) are models with no install or list surface; no plug-in is loaded and no Settings page is drawn. Build the pane on plugin_host.rs. Built 2026-10-17: AudioUnitSettings model (enabled flags, run order, rows for the list, the chain the host allocates); tests audio_unit_settings::tests. Still open: the Settings page is not drawn and the host does not yet allocate from chain().",
    "rea": [],
    "method": "assessed"
   },
@@ -3204,9 +3204,18 @@
    "doc": "",
    "bifrost": "springboard/src/media/capture.rs, springboard/ui/src/capture_session.rs, springboard/src/media/v4l2.rs, springboard/sdk/src/av_capture_session.rs",
    "status": "partial",
-   "note": "Camera capture for the shell's Camera app through V4L2 and a capture session model. Built 2026-10-17: the session (input, size, start, stop) reaches apps through bifrost_app::av_capture_session (tests av_capture_session::tests). Not covered: photo or depth capture, publishing a camera device to other apps and camera extensions.",
+   "note": "Camera capture for the shell's Camera app through V4L2 and a capture session model. Built 2026-10-17: the session (input, size, start, stop) reaches apps through bifrost_app::av_capture_session (tests av_capture_session::tests). Not covered: photo or depth capture, publishing a camera device to other apps and camera extensions. Built 2026-10-17: the running session keeps its StreamPlan (node, format, buffers) and reports it through running_plan(); tests av_capture_session::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "av_capture_session::tests"
+    }
+   ],
+   "ready_note": "Host tests of the capture session an app gets (input checks, size, start planning the V4L2 stream, stop unlocking, running_plan) in springboard/sdk/src/av_capture_session.rs. Photo and depth capture and camera publishing stay open in the note."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AVFCore.framework",
@@ -3225,9 +3234,18 @@
    "doc": "",
    "bifrost": "springboard/ui/src/capture_session.rs, springboard/src/media/v4l2.rs, springboard/sdk/src/av_capture_session.rs",
    "status": "partial",
-   "note": "Shares the capture session model and V4L2 camera devices with the capture row. Built 2026-10-17: apps reach the session through bifrost_app::av_capture_session (tests av_capture_session::tests). Not covered: no sample buffer or device format API reaches apps.",
+   "note": "Shares the capture session model and V4L2 camera devices with the capture row. Built 2026-10-17: apps reach the session through bifrost_app::av_capture_session (tests av_capture_session::tests). Not covered: no sample buffer or device format API reaches apps. Built 2026-10-17: the running stream plan (node, format, buffers) reaches apps through running_plan(); tests av_capture_session::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "av_capture_session::tests"
+    }
+   ],
+   "ready_note": "Host tests of the app-facing capture session and its stream plan (springboard/sdk/src/av_capture_session.rs). Sample buffer delivery stays open in the note."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AVFoundationCF.framework",
@@ -3461,9 +3479,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json",
+   "bifrost": "docs/parity-matrix/data/accessibility.json; springboard/ui/src/motion_cues.rs (cue model)",
    "status": "partial",
-   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: motion cues are not built; the shell honours Reduce Motion only.",
+   "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: motion cues are not built; the shell honours Reduce Motion only. Built 2026-10-17: MotionCues model (low-passed acceleration, ring of 12 dots); tests motion_cues::tests. Still open: the shell does not draw the dots and no sensor feeds it.",
    "rea": [],
    "method": "assessed"
   },
@@ -3579,7 +3597,16 @@
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Built 2026-10-17: the audit reaches apps through bifrost_app::accessibility_audit (tests accessibility_audit::tests). Not covered yet: the audit is not wired into any shell surface.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessibility_audit::tests"
+    }
+   ],
+   "ready_note": "Host tests of the accessibility audit an app runs (springboard/sdk/src/accessibility_audit.rs). The audit is not yet a shell surface; that is open in the note."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilityBundles.framework",

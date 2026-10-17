@@ -14,6 +14,7 @@ pub use bifrost_ui::video_device::{StreamPlan, VideoDevice};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_ui::video_device::{PixelFormat, StreamFormat, BUFFER_COUNT, CAP_STREAMING, CAP_VIDEO_CAPTURE};
 
     fn unusable(path: &str) -> VideoDevice {
         VideoDevice { path: path.to_string(), card: "Test".to_string(), capabilities: 0, device_caps: 0, formats: Vec::new() }
@@ -57,5 +58,39 @@ mod tests {
         session.stop();
         assert_eq!(session.state(), SessionState::Stopped);
         assert!(session.remove_input().is_ok());
+    }
+
+    fn streaming_device(path: &str) -> VideoDevice {
+        VideoDevice {
+            path: path.to_string(),
+            card: "Test".to_string(),
+            capabilities: CAP_VIDEO_CAPTURE | CAP_STREAMING,
+            device_caps: 0,
+            formats: vec![StreamFormat { format: PixelFormat::Yuyv, width: 640, height: 480 }],
+        }
+    }
+
+    #[test]
+    fn a_running_session_exposes_the_format_and_buffers_it_opened() {
+        let mut session = CaptureSession::new(640, 480).unwrap();
+        assert!(session.running_plan().is_none());
+        session.set_input(streaming_device("/dev/video0")).unwrap();
+        let started = session.start().unwrap();
+        let plan = session.running_plan().expect("a running session has a plan");
+        assert_eq!(plan, &started);
+        assert_eq!(plan.path, "/dev/video0");
+        assert_eq!(plan.format, StreamFormat { format: PixelFormat::Yuyv, width: 640, height: 480 });
+        assert_eq!(plan.buffers, BUFFER_COUNT);
+    }
+
+    #[test]
+    fn stopping_forgets_the_stream_plan_and_unlocks_the_input() {
+        let mut session = CaptureSession::new(640, 480).unwrap();
+        session.set_input(streaming_device("/dev/video0")).unwrap();
+        session.start().unwrap();
+        assert_eq!(session.set_size(320, 240), Err(CaptureError::Running));
+        session.stop();
+        assert!(session.running_plan().is_none());
+        assert!(session.set_size(320, 240).is_ok());
     }
 }

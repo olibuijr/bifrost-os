@@ -1159,6 +1159,8 @@ pub mod midi_events;
 pub mod midi_ble;
 pub mod midi_ble_picker;
 pub mod audio_extension;
+pub mod audio_unit_settings;
+pub mod motion_cues;
 pub mod network_audio_browser;
 pub mod fourier;
 pub mod embedding;
