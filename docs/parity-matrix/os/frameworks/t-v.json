@@ -3288,9 +3288,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/store/install.rs; springboard/src/shell/pacman_update.rs (remove_args)",
+   "bifrost": "springboard/src/shell/store/install.rs; springboard/src/shell/pacman_update.rs (remove_args, Removal); springboard/src/privd/methods.rs (package.remove)",
    "status": "partial",
-   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Built 2026-10-17: pacman_update::remove_args builds the guarded `pacman -R` for a non-store app and refuses the shell and the base system (tests pacman_update::tests). Gap: no privd method runs it and no confirmation sheet asks first.",
+   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Built 2026-10-17: pacman_update::remove_args builds the guarded `pacman -R` for a non-store app and refuses the shell and the base system (tests pacman_update::tests). Built 2026-10-17: privd package.remove runs it (tests privd::methods::tests::bad_params_are_refused_before_any_command_runs), and Removal is the confirm-first model (tests pacman_update::tests::a_removal_is_only_offered_for_a_package_that_can_run). Gap: the sheet is not drawn and no shell page lists non-store packages to remove, so the removal cannot be reached yet.",
    "rea": [],
    "method": "assessed"
   },
