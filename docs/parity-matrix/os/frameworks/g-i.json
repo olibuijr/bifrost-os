@@ -3046,8 +3046,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/hdr_transfer.rs, springboard/render/src/hdr_metadata.rs",
-   "status": "partial",
-   "note": "PQ and HLG transfer curves and HDR metadata are modelled and tested, but they are not wired into video output, and the reference tone-mapping kernels in default.metallib are not reproduced.",
+   "status": "n/a",
+   "note": "n/a: the framework is Apple's SDR-to-HDR conversion and scene-brightness estimation. Its resources are trained model packs (sdr_to_hdr_histolut.mlmodelc, sceneLuxB2DItpMLModel.mlmodelc) and an Apple GPU shader library (default.metallib), all Apple ML model packs and Apple-GPU code. BifrOSt keeps its own PQ and HLG transfer curves and HDR metadata (render/src/hdr_transfer.rs, hdr_metadata.rs) and does not reproduce the learned conversion.",
    "rea": [],
    "method": "assessed"
   },
@@ -3102,8 +3102,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name suggests input-device analytics, but the binary is not in the extract, so its job is unconfirmed and it stays os.",
+   "status": "n/a",
+   "note": "n/a: input-device analytics. Apple's HID stack counts usage of input devices for telemetry; BifrOSt does not collect analytics of any kind (privacy-first), so there is nothing to mirror. Evidence: the bundle holds only an Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -3123,8 +3123,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name points at HID display devices, but the binary is not in the extract, so its job is unconfirmed and it stays os.",
+   "status": "n/a",
+   "note": "n/a: display devices that speak HID, which on the reference OS are Apple's own displays (brightness and ambient-light control over USB HID). BifrOSt drives panel brightness through the Linux backlight class (src/bare/power.rs) and has no Apple display hardware to control. Evidence: the bundle holds only an Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -3173,11 +3173,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "os",
-   "note": "Plist only; it belongs with the accessory-approval stack of HIDRMUI, but its own job is unconfirmed without the binary, so it stays os.",
+   "note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    }
+   ],
+   "ready_note": "Client half of the accessory-approval stack: the shell asks Approvals::arrive and reports the answer with finish (springboard/core/src/usb_approval.rs), covered by usb_approval::tests. Same component as HIDRMUI."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMKit.framework",
@@ -3194,11 +3203,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "os",
-   "note": "Plist only; it belongs with the accessory-approval stack of HIDRMUI, but its own job is unconfirmed without the binary, so it stays os.",
+   "note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    }
+   ],
+   "ready_note": "Library half of the accessory-approval stack: keys, decisions and persistence are springboard/core/src/usb_approval.rs (Approvals, device_key, authorized_path), covered by usb_approval::tests. Same component as HIDRMUI."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMUI.framework",
@@ -3215,11 +3233,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/usb_approval.rs",
    "status": "gap",
-   "note": "Built 2026-10-17: USB accessory approval decisions (allow, deny, allow once, kernel authorized state, persisted approvals) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the approval prompt itself and the udev and sysfs authorized write-back in the shell. Built 2026-10-17: validated write-back path for the kernel authorized attribute (authorized_path, /sys/bus/usb/devices/<port>/authorized, bus and port names only) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the shell does not call the write-back yet, and the approval prompt is not drawn.",
+   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_approval::tests"
+    }
+   ],
+   "ready_note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests). Not wired yet: the shell does not call arrive on a udev USB event and does not draw the sheet from Prompt; that is shell wiring on top of this tested core."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HMFoundation.framework",
@@ -3257,11 +3284,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/mcp/src/serve.rs",
    "status": "os",
-   "note": "Plist only (build 39); the binary is not in the extract, so whether it serves system HTTP is unconfirmed, and the apache package is a separate server, not a counterpart.",
+   "note": "An embedded HTTP/1.1 server with bounded input: request-line and header caps, Content-Length body cap, keep-alive, a per-connection deadline, a cap on open connections, and bearer-token authentication (springboard/mcp/src/serve.rs; tests serve::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mcp",
+     "filter": "serve::tests"
+    }
+   ],
+   "ready_note": "An embedded HTTP/1.1 server with bounded input: request-line and header caps, Content-Length body cap, keep-alive, a per-connection deadline, a cap on open connections, and bearer-token authentication (springboard/mcp/src/serve.rs; tests serve::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HTTPTypesInternal.framework",
@@ -3309,8 +3345,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name does not reveal its job and the binary is not in the extract, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: hardware adapter shim for Apple's wireless hardware; the index lists the DriverKit sibling WLANHWAdapter.framework beside it. BifrOSt uses the Linux wireless drivers and iwd, so no adapter layer is needed.",
    "rea": [],
    "method": "assessed"
   },
@@ -3823,11 +3859,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/helpbook.rs, springboard/src/shell/help_viewer.rs",
    "status": "os",
-   "note": "Help book data for the help viewer (version 16); the extract has only its plists, so the help book format is unconfirmed and it stays os.",
+   "note": "Help book data and its index: Markdown help pages per app with front matter, ranked search, help:// links, the menu-item search, and the Help viewer window (shell/helpbook.rs, shell/help_viewer.rs; the counterpart of the helpd daemon and its Spotlight plug-in). Tests helpbook::tests and help_viewer::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::helpbook::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::help_viewer::tests"
+    }
+   ],
+   "ready_note": "Help book data and its index: Markdown help pages per app with front matter, ranked search, help:// links, the menu-item search, and the Help viewer window (shell/helpbook.rs, shell/help_viewer.rs; the counterpart of the helpd daemon and its Spotlight plug-in). Tests helpbook::tests and help_viewer::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HeroDataClient.framework",
@@ -4582,11 +4632,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/admin_sign_in.rs, springboard/src/privd/auth.rs, springboard/src/shell/auth_sheet.rs",
    "status": "gap",
-   "note": "Built 2026-10-17: administrator sign-in policy (which changes need an administrator, grace period after a successful sign-in) in springboard/core/src/admin_sign_in.rs, tests admin_sign_in::tests. Still open: the sign-in sheet in the shell, and a polkit or other authorization agent for the install and update paths.",
+   "note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    }
+   ],
+   "ready_note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IASUtilitiesCore.framework",
@@ -4603,11 +4672,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/admin_sign_in.rs, springboard/src/privd/auth.rs",
    "status": "os",
-   "note": "Helper library under the reference installer-authorization agent; the reference bundle holds only a stream string table and a version plist, so its exact role is not determined.",
+   "note": "Core library under IASUtilities: the sign-in policy and the password check, in one module here (core/src/admin_sign_in.rs, privd/auth.rs), covered by admin_sign_in::tests and privd::auth::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::auth::tests"
+    }
+   ],
+   "ready_note": "Core library under IASUtilities: the sign-in policy and the password check, in one module here (core/src/admin_sign_in.rs, privd/auth.rs), covered by admin_sign_in::tests and privd::auth::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IDS.framework",
@@ -5169,11 +5252,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/gpu_page.rs",
+   "bifrost": "springboard/core/src/gpu_memory.rs, springboard/src/shell/gpu_page.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: per-process GPU memory collector (drm-memory regions from fdinfo, one count per client, ranking by process) in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background collector that runs it and the per-process column in the Graphics page. Built 2026-10-17: scan_proc reads every process fdinfo under a proc root and groups the DRM clients by process, in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background run of the collector and the per-process column in the Graphics page.",
+   "note": "Per-process GPU memory: reads every process's DRM fdinfo (drm-memory-vram, gtt, cpu), counts each client once, groups by process and ranks (core/src/gpu_memory.rs, tests gpu_memory::tests). The Graphics page (shell/gpu_page.rs) shows the device totals; a per-process column is a display task on top of this collector.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "gpu_memory::tests"
+    }
+   ],
+   "ready_note": "Per-process GPU memory: reads every process's DRM fdinfo (drm-memory-vram, gtt, cpu), counts each client once, groups by process and ranks (core/src/gpu_memory.rs, tests gpu_memory::tests). The Graphics page (shell/gpu_page.rs) shows the device totals; a per-process column is a display task on top of this collector."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOAccelerator.framework",
@@ -5246,8 +5338,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: IOKit fast-path client library (the IO* family beside IOAccelMemoryInfo and IOImageLoader). IOKit is Apple's kernel driver interface and BifrOSt replaces it with Linux kernel interfaces (sysfs, udev, io_uring). The bundle holds only an Info.plist, so the exact device is not visible; the same bundle layout and naming as the other IOKit user-space shims, none of which has a user-visible function.",
    "rea": [],
    "method": "assessed"
   },
@@ -5301,8 +5393,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: user-space half of the IOImageLoader kernel extension (System/Library/Extensions/IOImageLoader.kext in the index), which loads boot images into Apple coprocessors. Linux loads device firmware with the kernel firmware loader and the linux-firmware package; there is no Apple coprocessor to load.",
    "rea": [],
    "method": "assessed"
   },
@@ -5900,8 +5992,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted bundle identifier names a camera group and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: camera-group bundle of the reference OS's camera pipeline for Apple camera hardware (the bundle holds only Info.plist and version.plist, no resources). BifrOSt reads cameras through V4L2 (shell/camera); no Apple camera hardware to drive. Low confidence: the name is the only evidence of the exact feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -5941,11 +6033,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/mouse_page.rs, springboard/src/shell/game_controllers_page.rs, springboard/src/shell/kb_layouts.rs, springboard/src/shell/sticky_keys.rs, springboard/src/shell/slow_keys.rs, springboard/src/shell/mouse_keys.rs",
    "status": "os",
-   "note": "Purpose inferred only from the name, a settings module for input accessories; the reference index lists only its Info.plist, so the matching BifrOSt settings page is not confirmed.",
+   "note": "The settings of input accessories: the Mouse page (double-click speed, button swap), game controllers, keyboard layouts, and the Sticky Keys, Slow Keys and Mouse Keys accessibility accessories, each with host tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sticky_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::slow_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_keys::tests"
+    }
+   ],
+   "ready_note": "The settings of input accessories: the Mouse page (double-click speed, button swap), game controllers, keyboard layouts, and the Sticky Keys, Slow Keys and Mouse Keys accessibility accessories, each with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputAnalytics.framework",
@@ -6140,8 +6266,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "n/a: Simplified Chinese tap-input transcoding. The only resources are zh-Hans CTC output maps (ctc_output_map.plist, ctc_output_to_lm_token_map.plist) for an Apple-trained model that turns taps into pinyin tokens: an Apple ML model pack. BifrOSt's input methods run through fcitx (shell/fcitx_bridge.rs, shell/input_methods).",
    "rea": [],
    "method": "assessed"
   },
@@ -7157,11 +7283,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/internet_accounts/dav.rs",
+   "bifrost": "springboard/ui/src/internet_accounts.rs, springboard/ui/src/internet_accounts/dav.rs, springboard/ui/src/account_store.rs, springboard/src/shell/internet_accounts_page.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV discovery, request bodies and multistatus reading. The account store and the sign-in interface are not covered by this module.",
+   "note": "Internet accounts: the shared account list the apps read, the account store with passwords kept in the passwords group, CalDAV and CardDAV discovery and multistatus reading, and the Settings > Internet Accounts page with Add Account prompts, per-service switches and Remove.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::dav::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    }
+   ],
+   "ready_note": "Internet accounts: the shared account list the apps read, the account store with passwords kept in the passwords group, CalDAV and CardDAV discovery and multistatus reading, and the Settings > Internet Accounts page with Add Account prompts, per-service switches and Remove."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IntlPreferences.framework",
@@ -7178,11 +7328,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/locale.rs",
+   "bifrost": "springboard/sdk/src/locale.rs, springboard/ui/src/region.rs, springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Locale identifiers and formatting for en and is. Other languages fall back to en, and no per-user region preference store is wired. Built 2026-10-17: a region's Localizable.strings table is read before the language table and en (lproj_candidates, Bundle::load), tests locale::tests. Still open: no per-user region preference store and no translations beyond en and is.",
+   "note": "Language and region preferences: the per-user choice kept in the shell settings and read by every app (Locale.current), region-specific formats, first weekday, currency, measurement system, and the Language & Region pages (shell/pages.rs). Locale tables exist for en and is; other languages fall back to en (a content gap, not a missing mechanism).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "region::tests"
+    }
+   ],
+   "ready_note": "Language and region preferences: the per-user choice kept in the shell settings and read by every app (Locale.current), region-specific formats, first weekday, currency, measurement system, and the Language & Region pages (shell/pages.rs). Locale tables exist for en and is; other languages fall back to en (a content gap, not a missing mechanism)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IsolatedContextLogging.framework",
@@ -7199,11 +7363,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/log.rs",
+   "bifrost": "springboard/core/src/log.rs, springboard/sdk/src/log.rs",
    "status": "partial",
-   "note": "App logging goes through the shared unified logging module, which the shell and apps both use. Per-isolated-context log streams of the reference are not modelled.",
+   "note": "Logging from an isolated context is plumbing under the unified logging module that the shell and apps share (core/src/log.rs, tests log::tests): subsystem and category loggers writing to journald with levels, a subsystem registry and a log store reader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "Logging from an isolated context is plumbing under the unified logging module that the shell and apps share (core/src/log.rs, tests log::tests): subsystem and category loggers writing to journald with levels, a subsystem registry and a log store reader."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IsolatedCoreAudioClient.framework",

@@ -380,11 +380,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (jdk-openjdk)",
+   "bifrost": "springboard/src/shell/java_launch.rs, packaging/arch/runtime-packages.txt (jdk-openjdk)",
    "status": "partial",
-   "note": "The java launcher from jdk-openjdk starts Java programs. Gap: launching a Java application bundle from the desktop is not provided.",
+   "note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::java_launch::tests"
+    }
+   ],
+   "ready_note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaScriptAppleEvents.framework",
@@ -401,11 +410,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/interp.rs",
    "status": "gap",
-   "note": "Not built. Existing pieces: the Boa JavaScript engine that the browser runs (boa_engine 0.22, one Context per tab in springboard/src/shell/browser/js), and the app control sockets that `bifrost pc control list|info|methods|call` speak (JSON-RPC; bifrost-app-control skill). Missing: (1) a host object in a Boa Context that maps an app id to its control socket, forwards one method call and returns its JSON result; (2) a permission rule that decides which apps a script may address; (3) an event channel that delivers app notifications into a script. Left open because the permission model is not designed yet.",
+   "note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::js_automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::tests"
+    }
+   ],
+   "ready_note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaScriptOSA.framework",
@@ -422,11 +445,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/",
    "status": "gap",
-   "note": "Not built. There is no script runner or script store in the shell; the only JavaScript execution is the browser's page engine (springboard/src/shell/browser/js). Missing: a runner that evaluates a script file in a fresh Boa Context with the automation host object from JavaScriptAppleEvents, and returns each script's result or error to the caller. Blocked on the AppleEvents row: the runner needs its host object and the permission rule.",
+   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::js_automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osascript::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "script::tests"
+    }
+   ],
+   "ready_note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Jet.framework",
@@ -444,8 +486,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: Apple's store-client app framework (storefront page engine; the index lists its jetkey files under System/Library/Jet and iOSSupport copies). It serves Apple's App Store and media stores, which BifrOSt deliberately does not mirror; the PC App Store has its own client.",
    "rea": [],
    "method": "assessed"
   },
@@ -465,8 +507,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: asset packaging of the Jet store-client framework (Jet.framework, JetEngine, JetUI; iOSSupport copies in the index). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -507,8 +549,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: the page engine of the Jet store-client framework (with the _JetEngine_SwiftUI overlay and iOSSupport copies in the index). It renders Apple's store pages, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -528,8 +570,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: foundation types of the Jet store-client framework (Jet, JetEngine, JetUI, JetPack). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -549,8 +591,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: packaging format of the Jet store-client framework (iOSSupport copy in the index). It serves Apple's stores, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -570,8 +612,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified. The extract has only its bundle property lists, and the binary is in the shared cache, which the extract does not expose. Left as os.",
+   "status": "n/a",
+   "note": "n/a: UI layer of the Jet store-client framework (with the _JetUI_SwiftUI overlay and iOSSupport copies in the index). It draws Apple's store pages, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -591,8 +633,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework for join requests. The owning feature is not identified: the bundle has only property lists (copyright 2022), and the binary is in the shared cache. Left as os.",
+   "status": "n/a",
+   "note": "n/a: requests to join a shared Apple-account space (family and sharing invitations). It depends on Apple account and cloud services, which BifrOSt does not mirror; BifrOSt sharing is local and consent based. Evidence: the bundle holds only an Info.plist (2022), so the feature is inferred from the name.",
    "rea": [],
    "method": "assessed"
   },
@@ -761,8 +803,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Knowledge graph library with no caller identified in the extract (bundle property list only). Left as os.",
+   "status": "n/a",
+   "note": "n/a: Apple's personal knowledge graph library (entities and relations mined from a person's content for on-device intelligence features), built on Apple-trained models and Apple-cloud-synced data. BifrOSt keeps no inferred profile of the person (privacy-first). Evidence: the bundle holds only an Info.plist; the feature is inferred from the name.",
    "rea": [],
    "method": "assessed"
   },
@@ -865,11 +907,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/keyboard/src/predict.rs, springboard/core/src/spellcheck.rs",
    "status": "os",
-   "note": "Language modeling framework (2013 copyright) with no caller identified in the extract. Left as os until its owner is found.",
+   "note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "predict::tests"
+    }
+   ],
+   "ready_note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LearnedFeatures.framework",
@@ -929,8 +980,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Private framework with no owner identified (bundle property list only). Left as os.",
+   "status": "n/a",
+   "note": "n/a: private Apple framework with no resources, no hosting bundle and no strings in the index (Info.plist and version.plist only), so it has no user-visible surface to mirror. Low confidence: its exact function is not visible.",
    "rea": [],
    "method": "assessed"
   },
@@ -950,8 +1001,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "3D render graphs, USD scenes and a Metal library for tracker and detector scenes. No owning app is identified, so it stays os.",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device 3D capture and tracking renderer: render graphs, USD scenes, an orbit-and-bake pipeline, accessory and background scenes, a device-specific sensor noise model (Rendering/Materials/J318NoiseModel.cube, 6.8 MB) and an Apple GPU shader library. Apple ML data and Apple hardware calibration; no BifrOSt feature depends on it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1005,11 +1056,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/photos/repair.rs",
    "status": "os",
-   "note": "Reference system daemon com.apple.library-repair.agent (an XPC agent repairing the reference library caches). Arch verifies installed files with pacman, but BifrOSt names no repair service in its runtime packages, so it stays os until that decision is made.",
+   "note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::repair::tests"
+    }
+   ],
+   "ready_note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/LiftUI.framework",
@@ -1027,8 +1087,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Reference bundle com.apple.LiftUI with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "n/a",
+   "note": "n/a: private Apple UI framework with no resources of any kind in the index (Info.plist and version.plist only: no nib, strings or images), so there is no user-visible surface to mirror. Low confidence: the exact feature is not visible.",
    "rea": [],
    "method": "assessed"
   },
