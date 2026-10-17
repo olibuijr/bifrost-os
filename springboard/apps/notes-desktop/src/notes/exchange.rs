@@ -282,7 +282,7 @@ pub fn apply(dir: &Path, account: &Account, report: &Report, busy: &[String], no
         .collect();
     for local in gone {
         if here.join(format!("{local}.md")).exists() {
-            if folders::trash(dir, &local, Some(&mirror.folder), now).is_ok() {
+            if folders::trash(dir, &local, Some(mirror.folder.as_str()), now).is_ok() {
                 out.removed += 1;
             } else {
                 continue;

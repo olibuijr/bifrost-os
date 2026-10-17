@@ -804,6 +804,8 @@ impl Notes {
     pub fn exchange_apply(&mut self, ui: &Ui, t: f64, account: &bifrost_app::controls::internet_accounts::Account, report: &bifrost_app::exchange_notes::Report) -> exchange::Applied {
         let mut busy: Vec<String> = self.editing().map(|n| n.id.clone()).into_iter().collect();
         busy.extend(self.unsaved.clone());
+        // the list is read again from disk below, so an edit that is waiting for the autosave goes to disk first
+        self.flush();
         let applied = exchange::apply(&self.dir, account, report, &busy, self.wall.now(t));
         if applied.changed() {
             self.reload(ui, t);

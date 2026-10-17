@@ -243,6 +243,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_exchange_server_address_must_be_https() {
+        let ask = Purpose::NewAccountAddress { kind: Kind::Exchange };
+        assert!(acceptable(&ask, "https://mail.example.com/EWS/Exchange.asmx"));
+        assert!(!acceptable(&ask, "http://mail.example.com/EWS/Exchange.asmx"));
+        assert!(acceptable(&Purpose::NewAccountAddress { kind: Kind::CalDav }, "http://dav.example.com/"), "DAV keeps its own rule");
+        let prompt = Prompt::new_account_address(Kind::Exchange);
+        assert_eq!(prompt.title, "Add Exchange Account");
+        assert_eq!(prompt.purpose, ask);
+    }
+
+    #[test]
     fn a_new_password_is_typed_again_before_it_is_used() {
         let purpose = Purpose::NewUserPassword { admin: false, full: "Kid".into(), name: "kid".into() };
         let confirm = Prompt::next(&purpose, "s3cret-one").expect("confirm step");
