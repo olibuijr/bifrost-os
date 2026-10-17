@@ -116,7 +116,8 @@ impl Config {
             ("downtime.start", &(d.start % 1440).to_string()),
             ("downtime.end", &(d.end % 1440).to_string()),
         ]);
-        self.policy.set_downtime(d);
+        // the policy gets the same minute of the day that is stored
+        self.policy.set_downtime(Downtime { on: d.on, start: d.start % 1440, end: d.end % 1440 });
     }
 
     /// Whether Downtime leaves `app` usable. Settings always is; Clock is by default.
