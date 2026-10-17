@@ -1752,6 +1752,19 @@
     }
 
     #[test]
+    fn voice_control_presses_the_named_element_only_for_a_final_command() {
+        use bifrost_ui::whisper::Transcript;
+        let mut sh = desktop_shell();
+        let hypothesis = Transcript { text: "press General > Software Update".into(), is_final: false };
+        assert!(sh.voice_press(&hypothesis, 1.0).is_none(), "a hypothesis is not a command");
+        let chatter = Transcript { text: "good morning".into(), is_final: true };
+        assert!(sh.voice_press(&chatter, 1.0).is_none(), "a sentence without a press verb is not a command");
+        let heard = Transcript { text: "press os/settings/general/software-update.".into(), is_final: true };
+        let answer = sh.voice_press(&heard, 2.0).expect("a command").expect("the element is pressable");
+        assert_eq!(answer.0, "os/settings/general/software-update");
+    }
+
+    #[test]
     fn ax_press_walks_a_label_path_in_settings_like_a_tap() {
         let mut sh = desktop_shell();
         let map = sh.ax_map(0.0);
