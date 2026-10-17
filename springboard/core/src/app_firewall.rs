@@ -175,9 +175,67 @@ pub fn format_policies(policies: &[AppPolicy]) -> String {
     out
 }
 
+/// The script that removes the firewall's table (and so every rule it added). Safe to run when the table is absent.
+pub fn clear_script() -> String {
+    format!("add table inet {TABLE}\ndelete table inet {TABLE}\n")
+}
+
+/// Sets the policy of one app, replacing its earlier entry. The change is refused, and `policies` left as it was,
+/// when the id or a port is invalid or a port would then be both allowed and blocked.
+pub fn set_policy(policies: &mut Vec<AppPolicy>, new: AppPolicy) -> Result<(), Error> {
+    let before = policies.clone();
+    match policies.iter_mut().find(|p| p.app_id == new.app_id) {
+        Some(existing) => *existing = new,
+        None => policies.push(new),
+    }
+    if let Err(e) = ruleset(policies) {
+        *policies = before;
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Drops the policy of `app_id`; true when there was one.
+pub fn remove_policy(policies: &mut Vec<AppPolicy>, app_id: &str) -> bool {
+    let before = policies.len();
+    policies.retain(|p| p.app_id != app_id);
+    policies.len() != before
+}
+
+/// Ports from a comma-separated list of `tcp/<n>` or `udp/<n>`; `-` or an empty text is no ports.
+pub fn parse_port_list(text: &str) -> Result<Vec<Port>, String> {
+    if text.is_empty() || text == "-" {
+        return Ok(Vec::new());
+    }
+    text.split(',').map(parse_port).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn set_policy_replaces_an_app_and_refuses_a_conflict() {
+        let mut ps = Vec::new();
+        set_policy(&mut ps, app("a.b", Policy::Block, vec![tcp(80)])).unwrap();
+        set_policy(&mut ps, app("a.b", Policy::Block, vec![tcp(81)])).unwrap();
+        assert_eq!(ps.len(), 1);
+        assert_eq!(ps[0].ports, vec![tcp(81)]);
+        let clash = app("c.d", Policy::Allow, vec![tcp(81)]);
+        assert!(matches!(set_policy(&mut ps, clash), Err(Error::Conflict { number: 81, .. })));
+        assert_eq!(ps.len(), 1, "a refused change leaves the list as it was");
+        assert!(matches!(set_policy(&mut ps, app("BAD", Policy::Allow, vec![])), Err(Error::BadAppId(_))));
+        assert!(remove_policy(&mut ps, "a.b"));
+        assert!(!remove_policy(&mut ps, "a.b"));
+    }
+
+    #[test]
+    fn port_lists_parse_and_the_clear_script_names_the_table() {
+        assert_eq!(parse_port_list("-").unwrap(), vec![]);
+        assert_eq!(parse_port_list("tcp/22,udp/53").unwrap().len(), 2);
+        assert!(parse_port_list("22").is_err());
+        assert!(clear_script().contains(&format!("delete table inet {TABLE}")));
+    }
 
     fn tcp(n: u16) -> Port {
         Port { proto: Proto::Tcp, number: n }
