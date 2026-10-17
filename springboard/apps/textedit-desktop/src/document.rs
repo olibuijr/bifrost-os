@@ -354,7 +354,8 @@ mod tests {
 
     #[test]
     fn an_rtf_file_with_a_picture_keeps_it_as_an_attachment() {
-        let doc = TextDocument::read(b"{\\rtf1 a{\\NeXTGraphic p.png \\width40\\height20}b}", RTF_TYPE).unwrap();
+        // the size in the file is in twips: 800 x 400 twips is 40 x 20 points
+        let doc = TextDocument::read(b"{\\rtf1 a{\\NeXTGraphic p.png \\width800\\height400}b}", RTF_TYPE).unwrap();
         assert_eq!(doc.text.attachments().len(), 1);
         assert!(doc.text.has_attachments());
         let back = TextDocument::read(&doc.write(RTF_TYPE).unwrap(), RTF_TYPE).unwrap();
