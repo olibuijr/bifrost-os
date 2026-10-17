@@ -56,6 +56,7 @@ pub mod gamepad_service;
 pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
+pub mod wifi;
 pub mod dock_tile;
 pub mod quick_actions;
 pub mod now_playing;
@@ -137,6 +138,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(bluetooth_service::BluetoothService::default()),
         Box::new(login_items_approval::LoginItemsApproval),
         Box::new(network_path::NetworkPath::new()),
+        Box::new(wifi::WifiService::new()),
         Box::new(now_playing::NowPlaying),
         Box::new(notification_schedule::NotificationSchedule::default()),
         Box::new(screens::Displays::default()),
