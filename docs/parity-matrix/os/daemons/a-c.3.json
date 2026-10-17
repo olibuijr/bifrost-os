@@ -436,7 +436,26 @@
    "status": "partial",
    "note": "rule: Voice Memos app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "voicememos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "Voice Memos app: recording store, enhancement and services, covered by the app's tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.wallpaper.plist",
@@ -453,11 +472,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs, springboard/src/shell/wallpaper_schedule.rs",
    "status": "partial",
    "note": "role filled by wallpaper_page.rs; no separate process; no dynamic or aerial wallpaper agent",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    }
+   ],
+   "ready_note": "Wallpaper page and the time-of-day schedule (wallpaper_schedule.rs, driven by a timer in bin/shell.rs). Aerial video wallpapers use Apple-supplied content and are not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.warmd_agent.plist",
@@ -519,7 +552,26 @@
    "status": "partial",
    "note": "rule: Weather app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "weather::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "insights::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-weather",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "Weather app: forecast model, insights and services, covered by the app's tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.webprivacyd.plist",
@@ -689,8 +741,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
-   "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "status": "n/a",
+   "note": "rule: BOOTP/NetBoot serves Apple machines' network install; BifrOSt installs from its own media, and DHCP is served by the Linux network stack (systemd-networkd).",
    "rea": [],
    "method": "rule"
   },
@@ -710,8 +762,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/nearby_service.rs, springboard/sdk/src/peer_session.rs, springboard/src/shell/services/peer_hub.rs",
-   "status": "partial",
-   "note": "rule: nearby and peer session models; the `peer` service connects apps inside the shell (named listeners, request and reply); AirPlay discovery and streaming are not built",
+   "status": "n/a",
+   "note": "rule: AirPlay is Apple's proprietary streaming protocol; BifrOSt does not implement it. In-shell and app-to-app links use the peer and nearby models.",
    "rea": [],
    "method": "rule"
   },
@@ -790,7 +842,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust and local authentication models in the SDK."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.AppleQEMUGuestAgent.plist",
@@ -1016,10 +1087,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/container_migration.rs",
    "status": "gap",
    "note": "Migrates app data containers when the OS upgrades; the updater has rollback (packaging/arch/recovery) but moves no per-app data, so build a migration step for app data format changes.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "container_migration::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: per-container format version file and resumable, non-downgrading migration steps."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.CoreAuthentication.daemon.plist",
@@ -1040,7 +1120,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust and local authentication models in the SDK."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.CrashReporterSupportHelper.plist",
@@ -1093,8 +1192,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "n/a",
+   "note": "rule: token hardware (smart card and secure element brokering) is device-specific; BifrOSt has no token hardware. Keychain and trust models are rows of their own.",
    "rea": [],
    "method": "rule"
   },
@@ -1113,11 +1212,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/searchindex.rs, springboard/sdk/src/search_index_batch.rs",
+   "bifrost": "springboard/ui/src/detect.rs, springboard/ui/src/searchindex.rs",
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    }
+   ],
+   "ready_note": "Data detector (links, dates, phones, addresses, money) and the search index model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.DesktopServicesHelper.plist",
@@ -1138,7 +1251,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models in the SDK."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.DesktopServicesScriptingHelper.plist",
@@ -1159,7 +1286,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models in the SDK."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.DumpGPURestart.plist",
@@ -1264,7 +1405,26 @@
    "status": "partial",
    "note": "rule: file watching, coordination and provider models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    }
+   ],
+   "ready_note": "File watching, advisory coordination with presenters, and file provider models in the SDK."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.GSSCred.plist",
@@ -1320,7 +1480,21 @@
    "status": "partial",
    "note": "Gamepad service and settings page",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page::tests"
+    }
+   ],
+   "ready_note": "Gamepad service and game controllers settings page."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.IFCStart.plist",
@@ -1544,7 +1718,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
    "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "note": "Built 2026-10-17: kpasswd request and reply framing (RFC 3244) in the SDK, tests kpasswd::tests. Still missing: ticket verification and the password change backend.",
    "rea": [],
    "method": "rule"
   },
@@ -1623,7 +1797,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "Keychain, trust and local authentication models in the SDK; the shell's local_auth service answers with the account password."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ManagedClient.mechanism.plist",
@@ -1723,11 +1916,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
+   "bifrost": "springboard/sdk/src/link_conditioner.rs",
    "status": "partial",
    "note": "rule: Wi-Fi models over the Linux wireless stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_conditioner::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: conditioning profiles (rate, delay, jitter, loss) mapped to tc netem arguments for an interface."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.NetworkSharing.plist",
@@ -1765,11 +1967,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "bifrost": "springboard/sdk/src/keychain.rs",
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "Keychain model holds the stored passwords; tested in keychain::tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.PerfPowerServices.plist",
@@ -1868,11 +2079,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/rfb",
+   "bifrost": "springboard/rfb/src/keysym.rs, springboard/rfb/src/message.rs, springboard/rfb/src/handshake.rs",
    "status": "partial",
    "note": "rule: remote framebuffer service; Remote app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "keysym::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    }
+   ],
+   "ready_note": "Remote framebuffer event handling: key symbols, client messages and handshake."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.RemoteDesktop.PrivilegeProxy.plist",
@@ -1949,7 +2179,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "Crash report model: reason, images, symbolication and call-stack tree. The shell does not yet call a reporter for another app's crash."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ReportSystemMemory.plist",
