@@ -2070,6 +2070,19 @@ fn menu_item(action: Action, title: &str, key: &str, enabled: bool) -> AppMenuIt
     }
 }
 
+impl TextEditApp {
+    /// A new untitled document holding `doc`, shown from its top (as `after_documents` does for a created document).
+    fn open_untitled(&mut self, doc: TextDocument) {
+        let id = self.docs.new_document();
+        if let Some(d) = self.docs.get_mut(id) {
+            *d = doc;
+        }
+        self.scroll = 0.0;
+        self.follow = true;
+        self.revision += 1;
+    }
+}
+
 impl App for TextEditApp {
     fn rpc_methods(&self) -> Vec<&'static str> {
         vec!["service.new_window_with_text", "service.open_selected_file"]
@@ -2099,14 +2112,7 @@ impl App for TextEditApp {
             }
             _ => return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),
         };
-        let id = self.docs.new_document();
-        if let Some(d) = self.docs.get_mut(id) {
-            *d = doc;
-        }
-        // show the new document from its top, as after_documents does for a created document
-        self.scroll = 0.0;
-        self.follow = true;
-        self.revision += 1;
+        self.open_untitled(doc);
         Ok(Json::Obj(Vec::new()))
     }
 
@@ -2265,6 +2271,16 @@ impl App for TextEditApp {
                     _ => false,
                 }
             }
+            // shared text (a drop on the Dock icon, or the share sheet) is a `data:` URL and becomes an untitled document.
+            // Files do not come here: Files, the Dock and the share sheet hand a file over as a grant, which the document
+            // controller opens (`DocumentEvent::Opened`, folders of the RTFD type included). A file URL has no grant, so it is refused.
+            Input::Open(url) => match bifrost_app::share::text_from_url(&url).map(|text| TextDocument::read_bytes(text.as_bytes(), false)) {
+                Some(Ok(doc)) => {
+                    self.open_untitled(doc);
+                    true
+                }
+                _ => false,
+            },
             Input::Touch { kind, x, y, .. } => self.touch(ctx, kind, x, y),
             _ => false,
         }
@@ -2498,6 +2514,16 @@ mod tests {
         let mut d = TextDocument::untitled();
         d.text.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
         d
+    }
+
+    #[test]
+    fn an_untitled_document_holds_the_text_it_is_given_and_shows_from_the_top() {
+        let mut app = TextEditApp::new();
+        app.scroll = 40.0;
+        app.open_untitled(doc("shared text"));
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "shared text");
+        assert!(app.follow);
+        assert_eq!(app.scroll, 0.0);
     }
 
     #[test]

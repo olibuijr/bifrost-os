@@ -717,10 +717,19 @@ impl<D: Document> DocumentController<D> {
             return Some(Vec::new());
         };
         let uttype = named.map(str::to_string).unwrap_or_else(|| e.uttype.clone());
-        let result = e.doc.write(&uttype).map_err(|DocumentError(m)| m).and_then(|bytes| {
-            let mut f = &file.file;
-            f.set_len(0).and_then(|_| f.write_all(&bytes)).and_then(|_| f.sync_all()).map_err(|err| err.to_string())
-        });
+        let result = if file.file.metadata().is_ok_and(|m| m.is_dir()) {
+            // a package name: the shell made a folder for the save; the package's files go into it and commit puts it in place
+            package_path(&file.file).ok_or_else(|| "the package cannot be reached".to_string()).and_then(|path| {
+                let files = e.doc.package_files(&uttype).map_err(|DocumentError(m)| m)?;
+                let refs: Vec<(&str, &[u8])> = files.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+                document_package::write_package_contents(&path, &refs).map_err(|err| err.to_string())
+            })
+        } else {
+            e.doc.write(&uttype).map_err(|DocumentError(m)| m).and_then(|bytes| {
+                let mut f = &file.file;
+                f.set_len(0).and_then(|_| f.write_all(&bytes)).and_then(|_| f.sync_all()).map_err(|err| err.to_string())
+            })
+        };
         match result {
             Ok(()) => {
                 host.commit(request);
@@ -747,6 +756,8 @@ impl<D: Document> DocumentController<D> {
         if let Some(t) = bifrost_ui::uttype::type_for_extension(&file.name) {
             e.uttype = t.to_string();
         }
+        // a package keeps its folder, which a later save writes back to; a saved file has none
+        e.package = if file.file.metadata().is_ok_and(|m| m.is_dir()) { package_path(&file.file) } else { None };
         if let Some(n) = untitled {
             let _ = std::fs::remove_file(autosave_path(&host.data_dir(), n));
         }
@@ -1124,6 +1135,78 @@ mod tests {
         let notices = c.handle(m, DocumentEvent::OpenedMany { request: req, docs: vec![file] }).unwrap();
         let Notice::Opened(id) = notices[0] else { panic!("{notices:?}") };
         id
+    }
+
+    /// A document with a package form: its main file is `TXT.rtf`, its text is that file's contents.
+    #[derive(Debug, PartialEq)]
+    struct Pkg(String);
+
+    impl Document for Pkg {
+        fn read(bytes: &[u8], _t: &str) -> Result<Self, DocumentError> {
+            String::from_utf8(bytes.to_vec()).map(Pkg).map_err(|_| DocumentError::new("not UTF-8"))
+        }
+        fn write(&self, _t: &str) -> Result<Vec<u8>, DocumentError> {
+            Ok(self.0.clone().into_bytes())
+        }
+        fn untitled() -> Self {
+            Pkg(String::new())
+        }
+        fn readable_types() -> &'static [&'static str] {
+            &["public.rtfd"]
+        }
+        fn default_type() -> &'static str {
+            "public.rtfd"
+        }
+        fn read_package(files: &[(String, Vec<u8>)], _t: &str) -> Result<Self, DocumentError> {
+            let (_, main) = files.iter().find(|(n, _)| n == "TXT.rtf").ok_or_else(|| DocumentError::new("no TXT.rtf"))?;
+            Self::read(main, "public.rtfd")
+        }
+        fn package_files(&self, _t: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
+            Ok(vec![("TXT.rtf".into(), self.0.clone().into_bytes())])
+        }
+    }
+
+    #[test]
+    fn a_package_folder_opens_as_one_document_and_keeps_its_folder() {
+        let m = Mock::new("pkgopen");
+        let pkg = m.dir.join("Notes.rtfd");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(pkg.join("TXT.rtf"), "hello").unwrap();
+        let mut c = DocumentController::<Pkg>::new();
+        c.open_panel(&m);
+        let req = m.next.get();
+        // the grant of a folder is a read-only descriptor of the folder itself
+        let file = crate::Document { request: req, grant: [9; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Read, file: std::fs::File::open(&pkg).unwrap() };
+        let notices = c.handle(&m, DocumentEvent::OpenedMany { request: req, docs: vec![file] }).unwrap();
+        let Notice::Opened(id) = notices[0] else { panic!("{notices:?}") };
+        assert_eq!(c.get(id), Some(&Pkg("hello".into())));
+        assert_eq!(c.uttype(id), Some("public.rtfd"));
+        assert_eq!(c.file_name(id), Some("Notes.rtfd"));
+        assert_eq!(c.entry(id).and_then(|e| e.package.as_ref()).and_then(|p| p.file_name()).map(|n| n.to_owned()), Some("Notes.rtfd".into()), "a save writes back to this folder");
+    }
+
+    #[test]
+    fn save_as_to_a_package_name_writes_into_the_folder_the_shell_made_and_commits_it() {
+        let m = Mock::new("pkgsave");
+        let mut c = DocumentController::<Pkg>::new();
+        let id = c.new_document();
+        *c.get_mut(id).unwrap() = Pkg("draft".into());
+        c.save_as(&m, id);
+        let req = m.next.get();
+        // the shell answers the panel with the temporary folder it made for "Notes.rtfd"
+        let staging = m.dir.join("staging-Notes.rtfd");
+        std::fs::create_dir_all(&staging).unwrap();
+        let folder = crate::Document { request: req, grant: [4; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&staging).unwrap() };
+        assert_eq!(c.handle(&m, DocumentEvent::SaveTo(folder)).unwrap(), Vec::new());
+        assert_eq!(std::fs::read(staging.join("TXT.rtf")).unwrap(), b"draft", "the package's files are in the folder");
+        assert!(m.log().contains(&format!("commit#{req}")), "{:?}", m.log());
+        // the shell has put the folder in place and answers with it
+        let done = crate::Document { request: req, grant: [5; 16], name: "Notes.rtfd".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&staging).unwrap() };
+        assert_eq!(c.handle(&m, DocumentEvent::Saved(done)).unwrap(), vec![Notice::Saved(id, SaveOp::SaveAs)]);
+        assert_eq!(c.file_name(id), Some("Notes.rtfd"));
+        assert_eq!(c.uttype(id), Some("public.rtfd"));
+        assert!(c.entry(id).is_some_and(|e| e.package.is_some()), "the next save writes the folder");
+        assert!(!c.is_edited(id));
     }
 
     #[test]
