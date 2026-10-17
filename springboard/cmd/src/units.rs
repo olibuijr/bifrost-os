@@ -83,6 +83,8 @@ const PREFIXES: &[(&str, f64)] = &[
 /// Built-in unit definitions: `(name, definition)`. A definition is an expression in the same language as the input.
 pub const BUILTIN: &[(&str, &str)] = &[
     // length
+    ("meter", "m"),
+    ("metre", "m"),
     ("inch", "2.54 cm"),
     ("in", "inch"),
     ("foot", "12 inch"),
