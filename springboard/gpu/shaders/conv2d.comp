@@ -1,0 +1,51 @@
+#version 450
+// Direct 2D convolution (cross-correlation), channel-first float32 storage buffers, one invocation per output element
+// (x, y, output channel). The CPU reference is render/src/nn_kernels.rs (conv2d; conv2d_gemm is the im2col form).
+// Layouts: input C_in x H x W, weights [c_out][c_in][kh][kw], bias [c_out], output C_out x OH x OW. Not wired to a
+// pipeline yet; build.rs compiles it into the shader table like the other stages.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer InBuf { float src[]; };
+layout(std430, set = 0, binding = 1) readonly buffer WeightBuf { float wgt[]; };
+layout(std430, set = 0, binding = 2) readonly buffer BiasBuf { float bias[]; };
+layout(std430, set = 0, binding = 3) writeonly buffer OutBuf { float dst[]; };
+
+layout(push_constant) uniform Push {
+    uint c_in;
+    uint h;
+    uint w;
+    uint c_out;
+    uint kh;
+    uint kw;
+    uint stride;
+    uint pad;
+    uint oh;
+    uint ow;
+    uint has_bias;
+} pc;
+
+void main() {
+    uint ox = gl_GlobalInvocationID.x;
+    uint oy = gl_GlobalInvocationID.y;
+    uint co = gl_GlobalInvocationID.z;
+    if (ox >= pc.ow || oy >= pc.oh || co >= pc.c_out) {
+        return;
+    }
+    float sum = pc.has_bias != 0u ? bias[co] : 0.0;
+    for (uint ci = 0u; ci < pc.c_in; ++ci) {
+        for (uint ky = 0u; ky < pc.kh; ++ky) {
+            int iy = int(oy * pc.stride + ky) - int(pc.pad);
+            if (iy < 0 || iy >= int(pc.h)) {
+                continue;
+            }
+            for (uint kx = 0u; kx < pc.kw; ++kx) {
+                int ix = int(ox * pc.stride + kx) - int(pc.pad);
+                if (ix < 0 || ix >= int(pc.w)) {
+                    continue;
+                }
+                sum += src[(ci * pc.h + uint(iy)) * pc.w + uint(ix)] * wgt[((co * pc.c_in + ci) * pc.kh + ky) * pc.kw + kx];
+            }
+        }
+    }
+    dst[(co * pc.oh + oy) * pc.ow + ox] = sum;
+}
