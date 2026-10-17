@@ -160,6 +160,7 @@ pub fn decide_grant(prompt: &Prompt, grant: Grant) {
 /// Writes a location grant. Allow Once and Allow While Using both make the app authorized while in use; Allow Once is
 /// also remembered so `expire_once` can take it back. A restricted app keeps its status.
 pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
+    mark_grants_dirty();
     let current = location_status(app_id);
     if current == AuthorizationStatus::Restricted {
         return current;
@@ -183,6 +184,9 @@ pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
 /// not asked, so its next request shows the sheet again. Returns the apps it reset.
 pub fn expire_once(is_running: impl Fn(&str) -> bool) -> Vec<String> {
     let gone: Vec<String> = ONCE.with(|o| o.borrow().iter().filter(|a| !is_running(a.as_str())).cloned().collect());
+    if !gone.is_empty() {
+        mark_grants_dirty();
+    }
     for app in &gone {
         ONCE.with(|o| o.borrow_mut().remove(app));
         LOCATION.with(|s| s.borrow_mut().remove(app));
@@ -198,6 +202,7 @@ pub fn location_status(app_id: &str) -> AuthorizationStatus {
 /// The person's location switch for one app: on allows location while the app is in use, off refuses it. A restricted
 /// app keeps the status it has, so the switch shows the answer that stands.
 pub fn set_location_by_user(app_id: &str, allowed: bool) -> AuthorizationStatus {
+    mark_grants_dirty();
     set_location_grant(app_id, if allowed { Grant::WhileUsing } else { Grant::Deny })
 }
 
@@ -244,6 +249,7 @@ pub fn access_label_of(status: AuthorizationStatus) -> &'static str {
 /// Writes an app's location access from the popup. Never denies, While Using allows while in use, and Ask Next Time
 /// forgets the answer so the app's next request shows the sheet again. A restricted app keeps its status.
 pub fn set_location_access(app_id: &str, choice: LocationAccess) -> AuthorizationStatus {
+    mark_grants_dirty();
     match choice {
         LocationAccess::Never => set_location_grant(app_id, Grant::Deny),
         LocationAccess::WhileUsing => set_location_grant(app_id, Grant::WhileUsing),
@@ -659,7 +665,27 @@ pub fn render_grants() -> String {
             bifrost_ui::contact_access::Status::NotDetermined | bifrost_ui::contact_access::Status::Restricted => {}
         }
     }
+    // Location answers. An Allow Once grant lasts only while its app runs, so it is not saved.
+    let once: std::collections::BTreeSet<String> = ONCE.with(|o| o.borrow().clone());
+    for (app, status) in location_asked() {
+        if once.contains(&app) {
+            continue;
+        }
+        if let Some(name) = location_saved_name(status) {
+            out.push_str(&format!("location\t{app}\t{name}\n"));
+        }
+    }
     out
+}
+
+/// The saved name of a location answer, or `None` for an answer that is not saved (not asked, or restricted).
+fn location_saved_name(status: AuthorizationStatus) -> Option<&'static str> {
+    match status {
+        AuthorizationStatus::Denied => Some("denied"),
+        AuthorizationStatus::AuthorizedAlways => Some("always"),
+        AuthorizationStatus::AuthorizedWhenInUse => Some("when_in_use"),
+        AuthorizationStatus::NotDetermined | AuthorizationStatus::Restricted => None,
+    }
 }
 
 /// Applies saved grants. Lines that do not parse are skipped; a restricted answer keeps its status as the model says.
@@ -689,6 +715,15 @@ pub fn apply_grants(text: &str) {
                 if let Some(picked) = picked {
                     let _ = super::contacts::answer_prompt(app, bifrost_ui::contact_access::Choice::Picked(picked));
                 }
+            }
+            ["location", app, status] => {
+                let status = match *status {
+                    "denied" => AuthorizationStatus::Denied,
+                    "always" => AuthorizationStatus::AuthorizedAlways,
+                    "when_in_use" => AuthorizationStatus::AuthorizedWhenInUse,
+                    _ => continue,
+                };
+                LOCATION.with(|s| s.borrow_mut().insert(app.to_string(), status));
             }
             _ => {}
         }
@@ -720,5 +755,27 @@ mod grants_tests {
     fn a_file_without_the_header_restores_nothing() {
         apply_grants("media\tis.example.grants.none\tcamera\t1\n");
         assert_eq!(access("is.example.grants.none").status(Media::Video), Status::NotDetermined);
+    }
+}
+
+#[cfg(test)]
+mod location_grants_tests {
+    use super::*;
+
+    #[test]
+    fn a_location_answer_is_saved_except_allow_once() {
+        let kept = "is.example.grants.loc-kept";
+        set_location_grant(kept, Grant::WhileUsing);
+        let once = "is.example.grants.loc-once";
+        set_location_grant(once, Grant::Once);
+        let text = render_grants();
+        assert!(text.contains(&format!("location\t{kept}\twhen_in_use\n")), "{text}");
+        assert!(!text.contains(once), "an Allow Once grant ends with its app: {text}");
+    }
+
+    #[test]
+    fn a_saved_location_answer_restores_its_status() {
+        apply_grants("springboard-privacy-grants-v1\nlocation\tis.example.grants.loc-back\tdenied\n");
+        assert_eq!(location_status("is.example.grants.loc-back"), AuthorizationStatus::Denied);
     }
 }
