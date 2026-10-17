@@ -43,7 +43,7 @@ With Settings > "Suspend Background Apps" on (`suspend_background`), an external
 `SIGSTOP` after the grace period in `bifrost_core::occlusion`. It is resumed with `SIGCONT` when it is focused or seen
 again. Turning the switch off resumes every app the shell stopped. The shell keeps one model per external app slot and
 feeds it whether the app is focused and whether any of its windows is on screen. Covering is not tracked yet, so an app
-with any shown window counts as on screen. Apps see no callback for this; they only stop running while suspended.
+with any shown window counts as on screen.
 
 ## Window lifecycle on the desktop (2026-10-08)
 
