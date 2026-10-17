@@ -110,7 +110,7 @@
    "apple": "StoreKit Test, sandbox testing, Xcode testing for IAP",
    "bifrost": "springboard/ui/src/store_test.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware"
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no commerce test harness; SDK testing kit is springboard/sdk/src/testing.rs, not purchase-aware Built 2026-10-17: StoreSession, a scripted store that answers each purchase in order (result, pending or failure) in springboard/sdk/src/testing.rs; tests testing::store_session_tests."
   },
   {
    "feature": "Ad network attribution",
@@ -140,7 +140,6 @@
   "No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.",
   "No subscriptions, renewal state, offers, offer codes or win-back offers.",
   "No review prompt API (RequestReviewAction / SKStoreReviewController equivalent) in springboard/sdk/src.",
-  "No StoreKit-style test harness for purchase flows in springboard/sdk/src/testing.rs.",
   "Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a)."
  ]
 }
