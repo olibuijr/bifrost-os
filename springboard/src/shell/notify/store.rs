@@ -57,7 +57,7 @@ impl Group {
 }
 
 /// The persistence key of an app: its bundle id, which `apps()` keeps unique.
-fn app_key(app: AppId) -> &'static str {
+pub fn app_key(app: AppId) -> &'static str {
     apps().iter().find(|a| a.id == app).map_or("", |a| a.icon)
 }
 

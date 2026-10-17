@@ -734,10 +734,41 @@ restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels,
   on the lock screen), When Unlocked (hidden on the lock screen, shown once unlocked) and Never (hidden everywhere). A
   banner's text follows the same rule, since banners only show when unlocked (`Shell::previews_hidden`, `start_banner`).
   Test: `show_previews_decides_what_banners_and_lists_reveal`, `previews_hidden_per_app_hide_only_that_app_text` (`list.rs`).
-- **Not built**: Focus filters per named Focus. The shell has one Focus (Do Not Disturb), so "allowed apps" is one list
-  (`notify/store.rs` `focus_allowed`); the `focus_filter` service stores app values per Focus name but the shell does not
-  switch between Focus modes. Calendar triggers still carry only hour, minute and weekday over the wire.
-- **Not verified on Midget**: the stacks, the restart and the Show Previews settings are host-tested only.
+- **Calendar triggers** still carry only hour, minute and weekday over the wire.
+- **Not verified on Midget**: the stacks, the restart, the Show Previews settings and the Focus modes are host-tested only.
+
+### Focus modes (Focus round)
+
+- **Modes** (`springboard/src/shell/notify/modes.rs`): Do Not Disturb, Work, Personal and Sleep, plus custom modes (up to
+  12, named with a unique slug id). Each mode has allowed apps (app keys), allowed people (matched by exact name), a
+  time-sensitive allowance and an optional schedule. A schedule is a set of weekdays and a window in local minutes; a
+  window that crosses midnight belongs to the weekday it starts on (Friday 22:00 to 07:00 covers Friday night and early
+  Saturday). One mode is on by hand (`Modes::manual`, a manual choice wins) or by its schedule.
+- **Delivery**: `modes::decide` returns `Show` or `Quiet`. With no mode on everything shows. A notification shows when its
+  app is allowed, or its sender is allowed, or it is time-sensitive and the mode allows that. `Notify::delivers` uses it;
+  a `Quiet` notification is stored and badged, with no banner or wake (Notification Center only).
+- **Do Not Disturb** keeps its allowed apps and schedule in `notifications.ini` (`Store::focus_allowed`, `Store::schedule`),
+  so existing data keeps working. `Notify::as_stored` reads them into the mode. Other modes live in `focus_modes.ini`,
+  saved next to the notification store when the shell loads its data directory (`Notify::load_modes`, `save_modes`).
+- **API**: `Shell::set_focus_mode(Option<&str>)` (saves; the Settings Do Not Disturb switch follows only Do Not Disturb),
+  `Shell::set_dnd` (a wrapper for Do Not Disturb), `Notify::set_mode`, `Notify::active_mode`, `Notify::dnd` (any mode is on).
+  Turning a mode off inside its schedule's window holds until the window ends, as Do Not Disturb always did.
+- **Focus filters**: `services/focus_filter.rs` names the Focus by the active mode, so apps read and get the `changed`
+  event for the values they stored under that mode's name. Apps declare filter fields as `[[focus_filter]]` tables in
+  `manifest.toml` (`id`, `title`, `params = ["folder", "room"]`); `parse_declarations` checks them and drops bad tables.
+- **Shortcuts**: `When Focus Turns On` and `When Focus Turns Off` (`springboard/src/shortcuts.rs`, `Automation::FocusOn`,
+  `Automation::FocusOff`, `Event::FocusChanged`). Nothing calls `shortcuts::due` in the shell yet, so they do not run.
+- **Control Centre**: the Focus tile still toggles Do Not Disturb; its subtitle names the mode on.
+- **Tests**: `notify/modes.rs` (schedule across midnight and weekdays, weekdays from the Unix epoch, manual over schedule,
+  delivery decisions, custom modes, the file format, junk, persistence, and the `Notify` clock tests), `shell/focus.rs`
+  (`a_mode_chosen_by_hand_survives_a_restart_and_the_settings_switch_follows_do_not_disturb_only`),
+  `services/focus_filter.rs` (`a_work_focus_hands_the_apps_its_work_values_and_the_change_is_pushed`,
+  `filter_declarations_come_from_the_manifest_and_bad_tables_are_dropped`), `tests/parity_app-shortcuts.rs` (Focus
+  automations). Not run: the lead runs them.
+- **Not built**: the menu bar Focus glyph; the Control Centre list of modes; a Settings page for the modes, their people
+  and the per-mode filter values; the sender on a notification (so allowed people never match on device); the
+  time-sensitive level from the app protocol; the Shortcuts dispatcher that raises `FocusChanged`.
+- **Not verified on Midget**: all of the above.
 
 ### User notifications model (sprint 9)
 
@@ -1438,7 +1469,7 @@ Gaps (Apple behaviour not matched yet):
 - Present in the SDK but not wired to the shell: `Intent::foreground` and `Intent::authentication` (checked by
   `Intent::may_run` and `check_result`; the shell does not gate runs on the session), `IntentResult::with_snippet` (the
   shell does not draw the snippet), `donation` and `donations` (stores; Search does not read them), `focus_filter`
-  (client of the shell's Do Not Disturb service only; there is no `SetFocusFilterIntent` model).
+  (client of the shell's Focus service; the Focus name is the active Focus mode's name; there is no `SetFocusFilterIntent` model).
 - Parameter prompts: `IntentForm` is only a typed data model; `controls::intent_resolve` plans ask, choose, confirm and
   block (`Plan`), but the control socket replies with a plain error and the shell does not draw a form or prompt for a value.
 - Not started: intents driving widgets, controls and Live Activities.

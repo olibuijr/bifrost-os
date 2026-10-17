@@ -12,6 +12,7 @@
 //! Event to the app that owns the contexts: `changed` `{focus: string|null}` when the Focus that is on changes. The first
 //! tick only records the state, so nothing is sent at start-up.
 use super::{Event, Shell, SystemService};
+use crate::shell::apphost::unquote;
 use bifrost_core::json::Json;
 use bifrost_ui::focus_filter::{AppContext, FocusFilters};
 
@@ -30,13 +31,9 @@ pub struct FocusFilterService {
     last: Option<Option<String>>,
 }
 
-/// The Focus that is on now: Do Not Disturb when it is on.
-fn active_focus(shell: &Shell) -> Option<&'static str> {
-    if shell.dnd() {
-        Some(DO_NOT_DISTURB)
-    } else {
-        None
-    }
+/// The Focus that is on now: the name of the Focus mode on (Do Not Disturb, Work, ...), or None when no Focus is on.
+fn active_focus(shell: &Shell) -> Option<String> {
+    shell.notify.active_mode().map(|mode| mode.name)
 }
 
 /// The `focus` name in `params`; it must not be empty.
@@ -109,7 +106,8 @@ impl SystemService for FocusFilterService {
             "current" => {
                 // a copy, so reading never creates an entry for an app that has stored nothing
                 let mut view = self.apps.iter().find(|(a, _)| a == app_id).map(|(_, f)| f.clone()).unwrap_or_default();
-                view.activate(active_focus(shell));
+                let active = active_focus(shell);
+                view.activate(active.as_deref());
                 let focus = view.active().map_or(Json::Null, |f| Json::Str(f.to_string()));
                 let values = context_json(view.current());
                 Ok(Json::Obj(vec![("focus".to_string(), focus), ("values".to_string(), values)]))
@@ -121,24 +119,104 @@ impl SystemService for FocusFilterService {
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
         let active = active_focus(shell);
         for (_, filters) in self.apps.iter_mut() {
-            filters.activate(active);
+            filters.activate(active.as_deref());
         }
-        let before = self.last.replace(active.map(str::to_string));
+        let before = self.last.replace(active.clone());
         match before {
-            Some(prev) if prev.as_deref() != active => self
+            Some(prev) if prev != active => self
                 .apps
                 .iter()
-                .map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active) })
+                .map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active.as_deref()) })
                 .collect(),
             _ => Vec::new(),
         }
     }
 }
 
+/// One `[[focus_filter]]` table of a manifest, already checked: an id, a title, and the value keys the app keeps for
+/// each Focus (its `set_context` values). A Settings page shows one row of fields per declaration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FilterDeclaration {
+    pub id: String,
+    pub title: String,
+    /// the value keys, in declaration order
+    pub params: Vec<String>,
+}
+
+/// A word the manifest may hold as an id or a value key: letters, digits, dashes and underscores, up to 40 characters.
+fn safe_word(text: &str) -> bool {
+    !text.is_empty() && text.len() <= 40 && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Reads the `[[focus_filter]]` tables of a manifest:
+///
+/// ```toml
+/// [[focus_filter]]
+/// id = "notebook"
+/// title = "Notebook"
+/// params = ["folder", "room"]
+/// ```
+///
+/// A table with an unsafe id or key, a blank title or no keys is dropped, so one bad table does not hide the others.
+pub fn parse_declarations(text: &str) -> Vec<FilterDeclaration> {
+    #[derive(Default)]
+    struct Draft {
+        id: String,
+        title: String,
+        params: String,
+    }
+    let mut drafts: Vec<Draft> = Vec::new();
+    let mut in_table = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && !line.contains('=') {
+            in_table = line == "[[focus_filter]]";
+            if in_table {
+                drafts.push(Draft::default());
+            }
+            continue;
+        }
+        if !in_table {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some(draft) = drafts.last_mut() else { continue };
+        match key.trim() {
+            "id" => draft.id = unquote(value),
+            "title" => draft.title = unquote(value),
+            "params" => draft.params = value.trim().to_string(),
+            _ => {}
+        }
+    }
+    drafts
+        .into_iter()
+        .filter_map(|d| {
+            let inner = d.params.trim().trim_start_matches('[').trim_end_matches(']');
+            let params: Vec<String> = inner.split(',').map(|p| unquote(p.trim())).filter(|p| !p.is_empty()).collect();
+            let checked = safe_word(&d.id) && !d.title.trim().is_empty() && !params.is_empty() && params.iter().all(|p| safe_word(p));
+            checked.then(|| FilterDeclaration { id: d.id, title: d.title.trim().to_string(), params })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::shell::tests::shell;
+
+    #[test]
+    fn filter_declarations_come_from_the_manifest_and_bad_tables_are_dropped() {
+        let text = "name = \"Notes\"\n[[focus_filter]]\nid = \"notebook\"\ntitle = \"Notebook\"\nparams = [\"folder\", \"room\"]\n\
+                    [[focus_filter]]\nid = \"bad id\"\ntitle = \"Spaces\"\nparams = [\"a\"]\n\
+                    [[focus_filter]]\nid = \"blank\"\ntitle = \" \"\nparams = [\"a\"]\n\
+                    [[focus_filter]]\nid = \"none\"\ntitle = \"No values\"\nparams = []\n\
+                    [[control]]\nkind = \"button\"\ntitle = \"Other\"\nintent = \"x\"\n";
+        let decls = parse_declarations(text);
+        assert_eq!(decls, vec![FilterDeclaration { id: "notebook".into(), title: "Notebook".into(), params: vec!["folder".into(), "room".into()] }]);
+    }
 
     fn body(text: &str) -> Json {
         bifrost_core::json::parse(text).expect("valid json")
@@ -223,6 +301,24 @@ mod tests {
         sh.set_dnd(false);
         let off = svc.tick(&mut sh, 4.0);
         assert_eq!(off.len(), 2);
+        assert_eq!(off[0].body.get("focus"), Some(&Json::Null));
+    }
+
+    #[test]
+    fn a_work_focus_hands_the_apps_its_work_values_and_the_change_is_pushed() {
+        let mut sh = shell();
+        let mut svc = FocusFilterService::default();
+        store(&mut svc, &mut sh, "app.a", r#"{"focus":"Work","values":{"folder":"Projects"}}"#).unwrap();
+        store(&mut svc, &mut sh, "app.a", r#"{"focus":"Do Not Disturb","values":{"mode":"Quiet"}}"#).unwrap();
+        assert!(sh.set_focus_mode(Some("work")));
+        assert!(svc.tick(&mut sh, 0.0).is_empty(), "the first tick records Work");
+        let reply = svc.call(&mut sh, "app.a", "current", &Json::Null, 0.0).unwrap();
+        assert_eq!(reply.str_field("focus").as_deref(), Some("Work"), "the mode's name is the Focus name");
+        let values = reply.get("values").expect("values");
+        assert_eq!(values.str_field("folder").as_deref(), Some("Projects"));
+        assert!(sh.set_focus_mode(None));
+        let off = svc.tick(&mut sh, 1.0);
+        assert_eq!(off.len(), 1);
         assert_eq!(off[0].body.get("focus"), Some(&Json::Null));
     }
 }

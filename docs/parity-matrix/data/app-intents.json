@@ -110,7 +110,7 @@
       "apple": "SetFocusFilterIntent, appContext, suggestedFocusFilters(for:)",
       "bifrost": "springboard/ui/src/focus_filter.rs; wired: springboard/ui/src/focus_filter.rs, springboard/src/shell/services/focus_filter.rs, springboard/sdk/src/focus_filter.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model of per-Focus app contexts, the active context and change generations, tested headless in springboard/ui/tests/parity_sdk-tests-13.rs as well as in the module's unit tests. Not wired into apps or the shell, not yet tested on the VM or Midget. Focus is a notification switch; apps cannot declare filter intents Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Round (focus-modes): the shell's Focus name is now the active Focus mode's name (Do Not Disturb, Work, Personal, Sleep or a custom one), so apps get the values stored for that mode through the existing changed event; manifest [[focus_filter]] tables (id, title, params) are parsed and checked by parse_declarations in springboard/src/shell/services/focus_filter.rs and tested headless. Not built: the Settings page that sets the values per mode from the declarations, and any app-side SDK declaration path. Not verified on Midget."
     },
     {
       "feature": "Widgets, controls and Live Activities",
@@ -142,7 +142,7 @@
     "Parameter prompts and disambiguation in Spotlight (needsValueError, requestDisambiguation, requestConfirmation)",
     "IndexedEntity: indexing App Intents entities in Spotlight, and hideInSpotlight",
     "Intent donations and relevance (IntentDonationManager, RelevantIntentManager)",
-    "Focus filters (SetFocusFilterIntent); the shell only has Do Not Disturb",
+    "Focus filters (SetFocusFilterIntent): manifest [[focus_filter]] declarations are read, but Settings does not yet set the values per Focus mode",
     "Widgets, controls and Live Activities driven by intents",
     "Shortcuts app does not list or run intents yet (docs/bifrost-ui.md, App Intents gaps)"
   ]

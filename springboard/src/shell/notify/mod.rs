@@ -20,6 +20,7 @@ pub mod banner;
 pub mod center;
 pub mod list;
 pub mod lockwidgets;
+pub mod modes;
 pub mod permission;
 pub mod schedule;
 pub mod store;
@@ -131,10 +132,12 @@ pub struct Notify {
     pub(in crate::shell) extra: Vec<(AppId, usize)>,
     /// set after the first `set_info`, so the boot state posts nothing
     booted: bool,
-    /// Do Not Disturb as the user set it
-    dnd: bool,
-    /// the schedule's window covers now
-    sched_on: bool,
+    /// the Focus modes (`modes`) and the one on by hand; Do Not Disturb's apps and schedule are read from the store
+    pub(in crate::shell) modes: modes::Modes,
+    /// where `modes` is saved (`focus_modes.ini`); None for a shell that never loaded its data directory
+    modes_path: Option<std::path::PathBuf>,
+    /// the scheduled mode whose window covers now
+    sched_mode: Option<String>,
     /// Focus was switched off inside the window: it stays off until the window ends
     sched_skip: bool,
     /// first-time permission alerts waiting for their turn: the app and the name the alert shows
@@ -166,8 +169,9 @@ impl Default for Notify {
             badges: Vec::new(),
             extra: Vec::new(),
             booted: false,
-            dnd: false,
-            sched_on: false,
+            modes: modes::Modes::builtin(),
+            modes_path: None,
+            sched_mode: None,
             sched_skip: false,
             ask_queue: Vec::new(),
             ask: None,
@@ -176,36 +180,93 @@ impl Default for Notify {
 }
 
 impl Notify {
-    /// Focus affects delivery only; notification history and badges are kept.
+    /// Focus affects delivery only; notification history and badges are kept. Do Not Disturb on or off.
     pub fn set_dnd(&mut self, on: bool) {
-        if on == self.dnd {
-            return;
+        self.set_mode(on.then_some(modes::DND_ID));
+    }
+
+    /// Switches the Focus mode `id` on by hand, or Focus off (None). Returns false for a mode that does not exist.
+    pub fn set_mode(&mut self, id: Option<&str>) -> bool {
+        if id.is_none() {
+            // switching Focus off inside a schedule's window holds until the window ends
+            self.end_scheduled();
         }
-        self.dnd = on;
-        if on {
+        if self.modes.manual.as_deref() == id {
+            return true;
+        }
+        if !self.modes.set_manual(id) {
+            return false;
+        }
+        if id.is_some() {
             self.sched_skip = false;
             self.silence();
         }
+        true
     }
 
-    /// Focus is on: switched on by hand, or the schedule's window is open
-    /// and nobody switched it off since it opened.
+    /// Focus is on: a mode switched on by hand, or a schedule's window is open
+    /// and nobody switched Focus off since it opened.
     pub fn dnd(&self) -> bool {
-        self.dnd || (self.sched_on && !self.sched_skip)
+        self.active_mode().is_some()
     }
 
-    /// The user turned Focus off while the schedule had it on: it stays off
+    /// The Focus mode on now, if any. A manual choice wins over the schedule.
+    pub fn active_mode(&self) -> Option<modes::FocusMode> {
+        if let Some(mode) = self.modes.manual_mode() {
+            return Some(self.as_stored(mode));
+        }
+        if self.sched_skip {
+            return None;
+        }
+        let id = self.sched_mode.as_deref()?;
+        self.modes.get(id).map(|mode| self.as_stored(mode))
+    }
+
+    /// A mode as it applies now. Do Not Disturb's allowed apps and schedule live in the notification store
+    /// (`notifications.ini`); every other mode keeps its own in `focus_modes.ini`.
+    fn as_stored(&self, mode: &modes::FocusMode) -> modes::FocusMode {
+        let mut m = mode.clone();
+        if m.id == modes::DND_ID {
+            m.apps = apps().iter().filter(|a| self.store.is_focus_allowed(a.id)).map(|a| store::app_key(a.id).to_string()).collect();
+            let s = self.store.schedule();
+            m.schedule = s.enabled.then_some(modes::ModeSchedule { days: modes::ALL_DAYS, start: s.start, end: s.end });
+        }
+        m
+    }
+
+    /// The user turned Focus off while a schedule had it on: it stays off
     /// until the window ends.
     pub fn end_scheduled(&mut self) {
-        if self.sched_on {
+        if self.sched_mode.is_some() {
             self.sched_skip = true;
         }
     }
 
-    /// Whether a notification of `app` may show a banner or wake the screen: not muted, and either Focus is off or
-    /// the app is allowed through Focus.
+    /// Whether a notification of `app` may show a banner or wake the screen: not muted, and the Focus mode on now
+    /// lets it through.
     pub fn delivers(&self, app: AppId) -> bool {
-        !self.store.is_muted(app) && (!self.dnd() || self.store.is_focus_allowed(app))
+        !self.store.is_muted(app) && self.shows(self.active_mode().as_ref(), app)
+    }
+
+    /// Whether a notification of `app` shows under `mode` (no mode shows everything).
+    fn shows(&self, mode: Option<&modes::FocusMode>, app: AppId) -> bool {
+        modes::decide(mode, store::app_key(app), "", false) == modes::Delivery::Show
+    }
+
+    /// Saves the Focus modes to their file, when the shell has a data directory.
+    pub fn save_modes(&self) {
+        if let Some(path) = &self.modes_path {
+            if let Err(e) = self.modes.save(path) {
+                eprintln!("springboard: focus_modes.ini: {e}");
+            }
+        }
+    }
+
+    /// Reads the Focus modes saved next to the notification store.
+    pub(in crate::shell) fn load_modes(&mut self, notifications: &str) {
+        let path = std::path::Path::new(notifications).with_file_name("focus_modes.ini");
+        self.modes = modes::Modes::load(&path);
+        self.modes_path = Some(path);
     }
 
     /// The person answered the first-time alert for `app`: the answer is stored (the app is not asked again) and the
@@ -217,7 +278,8 @@ impl Notify {
 
     /// Drops what Focus silences: the banner and a pending wake. A banner of an app allowed through Focus stays.
     fn silence(&mut self) {
-        if self.banner_card.as_ref().is_some_and(|c| self.store.is_focus_allowed(c.app)) {
+        let mode = self.active_mode();
+        if self.banner_card.as_ref().is_some_and(|c| self.shows(mode.as_ref(), c.app)) {
             return;
         }
         self.banner = None;
@@ -227,13 +289,14 @@ impl Notify {
 
     /// Re-reads the schedule against the clock; true when the window opened or closed.
     fn refresh_schedule(&mut self) -> bool {
-        let minute = Schedule::minute_of_day(self.now(), self.wall.offset);
-        let on = self.store.schedule().active(minute);
-        if on == self.sched_on {
+        let (unix, offset) = (self.now(), self.wall.offset);
+        let (day, minute) = (modes::weekday_of(unix, offset), Schedule::minute_of_day(unix, offset));
+        let on = self.modes.list.iter().map(|m| self.as_stored(m)).find(|m| m.schedule.as_ref().is_some_and(|s| s.covers(day, minute))).map(|m| m.id);
+        if on == self.sched_mode {
             return false;
         }
-        self.sched_on = on;
-        if !on {
+        self.sched_mode = on;
+        if self.sched_mode.is_none() {
             self.sched_skip = false;
         } else if self.dnd() {
             self.silence();
@@ -602,6 +665,7 @@ impl Shell {
     /// Loads the persisted notifications from `path` and saves there from now on.
     pub(super) fn notify_load(&mut self, path: &str) {
         self.notify.store = Store::load(path);
+        self.notify.load_modes(path);
         self.store_changed();
     }
 

@@ -1553,7 +1553,10 @@ impl Shell {
         }
         self.rebuild_dock(false);
         let o = self.options();
-        self.notify.set_dnd(o.dnd);
+        // Focus on in the previous session stays on; another mode saved by hand is kept as it is
+        if o.dnd || self.notify.modes.manual.as_deref() == Some(notify::modes::DND_ID) {
+            self.notify.set_dnd(o.dnd);
+        }
         self.sync_status_flags(&o);
         if self.assistive_touch.set_enabled(o.assistive_touch) {
             self.dirty = true;

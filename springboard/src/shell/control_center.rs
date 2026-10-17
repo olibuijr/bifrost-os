@@ -2183,7 +2183,8 @@ impl Shell {
                             let on = self.info.bt.on();
                             (on, "Bluetooth", if on { "On" } else { "Off" }.into())
                         }
-                        _ => (self.dnd(), "Focus", if self.dnd() { "Do Not Disturb" } else { "Off" }.into()),
+                        // the subtitle names the Focus mode that is on
+                        _ => (self.dnd(), "Focus", self.notify.active_mode().map_or_else(|| "Off".to_string(), |m| m.name)),
                     };
                     let d = ui.pt(DK_DISC_PT);
                     let (dx, dy) = (x + (h - d) / 2.0, y + (h - d) / 2.0);
