@@ -1432,9 +1432,10 @@ mod tests {
         let inline = &ta.lines[1];
         assert_eq!(inline.maths.len(), 1, "one inline formula on the line");
         let (at, lay) = &inline.maths[0];
-        assert_eq!(*at, 4, "the formula starts at the dollar");
-        assert!((inline.adv[4] - lay.width).abs() < 0.01, "the dollar takes the formula width");
-        assert!(inline.adv[5..8].iter().all(|a| *a == 0.0), "the rest of its source takes no width");
+        // the opening dollar is a marker (drawn as source), so the formula's source starts after it
+        assert_eq!(*at, 5, "the formula starts after the opening dollar");
+        assert!((inline.adv[5] - lay.width).abs() < 0.01, "the formula takes its width on its first char");
+        assert!(inline.adv[6..8].iter().all(|a| *a == 0.0), "the rest of its source takes no width");
         let display = &ta.lines[2];
         assert!(display.display.is_some(), "a $$ paragraph is display math");
         assert!(display.h >= display.display.as_ref().map_or(0.0, |d| d.ascent + d.depth));
