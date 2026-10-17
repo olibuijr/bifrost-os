@@ -1537,9 +1537,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/ui/src/credential_acl.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Built 2026-10-17: the credential binding (owner-only grants, presence constraint on every read, stored form) in bifrost_ui::credential_acl, with tests. Open: the keychain service does not yet store or check the binding, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1558,9 +1558,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "bifrost": "springboard/ui/src/recovery_key.rs",
    "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Built 2026-10-17: the reset decision (recovery key with salted digest, five tries, administrator with verified password) in bifrost_ui::recovery_key, with tests. Open: no login-screen step draws the reset, and the password change is not yet called through the login backend, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
