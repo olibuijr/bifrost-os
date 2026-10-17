@@ -2078,7 +2078,16 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the helper service process that runs the asset downloads for the reference system.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    }
+   ],
+   "ready_note": "Staging model (size and SHA-256 check, .part write, rename) and its tests are in bifrost-app background_download::tests. The helper service process is not mirrored: the caller does the transfer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsHelperFetching.framework",
@@ -2099,7 +2108,16 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the fetching service process of the reference helper.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    }
+   ],
+   "ready_note": "Staging model (size and SHA-256 check, .part write, rename) and its tests are in bifrost-app background_download::tests. The helper service process is not mirrored: the caller does the transfer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsRelay.framework",
@@ -2120,7 +2138,16 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the relay service process that hands asset state between the reference system and apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    }
+   ],
+   "ready_note": "Staging model (size and SHA-256 check, .part write, rename) and its tests are in bifrost-app background_download::tests. The helper service process is not mirrored: the caller does the transfer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsXPC.framework",
@@ -2141,7 +2168,16 @@
    "status": "partial",
    "note": "Background downloads for apps are in the SDK and the UI model. Not mirrored: the XPC interface of the reference asset service, because BifrOSt uses its own IPC.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    }
+   ],
+   "ready_note": "Staging model (size and SHA-256 check, .part write, rename) and its tests are in bifrost-app background_download::tests. The helper service process is not mirrored: the caller does the transfer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedClient.framework",
