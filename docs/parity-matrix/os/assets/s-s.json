@@ -475,7 +475,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -496,7 +496,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper. Partial.",
    "rea": [],
    "method": "assessed"
   },
