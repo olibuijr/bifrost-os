@@ -1105,6 +1105,11 @@ impl Window {
         self.loc_calls.push((id, LocCall::Authorize));
     }
 
+    /// The window is closing: it stops the live positions it was following.
+    pub fn leave(&mut self, ctx: &Ctx) {
+        self.track_location(ctx, false);
+    }
+
     /// Starts or stops the live positions that guidance follows.
     fn track_location(&mut self, ctx: &Ctx, on: bool) {
         self.tracking = on;
