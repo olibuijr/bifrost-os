@@ -44,6 +44,45 @@ impl QuestionTopic for SignificantAppUpdateTopic {
     }
 }
 
+/// Permission for one app to use the device location, asked the first time the app requests it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocationTopic {
+    pub app: String,
+}
+
+impl QuestionTopic for LocationTopic {
+    fn topic_name(&self) -> &'static str {
+        "location"
+    }
+}
+
+/// The choice that lets the app use the location while it is open. Any other choice keeps the location closed.
+pub const LOCATION_ALLOW_WHILE_USING: &str = "allow-while-using";
+/// The choice that keeps the location closed for the app. It is the default, so nobody grants it by accident.
+pub const LOCATION_DONT_ALLOW: &str = "dont-allow";
+
+impl PermissionQuestion<LocationTopic> {
+    /// A location question for one app. The app name is non-blank, at most [`MAX_HANDLE_LEN`] bytes, with no control
+    /// characters. The choices are "allow while using" and "don't allow", and "don't allow" is the default.
+    pub fn location(id: u64, app: &str, expires_at: Option<u64>) -> Result<Self, AskError> {
+        if app.trim().is_empty() || app.len() > MAX_HANDLE_LEN || app.chars().any(|c| c.is_control()) {
+            return Err(AskError::InvalidQuestion);
+        }
+        let topic = LocationTopic { app: app.to_string() };
+        PermissionQuestion::for_topic(topic, id, expires_at)
+            .with_choices(&[LOCATION_ALLOW_WHILE_USING, LOCATION_DONT_ALLOW], 1)
+    }
+
+    pub fn app(&self) -> &str {
+        &self.topic.app
+    }
+}
+
+/// True when a location answer lets the app read the location.
+pub fn grants_location(choice: &str) -> bool {
+    choice == LOCATION_ALLOW_WHILE_USING
+}
+
 /// Why a question could not be sent, or why an answer was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AskError {
@@ -457,6 +496,55 @@ mod tests {
 
     fn h(s: &str) -> Handle {
         Handle::new(s).unwrap()
+    }
+
+    #[test]
+    fn location_question_names_the_app_and_defaults_to_dont_allow() {
+        let q = PermissionQuestion::location(7, "Maps", None).unwrap();
+        assert_eq!(q.app(), "Maps");
+        assert_eq!(q.topic().topic_name(), "location");
+        assert_eq!(q.choices(), &[LOCATION_ALLOW_WHILE_USING.to_string(), LOCATION_DONT_ALLOW.to_string()]);
+        assert_eq!(q.default_choice(), LOCATION_DONT_ALLOW);
+    }
+
+    #[test]
+    fn location_question_refuses_a_blank_long_or_control_app_name() {
+        assert_eq!(PermissionQuestion::location(1, "  ", None).unwrap_err(), AskError::InvalidQuestion);
+        assert_eq!(PermissionQuestion::location(1, "Ma\nps", None).unwrap_err(), AskError::InvalidQuestion);
+        let long = "a".repeat(MAX_HANDLE_LEN + 1);
+        assert_eq!(PermissionQuestion::location(1, &long, None).unwrap_err(), AskError::InvalidQuestion);
+    }
+
+    #[test]
+    fn only_allow_while_using_grants_the_location() {
+        assert!(grants_location(LOCATION_ALLOW_WHILE_USING));
+        assert!(!grants_location(LOCATION_DONT_ALLOW));
+        assert!(!grants_location("approve"), "a communication choice is not a location grant");
+    }
+
+    #[test]
+    fn a_location_answer_is_read_back_under_the_location_topic() {
+        let mut center = AskCenter::new();
+        let q = PermissionQuestion::location(9, "Weather", Some(100)).unwrap();
+        center.ask(&q, 10).unwrap();
+        assert!(center.is_pending(9));
+        assert_eq!(center.answer(9, "approve", 11).unwrap_err(), AskError::InvalidQuestion);
+        assert!(center.is_pending(9), "a choice the question does not offer keeps it waiting");
+        let r = center.answer(9, LOCATION_ALLOW_WHILE_USING, 12).unwrap();
+        assert_eq!(r.topic, "location");
+        let taken = center.take_responses("location");
+        assert_eq!(taken.len(), 1);
+        assert!(grants_location(&taken[0].choice));
+    }
+
+    #[test]
+    fn a_location_question_expires_like_the_others() {
+        let mut center = AskCenter::new();
+        let q = PermissionQuestion::location(4, "Weather", Some(50)).unwrap();
+        assert_eq!(center.ask(&q, 50).unwrap_err(), AskError::InvalidQuestion);
+        center.ask(&q, 40).unwrap();
+        assert_eq!(center.expire(50), 1);
+        assert_eq!(center.pending_count(), 0);
     }
 
     #[test]
