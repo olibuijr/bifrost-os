@@ -18,6 +18,14 @@
 //!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
 //!
+//! - `donate {name?, handle, value}` (any app) offers a person the app saw: `handle` is `email` or `phone`. The shell keeps
+//!   it in a sidecar (`contactdonations`) with the app as its source, and returns `{donated}`: false for an address the
+//!   person dismissed before. A value that is no email address or phone number is an error.
+//! - `suggestions {limit?}` returns `{suggestions: [{key, handle, value, name, sources, count}]}`, the donated people not
+//!   yet in the book, best first. `feedback {key, answer}` (`accepted` or `dismissed`) records the person's answer; an
+//!   accepted one returns `{contact: {given_name, family_name, email, phone}}` for the book to save, a dismissed one is
+//!   never offered again. Only the Contacts app (the owner of the book) may call these two.
+//!
 //! The first phone and email come from the contacts file (labeled by its label row); more phones and emails, URLs, the
 //! birthday and dates come from the sidecar (`contactextras`). A contact without a sidecar entry reads as before, with
 //! one-element lists.
@@ -27,6 +35,7 @@
 use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
 use crate::shell::contactchanges;
+use crate::shell::contactdonations;
 use crate::shell::contactgroups;
 use crate::shell::contactpick;
 use crate::shell::contactphotos;
@@ -35,6 +44,8 @@ use bifrost_core::json::Json;
 use bifrost_ui::contact_groups::Groups;
 use bifrost_ui::contact_vcard;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
+use bifrost_ui::contact_book::{Contact as BookContact, LabeledValue as BookValue};
+use bifrost_ui::contact_donation::{DonationStore, Feedback, Handle, Refusal};
 use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -460,6 +471,98 @@ pub fn groups_answer(
 
 pub struct Contacts;
 
+/// The apps that own the book: only they see the donated people and answer for them.
+pub fn owns_book(app_id: &str) -> bool {
+    matches!(app_id, "is.olibuijr.contacts" | "is.olibuijr.contacts.desktop")
+}
+
+/// The book as the donation model needs it: the email addresses and phone numbers the store and its sidecar hold, so a
+/// person already in the book is never suggested.
+pub fn handles_of(contacts: &[Contact], extras: &Book) -> Vec<BookContact> {
+    contacts
+        .iter()
+        .map(|c| {
+            let more = extras.get(&c.id).cloned().unwrap_or_default();
+            let mut book = BookContact { identifier: c.id.to_string(), ..BookContact::default() };
+            for email in std::iter::once(c.email.as_str()).chain(more.emails.iter().map(|e| e.value.as_str())) {
+                if !email.trim().is_empty() {
+                    book.email_addresses.push(BookValue::new(None, email.to_string()));
+                }
+            }
+            for phone in std::iter::once(c.phone.as_str()).chain(more.phones.iter().map(|p| p.value.as_str())) {
+                if !phone.trim().is_empty() {
+                    book.phone_numbers.push(BookValue::new(None, phone.to_string()));
+                }
+            }
+            book
+        })
+        .collect()
+}
+
+/// Answers `donate`, `suggestions` and `feedback` over `store`. `book` is the people already in the address book and
+/// `now` the clock in seconds. The flag says whether the store changed and must be saved.
+pub fn donations_answer(app_id: &str, method: &str, params: &Json, store: &mut DonationStore, book: &[BookContact], now: u64) -> Result<(Json, bool), String> {
+    let text = |name: &str| params.get(name).and_then(Json::as_str).unwrap_or("");
+    match method {
+        "donate" => {
+            let handle = match text("handle") {
+                "email" => Handle::Email,
+                "phone" => Handle::Phone,
+                other => return Err(format!("donate needs handle email or phone, not {other:?}")),
+            };
+            match store.donate(app_id, text("name"), handle, text("value"), now) {
+                Ok(()) => Ok((Json::Obj(vec![("donated".into(), Json::Bool(true))]), true)),
+                Err(Refusal::Blocked) => Ok((Json::Obj(vec![("donated".into(), Json::Bool(false))]), false)),
+                Err(Refusal::BadField) => Err("donate needs a value and a name of at most 200 bytes each".into()),
+                Err(Refusal::BadHandle) => Err("the value is not an email address or phone number".into()),
+            }
+        }
+        "suggestions" | "feedback" if !owns_book(app_id) => Err("only the Contacts app sees suggested contacts".into()),
+        "suggestions" => {
+            let limit = params.get("limit").and_then(Json::as_u64).map_or(20, |n| n.min(100) as usize);
+            let rows = store
+                .suggestions(book, limit)
+                .into_iter()
+                .map(|d| {
+                    Json::Obj(vec![
+                        ("key".into(), Json::Str(d.key.clone())),
+                        ("handle".into(), Json::Str(if d.handle == Handle::Email { "email" } else { "phone" }.into())),
+                        ("value".into(), Json::Str(d.display.clone())),
+                        ("name".into(), Json::Str(d.name.clone())),
+                        ("sources".into(), Json::Num(d.sources.len() as f64)),
+                        ("count".into(), Json::Num(f64::from(d.count))),
+                    ])
+                })
+                .collect();
+            Ok((Json::Obj(vec![("suggestions".into(), Json::Arr(rows))]), false))
+        }
+        "feedback" => {
+            let key = text("key");
+            let answer = match text("answer") {
+                "accepted" => Feedback::Accepted,
+                "dismissed" => Feedback::Dismissed,
+                other => return Err(format!("feedback answer is accepted or dismissed, not {other:?}")),
+            };
+            let contact = store.feedback(key, answer);
+            match (answer, contact) {
+                (Feedback::Accepted, Some(c)) => {
+                    let first = |list: &[BookValue<String>]| list.first().map_or(Json::Null, |v| Json::Str(v.value.clone()));
+                    let reply = Json::Obj(vec![
+                        ("given_name".into(), Json::Str(c.given_name.clone())),
+                        ("family_name".into(), Json::Str(c.family_name.clone())),
+                        ("email".into(), first(&c.email_addresses)),
+                        ("phone".into(), first(&c.phone_numbers)),
+                    ]);
+                    Ok((Json::Obj(vec![("contact".into(), reply)]), true))
+                }
+                (Feedback::Accepted, None) => Err("no such suggestion".into()),
+                (Feedback::Dismissed, _) => Ok((Json::Obj(Vec::new()), true)),
+            }
+        }
+        _ => Err(format!("contacts has no method {method}")),
+    }
+}
+
 impl SystemService for Contacts {
     fn name(&self) -> &'static str {
         "contacts"
@@ -616,6 +719,18 @@ impl SystemService for Contacts {
                     ("changes".into(), Json::Arr(rows)),
                 ]))
             }
+            "donate" | "suggestions" | "feedback" => {
+                let donations_path = contactdonations::path_for(&path);
+                let mut store = contactdonations::load(&donations_path);
+                // the owner's suggestions leave out everyone already in the book
+                let book = if method == "donate" || !owns_book(app_id) { Vec::new() } else { handles_of(&load()?, &contactextras::load(&contactextras::path_for(&path))) };
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let (reply, changed) = donations_answer(app_id, method, params, &mut store, &book, now)?;
+                if changed {
+                    contactdonations::save(&donations_path, &store).map_err(|e| e.to_string())?;
+                }
+                Ok(reply)
+            }
             "groups" | "group_members" | "group_add" | "group_remove" | "group_add_member" | "group_remove_member" => {
                 let mut groups: Groups = contactgroups::load(&groups_path);
                 let before = groups.clone();
@@ -660,6 +775,73 @@ mod tests {
             fields.push(("query".into(), Json::Str(query.into())));
         }
         params
+    }
+
+    const OWNER: &str = "is.olibuijr.contacts.desktop";
+
+    fn donate(store: &mut DonationStore, app: &str, name: &str, handle: &str, value: &str) -> Result<(Json, bool), String> {
+        let params = Json::Obj(vec![
+            ("name".into(), Json::Str(name.into())),
+            ("handle".into(), Json::Str(handle.into())),
+            ("value".into(), Json::Str(value.into())),
+        ]);
+        donations_answer(app, "donate", &params, store, &[], 100)
+    }
+
+    fn suggested(store: &mut DonationStore, book: &[BookContact]) -> Vec<String> {
+        let (reply, _) = donations_answer(OWNER, "suggestions", &Json::Null, store, book, 100).unwrap();
+        reply.get("suggestions").and_then(Json::as_array).unwrap().iter().filter_map(|r| r.get("key").and_then(Json::as_str)).map(str::to_string).collect()
+    }
+
+    fn feedback(store: &mut DonationStore, key: &str, answer: &str) -> Result<(Json, bool), String> {
+        let params = Json::Obj(vec![("key".into(), Json::Str(key.into())), ("answer".into(), Json::Str(answer.into()))]);
+        donations_answer(OWNER, "feedback", &params, store, &[], 100)
+    }
+
+    #[test]
+    fn any_app_donates_but_only_the_contacts_app_sees_the_suggestions() {
+        let mut store = DonationStore::new();
+        let (reply, changed) = donate(&mut store, "is.olibuijr.mail.desktop", "Ada Lovelace", "email", "Ada@Example.com").unwrap();
+        assert_eq!(reply.get("donated"), Some(&Json::Bool(true)));
+        assert!(changed);
+        assert!(donate(&mut store, "is.olibuijr.mail.desktop", "X", "email", "not-an-address").is_err());
+        assert!(donate(&mut store, "is.olibuijr.mail.desktop", "X", "fax", "1").is_err());
+        for method in ["suggestions", "feedback"] {
+            assert!(donations_answer("is.olibuijr.mail.desktop", method, &Json::Null, &mut store, &[], 100).is_err(), "{method} is the owner's");
+        }
+        assert_eq!(suggested(&mut store, &[]), vec!["ada@example.com"]);
+    }
+
+    #[test]
+    fn a_person_in_the_book_is_not_suggested() {
+        let mut store = DonationStore::new();
+        donate(&mut store, "mail", "Ada Lovelace", "email", "ADA@example.com").unwrap();
+        donate(&mut store, "mail", "Bob Stone", "email", "bob@example.com").unwrap();
+        donate(&mut store, "mail", "Alan", "phone", "+354 555 0300").unwrap();
+        donate(&mut store, "mail", "Cy", "phone", "+354 555 0999").unwrap();
+        let known = handles_of(&book(), &Book::new());
+        assert_eq!(suggested(&mut store, &known), vec!["+3545550999", "bob@example.com"]);
+    }
+
+    #[test]
+    fn accepting_returns_the_contact_to_save_and_dismissing_blocks_the_address() {
+        let mut store = DonationStore::new();
+        donate(&mut store, "mail", "Ada Lovelace", "email", "ada@example.com").unwrap();
+        donate(&mut store, "mail", "Bob", "email", "bob@example.com").unwrap();
+        let (reply, changed) = feedback(&mut store, "ada@example.com", "accepted").unwrap();
+        assert!(changed);
+        let contact = reply.get("contact").unwrap();
+        assert_eq!(contact.get("given_name").and_then(Json::as_str), Some("Ada"));
+        assert_eq!(contact.get("family_name").and_then(Json::as_str), Some("Lovelace"));
+        assert_eq!(contact.get("email").and_then(Json::as_str), Some("ada@example.com"));
+        assert_eq!(contact.get("phone"), Some(&Json::Null));
+        assert!(feedback(&mut store, "nobody@example.com", "accepted").is_err());
+        feedback(&mut store, "bob@example.com", "dismissed").unwrap();
+        assert!(suggested(&mut store, &[]).is_empty(), "an answered suggestion is gone");
+        let (again, saved) = donate(&mut store, "mail", "Bob", "email", "bob@example.com").unwrap();
+        assert_eq!(again.get("donated"), Some(&Json::Bool(false)), "a dismissed address stays dismissed");
+        assert!(!saved);
+        assert!(feedback(&mut store, "bob@example.com", "maybe").is_err());
     }
 
     #[test]
