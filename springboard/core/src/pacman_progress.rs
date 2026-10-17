@@ -69,6 +69,17 @@ pub fn fraction(done: usize, expected: usize) -> f32 {
     (done as f32 / expected as f32).clamp(0.0, 1.0)
 }
 
+/// The progress of the latest transaction in `log` against the `expected` packages the sheet listed, from 0 to 1.
+pub fn progress(log: &str, expected: usize) -> f32 {
+    fraction(latest_steps(log).len(), expected)
+}
+
+/// Whether an install of `packages` waits for the person's confirmation. pacman runs each package's install script as
+/// it installs the package, so any install runs code the person has not seen: the sheet asks before the first one.
+pub fn confirmation_needed(packages: &[String]) -> bool {
+    !packages.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +127,19 @@ mod tests {
         assert_eq!(fraction(1, 4), 0.25);
         assert_eq!(fraction(9, 4), 1.0, "never past complete");
         assert_eq!(fraction(0, 0), 1.0);
+    }
+
+    #[test]
+    fn the_sheet_progress_counts_the_latest_transaction_against_the_expected_packages() {
+        let log = "[2026-10-01T12:00:00+0000] [ALPM] transaction started\n[2026-10-01T12:00:01+0000] [ALPM] installed a (1-1)\n[2026-10-01T12:00:02+0000] [ALPM] upgraded b (1-1 -> 1-2)\n";
+        assert_eq!(progress(log, 4), 0.5, "two of four packages so far");
+        assert_eq!(progress(log, 0), 1.0, "nothing expected is complete");
+        assert_eq!(progress("", 3), 0.0, "no transaction yet");
+    }
+
+    #[test]
+    fn an_install_waits_for_confirmation_before_its_scripts_run() {
+        assert!(confirmation_needed(&["a".to_string()]));
+        assert!(!confirmation_needed(&[]), "nothing to install, nothing to confirm");
     }
 }
