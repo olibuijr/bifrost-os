@@ -392,16 +392,11 @@ impl Magnifier {
     }
 }
 
-/// The Magnifier icon: a loupe on dark grey, drawn with software shapes.
+/// The Magnifier icon: a loupe on dark grey, a layered document (`res/icons/magnifier`) drawn by the icon renderer.
 pub fn icon(size: usize) -> Image {
-    let mut image = Image { w: size, h: size, px: vec![pack(28, 28, 30, 255); size * size] };
-    let f = size as f32;
-    let mut s = Surface { w: size, h: size, stride: size, px: &mut image.px, y0: 0 };
-    s.fill_rrect(f * 0.58, f * 0.62, f * 0.30, f * 0.09, f * 0.045, pack(200, 200, 204, 255));
-    s.fill_rrect(f * 0.20, f * 0.16, f * 0.52, f * 0.52, f * 0.26, pack(200, 200, 204, 255));
-    s.fill_rrect(f * 0.25, f * 0.21, f * 0.42, f * 0.42, f * 0.21, pack(28, 28, 30, 255));
-    s.fill_rrect(f * 0.29, f * 0.25, f * 0.34, f * 0.34, f * 0.17, pack(10, 132, 255, 255));
-    image
+    const JSON: &str = include_str!("../../res/icons/magnifier/icon.json");
+    bifrost_render::icon_doc::render_builtin(JSON, &[("lens.png", include_bytes!("../../res/icons/magnifier/lens.png"))], size)
+        .unwrap_or_else(|| Image { w: size, h: size, px: vec![pack(28, 28, 30, 255); size * size] })
 }
 
 #[cfg(test)]

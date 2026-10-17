@@ -9,6 +9,7 @@ pub mod gvar;
 pub mod emoji;
 pub mod symbols;
 pub mod sdf_glyphs;
+pub mod icon_doc;
 pub mod imgdec;
 pub mod image_tiles;
 pub mod ui;

@@ -77,19 +77,24 @@ pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::AppStore, name: "App Store", icon: "bifrost.appstore", icon_image: Some(store::icon) },
 ];
 /// The Terminal icon at `size` px: the reference icon when one is installed (personal-use reference assets,
-/// see `bifrost_core::ref_assets`), else BifrOSt's own artwork (`res/term-icon/icon.svg`, rendered to PNG).
+/// see `bifrost_core::ref_assets`), else BifrOSt's own layered icon (`res/icons/terminal`, the tile from
+/// `res/term-icon/icon.svg` with its prompt as a layer), drawn by the shared icon renderer.
 pub fn term_icon(size: usize) -> Image {
     use bifrost_core::ref_assets::{Kind, Resolver};
     let reference = Resolver::standard(None)
         .resolve(Kind::AppIcon, "Terminal")
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| crate::cg::imageio::decode(&b));
-    let img = reference.or_else(|| crate::cg::imageio::decode(TERM_ICON_PNG)).unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] });
-    if img.w == size && img.h == size { img } else { img.resized(size, size) }
+    if let Some(img) = reference {
+        return if img.w == size && img.h == size { img } else { img.resized(size, size) };
+    }
+    bifrost_render::icon_doc::render_builtin(TERM_ICON_JSON, &[("prompt.png", TERM_PROMPT_PNG)], size)
+        .unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] })
 }
 
-/// BifrOSt's Terminal artwork, 512 px (`res/term-icon/icon.svg` rendered with rsvg-convert).
-const TERM_ICON_PNG: &[u8] = include_bytes!("../../res/term-icon/icon-512.png");
+/// BifrOSt's Terminal icon document and its prompt layer (`res/icons/terminal`).
+const TERM_ICON_JSON: &str = include_str!("../../res/icons/terminal/icon.json");
+const TERM_PROMPT_PNG: &[u8] = include_bytes!("../../res/icons/terminal/prompt.png");
 
 /// Every app on the home screen: the built-in `APPS`, then the installed ones
 /// (`apphost::register` must run before the first call to include them).

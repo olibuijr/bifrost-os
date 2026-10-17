@@ -1374,8 +1374,10 @@ pub const CALCULATOR: &str = "is.olibuijr.calculator";
 pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
     let registered = installed();
     let app = registered.iter().find(|a| a.manifest.id == id)?;
-    let img = crate::cg::imageio::decode(&std::fs::read(app.icon_path()).ok()?)?;
-    Some(if img.w == size { img } else { img.resized(size, size) })
+    // the one icon path: the package's icon.json (layers) or its flat icon.png, drawn at `size` px
+    let (variant, _) = bifrost_render::icon_doc::current_style();
+    let icon = bifrost_render::icon_doc::app_icon(id, &app.icon_path(), size as f32, 1.0, variant)?;
+    Some((*icon).clone())
 }
 
 use super::{home_zone, keyboard::Out, AppId, Event, Screen, Shell};

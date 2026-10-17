@@ -1,0 +1,7 @@
+{
+  "format": 1,
+  "background": {"solid": "#3a3a3c"},
+  "layers": [
+    {"image": "camera.png", "x": 0.5, "y": 0.5, "scale": 1.0, "blend": "normal", "opacity": 1.0}
+  ]
+}

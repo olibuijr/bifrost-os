@@ -1,0 +1,7 @@
+{
+  "format": 1,
+  "background": {"solid": "#1c1c1e"},
+  "layers": [
+    {"image": "lens.png", "x": 0.5, "y": 0.5, "scale": 1.0, "blend": "normal", "opacity": 1.0}
+  ]
+}
