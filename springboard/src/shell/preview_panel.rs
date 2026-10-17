@@ -515,6 +515,11 @@ pub struct Panel {
     /// the body's height and the point scale of the last frame: the viewport a PDF scrolls in
     viewport: usize,
     scale: f32,
+    /// the card's size as the user dragged it (None for the default); kept while the panel is shown
+    size: Option<(f32, f32)>,
+    full: bool,
+    /// the edge a drag is resizing, from a press until the release
+    drag: Option<Grip>,
 }
 
 impl Panel {
@@ -537,6 +542,7 @@ impl Panel {
         self.dirty = true;
         self.body = Body::Empty;
         self.face = None;
+        self.drag = None;
         was
     }
 
@@ -606,6 +612,45 @@ impl Panel {
     /// Whether the open item is a PDF, which the arrow keys scroll.
     pub fn is_pdf(&self) -> bool {
         matches!(self.body, Body::Pdf(_))
+    }
+
+    /// The card's layout for the open item: the strip, the size the user dragged it to and full-screen.
+    pub fn layout(&self) -> Layout {
+        Layout { strip: self.has_strip(), size: self.size, full: self.full }
+    }
+
+    /// The full-screen button: the card fills the screen, or goes back to its size.
+    pub fn toggle_full(&mut self) {
+        self.full = !self.full;
+        self.drag = None;
+        self.dirty = true;
+    }
+
+    /// A press on an edge: the drag resizes the card from now on. A full-screen card has no edges to drag.
+    pub fn begin_drag(&mut self, grip: Grip) {
+        if !self.full {
+            self.drag = Some(grip);
+        }
+    }
+
+    pub fn end_drag(&mut self) -> bool {
+        self.drag.take().is_some()
+    }
+
+    /// The pointer moved during a drag: the card follows it. Returns false when no drag is on, so the pointer passes on.
+    pub fn drag_to(&mut self, x: f32, y: f32, screen: (f32, f32), current: (f32, f32), k: f32) -> bool {
+        let Some(grip) = self.drag else { return false };
+        let size = size_for_drag(grip, x, y, screen, current, k);
+        if self.size != Some(size) {
+            self.size = Some(size);
+            self.dirty = true;
+        }
+        true
+    }
+
+    /// The card's size on screen now: the size the user dragged it to, or the default (for the drag's start).
+    pub fn current_size(&self, k: f32) -> (f32, f32) {
+        self.size.unwrap_or((DEFAULT_CARD_PT.0 * k, DEFAULT_CARD_PT.1 * k))
     }
 
     /// `{visible, index, count}` for the `state` method.
@@ -757,7 +802,33 @@ pub struct Geometry {
     pub transport: Rect,
     /// the strip under the body that shows the item's URL when it has a title of its own
     pub caption: Rect,
+    /// the full-screen toggle, at the top right of the card
+    pub full: Rect,
 }
+
+/// How the card is laid out: whether a transport strip sits under the body, the size the user dragged it to (None for
+/// the default), and whether it fills the screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Layout {
+    pub strip: bool,
+    pub size: Option<(f32, f32)>,
+    pub full: bool,
+}
+
+/// Which edge of the card a drag resizes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Grip {
+    Horizontal,
+    Vertical,
+    Both,
+}
+
+/// The card's default size in points, before the user resizes it.
+const DEFAULT_CARD_PT: (f32, f32) = (560.0, 440.0);
+/// The smallest card the user can drag it to, in points.
+const MIN_CARD_PT: (f32, f32) = (240.0, 200.0);
+/// The width of an edge's grab zone, in points, on each side of the edge.
+const GRIP_PT: f32 = 6.0;
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
     Rect { x: x as i32, y: y as i32, w: w as i32, h: h as i32 }
@@ -769,26 +840,70 @@ fn inside(r: Rect, x: f32, y: f32) -> bool {
 
 /// Where the card sits on a `w` by `h` screen: centred, with sizes from the point scale `k`. Without a transport strip.
 pub fn geometry(w: f32, h: f32, k: f32) -> Geometry {
-    geometry_for(w, h, k, false)
+    geometry_with(w, h, k, Layout::default())
 }
 
-/// The card's rectangles, with a transport strip under the body when `strip` is set.
-pub fn geometry_for(w: f32, h: f32, k: f32, strip: bool) -> Geometry {
-    let (cw, ch) = ((560.0 * k).min(w - 32.0 * k).max(0.0), (440.0 * k).min(h - 32.0 * k).max(0.0));
-    let (x, y) = ((w - cw) / 2.0, ((h - ch) / 2.0).max(0.0));
+/// The card's rectangles for a layout. A full-screen card covers the screen; otherwise the card is centred and at most
+/// the screen less a margin, whatever size the user dragged it to.
+pub fn geometry_with(w: f32, h: f32, k: f32, l: Layout) -> Geometry {
+    let (cw, ch, x, y) = if l.full {
+        (w.max(0.0), h.max(0.0), 0.0, 0.0)
+    } else {
+        let (dw, dh) = l.size.unwrap_or((DEFAULT_CARD_PT.0 * k, DEFAULT_CARD_PT.1 * k));
+        let (cw, ch) = (dw.min(w - 32.0 * k).max(0.0), dh.min(h - 32.0 * k).max(0.0));
+        (cw, ch, (w - cw) / 2.0, ((h - ch) / 2.0).max(0.0))
+    };
     let head = 36.0 * k;
     let pad = 12.0 * k;
     let foot = 22.0 * k;
-    let bar = if strip { 36.0 * k } else { 0.0 };
+    let bar = if l.strip { 36.0 * k } else { 0.0 };
     Geometry {
         card: rect(x, y, cw, ch),
         close: rect(x + 6.0 * k, y + 6.0 * k, 28.0 * k, 28.0 * k),
+        full: rect(x + cw - 34.0 * k, y + 6.0 * k, 28.0 * k, 28.0 * k),
         prev: rect(x + 4.0 * k, y + ch / 2.0 - 24.0 * k, 28.0 * k, 48.0 * k),
         next: rect(x + cw - 32.0 * k, y + ch / 2.0 - 24.0 * k, 28.0 * k, 48.0 * k),
         body: rect(x + pad, y + head, cw - 2.0 * pad, (ch - head - pad - foot - bar).max(0.0)),
-        transport: if strip { rect(x + pad, y + ch - foot - bar + 4.0 * k, cw - 2.0 * pad, bar - 8.0 * k) } else { rect(0.0, 0.0, 0.0, 0.0) },
+        transport: if l.strip { rect(x + pad, y + ch - foot - bar + 4.0 * k, cw - 2.0 * pad, bar - 8.0 * k) } else { rect(0.0, 0.0, 0.0, 0.0) },
         caption: rect(x + pad, y + ch - foot, cw - 2.0 * pad, foot),
     }
+}
+
+/// The edge a pointer press grabs, for a card that is not full-screen: a strip of [`GRIP_PT`] points along the right
+/// edge, the bottom edge, or both at the corner. None elsewhere.
+pub fn grip_at(card: Rect, x: f32, y: f32, k: f32) -> Option<Grip> {
+    let zone = GRIP_PT * k;
+    let right = (card.x + card.w) as f32;
+    let bottom = (card.y + card.h) as f32;
+    let on_right = x >= right - zone && x < right + zone;
+    let on_bottom = y >= bottom - zone && y < bottom + zone;
+    let within = x >= card.x as f32 && y >= card.y as f32 && x < right + zone && y < bottom + zone;
+    match (on_right, on_bottom) {
+        _ if !within => None,
+        (true, true) => Some(Grip::Both),
+        (true, false) => Some(Grip::Horizontal),
+        (false, true) => Some(Grip::Vertical),
+        _ => None,
+    }
+}
+
+/// The card's size when the user drags `grip` to pointer `(x, y)`. The card stays centred on the screen, so an edge
+/// follows the pointer at twice its distance from the centre. Held between the minimum and the screen less a margin.
+pub fn size_for_drag(grip: Grip, x: f32, y: f32, screen: (f32, f32), current: (f32, f32), k: f32) -> (f32, f32) {
+    let (w, h) = screen;
+    let (cx, cy) = (w / 2.0, h / 2.0);
+    let (min_w, min_h) = (MIN_CARD_PT.0 * k, MIN_CARD_PT.1 * k);
+    let max_w = (w - 32.0 * k).max(min_w);
+    let max_h = (h - 32.0 * k).max(min_h);
+    let nw = match grip {
+        Grip::Horizontal | Grip::Both => 2.0 * (x - cx).abs(),
+        Grip::Vertical => current.0,
+    };
+    let nh = match grip {
+        Grip::Vertical | Grip::Both => 2.0 * (y - cy).abs(),
+        Grip::Horizontal => current.1,
+    };
+    (nw.clamp(min_w, max_w), nh.clamp(min_h, max_h))
 }
 
 impl Shell {
@@ -798,13 +913,17 @@ impl Shell {
         if !self.quick_look.is_visible() {
             return false;
         }
-        let g = geometry_for(self.w as f32, self.h as f32, self.ui.pt(1.0), self.quick_look.has_strip());
+        let k = self.ui.pt(1.0);
+        let g = geometry_with(self.w as f32, self.h as f32, k, self.quick_look.layout());
         if !inside(g.card, x, y) {
             return false;
         }
         if up {
+            self.quick_look.end_drag();
             if inside(g.close, x, y) {
                 self.quick_look.close_by_user();
+            } else if inside(g.full, x, y) {
+                self.quick_look.toggle_full();
             } else if inside(g.prev, x, y) {
                 self.quick_look.user_step(-1);
             } else if inside(g.next, x, y) {
@@ -812,8 +931,26 @@ impl Shell {
             } else {
                 self.quick_look.transport_press(g.transport, x, y);
             }
+        } else if let Some(grip) = grip_at(g.card, x, y, k) {
+            self.quick_look.begin_drag(grip);
         }
         true
+    }
+
+    /// A release ends an edge drag, wherever it lands.
+    pub(super) fn quick_look_end_drag(&mut self) {
+        self.quick_look.end_drag();
+    }
+
+    /// Pointer moves while the card is dragged at an edge: it follows the pointer. Returns false when no drag is on.
+    pub(super) fn quick_look_drag(&mut self, x: f32, y: f32) -> bool {
+        if !self.quick_look.is_visible() {
+            return false;
+        }
+        let k = self.ui.pt(1.0);
+        let current = self.quick_look.current_size(k);
+        let screen = (self.w as f32, self.h as f32);
+        self.quick_look.drag_to(x, y, screen, current, k)
     }
 
     /// Keys for the open panel: Esc and Space close it, Left and Right step, and Up, Down, Page Up and Page Down scroll
@@ -893,7 +1030,7 @@ impl Shell {
             return;
         }
         let k = self.ui.pt(1.0);
-        let g = geometry_for(w, h, k, self.quick_look.has_strip());
+        let g = geometry_with(w, h, k, self.quick_look.layout());
         self.quick_look.prepare(g.body, k);
     }
 
@@ -904,8 +1041,9 @@ impl Shell {
             return;
         }
         let ui = &self.ui;
-        let g = geometry_for(s.w as f32, s.h as f32, ui.pt(1.0), p.has_strip());
-        let radius = ui.pt(13.0);
+        let g = geometry_with(s.w as f32, s.h as f32, ui.pt(1.0), p.layout());
+        // a full-screen card has square corners; a window has its radius
+        let radius = if p.layout().full { 0.0 } else { ui.pt(13.0) };
         let (cx, cy, cw, ch) = (g.card.x as f32, g.card.y as f32, g.card.w as f32, g.card.h as f32);
         s.fill_rrect(cx, cy, cw, ch, radius, CARD_BG.now());
         s.stroke_rrect(cx, cy, cw, ch, radius, ui.pt(1.0), SEPARATOR_C.now());
@@ -918,7 +1056,14 @@ impl Shell {
             s.blit(im, c.x + (c.w - im.w as i32) / 2, c.y + (c.h - im.h as i32) / 2, 255, 255)
         });
 
-        // title (centred, cut to fit between the close button and the counter) and the "n of N" counter
+        // full-screen button: a grey disc with a square outline (LINK) inside it
+        let f = g.full;
+        s.fill_rrect(f.x as f32, f.y as f32, f.w as f32, f.h as f32, f.w as f32 / 2.0, DETAIL_BG.now());
+        let box_pt = ui.pt(11.0);
+        let (bxf, byf) = (f.x as f32 + (f.w as f32 - box_pt) / 2.0, f.y as f32 + (f.h as f32 - box_pt) / 2.0);
+        s.stroke_rrect(bxf, byf, box_pt, box_pt, ui.pt(2.0), ui.pt(1.5), LINK.now());
+
+        // title (centred, cut to fit between the buttons) and the "n of N" counter, left of the full-screen button
         let title = p.current().map(|i| if i.title.is_empty() { i.url.as_str() } else { i.title.as_str() }).unwrap_or("");
         let title = ui.fit(title, MAC_HEADLINE_PT, cw - 2.0 * ui.pt(120.0));
         self.label(&title, MAC_HEADLINE_PT, Weight::Bold, LABEL.now(), |im| {
@@ -926,7 +1071,7 @@ impl Shell {
         });
         let counter = format!("{} of {}", p.index() + 1, p.count());
         self.label(&counter, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, |im| {
-            s.blit(im, (cx + cw - ui.pt(16.0) - im.w as f32) as i32, (cy + ui.pt(18.0) - im.h as f32 / 2.0) as i32, 255, 255)
+            s.blit(im, (cx + cw - ui.pt(44.0) - im.w as f32) as i32, (cy + ui.pt(18.0) - im.h as f32 / 2.0) as i32, 255, 255)
         });
 
         // body: a grouped plate with the preview inside
@@ -1323,11 +1468,71 @@ mod tests {
         assert!(!p.scroll_key(KEY_DOWN), "a text item does not scroll");
         assert!(!p.has_strip());
         let plain = geometry(1280.0, 800.0, 1.0);
-        let with = geometry_for(1280.0, 800.0, 1.0, true);
+        let with = geometry_with(1280.0, 800.0, 1.0, Layout { strip: true, ..Layout::default() });
         assert!(with.body.h < plain.body.h, "the strip takes room from the body");
         assert_eq!(with.transport.h > 0, true);
         assert!(with.body.y + with.body.h <= with.transport.y, "the body sits above the strip");
         assert!(with.transport.y + with.transport.h <= with.caption.y);
+    }
+
+    #[test]
+    fn a_dragged_edge_follows_the_pointer_about_the_centre() {
+        let screen = (1280.0, 800.0);
+        let current = (560.0, 440.0);
+        // the right edge at x = 1000 is 360 from the centre (640): the card is 720 wide
+        assert_eq!(size_for_drag(Grip::Horizontal, 1000.0, 400.0, screen, current, 1.0), (720.0, 440.0));
+        // the bottom edge at y = 600 is 200 from the centre (400): the card is 400 tall, its width untouched
+        assert_eq!(size_for_drag(Grip::Vertical, 900.0, 600.0, screen, current, 1.0), (560.0, 400.0));
+        assert_eq!(size_for_drag(Grip::Both, 1000.0, 600.0, screen, current, 1.0), (720.0, 400.0));
+    }
+
+    #[test]
+    fn a_drag_is_held_between_the_minimum_and_the_screen_less_a_margin() {
+        let screen = (1280.0, 800.0);
+        assert_eq!(size_for_drag(Grip::Horizontal, 640.0, 400.0, screen, (560.0, 440.0), 1.0).0, MIN_CARD_PT.0);
+        assert_eq!(size_for_drag(Grip::Horizontal, 5000.0, 400.0, screen, (560.0, 440.0), 1.0).0, 1280.0 - 32.0);
+        assert_eq!(size_for_drag(Grip::Vertical, 640.0, 400.0, screen, (560.0, 440.0), 1.0).1, MIN_CARD_PT.1, "dragged to the centre");
+    }
+
+    #[test]
+    fn the_grab_zones_are_the_right_and_bottom_edges_and_the_corner() {
+        let card = Rect { x: 100, y: 50, w: 400, h: 300 };
+        assert_eq!(grip_at(card, 499.0, 200.0, 1.0), Some(Grip::Horizontal), "just inside the right edge");
+        assert_eq!(grip_at(card, 300.0, 348.0, 1.0), Some(Grip::Vertical), "just inside the bottom edge");
+        assert_eq!(grip_at(card, 499.0, 348.0, 1.0), Some(Grip::Both), "the corner takes both");
+        assert_eq!(grip_at(card, 300.0, 200.0, 1.0), None, "the middle of the card is not a grip");
+        assert_eq!(grip_at(card, 900.0, 900.0, 1.0), None, "outside the card");
+    }
+
+    #[test]
+    fn a_full_screen_card_covers_the_screen_and_takes_no_drag() {
+        let full = geometry_with(1280.0, 800.0, 1.0, Layout { full: true, ..Layout::default() });
+        assert_eq!((full.card.x, full.card.y, full.card.w, full.card.h), (0, 0, 1280, 800));
+        assert!(inside(full.full, (full.full.x + 1) as f32, (full.full.y + 1) as f32), "the full-screen button stays on the card");
+        let mut p = Panel::default();
+        p.show("app", vec![item("file:///a", "a")], 0);
+        p.toggle_full();
+        assert!(p.layout().full);
+        p.begin_drag(Grip::Both);
+        assert!(!p.drag_to(10.0, 10.0, (1280.0, 800.0), (560.0, 440.0), 1.0), "no drag while full-screen");
+        p.toggle_full();
+        assert!(!p.layout().full, "the button goes back to the card");
+    }
+
+    #[test]
+    fn a_drag_resizes_the_panel_and_keeps_the_size_for_the_next_item() {
+        let mut p = Panel::default();
+        p.show("app", vec![item("file:///a", "a"), item("file:///b", "b")], 0);
+        assert!(!p.drag_to(900.0, 300.0, (1280.0, 800.0), (560.0, 440.0), 1.0), "no drag, the pointer passes on");
+        p.begin_drag(Grip::Horizontal);
+        assert!(p.drag_to(1000.0, 300.0, (1280.0, 800.0), (560.0, 440.0), 1.0));
+        assert_eq!(p.layout().size, Some((720.0, 440.0)));
+        assert!(p.end_drag());
+        assert!(!p.end_drag(), "a release with no drag is nothing");
+        p.step(1);
+        assert_eq!(p.layout().size, Some((720.0, 440.0)), "the size stays for the next item");
+        p.close_by_user();
+        assert!(p.layout().size.is_some(), "and for the next opening");
     }
 
     #[test]

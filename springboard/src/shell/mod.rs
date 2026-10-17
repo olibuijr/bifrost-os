@@ -2697,7 +2697,13 @@ impl Shell {
         // the preview card takes its pointer in every build, not only with the desktop bar; a locked screen does not
         let quick_look_took = !self.is_locked() && match ev {
             Event::Down(x, y) => self.quick_look_pointer(x, y, false),
-            Event::Up(x, y) => self.quick_look_pointer(x, y, true),
+            Event::Move(x, y) => self.quick_look_drag(x, y),
+            Event::Up(x, y) => {
+                // a release always ends a resize, even one that lands outside the card
+                let took = self.quick_look_pointer(x, y, true);
+                self.quick_look_end_drag();
+                took
+            }
             _ => false,
         };
         if quick_look_took {
