@@ -180,8 +180,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-data.json",
-   "status": "partial",
-   "note": "overlay module, owner CoreData; from SDK matrix core-data.json",
+   "status": "n/a",
+   "note": "n/a: CloudKit mirroring and sharing are Apple iCloud services. The BifrOSt account sync is a bifrost-cloud service that keeps counters, not a mirror of the local store (core-data.json, iCloud section). Previous note: overlay module, owner CoreData; from SDK matrix core-data.json",
    "rea": [],
    "method": "assessed"
   },
@@ -576,7 +576,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/media-intents.json",
    "status": "partial",
-   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet.",
+   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet. Built 2026-10-17: requestConfirmation check for a loose text match (ui media_search, tests media_search::tests); system delivery of requests is still missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -1037,8 +1037,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/storekit.json",
-   "status": "partial",
-   "note": "overlay module, owner StoreKit; from SDK matrix storekit.json",
+   "status": "n/a",
+   "note": "n/a: the StoreKit SwiftUI store views present products, subscriptions and receipts from Apple's App Store. BifrOSt sells apps through its own PC App Store service, which is tracked on the StoreKit SDK side (storekit.json), not by this view. Previous note: overlay module, owner StoreKit; from SDK matrix storekit.json",
    "rea": [],
    "method": "assessed"
   },
@@ -1059,7 +1059,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftdata.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
    "method": "assessed"
   },
@@ -1080,7 +1080,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftdata.json",
    "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
    "rea": [],
    "method": "assessed"
   },
@@ -1577,7 +1577,16 @@
    "status": "partial",
    "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    }
+   ],
+   "ready_note": "Local play queue (media::queue::tests) and the transport in audiosvc for the app's own files and streams. Catalog playback and protected content are Apple Music services with no BifrOSt counterpart, so they are n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_MediaPlayer.framework",
@@ -1598,7 +1607,16 @@
    "status": "partial",
    "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    }
+   ],
+   "ready_note": "Local play queue (media::queue::tests) and the transport in audiosvc for the app's own files and streams. Catalog playback and protected content are Apple Music services with no BifrOSt counterpart, so they are n/a."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_SwiftUI.framework",
