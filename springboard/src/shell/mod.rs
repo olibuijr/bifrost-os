@@ -3855,6 +3855,7 @@ impl Shell {
             pip::draw_window(s, &self.ui, self.pip.rect(usable), None);
         }
         self.draw_announce(s);
+        self.draw_paste_progress(s, t);
         self.draw_reader(s);
         if self.dnd.session.is_some() {
             damage.all();
