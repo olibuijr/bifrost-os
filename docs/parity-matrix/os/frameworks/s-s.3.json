@@ -3557,11 +3557,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/net_probe.rs, springboard/core/src/reachability.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_diagnostic::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_probe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "reachability::tests"
+    }
+   ],
+   "ready_note": "The shared model of the network diagnosis (the stages link, address, name, connection, security and server, the observation and the diagnosis with its advice) is sdk net_diagnostic; core reachability holds the path state the shell reads. Both are covered by host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SymptomNetworkDiagnosticsCore.framework",
@@ -3578,11 +3597,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/net_probe.rs, springboard/core/src/net_path.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_diagnostic::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_probe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "net_path::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the diagnosing engine is sdk net_probe, which probes the link (interface state), the address, the name and the TCP connection on this computer in order, stops at the first failure and gives it to net_diagnostic for the words; core net_path models the path the shell watches. Host tests cover the probe order, skipped stages, address literals and the link and address parsing. Nothing is sent to a diagnostics service. No Settings page runs it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SymptomReporter.framework",
@@ -3684,8 +3722,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, owner SyncServices, which no SDK file assesses yet",
+   "status": "n/a",
+   "note": "n/a: the reference bundle is the Conflict Resolver app of the retired Sync Services engine (the former contact and calendar device sync). BifrOSt has no Sync Services engine to conflict with; contacts and calendars sync over CalDAV and CardDAV (sdk dav_sync), whose merge rules live with the data, not in a resolver app.",
    "rea": [],
    "method": "assessed"
   },
@@ -3746,11 +3784,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/src/shell/users_page.rs, springboard/src/privd/accounts.rs, springboard/core/src/admin_sign_in.rs, springboard/ui/src/account_policy.rs",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps). Built 2026-10-17: savePresentedItemChanges negotiation (sdk file_coordination save_presented_item_changes, tests file_coordination::tests) and a watch stream pumped into presenters (file_coordination::pump). Still open: relinquish negotiation.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_policy::tests"
+    }
+   ],
+   "ready_note": "Local account administration (add and delete accounts, make or remove an administrator, set a password, computer name, groups) is Settings > Users & Groups reading /etc/passwd and /etc/group and sending every change to bifrost-privd, which validates it and runs the fixed command as root (privd accounts); core admin_sign_in decides when an administrator password is asked for and ui account_policy holds per-account restrictions. All have host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemAdministrationInterface.framework",
@@ -3767,11 +3829,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/src/shell/users_page.rs, springboard/src/shell/auth_sheet.rs, springboard/core/src/admin_sign_in.rs",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: file coordination has no relinquish or save-negotiation step (system.json gaps).",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "admin_sign_in::tests"
+    }
+   ],
+   "ready_note": "The interface half of account administration is the Users & Groups page and the authentication sheet that asks an administrator for the password before a change (auth_sheet, admin_sign_in), with host tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemBanner.framework",
@@ -4008,8 +4089,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system.json",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: the coordinator still lacks relinquish; the file-change feed has a callback through WatchStream::deliver (system.json gaps).",
+   "status": "n/a",
+   "note": "n/a: Apple-internal component. The reference index shows only a binary, Info.plist and version.plist (no resources, no XPC service, no hosting bundle and no other bundle that links it), so there is no user-visible function to mirror; the name points to an internal system-wide override switch of the vendor's own services. Low confidence: evidence is the empty bundle only.",
    "rea": [],
    "method": "assessed"
   },
@@ -4028,11 +4109,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/core/src/launch_policy.rs, springboard/core/src/quarantine.rs, springboard/core/src/codereq.rs",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "launch_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "quarantine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the policy that decides whether a program may run (the Allow apps from setting, the downloaded-from-the-internet question on first launch, Open Anyway per program and per code hash, blocking of changed code) is core launch_policy, built on the quarantine record and the code requirement model. It is a pure assessment with host tests; BifrOSt does not sign code yet and no launch path hands it a received executable, so the shell does not consult it today."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemStatus.framework",
@@ -4149,11 +4249,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/ui/src/menu_extras.rs, springboard/sdk/src/status_item.rs",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu_extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "status_item::tests"
+    }
+   ],
+   "ready_note": "The host for menu bar extras is the fixed set of system menu extras (ui menu_extras: order, ids, visibility) and the app-supplied status items with their menus (sdk status_item) that the shell draws, with host tests. Loading third-party code into the shell, which the reference framework allowed, is deliberately not done: apps use the status item API instead."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SystemWake.framework",
@@ -4170,11 +4284,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/core/src/wake_schedule.rs, springboard/core/src/sleep_assertions.rs, springboard/src/privd/methods.rs",
    "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json. Not ready: main job not audited in this round (system.json).",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "wake_schedule::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sleep_assertions::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: core wake_schedule (repeating power-on and wake times, the next moment with a local offset, the real-time clock alarm text and its validation, the ACPI wake device table and wake reasons) and the root method power.wake_alarm in bifrost-privd that arms /sys/class/rtc/rtc0/wakealarm after the check. core sleep_assertions covers the apps that keep the machine awake. Not yet wired: a Settings page for the schedule."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/shared_cache_page_prewarming.framework",
