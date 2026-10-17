@@ -23,7 +23,7 @@ const ETA: usize = 2;
 /// A polynomial with coefficients kept in `[0, q)`.
 type Poly = [u16; N];
 
-/// The two ML-KEM parameter sets, the ones CryptoKit exposes as `MLKEM768` and `MLKEM1024`.
+/// The two ML-KEM parameter sets of FIPS 203 this module implements (ML-KEM-512 is left out).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Params {
     MlKem768,

@@ -302,6 +302,15 @@ mod tests {
     }
 
     #[test]
+    fn shake_of_empty_input_matches_the_fips_202_vectors() {
+        let mut out = [0u8; 32];
+        Shake::new_128().squeeze(&mut out);
+        assert_eq!(hex(&out), "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
+        Shake::new_256().squeeze(&mut out);
+        assert_eq!(hex(&out), "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
+    }
+
+    #[test]
     fn shake128_and_shake256_differ() {
         let mut a = Shake::new_128();
         let mut b = Shake::new_256();

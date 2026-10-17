@@ -1,6 +1,5 @@
-//! Post-quantum key encapsulation for apps: ML-KEM-768 and ML-KEM-1024 (FIPS 203), the parameter sets CryptoKit
-//! exposes as `MLKEM768` and `MLKEM1024`. The arithmetic lives in `bifrost_core::mlkem`; this module draws the random
-//! seeds from the kernel pool ([`crate::entropy`]) and gives the bytes an object shape.
+//! Post-quantum key encapsulation for apps: ML-KEM-768 and ML-KEM-1024 (FIPS 203). The arithmetic lives in
+//! `bifrost_core::mlkem`; this module draws the random seeds from the kernel pool ([`crate::entropy`]) and gives the bytes an object shape.
 //!
 //! An app generates a [`DecapsulationKey`], publishes its [`EncapsulationKey`] bytes, and the sender calls
 //! [`EncapsulationKey::encapsulate`] to get a shared secret and a ciphertext. The receiver calls
@@ -13,7 +12,7 @@
 use crate::entropy;
 use bifrost_core::mlkem::{self, Error as CoreError};
 
-/// The parameter set: `MLKEM768` or `MLKEM1024`.
+/// The parameter set: ML-KEM-768 or ML-KEM-1024.
 pub use bifrost_core::mlkem::Params as Variant;
 
 /// The 32-byte shared secret that both sides of an encapsulation agree on.
