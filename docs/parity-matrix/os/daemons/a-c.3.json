@@ -4151,7 +4151,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); no sync and no shared stores yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`) and a `changes` method that answers the records when the store moved since the client's revision (built 2026-10-17); no per-record change log and no sync to other devices yet",
    "rea": [],
    "method": "rule"
   },

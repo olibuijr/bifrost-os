@@ -3,6 +3,12 @@
 //! `bifrost_ui::model_store::Record` values. Each app sees only its own records: the store is keyed by the caller's
 //! app id, which the shell takes from the connection.
 //!
+//! Shared stores: a request with `suite` names a store that every first-party app can open by that name, the way a
+//! shared defaults suite does. A third-party app that names a suite is refused. A store's `revision` moves on every
+//! write; `changes {entity, since}` answers `{revision, changed, records}`, with the records of the entity only when
+//! the store changed since the revision the client holds. The revision starts from the clock, so one from before a
+//! restart is never mistaken for the current one.
+//!
 //! Storage is in memory, and each app's records are also written to `<apphost root>/records/<app id>.json` after every
 //! change (a temporary file, then a rename), so they survive a restart. The file is read once, when the app first
 //! calls the service. An app id that is not a plain name (letters, digits, `.`, `-`, `_`, not starting with `.`) gets
@@ -17,6 +23,8 @@
 //! - `erase {}` deletes every record of the app.
 //!
 //! Every write is one batch, so a refused write changes nothing.
+use super::keychain_groups::first_party;
+use super::location::now_unix;
 use super::{Shell, SystemService};
 use crate::shell::apphost;
 use bifrost_core::json::{parse, Json};
@@ -34,7 +42,13 @@ pub const DIR: &str = "records";
 /// The `records` service: one store per app id.
 #[derive(Default)]
 pub struct RecordStore {
-    stores: BTreeMap<String, MemoryDataStore>,
+    stores: BTreeMap<String, Slot>,
+}
+
+/// One store and its revision.
+struct Slot {
+    store: MemoryDataStore,
+    revision: u64,
 }
 
 impl SystemService for RecordStore {
@@ -43,20 +57,54 @@ impl SystemService for RecordStore {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
-        let file = store_file(&apphost::root().join(DIR), app_id);
-        if !self.stores.contains_key(app_id) {
+        let installed = crate::shell::apphost::installed();
+        let app_first_party = installed.iter().find(|a| a.manifest.id == app_id).is_some_and(|a| first_party(&a.manifest));
+        let key = shared_key(app_id, params.str_field("suite").as_deref(), app_first_party)?;
+        let file = store_file(&apphost::root().join(DIR), &key);
+        if !self.stores.contains_key(&key) {
             let store = file.as_deref().map(load).unwrap_or_default();
-            self.stores.insert(app_id.to_string(), store);
+            self.stores.insert(key.clone(), Slot { store, revision: epoch_now() });
         }
-        let store = self.stores.get_mut(app_id).ok_or("records store is missing")?;
-        let out = answer(store, method, params)?;
+        let slot = self.stores.get_mut(&key).ok_or("records store is missing")?;
+        if method == "changes" {
+            let entity = text(params, "entity")?;
+            let since = params.get("since").and_then(Json::as_u64).unwrap_or(0);
+            return Ok(changes_json(&slot.store, slot.revision, since, &entity));
+        }
+        let out = answer(&mut slot.store, method, params)?;
         if matches!(method, "put" | "remove" | "erase") {
+            slot.revision += 1;
             if let Some(path) = &file {
-                persist(path, store).map_err(|e| format!("records could not be saved: {e}"))?;
+                persist(path, &slot.store).map_err(|e| format!("records could not be saved: {e}"))?;
             }
         }
         Ok(out)
     }
+}
+
+/// The key of the store a request uses: the app's own store, or the shared store `suite` (first-party apps only).
+pub fn shared_key(app_id: &str, suite: Option<&str>, first_party_app: bool) -> Result<String, String> {
+    match suite {
+        None => Ok(app_id.to_string()),
+        Some(_) if !first_party_app => Err("shared record stores are open to first-party apps only".into()),
+        Some(name) => Ok(format!("suite.{name}")),
+    }
+}
+
+/// The starting revision of a store: the clock in seconds, scaled, so it is newer than any revision of an earlier run.
+pub fn epoch_now() -> u64 {
+    (now_unix().max(0.0) as u64) * 1_000_000
+}
+
+/// The answer to `changes`: the records of `entity` when the store moved past `since`, else none.
+pub fn changes_json(store: &MemoryDataStore, revision: u64, since: u64, entity: &str) -> Json {
+    let changed = revision != since;
+    let records = if changed { store.fetch(entity).iter().map(record_json).collect() } else { Vec::new() };
+    Json::Obj(vec![
+        ("revision".into(), Json::Num(revision as f64)),
+        ("changed".into(), Json::Bool(changed)),
+        ("records".into(), Json::Arr(records)),
+    ])
 }
 
 /// The file that holds the records of `app_id` under `root`, or `None` when the id is not a plain name.
@@ -189,6 +237,26 @@ mod tests {
     fn put(store: &mut MemoryDataStore, id: f64, name: &str) -> Result<Json, String> {
         let fields = obj(vec![("name", Json::Str(name.into()))]);
         answer(store, "put", &obj(vec![("id", Json::Num(id)), ("entity", Json::Str("Note".into())), ("fields", fields)]))
+    }
+
+    #[test]
+    fn a_shared_store_is_for_first_party_apps_only() {
+        assert_eq!(shared_key("app.notes", None, false).unwrap(), "app.notes");
+        assert!(shared_key("app.other", Some("group.shared"), false).is_err());
+        assert_eq!(shared_key("app.notes", Some("group.shared"), true).unwrap(), "suite.group.shared");
+    }
+
+    #[test]
+    fn changes_answer_the_records_only_when_the_revision_moved() {
+        let mut store = MemoryDataStore::new();
+        put(&mut store, 1, "first").unwrap();
+        let moved = changes_json(&store, 7, 3, "Note");
+        assert_eq!(moved.get("changed"), Some(&Json::Bool(true)));
+        assert_eq!(moved.get("records").and_then(Json::as_array).map(|r| r.len()), Some(1));
+        let same = changes_json(&store, 7, 7, "Note");
+        assert_eq!(same.get("changed"), Some(&Json::Bool(false)));
+        assert_eq!(same.get("records").and_then(Json::as_array).map(|r| r.len()), Some(0));
+        assert!(epoch_now() > 1_000_000);
     }
 
     #[test]
