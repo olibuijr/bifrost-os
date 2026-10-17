@@ -99,6 +99,13 @@ impl Registry {
         self.watches.len() != before
     }
 
+    /// Removes every attachment on `folder` (the setup screen's "stop watching this folder"). Returns how many were removed.
+    pub fn remove_folder(&mut self, folder: &Path) -> usize {
+        let before = self.watches.len();
+        self.watches.retain(|w| w.attachment.as_ref().map_or(true, |a| a.folder != folder));
+        before - self.watches.len()
+    }
+
     /// The attachments on `folder`.
     pub fn for_folder<'a>(&'a self, folder: &'a Path) -> impl Iterator<Item = &'a Attachment> + 'a {
         self.attachments().filter(move |a| a.folder == folder)
@@ -305,6 +312,18 @@ mod tests {
         assert!(r.remove(&a));
         assert!(!r.remove(&a));
         assert_eq!(r.for_folder(Path::new("/srv/in")).count(), 0);
+    }
+
+    #[test]
+    fn remove_folder_detaches_every_action_on_that_folder_only() {
+        let mut r = Registry::new();
+        r.add(attach("/srv/in", "files", "tag"));
+        r.add(attach("/srv/in", "notes", "import"));
+        r.add(attach("/srv/out", "files", "tag"));
+        assert_eq!(r.remove_folder(Path::new("/srv/in")), 2);
+        assert_eq!(r.for_folder(Path::new("/srv/in")).count(), 0);
+        assert_eq!(r.for_folder(Path::new("/srv/out")).count(), 1);
+        assert_eq!(r.remove_folder(Path::new("/srv/in")), 0, "nothing left to remove");
     }
 
     #[test]
