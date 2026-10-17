@@ -79,6 +79,11 @@ pub trait RecognitionBackend {
     /// Receives the request's contextual strings (custom words to favour) before a task runs. Engines that
     /// cannot bias their vocabulary keep the default, which ignores them.
     fn set_contextual_strings(&mut self, _strings: &[String]) {}
+    /// The locales the engine can recognise (`supportedLocales`). Engines that do not list them keep the default,
+    /// which is empty: the app then sees no locales rather than a guess.
+    fn supported_locales(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// The most contextual strings one request may carry; later ones are dropped.
@@ -294,6 +299,13 @@ impl SFSpeechRecognizer {
     pub fn is_available(&self) -> bool {
         self.backend.borrow().is_available(&self.locale)
     }
+    /// `supportedLocales`: the locales the engine serves, as the engine lists them. Sorted and without duplicates.
+    pub fn supported_locales(&self) -> Vec<String> {
+        let mut locales = self.backend.borrow().supported_locales();
+        locales.sort();
+        locales.dedup();
+        locales
+    }
 
     fn start(&self, source: Source, handler: Handler) -> Result<SFSpeechRecognitionTask, SpeechError> {
         if self.status != SFSpeechRecognizerAuthorizationStatus::Authorized {
@@ -341,6 +353,7 @@ mod tests {
     struct Fake {
         available: bool,
         words: Vec<String>,
+        locales: Vec<String>,
     }
     fn seg(w: &str, i: usize) -> SFTranscriptionSegment {
         SFTranscriptionSegment { substring: w.to_string(), timestamp: i as f64 * 0.5, duration: 0.5, confidence: 0.9 }
@@ -351,6 +364,9 @@ mod tests {
     impl RecognitionBackend for Fake {
         fn is_available(&self, _: &str) -> bool {
             self.available
+        }
+        fn supported_locales(&self) -> Vec<String> {
+            self.locales.clone()
         }
         fn accept(&mut self, _: &AnalyzerInput) -> Option<SFTranscription> {
             self.words.push(format!("w{}", self.words.len()));
@@ -369,7 +385,22 @@ mod tests {
     }
 
     fn recognizer(available: bool) -> SFSpeechRecognizer {
-        SFSpeechRecognizer::new("en-US", Box::new(Fake { available, words: vec![] }))
+        SFSpeechRecognizer::new("en-US", Box::new(Fake { available, words: vec![], locales: vec![] }))
+    }
+    fn recognizer_with_locales(locales: &[&str]) -> SFSpeechRecognizer {
+        let locales = locales.iter().map(|l| l.to_string()).collect();
+        SFSpeechRecognizer::new("en-US", Box::new(Fake { available: true, words: vec![], locales }))
+    }
+
+    #[test]
+    fn supported_locales_are_sorted_and_unique() {
+        let r = recognizer_with_locales(&["fr-FR", "en-US", "en-US", "is-IS"]);
+        assert_eq!(r.supported_locales(), vec!["en-US", "fr-FR", "is-IS"]);
+    }
+
+    #[test]
+    fn an_engine_that_lists_no_locales_reports_none() {
+        assert!(recognizer(true).supported_locales().is_empty());
     }
     fn input() -> AnalyzerInput {
         AnalyzerInput::new(0.0, ANALYSIS_FORMAT, &[0.0; 160])
