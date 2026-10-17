@@ -255,6 +255,7 @@ pub mod audio_session;
 pub mod video_playback;
 pub mod audio_hal;
 pub mod hid_virtual;
+pub mod hid_reports;
 pub mod input_grab;
 pub mod video_decode;
 pub mod video_frame;
