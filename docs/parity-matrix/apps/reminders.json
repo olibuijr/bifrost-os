@@ -275,9 +275,9 @@
    "area": "integration",
    "apple": "Filter editor Location arriving/leaving",
    "status": "gap",
-   "bifrost": "",
-   "note": "The SDK has a location service (sdk/src/core_location.rs, with the When In Use authorization and a fixed location), so this no longer needs hardware. Not built: reminders have no location field, and there is no geofence check or purpose string yet.",
-   "wire": "Add a location field to reminders in store.rs, a purpose string in the manifest privacy table, a LocationManager that runs only while the app runs, and a distance check against each reminder location."
+   "bifrost": "springboard/apps/reminders-desktop/src/place.rs (Place, Watch); springboard/apps/reminders-desktop/src/store.rs (format v4 place field); springboard/apps/reminders-desktop/manifest.toml [privacy]",
+   "note": "Model, store field (format v4) and the location watch with tests exist, and the manifest has the location purpose string. The form has no place fields and the window does not call the watch, so no alert fires yet.",
+   "wire": "Add arriving and leaving place fields to the form (a saved place or a latitude and longitude with a radius), feed LocationManager fixes to place::Watch while the app runs, request a background task for the other times, and post the alert."
   },
   {
    "feature": "Print list",
@@ -347,9 +347,9 @@
    "area": "menu",
    "apple": "Format > Font, Bullets and Numbering",
    "status": "partial",
-   "bifrost": "springboard/apps/reminders-desktop/src/format.rs; springboard/apps/reminders-desktop/src/app.rs (format_notes); springboard/apps/reminders-desktop/src/main.rs (Format menu)",
-   "note": "Format > Bold (cmd+b), Bullet List and Numbered List write Markdown marks into the notes of the open form while the Notes field has the focus; a command again takes the mark away. Notes are stored as Markdown and shown as typed, not rendered. Built in 1.17.0; host tests in format.rs; not yet verified on Midget.",
-   "wire": "Render the notes as Markdown (bold text and lists) in the form and on the row, and move the caret after a Format command."
+   "bifrost": "springboard/apps/reminders-desktop/src/format.rs; springboard/apps/reminders-desktop/src/view.rs (row preview)",
+   "note": "The Format menu writes Markdown marks. Row preview shows the notes' first line with the marks removed (format::preview, shell md::to_plain). The notes field still edits the raw Markdown text, so the form does not show rendered bold or lists yet.",
+   "wire": "Render the notes field as Markdown when it is not being edited (bold, lists) the way Notes does, and move the caret after a Format command."
   },
   {
    "feature": "Image attachments",
