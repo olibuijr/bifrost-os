@@ -3664,7 +3664,7 @@ Gaps, stated rather than skipped:
 
 ## Assistant system service (`springboard/src/shell/assistant.rs`, OS daemon `com.apple.Siri.agent`)
 
-Status: gap. Groundwork only: the pure logic is built and unit-tested, but nothing is wired into the desktop, so the daemon row stays `gap`.
+Status: partial (`com.apple.Siri.agent` is `partial`). Built and wired, but not compiled or run on Midget yet: the pure logic is in `assistant.rs`, the HTTPS client in `springboard/assistant-client`, the panel in `assistant_panel.rs`, and the Settings page in `assistant_page.rs`.
 
 - Settings (`assistant.*` prefs): `enabled` (off), `shortcut` (`meta-shift-a`, Cmd+Shift+A; Cmd+Space is Search, Ctrl+Space the input source, Ctrl+Option+Space reader activation, so none is reused), `backend` (`off`; the only other choice is `anthropic`, the API `assistant-desktop` already speaks), `history` (off: earlier turns are neither kept nor sent), and `assistant.app.<id>` per-app access to intents (off for every app).
 - Catalogue: `assistant::build` takes the installed apps' `[[intent]]` tables and keeps only allowed apps. Ids must be safe (letters, digits, `-`, `_`), a title is required, parameter specs must be `name:type` (`?` optional), descriptions are cut at 300 characters. Only these entries are sent.
@@ -3672,7 +3672,10 @@ Status: gap. Groundwork only: the pure logic is built and unit-tested, but nothi
 - Gate: an intent is only proposed as a card ("Create note 'Groceries' in Notes?", `card_text`). `Gate::confirm` hands the call out once; `execute` runs it through `intents::run_with`, the same path as Search's Shortcuts. Nothing runs on proposal.
 - Speech: `speech_engine` looks for `whisper-cli` or `vosk-transcriber` on `PATH`. Without one the mic button is hidden. No engine is installed on the image yet, so the mic is hidden.
 
-Not built yet: the Cmd+Shift+A `Shortcut` variant in `hwkeys.rs` and the panel that draws over the desktop (translucent material like Spotlight), the Settings > Assistant page (`pages.rs`), the `assistant` service registration, and the HTTPS transport in the shell (today only `assistant-desktop` talks to the API; the request and reply code here is the shared shape to move into a crate when the transport lands).
+- Shortcut: `Shortcut::Assistant` (Cmd+Shift+A) in `hwkeys.rs`, switchable as `BINDINGS[11]` in `kb_input.rs`. With the assistant off it opens Settings > Assistant instead; with the chord set to Off it does nothing.
+- Panel (`assistant_panel.rs`): a field, a wrapped answer area that scrolls with the arrows, and a card with Run and Cancel for one intent call. It draws with Search's material (`quicksearch::mac_glass`) and, on the desktop, as overlay surface id 6 with exclusive keyboard focus (like Search's id 3). Requests run on a worker thread through `assistant::ask` with the key from the keychain item `is.olibuijr.assistant` / `anthropic-api-key`; replies come back on a channel that `tick` polls. Nothing is sent while the backend is Off, the assistant is off, or the field is empty. Run goes through `Gate::confirm` and `assistant::execute` on another worker. History is kept only when it is on.
+- Settings > Assistant (`assistant_page.rs`): the switch, the shortcut (value only; switched in Keyboard Shortcuts), the backend (Off or Anthropic API), history (off), and an access switch per installed app that declares intents. Each row saves on tap.
+- Not built: speech input (no engine on the image), the assistant service registration, and the panel on non-desktop screens (the overlay exists only in the desktop path). Not yet compiled or run on Midget.
 
 ## Module index: modules without their own section
 
