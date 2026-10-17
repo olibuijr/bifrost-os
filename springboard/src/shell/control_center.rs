@@ -397,11 +397,38 @@ pub struct ControlCenter {
     pub app_controls: AppControls,
     /// the Edit Controls list is showing in place of the modules
     pub editing: bool,
+    /// the output menu opened from the Sound module's chevron
+    pub route_menu: Option<RouteMenu>,
+    /// the output the user picked in that menu, for the binary to apply (it owns the router)
+    pub route_choice: Option<crate::media::route::Route>,
+    /// the headset is in the jack: Headphones is listed in the output menu
+    pub headphones_present: bool,
+}
+
+/// The Sound module's output menu: its panel and one row per output (`bifrost_ui::route_picker`).
+#[derive(Clone, Debug)]
+pub struct RouteMenu {
+    pub panel: bifrost_ui::Rect,
+    pub rows: Vec<bifrost_ui::route_picker::Destination>,
+}
+
+/// The output chevron's square at the top right of the Sound module (x, y, w, h in px).
+fn route_chevron((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    (x + w - ui.pt(DK_PAD_PT + 22.0), y + ui.pt(6.0), ui.pt(22.0), ui.pt(22.0))
+}
+
+/// The route a menu row's id stands for.
+fn route_of_id(id: &str) -> Option<crate::media::route::Route> {
+    match id {
+        "speaker" => Some(crate::media::route::Route::Speaker),
+        "headphones" => Some(crate::media::route::Route::Headphones),
+        _ => None,
+    }
 }
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
+        ControlCenter { route_menu: None, route_choice: None, headphones_present: false, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
     }
 }
 
@@ -1466,6 +1493,32 @@ mod tests {
     use super::*;
     use crate::gfx::Surface;
 
+    #[test]
+    fn sound_output_menu_lists_the_outputs_and_a_pick_reaches_the_binary() {
+        use crate::media::route::Route;
+        let mut sh = shell();
+        sh.set_headphones_present(false);
+        let rect = (100.0, 100.0, 300.0, 60.0);
+        sh.cc.route_menu = Some(sh.route_menu_below(rect));
+        {
+            let menu = sh.cc.route_menu.as_ref().unwrap();
+            assert_eq!(menu.rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["speaker"], "no headset, no Headphones row");
+            assert!(menu.rows[0].active, "the current output is checked");
+        }
+        sh.set_headphones_present(true);
+        let menu = sh.route_menu_below(rect);
+        assert_eq!(menu.rows.len(), 2);
+        assert!(!menu.rows[1].active);
+        // a press on the second row picks Headphones and closes the menu
+        let row_h = sh.ui.pt(super::super::list::ROW_PT);
+        let (x, y) = (menu.panel.x + 10.0, menu.panel.y + row_h * 1.5);
+        sh.cc.route_menu = Some(menu);
+        sh.cc_desk_event(Event::Down(x, y), 0.0);
+        assert!(sh.cc.route_menu.is_none());
+        assert_eq!(sh.take_route_choice(), Some(Route::Headphones));
+        assert_eq!(sh.take_route_choice(), None, "the choice is taken once");
+    }
+
     fn open_cc(sh: &mut Shell, t: f64) {
         swipe(sh, 1100.0, 5.0, 500.0, t);
         settle(sh, t + 110.0);
@@ -2044,6 +2097,34 @@ impl Shell {
         Some((x, y, lx + lw - x, ly + lh - y))
     }
 
+    /// The output menu under the Sound module: Speaker, and Headphones while the headset is in, with the active
+    /// output checked.
+    pub(crate) fn route_menu_below(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> RouteMenu {
+        let auth = bifrost_ui::route_auth::RouteAuth::new();
+        let local: Vec<(&str, &str)> = if self.cc.headphones_present { vec![("speaker", "Speaker"), ("headphones", "Headphones")] } else { vec![("speaker", "Speaker")] };
+        let mut rows = bifrost_ui::route_picker::destinations(&local, &[], &auth);
+        let current = match self.cc.route {
+            crate::media::route::Route::Speaker => "speaker",
+            crate::media::route::Route::Headphones => "headphones",
+        };
+        for row in rows.iter_mut() {
+            row.active = row.id == current;
+        }
+        let panel_w = self.ui.pt(220.0);
+        let panel = bifrost_ui::Rect { x: x + w - panel_w, y: y + self.ui.pt(30.0), w: panel_w, h: rows.len() as f32 * self.ui.pt(super::list::ROW_PT) };
+        RouteMenu { panel, rows }
+    }
+
+    /// The binary takes the output the user picked in the Sound module's menu.
+    pub fn take_route_choice(&mut self) -> Option<crate::media::route::Route> {
+        self.cc.route_choice.take()
+    }
+
+    /// The binary tells the shell whether the headset is in, so the output menu lists Headphones only then.
+    pub fn set_headphones_present(&mut self, plugged: bool) {
+        self.cc.headphones_present = plugged;
+    }
+
     /// A slider's track in its module: (left, right, centre y) in px.
     fn desk_track(&self, (x, y, w, h): (f32, f32, f32, f32)) -> (f32, f32, f32) {
         let ui = &self.ui;
@@ -2061,6 +2142,7 @@ impl Shell {
             return;
         }
         self.notify.center.hide();
+        self.cc.route_menu = None;
         self.cc.backlight = desk_backlight();
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         self.cc.backdrop = None;
@@ -2071,6 +2153,17 @@ impl Shell {
     /// Pointer input while the desktop panel is up: a click outside closes it
     /// (and is consumed, as a menu does), modules act on release.
     pub(super) fn cc_desk_event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // an open output menu takes the next press: a row picks that output, anything else closes the menu
+        if let Event::Down(x, y) = ev {
+            if let Some(menu) = self.cc.route_menu.take() {
+                let row_h = self.ui.pt(super::list::ROW_PT);
+                if let Some(row) = super::pickers::row_at(menu.panel, row_h, menu.rows.len(), x, y) {
+                    self.cc.route_choice = route_of_id(&menu.rows[row].id);
+                }
+                self.dirty = true;
+                return vec![];
+            }
+        }
         let tiles = self.cc_desk_tiles();
         let at = |x: f32, y: f32| tiles.iter().copied().find(|&(_, r)| inside(r, x, y));
         match ev {
@@ -2083,6 +2176,11 @@ impl Shell {
                     } else {
                         Some(Touch::Tile(desk_media_button(r, x)))
                     };
+                    vec![]
+                }
+                Some((Tile::Volume, r)) if inside(route_chevron(r, &self.ui), x, y) => {
+                    self.cc.route_menu = Some(self.route_menu_below(r));
+                    self.dirty = true;
                     vec![]
                 }
                 Some((tile @ (Tile::Brightness | Tile::Volume), r)) => {
@@ -2174,6 +2272,10 @@ impl Shell {
                     } else {
                         draw_speaker(s, ends.0, cy, ui.s * 0.6, a(label));
                         draw_speaker_waves(s, ends.1, cy, ui.s * 0.6, a(label), 3);
+                        // the output chevron: opens the output menu
+                        let (kx, ky, kw, kh) = route_chevron((x, y, w, h), ui);
+                        let (kcx, kcy, k) = (kx + kw / 2.0, ky + kh / 2.0, ui.pt(4.0));
+                        icons::fill_poly(s, &[(kcx - k * 1.6, kcy - k * 0.6), (kcx + k * 1.6, kcy - k * 0.6), (kcx, kcy + k * 0.9)], a(label));
                     }
                 }
                 Tile::MediaPlay => {
@@ -2225,6 +2327,10 @@ impl Shell {
                     self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
                 }
             }
+        }
+        // the output menu, over the modules
+        if let Some(menu) = &self.cc.route_menu {
+            super::pickers::draw_route_menu(s, &self.ui, menu.panel, &menu.rows, None);
         }
     }
 }
