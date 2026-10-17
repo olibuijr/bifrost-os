@@ -814,6 +814,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 if !info.saved.is_empty() {
                     groups.push(Group::new(vec![Item::new("Known Networks").value(info.saved.len().to_string()).link(PageId::KnownNetworks)]).footer("Known networks are joined automatically when they are in range."));
                 }
+                // the country whose radio rules the Wi-Fi chip follows; netd applies it from the same region setting
+                groups.push(Group::new(vec![Item::new("Country or Region").value(bifrost_ui::region::current().region_name())]).footer("The Wi-Fi chip uses the channels and power levels allowed in this country. It follows the Region in Language & Region."));
             }
             page("Wi-Fi", false, groups)
         }
@@ -2006,6 +2008,7 @@ mod tests {
         assert_eq!(s.groups[1].header.as_deref(), Some("NETWORKS"));
         assert_eq!(s.groups[1].items[0].action, Action::Network("Cafe".into()));
         assert_eq!(s.groups[1].items[0].accessory, Accessory::Wifi { secure: false, bars: 1 });
+        assert_eq!(s.groups.last().unwrap().items[0].label, "Country or Region", "the regulatory domain shows under the networks");
         let off = spec(PageId::Wifi, &Model { wifi_on: false, ..model(&info, &opts) });
         assert_eq!(off.groups.len(), 1, "nothing but the switch while off");
         assert_eq!(off.groups[0].items.len(), 1);

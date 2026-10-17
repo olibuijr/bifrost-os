@@ -5597,11 +5597,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/regdomain.rs",
+   "bifrost": "springboard/src/net/regdomain.rs; springboard/netd/src/main.rs; springboard/src/shell/pages.rs",
    "status": "gap",
-   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Not built: netd does not call it at start or when the region changes, and Wi-Fi settings do not show the domain.",
+   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Built 2026-10-17: netd starts net::regdomain::follow_region, which reads region from settings.ini every 5 seconds and applies the country at start and on each change; the Wi-Fi page shows Country or Region (tests regdomain::tests, shell::pages::tests). Not built: a live check on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::regdomain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    }
+   ],
+   "ready_note": "The regulatory domain follows the region setting (netd applies it at start and on change) and the Wi-Fi page shows the country; host-tested only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RelativeMotion.framework",
