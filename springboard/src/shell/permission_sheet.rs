@@ -27,8 +27,8 @@ const LOCATION_CHOICES: [&str; 3] = [ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW];
 /// The question's choices for a request: the ids in button order, and the index of the default (Don't Allow).
 pub fn choices_for(kind: Kind) -> (&'static [&'static str], usize) {
     match kind {
-        Kind::Location => (&LOCATION_CHOICES, 2),
-        Kind::Media(_) => (&MEDIA_CHOICES, 1),
+        Kind::Location => (&LOCATION_CHOICES[..], 2),
+        Kind::Media(_) => (&MEDIA_CHOICES[..], 1),
     }
 }
 
@@ -76,8 +76,8 @@ const MEDIA_BUTTONS: [Button; 2] = [Button::DontAllow, Button::Allow];
 /// The buttons a request shows, left to right.
 pub fn buttons_for(kind: Kind) -> &'static [Button] {
     match kind {
-        Kind::Location => &LOCATION_BUTTONS,
-        Kind::Media(_) => &MEDIA_BUTTONS,
+        Kind::Location => &LOCATION_BUTTONS[..],
+        Kind::Media(_) => &MEDIA_BUTTONS[..],
     }
 }
 

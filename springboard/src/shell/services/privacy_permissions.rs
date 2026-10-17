@@ -173,7 +173,7 @@ pub fn set_location_grant(app_id: &str, grant: Grant) -> AuthorizationStatus {
 /// Takes back every Allow Once grant whose app is no longer running (`is_running`): the app's location goes back to
 /// not asked, so its next request shows the sheet again. Returns the apps it reset.
 pub fn expire_once(is_running: impl Fn(&str) -> bool) -> Vec<String> {
-    let gone: Vec<String> = ONCE.with(|o| o.borrow().iter().filter(|a| !is_running(a)).cloned().collect());
+    let gone: Vec<String> = ONCE.with(|o| o.borrow().iter().filter(|a| !is_running(a.as_str())).cloned().collect());
     for app in &gone {
         ONCE.with(|o| o.borrow_mut().remove(app));
         LOCATION.with(|s| s.borrow_mut().remove(app));
