@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0 — 2026-10-17
+
+- Lyrics fall back to the lyrics tagged in the file (ID3 USLT) when there is no `.lrc` file beside the song. The tag is read by
+  `springboard/src/media/id3.rs`, and `Lyrics::load` in `music/lyrics.rs` tries the sidecar first, then the tag.
+- Lyrics tests cover plain and timed embedded text, and the USLT frame tests cover the language and descriptor skip in
+  ID3 v2.3 and v2.4.
+
 ## 1.10.1 — 2026-10-14
 
 - Use the shared spacing token for the artwork badge inset.

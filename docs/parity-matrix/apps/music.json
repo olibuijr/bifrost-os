@@ -154,9 +154,9 @@
    "area": "panel",
    "apple": "View > Lyrics",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_lyrics",
-   "note": "A .lrc file beside a song adds a Lyrics switch on the Now Playing sheet; the line being sung is highlighted and follows the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
-   "wire": "Verify timed .lrc highlighting and plain-text lyrics in the Now Playing sheet on Midget."
+   "bifrost": "springboard/apps/music-desktop/src/music/lyrics.rs (Lyrics::load, load_embedded); springboard/src/media/id3.rs (lyrics); music.rs::draw_lyrics",
+   "note": "A .lrc file beside a song, or else the lyrics tagged in the file (ID3 USLT), adds a Lyrics switch on the Now Playing sheet; timed lyrics highlight the line being sung and follow the song. View > Show Lyrics does the same. Plain-text lyrics are listed without highlight. Not yet checked on Midget.",
+   "wire": "Verify on Midget the timed .lrc highlighting, lyrics embedded in an MP3 (USLT) and plain-text lyrics in the Now Playing sheet."
   },
   {
    "feature": "Equalizer",

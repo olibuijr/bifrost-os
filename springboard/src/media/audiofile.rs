@@ -82,6 +82,8 @@ pub struct Tags {
     pub year: Option<u32>,
     /// the cover picture, still encoded (JPEG or PNG)
     pub cover: Option<Vec<u8>>,
+    /// the unsynchronised lyrics text as tagged (ID3 USLT), when the file carries it
+    pub lyrics: Option<String>,
 }
 
 /// A decoded audio stream: interleaved S16 at its own rate and channel
