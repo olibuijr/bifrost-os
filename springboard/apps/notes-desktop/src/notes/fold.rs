@@ -130,6 +130,11 @@ pub fn render(folds: &Folds) -> String {
     pairs.iter().map(|(id, key)| format!("{id}\t{key}\n")).collect()
 }
 
+/// Drops the folds of notes that are gone (`live` is every note id on disk) and entries with nothing folded.
+pub fn prune(folds: &mut Folds, live: &HashSet<&str>) {
+    folds.retain(|id, keys| !keys.is_empty() && live.contains(id.as_str()));
+}
+
 /// The folds saved in `dir`, or none.
 pub fn load(dir: &Path) -> Folds {
     std::fs::read_to_string(dir.join(FOLDS_FILE)).map(|t| parse(&t)).unwrap_or_default()
@@ -218,6 +223,18 @@ mod tests {
         assert_eq!(parse(&text), folds);
         assert_eq!(render(&parse(&text)), text, "the text is stable once saved");
         assert_eq!(parse("zz\tzz\nnot a pair\n6e6f\tzz\n"), Folds::new(), "damaged lines are skipped");
+    }
+
+    #[test]
+    fn folds_of_deleted_notes_are_pruned() {
+        let mut folds = Folds::new();
+        folds.insert("kept".into(), set(&["# A"]));
+        folds.insert("gone".into(), set(&["# B"]));
+        folds.insert("empty".into(), set(&[]));
+        let live: HashSet<&str> = ["kept", "empty"].into_iter().collect();
+        prune(&mut folds, &live);
+        assert_eq!(folds.len(), 1);
+        assert!(folds.contains_key("kept"));
     }
 
     #[test]

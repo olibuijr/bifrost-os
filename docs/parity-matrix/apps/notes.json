@@ -203,9 +203,9 @@
    "area": "view",
    "apple": "MainMenu: View > as Gallery; ICMNoteGridController",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/gallery.rs:35 (columns), gallery.rs:45 (card_width); springboard/apps/notes-desktop/src/main.rs:207 (view_menu); springboard/apps/notes-desktop/src/notes/store.rs:240 (Prefs.layout)",
-   "note": "Layout choice in Prefs and View > as List / as Gallery, and the width-derived column math are built and tested on the host. The grid is not drawn: the list still shows rows.",
-   "wire": "In draw_list (mod.rs:3007) and row_rect (mod.rs:855), when prefs.layout is Gallery, lay out cards with gallery::columns(list width, CARD_MIN_PT, CARD_GAP_PT) and card_width (first image thumbnail from the attachments, else a text preview, then title and date); hit-test cards in list_hit; add the list toolbar toggle beside the More button."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/gallery.rs:35 (columns); springboard/apps/notes-desktop/src/notes/mod.rs:2450 (gallery_grid), mod.rs:3342 (draw_gallery), mod.rs:2434 (toggle_layout); springboard/apps/notes-desktop/src/main.rs:210 (view_menu); springboard/apps/notes-desktop/src/notes/chrome.rs (B_LAYOUT toolbar button)",
+   "note": "Gallery grid, width-derived columns, View menu and list toolbar toggle, background thumbnails are built and tested on the host. Not verified on Midget.",
+   "wire": "Verify on Midget the grid, the toolbar icon (square.grid.2x2 may need a symbol asset), thumbnails, and that tapping a card opens the note. Swipe actions are off in the gallery; pinned and date section headers draw above their rows."
   },
   {
    "feature": "Smart folders with user filters (tags, dates, attachments, checklists, folders, pinned, locked)",
@@ -293,9 +293,9 @@
    "area": "view",
    "apple": "MainMenu: View > Collapse/Expand Section, All Sections",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/fold.rs:39 (headings), fold.rs:58 (hidden), springboard/apps/notes-desktop/src/notes/mod.rs:2261 (fold_section); Format menu springboard/apps/notes-desktop/src/main.rs:190",
-   "note": "Heading detection, collapse ranges, Format > Collapse/Expand Section and All Sections, and per-note persistence (.springboard-notes-folds) are built and tested on the host. Remaining: the editor does not hide folded lines or draw disclosure chevrons.",
-   "wire": "Draw a disclosure chevron beside each heading in draw_editor (mod.rs) using the kit disclosure control, and hide the lines of fold::hidden(text, folds[note id]) in the TextArea (springboard/src/shell/textarea.rs), so the caret, line layout and taps skip them."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/fold.rs:39 (headings), fold.rs:58 (hidden); springboard/apps/notes-desktop/src/notes/mod.rs:2357 (apply_folds), mod.rs:2364 (fold_chevrons, disclosure chevrons), mod.rs:2387 (toggle_fold); springboard/src/shell/textarea.rs:305 (set_hidden); Format menu springboard/apps/notes-desktop/src/main.rs:190",
+   "note": "Chevrons, hidden lines, Format > Collapse/Expand Section and All Sections, and per-note persistence are built and tested on the host. The chevron is drawn with a local stripe triangle because the kit has no disclosure control. Not verified on Midget.",
+   "wire": "Verify on Midget that a tap on a heading chevron folds and unfolds the section and the caret never sits on a hidden line; the arrow keys can still step onto hidden lines (TextArea::vertical in springboard/src/shell/textarea.rs) and should skip them."
   },
   {
    "feature": "Settings window: default text size, dark note background, new notes start with, group by date",

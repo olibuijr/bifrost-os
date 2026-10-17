@@ -437,7 +437,7 @@ impl App for NotesApp {
             }
             MENU_LAYOUT_LIST | MENU_LAYOUT_GALLERY => {
                 let layout = if id == MENU_LAYOUT_GALLERY { notes::gallery::Layout::Gallery } else { notes::gallery::Layout::List };
-                n.set_layout(layout);
+                n.set_layout(&ctx.ui, layout);
                 true
             }
             id if (MENU_RECENT..MENU_RECENT + notes::RECENT_MENU as u32).contains(&id) => {

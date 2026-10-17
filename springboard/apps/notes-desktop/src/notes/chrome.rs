@@ -36,6 +36,8 @@ pub(super) const B_PHOTO: u32 = 9;
 pub(super) const B_SHARE: u32 = 10;
 pub(super) const B_MORE: u32 = 11;
 pub(super) const B_SEARCH: u32 = 12;
+/// the list's List / Gallery toggle
+pub(super) const B_LAYOUT: u32 = 13;
 
 /// Sidebar row ids: All Notes, Recently Deleted, then folder `i` as `FOLDER_ROW + i`.
 const ROW_ALL: u32 = 100;
@@ -128,13 +130,14 @@ impl Notes {
         let (lx, lw) = self.list_col(ui);
         let x0 = if side > 0.0 { lx + 12.0 } else { lead };
         let w = lx + lw - 8.0 - x0;
-        let buttons = if side > 0.0 { 1.0 } else { 2.0 };
+        let buttons = if side > 0.0 { 2.0 } else { 3.0 };
         let mut items = vec![];
         if side == 0.0 {
             items.push(ToolbarItem::icon(B_SIDEBAR, "Show Sidebar", "sidebar.left"));
         }
         items.push(ToolbarItem::custom(B_LIST_TITLE, "Title", (w - buttons * CAPSULE_PT - 2.0 * TOOLBAR_GAP_PT).max(40.0)));
         items.push(ToolbarItem::flexible_space());
+        items.push(ToolbarItem::icon(B_LAYOUT, "View as Gallery", "square.grid.2x2"));
         items.push(ToolbarItem::icon(B_LIST_MORE, "View Options", "ellipsis"));
         bars.push((Toolbar::new(items), band(x0, w)));
         let (ex, ew) = self.editor_col(ui);
