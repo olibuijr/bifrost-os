@@ -1,6 +1,7 @@
 //! Running without Android: KMS display, evdev input, sysfs power.
 pub mod chord_recovery;
 pub mod bluetooth;
+pub mod rfcomm;
 pub mod boost;
 pub mod control;
 pub mod cpuprofile;

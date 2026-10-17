@@ -111,11 +111,18 @@
       "bifrost": "springboard/src/bare/bluetooth.rs:1-24 (module header: uses the mgmt API instead of raw HCI, by design)",
       "status": "partial",
       "note": "The shell uses mgmt commands, not the HCI structure set. Apps get none of the HCI or LE types."
+    },
+    {
+      "feature": "RFCOMM streams",
+      "apple": "IOBluetoothRFCOMMChannel, IOBluetoothRFCOMMChannelDelegate, IOBluetoothDevice openRFCOMMChannel",
+      "bifrost": "springboard/src/bare/rfcomm.rs (sockaddr, connect, Stream)",
+      "status": "partial",
+      "note": "Built 2026-10-17: AF_BLUETOOTH BTPROTO_RFCOMM socket connect to a channel 1 to 30 with the sockaddr_rc layout, read and write_all on the stream; tests bare::rfcomm::tests (pure address rules). Not reachable from apps, and the connection needs the lab machine."
     }
   ],
   "gaps": [
     "App-facing Bluetooth SDK (springboard/sdk/src/bluetooth_service.rs) lists devices, scans, connects and reads a pending pairing code; apps cannot type the code (the shell asks the user) and cannot open RFCOMM or SDP.",
-    "No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).",
+    "No RFCOMM app API: the kernel stream is in springboard/src/bare/rfcomm.rs (channels must be known, since SDP is not queried), and no RFCOMM server side. No OBEX or SDP.",
     "No hands-free (call control) profile.",
     "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
     "No HID device counts or ignore controls exposed to apps."
