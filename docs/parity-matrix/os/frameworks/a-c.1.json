@@ -1636,9 +1636,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/bare/input.rs; springboard/mcp/src/keys.rs; springboard/sdk/src/hid_devices.rs; springboard/sdk/src/hid_virtual.rs",
+   "bifrost": "springboard/src/bare/input.rs; springboard/mcp/src/keys.rs; springboard/sdk/src/hid_devices.rs; springboard/sdk/src/hid_virtual.rs; springboard/sdk/src/hid_reports.rs",
    "status": "partial",
-   "note": "The shell classifies input devices and decodes their reports (springboard/src/bare/input.rs). The SDK has the app-facing device model (hid_devices.rs, DeviceManager over bifrost_ui::hid_match) and the virtual keyboard report model (hid_virtual.rs). Still not covered: a virtual device the shell creates for apps, report descriptors for arbitrary devices, and raw reports to apps.",
+   "note": "The shell classifies input devices and decodes their reports (springboard/src/bare/input.rs). The SDK has the app-facing device model (hid_devices.rs), the virtual keyboard report model (hid_virtual.rs), and raw reports read from hidraw nodes (hid_reports.rs, bounded queue). Still not covered: a virtual device the shell creates for apps, report descriptors for arbitrary devices, and the shell binding hidraw nodes into app sandboxes.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -1647,6 +1647,11 @@
      "kind": "test",
      "crate": "bifrost-app",
      "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_reports::tests"
     },
     {
      "kind": "test",
@@ -1664,7 +1669,7 @@
      "filter": "a_key_listed_twice_in_one_report_is_refused"
     }
    ],
-   "ready_note": "The device manager's change sets (hid_devices::tests) and the keyboard report encoding, key limit and duplicate refusal (parity_sdk-os-10 tests) are covered. Virtual devices created by the shell and raw reports to apps remain open in the note."
+   "ready_note": "Device matching, hidraw reads and the bounded report queue, and keyboard report encoding are covered. The remaining gaps are named in the note."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreHaptics.framework",
@@ -1807,11 +1812,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/mod.rs; springboard/src/media/queue.rs; springboard/src/media/player.rs; springboard/src/media/mp4.rs",
+   "bifrost": "springboard/ui/src/media_time.rs; springboard/ui/src/media_block.rs; springboard/sdk/src/sample_buffer.rs; springboard/sdk/src/media_format.rs; springboard/src/media/mod.rs; springboard/src/media/queue.rs; springboard/src/media/player.rs; springboard/src/media/mp4.rs",
    "status": "partial",
-   "note": "The media pipeline demuxes MP4, decodes, keeps a playback clock and queues frames and samples. Not covered: sample and block buffers, time values and format descriptions as an app-facing API.",
+   "note": "The media pipeline demuxes MP4, decodes, keeps a playback clock and queues frames and samples (springboard/src/media). App-facing models now cover the pieces the row named: time values (media_time: rational time, cross-timescale comparison, ranges), sample buffers (sample_buffer), block buffers (media_block), and format descriptions (media_format). Still missing: the shell's pipeline does not hand its own samples to apps as these types, and the pipeline does not use the format descriptions yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "media_block::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "media_format::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "a_demuxed_sample_keeps"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "a_batch_sorts_by_presentation"
+    }
+   ],
+   "ready_note": "Time values, block buffers, format descriptions and the sample buffer model are tested (media_time, media_block, media_format, parity_sdk-os-03). The pipeline's own hand-over to apps is listed as missing in the note, so the row is ready for the model parts only."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMediaIO.framework",
@@ -2069,9 +2103,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/wifi.rs; springboard/src/net/wpa.rs; springboard/src/net/wifi_config.rs; springboard/src/shell/wifi_page.rs; springboard/sdk/src/wlan_service.rs",
+   "bifrost": "springboard/src/net/wifi.rs; springboard/src/net/wpa.rs; springboard/src/net/wifi_config.rs; springboard/src/net/wifi_phy.rs; springboard/src/shell/services/wifi.rs; springboard/src/shell/desktop_network.rs; springboard/sdk/src/wlan_service.rs",
    "status": "partial",
-   "note": "The shell finds Wi-Fi interfaces, scans, joins networks, keeps saved profiles and reads signal and security through wpa_supplicant. The app-facing interface API is the SDK service layer (springboard/sdk/src/wlan_service.rs), served by springboard::shell::services::wifi. Still not covered: access-point and ad-hoc modes, and channel and PHY detail (no wire fields for them yet).",
+   "note": "The shell finds Wi-Fi interfaces, scans, joins networks, keeps saved profiles and reads signal and security through wpa_supplicant. The app-facing interface API is the SDK service layer (springboard/sdk/src/wlan_service.rs). Built 2026-10-17: access point (host) and ad-hoc networks through nmcli, stop_hosting, and the channel, frequency, width, transmit power and mode from iw dev info (net/wifi_phy.rs) in the interfaces reply.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2080,9 +2114,19 @@
      "kind": "test",
      "crate": "bifrost-app",
      "filter": "wlan_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_phy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::wifi::tests"
     }
    ],
-   "ready_note": "The app-facing request and decode functions for interfaces, networks, power, scan, join and forget are tested (wlan_service::tests). Access-point and ad-hoc modes and channel and PHY detail remain open in the note."
+   "ready_note": "Interface and network requests, the hotspot and ad-hoc offers (services::wifi tests), the iw radio detail (wifi_phy tests) and the SDK decoding (wlan_service tests) are covered. Nothing in the note is still open."
   },
   {
    "id": "path:/System/Library/Frameworks/CrashReportExtension.framework",
