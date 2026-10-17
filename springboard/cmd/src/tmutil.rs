@@ -1,7 +1,7 @@
 //! `tmutil`: the command line for the snapshot backup on the backup disk (see `bifrost_core::snapshot_backup`).
 //!
-//! Subcommands: `status`, `startbackup`, `listbackups`, `restore [--at STAMP] SOURCE DEST` and `addexclusion` /
-//! `removeexclusion PATH`. The backup store is a directory (`BIFROST_BACKUP_STORE`, else `DEFAULT_STORE`):
+//! Subcommands: `status`, `startbackup`, `listbackups`, `latestbackup`, `restore [--at STAMP] SOURCE DEST`,
+//! `isexcluded PATH` and `addexclusion` / `removeexclusion PATH`. The backup store is a directory (`BIFROST_BACKUP_STORE`, else `DEFAULT_STORE`):
 //! - `snapshots.txt`: one snapshot time (Unix seconds) per line, written by the backup writer;
 //! - `exclusions.txt`: the excluded items, one absolute path per line (`backup_exclude::BackupExclusions`);
 //! - `start-request`: written by `startbackup`, taken by the backup writer when the disk is attached;
@@ -18,7 +18,7 @@ use std::path::{Component, Path, PathBuf};
 pub const DEFAULT_STORE: &str = "/var/lib/bifrost/backup";
 /// The environment variable that overrides the backup store.
 pub const STORE_ENV: &str = "BIFROST_BACKUP_STORE";
-pub const USAGE: &str = "usage: tmutil status | startbackup | listbackups | restore [--at STAMP] SOURCE DEST | addexclusion PATH | removeexclusion PATH";
+pub const USAGE: &str = "usage: tmutil status | startbackup | listbackups | latestbackup | restore [--at STAMP] SOURCE DEST | isexcluded PATH | addexclusion PATH | removeexclusion PATH";
 
 const SNAPSHOTS_FILE: &str = "snapshots.txt";
 const EXCLUSIONS_FILE: &str = "exclusions.txt";
@@ -32,8 +32,10 @@ pub enum Command {
     Status,
     StartBackup,
     ListBackups,
+    LatestBackup,
     /// `at` is the snapshot time to restore from (the newest snapshot not after it); `None` means the newest one.
     Restore { at: Option<u64>, source: String, dest: String },
+    IsExcluded(String),
     AddExclusion(String),
     RemoveExclusion(String),
 }
@@ -48,7 +50,9 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         "status" => no_operands(rest, Command::Status),
         "startbackup" => no_operands(rest, Command::StartBackup),
         "listbackups" => no_operands(rest, Command::ListBackups),
+        "latestbackup" => no_operands(rest, Command::LatestBackup),
         "restore" => parse_restore(rest),
+        "isexcluded" => one_path(rest).map(Command::IsExcluded),
         "addexclusion" => one_path(rest).map(Command::AddExclusion),
         "removeexclusion" => one_path(rest).map(Command::RemoveExclusion),
         other => Err(format!("unknown command '{other}'\n{USAGE}")),
@@ -97,6 +101,8 @@ pub fn run(cmd: &Command, dir: &Path, now: u64) -> Result<String, String> {
         Command::Status => status(dir, now),
         Command::StartBackup => start_backup(dir, now),
         Command::ListBackups => list_backups(dir),
+        Command::LatestBackup => latest_backup(dir),
+        Command::IsExcluded(path) => is_excluded(dir, path),
         Command::Restore { at, source, dest } => restore(dir, *at, source, dest),
         Command::AddExclusion(path) => set_exclusion(dir, path, true),
         Command::RemoveExclusion(path) => set_exclusion(dir, path, false),
@@ -131,6 +137,21 @@ fn start_backup(dir: &Path, now: u64) -> Result<String, String> {
 fn list_backups(dir: &Path) -> Result<String, String> {
     let times = read_times(dir)?;
     Ok(times.iter().map(|&t| format!("{}\n", sb::stamp(t))).collect())
+}
+
+/// The newest snapshot name, as `listbackups` prints it. Fails when there is no backup yet.
+fn latest_backup(dir: &Path) -> Result<String, String> {
+    let last = *read_times(dir)?.last().ok_or("there are no backups yet")?;
+    Ok(format!("{}\n", sb::stamp(last)))
+}
+
+/// `[Excluded]` or `[Included]` and the path, as `tmutil isexcluded` prints it.
+fn is_excluded(dir: &Path, path: &str) -> Result<String, String> {
+    if !path.starts_with('/') {
+        return Err(format!("{path} is not an absolute path"));
+    }
+    let tag = if read_exclusions(dir)?.is_excluded(Path::new(path)) { "Excluded" } else { "Included" };
+    Ok(format!("[{tag}]  {path}\n"))
 }
 
 fn restore(dir: &Path, at: Option<u64>, source: &str, dest: &str) -> Result<String, String> {
@@ -368,6 +389,35 @@ mod tests {
         run(&Command::RemoveExclusion("/home/u/cache".into()), &dir, 0).unwrap();
         let text = run(&Command::Status, &dir, 0).unwrap();
         assert!(text.contains("Excluded items: 1"), "{text}");
+    }
+
+    #[test]
+    fn parses_latestbackup_and_isexcluded() {
+        assert_eq!(parse(&args(&["latestbackup"])), Ok(Command::LatestBackup));
+        assert_eq!(
+            parse(&args(&["isexcluded", "/home/u/cache"])),
+            Ok(Command::IsExcluded("/home/u/cache".into()))
+        );
+        assert!(parse(&args(&["latestbackup", "x"])).is_err());
+        assert!(parse(&args(&["isexcluded"])).is_err());
+    }
+
+    #[test]
+    fn latestbackup_prints_the_newest_snapshot() {
+        let dir = scratch("latest");
+        assert!(run(&Command::LatestBackup, &dir, 0).is_err());
+        let (_, t2) = two_snapshots(&dir);
+        let text = run(&Command::LatestBackup, &dir, 0).unwrap();
+        assert_eq!(text, format!("{}\n", sb::stamp(t2)));
+    }
+
+    #[test]
+    fn isexcluded_reports_each_path() {
+        let dir = scratch("isexcluded");
+        run(&Command::AddExclusion("/home/u/cache".into()), &dir, 0).unwrap();
+        assert_eq!(run(&Command::IsExcluded("/home/u/cache".into()), &dir, 0).unwrap(), "[Excluded]  /home/u/cache\n");
+        assert_eq!(run(&Command::IsExcluded("/home/u/notes".into()), &dir, 0).unwrap(), "[Included]  /home/u/notes\n");
+        assert!(run(&Command::IsExcluded("cache".into()), &dir, 0).is_err());
     }
 
     #[test]

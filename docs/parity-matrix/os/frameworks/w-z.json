@@ -197,7 +197,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
    "status": "partial",
-   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built since: wallpaper_types::listed and find give the installed apps' wallpapers as a list that Settings can read (tests wallpaper_types::tests). Gap: Settings > Wallpaper (springboard/src/shell/wallpaper_page.rs) still shows only the packed stills, and no extension runs to draw a wallpaper.",
+   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built 2026-10-17: wallpaper_types::installed reads the installed manifests, and the shell caches each app's first picture as wallpapers/app_<id>.raw (springboard/src/bin/shell.rs app_wallpapers) so the Settings Wallpaper grid lists it and choosing it uses the still path (tests wallpaper_types::tests). Gap: a day wallpaper shows its first picture only, and no extension runs to draw a wallpaper.",
    "rea": [],
    "method": "assessed"
   },

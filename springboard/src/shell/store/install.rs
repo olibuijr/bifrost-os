@@ -122,6 +122,8 @@ pub struct Manifest {
     pub wallpaper_kind: String,
     /// The app's wallpaper pictures, package-relative (`wallpapers = ["wallpapers/a.png"]`).
     pub wallpapers: Vec<String>,
+    /// Input source plugins the app adds, one `id|name|language|engine` each (`input_methods::plugins`).
+    pub input_sources: Vec<String>,
 }
 
 impl Manifest {
@@ -174,6 +176,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
                 "permissions" => m.permissions = items,
                 "provides" => m.provides = items,
                 "wallpapers" => m.wallpapers = items,
+                "input_sources" => m.input_sources = items,
                 _ => {}
             }
             continue;
@@ -261,6 +264,10 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     }
     if !m.icon.is_empty() && !has(&m.icon) {
         return Err(format!("icon {:?} is not inside the package", m.icon));
+    }
+    if !m.input_sources.is_empty() {
+        crate::shell::input_methods::plugins::parse(&m.input_sources.join("\n"))
+            .map_err(|e| format!("input_sources entry {} is refused: {}", e.line, e.reason))?;
     }
     if let Some(wallpaper) = crate::shell::wallpaper_types::from_manifest(&m.id, &m.wallpaper_kind, &m.wallpapers)? {
         if let Some(missing) = wallpaper.images.iter().find(|p| !has(p)) {
@@ -843,6 +850,18 @@ pub mod tests {
         assert!(validate(&m, &with_pictures, "0.1.0").is_ok());
         // an app that declares no wallpaper is unaffected
         assert!(parse_manifest(MANIFEST).unwrap().wallpapers.is_empty());
+    }
+
+    #[test]
+    fn an_app_adds_input_sources_that_must_name_a_built_in_engine() {
+        let text = format!("{MANIFEST}input_sources = [\"is.x.calc.kana|Kana|ja|kana-typing\"]\n");
+        let m = parse_manifest(&text).unwrap();
+        assert_eq!(m.input_sources, vec!["is.x.calc.kana|Kana|ja|kana-typing".to_string()]);
+        let files = read_tar(&pkg(&text)).unwrap();
+        assert!(validate(&m, &files, "0.1.0").is_ok());
+        let bad = parse_manifest(&format!("{MANIFEST}input_sources = [\"is.x.calc.kana|Kana|ja|shell-code\"]\n")).unwrap();
+        assert!(validate(&bad, &files, "0.1.0").unwrap_err().contains("refused"));
+        assert!(parse_manifest(MANIFEST).unwrap().input_sources.is_empty());
     }
 
     #[test]
