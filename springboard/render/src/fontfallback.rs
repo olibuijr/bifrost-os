@@ -4,7 +4,7 @@
 //! the list is empty and text draws exactly as before.
 
 use crate::font::Font;
-use crate::fontobj::FontManager;
+use crate::fontobj::{FontManager, Scope};
 use std::sync::{Arc, RwLock};
 
 type Faces = Arc<Vec<Font<'static>>>;
@@ -36,6 +36,36 @@ pub fn install_from_manager(mgr: &FontManager, lang: &str) -> usize {
 pub fn install_from_dir(dir: &std::path::Path, lang: &str) -> usize {
     let mut m = FontManager::new();
     m.scan_dir(dir, 2);
+    install_from_manager(&m, lang)
+}
+
+/// The script fonts the packages BifrOSt installs (`packaging/arch/runtime-packages.txt`) provide, by the family
+/// name the fallback cascade asks for (`fontobj::default_cascade`). Each file registers as one face: the first face
+/// of a collection, so `Noto Sans CJK JP` stands for every CJK language. A missing file is skipped.
+pub const SYSTEM_FALLBACK: &[(&str, &str)] = &[
+    ("Noto Sans", "/usr/share/fonts/noto/NotoSans-Regular.ttf"),
+    ("Noto Sans Arabic", "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"),
+    ("Noto Naskh Arabic", "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"),
+    ("Noto Sans Hebrew", "/usr/share/fonts/noto/NotoSansHebrew-Regular.ttf"),
+    ("Noto Sans Devanagari", "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"),
+    ("Noto Sans Thai", "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"),
+    ("Noto Sans CJK JP", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"),
+    ("Noto Sans Symbols", "/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf"),
+    ("Noto Sans Symbols 2", "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"),
+    ("Noto Sans Math", "/usr/share/fonts/noto/NotoSansMath-Regular.ttf"),
+    ("DejaVu Sans", "/usr/share/fonts/TTF/DejaVuSans.ttf"),
+];
+
+/// Registers the library fonts under `library`, then each existing `SYSTEM_FALLBACK` file, and installs the list.
+/// The library comes first, so the packed UI faces keep their order. Returns the count of fallback faces.
+pub fn install_with_system(library: &std::path::Path, lang: &str) -> usize {
+    let mut m = FontManager::new();
+    m.scan_dir(library, 2);
+    for (_, path) in SYSTEM_FALLBACK {
+        if std::path::Path::new(path).is_file() {
+            let _ = m.register_url(path, Scope::System);
+        }
+    }
     install_from_manager(&m, lang)
 }
 
@@ -108,6 +138,43 @@ mod tests {
         // the list may be shared with other tests in this process; whatever it holds, covered text yields None
         assert!(runs(&f, "Hello world").is_none());
         assert!(runs(&f, "").is_none());
+    }
+
+    #[test]
+    fn system_fallback_names_the_primary_face_of_each_language() {
+        use crate::fontobj::default_cascade;
+        let has = |family: &str| SYSTEM_FALLBACK.iter().any(|(f, _)| *f == family);
+        // the first cascade entry of each language that BifrOSt ships a package for
+        for (lang, family) in [("en", "Noto Sans"), ("ja", "Noto Sans CJK JP"), ("ar", "Noto Sans Arabic"), ("he", "Noto Sans Hebrew"), ("hi", "Noto Sans Devanagari"), ("th", "Noto Sans Thai")] {
+            assert_eq!(default_cascade(lang)[0], family, "{lang}");
+            assert!(has(family), "{lang} needs {family} in SYSTEM_FALLBACK");
+        }
+        // the symbol and math families at the end of every cascade are installed too
+        for family in ["Noto Sans Symbols", "Noto Sans Symbols 2", "Noto Sans Math"] {
+            assert!(has(family), "{family}");
+        }
+    }
+
+    #[test]
+    fn system_fallback_files_are_package_paths_without_duplicates() {
+        let mut seen = Vec::new();
+        for (family, path) in SYSTEM_FALLBACK {
+            assert!(path.starts_with("/usr/share/fonts/"), "{path}");
+            assert!(!seen.contains(family), "duplicate family {family}");
+            seen.push(*family);
+        }
+    }
+
+    #[test]
+    fn install_with_system_with_an_empty_library_reports_what_it_installed() {
+        // an empty library: the count is exactly the system files present on this machine, never a panic
+        let dir = std::env::temp_dir().join("bifrost-fallback-empty-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let present = SYSTEM_FALLBACK.iter().filter(|(_, p)| std::path::Path::new(p).is_file()).count();
+        let n = install_with_system(&dir, "en");
+        // a file the parser rejects (a collection, say) is not counted, so the bound is one-sided
+        assert!(n <= present);
+        install(Vec::new());
     }
 
     #[test]

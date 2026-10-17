@@ -692,7 +692,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ADTNumeric resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "ADTNumeric resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -715,7 +715,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    }
+   ],
+   "ready_note": "Noto Sans Symbols 2 (noto-fonts), Braille block is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Outline 8 Dot.ttf",
@@ -736,7 +744,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    }
+   ],
+   "ready_note": "Noto Sans Symbols 2 (noto-fonts), Braille block is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Pinpoint 6 Dot.ttf",
@@ -757,7 +773,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    }
+   ],
+   "ready_note": "Noto Sans Symbols 2 (noto-fonts), Braille block is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Pinpoint 8 Dot.ttf",
@@ -778,7 +802,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    }
+   ],
+   "ready_note": "Noto Sans Symbols 2 (noto-fonts), Braille block is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille.ttf",
@@ -828,7 +860,15 @@
    "status": "partial",
    "note": "BifrOSt renders emoji with Noto Color Emoji (noto-fonts-emoji in the runtime package list); not Apple artwork; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoColorEmoji.ttf"
+    }
+   ],
+   "ready_note": "Noto Color Emoji (noto-fonts-emoji) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Symbols.ttf",
@@ -907,7 +947,15 @@
    "status": "partial",
    "note": "AquaKana resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/ArialHB.ttc",
@@ -955,7 +1003,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Avenir Next Condensed resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Avenir Next Condensed resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -976,7 +1024,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Avenir Next resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Avenir Next resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -997,7 +1045,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Avenir resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Avenir resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1020,7 +1068,15 @@
    "status": "partial",
    "note": "CJKSymbolsFallback resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto Sans CJK (noto-fonts-cjk), CJK symbols is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Courier.ttc",
@@ -1068,7 +1124,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Academy Engraved LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Academy Engraved LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1091,7 +1147,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Al Tarikh.ttc",
@@ -1112,7 +1176,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AlBayan.ttc",
@@ -1133,7 +1205,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AmericanTypewriter.ttc",
@@ -1152,7 +1232,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AmericanTypewriter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "AmericanTypewriter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1173,7 +1253,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1196,7 +1276,15 @@
    "status": "partial",
    "note": "Apple Chancery resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/Z003-MediumItalic.otf"
+    }
+   ],
+   "ready_note": "Z003 Medium Italic (gsfonts), URW Zapf Chancery clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AppleGothic.ttf",
@@ -1217,7 +1305,15 @@
    "status": "partial",
    "note": "AppleGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AppleMyungjo.ttf",
@@ -1238,7 +1334,15 @@
    "status": "partial",
    "note": "AppleMyungjo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto serif CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Black.ttf",
@@ -1257,7 +1361,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1367,7 +1471,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/NimbusSansNarrow-BoldOblique.otf"
+    }
+   ],
+   "ready_note": "Nimbus Sans Narrow Bold Oblique (gsfonts) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf",
@@ -1388,7 +1500,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/NimbusSansNarrow-Bold.otf"
+    }
+   ],
+   "ready_note": "Nimbus Sans Narrow Bold (gsfonts) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow Italic.ttf",
@@ -1409,7 +1529,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/NimbusSansNarrow-Oblique.otf"
+    }
+   ],
+   "ready_note": "Nimbus Sans Narrow Oblique (gsfonts) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow.ttf",
@@ -1430,7 +1558,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/NimbusSansNarrow-Regular.otf"
+    }
+   ],
+   "ready_note": "Nimbus Sans Narrow (gsfonts), URW narrow Helvetica clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf",
@@ -1449,7 +1585,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1470,7 +1606,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), Latin stand-in; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1520,7 +1656,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Athelas resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Athelas resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1543,7 +1679,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular (noto-fonts), Thai script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Baghdad.ttc",
@@ -1564,7 +1708,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bangla MN.ttc",
@@ -1585,7 +1737,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBengali-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBengali-Regular (noto-fonts), Bengali script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bangla Sangam MN.ttc",
@@ -1606,7 +1766,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBengali-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBengali-Regular (noto-fonts), Bengali script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Baskerville.ttc",
@@ -1625,7 +1793,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Baskerville resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Baskerville resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1648,7 +1816,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/BigCaslon.ttf",
@@ -1667,7 +1843,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "BigCaslon resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "BigCaslon resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1688,7 +1864,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni 72 OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1709,7 +1885,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 Smallcaps Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni 72 Smallcaps Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1730,7 +1906,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni 72 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1751,7 +1927,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (decorative ornament face, no open equivalent installed); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1772,7 +1948,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bradley Hand Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bradley Hand Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1793,7 +1969,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Brush Script resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Brush Script resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1814,7 +1990,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Chalkboard resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Chalkboard resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1835,7 +2011,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ChalkboardSE resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "ChalkboardSE resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1856,7 +2032,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Chalkduster resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Chalkduster resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1877,7 +2053,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Charter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Charter resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1898,7 +2074,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Cochin resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Cochin resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1919,7 +2095,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1940,7 +2116,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1961,7 +2137,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Copperplate resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Copperplate resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -1982,7 +2158,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Corsiva resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Corsiva resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2359,7 +2535,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ADTGaramond resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "ADTGaramond resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2382,7 +2558,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlKhalil.ttc",
@@ -2403,7 +2587,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlRafidain.ttc",
@@ -2424,7 +2616,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlRafidainAlFanni.ttc",
@@ -2445,7 +2645,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Algiers.ttc",
@@ -2466,7 +2674,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AsphaltMedium.otf",
@@ -2485,7 +2701,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AsphaltMedium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "AsphaltMedium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2506,7 +2722,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "BalegaRegular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "BalegaRegular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2527,7 +2743,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "BankGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "BankGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2550,7 +2766,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BebasNeue.otf",
@@ -2569,7 +2793,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "BebasNeue resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "BebasNeue resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2590,7 +2814,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Blackmoor LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Blackmoor LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2611,7 +2835,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Blair Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Blair Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2632,7 +2856,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (decorative ornament face, no open equivalent installed); the UI face draws it.",
    "rea": [],
    "method": "assessed"
   },
@@ -2653,7 +2877,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni SvtyTwo OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni SvtyTwo OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2674,7 +2898,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni SvtyTwo SC Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni SvtyTwo SC Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2695,7 +2919,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni SvtyTwo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bodoni SvtyTwo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2718,7 +2942,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/P052-Roman.otf"
+    }
+   ],
+   "ready_note": "P052 (gsfonts), URW Palatino clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BookmanOldStyle.ttc",
@@ -2739,7 +2971,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/URWBookman-Light.otf"
+    }
+   ],
+   "ready_note": "URW Bookman Light (gsfonts), Bookman clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bordeaux Roman Bold LET Fonts.ttf",
@@ -2758,7 +2998,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bordeaux Roman Bold LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Bordeaux Roman Bold LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2779,7 +3019,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Braganza resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Braganza resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2800,7 +3040,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Capitals resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Capitals resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2821,7 +3061,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Carlito resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Carlito resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2844,7 +3084,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/URWGothic-Book.otf"
+    }
+   ],
+   "ready_note": "URW Gothic Book (gsfonts), Avant Garde clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/CenturySchoolbook.ttc",
@@ -2865,7 +3113,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/C059-Roman.otf"
+    }
+   ],
+   "ready_note": "C059 (gsfonts), URW Century Schoolbook clone is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AdelleSans.ttc",
@@ -2884,7 +3140,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AdelleSans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "AdelleSans resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -2907,7 +3163,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular (noto-fonts), Kannada script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AkayaTelivigala.ttf",
@@ -2928,7 +3192,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular (noto-fonts), Telugu script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AnnaiMN.ttf",
@@ -2949,7 +3221,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts), Tamil script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Apple LiGothic Medium.ttf",
@@ -2970,7 +3250,15 @@
    "status": "partial",
    "note": "Apple LiGothic Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Apple LiSung Light.ttf",
@@ -2991,7 +3279,15 @@
    "status": "partial",
    "note": "Apple LiSung Light resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto serif CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ArimaKoshi.ttc",
@@ -3012,7 +3308,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ArimaMadurai.ttc",
@@ -3033,7 +3337,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts), Tamil script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BIZ_UDGothic_stub.ttc",
@@ -3054,7 +3366,15 @@
    "status": "partial",
    "note": "BIZ_UDGothic_stub resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BIZ_UDMincho-regular_stub.ttf",
@@ -3075,7 +3395,15 @@
    "status": "partial",
    "note": "BIZ_UDMincho-regular_stub resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto serif CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMDoHyeon-Regular.otf",
@@ -3096,7 +3424,15 @@
    "status": "partial",
    "note": "BMDoHyeon-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHanna11yrs-Regular.otf",
@@ -3117,7 +3453,15 @@
    "status": "partial",
    "note": "BMHanna11yrs-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHannaAir-Regular.otf",
@@ -3138,7 +3482,15 @@
    "status": "partial",
    "note": "BMHannaAir-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHannaPro-Regular.otf",
@@ -3159,7 +3511,15 @@
    "status": "partial",
    "note": "BMHannaPro-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMJua-Regular.otf",
@@ -3180,7 +3540,15 @@
    "status": "partial",
    "note": "BMJua-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMKirangHaerang-Regular.otf",
@@ -3201,7 +3569,15 @@
    "status": "partial",
    "note": "BMKirangHaerang-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMYeongSung-Regular.otf",
@@ -3222,7 +3598,15 @@
    "status": "partial",
    "note": "BMYeongSung-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto sans CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baijam.ttc",
@@ -3243,7 +3627,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baloo-Devanagari.ttc",
@@ -3264,7 +3656,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular (noto-fonts), Devanagari script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhai-Gujarati.ttc",
@@ -3285,7 +3685,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGujarati-Regular (noto-fonts), Gujarati script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhaijaanUrdu-Regular.ttf",
@@ -3306,7 +3714,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts), Arabic Naskh script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhainaOdia.ttc",
@@ -3327,7 +3743,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOriya-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansOriya-Regular (noto-fonts), Oriya script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooChettanMalayalam.ttc",
@@ -3348,7 +3772,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansMalayalam-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansMalayalam-Regular (noto-fonts), Malayalam script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooDaBanga.ttc",
@@ -3369,7 +3801,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansBengali-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansBengali-Regular (noto-fonts), Bengali script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooPaajiGurmukhi.ttc",
@@ -3390,7 +3830,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGurmukhi-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansGurmukhi-Regular (noto-fonts), Gurmukhi script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooTammaKannada.ttc",
@@ -3411,7 +3859,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansKannada-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansKannada-Regular (noto-fonts), Kannada script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooTammuduTelugu.ttc",
@@ -3432,7 +3888,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTelugu-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTelugu-Regular (noto-fonts), Telugu script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooThambiTamil.ttc",
@@ -3453,7 +3917,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTamil-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansTamil-Regular (noto-fonts), Tamil script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baoli.ttc",
@@ -3474,7 +3946,15 @@
    "status": "partial",
    "note": "Baoli resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto serif CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BiauKai.ttc",
@@ -3495,7 +3975,15 @@
    "status": "partial",
    "note": "BiauKai resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "Noto serif CJK (noto-fonts-cjk) is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Brill-Italic.ttf",
@@ -3514,7 +4002,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Brill-Italic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Brill-Italic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3535,7 +4023,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Brill-Roman resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Brill-Roman resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3558,7 +4046,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansDevanagari-Regular (noto-fonts), Devanagari script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Canela.ttc",
@@ -3577,7 +4073,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Canela resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Canela resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3598,7 +4094,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "CanelaDeck resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "CanelaDeck resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3619,7 +4115,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "CanelaText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "CanelaText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3642,7 +4138,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular (noto-fonts), Thai script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Charm.ttc",
@@ -3661,7 +4165,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Charm resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Charm resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -3684,7 +4188,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoSansThai-Regular (noto-fonts), Thai script is the installed substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ActionsAvailable.aiff",
@@ -4123,7 +4635,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Coolvetica resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "Coolvetica resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   },
@@ -4234,7 +4746,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AGC resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "AGC resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed"
   }
