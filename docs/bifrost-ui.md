@@ -1105,7 +1105,7 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   the model, so a floating window stays above the normal ones.
 - Extra windows (`app_windows`): `windows::set_level` levels only the main window. An extra window floats with
   `windows::set_window_level(ctx, id, Level::Floating)` (it takes the extra window's `WindowId`), which
-  sends `ToShell::WindowLevelOf { id, level }` (tag 0x1cc, id then one byte). The shell keeps the flag in the window table
+  sends `ToShell::WindowLevelOf { id, level }` (tag 0x24c, id then one byte). The shell keeps the flag in the window table
   (`app_window_table.rs` `set_floating`, `floating_ids`; id 0 is refused) and `Desk::floating_apps` lists the floating
   extra windows with the floating apps, so they stack last. Activity Monitor's CPU windows use it (activity-desktop 0.8.0).
   Built and reviewed by reading only; no Midget run yet.
@@ -3629,7 +3629,7 @@ effect at once.
 **Full screen for app windows.** The green light of an external window toggles full screen (`Desk::set_full_screen`):
 the window takes the whole screen (its own space), has no title bar, and the menu bar is hidden until the pointer
 reaches the top edge (`desk::bar_hidden`). An app asks for it with `ToShell::SetFullScreen { on }` (SDK:
-`Ctx::set_full_screen`, tag 0x1c6); the shell answers with `ToApp::FullScreen { on }` (tag 0x1cc), which the SDK
+`Ctx::set_full_screen`, tag 0x24d); the shell answers with `ToApp::FullScreen { on }` (tag 0x24c), which the SDK
 accepts and ignores for now. Fixed-size windows do not go full screen.
 
 **What Game Mode does while on:**
@@ -4338,12 +4338,12 @@ cannot be closed) and the windows the app opens, front to back, the first one fo
   and other windows to nothing; `draw_window(ctx, window, surface, t)` sends the main window to `draw` and others to an empty
   damage; `window_closed(ctx, window)` is a no-op. Override them to serve the app's extra windows.
 
-Wire protocol (`springboard/proto`, tags 0x1c0 to 0x1ce): the app sends `WindowOpen {id, title, w, h, position, flags}`, `WindowClose {id}`,
+Wire protocol (`springboard/proto`, tags 0x240 to 0x24e; 0x1c0 to 0x1cf belongs to Search): the app sends `WindowOpen {id, title, w, h, position, flags}`, `WindowClose {id}`,
 `WindowTitle {id, title}`, `WindowResize {id, w, h}`, and for the pixels `WindowBuffers {id, w, h, generation}` and `WindowFrame {id, buf, damage}`.
 The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
 t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
-Placement, collapse and title double-click (tags 0x1c6, 0x1c7, 0x1cd, 0x1ce). `WindowOpen` carries an optional `position`
+Placement, collapse and title double-click (tags 0x246, 0x247, 0x24d, 0x24e). `WindowOpen` carries an optional `position`
 (points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
 `WindowMove {window, x, y}` to place a window and `WindowCollapse {window, collapsed}` to fold it to its title bar. The shell
 sends `WindowMoved {window, x, y}` when the person drags a window (the position is in points and clamped to the screen), and

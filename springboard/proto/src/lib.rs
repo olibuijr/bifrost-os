@@ -411,10 +411,10 @@ pub enum ToApp {
     /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
     WindowRelease { id: u32, buf: u32, generation: u32 },
     /// Several windows: the person dragged window `window` to (x, y) points relative to the visible desktop area (the
-    /// shell's clamped position). Tag 0x1cd.
+    /// shell's clamped position). Tag 0x24d.
     WindowMoved { window: u32, x: f32, y: f32 },
     /// Several windows: the person double-clicked the title bar of window `window`. Only sent to windows opened with
-    /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x1ce.
+    /// `window_flags::TITLE_DOUBLE_CLICK`. Tag 0x24e.
     WindowTitleDoubleClick { window: u32 },
     Resume,
     Suspend,
@@ -661,7 +661,7 @@ pub enum ToShell {
     /// Several windows: open window `id` (the app chose the id; the shell never invents one). The title is at most 512
     /// bytes; the size is in points. The window has no pixels until `WindowBuffers` and `WindowFrame` arrive.
     /// `position` (optional, points relative to the visible desktop area) asks where the window goes; the shell clamps it to
-    /// the screen. `flags` is a `window_flags` set. Tag 0x1c0.
+    /// the screen. `flags` is a `window_flags` set. Tag 0x240.
     WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
     /// Several windows: close window `id`. The shell drops its frames.
     WindowClose { id: u32 },
@@ -754,12 +754,12 @@ pub enum ToShell {
     /// Always on Top, Stickies' Float on Top). Sent when it changes; the shell keeps it while the app lives. Tag 0x165.
     WindowLevel(WindowLevel),
     /// The level of one of the app's extra windows (`WindowOpen`'s id). Id 0 is the main window and is refused by the
-    /// shell (use `WindowLevel`). Tag 0x1cc.
+    /// shell (use `WindowLevel`). Tag 0x24c.
     WindowLevelOf { id: u32, level: WindowLevel },
     /// Several windows: move window `window` to (x, y) points relative to the visible desktop area. The shell clamps it
-    /// to the screen. Tag 0x1c6.
+    /// to the screen. Tag 0x246.
     WindowMove { window: u32, x: f32, y: f32 },
-    /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x1c7.
+    /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.
     WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
     NotifyCategories(Vec<NotifCategory>),
@@ -906,16 +906,17 @@ mod tag {
     pub const INPUT_SOURCE: u32 = 0x162;
     pub const ACCENT_HOLD: u32 = 0x163;
     pub const QUICK_ACTION: u32 = 0x164;
-    pub const WINDOW_CLOSED: u32 = 0x1c8;
-    pub const WINDOW_CONFIGURE: u32 = 0x1c9;
-    pub const WINDOW_TOUCH: u32 = 0x1ca;
-    pub const WINDOW_RELEASE: u32 = 0x1cb;
-    pub const WINDOW_OPEN: u32 = 0x1c0;
-    pub const WINDOW_CLOSE: u32 = 0x1c1;
-    pub const WINDOW_TITLE: u32 = 0x1c2;
-    pub const WINDOW_RESIZE: u32 = 0x1c3;
-    pub const WINDOW_BUFFERS: u32 = 0x1c4;
-    pub const WINDOW_FRAME: u32 = 0x1c5;
+    // several windows, window level and full screen: 0x240..=0x24f (0x1c0..=0x1cf belongs to `quicksearch`)
+    pub const WINDOW_CLOSED: u32 = 0x248;
+    pub const WINDOW_CONFIGURE: u32 = 0x249;
+    pub const WINDOW_TOUCH: u32 = 0x24a;
+    pub const WINDOW_RELEASE: u32 = 0x24b;
+    pub const WINDOW_OPEN: u32 = 0x240;
+    pub const WINDOW_CLOSE: u32 = 0x241;
+    pub const WINDOW_TITLE: u32 = 0x242;
+    pub const WINDOW_RESIZE: u32 = 0x243;
+    pub const WINDOW_BUFFERS: u32 = 0x244;
+    pub const WINDOW_FRAME: u32 = 0x245;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -934,9 +935,9 @@ mod tag {
     pub const CONTEXT_MENU:u32=0x10d;
     pub const SET_BADGE: u32 = 0x10e;
     /// App -> shell: enter or leave full screen for the app's window (`ToShell::SetFullScreen`).
-    pub const SET_FULL_SCREEN: u32 = 0x1c6;
+    pub const SET_FULL_SCREEN: u32 = 0x24d;
     /// Shell -> app: the window's full-screen state changed (`ToApp::FullScreen`).
-    pub const FULL_SCREEN: u32 = 0x1cc;
+    pub const FULL_SCREEN: u32 = 0x24c;
     pub const KEYBOARD_OUT: u32 = 0x10f;
     pub const DOC_OPEN: u32 = 0x110;
     pub const DOC_SAVE: u32 = 0x111;
@@ -961,11 +962,11 @@ mod tag {
     pub const SUDDEN_TERMINATION: u32 = 0x160;
     pub const ACTIVITY: u32 = 0x161;
     pub const WINDOW_LEVEL: u32 = 0x165;
-    pub const WINDOW_LEVEL_OF: u32 = 0x1cc;
-    pub const WINDOW_MOVE: u32 = 0x1c6;
-    pub const WINDOW_COLLAPSE: u32 = 0x1c7;
-    pub const WINDOW_MOVED: u32 = 0x1cd;
-    pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x1ce;
+    pub const WINDOW_LEVEL_OF: u32 = 0x24c;
+    pub const WINDOW_MOVE: u32 = 0x246;
+    pub const WINDOW_COLLAPSE: u32 = 0x247;
+    pub const WINDOW_MOVED: u32 = 0x24d;
+    pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x24e;
 }
 
 /// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
@@ -2533,7 +2534,7 @@ mod ax_tree_tests {
     #[test]
     fn a_window_level_of_one_window_is_id_then_one_byte() {
         let m = ToShell::WindowLevelOf { id: 3, level: WindowLevel::Floating }.encode();
-        assert_eq!(&m[..4], &0x1ccu32.to_le_bytes());
+        assert_eq!(&m[..4], &0x24cu32.to_le_bytes());
         assert_eq!(&m[4..8], &3u32.to_le_bytes());
         assert_eq!(*m.last().unwrap(), 1);
         let mut bad = m.clone();
@@ -2835,8 +2836,8 @@ mod quick_action_tests {
     #[test]
     fn window_open_has_the_documented_layout() {
         let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0, position: None, flags: 0 }.encode();
-        // tag 0x1c0, id 2, title length 2 and "ab", then the two floats
-        assert_eq!(&bytes[..4], &0x1c0u32.to_le_bytes());
+        // tag 0x240, id 2, title length 2 and "ab", then the two floats
+        assert_eq!(&bytes[..4], &0x240u32.to_le_bytes());
         assert_eq!(&bytes[4..8], &2u32.to_le_bytes());
         assert_eq!(&bytes[8..12], &2u32.to_le_bytes());
         assert_eq!(&bytes[12..14], b"ab");
