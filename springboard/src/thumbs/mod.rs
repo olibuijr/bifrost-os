@@ -15,7 +15,8 @@
 //! | [`cards::PackageProvider`] | `public.archive` | the type icon with a format badge |
 //! | [`cards::ContactProvider`] | `public.vcard` | a contact card |
 //! | [`cards::CalendarProvider`] | `public.calendar-event` | a calendar page |
-//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds |
+//! | [`media::AudiovisualProvider`] | `public.audiovisual-content` | the cover picture the file embeds, else a waveform card |
+| [`pdf::PdfProvider`] | `com.adobe.pdf` | the first page, drawn by the PDF renderer |
 //! | [`text::ClippingsProvider`] | text clippings and web locations | the clipped text on a tabbed page |
 //!
 //! Thumbnails are kept as raw images in a disk cache named by [`bifrost_ui::thumb_service::cache_key`].
@@ -24,6 +25,7 @@ pub mod canvas;
 pub mod cards;
 pub mod images;
 pub mod media;
+pub mod pdf;
 pub mod text;
 
 use crate::shell::photos::thumbs::DiskCache;
@@ -48,6 +50,7 @@ pub fn registry() -> Registry {
     r.register(Box::new(cards::ContactProvider));
     r.register(Box::new(cards::CalendarProvider));
     r.register(Box::new(media::AudiovisualProvider));
+    r.register(Box::new(pdf::PdfProvider));
     r.register(Box::new(text::ClippingsProvider));
     r
 }
@@ -192,7 +195,7 @@ mod tests {
     #[test]
     fn every_provider_is_registered_once_and_picked_by_type() {
         let r = registry();
-        assert_eq!(r.len(), 11);
+        assert_eq!(r.len(), 12);
         let name = |t: &str| r.provider_for(t).map(ThumbProvider::name);
         assert_eq!(name("public.png"), Some("image"));
         assert_eq!(name("public.rust-source"), Some("text"));
@@ -207,6 +210,7 @@ mod tests {
         assert_eq!(name("public.calendar-event"), Some("calendar"));
         assert_eq!(name("public.mp3"), Some("audiovisual"));
         assert_eq!(name("public.mpeg-4"), Some("audiovisual"));
+        assert_eq!(name("com.adobe.pdf"), Some("pdf"));
         assert_eq!(name("bifrost.text-clipping"), Some("clippings"));
         assert_eq!(name("bifrost.web-location"), Some("clippings"));
         // a vector picture is both an image and XML text: the image provider is nearer
