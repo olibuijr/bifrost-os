@@ -5310,3 +5310,25 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   `springboard/src/shell/preview_panel.rs` uses the same helpers, so both show the same words in the same places.
 - **Local authentication view (`bifrost_app::view::local_auth_view`)**: `LocalAuthenticationView` shows the biometric state as a disc and
   sends its action when tapped; the state changes only through `send`. No caller found. Parity row: `local-authentication-embedded-ui.json`.
+
+### Private framework wave 12 (2026-10-17)
+
+- **File-manager sync extensions (`bifrost_app::file_manager_sync`)**: `SyncExtension` (observe begin and end, badge request, menus,
+  toolbar button), `SyncController` (observed folders, registered badges, per-item badges limited to the observed folders, the host's
+  selection) and `SyncHost` (what the Files app asks). Parity row: `FinderSyncPriv`. Gap: Files does not host an extension process or
+  draw the badges yet, and there is no enable screen in Settings.
+- **Local language model (`bifrost_app::local_model`)**: `LocalModelProvider` is a `ModelProvider` for the local inference engine over
+  a loopback port (chat-completions JSON over HTTP). `LocalEndpoint::parse` refuses any non-loopback host, so a conversation never leaves
+  the machine. Tool calls come back either as the engine's `tool_calls` field or as the prompted `{"tool_calls": [...]}` JSON.
+  `on_device_availability()` still says Unavailable because the system ships no engine; an app asks `LocalModelProvider::availability`.
+  Gap: no token streaming. Parity row: `GenerativeModels`.
+- **On-demand resources (`bifrost_app::on_demand_resources`)**: `Catalog` of tagged payloads, `ResourceStore` (fetch through a caller
+  closure, verify, install, pin, purge under a budget by preservation priority then least recently used) and `ResourceRequest`
+  (begin, conditionally begin, end accessing, progress). Gap: no PC App Store fetch yet. Parity row: `FoundationODR`.
+- **Graph runtime (`bifrost_ui::graph_run`)**: `run(graph, executable, feeds)` executes a compiled `graph::Graph` on the CPU for every
+  operator and element type; `Graph::constant_data` keeps constant payloads. Integer results saturate and an integer divide by zero is an
+  error. Gap: no GPU path. Parity rows: `GraphCompute`, `GraphComputeRT`.
+- **Mesh compression (`bifrost_ui::mesh_compress`)**: lossy compact format for `PrimitiveMesh` (quantized positions, octahedral normals,
+  16-bit texture coordinates, delta-coded indices, FNV-1a checksum). Parity row: `GeometryCompression`.
+- **Focus modes in Settings (`shell::notify_page::modes_group`)**: the Focus page lists every mode and switches the one on by hand.
+  Gap: a mode's people, apps and schedule are not editable from Settings yet. Parity row: `FocusSettingsUI`.
