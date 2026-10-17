@@ -108,6 +108,10 @@ pub struct Found {
     pub kind: Option<&'static str>,
     /// the thumbnail path the app gave, relative to its data dir ("" when none)
     pub thumbnail: String,
+    /// keywords and description, joined: the text the ranker searches besides the title
+    pub text: String,
+    /// Unix seconds the item was indexed (or last replaced); 0 when unknown
+    pub modified: u64,
 }
 
 /// The entries a word query matched, and the query they matched for. A query whose words extend these (more typing)
@@ -267,7 +271,8 @@ impl Index {
             .map(|(_, ai, ei)| {
                 let (app, list) = lists[ai];
                 let e = &list[ei];
-                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone() }
+                let text = format!("{} {}", e.item.keywords.join(" "), e.item.description);
+                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed }
             })
             .collect()
     }
