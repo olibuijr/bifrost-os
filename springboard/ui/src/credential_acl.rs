@@ -51,6 +51,16 @@ impl Binding {
         &self.owner
     }
 
+    /// The service of the item this binding belongs to.
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    /// The account of the item this binding belongs to.
+    pub fn account(&self) -> &str {
+        &self.account
+    }
+
     /// The apps other than the owner that may read the item.
     pub fn allowed(&self) -> &[String] {
         &self.allowed

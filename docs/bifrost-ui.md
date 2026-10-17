@@ -5085,7 +5085,7 @@ the model is host-tested, but no shell or app drives it yet. Every row stays par
   (the OAuth form of `ACAccountCredential`). `encode` and `decode` store it as one opaque keychain secret (header
   `bifrost-oauth-v1`), so the keychain never sees the fields. `is_expired`, `needs_renewal`, `can_renew`, `renewed`. No caller found.
 - **Credential binding (`bifrost_ui::credential_acl`)**: `Binding::new(owner, service, account, presence)`; `grant(by, app)`
-  lets another app read the item; `presence` can require a passcode or biometry. No caller found.
+  lets another app read the item; `presence` can require a passcode or biometry. Wired (2026-10-17): `springboard::keychain::Store` keeps the encoded binding next to the item under a reserved service name that apps cannot name or list; `bind`, `grant`, `revoke` (owner only), `get_as` (granted apps) and `get_with_presence`; a plain `get` of a presence-bound item answers `Error::AuthFailed` (-25293, wire status NotPermitted).
 - **Recovery key (`bifrost_ui::recovery_key`)**: `from_entropy` makes a 16-character key from a 32-character alphabet without
   look-alikes, shown in four groups; `normalise` cleans typed input; `Record::enrol` stores only a salted hash and `matches`
   checks a typed key. No caller found: forgotten-password reset is not wired.
