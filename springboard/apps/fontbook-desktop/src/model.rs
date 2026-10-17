@@ -556,13 +556,16 @@ pub fn repertoire_rows(r: &validate::Report) -> Vec<(String, String)> {
     ]
 }
 
+/// Extensions Font Book installs: single TrueType and OpenType faces, and TrueType or OpenType collections.
+pub const INSTALLABLE: [&str; 3] = ["ttf", "otf", "ttc"];
+
 /// Installs the font file `src` into `user_dir` (created if needed). Only TrueType and OpenType files the
 /// renderer can draw are accepted, and a file that fails validation is refused with its first problem. Returns the
 /// new path and the family name. An existing file is not overwritten.
 pub fn install(src: &Path, user_dir: &Path, validate: bool) -> Result<(PathBuf, String), String> {
     let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-    if ext != "ttf" && ext != "otf" {
-        return Err("Only .ttf and .otf fonts can be installed.".to_string());
+    if !INSTALLABLE.contains(&ext.as_str()) {
+        return Err("Only .ttf, .otf and .ttc fonts can be installed.".to_string());
     }
     if validate {
         if let Some(problem) = validate::check_file(src).problems.first() {
@@ -829,6 +832,19 @@ mod tests {
         std::fs::write(&src, b"not a font at all").unwrap();
         let err = install(&src, &dir.join("user"), false).unwrap_err();
         assert_eq!(err, "That file is not a font this desktop can draw.");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn install_takes_collections_and_refuses_a_broken_one_by_name() {
+        let dir = std::env::temp_dir().join(format!("fontbook-model-ttc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("Mincho.TTC");
+        std::fs::write(&src, b"not a collection").unwrap();
+        // the extension is accepted; the file itself is what gets refused
+        assert_eq!(install(&src, &dir.join("user"), false).unwrap_err(), "That file is not a font this desktop can draw.");
+        assert!(!dir.join("user").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -52,12 +52,12 @@
    "wire": "Check on Midget: View > Display In moves the readout between the five spaces. Native equals sRGB until the shell exposes the panel profile."
   },
   {
-   "feature": "Display Values format (8-bit, 16-bit, hex, percent)",
+   "feature": "Display Values format (hex, decimal, 16-bit, percent)",
    "area": "menu",
    "apple": "View > Display Values",
    "status": "partial",
    "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:175 (CopyFormat); springboard/apps/colormeter-desktop/src/color.rs:202 (copy_text)",
-   "note": "View > Display Values chooses the format that Copy and the Copy as row use, and the readout lists hex, 8-bit, 16-bit and percent together; the codes and the copy text are tested in color.rs. Not checked on Midget.",
+   "note": "View > Display Values chooses the format that Copy and the Copy as row use; the readout lists Hex, Decimal, 16-bit and Percent together (window.rs rows). The codes and copy text are tested in color.rs. Not checked on Midget.",
    "wire": "Check on Midget: the format chosen in View > Display Values is the one Copy Color as Text puts on the clipboard."
   },
   {

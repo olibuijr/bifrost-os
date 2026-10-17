@@ -367,8 +367,8 @@ impl FontBookApp {
     /// Opens the install preview for the font file at `path` (named `name`): its validation, family and a sample.
     fn begin_install(&mut self, ctx: &Ctx, path: PathBuf, name: &str) {
         let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-        if ext != "ttf" && ext != "otf" {
-            self.status = "Only .ttf and .otf fonts can be installed.".to_string();
+        if !model::INSTALLABLE.contains(&ext.as_str()) {
+            self.status = "Only .ttf, .otf and .ttc fonts can be installed.".to_string();
             return;
         }
         let bytes = match std::fs::read(&path) {
@@ -391,6 +391,7 @@ impl FontBookApp {
         match model::install(&p.path, &self.user_dir, self.prefs.validate_before_install) {
             Ok((_, family)) => {
                 self.status = format!("Installed {family}.");
+                Self::refresh_font_cache(&self.user_dir);
                 self.reload(&ctx.data_dir);
                 self.source = Source::All;
                 self.selected = Some(family);
@@ -414,13 +415,20 @@ impl FontBookApp {
         }
     }
 
-    /// Remove Font: deletes the selected family's file if the user installed it, then rereads the list.
+    /// Rebuilds the fontconfig cache of the user's fonts so other apps see the change. Best effort: a refresh inside the
+    /// rate limit, or a missing fc-cache, leaves the install in place and the list still reads the folder.
+    fn refresh_font_cache(user_dir: &Path) {
+        let _ = fontprefs::refresh_user_cache(user_dir);
+    }
+
+/// Remove Font: deletes the selected family's file if the user installed it, then rereads the list.
     fn remove(&mut self, data_dir: &Path, name: &str) {
         let Some(path) = self.library.as_ref().and_then(|l| l.find(name)).map(|f| PathBuf::from(&f.path)) else { return };
         match model::uninstall(&path, &self.user_dir) {
             Ok(()) => {
                 self.status = format!("Removed {name}.");
                 self.selected = None;
+                Self::refresh_font_cache(&self.user_dir);
                 self.reload(data_dir);
             }
             Err(e) => self.status = e,
@@ -922,7 +930,7 @@ impl App for FontBookApp {
         self.commit_edit(&data);
         match id {
             MENU_ADD => {
-                let options = OpenOptions { title: "Add Fonts".into(), filters: vec!["ttf".into(), "otf".into()], ..OpenOptions::default() };
+                let options = OpenOptions { title: "Add Fonts".into(), filters: vec!["ttf".into(), "otf".into(), "ttc".into()], ..OpenOptions::default() };
                 let _ = ctx.open_panel(&options);
             }
             MENU_NEW_COLLECTION => self.new_collection(&data),
