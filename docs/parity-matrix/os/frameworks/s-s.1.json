@@ -295,11 +295,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/login.rs",
+   "bifrost": "springboard/src/shell/login.rs, springboard/sdk/src/secure_entry.rs",
    "status": "partial",
-   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API.",
+   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API. Built 2026-10-17: an app-facing secure entry (springboard/sdk/src/secure_entry.rs, SecureEntry: masked display, refused control characters, constant-time match, text taken once and wiped on clear or drop); tests secure_entry::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "secure_entry::tests"
+    }
+   ],
+   "ready_note": "Session password entry is the login window (login.rs); the app-facing secure entry API is the SDK SecureEntry model with its tests."
   },
   {
    "id": "path:/System/Library/Frameworks/SensitiveContentAnalysis.framework",

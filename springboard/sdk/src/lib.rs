@@ -136,6 +136,7 @@ pub mod security_status;
 pub mod transport_policy;
 pub mod system;
 pub mod autofill;
+pub mod secure_entry;
 pub mod trust;
 pub mod gss_status;
 pub mod gss_oid;

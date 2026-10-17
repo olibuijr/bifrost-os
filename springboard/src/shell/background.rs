@@ -4,7 +4,8 @@
 //! app it stopped.
 //!
 //! The per-app run state is `bifrost_core::occlusion::Occlusion`. This file keeps one model per external app slot and
-//! feeds it the shell's facts. Covering is not known yet, so an app with any shown window counts as on screen.
+//! feeds it the shell's facts: focus, whether a window is shown, and whether every shown window is covered by windows
+//! of other apps. Process assertions are not reported yet.
 
 use bifrost_core::occlusion::{signal_for, Event, Occlusion, Run, SIGCONT};
 use std::collections::HashMap;
@@ -14,6 +15,8 @@ use std::collections::HashMap;
 pub struct Facts {
     pub focused: bool,
     pub on_screen: bool,
+    /// every shown window of the app is covered by windows of other apps (`occlusion::is_covered`)
+    pub covered: bool,
 }
 
 /// One signal to send: the external app slot and the signal number.
@@ -32,7 +35,7 @@ impl Suspender {
         let mut signals = Vec::new();
         for &(slot, f) in facts {
             let model = self.apps.entry(slot).or_insert_with(Occlusion::new);
-            for event in [Event::Focus(f.focused), Event::OnScreen(f.on_screen)] {
+            for event in [Event::Focus(f.focused), Event::OnScreen(f.on_screen), Event::Covered(f.covered)] {
                 if let Some(sig) = signal_for(model.report(event, now_ms)) {
                     signals.push((slot, sig));
                 }
@@ -70,8 +73,9 @@ mod tests {
     use super::*;
     use bifrost_core::occlusion::{GRACE_MS, SIGSTOP};
 
-    const HIDDEN: Facts = Facts { focused: false, on_screen: false };
-    const SHOWN: Facts = Facts { focused: false, on_screen: true };
+    const HIDDEN: Facts = Facts { focused: false, on_screen: false, covered: false };
+    const SHOWN: Facts = Facts { focused: false, on_screen: true, covered: false };
+    const COVERED: Facts = Facts { focused: false, on_screen: true, covered: true };
 
     #[test]
     fn an_unseen_app_is_stopped_only_after_the_grace_period() {
@@ -92,11 +96,19 @@ mod tests {
     }
 
     #[test]
+    fn a_covered_app_is_stopped_after_the_grace_period() {
+        let mut s = Suspender::default();
+        assert!(s.update(&[(7, COVERED)], 0).is_empty(), "the wait starts now");
+        assert_eq!(s.update(&[(7, COVERED)], GRACE_MS), vec![(7, SIGSTOP)]);
+        assert!(s.is_suspended(7));
+    }
+
+    #[test]
     fn focus_resumes_a_stopped_app() {
         let mut s = Suspender::default();
         s.update(&[(3, HIDDEN)], 0);
         s.update(&[(3, HIDDEN)], GRACE_MS);
-        let focused = Facts { focused: true, on_screen: false };
+        let focused = Facts { focused: true, on_screen: false, covered: false };
         assert_eq!(s.update(&[(3, focused)], GRACE_MS + 5), vec![(3, SIGCONT)]);
         assert!(!s.is_suspended(3));
     }

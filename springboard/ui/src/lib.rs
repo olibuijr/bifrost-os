@@ -1281,6 +1281,7 @@ pub mod video_info;
 
 pub mod sk_action;
 pub mod sk_node;
+pub mod sk_atlas;
 pub mod markup_adornment;
 pub mod ax_ignored;
 pub mod dictation_entry;

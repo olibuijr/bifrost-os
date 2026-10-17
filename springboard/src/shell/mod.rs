@@ -3323,11 +3323,24 @@ impl Shell {
                 let app = AppId::External(n as u8);
                 let focused = matches!(self.screen, Screen::App(a) if a == app);
                 let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized));
-                Some((n as u8, background::Facts { focused, on_screen }))
+                let covered = self.app_covered(app);
+                Some((n as u8, background::Facts { focused, on_screen, covered }))
             })
             .collect();
         let signals = self.suspender.update(&facts, (t.max(0.0) * 1000.0) as u64);
         self.send_app_signals(&signals);
+    }
+
+    /// Whether every shown window of `app` is covered by windows of other apps stacked over it. The desktop lists its
+    /// windows back to front, so the windows over window `i` are `wins[i + 1..]`. Minimized windows show nothing and
+    /// cover nothing.
+    fn app_covered(&self, app: AppId) -> bool {
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let rect = |w: &desk::Win| [w.r.x as i64, w.r.y as i64, w.r.w as i64, w.r.h as i64];
+        desk.wins.iter().enumerate().filter(|(_, w)| w.app == app && !w.minimized).all(|(i, w)| {
+            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app != app && !o.minimized).map(rect).collect();
+            bifrost_core::occlusion::is_covered(rect(w), &above)
+        })
     }
 
     /// Sends each signal to the process of its external app slot, when the app is still running.

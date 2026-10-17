@@ -33,7 +33,7 @@
    "apple": "SKTexture, SKTextureAtlas, SKMutableTexture",
    "bifrost": "springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode); springboard/render/src/imgdec.rs (fit, cover, contain)",
    "status": "partial",
-   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps"
+   "note": "Images decode to pixels, as tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no GPU-side texture object, atlas packing or dynamically updatable texture for apps Built 2026-10-17: atlas packing (springboard/ui/src/sk_atlas.rs, pack, Atlas::uv; tests sk_atlas::tests) places named images on one sheet with shelf packing and padding. Still open: a GPU texture object and dynamically updatable textures."
   },
   {
    "feature": "Actions",
