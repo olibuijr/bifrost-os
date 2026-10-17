@@ -7,7 +7,7 @@ use crate::crypto::{self, Machine};
 use crate::protocol::{self, Login, Sync};
 use bifrost_core::json::{self, Json};
 use springboard::deildu::http::{Client, Jar, Response, Transport};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +30,8 @@ pub struct Api {
     crypto: Mutex<Machine>,
     /// The rooms that have `m.room.encryption`, as the syncs reported them. A send to one of them is encrypted.
     encrypted_rooms: Mutex<HashSet<String>>,
+    /// The joined members of each room, as the syncs reported them.
+    room_members: Mutex<HashMap<String, Vec<String>>>,
 }
 
 impl Api {
@@ -49,6 +51,7 @@ impl Api {
             device_id,
             crypto,
             encrypted_rooms: Mutex::new(HashSet::new()),
+            room_members: Mutex::new(HashMap::new()),
         })
     }
 
@@ -95,15 +98,37 @@ impl Api {
                 rooms.insert(room.id.clone());
             }
         }
-        let mut senders: Vec<String> =
-            sync.to_device.iter().filter(|e| e.kind == "m.room.encrypted").map(|e| e.sender.clone()).collect();
-        senders.sort();
-        senders.dedup();
-        if !senders.is_empty() {
-            let _ = self.query_devices(&senders);
+        // Who is joined to each room, as far as the syncs say (the send path asks the server for the exact list).
+        if let Ok(mut joined) = self.room_members.lock() {
+            for room in &sync.rooms {
+                let members = joined.entry(room.id.clone()).or_default();
+                for m in &room.members {
+                    if m.membership == "join" {
+                        if !members.contains(&m.user_id) {
+                            members.push(m.user_id.clone());
+                        }
+                    } else {
+                        members.retain(|u| *u != m.user_id);
+                    }
+                }
+            }
+        }
+        // Device keys are queried for the senders of room keys and requests, and for users whose devices changed.
+        let mut users: Vec<String> = sync.device_changed.clone();
+        users.extend(sync.to_device.iter().filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request").map(|e| e.sender.clone()));
+        users.sort();
+        users.dedup();
+        if !users.is_empty() {
+            let _ = self.query_devices(&users);
+        }
+        if sync.to_device.iter().any(|e| e.kind == "m.room.encrypted") {
             if let Ok(mut m) = self.crypto.lock() {
                 m.receive(&sync.to_device);
             }
+        }
+        self.answer_key_requests(&sync.to_device);
+        for (room, members) in self.rooms_with_new_devices(&sync.device_changed) {
+            let _ = self.share_with_new_devices(&room, &members);
         }
         for room in sync.rooms.iter_mut().filter(|r| !r.ciphertexts.is_empty()) {
             if let Ok(mut m) = self.crypto.lock() {
@@ -118,6 +143,54 @@ impl Api {
     /// Whether `room` is end to end encrypted, as the syncs said.
     pub fn is_encrypted(&self, room: &str) -> bool {
         self.encrypted_rooms.lock().map(|r| r.contains(room)).unwrap_or(false)
+    }
+
+    /// The encrypted rooms that have a member whose device list just changed, with their members.
+    fn rooms_with_new_devices(&self, changed: &[String]) -> Vec<(String, Vec<String>)> {
+        if changed.is_empty() {
+            return Vec::new();
+        }
+        let (Ok(rooms), Ok(joined)) = (self.encrypted_rooms.lock(), self.room_members.lock()) else { return Vec::new() };
+        rooms
+            .iter()
+            .filter_map(|room| joined.get(room).map(|members| (room.clone(), members.clone())))
+            .filter(|(_, members)| members.iter().any(|m| changed.contains(m)))
+            .collect()
+    }
+
+    /// Sends the room key of `room` to the devices of `members` that do not hold it yet (devices that appeared since the
+    /// key was shared; see [`Machine::pending_shares`]). Claims one-time keys for the ones without an Olm session first.
+    fn share_with_new_devices(&self, room: &str, members: &[String]) -> Result<(), String> {
+        if self.with_crypto(|m| Ok(m.pending_shares(room, members)))?.is_empty() {
+            return Ok(());
+        }
+        let missing = self.with_crypto(|m| Ok(m.devices_without_session(members)))?;
+        self.claim_sessions(&missing)?;
+        let now = now_ms();
+        let (batch, _) = self.with_crypto(|m| Ok(m.prepare_room(room, members, now)))?;
+        if batch.is_empty() {
+            return Ok(());
+        }
+        self.send_room_keys(batch)
+    }
+
+    /// Answers the room key requests of this user's other devices (see [`Machine::key_requests`]): a device without an
+    /// Olm session gets one claimed first, then the key is sent to it.
+    fn answer_key_requests(&self, events: &[crate::protocol::ToDevice]) {
+        let requests = match self.with_crypto(|m| Ok(m.key_requests(events))) {
+            Ok(requests) => requests,
+            Err(_) => return,
+        };
+        for (room, user, device) in requests {
+            let needed = vec![(user.clone(), device.clone())];
+            if self.with_crypto(|m| Ok(m.needs_session(&user, &device))).unwrap_or(false) {
+                let _ = self.claim_sessions(&needed);
+            }
+            let answer = self.with_crypto(|m| Ok(m.answer_key_request(&room, &user, &device)));
+            if let Ok(Some(message)) = answer {
+                let _ = self.send_room_keys(vec![message]);
+            }
+        }
     }
 
     /// Uploads this device's keys and a batch of one-time keys (`POST /keys/upload`). Returns the server's count of

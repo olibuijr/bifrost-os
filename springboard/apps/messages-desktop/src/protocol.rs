@@ -34,6 +34,8 @@ pub struct Sync {
     pub rooms: Vec<RoomUpdate>,
     pub to_device: Vec<ToDevice>,
     pub otk_count: Option<u64>,
+    /// The users whose device lists changed (`device_lists.changed`): their keys must be queried again.
+    pub device_changed: Vec<String>,
 }
 
 /// A to-device message: `kind` is the event type (`m.room.encrypted` for Olm), `sender` the user who sent it.
@@ -485,7 +487,13 @@ pub fn parse_sync(body: &Json) -> Result<Sync, String> {
         })
         .collect();
     let otk_count = body.get("device_one_time_keys_count").and_then(|c| c.get("signed_curve25519")).and_then(|v| v.as_u64());
-    Ok(Sync { next_batch, rooms, to_device, otk_count })
+    let device_changed = body
+        .get("device_lists")
+        .and_then(|d| d.get("changed"))
+        .and_then(|c| c.as_array())
+        .map(|users| users.iter().filter_map(|u| u.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    Ok(Sync { next_batch, rooms, to_device, otk_count, device_changed })
 }
 
 /// The Megolm fields of an `m.room.encrypted` timeline event, or `None` when it lacks them.
@@ -1081,6 +1089,12 @@ mod tests {
         assert_eq!(keys_claim_url("https://h"), "https://h/_matrix/client/v3/keys/claim");
         assert_eq!(joined_members_url("https://h", "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/joined_members");
         assert_eq!(send_to_device_url("https://h", "m.room.encrypted", "t1"), "https://h/_matrix/client/v3/sendToDevice/m.room.encrypted/t1");
+    }
+
+    #[test]
+    fn a_sync_names_the_users_whose_device_lists_changed() {
+        let sync = parse_sync(&parse(r#"{"next_batch":"n","rooms":{},"device_lists":{"changed":["@a:x"]}}"#)).unwrap();
+        assert_eq!(sync.device_changed, vec!["@a:x".to_string()]);
     }
 
     #[test]

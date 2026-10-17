@@ -40,6 +40,13 @@ pub struct Outbound {
     pub created_ms: u64,
     pub messages: u32,
     pub members: Vec<String>,
+    /// The devices (as `user/device`) that hold this session's key. A device that appears later gets the key too.
+    pub shared: Vec<String>,
+}
+
+/// The `user/device` key a device is known by in [`Outbound::shared`].
+fn device_key(user: &str, device: &str) -> String {
+    format!("{user}/{device}")
 }
 
 /// The rotation policy of a room's outbound Megolm session: rotate when the membership changed, after [`ROTATE_MESSAGES`]
@@ -122,10 +129,11 @@ impl Machine {
         let mut lines = Vec::new();
         for (room, (session, state)) in &self.outbound {
             lines.push(format!(
-                "out\t{room}\t{}\t{}\t{}\t{}",
+                "out\t{room}\t{}\t{}\t{}\t{}\t{}",
                 state.created_ms,
                 state.messages,
                 state.members.join(","),
+                state.shared.join(","),
                 session.pickle().encrypt(key)
             ));
         }
@@ -141,12 +149,14 @@ impl Machine {
         for line in blob.lines() {
             let fields: Vec<&str> = line.split('\t').collect();
             match fields.as_slice() {
-                ["out", room, created, messages, members, pickle] => {
+                ["out", room, created, messages, members, shared, pickle] => {
                     let session = GroupSession::from_pickle(GroupSessionPickle::from_encrypted(pickle, key).map_err(|e| e.to_string())?);
+                    let list = |s: &str| s.split(',').filter(|m| !m.is_empty()).map(String::from).collect::<Vec<String>>();
                     let state = Outbound {
                         created_ms: created.parse().map_err(|_| "a session record is damaged".to_string())?,
                         messages: messages.parse().map_err(|_| "a session record is damaged".to_string())?,
-                        members: members.split(',').filter(|m| !m.is_empty()).map(String::from).collect(),
+                        members: list(*members),
+                        shared: list(*shared),
                     };
                     self.outbound.insert(room.to_string(), (session, state));
                 }
@@ -353,18 +363,32 @@ impl Machine {
             Some((_, state)) => rotation_due(state, &sorted, now_ms),
             None => true,
         };
-        if !due {
-            return (Vec::new(), 0);
+        if due {
+            let session = GroupSession::new(MegolmConfig::version_1());
+            self.dirty = true;
+            let state = Outbound { created_ms: now_ms, messages: 0, members: sorted.clone(), shared: Vec::new() };
+            self.outbound.insert(room.to_string(), (session, state));
         }
-        let session = GroupSession::new(MegolmConfig::version_1());
+        // The devices that do not hold the key yet: all of them after a rotation, or the ones that appeared since.
+        let shared = self.outbound.get(room).map(|(_, state)| state.shared.clone()).unwrap_or_default();
+        let fresh: Vec<Device> = self
+            .other_devices(&sorted)
+            .into_iter()
+            .filter(|d| !shared.contains(&device_key(&d.user_id, &d.device_id)))
+            .collect();
+        self.share_key(room, &fresh)
+    }
+
+    /// The `m.room_key` messages that give `devices` the outbound session's key of `room`, one per device with an Olm
+    /// session (as `(user, device, content)`), and how many had none. A device that got it is recorded in the session.
+    fn share_key(&mut self, room: &str, devices: &[Device]) -> (Vec<(String, String, Json)>, usize) {
+        let Some((session, _)) = self.outbound.get(room) else { return (Vec::new(), 0) };
         let key = session.session_key().to_base64();
         let session_id = session.session_id();
-        self.dirty = true;
-        self.outbound.insert(room.to_string(), (session, Outbound { created_ms: now_ms, messages: 0, members: sorted.clone() }));
-
+        let (_, ed) = self.identity();
         let mut messages = Vec::new();
         let mut skipped = 0;
-        for device in self.other_devices(&sorted) {
+        for device in devices {
             let plain = protocol::obj(vec![
                 ("type", protocol::text("m.room_key")),
                 (
@@ -378,16 +402,69 @@ impl Machine {
                 ),
                 ("sender", protocol::text(&self.user_id)),
                 ("sender_device", protocol::text(&self.device_id)),
-                ("keys", protocol::obj(vec![("ed25519", protocol::text(&self.identity().1))])),
+                ("keys", protocol::obj(vec![("ed25519", protocol::text(&ed))])),
                 ("recipient", protocol::text(&device.user_id)),
                 ("recipient_keys", protocol::obj(vec![("ed25519", protocol::text(&device.ed25519))])),
             ]);
             match self.encrypt_olm(&device.curve25519, &plain) {
-                Some(content) => messages.push((device.user_id.clone(), device.device_id.clone(), content)),
+                Some(content) => {
+                    messages.push((device.user_id.clone(), device.device_id.clone(), content));
+                    let name = device_key(&device.user_id, &device.device_id);
+                    if let Some((_, state)) = self.outbound.get_mut(room) {
+                        if !state.shared.contains(&name) {
+                            state.shared.push(name);
+                            self.dirty = true;
+                        }
+                    }
+                }
                 None => skipped += 1,
             }
         }
         (messages, skipped)
+    }
+
+    /// The devices of `members` that have not got the outbound session's key of `room` yet, as (user, device). Empty when
+    /// there is no outbound session (the next send makes one and shares it with everyone).
+    pub fn pending_shares(&self, room: &str, members: &[String]) -> Vec<(String, String)> {
+        let Some((_, state)) = self.outbound.get(room) else { return Vec::new() };
+        self.other_devices(members)
+            .into_iter()
+            .filter(|d| !state.shared.contains(&device_key(&d.user_id, &d.device_id)))
+            .map(|d| (d.user_id, d.device_id))
+            .collect()
+    }
+
+    /// True when this device has no Olm session with `device` of `user` yet.
+    pub fn needs_session(&self, user: &str, device: &str) -> bool {
+        self.device(user, device).is_some_and(|d| !self.olm.contains_key(&d.curve25519))
+    }
+
+    /// The room key requests this device should answer: the requester is one of this user's own devices whose keys are
+    /// signature-verified, and the session asked for is the outbound session of `room`. Returns (room, user, device).
+    pub fn key_requests(&self, events: &[ToDevice]) -> Vec<(String, String, String)> {
+        let mut out = Vec::new();
+        for ev in events.iter().filter(|e| e.kind == "m.room_key_request") {
+            if ev.sender != self.user_id || ev.content.str_field("action").as_deref() != Some("request") {
+                continue;
+            }
+            let Some(device) = ev.content.str_field("requesting_device_id") else { continue };
+            if device == self.device_id || self.device(&self.user_id, &device).is_none() {
+                continue;
+            }
+            let Some(body) = ev.content.get("body") else { continue };
+            let (Some(room), Some(session_id)) = (body.str_field("room_id"), body.str_field("session_id")) else { continue };
+            if self.outbound.get(&room).is_some_and(|(s, _)| s.session_id() == session_id) {
+                out.push((room, self.user_id.clone(), device));
+            }
+        }
+        out
+    }
+
+    /// The `m.room_key` message that answers a key request from `device` of `user`, or none when the device has no Olm
+    /// session yet (the caller claims one first, see [`Machine::needs_session`]).
+    pub fn answer_key_request(&mut self, room: &str, user: &str, device: &str) -> Option<(String, String, Json)> {
+        let target: Vec<Device> = self.device(user, device).cloned().into_iter().collect();
+        self.share_key(room, &target).0.into_iter().next()
     }
 
     /// The Olm `m.room.encrypted` content of `plain` for the device with curve25519 key `curve`, or `None` without a
@@ -646,13 +723,13 @@ mod tests {
 
     #[test]
     fn a_fresh_outbound_session_is_not_rotated() {
-        let state = Outbound { created_ms: 1_000, messages: 3, members: members(&["@a:x", "@b:x"]) };
+        let state = Outbound { created_ms: 1_000, messages: 3, members: members(&["@a:x", "@b:x"]), shared: Vec::new() };
         assert!(!rotation_due(&state, &members(&["@b:x", "@a:x"]), 2_000), "the member order is not a change");
     }
 
     #[test]
     fn a_session_rotates_on_membership_change_messages_or_age() {
-        let base = Outbound { created_ms: 0, messages: 0, members: members(&["@a:x", "@b:x"]) };
+        let base = Outbound { created_ms: 0, messages: 0, members: members(&["@a:x", "@b:x"]), shared: Vec::new() };
         assert!(rotation_due(&base, &members(&["@a:x", "@b:x", "@c:x"]), 1), "a member joined");
         assert!(rotation_due(&base, &members(&["@a:x"]), 1), "a member left");
         let busy = Outbound { messages: ROTATE_MESSAGES, ..base.clone() };
@@ -770,6 +847,54 @@ mod tests {
         assert_eq!(back.identity(), (curve, ed));
         assert!(parse_key_item("not a key").is_none());
         assert!(parse_device_item("no newline").is_none());
+    }
+
+    /// Lets `a` send Olm messages to `b`: `b` publishes a one-time key, both learn each other's keys, and `a` claims it.
+    fn open_session(a: &mut Machine, b: &mut Machine) {
+        let upload = b.upload_body(1);
+        b.mark_published();
+        a.ingest_query(&query_answer(b)).unwrap();
+        b.ingest_query(&query_answer(a)).unwrap();
+        let otks = upload.get("one_time_keys").cloned().unwrap();
+        let claim = protocol::obj(vec![("one_time_keys", protocol::obj(vec![(b.user_id.as_str(), protocol::obj(vec![(b.device_id.as_str(), otks)]))]))]);
+        assert_eq!(a.ingest_claim(&claim), Ok(1));
+    }
+
+    #[test]
+    fn a_new_device_gets_the_current_room_key_and_own_devices_can_ask_for_it() {
+        let mut alice = Machine::new("@a:x", "DEVA");
+        let mut alice2 = Machine::new("@a:x", "DEVA2");
+        let mut bob = Machine::new("@b:x", "DEVB");
+        let mut bob2 = Machine::new("@b:x", "DEVB2");
+        let people = members(&["@a:x", "@b:x"]);
+        let room = "!r:x";
+        open_session(&mut alice, &mut bob);
+        let (first, _) = alice.prepare_room(room, &people, 0);
+        assert_eq!(first.len(), 1, "bob's one device gets the key");
+        // Bob's second device appears later: it gets the same key, and the session is not rotated.
+        open_session(&mut alice, &mut bob2);
+        assert_eq!(alice.pending_shares(room, &people), vec![("@b:x".to_string(), "DEVB2".to_string())]);
+        let (late, _) = alice.prepare_room(room, &people, 0);
+        assert_eq!(late.len(), 1);
+        assert_eq!(late[0].1, "DEVB2");
+        assert!(alice.pending_shares(room, &people).is_empty(), "nothing is pending any more");
+
+        // Alice's own second device asks for the key: answered. A stranger's request and her own device's are not.
+        open_session(&mut alice, &mut alice2);
+        let session_id = alice.outbound.get(room).unwrap().0.session_id();
+        let request = |sender: &str, device: &str| ToDevice {
+            sender: sender.into(),
+            kind: "m.room_key_request".into(),
+            content: protocol::obj(vec![
+                ("action", protocol::text("request")),
+                ("requesting_device_id", protocol::text(device)),
+                ("body", protocol::obj(vec![("room_id", protocol::text(room)), ("session_id", protocol::text(&session_id))])),
+            ]),
+        };
+        let asks = vec![request("@a:x", "DEVA2"), request("@x:x", "DEVA2"), request("@a:x", "DEVA")];
+        assert_eq!(alice.key_requests(&asks), vec![(room.to_string(), "@a:x".to_string(), "DEVA2".to_string())]);
+        let answer = alice.answer_key_request(room, "@a:x", "DEVA2").expect("a key for alice's second device");
+        assert_eq!(answer.1, "DEVA2");
     }
 
     #[test]
