@@ -29,9 +29,9 @@
    "area": "toolbar",
    "apple": "Insert > Shape",
    "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:756 (choose_shape); springboard/apps/freeform-desktop/src/main.rs:77 (SHAPES)",
-   "note": "Insert > Shape offers Line, Arrow, Rectangle, Oval, Triangle and Star. The toolbar has no Shapes popover yet.",
-   "wire": "Add Line, Arrow, Triangle, Star and a Shapes popover; extend Tool (freeform.rs:170)"
+   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs (bar, Target::Shapes, BAR_SHAPES); springboard/apps/freeform-desktop/src/freeform/itemtools.rs (shapes_layout, draw_shapes, shapes_press); springboard/apps/freeform-desktop/src/main.rs (SHAPES)",
+   "note": "Insert > Shape offers Line, Arrow, Rectangle, Oval, Triangle and Star, and a Shapes toolbar button opens a popover with the same six rows; the chosen shape is the tool, and the button shows selected while a shape tool is set. Not yet verified on Midget.",
+   "wire": "Verify the Shapes popover on Midget: placement under the button at small and large window sizes, and that a press outside closes it."
   },
   {
    "feature": "Colour palette",
@@ -58,7 +58,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:795 (handle_at); springboard/apps/freeform-desktop/src/arrange.rs:145 (resize_step), :159 (rotate_step)",
    "note": "Drag a corner handle to scale the lasso selection and the top handle to turn it. Arrange has no numeric size or angle fields.",
-   "wire": "Add drag resize/rotate handles on the lasso selection"
+   "wire": "Add numeric size and angle fields to Arrange for the lasso selection; drag handles already scale and turn it."
   },
   {
    "feature": "Undo",
@@ -67,7 +67,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/main.rs:282 (Edit menu); springboard/apps/freeform-desktop/src/freeform.rs:590 (undo_step)",
    "note": "Edit > Undo (Cmd+Z) is enabled by the undo stack, and adding, typing into, moving and deleting an item are steps. Not yet verified on Midget.",
-   "wire": "Expose Undo in the Edit AppMenu (main.rs:161) with cmd+Z"
+   "wire": "Verify on Midget that Edit > Undo (cmd+Z) reaches the shell Edit menu and that the Undo toolbar button follows the stack."
   },
   {
    "feature": "Redo",
@@ -76,7 +76,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:607 (redo_step); springboard/apps/freeform-desktop/src/main.rs:283 (Edit menu)",
    "note": "Edit > Redo (Cmd+Shift+Z) replays the snapshots that undo took back, and a new edit clears the redo stack. Not yet verified on Midget.",
-   "wire": "Keep a redo stack of Snapshot in freeform.rs and wire cmd+shift+Z"
+   "wire": "Verify on Midget that Edit > Redo (cmd+shift+Z) replays the undone step and clears after a new edit."
   },
   {
    "feature": "Copy selection",
@@ -94,7 +94,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:625 (paste_anchor), :632 (add_copies); springboard/apps/freeform-desktop/src/freeform/itemtools.rs:338 (paste_text_item)",
    "note": "Edit > Paste centres pasted strokes and text items on the pointer, and Duplicate offsets a copy. With the pointer over the toolbar, or before any touch, the fixed offset is used. Pasted pictures still land at the board centre. Not yet verified on Midget.",
-   "wire": "Read STROKES_UTI (services.rs:20) or PNG from the pasteboard and insert at the pointer; add Edit > Paste and Duplicate"
+   "wire": "Pasted pictures still land at the board centre: read the pasteboard PNG at the pointer, as Paste does for strokes and text."
   },
   {
    "feature": "Delete selection and clear",
@@ -112,7 +112,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:707 (reorder_selection), :738 (arrange_in_row), :941 (align_selection), :946 (distribute_selection); springboard/apps/freeform-desktop/src/arrange.rs:37 (align_offsets), :54 (distribute_offsets)",
    "note": "Arrange has Bring to Front, Send to Back, Arrange in Row, align to the left, centre, right, top, middle or bottom edge, and distribute horizontally or vertically. There is no align-to-page or numeric position field.",
-   "wire": "Add Bring to Front / Send to Back / Align to an Arrange AppMenu"
+   "wire": "Add align-to-page and numeric position fields to Arrange; the align, layer and distribute items already exist."
   },
   {
    "feature": "Group / lock",
@@ -121,7 +121,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:883 (group_selection), :899 (lock_selection); springboard/apps/freeform-desktop/src/arrange.rs:79 (units)",
    "note": "Arrange > Group moves a selection's strokes as one unit, and Lock and Unlock stop a selection from being moved or edited. Not yet verified on Midget.",
-   "wire": "Add group ids and a locked flag to Style; Arrange menu items"
+   "wire": "Verify on Midget that Arrange > Group keeps a selection moving as one unit and that Lock stops edits."
   },
   {
    "feature": "Text boxes",
@@ -130,7 +130,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/itemtools.rs:236 (insert_text_box); springboard/apps/freeform-desktop/src/items.rs:310 (insert_text), :328 (backspace), :693 (draw_text)",
    "note": "The Text tool and Insert > Text Box make a box that takes typing, and Return starts a new line. Left, Right, Home and End move the caret, and typing and Backspace act at it. There is no selection and no per-run font, size or alignment. Not yet verified on Midget.",
-   "wire": "Add a Text tool with an SDK TextField overlay; store text items in the board"
+   "wire": "Add selection and per-run font, size and alignment in text boxes; the Text tool, caret and typing already work."
   },
   {
    "feature": "Sticky notes",
@@ -139,7 +139,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/itemtools.rs:245 (insert_note); springboard/apps/freeform-desktop/src/items.rs:310 (insert_text), :693 (draw_text)",
    "note": "The Note tool and Insert > Sticky Note make a square note in the pastel of the ink colour, and picking another colour recolours a picked note. Size changes only through Arrange > Make Item Larger or Smaller, and Left, Right, Home and End move the caret inside the note. Not yet verified on Midget.",
-   "wire": "Add a sticky note item (coloured square with text)"
+   "wire": "Verify on Midget that Insert > Sticky Note and the Note tool make a note and that Make Item Larger resizes it."
   },
   {
    "feature": "Insert images, files, links",
@@ -148,7 +148,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/itemtools.rs:263 (insert_link), :288 (insert_file), :311 (insert_files)",
    "note": "Insert > Picture or File draws pictures on the board and shows any other file as a name-and-size card, and Insert > Link takes the address from the pasteboard or typing; a double tap opens a link. Files are copied into the board folder (16 MB limit). Gaps: pictures are not cropped or rotated, and a file card cannot be opened again. Not yet verified on Midget.",
-   "wire": "Add an Insert menu using the shell open panel; draw images as board items"
+   "wire": "Add crop and rotate for pictures and open file cards again; Insert > Picture, File and Link already work."
   },
   {
    "feature": "Connectors",
@@ -157,7 +157,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/items.rs:279 (connect), :297 (connector_line), :303 (connector_at); springboard/apps/freeform-desktop/src/freeform/itemtools.rs:179 (choose_connector)",
    "note": "Insert > Connector and the Connect tool join two items with a line or arrow that follows them when they move, and Delete removes a picked connector. Connectors are straight, with no labels. Not yet verified on Midget.",
-   "wire": "Add connector items linking two item ids, drawn from canvas_view::connector and redrawn on move."
+   "wire": "Add connector labels, and check on Midget that connectors follow their items when moved."
   },
   {
    "feature": "Tables",
@@ -166,7 +166,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/itemtools.rs:254 (insert_table); springboard/apps/freeform-desktop/src/items.rs:345 (add_row), :359 (add_column)",
    "note": "Insert > Table makes a 3 by 3 grid of text cells; Tab and Return move between cells, and Add Table Row and Column grow it. Cells have a fixed size and clip text, with no merged cells, header rows or column resizing. Not yet verified on Midget.",
-   "wire": "Add a table item of TextField cells and Insert > Table"
+   "wire": "Add merged cells, a header row and column resizing to Insert > Table; the grid and row and column growth already work."
   },
   {
    "feature": "Multiple boards and board browser",
@@ -175,7 +175,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:960 (open_board), :992 (new_board); springboard/apps/freeform-desktop/src/boards.rs:53 (duplicate), :84 (rename)",
    "note": "File > New, Duplicate, Rename and Delete Board, and a Boards menu that lists and opens boards; a duplicate also copies the items and their files. There is no sidebar browser and no thumbnails. Not yet verified on Midget.",
-   "wire": "Add a board list in data_dir with a sidebar and File > New Board, rename, delete, duplicate"
+   "wire": "Add a board sidebar (source list) with thumbnails; the Boards menu and Search Boards already switch boards."
   },
   {
    "feature": "Board persistence",
@@ -184,7 +184,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:501 (load_board), :1815 (save)",
    "note": "The strokes with their looks, the items, and the pictures and files they use (a files folder) are written to the data folder a second after an edit and on suspend, and loaded at launch; files no item uses are removed when a board is read. Not yet verified on Midget.",
-   "wire": "Serialise Drawing::to_text plus styles to data_dir on change; load in configure (main.rs)"
+   "wire": "Verify on Midget that the board, its items and pictures reload after a relaunch."
   },
   {
    "feature": "Zoom and pan canvas",
@@ -193,7 +193,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/viewport.rs:105 (zoom_in), :110 (zoom_out), :115 (zoom_actual), :145 (choose_hand)",
    "note": "View > Zoom In and Zoom Out (Cmd+= and Cmd+-) from 25% to 400% keep the middle of the window fixed, Actual Size (Cmd+0) resets, a Hand Tool pans with a drag, and the arrow keys move the view. Pinch and two-finger pan are not wired yet.",
-   "wire": "Hold a canvas_view::View in freeform.rs; cmd+= / - / 0, pinch and two-finger drag call zoom_in, zoom_out, reset, pan."
+   "wire": "Pinch and two-finger pan need SDK gesture input; View zoom, the Hand Tool and the arrow keys work now."
   },
   {
    "feature": "Grid and snapping",
@@ -202,7 +202,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:810 (toggle_grid), :816 (toggle_snap)",
    "note": "View > Show Grid draws a dot grid, and Snap to Grid puts shape corners and dragged items on its points. Not yet verified on Midget.",
-   "wire": "Draw a dot grid and snap shape points when enabled"
+   "wire": "Verify on Midget that Show Grid and Snap to Grid agree with the placement of shapes and dragged items."
   },
   {
    "feature": "Export as PNG / save to Photos",
@@ -220,7 +220,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:1073 (export_as_pdf); springboard/apps/freeform-desktop/src/pdfout.rs:60 (board_page)",
    "note": "File > Export as PDF writes the strokes as vectors; the items are painted once and sit under them as a picture, so item text is not selectable in the PDF. Not yet verified on Midget.",
-   "wire": "Paint the board through a PDF context and save"
+   "wire": "Make item text selectable in the PDF export; items are painted as a picture under the vector strokes."
   },
   {
    "feature": "Print",
@@ -229,7 +229,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:1093 (print_board)",
    "note": "File > Print sends the same page as the PDF export (strokes as vectors, items as a picture under them). Not yet verified on Midget.",
-   "wire": "Add File > Print through bifrost_app::print"
+   "wire": "Verify File > Print on Midget with a printer; the page matches the PDF export."
   },
   {
    "feature": "Collaboration",
@@ -256,7 +256,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/freeform-desktop/src/freeform/itemtools.rs:813 (open_search), :827 (search_hits); springboard/apps/freeform-desktop/src/boards.rs:104 (matching)",
    "note": "Boards > Search Boards opens a panel that filters the boards by title as you type. Not yet verified on Midget.",
-   "wire": "Filter the board list with canvas_view::search_titles from a search field."
+   "wire": "Verify on Midget that Search Boards filters as you type and that a press outside closes it."
   },
   {
    "feature": "Pointer shape per tool",
