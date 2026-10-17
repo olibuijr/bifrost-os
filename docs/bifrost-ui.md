@@ -3014,6 +3014,26 @@ arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
 
 Still missing: P256, P384, P521. Status is partial until checked on Midget.
 
+## Post-quantum KEM (`MLKEM768`, `MLKEM1024`, `bifrost_app::kem`)
+
+ML-KEM (FIPS 203) for ML-KEM-768 and ML-KEM-1024, pure Rust in `bifrost_core::mlkem`; the hash for the matrix is the
+SHAKE128 and SHAKE256 XOF added to `bifrost_core::sha3` (`Shake`). The SDK module `bifrost_app::kem` wraps it:
+
+- `DecapsulationKey::generate(variant)` (seeds `d` and `z` from the kernel pool), `from_seeds`, `from_bytes`,
+  `bytes`, `encapsulation_key`, `decapsulate(ciphertext)`.
+- `EncapsulationKey::from_bytes` (length and the FIPS 203 modulus check), `bytes`, `encapsulate()` (fresh `m` from the
+  pool) returning `Encapsulation { shared_secret, ciphertext }`.
+- `Variant` is `Params`: `MlKem768` (ek 1184, dk 2400, ct 1088) and `MlKem1024` (ek 1568, dk 3168, ct 1568).
+- `KemError`: `IncorrectKeySize`, `IncorrectCiphertextSize`, `InvalidEncapsulationKey`, `InvalidDecapsulationKey`,
+  `Unavailable`. A tampered ciphertext is not an error: decapsulation returns the implicit-rejection secret.
+
+Decisions: the seeds are the caller's or the pool's, so the core draws no randomness; `DecapsulationKey` `Debug`
+shows the variant only. Known gap: the official FIPS 203 known-answer vectors are not in the repo, so the tests check
+lengths, the NTT round trip, NTT multiplication against a schoolbook product, byte and compress codecs, round trips
+and implicit rejection, and not interoperability. Out of scope: X-Wing (`XWingMLKEM768X25519`), ML-DSA (`MLDSA65`,
+`MLDSA87`), and the `KEM`/`KEMPublicKey` type shapes. Parity: `Post-quantum KEM and signatures` row in
+`docs/parity-matrix/data/apple-cryptokit.json` (partial until the vectors pass and it runs on Midget).
+
 ## Preference panes: pane links (`bifrost_ui::pane_link`, `NSPreferencePane` deep links)
 
 A System Settings pane is opened by an `x-apple.systempreferences:` link: the pane identifier, and an optional anchor
