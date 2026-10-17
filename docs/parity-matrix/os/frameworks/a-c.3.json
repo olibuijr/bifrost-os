@@ -983,7 +983,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },
@@ -1004,7 +1004,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },
@@ -1025,7 +1025,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },
@@ -1046,7 +1046,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },
@@ -1067,7 +1067,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json",
+   "note": "private framework, owner CloudKit; from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },

@@ -135,11 +135,11 @@
   }
  ],
  "gaps": [
-  "No purchase API: no product lookup with price, no purchase flow, no paid-app install path (springboard/src/shell/store/api.rs has no price or product type).",
-  "No transactions or entitlements API for apps to ask what the user has bought or is entitled to.",
+  "No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists",
+  "No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json",
   "No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.",
-  "No subscriptions, renewal state, offers, offer codes or win-back offers.",
-  "No review prompt API (RequestReviewAction / SKStoreReviewController equivalent) in springboard/sdk/src.",
+  "No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend",
+  "No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt",
   "Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a)."
  ]
 }

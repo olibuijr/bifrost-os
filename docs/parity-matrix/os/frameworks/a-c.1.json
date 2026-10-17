@@ -1152,7 +1152,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/cloudkit.json",
    "status": "partial",
-   "note": "from SDK matrix cloudkit.json",
+   "note": "from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
    "method": "assessed"
   },
@@ -4841,7 +4841,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/address-book.json",
    "status": "partial",
-   "note": "private framework, owner AddressBook; from SDK matrix address-book.json",
+   "note": "private framework, owner AddressBook; from SDK matrix address-book.json Refreshed 2026-10-17 (still open): No people picker or person view for apps to embed.; Contacts have one phone, one email and one address; no multi-value properties or primary value.; No groups or group membership; Favorites is a flag only.; No contact photos.; No structured postal address fields or formatter.; Changes are polled through contacts::history; there is no push notification when the store changes.; No contacts permission in the app manifest.; Apple deprecated this framework; the modern Contacts framework is the reference and is not covered in this batch.",
    "rea": [],
    "method": "assessed"
   },

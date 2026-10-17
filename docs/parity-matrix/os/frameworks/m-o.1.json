@@ -696,7 +696,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/network.json",
    "status": "partial",
-   "note": "from SDK matrix network.json",
+   "note": "from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
    "rea": [],
    "method": "assessed"
   },

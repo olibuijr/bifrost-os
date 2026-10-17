@@ -45,7 +45,7 @@
   ],
   "gaps": [
     "No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").",
-    "The LAContext model is in the SDK (sdk local_auth.rs); there is no LAAuthenticationView equivalent and no control size token for it.",
+    "LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists",
     "The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists."
   ]
 }

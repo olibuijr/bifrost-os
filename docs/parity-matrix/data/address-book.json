@@ -100,7 +100,6 @@
     }
   ],
   "gaps": [
-    "Apps read, save and search contacts through the SDK contacts module (sdk contacts.rs); the store file is shell-internal.",
     "No people picker or person view for apps to embed.",
     "Contacts have one phone, one email and one address; no multi-value properties or primary value.",
     "No groups or group membership; Favorites is a flag only.",
@@ -108,7 +107,6 @@
     "No structured postal address fields or formatter.",
     "Changes are polled through contacts::history; there is no push notification when the store changes.",
     "No contacts permission in the app manifest.",
-    "No vCard import.",
     "Apple deprecated this framework; the modern Contacts framework is the reference and is not covered in this batch."
   ]
 }

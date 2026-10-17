@@ -232,7 +232,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/lightweightcoderequirements.json",
    "status": "partial",
-   "note": "from SDK matrix lightweightcoderequirements.json",
+   "note": "from SDK matrix lightweightcoderequirements.json Refreshed 2026-10-17 (still open): No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8).",
    "rea": [],
    "method": "assessed"
   },
@@ -361,7 +361,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/local-authentication-embedded-ui.json",
    "status": "partial",
-   "note": "from SDK matrix local-authentication-embedded-ui.json",
+   "note": "from SDK matrix local-authentication-embedded-ui.json Refreshed 2026-10-17 (still open): No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").; LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists.",
    "rea": [],
    "method": "assessed"
   },
