@@ -169,3 +169,62 @@ impl System {
         self.devices.iter().any(|d| d.streams.iter().any(|s| s.id == id)).then_some(ObjectKind::Stream)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LISTING: &str = "00-00: ALC Analog : ALC Analog : playback 1 : capture 1\n\
+                           00-03: HDMI 0 : HDMI 0 : playback 1\n\
+                           01-00: USB Audio : USB Audio : capture 2\n\
+                           not a listing line\n\
+                           00-07: Odd : Odd\n";
+
+    #[test]
+    fn devices_and_streams_take_ids_in_listing_order() {
+        let system = System::from_listing(LISTING);
+        let devices = system.devices();
+        assert_eq!(devices.len(), 4, "the malformed line is skipped, the device without streams is kept");
+        assert_eq!(devices[0].id, ObjectId(2));
+        assert_eq!(devices[0].stream(Scope::Output).map(|s| s.id), Some(ObjectId(3)));
+        assert_eq!(devices[0].stream(Scope::Input).map(|s| s.id), Some(ObjectId(4)));
+        assert_eq!(devices[1].id, ObjectId(5));
+        assert_eq!(devices[2].stream(Scope::Input).map(|s| s.substreams), Some(2));
+        assert!(devices[3].streams.is_empty());
+    }
+
+    #[test]
+    fn a_device_is_addressed_by_its_card_and_device_numbers() {
+        let system = System::from_listing(LISTING);
+        assert_eq!(system.device(ObjectId(5)).map(Device::uid), Some("hw:0,3".to_string()));
+        assert_eq!(system.device(ObjectId(7)).map(|d| d.name.as_str()), Some("USB Audio"));
+        assert!(system.device(ObjectId(99)).is_none());
+    }
+
+    #[test]
+    fn the_default_device_is_the_first_with_a_stream_in_that_direction() {
+        let system = System::from_listing(LISTING);
+        assert_eq!(system.default_device(Scope::Output).map(|d| d.id), Some(ObjectId(2)));
+        let capture_only = System::from_listing("01-00: USB Audio : USB Audio : capture 1\n");
+        assert_eq!(capture_only.default_device(Scope::Input).map(|d| d.id), Some(ObjectId(2)));
+        assert!(capture_only.default_device(Scope::Output).is_none());
+    }
+
+    #[test]
+    fn objects_know_their_kind_and_a_stream_knows_its_owner() {
+        let system = System::from_listing(LISTING);
+        assert_eq!(system.kind_of(SYSTEM), Some(ObjectKind::System));
+        assert_eq!(system.kind_of(ObjectId(5)), Some(ObjectKind::Device));
+        assert_eq!(system.kind_of(ObjectId(6)), Some(ObjectKind::Stream));
+        assert_eq!(system.kind_of(ObjectId(99)), None);
+        assert_eq!(system.owner_of(ObjectId(6)), Some(ObjectId(5)));
+        assert_eq!(system.owner_of(ObjectId(5)), None);
+    }
+
+    #[test]
+    fn an_empty_listing_is_an_empty_system() {
+        let system = System::from_listing("");
+        assert!(system.devices().is_empty());
+        assert_eq!(system.kind_of(SYSTEM), Some(ObjectKind::System));
+    }
+}

@@ -130,3 +130,54 @@ pub fn prepare(cache: &mut SpecializationCache, graph: &Graph, target: Target, p
 fn put_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn graph() -> Graph {
+        Graph { name: "tiny".into(), input_width: 4, ops: vec![Op::Dense { outputs: 3 }, Op::Relu, Op::Softmax] }
+    }
+
+    #[test]
+    fn the_output_width_is_the_last_dense_width() {
+        assert_eq!(output_width(&graph()), Ok(3));
+        let two = Graph { ops: vec![Op::Dense { outputs: 8 }, Op::Dense { outputs: 2 }], ..graph() };
+        assert_eq!(output_width(&two), Ok(2));
+    }
+
+    #[test]
+    fn a_bad_description_is_refused_before_anything_is_written() {
+        assert_eq!(output_width(&Graph { name: String::new(), ..graph() }), Err(CompileError::EmptyName));
+        assert_eq!(output_width(&Graph { input_width: 0, ..graph() }), Err(CompileError::ZeroWidth));
+        assert_eq!(output_width(&Graph { ops: vec![], ..graph() }), Err(CompileError::NoOperators));
+        assert_eq!(
+            output_width(&Graph { ops: vec![Op::Dense { outputs: 0 }], ..graph() }),
+            Err(CompileError::ZeroWidth)
+        );
+    }
+
+    #[test]
+    fn the_same_description_compiles_to_the_same_bytes_and_starts_with_the_magic() {
+        let a = compile(&graph(), Target::Cpu).unwrap();
+        let b = compile(&graph(), Target::Cpu).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(&a[..4], MAGIC);
+        assert_eq!(a[4], VERSION);
+        // The target is part of the artifact.
+        assert_ne!(a, compile(&graph(), Target::Gpu).unwrap());
+        // The output width closes the artifact.
+        assert_eq!(&a[a.len() - 4..], &3u32.to_le_bytes());
+    }
+
+    #[test]
+    fn prepare_compiles_once_per_model_and_target() {
+        let mut cache = SpecializationCache::new(1 << 16);
+        assert_eq!(prepare(&mut cache, &graph(), Target::Cpu, Policy::Purgeable), Ok(true));
+        assert_eq!(prepare(&mut cache, &graph(), Target::Cpu, Policy::Purgeable), Ok(false));
+        assert_eq!(prepare(&mut cache, &graph(), Target::Gpu, Policy::Persistent), Ok(true));
+        assert_eq!(cache.len(), 2);
+        let held = cache.lookup("tiny", Target::Cpu.name()).map(|b| b.to_vec());
+        assert_eq!(held, Some(compile(&graph(), Target::Cpu).unwrap()));
+    }
+}

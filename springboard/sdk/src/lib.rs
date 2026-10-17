@@ -517,6 +517,9 @@ pub mod async_publisher;
 pub mod object_graph;
 pub mod ndarray;
 pub mod inference;
+/// Core AI: load a model once, keep its specialized plan, and call it as a typed inference function
+/// (`core_ai::InferenceSession`).
+pub mod core_ai;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
