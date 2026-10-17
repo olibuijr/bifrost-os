@@ -232,9 +232,18 @@
    "area": "settings",
    "apple": "RulesPreferences; Message > Apply Rules",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/rules.rs; springboard/apps/mail-desktop/src/window.rs (apply_rules_to_arrivals, apply_rules_to_shown); springboard/apps/mail-desktop/src/prefs.rs (rules)",
-   "note": "Rules are saved in mail-prefs.json, made from Mailbox > New Rule, and run on new mail and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. There is no Rules settings pane yet to edit a rule, and the rules are not tested on Midget.",
-   "wire": "Add a Rules settings pane that lists, edits and reorders rules; check the actions on Midget"
+   "bifrost": "springboard/apps/mail-desktop/src/rules.rs (describe, outcome); springboard/apps/mail-desktop/src/draw.rs (Sheet::Rules rows, Hit::EditRule); springboard/apps/mail-desktop/src/window.rs (MENU_RULES_PANE, remove_rule, submit_edit_rule); springboard/apps/mail-desktop/src/state.rs (open_rules_pane, open_rule_editor, rule_from_form_at); springboard/apps/mail-desktop/src/prefs.rs (rules)",
+   "note": "Mailbox > Rules opens the Rules pane: one line for each rule, a name opens its editor, Add Rule opens a new one, and Remove deletes a rule. The rules are saved in mail-prefs.json. They run on each listing that brings new mail (apply_listing) and by Mailbox > Apply Rules over the shown mailbox. The rule actions run over IMAP. Each rule has a fixed set of conditions (From, To or Cc, Subject contains) and at most one action of each kind, not a list of condition and action rows. Not yet verified on Midget.",
+   "wire": "Give a rule a list of conditions and actions (today: one of each kind), and check the pane and the rule actions on Midget"
+  },
+  {
+   "feature": "Drafts and autosave",
+   "area": "menu",
+   "apple": "File > Save (drafts), Mail Drafts mailbox, Autosave",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs (save_draft, discard_draft, draft_saved, save_question, cancel_sheet); springboard/apps/mail-desktop/src/compose_windows.rs (autosave, closed, changed); springboard/apps/mail-desktop/src/sync.rs (draft_job, DRAFTS); springboard/apps/mail-desktop/src/state.rs (Sheet::Question, draft_for_save)",
+   "note": "Closing a message with changes asks Save This Message, Don't Save, or Cancel. Save and the 30-second autosave keep the draft in the Drafts mailbox over IMAP (the mailbox is created when missing, and the older copy with the same Message-ID is replaced); without a signed-in account, or when the server refuses, the draft is kept as a file in the data directory. Sending removes the draft. Don't Save removes the saved copy. A window the shell closes is opened again with the question. Not yet verified on Midget.",
+   "wire": "Open a saved draft from Drafts in a compose window, and check the Drafts mailbox and the autosave on Midget"
   },
   {
    "feature": "Conversations (organize by thread, expand/collapse)",
@@ -544,11 +553,11 @@
   }
  ],
  "summary": {
-  "features": 59,
+  "features": 60,
   "parity": 13,
-  "partial": 42,
+  "partial": 43,
   "gap": 0,
   "n/a": 4,
-  "coverage_pct": 61.8
+  "coverage_pct": 61.6
  }
 }
