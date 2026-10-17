@@ -2935,11 +2935,20 @@
    "description": "",
    "role": "Source Sans (Adobe, OFL) bundled by macOS",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/tools/pack.py; springboard/tests/font_packages.rs",
    "status": "partial",
    "note": "same family is in BifrOSt's font library (Source Sans 3 / variable); selectable in Settings > Fonts; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "font_packages::library_pins_the_source_sans_italic_face"
+    }
+   ],
+   "ready_note": "The italic face is pinned in the font library (tools/pack.py LIBRARY_FONTS, SourceSans3-Italic-Variable.ttf, Google Fonts pinned commit, sha256 checked at pack time) so Settings > Fonts offers Source Sans 3 Italic. Not yet verified on Midget; the file ships when the font pack is built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ScrollPage.aiff",
