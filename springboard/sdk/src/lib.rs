@@ -84,6 +84,7 @@ pub mod app_windows;
 pub mod input_events;
 pub mod touch_events;
 pub mod launch_services;
+pub mod mail_compose;
 pub mod notify_bus;
 pub mod speech;
 /// Screenshots from the shell's screenshot service (`bifrost_app::screenshot`).

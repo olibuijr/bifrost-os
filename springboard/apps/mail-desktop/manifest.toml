@@ -11,3 +11,4 @@ architecture = "x86_64-linux"
 permissions = ["storage", "network", "keychain", "notifications", "documents"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
+schemes = ["mailto"]

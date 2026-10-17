@@ -10,6 +10,8 @@ struct MailApp {
     window: Option<MailWindow>,
     /// Viewer windows: a message in a window of its own (double-click, File > New Viewer Window).
     viewers: Vec<Viewer>,
+    /// A `mailto:` link that arrived before the window existed; it opens once the window is made.
+    pending_url: Option<String>,
 }
 
 impl MailApp {
@@ -57,6 +59,9 @@ impl App for MailApp {
             None => {
                 let mut mail = MailWindow::new(ctx);
                 mail.set_size(w, h);
+                if let Some(url) = self.pending_url.take() {
+                    mail.open_handoff(&url);
+                }
                 self.window = Some(mail);
                 ctx.wants_keyboard(true);
             }
@@ -77,11 +82,21 @@ impl App for MailApp {
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let changed = match &mut self.window {
-            None => false,
+            None => {
+                // a mailto: link before the window exists waits for configure
+                if let Input::Open(url) = ev {
+                    self.pending_url = Some(url);
+                }
+                false
+            }
             Some(mail) => match ev {
                 Input::Touch { kind, x, y, t, .. } => mail.touch(ctx, kind, x, y, t),
                 Input::Key(k) => mail.key(ctx, k),
                 Input::Command(Command::Paste) => mail.paste(),
+                Input::Open(url) => {
+                    mail.open_handoff(&url);
+                    true
+                }
                 _ => false,
             },
         };
@@ -154,5 +169,5 @@ impl App for MailApp {
 }
 
 fn main() {
-    bifrost_app::run(MailApp { window: None, viewers: Vec::new() });
+    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), pending_url: None });
 }

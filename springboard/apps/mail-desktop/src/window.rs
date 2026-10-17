@@ -997,6 +997,26 @@ impl MailWindow {
         }
     }
 
+    /// A `mailto:` link handed to Mail (the system compose path, or Open With): its fields fill a new message. A link
+    /// without a valid address is reported in the status line.
+    pub fn open_handoff(&mut self, url: &str) {
+        let Some(handoff) = bifrost_app::controls::compose_handoff::Compose::from_url(url) else {
+            self.mail.status = "That link is not a mail address".to_string();
+            return;
+        };
+        let from = self.mail.current().map(|a| a.email.clone()).unwrap_or_default();
+        self.mail.open_draft(crate::message::Draft {
+            from,
+            to: handoff.to,
+            cc: handoff.cc,
+            bcc: handoff.bcc,
+            subject: handoff.subject,
+            body: handoff.body,
+            ..crate::message::Draft::default()
+        });
+        self.dirty = true;
+    }
+
     /// File > New Viewer Window: the open message goes into a viewer window of its own.
     fn new_viewer(&mut self) {
         if let Some(uid) = self.mail.open {
