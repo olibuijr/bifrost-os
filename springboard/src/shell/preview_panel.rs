@@ -1118,12 +1118,12 @@ impl Shell {
         s.stroke_rrect(bxf, byf, box_pt, box_pt, ui.pt(2.0), ui.pt(1.5), LINK);
 
         // title (centred, cut to fit between the buttons) and the "n of N" counter, left of the full-screen button
-        let title = p.current().map(|i| if i.title.is_empty() { i.url.as_str() } else { i.title.as_str() }).unwrap_or("");
+        let title = p.current().map(|i| bifrost_ui::preview_view::title_of(&i.title, &i.url)).unwrap_or("");
         let title = ui.fit(title, MAC_HEADLINE_PT, cw - 2.0 * ui.pt(120.0));
         self.label(&title, MAC_HEADLINE_PT, Weight::Bold, LABEL.now(), |im| {
             s.blit(im, (cx + (cw - im.w as f32) / 2.0) as i32, (cy + ui.pt(18.0) - im.h as f32 / 2.0) as i32, 255, 255)
         });
-        let counter = format!("{} of {}", p.index() + 1, p.count());
+        let counter = bifrost_ui::preview_view::counter_text(p.index(), p.count());
         self.label(&counter, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, |im| {
             s.blit(im, (cx + cw - ui.pt(44.0) - im.w as f32) as i32, (cy + ui.pt(18.0) - im.h as f32 / 2.0) as i32, 255, 255)
         });
