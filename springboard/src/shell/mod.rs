@@ -1235,9 +1235,16 @@ impl Shell {
         self.game.is_on()
     }
 
-    /// True once per session, the first time Game Mode turns on (the notice is not built yet).
-    pub fn game_mode_first_notice(&mut self) -> bool {
-        self.game.take_first_notice()
+    /// The one-time Game Mode notice: posted the first time Game Mode turns on, then remembered in settings.ini.
+    pub fn game_mode_notice(&mut self) {
+        let mut o = Options::load(&self.prefs);
+        if o.game_notice_shown {
+            return;
+        }
+        o.game_notice_shown = true;
+        o.save(&mut self.prefs);
+        let body = "Game Mode gives the full-screen game in front the processor while it plays. Turn it off from the menu bar, or in Settings > General.";
+        self.notify(notify::store::Notification::new(AppId::Settings, "Game Mode is on".into(), body.into(), crate::bare::sys::wall_time().0));
     }
 
     /// Battery › Power Mode as the user left it; the binary maps it to the CPU profile.

@@ -84,7 +84,6 @@ pub struct Model {
     suppressed: bool,
     /// when the game first stopped qualifying, while Game Mode is still on
     leaving_since: Option<u64>,
-    notified: bool,
 }
 
 impl Model {
@@ -138,12 +137,6 @@ impl Model {
         self.leaving_since.map(|since| since + LEAVE_MS)
     }
 
-    /// True the first time Game Mode turns on in this session, so the shell can post its one notification.
-    pub fn take_first_notice(&mut self) -> bool {
-        let first = !self.notified;
-        self.notified = true;
-        first
-    }
 }
 
 #[cfg(test)]
@@ -200,13 +193,6 @@ mod tests {
         assert_eq!(m.update(false, 200), None, "the game leaves");
         assert_eq!(m.update(true, 300), Some(Change::Enter), "the next game gets it again");
         assert!(!Model::default().turn_off(), "off already: nothing to turn off");
-    }
-
-    #[test]
-    fn the_first_notice_comes_once() {
-        let mut m = Model::default();
-        assert!(m.take_first_notice());
-        assert!(!m.take_first_notice());
     }
 
     #[test]

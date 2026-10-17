@@ -1055,8 +1055,8 @@ fn run() -> std::io::Result<()> {
                 eprintln!("springboard: game mode {}", if change == springboard::shell::gamemode::Change::Enter { "on" } else { "off" });
                 // the effects of a change are the CPU profile, which is recomputed below at once
                 last_profile_check = f64::NEG_INFINITY;
-                if change == springboard::shell::gamemode::Change::Enter && shell.game_mode_first_notice() {
-                    eprintln!("springboard: game mode notice (not built yet)");
+                if change == springboard::shell::gamemode::Change::Enter {
+                    shell.game_mode_notice();
                 }
             }
         }
