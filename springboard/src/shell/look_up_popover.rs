@@ -180,7 +180,7 @@ fn title_of(hit: &Hit) -> Option<String> {
         Hit::Settings(p) | Hit::City(p) => p.to_string(),
         Hit::Deildu(t) | Hit::Answer(t) => t.clone(),
         Hit::Contact { name, .. } | Hit::File { name, .. } => name.clone(),
-        Hit::Shortcut { title, .. } | Hit::Indexed { title, .. } => title.clone(),
+        Hit::Shortcut { title, .. } | Hit::Indexed { title, .. } | Hit::Event { title } => title.clone(),
         Hit::Terminal(_) | Hit::Reveal { .. } => return None,
     })
 }
