@@ -39,6 +39,7 @@ pub const M_NET_PREFIX: &str = "net.";
 pub const M_BOOT_ATTEMPT: &str = "system.boot_attempt";
 pub const M_BACKUP_RESTORE_APPLY: &str = "backup.restore_apply";
 pub const M_STORAGE_POLICY_SET: &str = "storage.policy_set";
+pub const M_NETWORK_DNS_SET: &str = "network.dns_set";
 
 /// Methods allowed before login.
 pub const UNAUTH_METHODS: &[&str] = &[
