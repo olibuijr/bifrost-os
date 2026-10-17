@@ -32,6 +32,7 @@ pub mod textutil;
 pub mod tiff2icns;
 pub mod tmutil;
 pub mod units;
+pub mod vis;
 pub mod what;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
