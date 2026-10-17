@@ -15,6 +15,10 @@
 //! "skip_forward"|"skip_backward"|"seek"}`, plus `"position_ms"` for `seek`. A command the owner did not enable
 //! (`Unsupported` or `Disabled`) is never sent. A session whose app has closed is dropped on the next tick.
 //!
+//! `publish` may also name the owner's Up Next queue: `queue?: [{title, artist?, playable?: bool}]`. Media
+//! Control Center's Up Next picker lists it, and a pick goes back as `{"command": "queue_select", "index": n}`
+//! (the entry's place in the queue). An entry the owner marked not playable is listed and cannot be picked.
+//!
 //! The session lives in one process-wide store: the shell draws Control Center from it, and the service is answered
 //! from the app's channel. Nothing here blocks.
 use super::{Event, Shell, SystemService};
@@ -107,6 +111,8 @@ enum Sent {
     Toggle(&'static str, bool),
     /// A rating the user chose on the lock card.
     Rate(f64),
+    /// The Up Next entry the user picked, by its place in the owner's queue.
+    Queue(usize),
 }
 
 fn body_of(sent: &Sent) -> Json {
@@ -119,6 +125,10 @@ fn body_of(sent: &Sent) -> Json {
         Sent::Toggle(name, active) => Json::Obj(vec![
             ("command".to_string(), Json::Str((*name).into())),
             ("active".to_string(), Json::Bool(*active)),
+        ]),
+        Sent::Queue(index) => Json::Obj(vec![
+            ("command".to_string(), Json::Str("queue_select".into())),
+            ("index".to_string(), Json::Num(*index as f64)),
         ]),
         Sent::Rate(value) => Json::Obj(vec![
             ("command".to_string(), Json::Str("rate".into())),
@@ -214,14 +224,61 @@ pub(crate) struct Store {
     published: Option<Instant>,
     feedback: Option<Feedback>,
     pending: Vec<(String, Sent)>,
+    /// The owner's Up Next queue, replaced by each publish.
+    queue: Vec<QueueItem>,
+}
+
+/// One entry of an app's Up Next queue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueItem {
+    pub title: String,
+    pub artist: String,
+    /// False for an entry the owner cannot play now: listed, not pickable.
+    pub playable: bool,
+}
+
+/// The most entries a queue may hold; a longer list is refused.
+const QUEUE_MAX: usize = 200;
+
+/// Reads the optional `queue` of a publish body. A missing queue is an empty one.
+pub fn parse_queue(body: &Json) -> Result<Vec<QueueItem>, String> {
+    let Some(entries) = body.get("queue") else {
+        return Ok(Vec::new());
+    };
+    let entries = entries.as_array().ok_or_else(|| "queue must be an array".to_string())?;
+    if entries.len() > QUEUE_MAX {
+        return Err(format!("queue holds at most {QUEUE_MAX} entries"));
+    }
+    entries
+        .iter()
+        .map(|entry| {
+            let title = entry.str_field("title").and_then(|t| optional_text(&t)).ok_or_else(|| "each queue entry needs a title".to_string())?;
+            let artist = entry.str_field("artist").and_then(|t| optional_text(&t)).unwrap_or_default();
+            let playable = !matches!(entry.get("playable"), Some(Json::Bool(false)));
+            Ok(QueueItem { title, artist, playable })
+        })
+        .collect()
 }
 
 impl Store {
-    fn publish(&mut self, app_id: &str, session: MediaSession) {
+    fn publish(&mut self, app_id: &str, session: MediaSession, queue: Vec<QueueItem>) {
         self.owner = Some(app_id.to_string());
         self.session = Some(session);
         self.published = Some(Instant::now());
         self.feedback = None;
+        self.queue = queue;
+    }
+
+    /// Queues the owner's pick of an Up Next entry. False when there is no owner, no such entry, or it is not playable.
+    fn request_queue(&mut self, index: usize) -> bool {
+        let Some(owner) = self.owner.clone() else {
+            return false;
+        };
+        if !self.queue.get(index).is_some_and(|item| item.playable) {
+            return false;
+        }
+        self.pending.push((owner, Sent::Queue(index)));
+        true
     }
 
     /// Sets the feedback of the shown session. Only its owner may set it.
@@ -270,6 +327,7 @@ impl Store {
             self.session = None;
             self.published = None;
             self.feedback = None;
+            self.queue.clear();
         }
     }
 
@@ -324,6 +382,7 @@ impl Store {
                 self.session = None;
                 self.published = None;
                 self.feedback = None;
+                self.queue.clear();
             }
         }
     }
@@ -337,7 +396,7 @@ impl Store {
 }
 
 static STORE: Mutex<Store> =
-    Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new() });
+    Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new() });
 
 fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
     let mut g = STORE.lock().ok()?;
@@ -347,6 +406,16 @@ fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
 /// The session Control Center shows, if an app has published one.
 pub(crate) fn current() -> Option<MediaSession> {
     with(|s| s.current()).flatten()
+}
+
+/// The shown owner's Up Next queue (empty without a session or a queue).
+pub(crate) fn up_next() -> Vec<QueueItem> {
+    with(|s| s.queue.clone()).unwrap_or_default()
+}
+
+/// Sends the user's pick of an Up Next entry to the owner. False when the entry cannot be picked.
+pub(crate) fn choose_up_next(index: usize) -> bool {
+    with(|s| s.request_queue(index)).unwrap_or(false)
 }
 
 /// Sends a transport command to the shown session's owner. False when there is no session or it did not enable
@@ -449,7 +518,8 @@ impl SystemService for NowPlaying {
         match method {
             "publish" => {
                 let session = parse_session(app_id, params)?;
-                with(|s| s.publish(app_id, session)).ok_or_else(|| "now playing store unavailable".to_string())?;
+                let queue = parse_queue(params)?;
+                with(|s| s.publish(app_id, session, queue)).ok_or_else(|| "now playing store unavailable".to_string())?;
                 Ok(Json::Null)
             }
             "clear" => {
@@ -507,6 +577,25 @@ mod tests {
         assert_eq!(s.command_state(RemoteCommand::Play), CommandState::Enabled);
         assert_eq!(s.command_state(RemoteCommand::Next), CommandState::Disabled);
         assert_eq!(s.command_state(RemoteCommand::Previous), CommandState::Unsupported);
+    }
+
+    #[test]
+    fn a_publish_queue_is_read_and_a_pick_is_sent_for_a_playable_entry_only() {
+        let q = parse_queue(&body(r#"{"queue":[{"title":"A","artist":"X"},{"title":"B","playable":false},{"title":"C"}]}"#)).expect("a queue");
+        assert_eq!(q.len(), 3);
+        assert_eq!((q[0].artist.as_str(), q[0].playable), ("X", true));
+        assert!(!q[1].playable && q[2].artist.is_empty());
+        assert!(parse_queue(&body(r#"{"title":"x"}"#)).unwrap().is_empty(), "no queue is an empty one");
+        assert!(parse_queue(&body(r#"{"queue":[{"artist":"no title"}]}"#)).unwrap_err().contains("title"));
+        assert!(parse_queue(&body(r#"{"queue":"nope"}"#)).is_err());
+        let mut store = Store { owner: Some("app".into()), session: None, published: None, feedback: None, pending: Vec::new(), queue: q };
+        assert!(store.request_queue(0), "a playable entry is picked");
+        assert!(!store.request_queue(1), "an unplayable entry is not");
+        assert!(!store.request_queue(9), "an unknown entry is not");
+        let events = store.drain();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0].body.get("command"), Some(Json::Str(c)) if c == "queue_select"));
+        assert!(matches!(events[0].body.get("index"), Some(Json::Num(n)) if *n == 0.0));
     }
 
     #[test]
