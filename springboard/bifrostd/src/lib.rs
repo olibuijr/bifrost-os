@@ -122,6 +122,11 @@ impl Backoff {
     }
 }
 
+/// Game Mode's priority socket (`priority.rs`): `<root>/run/priority.sock`.
+pub const PRIORITY_SOCKET: &str = "priority.sock";
+
+pub mod priority;
+
 pub fn run_dir(root: &Path) -> PathBuf {
     root.join("run")
 }
