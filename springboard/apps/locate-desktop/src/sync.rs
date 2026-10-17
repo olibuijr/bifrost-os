@@ -5,7 +5,8 @@
 //! events become shell notifications.
 
 use crate::window::LocateWindow;
-use bifrost_app::cloud_findmy::{CloudFix, DeviceList};
+use bifrost_app::cloud_findmy::{CloudFix, CommandKind, DeviceList};
+use bifrost_locate::control::Request;
 use bifrost_app::core_location::{AuthorizationStatus, Delegate, Location, LocationError};
 use bifrost_app::power_sources;
 use bifrost_app::controls::x25519::PrivateKey;
@@ -173,7 +174,24 @@ impl LocateWindow {
     pub fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
         let mut dirty = self.drain_events(ctx);
         dirty |= self.step_report(ctx);
+        dirty |= self.send_outbox();
         dirty
+    }
+
+    /// Sends the control requests for other devices (locate, play sound) once the worker runs; until then they wait.
+    fn send_outbox(&mut self) -> bool {
+        let Some(link) = self.link.as_ref() else { return false };
+        if self.outbox.is_empty() {
+            return false;
+        }
+        for request in self.outbox.drain(..) {
+            match request {
+                Request::Locate(device) => link.send(Job::Command { device, kind: CommandKind::Locate }),
+                Request::PlaySound(device) => link.send(Job::Command { device, kind: CommandKind::PlaySound }),
+                Request::Share(_) => {}
+            }
+        }
+        true
     }
 
     fn drain_events(&mut self, ctx: &Ctx) -> bool {

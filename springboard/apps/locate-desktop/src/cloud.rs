@@ -9,7 +9,7 @@
 use crate::pairing::PollAnswer;
 use crate::sealing::Sealed;
 use bifrost_app::cloud_account::{session_send, CloudError};
-use bifrost_app::cloud_findmy::{self as fm, DeviceList, PendingCommand, PendingDevice, SharedLocation};
+use bifrost_app::cloud_findmy::{self as fm, CommandKind, DeviceList, PendingCommand, PendingDevice, SharedLocation};
 use bifrost_app::url::URLRequest;
 use bifrost_core::plist::base64_encode;
 use std::io::{Read, Write};
@@ -42,6 +42,8 @@ pub enum Job {
     Report { own: Sealed, copies: Vec<(String, Sealed)> },
     /// Delete this device's stored position from the cloud (sharing is off).
     Clear,
+    /// Queue a locate or a sound on another device of the account.
+    Command { device: String, kind: CommandKind },
 }
 
 /// What the worker tells the window.
@@ -218,6 +220,10 @@ impl Worker {
                     let req = fm::put_share_location_request(BASE_URL, &self.token, &share_id, &blob.sealed, &blob.enc);
                     let _ = self.run_once("share copy", req, fm::parse_approve_pending);
                 }
+            }
+            Job::Command { device, kind } => {
+                let req = fm::command_request(BASE_URL, &self.token, &device, kind, false);
+                let _ = self.run_once("command", req, fm::parse_command);
             }
             Job::Clear => {
                 let req = fm::delete_self_location_request(BASE_URL, &self.token);
