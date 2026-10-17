@@ -769,6 +769,25 @@ impl App for NotesApp {
         true
     }
 
+    /// The shell asks Notes to index again (`index_extension = true` in its manifest). A reindex-all clears the Search
+    /// index of Notes and indexes every note again; identifiers are indexed again on their own.
+    fn index_request(&mut self, ctx: &Ctx, request: bifrost_app::quicksearch::IndexRequest) -> bool {
+        use bifrost_app::quicksearch::{CSSearchableIndex, IndexRequest};
+        match request {
+            IndexRequest::ReindexAll => {
+                CSSearchableIndex::default_index().delete_all_searchable_items(ctx);
+                self.indexed.clear();
+            }
+            IndexRequest::ReindexIdentifiers(ids) => {
+                for id in &ids {
+                    self.indexed.remove(id);
+                }
+            }
+        }
+        self.sync_index(ctx);
+        false
+    }
+
     fn continue_activity(&mut self, ctx: &Ctx, activity: bifrost_app::quicksearch::UserActivity) -> bool {
         let now = bifrost_app::proto::sys::now_ms();
         activity.activity_type == bifrost_app::quicksearch::ACTION_TYPE && self.notes.as_mut().is_some_and(|n| n.show_note(&ctx.ui, &activity.unique_identifier, now))

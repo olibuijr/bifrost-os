@@ -10,6 +10,7 @@ category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
+index_extension = true
 window = "full-size"
 
 [[intent]]
