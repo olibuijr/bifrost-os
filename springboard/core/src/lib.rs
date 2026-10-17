@@ -73,6 +73,7 @@ pub mod pacman_progress;
 pub mod progress;
 pub mod notify_center;
 pub mod app_firewall;
+pub mod flatbuffers;
 pub mod app_review;
 pub mod speech_engine;
 pub mod disk_events;
