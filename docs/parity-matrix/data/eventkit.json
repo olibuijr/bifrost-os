@@ -12,7 +12,7 @@
       "apple": "EKEventStore, access requests",
       "bifrost": "springboard/ui/src/calendar_access.rs; springboard/src/shell/services/calendar.rs; springboard/sdk/src/calendar.rs",
       "status": "partial",
-      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, with each repeating event expanded to its occurrences in the range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), and Midget testing (host unit tests only)"
+      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, with each repeating event expanded to its occurrences in the range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Built 2026-10-17: SDK calendar::update_event and delete_event (service methods update_event and delete_event, tests calendar::tests). Not yet: EKEventStore account writes, a permission prompt (the manifest is the grant), and Midget testing (host unit tests only)"
     },
     {
       "feature": "Events",
@@ -107,7 +107,7 @@
     }
   ],
   "gaps": [
-    "No SDK calendar write API or reminder API for apps",
+    "No SDK reminder API for apps (calendar save, edit and delete are built: calendar::save_event, update_event, delete_event)",
     "No calendar access prompt; the calendars manifest permission is the only grant",
     "The calendar service returns base events; recurrence expansion is an SDK model (sdk event_recurrence.rs)",
     "No attendees, invitations or account sources",

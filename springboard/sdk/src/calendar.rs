@@ -1,4 +1,4 @@
-//! Calendar events for apps (the EventKit reads, and saving a new event): ask for the access status, then fetch the events that overlap a
+//! Calendar events for apps (the EventKit reads, and saving, editing and deleting events): ask for the access status, then fetch the events that overlap a
 //! range of local civil times.
 //!
 //! ```ignore
@@ -63,6 +63,31 @@ pub fn save_params(title: &str, start: &str, end: &str, all_day: bool, location:
         ("all_day".into(), Json::Bool(all_day)),
         ("location".into(), Json::Str(location.into())),
     ])
+}
+
+/// Replaces the title, time, all-day flag and location of event `id` (an id from an `events` reply) and returns the request
+/// id. The fields are as in [`save_event`]; a repeating event keeps its rule, and its first occurrence moves to `start`.
+/// The reply decodes with [`decode_ok`]. Needs the `calendars` permission.
+pub fn update_event(ctx: &Ctx, id: u64, title: &str, start: &str, end: &str, all_day: bool, location: &str) -> u32 {
+    let params = Json::Obj(vec![
+        ("id".into(), Json::Num(id as f64)),
+        ("title".into(), Json::Str(title.into())),
+        ("start".into(), Json::Str(start.into())),
+        ("end".into(), Json::Str(end.into())),
+        ("all_day".into(), Json::Bool(all_day)),
+        ("location".into(), Json::Str(location.into())),
+    ]);
+    service::call(ctx, SERVICE, "update_event", &params)
+}
+
+/// Deletes event `id` and returns the request id. The reply decodes with [`decode_ok`]. Needs the `calendars` permission.
+pub fn delete_event(ctx: &Ctx, id: u64) -> u32 {
+    service::call(ctx, SERVICE, "delete_event", &Json::Obj(vec![("id".into(), Json::Num(id as f64))]))
+}
+
+/// True for the `{ok: true}` reply of an `update_event` or `delete_event` call.
+pub fn decode_ok(reply: &Json) -> bool {
+    matches!(reply.get("ok"), Some(Json::Bool(true)))
 }
 
 /// The id of the event a `save_event` reply created, or `None` for a reply of another shape.
@@ -161,6 +186,13 @@ mod tests {
         let reply = Json::Obj(vec![("id".into(), Json::Num(12.0))]);
         assert_eq!(decode_saved_id(&reply), Some(12));
         assert_eq!(decode_saved_id(&Json::Null), None);
+    }
+
+    #[test]
+    fn an_update_or_delete_reply_decodes_only_when_ok_is_true() {
+        assert!(decode_ok(&Json::Obj(vec![("ok".into(), Json::Bool(true))])));
+        assert!(!decode_ok(&Json::Obj(vec![("ok".into(), Json::Bool(false))])));
+        assert!(!decode_ok(&Json::Null));
     }
 
     #[test]

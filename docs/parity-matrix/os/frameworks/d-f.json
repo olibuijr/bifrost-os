@@ -322,7 +322,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/calendar.rs; springboard/ui/src/calendar_store.rs",
    "status": "partial",
-   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Gap: apps cannot edit or delete events through the SDK, and account sources such as Exchange are missing.",
+   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Built 2026-10-17: apps can edit and delete events (SDK calendar::update_event and delete_event, service methods update_event and delete_event; tests calendar::tests in springboard/src/shell/services/calendar.rs and springboard/sdk/src/calendar.rs). Gap: account sources such as Exchange are missing.",
    "rea": [],
    "method": "assessed"
   },
