@@ -400,6 +400,10 @@ fn run() -> std::io::Result<()> {
     let mut cursor_dim = (w, h);
     let mut last_motion = f64::NEG_INFINITY;
     let mut last_pointer = ((0.0f32, 0.0f32), false);
+    // Dwell Control: a pointer that rests for the chosen delay is clicked where it rests (the delay comes from Settings)
+    let mut dwell = springboard::shell::accessibility::dwell::DwellClick::new(0, springboard::shell::accessibility::dwell::DEFAULT_RADIUS);
+    // Slow Keys: a key counts only after it has been held for the Settings delay
+    let mut slow_keys = springboard::shell::slow_keys::SlowKeys::default();
     // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
     // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
     let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite(), 1.0);
@@ -506,9 +510,9 @@ fn run() -> std::io::Result<()> {
         if let Some(ms) = disp.wayland_trim_wake_ms() { timeout = timeout.min(ms); }
         inputs.rescan_if_due(now);
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
-        // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
+        // the pointer's wheel ease and right-click hold, key auto-repeat, Slow Keys acceptance, and the cursor hiding
         let hide_cursor = (inputs.has_pointer() && (cursor.is_shown() || plane.is_shown())).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
-        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
+        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(slow_keys.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(system_gestures.next_deadline_ms()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
         // fixed slots first: touch, keys, display, control; then the shell's
@@ -580,6 +584,41 @@ fn run() -> std::io::Result<()> {
         if pointer_now != last_pointer {
             last_pointer = pointer_now;
             last_motion = t;
+        }
+        // Dwell Control: the delay follows Settings, and a pointer resting for it (no button held) clicks once in place
+        let dwell_ms = springboard::shell::accessibility::dwell_delay_ms();
+        if dwell.delay_ms() != dwell_ms {
+            dwell.set_delay_ms(dwell_ms);
+        }
+        // Slow Keys: presses wait for the delay and releases of unaccepted presses are dropped, before the key path sees them
+        let slow_ms = springboard::shell::accessibility::slow_delay_ms();
+        if slow_keys.delay_ms() != slow_ms {
+            slow_keys.set_delay_ms(slow_ms);
+        }
+        if slow_keys.enabled() {
+            let mut kept = Vec::with_capacity(events.len());
+            for e in events.drain(..) {
+                let keep = match e {
+                    input::Event::Key { code, down: true } => slow_keys.press(code, t) == springboard::shell::slow_keys::Verdict::Pass,
+                    input::Event::Key { code, down: false } => slow_keys.release(code) == springboard::shell::slow_keys::Verdict::Pass,
+                    _ => true,
+                };
+                if keep {
+                    kept.push(e);
+                }
+            }
+            events = kept;
+            for code in slow_keys.due(t) {
+                events.push(input::Event::Key { code, down: true });
+            }
+        }
+        if dwell.enabled() && inputs.has_pointer() && !inputs.is_down() {
+            let (px, py) = inputs.pointer();
+            let sample = springboard::shell::accessibility::dwell::Sample { t_ms: t.max(0.0) as u64, x: px, y: py };
+            if let Some((x, y)) = dwell.feed(sample) {
+                events.push(input::Event::Down { x, y, t });
+                events.push(input::Event::Up { x, y, t });
+            }
         }
         if hw_cursor {
             // a rotated screen takes the pointer off the plane (its frames show no cursor, as before)

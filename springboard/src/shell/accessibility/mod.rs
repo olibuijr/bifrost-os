@@ -58,6 +58,10 @@ pub struct AccessibilitySettings {
     pub screen_reader: bool,
     /// Sticky Keys: a modifier tapped once holds for the next key, tapped twice it locks (`sticky_keys`, read by `HwKeys`).
     pub sticky_keys: bool,
+    /// Dwell Control: index into `dwell::DELAYS_MS` (0 is Off). The shell's input loop clicks a resting pointer (`dwell_delay_ms`).
+    pub dwell: usize,
+    /// Slow Keys: index into `slow_keys::DELAYS_MS` (0 is Off). A key counts only when held for the delay (`slow_delay_ms`).
+    pub slow: usize,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -73,7 +77,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -92,6 +96,8 @@ impl AccessibilitySettings {
             guided_access: flag("a11y_guided_access", d.guided_access),
             screen_reader: flag("a11y_screen_reader", d.screen_reader),
             sticky_keys: flag("a11y_sticky_keys", d.sticky_keys),
+            dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
+            slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -114,6 +120,8 @@ impl AccessibilitySettings {
             ("a11y_guided_access", flag(self.guided_access)),
             ("a11y_screen_reader", flag(self.screen_reader)),
             ("a11y_sticky_keys", flag(self.sticky_keys)),
+            ("a11y_dwell", &self.dwell.to_string()),
+            ("a11y_slow_keys", &self.slow.to_string()),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -128,6 +136,16 @@ impl AccessibilitySettings {
 
     pub fn zoom_factor(&self) -> f32 {
         ZOOMS[self.zoom.min(ZOOMS.len() - 1)].1
+    }
+
+    /// The Slow Keys acceptance delay in milliseconds, 0 when Slow Keys is off.
+    pub fn slow_ms(&self) -> u64 {
+        super::slow_keys::delay_for_index(self.slow)
+    }
+
+    /// The dwell delay in milliseconds, 0 when Dwell Control is off.
+    pub fn dwell_ms(&self) -> u64 {
+        dwell::delay_for_index(self.dwell)
     }
 
     pub fn hold_ms(&self) -> u32 {
@@ -147,6 +165,8 @@ impl AccessibilitySettings {
     /// Makes these the values the hooks report.
     pub fn publish(&self) {
         STICKY_KEYS.store(self.sticky_keys, std::sync::atomic::Ordering::Relaxed);
+        DWELL_MS.store(self.dwell_ms(), std::sync::atomic::Ordering::Relaxed);
+        SLOW_MS.store(self.slow_ms(), std::sync::atomic::Ordering::Relaxed);
         bifrost_render::appearance::publish(bifrost_render::appearance::Appearance {
             text_scale: self.text_scale, zoom: self.zoom_factor(), hold_ms: self.hold_ms(),
             bold: self.bold_text, reduce_motion: self.reduce_motion,
@@ -170,6 +190,22 @@ static STICKY_KEYS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBoo
 /// Whether Settings > Accessibility > Sticky Keys is on.
 pub fn sticky_keys() -> bool {
     STICKY_KEYS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Dwell Control's delay in milliseconds as the last `publish` set it (0 is off). The input loop reads this.
+static DWELL_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The Dwell Control delay in milliseconds, or 0 when Dwell Control is off.
+pub fn dwell_delay_ms() -> u64 {
+    DWELL_MS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Slow Keys' acceptance delay in milliseconds as the last `publish` set it (0 is off). The input loop reads this.
+static SLOW_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The Slow Keys acceptance delay in milliseconds, or 0 when Slow Keys is off.
+pub fn slow_delay_ms() -> u64 {
+    SLOW_MS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 pub use bifrost_render::appearance::{text_scale, bold_text, display_zoom, reduce_motion, increase_contrast, reduce_transparency, button_shapes, touch_hold_ms, contrast, contrast_on, button_shape_radius, anim_ms, long_press_ms};
@@ -199,6 +235,33 @@ mod tests {
         STICKY_KEYS.store(true, std::sync::atomic::Ordering::Relaxed);
         assert!(sticky_keys());
         STICKY_KEYS.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[test]
+    fn slow_keys_round_trips_and_maps_to_a_delay() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).slow_ms(), 0);
+        let a = AccessibilitySettings { slow: 2, ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!(b.slow, 2);
+        assert_eq!(b.slow_ms(), 500);
+        p.set("a11y_slow_keys", "99").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).slow, 0);
+    }
+
+    #[test]
+    fn dwell_round_trips_maps_to_a_delay_and_falls_back() {
+        let mut p = Prefs::memory();
+        assert_eq!(AccessibilitySettings::load(&p).dwell_ms(), 0);
+        let a = AccessibilitySettings { dwell: 2, ..Default::default() };
+        a.save(&mut p);
+        let b = AccessibilitySettings::load(&p);
+        assert_eq!(b.dwell, 2);
+        assert_eq!(b.dwell_ms(), 1000);
+        // an index past the last choice is ignored, so the default (Off) holds
+        p.set("a11y_dwell", "99").unwrap();
+        assert_eq!(AccessibilitySettings::load(&p).dwell, 0);
     }
 
     #[test]

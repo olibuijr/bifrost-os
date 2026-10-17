@@ -4,6 +4,8 @@
 
 use super::accessibility::shortcut::Feature;
 use super::accessibility::{AccessibilitySettings, HOLD_MS, SPEECH_PITCHES, SPEECH_RATES, SPEECH_VOICES, ZOOMS};
+use super::accessibility::dwell::DELAYS_MS as DWELL_MS;
+use super::slow_keys::DELAYS_MS as SLOW_MS;
 use super::battery::{self, Graph};
 use super::desktop_dock::Position;
 use super::icons::Icon;
@@ -80,6 +82,10 @@ pub enum PageId {
     Accessibility,
     DisplayZoom,
     TouchHold,
+    /// Accessibility > Touch > Dwell Control: the delay before a resting pointer clicks (`a11y.dwell`)
+    DwellControl,
+    /// Accessibility > Keyboard > Slow Keys: how long a key must be held before it counts (`a11y.slow`)
+    SlowKeys,
     /// Accessibility › Accessibility Shortcut: the feature Option+Cmd+F5 switches
     AccessibilityShortcut,
     /// Accessibility › Screen Reader › Speech: rate, pitch and voice
@@ -256,6 +262,10 @@ pub enum Pick {
     GameMode(usize),
     DisplayZoom(usize),
     TouchHold(usize),
+    /// Accessibility > Touch > Dwell Control: the n-th of `dwell::DELAYS_MS`
+    Dwell(usize),
+    /// Accessibility > Keyboard > Slow Keys: the n-th of `slow_keys::DELAYS_MS`
+    Slow(usize),
     /// Accessibility > Accessibility Shortcut: the n-th of `accessibility::SHORTCUT_CHOICES` (0 is None)
     AccessibilityShortcut(usize),
     /// Screen Reader > Speech: the n-th of `accessibility::SPEECH_RATES`, `SPEECH_PITCHES`, `SPEECH_VOICES`
@@ -677,6 +687,8 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("notifications", "alerts banners badges sounds do not disturb"),
     ("accessibility", "zoom magnifier voiceover text size contrast reduce motion hearing screen reader speech spoken transparency animation shortcut pointer cursor switch scanning flashing lights vision touch"),
     ("assistivetouch", "accessibility touch pointer hold"),
+    ("dwellcontrol", "accessibility dwell click pointer rest hover"),
+    ("slowkeys", "accessibility keyboard acceptance hold delay"),
     ("battery", "power charge energy low power"),
     ("energy", "power battery sleep display"),
     ("about", "name version serial model build computer"),
@@ -1351,9 +1363,12 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("VISION")
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
-                    Group::new(vec![Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys))])
+                    Group::new(vec![
+                        Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
+                        Item::new("Slow Keys").value(SLOW_MS[a.slow.min(SLOW_MS.len() - 1)].0).link(PageId::SlowKeys),
+                    ])
                         .header("KEYBOARD")
-                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again."),
+                        .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough."),
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),
@@ -1364,6 +1379,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![
                         Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
                         Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
+                        Item::new("Dwell Control").value(DWELL_MS[a.dwell.min(DWELL_MS.len() - 1)].0).link(PageId::DwellControl),
                     ])
                     .header("TOUCH")
                     .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
@@ -1409,6 +1425,20 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![Group::new(HOLD_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.hold, Action::Pick(Pick::TouchHold(i)))).collect())
                 .header("HOLD DURATION")
                 .footer("A press must last this long before it counts as a touch and hold.")],
+        ),
+        PageId::DwellControl => page(
+            "Dwell Control",
+            false,
+            vec![Group::new(DWELL_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.dwell, Action::Pick(Pick::Dwell(i)))).collect())
+                .header("DWELL DELAY")
+                .footer("Rest the pointer in one place for this long and it clicks there, without a button press. Off turns Dwell Control off.")],
+        ),
+        PageId::SlowKeys => page(
+            "Slow Keys",
+            false,
+            vec![Group::new(SLOW_MS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.slow, Action::Pick(Pick::Slow(i)))).collect())
+                .header("ACCEPTANCE DELAY")
+                .footer("A key must be held this long before it types. Off turns Slow Keys off.")],
         ),
         PageId::AccessibilityShortcut => page(
             "Accessibility Shortcut",
