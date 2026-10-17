@@ -221,7 +221,10 @@ pub fn paginate(view: &dyn PrintableView, info: &PrintInfo) -> Vec<Rect> {
 pub fn render_pages(view: &dyn PrintableView, info: &PrintInfo) -> Vec<Page> {
     let paper = info.paper_size();
     let mut ctx = PdfContext::new();
-    let keep = |n: usize| info.pages.map_or(true, |(first, last)| (first as usize..=last as usize).contains(&n));
+    let ranges = info.page_ranges();
+    let keep = |n: usize| {
+        ranges.is_empty() || ranges.iter().any(|&(first, last)| (first as usize..=last as usize).contains(&n))
+    };
     for (index, rect) in paginate(view, info).into_iter().enumerate() {
         if !keep(index + 1) {
             continue;

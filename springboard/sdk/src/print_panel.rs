@@ -337,7 +337,10 @@ impl PanelOptions {
             match pages {
                 _ if !self.shows_page_range => refused.push("pages"),
                 Some((first, last)) if first < 1 || last < first => refused.push("pages"),
-                pages => info.pages = pages,
+                pages => {
+                    info.pages = pages;
+                    info.page_list.clear();
+                }
             }
         }
         if let Some(paper) = request.paper {

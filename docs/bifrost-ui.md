@@ -2136,8 +2136,9 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
 - `render_pages` draws only the pages of `PrintInfo::pages`, so a view job's PDF holds the range (one page per number,
   none past the last page). `print_operation` then drops the range from the operation's info so CUPS does not cut it again.
 - `print_ranges::parse_page_ranges(text, total)`: "1-3, 5, 7-", "-4", "all" or empty. Sorted, merged, last page cut to the
-  document, first page past the end refused. `PageSelection::apply_to` writes one range to `PrintInfo::pages`; several
-  ranges are refused with `Multiple` because the job's `page-ranges` attribute carries one range here.
+  document, first page past the end refused. `PageSelection::apply_to` writes one range to `PrintInfo::pages` and several
+  to `PrintInfo::page_list`; the job sends one `page-ranges` attribute with a value per range (`cups::merge_attributes`).
+  Not yet checked on CUPS or Midget.
 - `print_presets::PresetStore`: named `Preset`s (paper, orientation, margins, copies, scale, sides, colour). The page range,
   printer and save path stay with the job. `to_text`/`from_text` is the storage form; reading skips bad names and repeated
   sections, ignores unknown keys and keeps defaults for values that do not parse. An app keeps the text in its defaults.
