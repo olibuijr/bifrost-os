@@ -223,6 +223,7 @@ pub mod extension;
 pub mod quicksearch;
 pub mod indexed_entity;
 pub mod search_terms;
+pub mod search_kit;
 pub mod search_index_batch;
 pub mod visual_search;
 pub mod data_scanner;

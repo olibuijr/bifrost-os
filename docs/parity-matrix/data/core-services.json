@@ -82,7 +82,7 @@
       "apple": "SKIndexCreateWithURL, SKIndexAddDocument, SKSearchCreate, SKSearchFindMatches, SKSummaryCreateWithString",
       "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex: per-app content index for the Search panel)",
       "status": "partial",
-      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files."
+      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files. Built 2026-10-17: Built 2026-10-17: term-level document index in the SDK (springboard/sdk/src/search_kit.rs: SearchIndex add_document, remove_document, find_matches with prefix words and AND, summary of the matching sentence, to_text/from_text for an app-owned file); tests search_kit::tests. Not run: lead runs the tests."
     },
     {
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
