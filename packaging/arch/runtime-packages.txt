@@ -20,6 +20,9 @@ glib2
 qt6-wayland
 gst-plugins-base-libs
 gst-plugins-bad-libs
+gstreamer
+gst-plugins-base
+gst-plugin-whisper
 wl-clipboard
 noto-fonts
 noto-fonts-extra
