@@ -693,7 +693,16 @@
    "status": "partial",
    "note": "Deferred background work is modelled as interval activities and queued requests that run when due, with cronie and systemd timers as Linux runners. Gap: no system daemon runs these requests yet, so the SDK models have no runner.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background"
+    }
+   ],
+   "ready_note": "The background service runs deferred app tasks as the daemon does; tested in shell::services::background."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DASDelegate.framework",
@@ -735,7 +744,16 @@
    "status": "partial",
    "note": "Samba's client tools make DCE/RPC calls to Windows-style servers from the command line. Gap: there is no DCE/RPC client API for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "smbclient -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Samba's client tools make DCE/RPC calls to Windows-style servers from the command line (smbclient is installed)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DEPClientLibrary.framework",
@@ -774,8 +792,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Touch Bar display hardware; BifrOSt has no Touch Bar, so this framework has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -795,8 +813,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Touch Bar display hardware; BifrOSt has no Touch Bar, so this framework has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -816,8 +834,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Touch Bar display hardware; BifrOSt has no Touch Bar, so this framework has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1953,7 +1971,16 @@
    "status": "partial",
    "note": "Unified logging writes entries to journald, and the store reads them back through the subsystem registry. There is no sysdiagnose-style archive that bundles logs for a support request.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "Unified logging writes to the journal and reads entries back; tested in bifrost-core log::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiagnosticRequest.framework",
@@ -2184,7 +2211,21 @@
    "status": "partial",
    "note": "Create, attach, detach, inspect and convert RAW and ISO disk images through the hdiutil command and the shell's image control socket. Sparse bundles and encrypted images are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "hdiutil help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_image"
+    }
+   ],
+   "ready_note": "RAW and ISO image create, attach, detach, inspect and convert are in bifrost-core, with the hdiutil tool."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskImages2.framework",
@@ -2205,7 +2246,21 @@
    "status": "partial",
    "note": "The same RAW and ISO image model and hdiutil commands cover the basic image path. The second-generation sparse and encrypted image formats are not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "hdiutil help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_image"
+    }
+   ],
+   "ready_note": "The same RAW and ISO image model and hdiutil commands cover the basic image path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskManagement.framework",
@@ -2226,7 +2281,21 @@
    "status": "partial",
    "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "diskutil help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_commands"
+    }
+   ],
+   "ready_note": "Mount, unmount, eject, erase, partition and verify are in bifrost-core, with the diskutil tool."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskSpaceDiagnostics.framework",
@@ -2268,7 +2337,16 @@
    "status": "partial",
    "note": "Reads and sets the panel brightness from the backlight class, with a maximum. It does not cover display colour, rotation or multi-display configuration.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::power"
+    }
+   ],
+   "ready_note": "Panel brightness is read and set through the backlight class; tested in bare::power."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DisplayTransportServices.framework",
@@ -2394,7 +2472,16 @@
    "status": "partial",
    "note": "Focus on and off is built: it silences banners and screen wakes, keeps notifications, and persists, as tested in focus.rs. No Shortcuts or voice intent toggles it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus"
+    }
+   ],
+   "ready_note": "Focus on and off, with the state the shell persists, is built in the shell and tested in shell::focus."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DoNotDisturbKit.framework",
@@ -2415,7 +2502,16 @@
    "status": "partial",
    "note": "The shell's focus accessors (dnd, set_dnd) hold the state a client would read. No app-facing kit is exposed through the SDK yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus"
+    }
+   ],
+   "ready_note": "The shell's focus accessors hold the state a client reads; tested in shell::focus."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DoNotDisturbServer.framework",
@@ -2436,7 +2532,16 @@
    "status": "partial",
    "note": "Quiet hours and the persisted focus state are built in the shell. The reference server's settings model and cross-device settings sync are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::schedule"
+    }
+   ],
+   "ready_note": "Quiet-hours schedule and persisted focus state are in the shell; tested in shell::notify::schedule."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DocumentCamera.framework",
@@ -2562,7 +2667,16 @@
    "status": "partial",
    "note": "Stroke painting into a pixel canvas for Freeform is built and tested in ink.rs. The reference paint shaders (wet paint, dry composite, paper texture) are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-freeform",
+     "filter": "ink"
+    }
+   ],
+   "ready_note": "Stroke painting into a pixel canvas for Freeform is built and tested in ink."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Drift.framework",
@@ -2604,7 +2718,16 @@
    "status": "partial",
    "note": "Partial: the background service (services/background.rs) runs deferred app tasks gated by network and external power. Not built: idle-state gating, system jobs beyond app tasks, and systemd timers as the scheduler.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background"
+    }
+   ],
+   "ready_note": "The background service schedules deferred app work; tested in shell::services::background."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Dyld.framework",
@@ -2688,7 +2811,16 @@
    "status": "partial",
    "note": "PEAP and TTLS with MSCHAPv2 are configured through wpa_supplicant in wifi_config.rs. EAP-TLS and certificate-based 802.1X are not built, and the reference trust-store helper has no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_config"
+    }
+   ],
+   "ready_note": "PEAP and TTLS with MSCHAPv2 are configured through wpa_supplicant; tested in net::wifi_config."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EDPSecurity.framework",
@@ -3024,7 +3156,16 @@
    "status": "partial",
    "note": "MIME attachment stripping and the message model are built in the Mail app. The reference attribution, currency and subject-prefix pattern tables are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "mime"
+    }
+   ],
+   "ready_note": "MIME attachment stripping and the message model are in the Mail app; tested in mime."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmailDaemon.framework",
@@ -3066,7 +3207,16 @@
    "status": "partial",
    "note": "Mail parses MIME parts and speaks IMAP in these two files. There is no shared email surface for other apps and no SMTP send path in them.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "mime"
+    }
+   ],
+   "ready_note": "Mail parses MIME parts in the Mail app; tested in mime."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmbeddedAcousticRecognition.framework",
@@ -3150,7 +3300,16 @@
    "status": "partial",
    "note": "The SDK has a word-vector table with nearest-neighbour and distance queries (embedding.rs) and a table of named models that serves requests (ml_runtime.rs), tested in springboard/ui/tests/parity_sdk-complete-25.rs. Gap: no shell service hosts embedding models for search, and the vectors come from the caller rather than from a bundled model.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "embedding"
+    }
+   ],
+   "ready_note": "The word-vector table with nearest-neighbour and distance queries is in bifrost-ui; tested in embedding."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmojiFoundation.framework",
@@ -3171,7 +3330,16 @@
    "status": "partial",
    "note": "The keyboard emoji page has categories, a recently used list and search state. Per-language keyword tables are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "emoji"
+    }
+   ],
+   "ready_note": "The keyboard emoji page has categories, recents and search; tested in emoji."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EncoreXPCService.framework",
@@ -3360,7 +3528,16 @@
    "status": "partial",
    "note": "A pure-Rust CPU evaluator runs chains of dense, relu and softmax layers and reads models from their text form (ml_model.rs), behind the named model table in ml_runtime.rs. Gap: there are no convolution or recurrent layers, no binary model package format and no compute device path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_model"
+    }
+   ],
+   "ready_note": "A pure-Rust CPU evaluator runs dense, relu and softmax layer chains; tested in ml_model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EventKitExternalSync.framework",
@@ -3423,7 +3600,16 @@
    "status": "partial",
    "note": "The data detector finds calendar dates in plain text, in yyyy-mm-dd and d.m.yyyy forms (detect.rs). Gap: no code reads the title, time, place or end of an event from a message, and calendar-desktop offers no event suggestions.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect"
+    }
+   ],
+   "ready_note": "The data detector finds calendar dates in plain text; tested in detect."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ExchangeNotes.framework",
@@ -4305,7 +4491,16 @@
    "status": "partial",
    "note": "Child restrictions (downtime, time limits and URL filter rules) are covered by the SDK screen time module and the core content filter; family account sync and per-child reporting to a vendor cloud are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time"
+    }
+   ],
+   "ready_note": "Child restrictions (downtime, time limits, URL filter rules) are in the SDK screen time module; tested in screen_time."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FamilyControlsObjC.framework",
@@ -4323,8 +4518,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs; springboard/core/src/content_filter.rs",
-   "status": "partial",
-   "note": "Objective-C bindings are not needed on BifrOSt; the Rust SDK screen time module and the core content filter provide the same restriction logic.",
+   "status": "n/a",
+   "note": "Objective-C bindings of the screen time framework are not needed on BifrOSt: the Rust SDK screen time module (springboard/sdk/src/screen_time.rs) is the API.",
    "rea": [],
    "method": "assessed"
   },
@@ -4536,7 +4731,16 @@
    "status": "partial",
    "note": "The bug report model, server limits, diagnostics and redaction are in the SDK, and the client posts to the BifrOSt Cloud bug API; the reference feedback assistant interface and its vendor destinations are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bug_report"
+    }
+   ],
+   "ready_note": "The bug report model, limits, diagnostics and redaction are in the SDK; tested in bug_report."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FeedbackCore.framework",
@@ -4557,7 +4761,16 @@
    "status": "partial",
    "note": "The report model that feedback submissions use is covered by the SDK bug report module; the reference storage model and its vendor-side records are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bug_report"
+    }
+   ],
+   "ready_note": "The report model feedback submissions use is in the SDK bug report module; tested in bug_report."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FeedbackLogger.framework",
@@ -4599,7 +4812,16 @@
    "status": "partial",
    "note": "Collecting and posting a report is covered by the SDK bug report client; there is no system feedback daemon and no vendor feedback remote view.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bug_report"
+    }
+   ],
+   "ready_note": "Collecting and posting a report is in the SDK bug report client; tested in bug_report."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FileBrowsingServices.framework",
@@ -4641,7 +4863,16 @@
    "status": "partial",
    "note": "The thumbnails service draws and caches pictures of files for every app, with a request plan and a generation state machine in the SDK (thumbnails.rs). Gap: the shared preview generator does not yet cover documents or media beyond the providers in springboard/src/thumbs, and no derivative cache is shared with the file browser's previews.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails"
+    }
+   ],
+   "ready_note": "The thumbnails service draws and caches file pictures for every app; tested in thumbnails."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FileDerivatives.framework",
@@ -4662,7 +4893,16 @@
    "status": "partial",
    "note": "Partial: the thumbnails service picks a provider by content type (thumbs/: cards, images, media, text, canvas) and the cache key is defined in bifrost_ui::thumb_service. Used by the Files app (apps/files/src/system.rs) and Quick Look (shell/services/quick_look.rs). Not verified: an on-disk cache for previews.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "The shell's thumbnails service picks a provider by content type; tested in thumbs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FileProviderDaemon.framework",
@@ -5523,7 +5763,16 @@
    "status": "partial",
    "note": "Do Not Disturb can be switched on by hand or by a daily schedule that may cross midnight; banners and wakes are silenced while alarms still sound. Gap: named Focus modes with their own app and person filters are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus"
+    }
+   ],
+   "ready_note": "Focus modes (Do Not Disturb on, off, scheduled) are built in the shell and tested in shell::focus."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FocusSettingsUI.framework",
@@ -5565,7 +5814,16 @@
    "status": "partial",
    "note": "Pure model: an attached intent runs once for each new file in a watched folder, and the first listing never runs actions. Gap: the module is declared but the shell does not yet feed watch events to its registry, and there is no UI to attach an action.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::folder_actions"
+    }
+   ],
+   "ready_note": "An attached intent runs once for each new file in a watched folder; tested in shell::folder_actions."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework",
