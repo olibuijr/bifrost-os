@@ -1,6 +1,6 @@
 //! Parity sdk-complete-11: headless tests of the CSV reader's strict mode, its header table and its errors.
 
-use bifrost_core::csv::{parse_table, try_parse_rows, CsvError};
+use bifrost_core::csv::{parse_table, parse_table_delimited, try_parse_rows, try_parse_rows_delimited, CsvError};
 
 #[test]
 fn an_unclosed_quote_is_an_error_for_the_strict_reader() {
@@ -37,4 +37,23 @@ fn a_record_with_the_wrong_width_names_its_position() {
 fn a_table_needs_a_header_and_an_unclosed_quote_fails_it() {
     assert_eq!(parse_table("\n\n"), Err(CsvError::NoHeader));
     assert_eq!(parse_table("a,b\n\"1"), Err(CsvError::UnterminatedQuote));
+}
+
+#[test]
+fn a_tab_delimited_export_reads_as_a_table_with_quoted_tabs_kept() {
+    let t = parse_table_delimited("name\tnote\r\nAlma\t\"a\tb\"\r\nBo\t\n", '\t').unwrap();
+    assert_eq!(t.header(), &["name".to_string(), "note".to_string()]);
+    assert_eq!(t.len(), 2);
+    assert_eq!(t.value(0, "note"), Some("a\tb"));
+    assert_eq!(t.value(1, "note"), Some(""));
+    assert_eq!(t.value(0, "name"), Some("Alma"));
+}
+
+#[test]
+fn a_comma_is_ordinary_text_in_a_tab_delimited_record() {
+    assert_eq!(
+        try_parse_rows_delimited("a,b\tc\n", '\t'),
+        Ok(vec![vec!["a,b".to_string(), "c".to_string()]])
+    );
+    assert_eq!(try_parse_rows_delimited("a\t\"b", '\t'), Err(CsvError::UnterminatedQuote));
 }
