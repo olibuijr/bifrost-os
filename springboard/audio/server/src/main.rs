@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn the_default_puts_the_hardware_first() {
-        assert_eq!(parse_drivers(DEFAULT_DRIVERS), Ok(vec![DriverKind::Alsa, DriverKind::Loopback, DriverKind::Plugin]));
+        assert_eq!(parse_drivers(DEFAULT_DRIVERS), Ok(vec![DriverKind::Alsa, DriverKind::Loopback]));
     }
 
     #[test]
