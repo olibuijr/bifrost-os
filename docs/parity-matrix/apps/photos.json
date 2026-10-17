@@ -213,9 +213,9 @@
    "area": "view",
    "apple": "sidebar Map",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/places.rs (gps_of, layout, cluster_at); springboard/src/shell/photos/mod.rs (Album::Places, draw_places, Target::Place)",
-   "note": "Places album of photos with EXIF GPS; pins cluster by screen distance at the fitted zoom; tapping a pin lists its photos. Map tiles are not drawn yet (graticule backdrop)",
-   "wire": "Draw map tiles from the Maps tile source (springboard/apps/maps-desktop/src/source.rs, loader.rs, cache.rs) behind the pins, and add a way back from a pin to the map"
+   "bifrost": "springboard/src/shell/photos/places.rs; springboard/src/shell/photos/mod.rs (Album::Places, draw_places, draw_place_tiles, refresh_places); springboard/src/maptiles",
+   "note": "Places album of photos with EXIF GPS; GPS is read on a worker; pins cluster by screen distance at the fitted zoom over the shared map tiles; tapping a pin lists its photos; < Places returns to the map. Not yet checked on Midget",
+   "wire": "Check tiles load and the < Places control on Midget, then promote to parity"
   },
   {
    "feature": "People & Pets face recognition",

@@ -548,6 +548,8 @@ pub struct Photos {
     place_pick: Option<Vec<PathBuf>>,
     /// a worker is reading GPS positions; its result refreshes the map
     place_busy: bool,
+    /// the map tiles under the Places pins, loaded from the shared tile cache (created on first use)
+    tiles: Option<crate::maptiles::loader::TileLoader>,
     /// what Undo and Redo step through
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
@@ -700,6 +702,7 @@ impl Photos {
             place_gps: std::collections::HashMap::new(),
             place_pick: None,
             place_busy: false,
+            tiles: None,
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
@@ -1549,6 +1552,10 @@ impl Photos {
     /// came into view. True when the screen changed.
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
+        // map tiles finish on their own threads; applying them here picks them up on the next frame
+        if self.tiles.as_mut().is_some_and(|l| l.pump()) {
+            self.dirty = true;
+        }
         if self.note.as_ref().is_some_and(|(_, until)| t >= *until) {
             self.note = None;
             self.dirty = true;
@@ -2642,8 +2649,8 @@ impl Photos {
         places::layout(&self.place_points, self.w as u32, h, f64::from(ui.pt(PIN_CELL_PT)))
     }
 
-    /// The Places map: a graticule over the content area with one pin per cluster, and a count on pins that stand
-    /// for several photos. Map tiles are not drawn yet; see `docs/parity-matrix/apps/photos.json`.
+    /// The Places map: a graticule over the content area, the shared map tiles over it, and one pin per cluster with
+    /// a count on pins that stand for several photos.
     fn draw_places(&mut self, s: &mut Surface, ui: &Ui) {
         let (top, bottom) = (content_top(ui), self.content_bottom(ui));
         let step = ui.pt(48.0) as usize;
@@ -2658,6 +2665,7 @@ impl Photos {
             s.fill_rect(0, y, w, 1, SEPARATOR);
             y += step;
         }
+        self.draw_place_tiles(s, top, h);
         for c in self.place_clusters(ui) {
             let (cx, cy) = (c.x as f32, top + c.y as f32);
             let many = c.members.len() > 1;
@@ -2667,6 +2675,28 @@ impl Photos {
             s.fill_rrect(cx - ring + line, cy - ring + line, ring * 2.0 - line * 2.0, ring * 2.0 - line * 2.0, ring - line, BLUE);
             if many {
                 self.label(s, ui, &c.members.len().to_string(), 14.0, Weight::Bold, WHITE, cx, cy);
+            }
+        }
+    }
+
+    /// Draws the map tiles that cover the Places area, at the snapshot the pins are placed with. Tiles load in the
+    /// background (see `tick`); until one arrives the graticule shows through.
+    fn draw_place_tiles(&mut self, s: &mut Surface, top: f32, h: usize) {
+        let Some(snap) = places::snapshot_for(&self.place_points, self.w as u32, h as u32) else { return };
+        if self.tiles.is_none() {
+            let ua = format!("BifrOSt-Photos/{} (BifrOSt desktop; +https://bifrost.olibuijr.com)", env!("CARGO_PKG_VERSION"));
+            if let Ok(source) = crate::maptiles::source::TileSource::new(crate::maptiles::source::DEFAULT_TEMPLATE, &ua) {
+                let root = self.data.join("map-tiles");
+                self.tiles = Some(crate::maptiles::loader::TileLoader::new(&root, source, std::sync::Arc::new(crate::maptiles::net::Live::default())));
+            }
+        }
+        let Some(loader) = self.tiles.as_mut() else { return };
+        let placed = snap.tiles();
+        let ids: Vec<crate::maptiles::tiles::TileId> = placed.iter().map(|p| crate::maptiles::tiles::TileId { z: p.zoom as u8, x: p.tile_x as u32, y: p.tile_y as u32 }).collect();
+        loader.want(&ids);
+        for (p, id) in placed.iter().zip(&ids) {
+            if let Some(img) = loader.image(*id) {
+                s.blit(img, p.dest_x as i32, top as i32 + p.dest_y as i32, 255, 255);
             }
         }
     }
