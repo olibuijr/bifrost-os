@@ -461,6 +461,7 @@ pub mod layer_kinds;
 pub mod richlayout;
 pub mod spellcheck;
 pub mod translation;
+pub mod translation_engine;
 pub mod translation_popover;
 pub mod tips;
 pub mod tooltips;
