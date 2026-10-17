@@ -91,6 +91,7 @@ pub mod screen_time;
 pub mod web_usage;
 pub mod web_history;
 pub mod screen_usage;
+pub mod device_activity;
 pub mod screens;
 pub mod displays;
 pub mod windows;
