@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Shader pass: portrait relighting from depth (Lambert model in springboard/render/src/portrait_lighting.rs, relight); not the reference curves.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/CoreServices/RawCamera.bundle/Contents/Resources/RawCamera.metallib",
@@ -43,7 +52,16 @@
    "status": "partial",
    "note": "A CPU Bayer demosaic with white balance and a RAW parameter model exist; the Apple RAW processor's full pipeline and its shader are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Shader pass: bilinear Bayer demosaic (springboard/render/src/bayer.rs, demosaic_bilinear); the full RAW pipeline is not reproduced.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "demosaic::"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/raytracing_runtime_emulation.metallib",
@@ -314,7 +332,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. The job is feature detection and descriptor matching for photogrammetry, a multi-stage pipeline with no detector yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -377,7 +395,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. The encoder preprocessing kernels are not identified from the row, so there is no job to implement yet.",
    "rea": [],
    "method": "assessed"
   }

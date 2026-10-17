@@ -217,7 +217,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
    "status": "partial",
-   "note": "Mesh layout models exist as pure data. No vertex shader draws 3D content yet.",
+   "note": "Mesh layout models exist as pure data. No vertex shader draws 3D content yet. Shader pass: open. No mesh vertex transform draws 3D content yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -238,7 +238,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs (interpolate)",
    "status": "partial",
-   "note": "Frame interpolation exists on the CPU; the deghosting and virtual shutter kernels of the video enhancement library are not implemented.",
+   "note": "Frame interpolation exists on the CPU; the deghosting and virtual shutter kernels of the video enhancement library are not implemented. Shader pass: open. The common video-effect kernels are not identified from the row; deghosting and shutter are covered by their own rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -261,7 +261,16 @@
    "status": "partial",
    "note": "Frame interpolation and temporal accumulation run on CPU rasters; there is no deghosting or shutter-angle filter.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Shader pass: temporal deghosting: median_deghost (springboard/render/src/temporal_upscale.rs) keeps the static background and drops moving ghosts; CPU only.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "temporal_upscale::"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/videoSuperResolutionMetalLib.metallib",
@@ -280,7 +289,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/upscale.rs",
    "status": "partial",
-   "note": "only a bicubic CPU upscaler; no learned super resolution. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "only a bicubic CPU upscaler; no learned super resolution. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. Learned super resolution needs trained model weights, which BifrOSt does not have; only the bicubic CPU upscaler exists.",
    "rea": [],
    "method": "assessed"
   },
@@ -303,7 +312,16 @@
    "status": "partial",
    "note": "A temporal accumulation model exists on CPU rasters. Built: shutter_blend averages the sub-frames inside a shutter of N degrees (temporal_upscale::tests). Gap: no virtual shutter kernel runs on the GPU, and the shader's own filter is not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Shader pass: virtual shutter: shutter_blend averages the sub-frames inside the shutter angle on the CPU (springboard/render/src/temporal_upscale.rs); no GPU kernel.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "temporal_upscale::"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Vista.framework/Versions/A/Resources/VSTPrecompiledPipelines.metallib",

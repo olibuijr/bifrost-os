@@ -20,7 +20,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/blend.rs",
    "status": "partial",
-   "note": "Blend modes and source-over compositing run on packed premultiplied pixels; the six-channel stroke composite of the reference is not implemented.",
+   "note": "Blend modes and source-over compositing run on packed premultiplied pixels; the six-channel stroke composite of the reference is not implemented. Shader pass: open. The six-channel stroke model is not described well enough to implement without the reference behaviour.",
    "rea": [],
    "method": "assessed"
   },
@@ -83,7 +83,7 @@
    "doc": "",
    "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
    "status": "partial",
-   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled. Shader pass: open. Layer masks and EDR tone mapping on the GPU are not built; the compose and blur shaders exist.",
    "rea": [],
    "method": "assessed"
   }
