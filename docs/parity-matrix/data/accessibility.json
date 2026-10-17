@@ -12,14 +12,14 @@
    "apple": "Accessibility API, VoiceOver, NSAccessibility element hierarchy",
    "bifrost": "springboard/src/shell/atspi/bridge.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/atspi/mod.rs; wired: springboard/src/shell/accessibility/reader.rs (cursor, speech, focus ring); springboard/src/shell/hwkeys.rs (ReaderStep keys); springboard/src/shell/pages.rs (Screen Reader row); wired: springboard/src/shell/accessibility/reader.rs (walk, rotors, activation, focus ring); springboard/src/shell/accessibility/walk.rs; springboard/src/shell/hwkeys.rs (ReaderRotor, ReaderActivate)",
    "status": "partial",
-   "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "AT-SPI2 bus export of Accessible, Component, Action, Value, Text and EditableText; roles and states mapped in model.rs; unit tests only, untested on a live Orca. Feature-gated behind the atspi cargo feature. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Speech rate, pitch and voice are set in Settings > Accessibility > Screen Reader > Speech (a11y_speech_rate, a11y_speech_pitch, a11y_speech_voice) and passed to espeak-ng by the reader's speaker (accessibility/speech.rs). Not verified on Midget."
   },
   {
    "feature": "Element role mapping",
    "apple": "AccessibilityTechnology, NSAccessibility roles",
    "bifrost": "springboard/src/shell/atspi/model.rs:38 (atspi_role); wired: springboard/src/shell/accessibility/walk.rs (spoken_kind, speech, rotor_role, in_rotor); springboard/src/shell/axmap.rs (item_role)",
    "status": "partial",
-   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window and ProgressIndicator map to AT-SPI roles, and the spoken words and rotor roles are tested headless in springboard/tests/parity_sdk-tests-03.rs (each_element_role_maps_to_its_own_atspi_role_number, the rotor and speech tests). The Settings and menu role mapping in axmap.rs is crate-private and not covered by those tests. No table, selection, or rotor roles. Earlier checks: springboard/tests/parity_sdk-tests-01c.rs. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Button, TextField, List, Row, Toggle, Checkbox, Slider, SegmentedControl, StaticText, MenuItem, Window and ProgressIndicator map to AT-SPI roles, and the spoken words and rotor roles are tested headless in springboard/tests/parity_sdk-tests-03.rs (each_element_role_maps_to_its_own_atspi_role_number, the rotor and speech tests). The Settings and menu role mapping in axmap.rs is crate-private and not covered by those tests. No table, selection, or rotor roles. Earlier checks: springboard/tests/parity_sdk-tests-01c.rs. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. The reader's tree (accessibility/walk.rs, reader.rs page_elements) reads a Settings pop-up row as a pop-up button with its chosen label, and has sheet, panel and dialog words. The AT-SPI role map is unchanged. Help viewer, assistant panel and permission sheets are not walked for their content yet, only as windows. Not verified on Midget."
   },
   {
    "feature": "Element hierarchy (parent, focus, checked state)",
@@ -68,14 +68,14 @@
    "apple": "AccessibilitySettings (reduce motion, increase contrast, reduce transparency, larger text)",
    "bifrost": "springboard/proto/src/lib.rs:44 (Configure: reduce_motion, text_scale), springboard/render/src/appearance.rs (reduce_motion, increase_contrast, reduce_transparency), springboard/src/shell/accessibility/mod.rs; springboard/sdk/src/accessibility_display.rs and springboard/src/shell/services/accessibility_display.rs (options, options_changed)",
    "status": "partial",
-   "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct. The accessibility_display service now returns increase contrast, reduce transparency, differentiate without colour, invert colours, reduce motion and dim flashing lights, and pushes options_changed on any change. Needs a Midget check."
+   "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct. The accessibility_display service now returns increase contrast, reduce transparency, differentiate without colour, invert colours, reduce motion and dim flashing lights, and pushes options_changed on any change. Needs a Midget check. The shell itself honours Reduce Motion (desk.rs, mod.rs, switcher and jiggle through anim_ms), Reduce Transparency (vibrancy.rs, glass.rs, control_center.rs, desktop_bar.rs, quicksearch.rs) and Increase Contrast (ui.rs separators and material borders, appearance.rs colour contrast). Checked by reading the code, not on Midget."
   },
   {
    "feature": "Display Zoom and magnification",
    "apple": "Zoom, Display Zoom setting",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs (ZOOMS: Standard, Larger), springboard/src/shell/magnifier.rs",
+   "bifrost": "springboard/src/shell/accessibility/zoom.rs (Full Screen and Picture in Picture lens), springboard/src/bare/wayland.rs (set_zoom, the magnified final frame), springboard/src/shell/hwkeys.rs (ZoomToggle, ZoomStep), springboard/src/shell/magnifier.rs (camera loupe), springboard/src/shell/accessibility/mod.rs (ZOOMS: Standard, Larger)",
    "status": "partial",
-   "note": "Display Zoom is a 1.0 or 1.15 geometry factor, not a system-wide zoom. Magnifier is a camera loupe with digital zoom and filters, not a screen magnifier. No screen-wide zoom."
+   "note": "Display Zoom sets a 1.0 or 1.15 geometry factor for apps. Screen zoom (Full Screen up to 8x, and a Picture in Picture lens that follows the pointer) is a presenter transform on the whole display. The magnifier app is a camera loupe with digital zoom and filters. Not verified on Midget."
   },
   {
    "feature": "Pointer and touch accommodations",
@@ -124,6 +124,7 @@
   "Only the sidebar list draws an accessibility group; the other immediate-mode kit helpers and non-view apps still publish flat lists.",
   "Shell chrome is in the AT-SPI tree but read-only (press is not routed back) and Spotlight has no live text.",
   "ax::post queues notifications but the runtime does not yet forward them as AT-SPI signals.",
-  "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping."
+  "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping.",
+  "Spoken Content: Speak Selection (Option+Esc) and Speak Items Under the Pointer are not built. The shell has no selection source for the focused app and no pointer-hover option; the reader speaks only the keyboard cursor."
  ]
 }
