@@ -19,7 +19,7 @@
    "apple": "PHAsset, PHAssetCollection, PHCollectionList, PHFetchResult, PHFetchOptions, PHObject",
    "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker); springboard/sdk/src/photo_library.rs, springboard/src/shell/services/photos.rs",
    "status": "partial",
-   "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 5: PHAsset.fetch_assets with PHFetchOptions (sort descriptors, media type and creation date predicate, fetch limit) and PHFetchResult (count, object_at) in springboard/sdk/src/photo_library.rs; the photos service answers from ~/Pictures with stable localIdentifiers. Collections and isFavorite are not exposed. Midget check pending. Headless tests in springboard/ui/tests/parity_sdk-tests-07.rs: headless_default_fetch_drops_the_trash_and_sorts_newest_first, headless_media_kind_and_favourites_filter_the_listing, headless_date_range_includes_from_and_excludes_to, headless_limit_takes_the_first_items_after_sorting, headless_trashed_items_with_equal_times_are_ordered_by_identifier, headless_file_kind_comes_from_the_extension."
+   "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 5: PHAsset.fetch_assets with PHFetchOptions (sort descriptors, media type and creation date predicate, fetch limit) and PHFetchResult (count, object_at) in springboard/sdk/src/photo_library.rs; the photos service answers from ~/Pictures with stable localIdentifiers. Collections and isFavorite are not exposed. Midget check pending. Headless tests in springboard/ui/tests/parity_sdk-tests-07.rs: headless_default_fetch_drops_the_trash_and_sorts_newest_first, headless_media_kind_and_favourites_filter_the_listing, headless_date_range_includes_from_and_excludes_to, headless_limit_takes_the_first_items_after_sorting, headless_trashed_items_with_equal_times_are_ordered_by_identifier, headless_file_kind_comes_from_the_extension. Built 2026-10-17: PHAsset.modification_date is now decoded from the wire (falls back to the creation date); tests photo_library::tests::a_modified_stamp_marks_a_content_change."
   },
   {
    "feature": "Smart albums (screenshots, recents, recently deleted)",
@@ -68,14 +68,14 @@
    "apple": "PHContentEditingController, Creating Photo Editing Extensions",
    "bifrost": "springboard/ui/src/photo_adjustment.rs (AdjustmentData, EditSession, EditError)",
    "status": "partial",
-   "note": "An edit is kept as an adjustment record (editor format, version, payload) that an editing session reads, commits from the same format and reverts to the original; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: no extension host loads third-party editors inside the Photos app, and the built-in editor (springboard/src/shell/photos/edit.rs) does not write these records yet."
+   "note": "An edit is kept as an adjustment record (editor format, version, payload) that an editing session reads, commits from the same format and reverts to the original; tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: no extension host loads third-party editors inside the Photos app, and the built-in editor (springboard/src/shell/photos/edit.rs) does not write these records yet. Built 2026-10-17: SDK contract in springboard/sdk/src/photo_editing.rs (PHContentEditingInput, PHContentEditingOutput, PHContentEditingSession over the ui photo_adjustment session); tests photo_editing::tests. Still a gap: no extension host loads third-party editors in the Photos app."
   },
   {
    "feature": "System photo picker (UIKit, AppKit, SwiftUI)",
    "apple": "PHPickerViewController, PHPickerConfiguration, PHPickerResult, PhotosPicker, PhotosPickerItem, PHPickerFilter",
    "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs (bottom sheet of the newest photos from ~/Pictures); springboard/apps/notes-desktop/src/notes/attach.rs (attaches the chosen file)",
    "status": "partial",
-   "note": "Only Notes has a picker, and it is app-local. It scans ~/Pictures directly. No shared system picker, no filters, no multi-select and no privacy-scoped selection. The share sheet (springboard/sdk/src/share.rs) is a different surface."
+   "note": "Only Notes has a picker, and it is app-local. It scans ~/Pictures directly. No shared system picker, no filters, no multi-select and no privacy-scoped selection. The share sheet (springboard/sdk/src/share.rs) is a different surface. Built 2026-10-17: SDK PHPickerConfiguration (filters, selection limit, wire params), PHPickerViewController.present and PHPickerResult.decode_reply in springboard/sdk/src/photo_picker.rs; tests photo_picker::tests. The shell does not answer the picker call yet, and the Notes sheet is still app-local."
   },
   {
    "feature": "Live Photos",
@@ -103,14 +103,14 @@
    "apple": "PHProject, PHProjectExtensionController, PHProjectChangeRequest, PHProjectSection",
    "bifrost": "springboard/ui/src/photo_project.rs (Project, Project::apply, Change)",
    "status": "partial",
-   "note": "The project model (sections in order, asset membership, and change lists that apply all or nothing) is tested headless in springboard/ui/tests/parity_sdk-rest-03.rs. Gap: there is no PHProjectExtensionController or extension host, and the photo library does not store projects yet."
+   "note": "The project model (sections in order, asset membership, and change lists that apply all or nothing) is tested headless in springboard/ui/tests/parity_sdk-rest-03.rs. Gap: there is no PHProjectExtensionController or extension host, and the photo library does not store projects yet. Built 2026-10-17: SDK PHProjectChangeRequest in springboard/sdk/src/photo_project.rs (add, rename, remove and move sections, add and remove assets; applied as one unit over ui photo_project); tests photo_project::tests. Still a gap: no project extension host in the Photos app."
   },
   {
    "feature": "Change observation of the library",
    "apple": "PHPhotoLibraryChangeObserver, PHPhotoLibraryPersistentChangesObserver, PHChange",
    "bifrost": "springboard/ui/src/photo_changes.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs. Built 2026-10-17: PHChange.change_details in springboard/sdk/src/photo_library.rs returns the removed, inserted, moved and changed indexes between two fetches, using ui photo_changes; tests photo_library::tests::change_details_report_inserts_and_removals. The shell does not push change callbacks yet."
   },
   {
    "feature": "Background upload of asset resources",
