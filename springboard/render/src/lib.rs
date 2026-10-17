@@ -126,7 +126,6 @@ pub mod feature_detect;
 pub mod masked_blur;
 pub mod displacement_filters;
 pub mod edge_tone_filters;
-pub mod pbr;
 pub mod photosensitivity;
 pub mod stereo;
 pub mod wallpaper_frame;
