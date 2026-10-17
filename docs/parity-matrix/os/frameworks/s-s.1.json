@@ -3032,9 +3032,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs",
+   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_panes.rs",
    "status": "partial",
-   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Gap: apps cannot add a settings pane.",
+   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Still open: the Settings list does not yet draw these panes under the app, and the pane is not opened in the app.",
    "rea": [],
    "method": "assessed"
   },

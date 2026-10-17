@@ -38,6 +38,7 @@ mod dock_stack;
 mod homeedit;
 mod jiggle;
 mod quick_actions;
+mod settings_panes;
 pub mod camera;
 pub mod magnifier;
 pub mod calendar;
