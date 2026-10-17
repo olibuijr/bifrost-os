@@ -419,6 +419,11 @@ impl AppGrid {
     }
 
     /// Makes sure the icon of `app_index` at `size` px is in the cache.
+    /// Forgets the icons, so the next draw takes them from the shell's base icons again.
+    pub(super) fn clear_icons(&mut self) {
+        self.icons.clear();
+    }
+
     fn ensure_icon(&mut self, sh: &Shell, app_index: usize, size: usize) -> bool {
         if self.icons.contains_key(&(app_index, size)) {
             return true;
