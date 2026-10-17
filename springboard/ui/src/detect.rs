@@ -472,9 +472,42 @@ fn suffixed_money(bytes: &[u8], at: usize) -> Option<usize> {
     Some(p + code.len())
 }
 
+/// The actions a context menu on a detected item offers, in menu order. The menu host (the shell's context menu over
+/// selected text) shows these titles and runs the one chosen; this table is the model the host reads.
+pub fn menu_actions(kind: Kind) -> &'static [&'static str] {
+    match kind {
+        Kind::Link => &["Open Link", "Copy Link", "Add to Reading List"],
+        Kind::Date => &["Add to Calendar", "Copy Date"],
+        Kind::Address => &["Open in Maps", "Copy Address"],
+        Kind::Phone => &["Call", "Send Message", "Copy Number"],
+        Kind::Email => &["Compose Email", "Copy Address"],
+        Kind::Money => &["Copy Amount"],
+        Kind::Flight => &["Show Flight Status"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_kind_offers_at_least_one_action_and_copy_where_text_is_copied() {
+        let kinds = [Kind::Link, Kind::Date, Kind::Address, Kind::Phone, Kind::Email, Kind::Money, Kind::Flight];
+        for k in kinds {
+            assert!(!menu_actions(k).is_empty(), "{k:?} offers an action");
+        }
+        assert_eq!(menu_actions(Kind::Phone)[0], "Call", "the phone's first action calls it");
+        assert!(menu_actions(Kind::Link).contains(&"Copy Link"));
+        assert!(menu_actions(Kind::Money).contains(&"Copy Amount"));
+    }
+
+    #[test]
+    fn each_kind_leads_with_its_own_action() {
+        assert_eq!(menu_actions(Kind::Phone)[0], "Call");
+        assert_eq!(menu_actions(Kind::Email)[0], "Compose Email");
+        assert_eq!(menu_actions(Kind::Link)[0], "Open Link");
+        assert_ne!(menu_actions(Kind::Date)[0], menu_actions(Kind::Money)[0]);
+    }
 
     fn texts(s: &str, kinds: &[Kind]) -> Vec<(Kind, String)> {
         find(s, kinds).into_iter().map(|m| (m.kind, m.text(s).to_string())).collect()
