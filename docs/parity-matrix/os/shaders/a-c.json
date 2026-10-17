@@ -846,9 +846,9 @@
    "description": "",
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs",
+   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs; springboard/render/src/raw_color.rs",
    "status": "partial",
-   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and no RAW container decoder (DNG, CR2, NEF, ARW), no colour matrix and no tone curve, so the row stays open. Corrected 2026-10-17.",
+   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and a colour matrix with the sRGB tone curve (springboard/render/src/raw_color.rs). Built 2026-10-17: colour pipeline; tests raw_color::tests. Still missing: a RAW container decoder (DNG, CR2, NEF, ARW), so the row stays open.",
    "rea": [],
    "method": "assessed"
   },
@@ -867,9 +867,9 @@
    "description": "",
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs",
+   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs; springboard/render/src/raw_color.rs",
    "status": "partial",
-   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and no RAW container decoder (DNG, CR2, NEF, ARW), no colour matrix and no tone curve, so the row stays open. Corrected 2026-10-17.",
+   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and a colour matrix with the sRGB tone curve (springboard/render/src/raw_color.rs). Built 2026-10-17: colour pipeline; tests raw_color::tests. Still missing: a RAW container decoder (DNG, CR2, NEF, ARW), so the row stays open.",
    "rea": [],
    "method": "assessed"
   },
