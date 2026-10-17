@@ -24,6 +24,8 @@ pub enum Act {
     Toggle { id: String, service: Service },
     /// Remove an account and its saved password.
     Remove { id: String },
+    /// Clear a refused account-type request, so the app may ask again.
+    ForgetRefusal { app: String, account_type: String },
 }
 
 /// What the page is built from.
@@ -67,6 +69,19 @@ pub fn spec(s: &PageState) -> Spec {
         let access = if t.access_granted { "Apps may use these accounts." } else { "Apps may not use these accounts yet." };
         groups.push(Group::new(rows).header(&t.description).footer(&format!("Saved by apps. {access}")));
     }
+    // the requests the person refused: an app asks again only after its row is cleared here
+    if !s.store.refusals.is_empty() {
+        let rows: Vec<Item> = s
+            .store
+            .refusals
+            .iter()
+            .map(|r| {
+                let label = format!("{} · {}", r.app, s.store.type_description(&r.account_type));
+                Item::new(label).action(Action::InternetAccounts(Act::ForgetRefusal { app: r.app.clone(), account_type: r.account_type.clone() }))
+            })
+            .collect();
+        groups.push(Group::new(rows).header("DECLINED REQUESTS").footer("Apps that asked for an account type you refused. Tap one to let it ask again."));
+    }
     let adds: Vec<Item> = Kind::ALL.iter().map(|&k| Item::new(k.label()).tint(Tint::Blue).action(Action::InternetAccounts(Act::Add(k)))).collect();
     groups.push(Group::new(adds).header("ADD ACCOUNT").footer("Mail reads IMAP and SMTP at the servers of the address's domain. Passwords are saved in Passwords."));
     Spec { id: PageId::InternetAccounts, title: "Internet Accounts".into(), large: false, groups }
@@ -106,6 +121,12 @@ pub fn toggle(path: &Path, id: &str, service: Service) -> Result<(), String> {
     let on = !account.has(service);
     account.set_service(service, on);
     shared::save(path, &all).map_err(|e| format!("The change could not be saved: {e}"))
+}
+
+/// Clears a refused request from the accounts store, so the app is asked again the next time it asks.
+pub fn forget_refusal(app: &str, account_type: &str) -> Result<(), String> {
+    let path = store::store_path().ok_or_else(|| "The accounts file has no home folder".to_string())?;
+    store::remove_refusal(&path, app, account_type).map(|_| ()).map_err(|e| format!("The change could not be saved: {e}"))
 }
 
 /// Removes an account from the list and its password from the passwords group.
@@ -203,6 +224,7 @@ mod tests {
     fn accounts_apps_saved_are_listed_under_their_type() {
         use bifrost_ui::account_store::{AccountEntry, TypeEntry};
         let saved = Contents {
+            refusals: Vec::new(),
             next_id: 2,
             types: vec![TypeEntry { identifier: "bifrost.mail".into(), description: "Mail".into(), access_granted: true }],
             accounts: vec![AccountEntry {
@@ -218,6 +240,20 @@ mod tests {
         assert_eq!(listed.groups.len(), empty.groups.len() + 1, "one group for the one type with accounts");
         let other_type = Contents { types: saved.types.clone(), ..Contents::default() };
         assert_eq!(spec(&PageState { accounts: &[], store: &other_type, note: "" }).groups.len(), empty.groups.len(), "a type without accounts adds no group");
+    }
+
+    #[test]
+    fn a_refused_request_is_listed_and_clearing_it_is_an_action() {
+        use bifrost_ui::account_store::RefusalEntry;
+        let refused = Contents {
+            refusals: vec![RefusalEntry { app: "app.notes".into(), account_type: "bifrost.mail".into() }],
+            ..Contents::default()
+        };
+        let empty = spec(&PageState { accounts: &[], store: &Contents::default(), note: "" });
+        let s = spec(&PageState { accounts: &[], store: &refused, note: "" });
+        assert_eq!(s.groups.len(), empty.groups.len() + 1, "one group for the declined requests");
+        let row = &s.groups[1].items[0];
+        assert_eq!(row.action, Action::InternetAccounts(Act::ForgetRefusal { app: "app.notes".into(), account_type: "bifrost.mail".into() }));
     }
 
     #[test]

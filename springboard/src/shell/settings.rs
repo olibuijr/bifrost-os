@@ -761,6 +761,9 @@ impl Settings {
                     Err(e) => e,
                 };
             }
+            Act::ForgetRefusal { app, account_type } => {
+                self.ia_note = ia::forget_refusal(&app, &account_type).err().unwrap_or_default();
+            }
         }
         self.loads.accounts.start("accounts-read", ia::load);
         self.rebuild_visible(ui);

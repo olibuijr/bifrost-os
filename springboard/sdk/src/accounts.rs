@@ -14,7 +14,7 @@ use crate::keychain::{self, Reply};
 use crate::Ctx;
 use bifrost_core::fsutil;
 use bifrost_core::json::Json;
-use bifrost_ui::account_store::{self, AccountEntry, Contents, TypeEntry};
+use bifrost_ui::account_store::{self, AccountEntry, Contents, RefusalEntry, TypeEntry};
 use std::ffi::OsString;
 use std::fmt;
 use std::io;
@@ -275,6 +275,8 @@ pub struct AccountStore {
 struct Data {
     types: Vec<AccountType>,
     accounts: Vec<Account>,
+    /// refusals as the file holds them: the SDK writes them back unchanged, the shell decides on them
+    refusals: Vec<RefusalEntry>,
     next_id: u64,
 }
 
@@ -584,6 +586,7 @@ fn encode(data: &Data) -> String {
 
 fn to_contents(data: &Data) -> Contents {
     Contents {
+        refusals: data.refusals.clone(),
         next_id: data.next_id,
         types: data
             .types
@@ -620,6 +623,7 @@ fn from_contents(c: Contents) -> Data {
                 credential: None,
             })
             .collect(),
+        refusals: c.refusals,
         next_id: c.next_id,
     }
 }

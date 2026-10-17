@@ -34,6 +34,14 @@ pub struct AccountEntry {
     pub account_description: String,
 }
 
+/// An app's request for an account type that the person refused. The app asks again only after the person clears it
+/// in Settings > Internet Accounts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RefusalEntry {
+    pub app: String,
+    pub account_type: String,
+}
+
 /// Everything the file holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Contents {
@@ -41,6 +49,7 @@ pub struct Contents {
     pub next_id: u64,
     pub types: Vec<TypeEntry>,
     pub accounts: Vec<AccountEntry>,
+    pub refusals: Vec<RefusalEntry>,
 }
 
 impl Contents {
@@ -52,6 +61,11 @@ impl Contents {
     /// The description of an account's type. A type the store does not hold shows its identifier.
     pub fn type_description<'a>(&'a self, account_type: &'a str) -> &'a str {
         self.account_type(account_type).map(|t| t.description.as_str()).unwrap_or(account_type)
+    }
+
+    /// Whether the person refused this app's request for this type.
+    pub fn refused(&self, app: &str, account_type: &str) -> bool {
+        self.refusals.iter().any(|r| r.app == app && r.account_type == account_type)
     }
 
     /// The accounts saved with this type, in file order.
@@ -104,7 +118,29 @@ pub fn set_access(path: &Path, identifier: &str, granted: bool) -> io::Result<bo
     Ok(true)
 }
 
-/// Serialises the store. Sections are `[store]`, `[type]` and `[account]`.
+/// Records that the person refused `app` access to accounts of `account_type`. Recording it twice keeps one entry.
+pub fn add_refusal(path: &Path, app: &str, account_type: &str) -> io::Result<()> {
+    let mut c = read(path)?;
+    if !c.refused(app, account_type) {
+        c.refusals.push(RefusalEntry { app: app.into(), account_type: account_type.into() });
+        write(path, &c)?;
+    }
+    Ok(())
+}
+
+/// Clears a refusal so the app may ask again. Returns whether there was one.
+pub fn remove_refusal(path: &Path, app: &str, account_type: &str) -> io::Result<bool> {
+    let mut c = read(path)?;
+    let before = c.refusals.len();
+    c.refusals.retain(|r| !(r.app == app && r.account_type == account_type));
+    let removed = c.refusals.len() != before;
+    if removed {
+        write(path, &c)?;
+    }
+    Ok(removed)
+}
+
+/// Serialises the store. Sections are `[store]`, `[type]`, `[account]` and `[refusal]`.
 pub fn encode(c: &Contents) -> String {
     let mut out = String::from(FILE_HEADER);
     out.push_str(&format!("\n[store]\nnext-id = {}\n", c.next_id));
@@ -121,6 +157,11 @@ pub fn encode(c: &Contents) -> String {
         write_field(&mut out, "username", &a.username);
         write_field(&mut out, "full-name", &a.user_full_name);
         write_field(&mut out, "description", &a.account_description);
+    }
+    for r in &c.refusals {
+        out.push_str("\n[refusal]\n");
+        write_field(&mut out, "app", &r.app);
+        write_field(&mut out, "type", &r.account_type);
     }
     out
 }
@@ -224,6 +265,14 @@ pub fn decode(text: &str) -> io::Result<Contents> {
                     account_description: field_of(&fields, "description"),
                 });
             }
+            "refusal" => {
+                let app = field_of(&fields, "app");
+                let account_type = field_of(&fields, "type");
+                if app.is_empty() || account_type.is_empty() {
+                    return Err(invalid_data());
+                }
+                data.refusals.push(RefusalEntry { app, account_type });
+            }
             _ => {}
         }
     }
@@ -247,6 +296,7 @@ mod tests {
                 user_full_name: "Ann\\Lee".into(),
                 account_description: "two\nlines".into(),
             }],
+            refusals: vec![RefusalEntry { app: "app.notes".into(), account_type: "bifrost.mail".into() }],
         }
     }
 
@@ -299,6 +349,23 @@ mod tests {
         assert!(!read(&path).unwrap().account_type("bifrost.mail").unwrap().access_granted);
         assert_eq!(set_access(&path, "unknown.type", true).unwrap(), false);
         assert_eq!(read(&path).unwrap().types.len(), 1, "an unknown type writes nothing");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_refusal_is_kept_until_it_is_removed() {
+        let dir = std::env::temp_dir().join(format!("bifrost-account-refusal-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join(FILE_NAME);
+        write(&path, &sample()).unwrap();
+        add_refusal(&path, "app.other", "bifrost.caldav").unwrap();
+        add_refusal(&path, "app.other", "bifrost.caldav").unwrap();
+        let c = read(&path).unwrap();
+        assert!(c.refused("app.other", "bifrost.caldav"));
+        assert_eq!(c.refusals.len(), 2, "one entry per refusal");
+        assert!(remove_refusal(&path, "app.other", "bifrost.caldav").unwrap());
+        assert!(!read(&path).unwrap().refused("app.other", "bifrost.caldav"));
+        assert!(!remove_refusal(&path, "app.other", "bifrost.caldav").unwrap(), "clearing twice finds nothing");
         let _ = fs::remove_dir_all(&dir);
     }
 
