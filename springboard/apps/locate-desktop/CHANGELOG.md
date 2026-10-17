@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-10-17
+
+- SDK `bifrost_app::cloud_findmy`: request builders and parsers for the account key (`PUT`/`GET findmy/keys`), the
+  pending devices (`POST`, `GET`, approve, sealed-key poll, `DELETE`), this device's sealed location (`PUT`/`DELETE
+  devices/self/location`), contact copies (`PUT shares/{id}/location`) and the shared-with-me list. `CloudDevice` carries
+  `sealed_location` from the device list.
+- `sealing`: HPKE seal and open for reports (info = device id), share copies and the account key handed to an enrolling
+  device (info = pending id). Coordinates are range-checked on read.
+- `pairing`: enrollment state for a device that asks to join, and the owner's approval list. Nothing is approved
+  automatically.
+- `reporting`: report throttle (15 minutes, or at once on a locate while sharing is on), a single clear when sharing
+  goes off, and share copies only for live grants.
+- Not wired yet: the poll thread, keychain storage of the account key, the approval sheet, the location service, play
+  sound on the device, and notifications.
+
 ## 0.2.0 — 2026-10-17
 
 - New app window and manifest (`is.olibuijr.locate.desktop`, window full-size): a sidebar with People, Devices, Items and
