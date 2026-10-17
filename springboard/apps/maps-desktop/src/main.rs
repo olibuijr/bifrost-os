@@ -2,6 +2,8 @@
 //! directions card, and the app's own menus, hosted through the SDK. The map model and every command live in the
 //! library crate (`state`); this file only connects them to the shell.
 
+use bifrost_app::app_windows::{WindowId, WindowSpec};
+use bifrost_app::dock_tile::{self, MenuItem};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{network_path, App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input};
 use bifrost_core::json::Json;
@@ -19,9 +21,24 @@ use std::sync::Arc;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Largest GPX file read.
 const GPX_LIMIT: u64 = 16 * 1024 * 1024;
+/// The File > New Window item. Not a menu `Act`: the menu ids of `Act` stop before it.
+const NEW_WINDOW_MENU: u32 = 10_000;
+/// The Dock menu item that opens a window, chosen as `Input::ContextAction`.
+const DOCK_NEW_WINDOW: u32 = 1;
+/// The size of a window opened with New Window, in points.
+const NEW_WINDOW_PT: (f32, f32) = (960.0, 640.0);
+
+/// A window opened with New Window: its map state of its own, and the pixel size it was last laid out at.
+struct ExtraWindow {
+    id: WindowId,
+    win: Window,
+    px: (i32, i32),
+}
 
 struct MapsApp {
     w: Option<Window>,
+    /// the windows the person opened, front to back of the app's registry; each one has its own map state
+    extra: Vec<ExtraWindow>,
     net: Arc<dyn Net>,
     kb: bool,
     path_request: Option<u32>,
@@ -82,6 +99,17 @@ impl MapsApp {
             ctx.wants_keyboard(on);
         }
     }
+
+    /// Opens a window with its own map state, which starts from the saved view and places like the main window.
+    fn open_new_window(&mut self, ctx: &Ctx) -> bool {
+        let (pw, ph) = NEW_WINDOW_PT;
+        let Ok(id) = ctx.open_window(WindowSpec::new("Maps", pw, ph)) else { return false };
+        let pt = ctx.ui.pt(1.0);
+        let px = ((pw * pt) as i32, (ph * pt) as i32);
+        let win = Window::new(&ctx.ui, px.0, px.1, ctx.data_dir.clone(), VERSION, self.net.clone());
+        self.extra.push(ExtraWindow { id, win, px });
+        true
+    }
 }
 
 impl App for MapsApp {
@@ -97,11 +125,15 @@ impl App for MapsApp {
             None => {
                 self.w = Some(Window::new(&ctx.ui, w, h, ctx.data_dir.clone(), VERSION, self.net.clone()));
                 self.path_request = Some(network_path::request_path(ctx));
+                dock_tile::set_menu(ctx, &[MenuItem { id: DOCK_NEW_WINDOW, title: "New Window".into(), enabled: true }]);
             }
         }
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if matches!(ev, Input::ContextAction(id) if id == DOCK_NEW_WINDOW) {
+            return self.open_new_window(ctx);
+        }
         let Some(w) = &mut self.w else { return false };
         let now = bifrost_app::proto::sys::now_ms();
         let handled = match ev {
@@ -122,13 +154,56 @@ impl App for MapsApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        let r = self.w.as_mut().is_some_and(|w| w.tick(ctx, &ctx.ui, t));
+        let mut r = self.w.as_mut().is_some_and(|w| w.tick(ctx, &ctx.ui, t));
+        for e in &mut self.extra {
+            r |= e.win.tick(ctx, &ctx.ui, t);
+        }
         self.sync_keyboard(ctx);
         r
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.w.as_ref().and_then(|w| w.next_wake(t))
+        let main = self.w.as_ref().and_then(|w| w.next_wake(t));
+        self.extra.iter().filter_map(|e| e.win.next_wake(t)).chain(main).reduce(f64::min)
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
+        match ev {
+            Input::Touch { kind, id, x, y, t } => {
+                e.win.finger(ctx, &ctx.ui, id, kind, x, y, t);
+                true
+            }
+            // keys, commands and the menu bar belong to the main window
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        if let Some(e) = self.extra.iter_mut().find(|e| e.id == window) {
+            let size = (s.w as i32, s.h as i32);
+            if e.px != size {
+                e.win.set_size(size.0, size.1);
+                e.px = size;
+            }
+            e.win.draw(s, &ctx.ui, t);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+
+    fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
+        let Some(at) = self.extra.iter().position(|e| e.id == window) else { return false };
+        let mut gone = self.extra.remove(at);
+        gone.win.leave(ctx);
+        true
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
@@ -142,6 +217,8 @@ impl App for MapsApp {
             AppMenu {
                 title: "File".into(),
                 items: vec![
+                    AppMenuItem::new(NEW_WINDOW_MENU, "New Window").key("cmd+n"),
+                    AppMenuItem::separator(),
                     item(w, Act::OpenGpx, "Open GPX File\u{2026}", "cmd+o"),
                     AppMenuItem::separator(),
                     AppMenuItem::submenu("Share"),
@@ -177,6 +254,9 @@ impl App for MapsApp {
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id == NEW_WINDOW_MENU {
+            return self.open_new_window(ctx);
+        }
         let (Some(act), Some(w)) = (Act::from_menu_id(id), self.w.as_mut()) else { return false };
         let handled = w.act(ctx, act, bifrost_app::proto::sys::now_ms());
         self.sync_keyboard(ctx);
@@ -202,6 +282,9 @@ impl App for MapsApp {
         if self.w.as_mut().is_some_and(|w| w.service_reply(ctx, request, result)) {
             return true;
         }
+        if self.extra.iter_mut().any(|e| e.win.service_reply(ctx, request, result)) {
+            return true;
+        }
         if Some(request) != self.path_request {
             return false;
         }
@@ -214,6 +297,9 @@ impl App for MapsApp {
 
     fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
         if self.w.as_mut().is_some_and(|w| w.service_event(ctx, service, event, body)) {
+            return true;
+        }
+        if self.extra.iter_mut().any(|e| e.win.service_event(ctx, service, event, body)) {
             return true;
         }
         match (network_path::path_event(service, event, body), self.w.as_mut()) {
@@ -257,5 +343,17 @@ impl App for MapsApp {
 }
 
 fn main() {
-    bifrost_app::run(MapsApp { w: None, net: net(), kb: false, path_request: None });
+    bifrost_app::run(MapsApp { w: None, extra: Vec::new(), net: net(), kb: false, path_request: None });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_maps::state::MENU_ACTS;
+
+    #[test]
+    fn new_window_menu_id_is_not_a_map_action() {
+        assert!(MENU_ACTS.len() < NEW_WINDOW_MENU as usize);
+        assert!(Act::from_menu_id(NEW_WINDOW_MENU).is_none());
+    }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 — 2026-10-17
+
+- File > New Window (Cmd+N) and the Dock menu's New Window open another Maps window. Each window has its own map state (view, pins, route, card); the window's own map and card take touches. Keys, the menu bar and the toolbar still act on the main window.
+- A window closed by its traffic light stops following the location.
+- Known limit: all windows read and write the same places.json and settings.json, and each saves its whole state, so the last window to save a change wins. A shared store is needed before this is safe for heavy use.
+
 ## 0.5.2 — 2026-10-17
 
 - Add the location purpose string to the manifest (`[privacy] location`). Location requests without it are refused.
