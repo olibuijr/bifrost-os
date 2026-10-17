@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Video: the media player takes a playback rate (0.5x to 3x; the audio is time-stretched and the picture clock runs at the rate).
+- Music engine: crossfade between songs (`Crossfader`: the end of a song is held back and the next start is mixed under it with
+  equal-power gains, at most half a song, never on live stations); audiod has a `SetCrossfade` command.
+- Settings > Displays: Automatically Adjust Brightness on machines with an ambient light sensor (`auto_brightness`, off by default).
+- Settings > Accessibility: Show Vehicle Motion Cues (machines with an accelerometer), Switch Control and Voice Control
+  switches, and a Punctuation choice (None, Some, All) for the Screen Reader's voice.
 - Terminal: the profile look stores a window opacity (0.5 to 1.0), a background image with fit mode (fill, fit, tile) and a dim, saved in prefs and clamped on read. The grid does not paint them yet, and the Profile Editor does not set them yet.
 
 ## 0.9.0 — 2026-10-17
