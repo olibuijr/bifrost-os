@@ -12,7 +12,7 @@
       "apple": "FileDescriptor, FileDescriptor.AccessMode, OpenOptions, SeekOrigin, DuplicateOptions, PipeOptions (https://developer.apple.com/documentation/system/filedescriptor)",
       "bifrost": "springboard/sdk/src/file_descriptor.rs (FileDescriptor, Access, OpenFlags); springboard/sdk/src/runtime.rs:373 (takes ownership of a received descriptor as a File); springboard/proto/src/sys.rs:91 (Owned fd wrapper)",
       "status": "partial",
-      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). The received-descriptor wrapper is built 2026-10-17: FileDescriptor::from_received takes the shell's OwnedFd with an access mode and into_owned gives it back (tests file_descriptor::tests::a_received_descriptor_keeps_the_access_it_was_given). Gap: the descriptor is not verified on Midget. Built 2026-10-17: FileDescriptor::pipe creates a read end and a write end (springboard/sdk/src/file_descriptor.rs); tests file_descriptor::tests and sdk tests parity_sdk-os-11.rs."
+      "note": "A typed FileDescriptor opens with an access mode and flags, reads and writes at the position or at an offset, seeks, duplicates and refuses I/O that its access mode forbids (headless tests in springboard/sdk/tests/parity_sdk-complete-36.rs). The received-descriptor wrapper is built 2026-10-17: FileDescriptor::from_received takes the shell's OwnedFd with an access mode and into_owned gives it back (tests file_descriptor::tests::a_received_descriptor_keeps_the_access_it_was_given). Built 2026-10-17: FileDescriptor::from_received and into_owned wrap a descriptor the shell hands over (tests in file_descriptor::tests). Left partial: the descriptor is not verified on Midget, which needs hardware. Built 2026-10-17: FileDescriptor::pipe creates a read end and a write end (springboard/sdk/src/file_descriptor.rs); tests file_descriptor::tests and sdk tests parity_sdk-os-11.rs."
     },
     {
       "feature": "Document grants (user-chosen file access without a path)",
@@ -26,7 +26,7 @@
       "apple": "FilePath, FilePath.Component, FilePath.ComponentView, FilePath.Root (https://developer.apple.com/documentation/system/filepath)",
       "bifrost": "springboard/sdk/src/typed_path.rs (TypedPath, Part, PathError)",
       "status": "partial",
-      "note": "Parsing with checks, component views, push and removal, lexical normalisation and the bridge to the language path type are tested headless in tests/parity_sdk-rest-06.rs. Gap: there is no null-terminated platform string, no root enum and no separate component view type; the language path type stays the storage."
+      "note": "Parsing with checks, component views, push and removal, lexical normalisation and the bridge to the language path type are tested headless in tests/parity_sdk-rest-06.rs. Built 2026-10-17: Root (absolute or relative), components() as a ComponentView, and to_c_string for the NUL-terminated platform string (springboard/sdk/src/typed_path.rs; tests in sdk/tests/parity_sdk-rest-06.rs). The language path type stays the storage by design."
     },
     {
       "feature": "File permissions and modes",
@@ -47,7 +47,7 @@
       "apple": "No direct System type; used by Foundation volume APIs and the Storage pane",
       "bifrost": "springboard/sdk/src/volume.rs (capacity, Capacity); springboard/core/src/volume.rs (statvfs); springboard/src/bare/sys.rs (disk_space); springboard/src/shell/storage.rs:145 (shell caller)",
       "status": "partial",
-      "note": "Apps read total, free and available bytes of the volume holding a path; tested headless in sdk tests parity_sdk-os-08.rs. Gap: no change notifications when a volume's space changes."
+      "note": "Apps read total, free and available bytes of the volume holding a path; tested headless in sdk tests parity_sdk-os-08.rs. Built 2026-10-17: CapacityWatch polls the volume and reports when the free space moves by a threshold or the size changes (springboard/sdk/src/volume.rs; tests in volume.rs). It is a poll, not a callback."
     },
     {
       "feature": "Error numbers (Errno)",
@@ -82,7 +82,7 @@
       "apple": "UserID, GroupID, DeviceID, Inode (strongly typed wrappers over uid_t, gid_t, dev_t, ino_t)",
       "bifrost": "springboard/sdk/src/file_identity.rs (FileIdentity::of, UserId, GroupId, DeviceId, Inode); springboard/src/bare/docbroker.rs:1-20 (fsuid and fsgid switched for the calling thread)",
       "status": "partial",
-      "note": "Apps read the owning user, group, device and inode of a file and test whether two paths name the same file; tested headless in sdk tests parity_sdk-os-08.rs. Gap: the shell's identity switch for document grants is not exposed to apps."
+      "note": "Apps read the owning user, group, device and inode of a file and test whether two paths name the same file; tested headless in sdk tests parity_sdk-os-08.rs. Left partial 2026-10-17: the shell's identity switch for document grants is not exposed to apps. Exposing it would hand an app the account's file identity, a privilege decision for the owner, so it is not built."
     },
     {
       "feature": "Adopting C file operations in Swift (migration guides)",
@@ -100,8 +100,6 @@
     }
   ],
   "gaps": [
-    "No SDK path type with component views. Apps use Rust std::path only.",
-    "No SDK call for volume capacity. disk_space in springboard/src/bare/sys.rs:125 is shell-only.",
     "File coordination is advisory and has no relinquish or save-negotiation step (springboard/sdk/src/file_coordination.rs:1-20).",
     "The file-change feed must be polled by the app (springboard/sdk/src/fswatch.rs:185); no callback API."
   ]

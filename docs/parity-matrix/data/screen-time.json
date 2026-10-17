@@ -40,14 +40,14 @@
       "apple": "Not in this framework (system Screen Time)",
       "bifrost": "springboard/ui/src/os_services/time_limits.rs (Policy::block, Policy::set_limit, Policy::grant_ignore, LIMIT_STEPS); springboard/src/shell/screentime/config.rs (LIMIT_STEPS, Config::block, Ignore grants), springboard/src/shell/screentime/shield.rs",
       "status": "partial",
-      "note": "Limit steps from 15 min to 4 h, the used-time threshold, ignore grants and the Settings exemption are tested headless. Gap: the full-screen shield and its passcode stay in the shell, and the model does not draw it."
+      "note": "Limit steps from 15 min to 4 h, the used-time threshold, ignore grants and the Settings exemption are tested headless. Built 2026-10-17: Config.block asks the model, so the shield and the model give one reason (config.rs test the_shield_rule_agrees_with_the_model_rule). The full-screen shield and its passcode stay in the shell, and the model does not draw it."
     },
     {
       "feature": "Downtime schedule and always-allowed apps",
       "apple": "Not in this framework (system Screen Time)",
       "bifrost": "springboard/ui/src/os_services/time_limits.rs (Downtime::active, Policy::allowed, Policy::set_allowed); springboard/src/shell/screentime/config.rs (Downtime, Schedule from springboard/src/shell/notify/schedule.rs), springboard/src/shell/screentime/page.rs",
       "status": "partial",
-      "note": "The daily window that crosses midnight and the always-allowed list are tested headless. Gap: the shell keeps its own Schedule copy, and the Settings page is not yet wired to the model."
+      "note": "The daily window that crosses midnight and the always-allowed list are tested headless. Built 2026-10-17: the shell Downtime is the model type (config.rs re-exports os_services::time_limits::Downtime), and the Settings pages read and write through the model held by Config (config.rs tests the_held_policy_matches_a_rebuild_from_the_stored_settings). Notifications keep their own Schedule, which is a different feature."
     },
     {
       "feature": "Settings UI for Screen Time",
@@ -60,7 +60,7 @@
   "gaps": [
     "Web-usage and web-history models exist headless (springboard/sdk/src/web_usage.rs, web_history.rs) but no browser reports into them yet, so no visit is recorded on a device.",
     "The web-history store is in memory; the browser that owns it has no persistence yet.",
-        "Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.",
+        "Web usage is not in the Settings chart, and the shield does not block URLs; the block list exists headless in springboard/sdk/src/web_usage.rs.",
     "Limit state is not exposed to apps (only the app's own usage is, by springboard/sdk/src/screen_usage.rs); docs/bifrost-ui.md does not document the module yet."
   ]
 }
