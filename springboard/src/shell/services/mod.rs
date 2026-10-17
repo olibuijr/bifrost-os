@@ -71,6 +71,7 @@ pub mod notify_bus;
 pub mod speech;
 pub mod screenshot;
 pub mod launch_services;
+pub mod mail_compose;
 pub mod display_services;
 pub mod window_services;
 pub mod scene_services;
@@ -146,6 +147,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(speech::Speech::default()),
         Box::new(screenshot::ScreenshotService::default()),
         Box::new(launch_services::LaunchServices),
+        Box::new(mail_compose::MailCompose),
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),
         Box::new(scene_services::SceneServices::default()),

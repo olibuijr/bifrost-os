@@ -1615,6 +1615,8 @@ impl MailWindow {
             },
             DocumentEvent::Opened(doc) => match self.docs.remove(&doc.request) {
                 Some(DocTask::Attach) => self.attach_documents(ctx, vec![doc]),
+                // a file another app hands over with a mailto: link (bifrost_app::mail_compose) goes on the open message
+                None if bifrost_app::share::is_inbound(doc.request) => self.attach_documents(ctx, vec![doc]),
                 Some(DocTask::ImportMbox) => self.import_document(ctx, doc),
                 Some(DocTask::SaveFolder { files }) => self.save_folder(ctx, doc, files),
                 Some(other) => {
