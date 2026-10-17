@@ -404,6 +404,7 @@ pub mod audio_box;
 /// Virtual audio devices a driver plug-in would publish, as a pure model, and the driver status (no loader here).
 pub mod audio_virtual;
 pub mod speech_recognizer;
+pub mod speech_whisper;
 pub mod media_intents;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
