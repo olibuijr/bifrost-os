@@ -121,7 +121,7 @@ fn api_routes_lz4_through_the_algorithm_selection() {
     assert_eq!(decode_api(Algorithm::Lz4, &enc).unwrap(), data.to_vec());
     assert_eq!(decode_buffer_limited(Algorithm::Lz4, &enc, 5), Err(Error::TooBig));
     assert!(Algorithm::Lz4.is_supported());
-    assert_eq!(encode_api(Algorithm::Lzma, b"x"), Err(Error::Unsupported(Algorithm::Lzma)));
+    assert_eq!(encode_api(Algorithm::Lzfse, b"x"), Err(Error::Unsupported(Algorithm::Lzfse)));
 }
 
 #[test]
