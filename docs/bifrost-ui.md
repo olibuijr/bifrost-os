@@ -4417,11 +4417,21 @@ The signed-in BifrOSt Account of this device is one keychain item, shared throug
 - **App side**: `cloud_account::session(ctx)` asks the group (reply through `service_reply`), and `decode_session` gives a
   `Session` (`token`, `account_id`, `server`, `expires`), `SessionError::SignedOut` when there is no item (or it does not
   decode), or `SessionError::Keychain(e)` for a refusal. The token is never printed; `Session`'s `Debug` redacts it.
-- **Gaps**: no code path yet delivers the token to the device. Sign-in happens on the account web page
-  (`setup::ACCOUNT_URL`, opened by the setup assistant), and Settings has no BifrOSt Account page, so nothing calls `store`
-  yet. `bug_report::CloudSession::load()` still reads the plain file: once the shell has migrated it, bug reports say
-  "sign in" until that reader moves to the keychain (it is synchronous today, the keychain read is a service call).
-  Not run on Midget or on the host.
+- **Settings page** (`springboard/src/shell/account_page.rs`, the top row of Settings, "BifrOSt Account"): signed out, Sign
+  In opens an email sheet, then a password sheet. The password goes to `POST /api/cloud/v1/signin` on a worker thread and
+  is kept nowhere; the answer's `bc_session` cookie is stored with `store` and its `Max-Age` as the expiry. A refusal
+  reopens the password sheet with the cloud's reason in its message line (the sheet's footer is its message line; the
+  one-field sheets have no footer). Signed in: name and email (`GET /me`), the account's devices (`GET /devices`), and Sign
+  Out, which deletes the item and then calls `POST /signout`; a cloud that does not confirm is reported on the page. A
+  session the cloud refuses with 401 is removed, and the page says to sign in again. There is no sign-up: accounts are
+  made with an invitation (`/signup` takes an invite).
+- **Protocol**: `springboard/src/cloud_account.rs` holds the pure parts (sign-in body, answers, cookie, endpoints); the
+  SDK's `bifrost_app::cloud_account` re-exports them and builds the app requests. The shell sends through the deildu HTTP
+  client (`deildu::http::Client`, TLS, no cookie jar).
+- **Bug reports**: `bug_report::session_request(ctx)` and `session_from_reply` read the session through the keychain
+  service reply, so the bug-report client takes its token from the group, not from the migrated file.
+- **Gaps**: the sign-in and sign-out requests are not run on Midget or on the host; the Settings page is not yet
+  screenshot-checked against the reference. The device list is the account's `/devices`, not the Find My routes.
 
 ## Locate: device locator, end-to-end location (`bifrost-locate`, `bifrost_app::cloud_findmy`)
 
@@ -4462,9 +4472,9 @@ Play sound uses the new shell message `ToShell::PlaySystemSound`: the SDK call `
 shell queues up to four sounds per frame and the audio worker plays them on the sound-effects role.
 
 **Not built, or blocked:**
-- The session: the shell's account helpers can hold the session in the `is.bifrost.account` group now (see "BifrOSt
-  Account session"), but nothing calls them yet, so the worker does not start until the sign-in delivers the token. Until
-  then the cloud is off, and the join button says so.
+- The session: Settings > BifrOSt Account signs in and stores the session in the `is.bifrost.account` group (see "BifrOSt
+  Account session"). Locate reads it at start, so the worker runs once the user has signed in there. Without a session
+  the cloud is off, and the join button says so.
 - Contact copies: no contact share is created by the app, so a report goes only to the owner's own devices.
 - The join key pair is held in memory until approval. A restart during a wait begins the join again.
 - A sound's ack is sent when the worker takes the command, not when the tone has played.
