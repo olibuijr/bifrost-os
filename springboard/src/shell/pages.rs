@@ -151,6 +151,8 @@ pub enum PageId {
 pub enum Toggle {
     /// Settings › Menu Bar: shows or hides one menu extra
     MenuExtra(super::options::MenuExtra),
+    /// Settings › App Permissions › Contacts: the n-th installed app may read contacts
+    Contacts(usize),
     AutoUpdate,
     BackupBeforeUpdate,
     Airplane,
@@ -1512,6 +1514,16 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             .collect()
     };
     groups.push(Group::new(location).header("LOCATION").footer("Apps that may use your location while you use them. A switch is on only when you allow it."));
+    // Contacts (last, so the group indexes above stay the same): on only when the person lets the app read contacts.
+    let contacts: Vec<Item> = if rows.is_empty() {
+        vec![Item::new("No apps installed")]
+    } else {
+        rows.iter()
+            .enumerate()
+            .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.contacts, Action::Toggle(Toggle::Contacts(i))))
+            .collect()
+    };
+    groups.push(Group::new(contacts).header("CONTACTS").footer("Apps that may read your contacts. A switch is on only when you allow it."));
     Spec { id: PageId::PrivacyPermissions, title: "App Permissions".into(), large: false, groups }
 }
 
@@ -1903,7 +1915,7 @@ mod tests {
     fn app_permissions_lists_each_media_type_with_one_switch_per_app() {
         use bifrost_ui::capture_access::CaptureAccess;
         use bifrost_ui::location_auth::AuthorizationStatus;
-        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse }];
+        let rows = vec![Row { app_id: "is.example.a".into(), name: "Alpha".into(), access: CaptureAccess::default(), location: AuthorizationStatus::AuthorizedWhenInUse, contacts: false }];
         let s = permissions_page(&rows);
         assert_eq!(s.groups.len(), 4, "camera, microphone, screen recording, location");
         assert_eq!(s.groups[3].header.as_deref(), Some("LOCATION"));

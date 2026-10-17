@@ -28,7 +28,7 @@ const LOCATION_CHOICES: [&str; 3] = [ALLOW_ONCE, ALLOW_WHILE_USING, DONT_ALLOW];
 pub fn choices_for(kind: Kind) -> (&'static [&'static str], usize) {
     match kind {
         Kind::Location => (&LOCATION_CHOICES[..], 2),
-        Kind::Media(_) => (&MEDIA_CHOICES[..], 1),
+        Kind::Media(_) | Kind::Contacts => (&MEDIA_CHOICES[..], 1),
     }
 }
 
@@ -77,7 +77,7 @@ const MEDIA_BUTTONS: [Button; 2] = [Button::DontAllow, Button::Allow];
 pub fn buttons_for(kind: Kind) -> &'static [Button] {
     match kind {
         Kind::Location => &LOCATION_BUTTONS[..],
-        Kind::Media(_) => &MEDIA_BUTTONS[..],
+        Kind::Media(_) | Kind::Contacts => &MEDIA_BUTTONS[..],
     }
 }
 
@@ -112,6 +112,7 @@ pub fn detail(prompt: &Prompt) -> String {
     match prompt.kind {
         Kind::Location => format!("{} You can change this at any time in {LOCATION_SETTINGS_PATH}.", prompt.purpose),
         Kind::Media(_) => format!("Allowing lets the app use this while it is open. You can change this at any time in {SETTINGS_PATH}."),
+        Kind::Contacts => format!("Allowing lets the app read the contacts you choose, while it is open. You can change this at any time in {SETTINGS_PATH}."),
     }
 }
 

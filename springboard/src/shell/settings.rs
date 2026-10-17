@@ -2916,6 +2916,14 @@ impl Settings {
                 }
                 None => false,
             },
+            Toggle::Contacts(index) => match super::apphost::installed().get(index) {
+                Some(app) => {
+                    let id = app.manifest.id.clone();
+                    let allowed = !super::services::privacy_permissions::contacts_allowed(&id);
+                    super::services::privacy_permissions::set_contacts_by_user(&id, allowed)
+                }
+                None => false,
+            },
             Toggle::Location(index) => match super::apphost::installed().get(index) {
                 Some(app) => {
                     let id = app.manifest.id.clone();

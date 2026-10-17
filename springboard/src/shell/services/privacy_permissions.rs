@@ -51,6 +51,8 @@ pub enum Grant {
 pub enum Kind {
     Location,
     Media(Media),
+    /// The contact store (the contacts service's access sheet).
+    Contacts,
 }
 
 impl Kind {
@@ -59,6 +61,7 @@ impl Kind {
         match self {
             Kind::Location => "location",
             Kind::Media(m) => media_name(m),
+            Kind::Contacts => "contacts",
         }
     }
 
@@ -69,6 +72,7 @@ impl Kind {
             Kind::Media(Media::Video) => "use your camera",
             Kind::Media(Media::Audio) => "use your microphone",
             Kind::Media(Media::Screen) => "record your screen",
+            Kind::Contacts => "use your contacts",
         };
         format!("\u{201c}{app_name}\u{201d} would like to {want}.")
     }
@@ -113,6 +117,7 @@ pub fn still_asked(prompt: &Prompt) -> bool {
     match prompt.kind {
         Kind::Location => location_status(&prompt.app_id) == AuthorizationStatus::NotDetermined,
         Kind::Media(m) => access(&prompt.app_id).status(m) == Status::NotDetermined,
+        Kind::Contacts => super::contacts::access_of(&prompt.app_id).status() == bifrost_ui::contact_access::Status::NotDetermined,
     }
 }
 
@@ -144,6 +149,10 @@ pub fn decide_grant(prompt: &Prompt, grant: Grant) {
         }
         Kind::Media(m) => {
             let _ = set_by_user(&prompt.app_id, m, grant != Grant::Deny);
+        }
+        Kind::Contacts => {
+            let choice = if grant == Grant::Deny { bifrost_ui::contact_access::Choice::Deny } else { bifrost_ui::contact_access::Choice::All };
+            let _ = super::contacts::answer_prompt(&prompt.app_id, choice);
         }
     }
 }
@@ -331,6 +340,8 @@ pub struct Row {
     pub name: String,
     pub access: CaptureAccess,
     pub location: AuthorizationStatus,
+    /// Whether the app may read contacts (a read grant: full or picked).
+    pub contacts: bool,
 }
 
 /// The installed apps, in the order the shell lists them.
@@ -342,8 +353,22 @@ pub fn rows() -> Vec<Row> {
             name: a.manifest.name.clone(),
             access: access(&a.manifest.id),
             location: location_status(&a.manifest.id),
+            contacts: contacts_allowed(&a.manifest.id),
         })
         .collect()
+}
+
+/// Whether the person lets the app read contacts. A Settings switch and the access sheet both set it.
+pub fn contacts_allowed(app_id: &str) -> bool {
+    super::contacts::reads(app_id)
+}
+
+/// The person's Settings switch for an app's contacts. A restricted app refuses it. Returns whether the app now reads
+/// contacts.
+pub fn set_contacts_by_user(app_id: &str, allowed: bool) -> bool {
+    let choice = if allowed { bifrost_ui::contact_access::Choice::All } else { bifrost_ui::contact_access::Choice::Deny };
+    let _ = super::contacts::change_by_user(app_id, choice);
+    contacts_allowed(app_id)
 }
 
 pub struct PrivacyPermissions;

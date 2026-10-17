@@ -261,24 +261,138 @@ pub fn preview(choice: Choice) -> Result<Status, Error> {
     Access::new().request(choice)
 }
 
-/// Groups of contacts (CNGroup): nested groups and membership, with a recursive member listing. The model lives in the
-/// app's own process; the shell's contact store keeps no groups yet.
+/// Groups of contacts (CNGroup): nested groups and membership, with a recursive member listing. The shell keeps the
+/// groups beside the contact store, so they persist and are shared; the calls below use it. `Groups` is the same model
+/// the shell uses, for an app that wants to check a change before it sends it.
 pub mod groups {
+    use super::*;
     pub use bifrost_ui::contact_groups::{Error, Group, Groups};
+
+    fn call_with(ctx: &Ctx, method: &str, pairs: &[(&str, u64)]) -> u32 {
+        let params = pairs.iter().map(|(k, v)| (k.to_string(), Json::Num(*v as f64))).collect();
+        service::call(ctx, SERVICE, method, &Json::Obj(params))
+    }
+
+    /// Lists the groups the shell keeps, as the app sees them. The shell keeps the groups, so they persist and are
+    /// shared by every app with a read grant. Decodes with [`decode_list`].
+    pub fn list(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "groups", &Json::Null)
+    }
+
+    /// Adds a group at the top level, or under `parent`. Needs full access. The reply holds the new `id`.
+    pub fn add(ctx: &Ctx, name: &str, parent: Option<u64>) -> u32 {
+        let mut params = vec![("name".to_string(), Json::Str(name.into()))];
+        if let Some(parent) = parent {
+            params.push(("parent".to_string(), Json::Num(parent as f64)));
+        }
+        service::call(ctx, SERVICE, "group_add", &Json::Obj(params))
+    }
+
+    /// Removes a group and its subgroups. Needs full access.
+    pub fn remove(ctx: &Ctx, group: u64) -> u32 {
+        call_with(ctx, "group_remove", &[("group", group)])
+    }
+
+    /// Puts a contact in a group. Needs full access and a contact the app can see.
+    pub fn add_member(ctx: &Ctx, group: u64, contact: u64) -> u32 {
+        call_with(ctx, "group_add_member", &[("group", group), ("contact", contact)])
+    }
+
+    /// Takes a contact out of a group. Needs full access.
+    pub fn remove_member(ctx: &Ctx, group: u64, contact: u64) -> u32 {
+        call_with(ctx, "group_remove_member", &[("group", group), ("contact", contact)])
+    }
+
+    /// The contacts in a group, with subgroups' members when `recursive`. Decodes with [`decode_members`].
+    pub fn members(ctx: &Ctx, group: u64, recursive: bool) -> u32 {
+        let params = Json::Obj(vec![
+            ("group".into(), Json::Num(group as f64)),
+            ("recursive".into(), Json::Bool(recursive)),
+        ]);
+        service::call(ctx, SERVICE, "group_members", &params)
+    }
+
+    /// The groups in a `groups` reply as `(id, name, parent)`, or `None` for a reply of another shape.
+    pub fn decode_list(reply: &Json) -> Option<Vec<(u64, String, Option<u64>)>> {
+        reply
+            .get("groups")?
+            .as_array()?
+            .iter()
+            .map(|g| Some((g.get("id")?.as_u64()?, g.get("name")?.as_str()?.to_string(), g.get("parent").and_then(Json::as_u64))))
+            .collect()
+    }
+
+    /// The contact ids in a `group_members` reply.
+    pub fn decode_members(reply: &Json) -> Option<Vec<u64>> {
+        reply.get("contacts")?.as_array()?.iter().map(Json::as_u64).collect()
+    }
 }
 
-/// Batched saves and change history for contacts (CNChangeHistoryFetchRequest). `Store::save` applies a batch of adds,
-/// updates and deletes all or nothing and numbers each change; `changes_since` returns the events after a token. Apps
-/// keep the store in process; the shell posts `system.contacts.change` when the contact file changes.
+/// Change history for contacts (CNChangeHistoryFetchRequest). The shell logs each applied save as numbered events, and
+/// [`history::changes`] returns the events after a token. `Store` is the in-process model of the same log, for an app
+/// that keeps its own batches; the shell posts `system.contacts.change` when the contact file changes.
 pub mod history {
+    use super::*;
     pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
+
+    /// The changes to contacts after `token` (0 for all the kept history), as the shell logged them. The reply holds the
+    /// token to keep for the next call and the changes the app may read. Decodes with [`decode_changes`]; an expired
+    /// token is an error, and the app reads the whole book again.
+    pub fn changes(ctx: &Ctx, token: u64) -> u32 {
+        service::call(ctx, SERVICE, "changes", &Json::Obj(vec![("token".into(), Json::Num(token as f64))]))
+    }
+
+    /// The next token and the `(seq, kind, id)` changes in a `changes` reply, where kind is `added`, `updated` or
+    /// `deleted`.
+    pub fn decode_changes(reply: &Json) -> Option<(u64, Vec<(u64, String, u64)>)> {
+        let token = reply.get("token")?.as_u64()?;
+        let rows = reply
+            .get("changes")?
+            .as_array()?
+            .iter()
+            .map(|c| Some((c.get("seq")?.as_u64()?, c.get("kind")?.as_str()?.to_string(), c.get("id")?.as_u64()?)))
+            .collect::<Option<Vec<_>>>()?;
+        Some((token, rows))
+    }
 }
 
 /// Contact pictures (CNContact image and thumbnail data): PNG or JPEG only, detected from the first bytes, capped at
 /// `photos::MAX_BYTES`. `Photos::set` replaces a contact's picture and keeps the old one when the new data is refused;
 /// `fit_size` works out a thumbnail size inside a square. Notes are plain text on the contact record.
 pub mod photos {
+    use super::*;
     pub use bifrost_ui::contact_photo::{fit_size, format_of, Error, Format, Photos, MAX_BYTES};
+
+    /// Asks the shell for a contact's picture. Decodes with [`decode`].
+    pub fn get(ctx: &Ctx, contact: u64) -> u32 {
+        service::call(ctx, SERVICE, "photo", &Json::Obj(vec![("id".into(), Json::Num(contact as f64))]))
+    }
+
+    /// Sets a contact's picture in the shell (PNG or JPEG, within `MAX_BYTES`). Needs full access. The shell refuses
+    /// other data and keeps the old picture.
+    pub fn set(ctx: &Ctx, contact: u64, data: &[u8]) -> u32 {
+        let params = Json::Obj(vec![
+            ("id".into(), Json::Num(contact as f64)),
+            ("data".into(), Json::Str(bifrost_ui::contact_vcard::base64_encode(data))),
+        ]);
+        service::call(ctx, SERVICE, "photo_set", &params)
+    }
+
+    /// Removes a contact's picture in the shell. Needs full access.
+    pub fn remove(ctx: &Ctx, contact: u64) -> u32 {
+        service::call(ctx, SERVICE, "photo_remove", &Json::Obj(vec![("id".into(), Json::Num(contact as f64))]))
+    }
+
+    /// The format and bytes in a `photo` reply, or `None` when the contact has no picture or the reply is another shape.
+    pub fn decode(reply: &Json) -> Option<(Format, Vec<u8>)> {
+        let format = match reply.get("format")?.as_str()? {
+            "png" => Format::Png,
+            "jpeg" => Format::Jpeg,
+            _ => return None,
+        };
+        let bytes = bifrost_ui::contact_vcard::base64_decode(reply.get("data")?.as_str()?)?;
+        Some((format, bytes))
+    }
 }
 
 /// Contact display preferences (CNContactsUserDefaults and CNContactFormatter sort order): the sort order a list uses,
@@ -295,8 +409,47 @@ pub mod display {
 /// access to the store. `Picker::new` takes the entries the shell shows, `select` picks or opens a contact, and
 /// `choose` picks one value of the open contact. The shell draws the list from `visible` and the detail from `detail`.
 pub mod picker {
+    use super::*;
     pub use bifrost_ui::contact_card::{Entry, Field, Key};
     pub use bifrost_ui::contact_picker::{Choice, Error, Mode, Picker};
+
+    /// Starts a pick in the shell. `mode` is `"contact"` (one whole contact, with `need` naming a field it must have)
+    /// or `"property"` (one value under `keys`, such as `"phone"` or `"email"`). The person chooses in the shell's
+    /// picker sheet; read the result with [`result`]. Nothing about the book is sent to the app.
+    pub fn start(ctx: &Ctx, mode: &str, need: Option<&str>, keys: &[&str]) -> u32 {
+        let mut params = vec![
+            ("mode".to_string(), Json::Str(mode.into())),
+            ("keys".to_string(), Json::Arr(keys.iter().map(|k| Json::Str((*k).into())).collect())),
+        ];
+        if let Some(need) = need {
+            params.push(("need".to_string(), Json::Str(need.into())));
+        }
+        service::call(ctx, SERVICE, "pick", &Json::Obj(params))
+    }
+
+    /// Asks for the result of the app's pick. Decodes with [`decode_result`].
+    pub fn result(ctx: &Ctx) -> u32 {
+        service::call(ctx, SERVICE, "pick_result", &Json::Null)
+    }
+
+    /// What a `pick_result` reply says: still open, or the chosen contact and, for a property pick, its value.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum PickResult {
+        Pending,
+        Chosen { contact: u64, value: Option<String> },
+    }
+
+    /// The pick state in a `pick_result` reply, or `None` for a reply of another shape.
+    pub fn decode_result(reply: &Json) -> Option<PickResult> {
+        match reply.get("status")?.as_str()? {
+            "pending" => Some(PickResult::Pending),
+            "chosen" => Some(PickResult::Chosen {
+                contact: reply.get("contact")?.as_u64()?,
+                value: reply.get("value").and_then(Json::as_str).map(str::to_string),
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// vCard 3.0 and 4.0 for the full contact model (`bifrost_ui::contact_vcard`, the same code the Contacts app uses for
@@ -387,6 +540,54 @@ mod tests {
         assert_eq!(defaults.effective_sort_order(display::SortOrder::UserDefault), display::SortOrder::GivenName);
         assert_eq!(display::normalize_country_code(" is "), Some("IS".to_string()));
         assert_eq!(display::normalize_country_code("Iceland"), None);
+    }
+
+    #[test]
+    fn shell_replies_decode_into_the_sdk_types() {
+        let groups = Json::Obj(vec![(
+            "groups".into(),
+            Json::Arr(vec![
+                Json::Obj(vec![("id".into(), Json::Num(1.0)), ("name".into(), Json::Str("Family".into())), ("parent".into(), Json::Null)]),
+                Json::Obj(vec![("id".into(), Json::Num(2.0)), ("name".into(), Json::Str("Kin".into())), ("parent".into(), Json::Num(1.0))]),
+            ]),
+        )]);
+        assert_eq!(
+            groups::decode_list(&groups),
+            Some(vec![(1, "Family".to_string(), None), (2, "Kin".to_string(), Some(1))])
+        );
+
+        let changes = Json::Obj(vec![
+            ("token".into(), Json::Num(2.0)),
+            (
+                "changes".into(),
+                Json::Arr(vec![Json::Obj(vec![
+                    ("seq".into(), Json::Num(2.0)),
+                    ("kind".into(), Json::Str("deleted".into())),
+                    ("id".into(), Json::Num(5.0)),
+                ])]),
+            ),
+        ]);
+        assert_eq!(history::decode_changes(&changes), Some((2, vec![(2, "deleted".to_string(), 5)])));
+
+        let pending = Json::Obj(vec![("status".into(), Json::Str("pending".into()))]);
+        assert_eq!(picker::decode_result(&pending), Some(picker::PickResult::Pending));
+        let chosen = Json::Obj(vec![
+            ("status".into(), Json::Str("chosen".into())),
+            ("contact".into(), Json::Num(4.0)),
+            ("value".into(), Json::Str("ada@example.com".into())),
+        ]);
+        assert_eq!(
+            picker::decode_result(&chosen),
+            Some(picker::PickResult::Chosen { contact: 4, value: Some("ada@example.com".into()) })
+        );
+
+        let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 9];
+        let photo = Json::Obj(vec![
+            ("format".into(), Json::Str("png".into())),
+            ("data".into(), Json::Str(bifrost_ui::contact_vcard::base64_encode(&png))),
+        ]);
+        assert_eq!(photos::decode(&photo), Some((photos::Format::Png, png.to_vec())));
+        assert_eq!(photos::decode(&Json::Obj(vec![("format".into(), Json::Null)])), None);
     }
 
     #[test]
