@@ -28,7 +28,7 @@ fn font_bytes(path: &PathBuf) -> Option<&'static [u8]> {
     use std::sync::{Mutex, OnceLock};
     static LOADED: OnceLock<Mutex<HashMap<PathBuf, &'static [u8]>>> = OnceLock::new();
     let mut loaded = LOADED.get_or_init(Default::default).lock().ok()?;
-    if let Some(data) = loaded.get(path) {
+    if let Some(&data) = loaded.get(path) {
         return Some(data);
     }
     let data: &'static [u8] = Box::leak(std::fs::read(path).ok()?.into_boxed_slice());
