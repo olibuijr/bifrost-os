@@ -595,6 +595,19 @@ impl KeyRepeat {
 }
 
 impl Shell {
+    /// A hardware media key (play, pause, next, previous, stop, fast forward, rewind). It goes to the owner of the
+    /// Now Playing session when that owner enabled the command, and works with the screen off. True when sent.
+    pub fn hw_media_key(&mut self, code: u16, down: bool, t: f64) -> bool {
+        if !down {
+            return false;
+        }
+        let used = super::services::now_playing::media_key(code);
+        if used {
+            self.last_input = t;
+        }
+        used
+    }
+
     /// A key from a physical keyboard that the app on screen handles itself (Deildu, Files); true if taken.
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {

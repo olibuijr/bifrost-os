@@ -240,6 +240,49 @@ pub(crate) fn send(command: RemoteCommand) -> bool {
     with(|s| s.send(Sent::Command(command))).unwrap_or(false)
 }
 
+/// The transport command a hardware media key asks for, by its evdev code. None for keys that are not transport keys.
+/// Play/pause is a toggle; [`toggle_command`] picks the command that matches the playback state.
+pub(crate) fn media_key_command(code: u16) -> Option<RemoteCommand> {
+    Some(match code {
+        164 => RemoteCommand::TogglePlayPause, // KEY_PLAYPAUSE
+        200 | 207 => RemoteCommand::Play,      // KEY_PLAYCD, KEY_PLAY
+        201 => RemoteCommand::Pause,           // KEY_PAUSECD
+        166 => RemoteCommand::Stop,            // KEY_STOPCD
+        163 => RemoteCommand::Next,            // KEY_NEXTSONG
+        165 => RemoteCommand::Previous,        // KEY_PREVIOUSSONG
+        208 => RemoteCommand::SkipForward,     // KEY_FASTFORWARD
+        168 => RemoteCommand::SkipBackward,    // KEY_REWIND
+        _ => return None,
+    })
+}
+
+/// The command a play/pause toggle sends: pause while playing, play otherwise.
+pub(crate) fn toggle_command(playing: bool) -> RemoteCommand {
+    if playing {
+        RemoteCommand::Pause
+    } else {
+        RemoteCommand::Play
+    }
+}
+
+/// Sends the transport command a media key asks for to the owner of the shown session. False when the key is not a
+/// transport key, there is no session, or the owner did not enable the command (the key then falls through).
+pub(crate) fn media_key(code: u16) -> bool {
+    let Some(command) = media_key_command(code) else {
+        return false;
+    };
+    with(|s| {
+        let command = if command == RemoteCommand::TogglePlayPause {
+            let playing = s.session.as_ref().is_some_and(|x| x.snapshot().state == PlaybackState::Playing);
+            toggle_command(playing)
+        } else {
+            command
+        };
+        s.send(Sent::Command(command))
+    })
+    .unwrap_or(false)
+}
+
 /// Asks the owner to seek to `position_ms`. False when there is no session or it did not enable seeking.
 pub(crate) fn seek(position_ms: f64) -> bool {
     with(|s| s.send(Sent::Seek(position_ms))).unwrap_or(false)
@@ -400,6 +443,24 @@ mod tests {
         assert!(p.playing);
         assert!((90_000..=200_000).contains(&p.position_ms), "at least the seek target, never past the length");
         assert_eq!(store.drain()[0].body.get("position_ms").and_then(Json::number), Some(90_000.0));
+    }
+
+    #[test]
+    fn media_keys_map_to_transport_commands_and_other_keys_do_not() {
+        assert_eq!(media_key_command(164), Some(RemoteCommand::TogglePlayPause));
+        assert_eq!(media_key_command(163), Some(RemoteCommand::Next));
+        assert_eq!(media_key_command(165), Some(RemoteCommand::Previous));
+        assert_eq!(media_key_command(166), Some(RemoteCommand::Stop));
+        assert_eq!(media_key_command(208), Some(RemoteCommand::SkipForward));
+        assert_eq!(media_key_command(168), Some(RemoteCommand::SkipBackward));
+        assert_eq!(media_key_command(115), None, "volume up is the shell's");
+        assert_eq!(media_key_command(28), None, "enter is not a transport key");
+    }
+
+    #[test]
+    fn a_play_pause_key_pauses_while_playing_and_plays_otherwise() {
+        assert_eq!(toggle_command(true), RemoteCommand::Pause);
+        assert_eq!(toggle_command(false), RemoteCommand::Play);
     }
 
     #[test]
