@@ -156,7 +156,20 @@
    "status": "partial",
    "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "mount --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mount"
+    }
+   ],
+   "ready_note": "mount_9p mounts a 9P file system; mount -t 9p (util-linux, with the kernel's 9p client) does that job. It needs root and the 9p module, so only the tool is checked."
   },
   {
    "id": "path:/sbin/mount_devfs",
@@ -615,7 +628,20 @@
    "status": "partial",
    "note": "mdfind walks the folder tree, matches names and (with -content) text of files up to 4 MiB; the content index and -live are missing. Not yet verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mdfind::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mdfind"
+    }
+   ],
+   "ready_note": "mdfind walks the folder tree and matches names and (with -content) the text of files up to 4 MiB. Gap: no content index and no -live."
   },
   {
    "id": "path:/usr/bin/mdimport",
@@ -695,11 +721,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/mdutil.rs",
+   "bifrost": "springboard/cmd/src/mdutil.rs, springboard/src/shell/spotlight_scope.rs",
    "status": "partial",
-   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index.",
+   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Built 2026-10-17 (wave 13): mdutil -i writes the Spotlight exclusions (spotlight_excluded) that shell::spotlight_scope reads (mdutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "mdutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/mdutil"
+    }
+   ],
+   "ready_note": "mdutil -i off adds the volume to the Spotlight exclusions in the shell's settings, so Search lists nothing under it, and -i on removes it; -s reports it; -E erases the command line's own store. Gap: a running shell reads the exclusions at start or when Settings changes them."
   },
   {
    "id": "path:/usr/bin/memacct",
@@ -1304,11 +1343,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (nethogs)",
+   "bifrost": "/usr/bin/nethogs",
    "status": "partial",
    "note": "nethogs, which lists network use per process, is in the runtime package list. It is not a column-for-column equivalent of the reference monitor, and no BifrOSt view reads it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/nethogs"
+    }
+   ],
+   "ready_note": "nettop shows network use per process; nethogs (Arch package nethogs, in runtime-packages.txt) does that job. The columns differ."
   },
   {
    "id": "path:/usr/bin/networkQuality",

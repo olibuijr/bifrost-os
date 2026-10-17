@@ -204,11 +204,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/accessibility/reader.rs, springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "accessibility tree and reader; no VoiceOver utility",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::earcons::tests"
+    }
+   ],
+   "ready_note": "VoiceOver Utility configures the screen reader. BifrOSt does that in Settings > Accessibility > Screen Reader: the on/off switch, speaking rate, pitch and voice (pages.rs, accessibility::speech), the reader's rotors and keyboard cursor (accessibility::reader), Braille output and earcons. Gap: no activities, verbosity matrix or custom command assignments."
   },
   {
    "id": "path:/System/Applications/VoiceMemos.app",

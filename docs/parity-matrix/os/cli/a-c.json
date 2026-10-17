@@ -788,11 +788,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/shortcuts.rs",
+   "bifrost": "springboard/cmd/src/bin/automator.rs, springboard/cmd/src/shortcuts.rs, springboard/apps/automator-desktop/src/model.rs",
    "status": "partial",
-   "note": "implemented in springboard/cmd (shortcuts.rs); it runs saved shortcuts and does not read Automator workflow bundles; not yet verified on Midget",
+   "note": "implemented in springboard/cmd (shortcuts.rs); it runs saved shortcuts and does not read Automator workflow bundles; not yet verified on Midget Built 2026-10-17 (wave 13): springboard/cmd/src/bin/automator.rs runs .automator files with the app's runner (model::tests) and shortcuts by name (shortcuts::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/automator"
+    }
+   ],
+   "ready_note": "automator runs a workflow from the command line: a .automator file saved by the Automator app (the app's own model and runner are compiled into the tool) or a saved shortcut by name or id. Gap: it does not read the reference workflow bundles (.workflow), and -i/-D are refused."
   },
   {
    "id": "path:/usr/bin/auvaltool",

@@ -1536,7 +1536,20 @@
    "status": "partial",
    "note": "strace is the Linux system-call tracer, not a dtruss-compatible DTrace script; provided by Arch package strace; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "strace -V",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/strace"
+    }
+   ],
+   "ready_note": "dtruss traces a program's system calls; strace (Arch package strace, in runtime-packages.txt) does that job on Linux. The output format and DTrace scripting differ."
   },
   {
    "id": "path:/usr/bin/du",

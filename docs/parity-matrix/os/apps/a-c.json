@@ -489,11 +489,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/archive-desktop",
+   "bifrost": "springboard/apps/archive-desktop, springboard/src/files/zip.rs, springboard/src/files/archive.rs",
    "status": "partial",
    "note": "expands zip, tar, tar.gz and xz/bzip2/zstd (shared files module), compresses a folder to zip; progress, cancel, no-overwrite names, path-escape guard; lacks destination/post-expand preferences and encrypted zip. Still missing: encrypted zip (a password zip writer; the SDK encrypted_archive is a different sealed format). Built 2026-10-17: the shared zip module seals and opens encrypted members (ZipCrypto: Writer::add_bytes_encrypted, Archive::read_with_password); tests files::zip::tests. Still missing: the password prompt and the encrypt option in the app.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-archive",
+     "filter": "archive::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "files::zip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "files::archive::tests"
+    }
+   ],
+   "ready_note": "Archive Utility's job is expanding archives and compressing a folder: the app does both (zip, tar, tar.gz, xz, bzip2, zstd; progress, cancel, no-overwrite names, path-escape guard) and the shared zip module reads and writes encrypted members. Gap: the app has no password prompt or encrypt option yet, and no destination preference."
   }
  ]
 }

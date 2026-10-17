@@ -198,7 +198,41 @@
    "status": "partial",
    "note": "Viewer: images and PDFs, zoom and fit, rotate, thumbnails or outline, page move and delete, markup, Adjust Color, PNG/JPEG/PDF export; pdfcraft-desktop is a separate PDF editor; lacks form filling and Live Text",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "forms::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "pdfmarks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "signature::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-viewer",
+     "filter": "export::tests"
+    }
+   ],
+   "ready_note": "Preview views images and PDFs (zoom and fit, rotate, thumbnails or outline, page move and delete), marks them up, fills PDF form text fields and check boxes, signs, opens password-protected files, and exports PNG, JPEG and PDF. Gap: no Live Text (text recognition in pictures) and no radio, list or signature form fields."
   },
   {
    "id": "path:/System/Applications/QuickTime Player.app",
