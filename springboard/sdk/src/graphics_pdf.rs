@@ -1,8 +1,8 @@
 //! PDF documents for apps: open a file to read its pages (count, size, a rasterised picture of a page) and build a new
 //! file from drawn pages. The reader is `bifrost_render::cg::pdf` (`Doc`, `page`, `draw`); the writer is its
 //! `writer` module. Drawing is limited to what the writer emits: filled and stroked rectangles and lines, raster
-//! images, and text in the four standard faces ([`Face`], WinAnsi only). Text extraction and annotation editing stay
-//! in the PDF app.
+//! images, and text in the four standard faces ([`Face`], WinAnsi only). Reading gives the text of each page
+//! ([`Document::page_text`]); annotation editing stays in the PDF app.
 //!
 //! ```ignore
 //! let doc = graphics_pdf::Document::open(bytes)?;
@@ -98,6 +98,24 @@ impl Document {
             })
             .map(|page| page.index)
             .collect()
+    }
+
+    /// The text of page `index` (zero based): its lines in drawing order, joined with `\n`. None when the page does not
+    /// exist. This is the page's string without any selection or layout.
+    pub fn page_text(&self, index: usize) -> Option<String> {
+        let pages = page::pages(&self.doc);
+        let page = pages.get(index)?;
+        let mut ex = Extractor::new(&self.doc);
+        ex.page(page);
+        let lines: Vec<&str> = ex
+            .pieces
+            .iter()
+            .filter_map(|p| match p {
+                Piece::Line { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        Some(lines.join("\n"))
     }
 
     /// Page `index` as a picture scaled to fit `max_w` x `max_h` pixels, keeping its aspect.
@@ -291,6 +309,18 @@ mod tests {
         assert_eq!(doc.find("  SECOND page "), vec![1]);
         assert!(doc.find("   ").is_empty());
         assert!(doc.find("missing").is_empty());
+    }
+
+    #[test]
+    fn page_text_reads_back_the_text_of_one_page() {
+        let mut w = PdfWriter::new();
+        w.add_page(300.0, 200.0).draw_text("Hello World", 10.0, 150.0, 12.0, Face::Helvetica);
+        w.add_page(300.0, 200.0).draw_text("Second page", 10.0, 150.0, 12.0, Face::Times);
+        let doc = Document::open(w.finish()).expect("reads back");
+        assert!(doc.page_text(0).expect("page 0").contains("Hello World"));
+        assert!(doc.page_text(1).expect("page 1").contains("Second page"));
+        assert!(!doc.page_text(1).expect("page 1").contains("Hello"));
+        assert_eq!(doc.page_text(2), None);
     }
 
     #[test]

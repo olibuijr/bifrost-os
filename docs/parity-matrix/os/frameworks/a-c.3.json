@@ -3735,7 +3735,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-location.json",
    "status": "partial",
-   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json",
+   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json. Not ready: 5 of 11 owner features are partial: the device position source, the app location permission, the worldwide gazetteer, region triggers, magnetometer heading and background sessions.",
    "rea": [],
    "method": "assessed"
   },
@@ -3756,7 +3756,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-location.json",
    "status": "partial",
-   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json",
+   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json. Not ready: 5 of 11 owner features are partial: the device position source, the app location permission, the worldwide gazetteer, region triggers, magnetometer heading and background sessions.",
    "rea": [],
    "method": "assessed"
   },
@@ -3777,7 +3777,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-location.json",
    "status": "partial",
-   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json",
+   "note": "private framework, owner CoreLocation; from SDK matrix core-location.json. Not ready: 5 of 11 owner features are partial: the device position source, the app location permission, the worldwide gazetteer, region triggers, magnetometer heading and background sessions.",
    "rea": [],
    "method": "assessed"
   },
@@ -3942,7 +3942,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-motion.json",
    "status": "partial",
-   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json",
+   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer.",
    "rea": [],
    "method": "assessed"
   },
@@ -3963,7 +3963,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-motion.json",
    "status": "partial",
-   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json",
+   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer.",
    "rea": [],
    "method": "assessed"
   },
@@ -4117,9 +4117,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/books/engine/pdf; springboard/ui/src/print.rs",
+   "bifrost": "springboard/src/shell/books/engine/pdf; springboard/ui/src/print.rs; springboard/sdk/src/graphics_pdf.rs",
    "status": "partial",
-   "note": "Backs the PDFKit row. The Books reader parses PDF pages, text, images and outlines, and the SDK prints through the print module. No app-facing PDF document, annotation, form or selection API exists, and the reference's font-info tables are not used.",
+   "note": "Backs the PDFKit row. The Books reader parses PDF pages, text, images and outlines, and the SDK prints through the print module. The app-facing reader is graphics_pdf::Document (springboard/sdk/src/graphics_pdf.rs): pages, size, outline, find and render. Built 2026-10-17 (wave 6): page_text gives a page's text (graphics_pdf::tests::page_text_reads_back_the_text_of_one_page). Still open: annotations, AcroForm fields, selection, and the reference's font-info tables are not used.",
    "rea": [],
    "method": "assessed"
   },
@@ -4315,9 +4315,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "A local store of recent people and addresses (a recents table with contacts and metadata, used as recipients for Mail and Messages). Build a recents store for recipients that the mail and messages apps feed; BifrOSt's recent items list covers only apps and documents (springboard/src/shell/recent_items.rs). Built 2026-10-17: recipient recents store in springboard/ui/src/recipient_recents.rs (most recent first, capped, favourites kept, case-insensitive addresses); tests recipient_recents::tests. Still open: Mail and Messages do not feed it yet.",
+   "bifrost": "springboard/ui/src/recipient_recents.rs; springboard/apps/mail-desktop/src/state.rs (recipients)",
+   "status": "partial",
+   "note": "A local store of recent people and addresses (a recents table with contacts and metadata, used as recipients for Mail and Messages). Build a recents store for recipients that the mail and messages apps feed; BifrOSt's recent items list covers only apps and documents (springboard/src/shell/recent_items.rs). Built 2026-10-17: recipient recents store in springboard/ui/src/recipient_recents.rs (most recent first, capped, favourites kept, case-insensitive addresses); tests recipient_recents::tests. Built 2026-10-17 (wave 6): Mail records every address it sends to, most recent first (mail state recipients; tests state::tests::sent_addresses_are_suggested_most_recent_first). Still open: Messages does not feed the store, and Mail's compose does not offer the suggestions yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -4578,7 +4578,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-services.json",
    "status": "partial",
-   "note": "private framework, owner CoreServices; from SDK matrix core-services.json",
+   "note": "private framework, owner CoreServices; from SDK matrix core-services.json. Not ready: 6 of 18 owner features are partial: Apple Events descriptors, file metadata queries, dictionary lookup, backup exclusion, identity, event replay, launch roles and search terms.",
    "rea": [],
    "method": "assessed"
   },
@@ -4599,7 +4599,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-services.json",
    "status": "partial",
-   "note": "private framework, owner CoreServices; from SDK matrix core-services.json",
+   "note": "private framework, owner CoreServices; from SDK matrix core-services.json. Not ready: 6 of 18 owner features are partial: Apple Events descriptors, file metadata queries, dictionary lookup, backup exclusion, identity, event replay, launch roles and search terms.",
    "rea": [],
    "method": "assessed"
   },
@@ -4620,7 +4620,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-services.json",
    "status": "partial",
-   "note": "private framework, owner CoreServices; from SDK matrix core-services.json",
+   "note": "private framework, owner CoreServices; from SDK matrix core-services.json. Not ready: 6 of 18 owner features are partial: Apple Events descriptors, file metadata queries, dictionary lookup, backup exclusion, identity, event replay, launch roles and search terms.",
    "rea": [],
    "method": "assessed"
   },
@@ -5121,9 +5121,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/url.rs (the URL client's TLS stack, where the check belongs)",
-   "status": "gap",
-   "note": "No Certificate Transparency check runs on TLS connections, so a certificate that no log records is accepted. Build an embedded log list and signed-timestamp verification into the URL client's rustls stack; the framework binary is not in the extract, so this rests on its name.",
+   "bifrost": "springboard/sdk/src/ct_sct.rs (SCT parser); springboard/sdk/src/url.rs (the URL client's TLS stack, where the check belongs)",
+   "status": "partial",
+   "note": "No Certificate Transparency check runs on TLS connections, so a certificate that no log records is accepted. Build an embedded log list and signed-timestamp verification into the URL client's rustls stack; the framework binary is not in the extract, so this rests on its name. Built 2026-10-17 (wave 6): springboard/sdk/src/ct_sct.rs reads the SCT list from a DER certificate and counts the distinct known logs (ct_sct::tests). Still open: the SCT signatures are not checked, no log list ships, and the TLS client does not call the check.",
    "rea": [],
    "method": "assessed"
   },

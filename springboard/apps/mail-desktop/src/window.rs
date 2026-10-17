@@ -2439,6 +2439,9 @@ impl MailWindow {
         // a message on its way is done with its draft: the saved copy leaves Drafts
         self.discard_draft(compose);
         let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
+        for address in &recipients {
+            self.mail.recipients.record(address, "");
+        }
         if let Some((seconds, undoable)) = wait {
             let queued_id = self.mail.queue.new_id();
             self.mail.queue.outbox.push(Queued { id: queued_id, due: unix + seconds, account: account.id.clone(), from: draft.from.clone(), recipients, text, attempts: 0 });
