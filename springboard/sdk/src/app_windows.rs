@@ -40,11 +40,27 @@ pub struct WindowSpec {
     pub title: String,
     pub width: f32,
     pub height: f32,
+    /// Where the window goes, in points relative to the visible desktop area; the shell clamps it to the screen.
+    pub position: Option<(f32, f32)>,
+    /// The app wants `App::window_title_double_click` when the person double-clicks the title bar (the shell zooms otherwise).
+    pub title_double_click: bool,
 }
 
 impl WindowSpec {
     pub fn new(title: &str, width: f32, height: f32) -> Self {
-        Self { title: title.to_string(), width, height }
+        Self { title: title.to_string(), width, height, position: None, title_double_click: false }
+    }
+
+    /// Asks for the window at (x, y) points relative to the visible desktop area (a restored position).
+    pub fn at(mut self, x: f32, y: f32) -> Self {
+        self.position = Some((x, y));
+        self
+    }
+
+    /// Asks for `App::window_title_double_click` instead of the shell's zoom.
+    pub fn with_title_double_click(mut self) -> Self {
+        self.title_double_click = true;
+        self
     }
 }
 
@@ -55,6 +71,11 @@ pub struct AppWindow {
     pub title: String,
     pub width: f32,
     pub height: f32,
+    /// The last position the window was asked for or dragged to, in points relative to the visible desktop area.
+    pub position: Option<(f32, f32)>,
+    /// The window is collapsed to its title bar.
+    pub collapsed: bool,
+    pub title_double_click: bool,
 }
 
 /// Why a window request failed.
@@ -95,7 +116,7 @@ impl Default for AppWindows {
 impl AppWindows {
     /// A registry with the main window only, holding at most `limit` windows.
     pub fn new(limit: usize) -> Self {
-        let main = AppWindow { id: WindowId::MAIN, title: String::new(), width: 0.0, height: 0.0 };
+        let main = AppWindow { id: WindowId::MAIN, title: String::new(), width: 0.0, height: 0.0, position: None, collapsed: false, title_double_click: false };
         Self { windows: vec![main], limit: limit.max(1), next: 1 }
     }
 
@@ -120,7 +141,16 @@ impl AppWindows {
         }
         let id = WindowId(self.next);
         self.next += 1;
-        self.windows.insert(0, AppWindow { id, title: spec.title, width: spec.width, height: spec.height });
+        let window = AppWindow {
+            id,
+            title: spec.title,
+            width: spec.width,
+            height: spec.height,
+            position: spec.position,
+            collapsed: false,
+            title_double_click: spec.title_double_click,
+        };
+        self.windows.insert(0, window);
         Ok(id)
     }
 
@@ -139,6 +169,27 @@ impl AppWindows {
         }
         let index = self.index_of(id)?;
         Ok(self.windows.remove(index))
+    }
+
+    /// Records where an open window is: the app asked for a position, or the shell reported a drag. The main window has
+    /// no shell position.
+    pub fn set_position(&mut self, id: WindowId, x: f32, y: f32) -> Result<(), WindowError> {
+        if id.is_main() {
+            return Err(WindowError::MainWindow);
+        }
+        let index = self.index_of(id)?;
+        self.windows[index].position = Some((x, y));
+        Ok(())
+    }
+
+    /// Records whether an open window is collapsed to its title bar.
+    pub fn set_collapsed(&mut self, id: WindowId, collapsed: bool) -> Result<(), WindowError> {
+        if id.is_main() {
+            return Err(WindowError::MainWindow);
+        }
+        let index = self.index_of(id)?;
+        self.windows[index].collapsed = collapsed;
+        Ok(())
     }
 
     /// Sets the title and the size of an open window (the main window's size follows the shell's configure).
@@ -173,6 +224,16 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
             let window = WindowId(*id);
             let closed = !window.is_main() && ctx.windows.borrow_mut().close(window).is_ok();
             closed && app.window_closed(ctx, window)
+        }
+        ToApp::WindowMoved { window, x, y } => {
+            let id = WindowId(*window);
+            let moved = ctx.windows.borrow_mut().set_position(id, *x, *y).is_ok();
+            moved && app.window_moved(ctx, id, *x, *y)
+        }
+        ToApp::WindowTitleDoubleClick { window } => {
+            let id = WindowId(*window);
+            let wanted = ctx.windows.borrow().get(id).is_some_and(|w| w.title_double_click);
+            wanted && app.window_title_double_click(ctx, id)
         }
         ToApp::WindowConfigure { id, w, h } => {
             let window = WindowId(*id);
@@ -328,6 +389,14 @@ mod tests {
             self.log.push(format!("closed {}", window.0));
             true
         }
+        fn window_moved(&mut self, _: &crate::Ctx, window: WindowId, x: f32, y: f32) -> bool {
+            self.log.push(format!("moved {} {x} {y}", window.0));
+            true
+        }
+        fn window_title_double_click(&mut self, _: &crate::Ctx, window: WindowId) -> bool {
+            self.log.push(format!("double {}", window.0));
+            true
+        }
     }
 
     fn touch_down(id: u32) -> ToApp {
@@ -339,7 +408,7 @@ mod tests {
         let ctx = crate::runtime::test_ctx();
         let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
         assert_eq!(id, WindowId(1));
-        assert_eq!(ctx.take_sent(), vec![ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0 }]);
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }]);
     }
 
     #[test]
@@ -372,6 +441,28 @@ mod tests {
         assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowClosed { id: 0 }, 0.0), Some(false), "the main window never closes");
         assert_eq!(app.log, vec!["closed 1".to_string()]);
         assert!(ctx.windows().get(id).is_none());
+    }
+
+    #[test]
+    fn a_window_moves_collapses_and_only_an_opted_in_window_gets_the_double_click() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let spec = WindowSpec::new("Note", 200.0, 150.0).at(12.0, 40.0).with_title_double_click();
+        let id = ctx.open_window(spec).unwrap();
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowOpen { id: 1, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.0, 40.0)), flags: crate::proto::window_flags::TITLE_DOUBLE_CLICK }]
+        );
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowMoved { window: id.0, x: 30.0, y: 60.0 }, 0.0), Some(true));
+        assert_eq!(ctx.windows().get(id).and_then(|w| w.position), Some((30.0, 60.0)));
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowTitleDoubleClick { window: id.0 }, 0.0), Some(true));
+        ctx.set_window_collapsed(id, true).unwrap();
+        assert!(ctx.windows().get(id).is_some_and(|w| w.collapsed));
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowCollapse { window: 1, collapsed: true }]);
+        let plain = ctx.open_window(WindowSpec::new("Plain", 10.0, 10.0)).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowTitleDoubleClick { window: plain.0 }, 0.0), Some(false));
+        assert_eq!(app.log, vec!["moved 1 30 60".to_string(), "double 1".to_string()]);
+        assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 1.0), Err(WindowError::MainWindow));
     }
 
     #[test]
