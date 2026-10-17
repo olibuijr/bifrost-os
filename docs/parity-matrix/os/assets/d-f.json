@@ -1349,9 +1349,9 @@
    "description": "",
    "role": "Default desktop wallpaper (shown on a fresh account)",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/bin/shell.rs (dynamic still switch), springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "BifrOSt ships its own wallpaper set (6 Icelandic landscape JPEGs in springboard/wallpapers) with a default; the Apple default is a dynamic aerial (time-of-day HEIC) and BifrOSt has no dynamic wallpapers (gap); reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "BifrOSt ships its own wallpaper set (6 Icelandic landscape JPEGs in springboard/wallpapers) with a default. BifrOSt has a time-of-day dynamic wallpaper (wallpaper_schedule.rs: the day is cut into equal slices of packed stills, switched by a timer; Settings > Wallpaper switch wallpaper_dynamic, off by default) with tests in shell::wallpaper_schedule::tests. Partial: the Apple default is a dynamic aerial HEIC, not reproduced; the stills are BifrOSt art and the default is off; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default).",
    "rea": [],
    "method": "assessed"
   }
