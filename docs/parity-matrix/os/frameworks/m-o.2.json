@@ -2695,7 +2695,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/now-playing.json",
    "status": "partial",
-   "note": "private framework, owner NowPlaying; from SDK matrix now-playing.json",
+   "note": "private framework, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
    "rea": [],
    "method": "assessed"
   },

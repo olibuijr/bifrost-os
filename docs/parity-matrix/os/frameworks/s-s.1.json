@@ -474,7 +474,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/sound-analysis.json",
    "status": "partial",
-   "note": "from SDK matrix sound-analysis.json",
+   "note": "from SDK matrix sound-analysis.json Refreshed 2026-10-17: not ready, remaining: No sound classifier: no built-in label set (over 300 sounds) and no Core ML audio model path | No SDK audio input API: the audio service records to a file only (RecordStart and RecordStop), so apps cannot receive a live buffer stream | No analysis of audio files: springboard/src/media/audiofile.rs decodes files only | No result types for time-ranged classifications with confidences, and no observer delivery to apps",
    "rea": [],
    "method": "assessed"
   },

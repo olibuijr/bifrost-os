@@ -68,21 +68,21 @@
       "apple": "PHASESoundEventNodeDefinition, PHASESwitchNodeDefinition, PHASERandomNodeDefinition, PHASEBlendNodeDefinition, PHASEContainerNodeDefinition, PHASESoundEvent",
       "bifrost": "springboard/ui/src/sound_event.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playback is a flat track queue (springboard/src/media/queue.rs); no event tree"
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playback is a flat track queue (springboard/src/media/queue.rs); no event tree Refreshed 2026-10-17: covered by springboard/ui/src/sound_event.rs (Container, Switch, Random, Blend); tests sound_event::tests."
     },
     {
       "feature": "Runtime parameters and envelopes",
       "apple": "PHASEMetaParameter, PHASENumberMetaParameter, PHASEStringMetaParameter, PHASEMappedMetaParameterDefinition, PHASEEnvelope, PHASEEnvelopeSegment, PHASECurveType",
       "bifrost": "springboard/ui/src/sound_envelope.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API to change in-flight audio parameters over time"
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API to change in-flight audio parameters over time Refreshed 2026-10-17: covered by springboard/ui/src/sound_envelope.rs; tests sound_envelope::tests."
     },
     {
       "feature": "Groups and ducking",
       "apple": "PHASEGroup, PHASEGroupPreset, PHASEDucker",
       "bifrost": "springboard/ui/src/sound_group.rs (Group",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the sound server mixes streams; apps cannot share parameters or duck competing sounds"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the sound server mixes streams; apps cannot share parameters or duck competing sounds Refreshed 2026-10-17: covered by springboard/ui/src/sound_group.rs (group gain and ducking); tests sound_group::tests."
     },
     {
       "feature": "Loudness normalization and calibration",
@@ -100,12 +100,10 @@
     }
   ],
   "gaps": [
-    "No 3D sound: no source position, listener or orientation, and no spatialization or HRTF output",
-    "No occlusion, geometry or material acoustics",
-    "No reverb or environmental effects API",
-    "No sound event graph (switch, random, blend, container nodes) for apps",
-    "No runtime metaparameters or envelopes for changing audio over time",
-    "No groups or ducking across apps",
-    "SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable"
+    "No HRTF or head-tracked binaural output: the listener model gives pan gains, distance and occlusion gains only.",
+    "SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable",
+    "Occlusion is a transmission gain over boxes (sound_space Occluder); no geometry or material acoustics.",
+    "Reverb: sound_room gives reverb time and critical distance, but no applied reverb or environment effect reaches the output.",
+    "Groups and ducking: sound_group models a group gain and a ducker, but the audio service applies neither across apps."
   ]
 }

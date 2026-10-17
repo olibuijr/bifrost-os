@@ -493,7 +493,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },
@@ -4262,7 +4262,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },
@@ -4283,7 +4283,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },
@@ -4304,7 +4304,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },
@@ -4325,7 +4325,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },
@@ -4346,7 +4346,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
    "method": "assessed"
   },

@@ -47,7 +47,7 @@
       "apple": "CIColorCube, CIColorMap, CIPalettize, CIConvertLab, CIConvertRGBtoLab, CIColorCubeWithColorSpace",
       "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colormap.rs, springboard/render/src/colorlab.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
       "status": "partial",
-      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget."
+      "note": "Colour cube lookup, colour maps, RGB and Lab palettes and the CIE L*a*b* conversion are tested headless in tests/parity_sdk-complete-01.rs. Gap: no SDK filter wraps them for apps, the conversions ignore ICC profiles and rendering intents, and nothing is verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/colormap.rs (Palette snaps colours in RGB or CIE Lab); tests colormap::tests and tests/parity_sdk-complete-01.rs."
     },
     {
       "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
@@ -89,7 +89,7 @@
       "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
       "bifrost": "springboard/render/src/generators.rs (checkerboard, stripes, linear_gradient, radial_gradient); springboard/render/src/gradient.rs; springboard/sdk/src/image_filter.rs (linear_gradient for apps); springboard/render/src/generators.rs (random noise)",
       "status": "partial",
-      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test."
+      "note": "Checkerboard, stripes, and linear and radial gradient generators are pure models tested headless in tests/parity_sdk-complete-01.rs. Apps get the linear gradient through image_filter. Gap: there is no QR or barcode generator, no SDK API for the checkerboard, stripes or radial gradient, and nothing is verified on Midget. Built 2026-10-17: CIRandomGenerator as generators::random, with a determinism test. Refreshed 2026-10-17: generators::tests covers the generator models."
     },
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
@@ -131,7 +131,7 @@
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
       "bifrost": "springboard/render/src/halftone_tile_filters.rs (kaleidoscope, op_tile, affine_tile); springboard/render/src/tile_shapes.rs (triangle, parallelogram, perspective tiles)",
       "status": "partial",
-      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget."
+      "note": "Kaleidoscope, op tile and affine tile are tested headless in springboard/render/tests/parity_sdk-tests-17.rs. Built 2026-10-17: triangle, parallelogram and perspective tiles are CPU models in tile_shapes.rs with host tests; their cell shapes are this model's own, not the reference cells. Not yet wired into an app or verified on Midget. Refreshed 2026-10-17: covered by springboard/render/src/tile_shapes.rs (triangle_tile, parallelogram_tile, perspective_tile); tests tile_shapes::tests."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
@@ -177,10 +177,10 @@
     "Colour: the temperature and tint model is a gain approximation, not a white-point conversion. Photos uses brightness and contrast only.",
     "Feature detection covers axis-aligned bright rectangles only. No perspective quadrilaterals, faces, text, barcodes, or barcode and QR generation.",
     "Depth blur needs an app-supplied depth map; there is no depth estimation from stereo or a single image, and no lens shape.",
-    "Missing filters: triangle and parallelogram tiles, the perspective tile (CIPerspectiveTile), and the torus lens and circle splash profiles are approximate. Comic and spot light exist; see stylize and tile rows.",
+    "Tiles: the torus lens and circle splash profiles are approximate. Triangle, parallelogram and perspective tiles exist (tile_shapes.rs).",
     "Photo looks approximate the reference tone curves; they are not exact.",
-    "Colour lookup: palettize is missing; colour cube, colour map and Lab are models only.",
     "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
-    "The built-in filter catalogue lists 28 filters by name; the full reference catalogue is not covered."
+    "The built-in filter catalogue lists 28 filters by name; the full reference catalogue is not covered.",
+    "Colour lookup: no SDK filter wraps the colour cube, colour map, Lab or palette models; apps cannot reach them."
   ]
 }

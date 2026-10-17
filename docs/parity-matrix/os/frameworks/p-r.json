@@ -61,7 +61,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/phase.json",
    "status": "partial",
-   "note": "from SDK matrix phase.json",
+   "note": "from SDK matrix phase.json Refreshed 2026-10-17: not ready, remaining: No HRTF or head-tracked binaural output: the listener model gives pan gains, distance and occlusion gains only. | SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable | Occlusion is a transmission gain over boxes (sound_space Occluder); no geometry or material acoustics. | Reverb: sound_room gives reverb time and critical distance, but no applied reverb or environment effect reaches the output. | Groups and ducking: sound_group models a group gain and a ducker, but the audio service applies neither across apps.",
    "rea": [],
    "method": "assessed"
   },
