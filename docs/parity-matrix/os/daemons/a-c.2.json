@@ -3169,17 +3169,8 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/exchange_notes.rs",
    "status": "partial",
-   "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Not wired: the Notes app and an Exchange account type in Settings.",
-   "rea": [],
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "exchange_notes::tests"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: the Exchange notes source (SDK exchange_notes.rs) lists, reads, creates, updates and deletes notes in the mailbox's notes folder over Exchange Web Services (HTTPS only, plain-text bodies, paged and batched reads, a change diff for the app to import). Open: the Notes app does not call it yet and Settings has no Exchange account type; the app passes the server address and the login from the passwords store."
+   "note": "Syncs Notes with Exchange accounts. Built 2026-10-17: SDK exchange_notes.rs (EWS FindItem, GetItem, CreateItem, UpdateItem, DeleteItem against the notes folder; tests exchange_notes::tests). Not wired: the Notes app and an Exchange account type in Settings. Lead 2026-10-17: not ready: the Notes app does not call exchange_notes and Settings has no Exchange account yet.",
+   "rea": []
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.notificationcenterui.plist",
@@ -5292,23 +5283,9 @@
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
    "status": "partial",
-   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item) and the bounded folder scan (spotindex::scan_folder, index_folder; tests spotindex::tests). Missing: importers for binary formats and the start-up scan call.",
+   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item) and the bounded folder scan (spotindex::scan_folder, index_folder; tests spotindex::tests). Missing: importers for binary formats and the start-up scan call. Lead 2026-10-17: not ready: the shell does not call index_folder at start-up yet.",
    "rea": [],
-   "method": "heuristic",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::spotindex::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "mdimport::tests"
-    }
-   ],
-   "ready_note": "Importers read a file head and give the index a title, description and keywords by content type (mdimport.rs: text importer plus file-name fallback); spotindex::scan_folder walks a folder breadth first (regular files only, no links, no hidden names, bounded depth and count) and index_folder feeds the result to the index. Open: no importers for binary formats (PDF, image, office) and the shell does not call index_folder at start-up yet."
+   "method": "heuristic"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.spotlightknowledged.plist",
