@@ -3,7 +3,8 @@
 //! screen. Geometry follows the bifrost mini: 65 pt tiles, 10 pt gaps, the
 //! cluster 34 pt from the right edge and 68 pt from the top.
 
-use super::app_controls::AppControls;
+use super::app_controls::{join_pref, pref_app_keys, AppControlEntry, AppControls};
+use super::controls::{draw_switch, SWITCH_H_PT, SWITCH_W_PT};
 use super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use bifrost_ui::control_widget::ControlKind;
 use std::time::Duration;
@@ -110,6 +111,24 @@ pub fn app_hit(ui: &Ui, w: i32, count: usize, x: f32, y: f32) -> Option<usize> {
     (0..count).find(|&i| inside(app_tile_rect(ui, w, i), x, y))
 }
 
+/// The Edit Controls button, under the rows of `count` app control tiles, (x, y, w, h) in px.
+pub fn edit_button_rect(ui: &Ui, w: i32, count: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    let rows = count.div_ceil(APP_COLS) as f32;
+    (x, y + ui.pt(BIG_PITCH_PT + 2.0 * PITCH_PT + SMALL_PT + GAP_PT + rows * PITCH_PT), ui.pt(2.0 * BIG_PT + GAP_PT), ui.pt(32.0))
+}
+
+/// Row `index` of the Edit Controls list, which replaces the cluster while it is open: (x, y, w, h) in px.
+pub fn gallery_row_rect(ui: &Ui, w: i32, index: usize) -> (f32, f32, f32, f32) {
+    let (x, y) = origin(ui, w);
+    (x, y + ui.pt(ROW_PT) * index as f32, ui.pt(2.0 * BIG_PT + GAP_PT), ui.pt(ROW_PT))
+}
+
+/// The Edit Controls row under (x, y), of `rows` rows.
+pub fn gallery_hit(ui: &Ui, w: i32, rows: usize, x: f32, y: f32) -> Option<usize> {
+    (0..rows).find(|&i| inside(gallery_row_rect(ui, w, i), x, y))
+}
+
 /// Where a tile sits, (x, y, w, h) in px.
 pub fn tile_rect(ui: &Ui, w: i32, tile: Tile) -> (f32, f32, f32, f32) {
     let (x, y) = origin(ui, w);
@@ -178,6 +197,10 @@ enum Touch {
     Scrub,
     /// a finger on an app control tile (its index in the panel's order): released there, it uses the control
     App(usize),
+    /// a finger on the Edit Controls button
+    Edit,
+    /// a finger on a row of the Edit Controls list (the last row is Done)
+    Gallery(usize),
 }
 
 /// How long a finger rests on a module before it expands, like bifrost.
@@ -367,11 +390,13 @@ pub struct ControlCenter {
     bounce: Option<(Tile, SymbolEffect)>,
     /// the app controls shown under the built-in modules, in panel order
     pub app_controls: AppControls,
+    /// the Edit Controls list is showing in place of the modules
+    pub editing: bool,
 }
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new() }
+        ControlCenter { state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
     }
 }
 
@@ -424,6 +449,7 @@ impl ControlCenter {
         self.backdrop = None;
         self.expanded = None;
         self.press = None;
+        self.editing = false;
     }
 
     /// When a resting finger turns into an expansion.
@@ -433,6 +459,9 @@ impl ControlCenter {
 
     fn settle(&mut self, from: f32, shown: bool, t: f64) {
         self.touch = None;
+        if !shown {
+            self.editing = false;
+        }
         self.state = State::Settling { from, to: if shown { 1.0 } else { 0.0 }, start: t };
     }
 
@@ -487,6 +516,8 @@ impl Shell {
         let range = self.ui.pt(REVEAL_PT);
         match (self.cc.state, ev) {
             (State::Hidden, Event::Down(x, y)) if self.cc_reveal_zone(x, y) => {
+                let candidates = self.cc_candidates();
+                self.restore_app_controls(&candidates);
                 let sharp = self.snapshot_screen(t);
                 self.cc.backdrop = Some(Frost::new(sharp, (self.ui.pt(BLUR_PT) / 4.0) as usize, 140));
                 self.cc.state = State::Dragging(Drag::new(y, t, 0.0, range));
@@ -516,10 +547,121 @@ impl Shell {
         parse_slots(self.prefs.get(MODULES_PREF).unwrap_or(""))
     }
 
+    /// Every app control the running apps declare, in the order the apps are running.
+    fn cc_candidates(&self) -> Vec<AppControlEntry> {
+        self.ext
+            .iter()
+            .flatten()
+            .flat_map(|h| h.controls.iter().map(move |c| AppControlEntry { app_id: h.id.clone(), control: c.clone(), identifier: c.identifier(&h.id) }))
+            .collect()
+    }
+
+    /// Puts back on the panel each app control the saved list names, once its app declares it.
+    fn restore_app_controls(&mut self, candidates: &[AppControlEntry]) {
+        for key in pref_app_keys(self.prefs.get(MODULES_PREF).unwrap_or("")) {
+            if self.cc.app_controls.keys().contains(&key) {
+                continue;
+            }
+            if let Some(c) = candidates.iter().find(|c| c.identifier == key) {
+                let _ = self.cc.app_controls.add(&c.app_id, c.control.clone());
+            }
+        }
+    }
+
+    /// Adds an app control to the panel, or takes it off when it is already there, and saves the list.
+    fn toggle_app_control(&mut self, c: &AppControlEntry) {
+        if self.cc.app_controls.keys().contains(&c.identifier) {
+            self.cc.app_controls.remove(&c.identifier);
+        } else {
+            let _ = self.cc.app_controls.add(&c.app_id, c.control.clone());
+        }
+        let slots = self.cc_slots();
+        self.cc_save(&slots);
+    }
+
+    /// Writes the module list and the app controls on the panel to `MODULES_PREF`.
+    fn cc_save(&mut self, slots: &[ModuleSlot]) {
+        let text = save_text(slots, &self.cc.app_controls.keys());
+        let _ = self.prefs.set(MODULES_PREF, &text);
+    }
+
+    /// Opens the Edit Controls list and brings back the app controls the saved list names.
+    fn cc_open_edit(&mut self) {
+        let candidates = self.cc_candidates();
+        self.restore_app_controls(&candidates);
+        self.cc.editing = true;
+    }
+
+    /// The Edit Controls row under (x, y), while the list is open.
+    fn cc_gallery_at(&self, x: f32, y: f32) -> Option<usize> {
+        gallery_hit(&self.ui, self.w, self.cc_gallery_rows(), x, y)
+    }
+
+    /// The rows of the Edit Controls list: every module, then every app control, then Done.
+    fn cc_gallery_rows(&self) -> usize {
+        DEFAULT_MODULES.len() + self.cc_candidates().len() + 1
+    }
+
+    /// Uses the Edit Controls row `index`: a module is shown or hidden, an app control is added or removed, Done closes.
+    fn cc_gallery_tap(&mut self, index: usize) {
+        let modules = DEFAULT_MODULES.len();
+        if index < modules {
+            let tile = DEFAULT_MODULES[index];
+            let mut slots = self.cc_slots();
+            if let Some(slot) = slots.iter_mut().find(|m| m.tile == tile) {
+                slot.shown = !slot.shown;
+            }
+            self.cc_save(&slots);
+        } else if index < self.cc_gallery_rows() - 1 {
+            let candidates = self.cc_candidates();
+            if let Some(c) = candidates.get(index - modules) {
+                self.toggle_app_control(c);
+            }
+        } else {
+            self.cc.editing = false;
+        }
+    }
+
+    /// Draws the Edit Controls list over the frosted backdrop, in the cluster's place.
+    fn draw_gallery(&self, s: &mut Surface, slide: f32, alpha: u32) {
+        let ui = &self.ui;
+        let a = |c: u32| scale(c, alpha);
+        let candidates = self.cc_candidates();
+        let rows = DEFAULT_MODULES.len() + candidates.len() + 1;
+        let slots = self.cc_slots();
+        let (x0, y0, w0, _) = gallery_row_rect(ui, self.w, 0);
+        s.fill_rrect(x0, y0 + slide, w0, ui.pt(ROW_PT) * rows as f32, ui.pt(RADIUS_PT), a(rgba(118, 118, 128, 96)));
+        for i in 0..rows {
+            let (x, y, w, h) = gallery_row_rect(ui, self.w, i);
+            let y = y + slide;
+            if i == rows - 1 {
+                let done = ui.text("Done", 15.0, Weight::Semibold, BLUE);
+                s.blit(&done, (x + (w - done.w as f32) / 2.0) as i32, (y + (h - done.h as f32) / 2.0) as i32, 255, alpha);
+                continue;
+            }
+            let (title, on) = if i < DEFAULT_MODULES.len() {
+                let tile = DEFAULT_MODULES[i];
+                (module_title(tile).to_string(), slots.iter().find(|m| m.tile == tile).is_none_or(|m| m.shown))
+            } else {
+                let c = &candidates[i - DEFAULT_MODULES.len()];
+                (c.control.title.clone(), self.cc.app_controls.keys().contains(&c.identifier))
+            };
+            let label = ui.text(&title, 13.0, Weight::Regular, WHITE);
+            s.blit(&label, (x + ui.pt(12.0)) as i32, (y + (h - label.h as f32) / 2.0) as i32, 255, alpha);
+            let (sw, sh) = (ui.pt(SWITCH_W_PT), ui.pt(SWITCH_H_PT));
+            draw_switch(s, ui, x + w - sw - ui.pt(12.0), y + (h - sh) / 2.0, if on { 1.0 } else { 0.0 });
+        }
+    }
+
     /// The tile under (x, y) that the cluster is showing: a module the user hid does not answer a finger.
     fn cc_tile_at(&self, x: f32, y: f32) -> Option<Tile> {
         let slots = self.cc_slots();
         hit(&self.ui, self.w, x, y).filter(|&t| tile_visible(&slots, t))
+    }
+
+    /// Whether (x, y) is on the Edit Controls button under the app control rows.
+    fn cc_edit_at(&self, x: f32, y: f32) -> bool {
+        inside(edit_button_rect(&self.ui, self.w, self.cc.app_controls.entries().len()), x, y)
     }
 
     /// The app control tile under (x, y), if any.
@@ -528,6 +670,14 @@ impl Shell {
     }
 
     fn cc_down(&mut self, x: f32, y: f32, t: f64, range: f32) -> Vec<Effect> {
+        if self.cc.editing {
+            self.cc.touch = self.cc_gallery_at(x, y).map(Touch::Gallery);
+            return vec![];
+        }
+        if self.cc_edit_at(x, y) {
+            self.cc.touch = Some(Touch::Edit);
+            return vec![];
+        }
         if let Some(i) = self.cc_app_at(x, y) {
             self.cc.press = None;
             self.cc.touch = Some(Touch::App(i));
@@ -573,6 +723,14 @@ impl Shell {
         match self.cc.touch.take() {
             Some(Touch::Tile(tile)) if self.cc_tile_at(x, y) == Some(tile) => self.activate_tile(tile, t),
             Some(Touch::App(index)) if self.cc_app_at(x, y) == Some(index) => self.activate_app(index),
+            Some(Touch::Edit) if self.cc_edit_at(x, y) => {
+                self.cc_open_edit();
+                vec![]
+            }
+            Some(Touch::Gallery(index)) if self.cc_gallery_at(x, y) == Some(index) => {
+                self.cc_gallery_tap(index);
+                vec![]
+            }
             Some(Touch::Outside(mut d)) => {
                 d.moved(y, t);
                 let tap = d.travel().abs() < self.ui.pt(TAP_PT);
@@ -817,6 +975,10 @@ impl Shell {
             _ => None,
         };
         let labels = self.cc.labels.as_ref().unwrap();
+        if self.cc.editing {
+            self.draw_gallery(s, slide, (alpha * 255.0) as u32);
+            return;
+        }
 
         // connectivity: airplane, nearby, wi-fi and bluetooth circles
         let (nx, ny, nw, nh) = network_tile(ui, self.w);
@@ -949,6 +1111,16 @@ impl Shell {
             let tx = (x + (w - title.w as f32) / 2.0).max(x) as i32;
             s.blit(&title, tx, (y + h - ui.pt(16.0)) as i32, 255, (alpha * 255.0) as u32);
         }
+
+        // Edit Controls: opens the list of modules and app controls
+        let (ex, ey, ew, eh) = edit_button_rect(ui, self.w, self.cc.app_controls.entries().len());
+        let mut bg = tile_bg;
+        if matches!(self.cc.touch, Some(Touch::Edit)) {
+            bg = over(bg, a(rgba(255, 255, 255, 50)));
+        }
+        s.fill_rrect(ex, ey + slide, ew, eh, eh / 2.0, bg);
+        let label = ui.text("Edit Controls", 13.0, Weight::Semibold, BLUE);
+        s.blit(&label, (ex + (ew - label.w as f32) / 2.0) as i32, (ey + slide + (eh - label.h as f32) / 2.0) as i32, 255, (alpha * 255.0) as u32);
 
         if let Some(e) = self.cc.expanded {
             self.draw_expanded(s, e, (alpha * 255.0) as u32);
@@ -1292,6 +1464,52 @@ mod tests {
         // a built-in module's centre is not an app tile
         let (wx, wy) = centre(&sh, Tile::Wifi);
         assert_eq!(app_hit(&sh.ui, sh.w, 12, wx, wy), None);
+    }
+
+    fn notes_candidates() -> Vec<AppControlEntry> {
+        let control = super::super::app_controls::ManifestControl { kind: ControlKind::Toggle, title: "Quiet Hours".into(), symbol: "moon".into(), intent: "set-quiet".into() };
+        vec![AppControlEntry { app_id: "is.olibuijr.notes".into(), identifier: control.identifier("is.olibuijr.notes"), control }]
+    }
+
+    #[test]
+    fn gallery_module_row_hides_and_shows_a_module_and_saves_it() {
+        let mut sh = shell();
+        let wifi = DEFAULT_MODULES.iter().position(|&t| t == Tile::Wifi).unwrap();
+        sh.cc_gallery_tap(wifi);
+        assert!(!tile_visible(&sh.cc_slots(), Tile::Wifi));
+        assert!(sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
+        sh.cc_gallery_tap(wifi);
+        assert!(tile_visible(&sh.cc_slots(), Tile::Wifi));
+        assert!(!sh.prefs.get(MODULES_PREF).unwrap_or("").contains("-wifi"));
+    }
+
+    #[test]
+    fn gallery_app_control_add_remove_persists_and_comes_back() {
+        let mut sh = shell();
+        let candidates = notes_candidates();
+        sh.toggle_app_control(&candidates[0]);
+        assert_eq!(sh.cc.app_controls.keys(), vec!["is.olibuijr.notes.set-quiet"]);
+        assert!(sh.prefs.get(MODULES_PREF).unwrap_or("").contains("app:is.olibuijr.notes.set-quiet"));
+        // a fresh panel gets the control back from the saved list, once its app declares it
+        sh.cc.app_controls = AppControls::new();
+        sh.restore_app_controls(&candidates);
+        assert_eq!(sh.cc.app_controls.keys(), vec!["is.olibuijr.notes.set-quiet"]);
+        sh.toggle_app_control(&candidates[0]);
+        assert!(sh.cc.app_controls.keys().is_empty());
+        assert!(!sh.prefs.get(MODULES_PREF).unwrap_or("").contains("app:"));
+    }
+
+    #[test]
+    fn edit_controls_opens_the_list_and_done_closes_it() {
+        let mut sh = shell();
+        let (x, y, w, h) = edit_button_rect(&sh.ui, sh.w, 0);
+        assert!(sh.cc_edit_at(x + w / 2.0, y + h / 2.0));
+        sh.cc_open_edit();
+        assert!(sh.cc.editing);
+        let (rx, ry, rw, rh) = gallery_row_rect(&sh.ui, sh.w, 0);
+        assert_eq!(sh.cc_gallery_at(rx + rw / 2.0, ry + rh / 2.0), Some(0));
+        sh.cc_gallery_tap(sh.cc_gallery_rows() - 1);
+        assert!(!sh.cc.editing);
     }
 
     #[test]
@@ -2090,6 +2308,30 @@ pub fn set_menu_bar_item(items: &mut Vec<Tile>, tile: Tile, on: bool) {
 /// Whether the battery item shows its percentage, from the pref text.
 pub fn battery_percent_shown(pref: Option<&str>) -> bool {
     pref.map(str::trim) == Some("1")
+}
+
+/// The name a module has in the Edit Controls list. Media tiles have none (they are not listed).
+pub fn module_title(tile: Tile) -> &'static str {
+    match tile {
+        Tile::Airplane => "Airplane Mode",
+        Tile::Nearby => "Nearby Sharing",
+        Tile::Wifi => "Wi-Fi",
+        Tile::Bluetooth => "Bluetooth",
+        Tile::RotationLock => "Rotation Lock",
+        Tile::Mirror => "Screen Mirroring",
+        Tile::Focus => "Focus",
+        Tile::Silent => "Silent Mode",
+        Tile::Timer => "Timer",
+        Tile::Camera => "Camera",
+        Tile::Brightness => "Brightness",
+        Tile::Volume => "Volume",
+        Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext => "",
+    }
+}
+
+/// The modules pref text for the module list and the app controls on the panel (`join_pref`).
+pub fn save_text(slots: &[ModuleSlot], app_keys: &[String]) -> String {
+    join_pref(&format_slots(slots), app_keys)
 }
 
 /// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
