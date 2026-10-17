@@ -2958,6 +2958,38 @@ where Apple keeps one per device. Audit of the other panes (Trackpad, Print & Sc
 pages exist (`pages.rs`, `print_scan_page.rs`, `sharing_page.rs`, `internet_accounts_page.rs`, `users_page.rs`); their parity rows are
 `partial` with the missing parts listed, none `parity` until checked on Midget.
 
+## System Settings: shared list rows (`springboard/src/shell/list.rs`)
+
+Every Settings list page draws through `list::Item`. Two accessories were added for the per-app lists. Existing rows
+are unchanged unless they ask for them.
+
+- **Leading app icon.** `Item::app_icon(app_id)` draws the installed app's icon at the detail row's icon token
+  (`ROW_ICON`, 23 pt, at `ROW_ICON_X`), through `apphost::icon_image`, which calls `bifrost_render::icon_doc::app_icon`
+  (see "Layered app icons"). The label moves to `ROW_LABEL_X`, as for a row with a symbol tile. A built-in app has no
+  package, so its slot is blank and the label still moves in. Sidebar rows do not take the app icon.
+- **Trailing pop-up button.** `Item::popup(choices, selected, action)` sets `Accessory::Popup`. The button shows the
+  chosen label in the label colour, then up and down chevrons at the row's right edge (`popup_layout`). Tapping the
+  row opens a menu (`ListPage::open_popup`) built on the kit's menu model (`bifrost_ui::menu::Menu::popup`) and placed
+  by `popup_origin`: the selected item sits over the button and the menu stays below the bar. The menu is a translucent
+  card (`MATERIAL_MENU`, 14 pt radius) with a checkmark on the chosen item and the touched item filled with
+  `MENU_HIGHLIGHT`. Its metrics are the desktop menus' (24 pt rows, 11 pt separators, 5 pt padding).
+- **Choosing.** A touch on a menu row is `Hit::Choice(k)`; a touch elsewhere is `Hit::Dismiss` and closes the menu. A
+  touch on the menu's padding or separators does nothing. `Settings::activate` closes the menu and sends
+  `pages::chosen(&row.action, k)`, the row's action with the choice in its place. Only the location access edit maps a
+  choice today (`Edit::Access`, index into `LocationAccess::ALL`); other actions map to None and the touch does nothing.
+  A restricted app's access popup is dimmed (`Tint::Dim`) and does not open.
+- **Per-app lists.** Location Services (`location_page.rs`): each app's row is its icon and an access popup (Never,
+  Ask Next Time, While Using the App), replacing the pushed checkmark page (`PageId::LocationAccess` is gone). The
+  Precise Location switch and "Used in the last 24 hours" rows stay. App Permissions (Camera, Microphone, Screen
+  Recording, Location) and Background App Refresh show each app's icon on its switch row. They keep switches: the store
+  records only allowed or not allowed for them, with no Ask state, so a two-item popup would be a switch in disguise.
+  Screen Time's allowed-apps list is not converted.
+
+Gaps: icons come from the installed package only (no fallback glyph for a built-in app), and the popup has no keyboard
+path (arrow keys and type-to-select of the kit menu are not wired to the list). Host-tested only: the layout and hit
+tests are in `list.rs`, the choice mapping in `pages.rs` and `location_page.rs`. Parity rows stay `partial` until
+checked on Midget.
+
 ## Launch agents and daemons (OS daemons, role map)
 
 No new API. The shell performs the roles of the reference launchd agents (Dock, Finder desktop, controlcenter,
@@ -3006,12 +3038,12 @@ Privacy model (owner decision, follows the reference platform):
   location (Set Location… asks for latitude then longitude in two one-field sheets, validated to -90..90 and
   -180..180, a decimal comma is accepted; Clear removes it; no network geocoding, so the place has no city or
   country); and one row group per app that has an answer in the privacy store (`privacy_permissions::location_asked`):
-  an access row whose value is Never, Ask Next Time or While Using the App (it pushes a page with the three choices;
-  Ask Next Time forgets the answer so the next request shows the sheet again), a Precise Location switch
+  an access pop-up on the row with Never, Ask Next Time or While Using the App (Ask Next Time forgets the answer so the
+  next request shows the sheet again; see "System Settings: shared list rows"), a Precise Location switch
   (`location.precise.<id>`), and "Used in the last 24 hours" (a check while the last fix is within 24 h). Pref writes
   go through `Effect::Location`, which the shell saves to `settings.ini`. Apps that have only been asked, and not
-  answered, are not listed: the store keeps no entry for them. Gaps: no app icon in the rows (the list rows have no
-  image slot), the access page has no Allow Once choice, and the page is host-tested only until checked on Midget.
+  answered, are not listed: the store keeps no entry for them. Gaps: the access popup has no Allow Once choice, and the
+  page is host-tested only until checked on Midget.
 
 Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m), set in Settings > Privacy & Security
 > Location Services. Gaps still open: the city and country of the fixed place (no geocoding, so they stay empty), the

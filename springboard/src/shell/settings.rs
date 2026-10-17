@@ -654,7 +654,7 @@ impl Settings {
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
-            PageId::LocationServices | PageId::LocationAccess(_) => super::location_page::spec(id, &self.location, super::services::location::now_unix()),
+            PageId::LocationServices => super::location_page::spec(&self.location, super::services::location::now_unix()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value }),
             _ => spec(id, &self.model()),
         }
@@ -2140,20 +2140,46 @@ impl Settings {
     }
 
     fn activate(&mut self, ui: &Ui, prefs: &mut Prefs, hit: Hit, t: f64) -> Vec<Effect> {
-        let (g, i) = match hit {
+        // (group, item, the pop-up choice when the touch chose one from an open menu)
+        let (g, i, choice) = match hit {
             Hit::Back => {
                 self.pop(t);
                 return vec![];
             }
-            Hit::Row(g, i) => (g, i),
+            Hit::Row(g, i) => (g, i, None),
+            Hit::Choice(k) => match self.list_mut().and_then(|p| p.close_popup()) {
+                Some((g, i)) => (g, i, Some(k)),
+                None => return vec![],
+            },
+            Hit::Dismiss => {
+                if let Some(p) = self.list_mut() {
+                    p.close_popup();
+                }
+                return vec![];
+            }
             Hit::Slider(..) => return vec![],
         };
         let Some(page) = self.list() else { return vec![] };
         let item = page.item(g, i).clone();
+        if choice.is_none() && item.popup.is_some() {
+            // a pop-up row opens its menu; the menu's choice comes back as `Hit::Choice`
+            if let Some(p) = self.list_mut() {
+                p.open_popup(ui, g, i);
+            }
+            return vec![];
+        }
         if !item.tappable() {
             return vec![];
         }
-        match item.action {
+        // a choice sends the row's action with the chosen index
+        let action = match choice {
+            Some(k) => match super::pages::chosen(&item.action, k) {
+                Some(action) => action,
+                None => return vec![],
+            },
+            None => item.action.clone(),
+        };
+        match action {
             Action::None | Action::Slider(_) => vec![],
             Action::Push(id) => {
                 if matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp | PageId::UserDetail | PageId::GroupDetail) {

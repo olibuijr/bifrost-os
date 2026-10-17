@@ -155,12 +155,25 @@ pub fn app_rows(store: &Store, now: f64) -> Vec<AppRow> {
         .collect()
 }
 
-/// The page for `id`: the main page, or one app's access page (the index into [`app_rows`]).
-pub fn spec(id: PageId, store: &Store, now: f64) -> Spec {
-    match id {
-        PageId::LocationAccess(index) => access_page(id, store, now, index),
-        _ => main_page(store, now),
+/// An app's access row: its icon and a pop-up of the three choices, the current one selected.
+fn access_row(r: &AppRow) -> Item {
+    let current = LocationAccess::of(r.status);
+    let choices = LocationAccess::ALL.iter().map(|c| c.label().to_string()).collect();
+    let selected = LocationAccess::ALL.iter().position(|c| *c == current).unwrap_or(0);
+    let item = Item::new(r.name.as_str())
+        .app_icon(r.app_id.as_str())
+        .popup(choices, selected, Action::Location(Edit::Access { app: r.app_id.clone(), choice: current }));
+    // a restricted app's answer cannot change: its popup shows greyed out and does not open
+    if r.status == AuthorizationStatus::Restricted {
+        item.tint(Tint::Dim)
+    } else {
+        item
     }
+}
+
+/// The Location Services page. Each app's access is a pop-up on its row (Never, Ask Next Time, While Using the App).
+pub fn spec(store: &Store, now: f64) -> Spec {
+    main_page(store, now)
 }
 
 fn main_page(store: &Store, now: f64) -> Spec {
@@ -183,10 +196,9 @@ fn main_page(store: &Store, now: f64) -> Spec {
         vec![Item::new("No apps have asked to use location")]
     } else {
         rows.iter()
-            .enumerate()
-            .flat_map(|(i, r)| {
+            .flat_map(|r| {
                 vec![
-                    Item::new(r.name.as_str()).value(privacy::access_label_of(r.status)).link(PageId::LocationAccess(i)),
+                    access_row(r),
                     Item::new("Precise Location").switch(r.precise, Action::Location(Edit::Precise { app: r.app_id.clone(), on: !r.precise })),
                     Item::new("Used in the last 24 hours").check(r.used_recently, Action::None),
                 ]
@@ -200,28 +212,11 @@ fn main_page(store: &Store, now: f64) -> Spec {
     Spec { id: PageId::LocationServices, title: "Location Services".into(), large: false, groups: vec![services, system, apps] }
 }
 
-fn access_page(id: PageId, store: &Store, now: f64, index: usize) -> Spec {
-    let Some(row) = app_rows(store, now).into_iter().nth(index) else {
-        return Spec { id, title: "Location Services".into(), large: false, groups: vec![] };
-    };
-    let current = LocationAccess::of(row.status);
-    let items: Vec<Item> = LocationAccess::ALL
-        .iter()
-        .map(|choice| Item::new(choice.label()).check(*choice == current, Action::Location(Edit::Access { app: row.app_id.clone(), choice: *choice })))
-        .collect();
-    let mut footer = String::from(
-        "Never: the app cannot use your location. Ask Next Time: the app asks each time it needs your location. While Using the App: the app uses your location only while you use it.",
-    );
-    if row.status == AuthorizationStatus::Restricted {
-        footer.push_str(" This app is restricted by the system, so this setting cannot change.");
-    }
-    Spec { id, title: row.name.clone(), large: false, groups: vec![Group::new(items).footer(&footer)] }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::list::Accessory;
+    use super::super::list::{Accessory, Popup};
+    use super::super::pages;
 
     const NOW: f64 = 1_000_000.0;
 
@@ -348,7 +343,7 @@ mod tests {
         privacy::set_location_access(b, LocationAccess::Never);
         location::record_use(a, NOW - 10.0);
         let store = Store { services_on: true, manual: Some((65.68, -18.1)), precise: BTreeSet::from([a.to_string()]) };
-        let s = spec(PageId::LocationServices, &store, NOW);
+        let s = spec(&store, NOW);
         assert_eq!(s.groups.len(), 3);
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
         assert_eq!(s.groups[1].items[0].value, "65.6800, -18.1000");
@@ -358,19 +353,22 @@ mod tests {
         let apps = &s.groups[2].items;
         assert_eq!(apps.len(), 6, "three rows per app");
         let pa = apps.iter().position(|i| i.label == a).expect("row for a");
-        assert_eq!(apps[pa].value, "While Using the App");
-        assert_eq!(apps[pa].action, Action::Push(PageId::LocationAccess(0)));
+        assert_eq!(apps[pa].accessory, Accessory::Popup, "the access is a pop-up on the row");
+        assert_eq!(apps[pa].app_icon.as_deref(), Some(a));
+        assert_eq!(apps[pa].popup, Some(Popup { choices: vec!["Never".into(), "Ask Next Time".into(), "While Using the App".into()], selected: 2 }));
+        assert_eq!(apps[pa].action, Action::Location(Edit::Access { app: a.into(), choice: LocationAccess::WhileUsing }));
         assert_eq!(apps[pa + 1].accessory, Accessory::Switch(true));
         assert_eq!(apps[pa + 1].action, Action::Location(Edit::Precise { app: a.into(), on: false }));
         assert_eq!(apps[pa + 2].accessory, Accessory::Check(true), "used in the last 24 hours");
         let pb = apps.iter().position(|i| i.label == b).expect("row for b");
-        assert_eq!(apps[pb].value, "Never");
+        assert_eq!(apps[pb].popup.as_ref().map(|p| p.selected), Some(0), "Never is the first choice");
+        assert_eq!(apps[pb].tint, Tint::Plain);
         assert_eq!(apps[pb + 2].accessory, Accessory::Check(false));
     }
 
     #[test]
     fn the_main_page_with_the_switch_off_offers_to_turn_it_on_and_no_clear_without_a_place() {
-        let s = spec(PageId::LocationServices, &Store::default(), NOW);
+        let s = spec(&Store::default(), NOW);
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
         assert_eq!(s.groups[0].items[0].action, Action::Location(Edit::Services(false)));
         assert_eq!(s.groups[1].items[0].value, "Not Set");
@@ -379,20 +377,29 @@ mod tests {
     }
 
     #[test]
-    fn an_app_page_checks_its_current_access_and_names_the_choice_it_sends() {
-        let a = "is.example.loc-page-detail";
+    fn the_access_popup_sends_the_row_action_with_the_chosen_index() {
+        let a = "is.example.loc-page-popup-map";
         privacy::set_location_access(a, LocationAccess::AskNextTime);
-        let index = app_rows(&Store::default(), NOW).iter().position(|r| r.app_id == a).expect("a has asked");
-        let s = spec(PageId::LocationAccess(index), &Store::default(), NOW);
-        let items = &s.groups[0].items;
-        assert_eq!(items.iter().map(|i| i.accessory.clone()).collect::<Vec<_>>(), [Accessory::Check(false), Accessory::Check(true), Accessory::Check(false)]);
-        assert_eq!(items[0].action, Action::Location(Edit::Access { app: a.into(), choice: LocationAccess::Never }));
-        assert_eq!(items[2].label, "While Using the App");
+        let s = spec(&Store::default(), NOW);
+        let row = s.groups[2].items.iter().find(|i| i.label == a).cloned();
+        let row = row.expect("a has asked, so it has a row");
+        assert_eq!(row.popup.as_ref().map(|p| p.selected), Some(1));
+        let edit = |choice| Action::Location(Edit::Access { app: a.into(), choice });
+        assert_eq!(pages::chosen(&row.action, 0), Some(edit(LocationAccess::Never)));
+        assert_eq!(pages::chosen(&row.action, 2), Some(edit(LocationAccess::WhileUsing)));
+        assert_eq!(pages::chosen(&row.action, 3), None, "no fourth choice");
+        assert_eq!(pages::chosen(&Action::None, 0), None, "only location rows map a choice");
     }
 
     #[test]
-    fn an_app_page_for_a_missing_row_is_empty() {
-        assert!(spec(PageId::LocationAccess(99), &Store::default(), NOW).groups.is_empty());
+    fn a_restricted_app_shows_its_popup_greyed_out_and_does_not_open() {
+        let row = |status| AppRow { app_id: "is.example.restricted".into(), name: "Restricted".into(), status, precise: false, used_recently: false };
+        let restricted = access_row(&row(AuthorizationStatus::Restricted));
+        assert_eq!(restricted.tint, Tint::Dim);
+        assert!(!restricted.tappable(), "a dimmed popup does not open");
+        let open = access_row(&row(AuthorizationStatus::AuthorizedWhenInUse));
+        assert_eq!(open.tint, Tint::Plain);
+        assert!(open.tappable());
     }
 
     #[test]

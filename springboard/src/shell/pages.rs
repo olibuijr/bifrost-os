@@ -88,8 +88,6 @@ pub enum PageId {
     PrivacyPermissions,
     /// Privacy › Location Services: the global switch, System location and each app (see `location_page::spec`)
     LocationServices,
-    /// Location Services › one app's access popup (the index into `location_page::app_rows`)
-    LocationAccess(usize),
     Storage,
     /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
     Graphics,
@@ -1357,7 +1355,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `permissions_page`, which reads the installed apps and their answers
         PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
         // built by `location_page::spec`, which reads the prefs and the location answers
-        PageId::LocationServices | PageId::LocationAccess(_) => page("Location Services", false, vec![]),
+        PageId::LocationServices => page("Location Services", false, vec![]),
     }
 }
 
@@ -1367,6 +1365,18 @@ pub fn shortcut_label(features: &[Feature]) -> String {
         [] => "None".into(),
         [one] => one.name().into(),
         many => format!("{} Features", many.len()),
+    }
+}
+
+/// The setting a pop-up row sends for its `choice` index: the row's action with the choice in place of its own.
+/// None when the row's action has no choices or the index is out of range.
+pub fn chosen(row: &Action, index: usize) -> Option<Action> {
+    match row {
+        Action::Location(super::location_page::Edit::Access { app, .. }) => {
+            let choice = *super::services::privacy_permissions::LocationAccess::ALL.get(index)?;
+            Some(Action::Location(super::location_page::Edit::Access { app: app.clone(), choice }))
+        }
+        _ => None,
     }
 }
 
@@ -1388,7 +1398,7 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
             } else {
                 rows.iter()
                     .enumerate()
-                    .map(|(i, r)| Item::new(r.name.as_str()).switch(r.access.can_capture(*media), Action::Toggle(Toggle::Permission(*media, i))))
+                    .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.access.can_capture(*media), Action::Toggle(Toggle::Permission(*media, i))))
                     .collect()
             };
             Group::new(items).header(header).footer(footer)
@@ -1400,7 +1410,7 @@ pub fn permissions_page(rows: &[Row]) -> Spec {
     } else {
         rows.iter()
             .enumerate()
-            .map(|(i, r)| Item::new(r.name.as_str()).switch(r.location.is_authorized(), Action::Toggle(Toggle::Location(i))))
+            .map(|(i, r)| Item::new(r.name.as_str()).app_icon(r.app_id.as_str()).switch(r.location.is_authorized(), Action::Toggle(Toggle::Location(i))))
             .collect()
     };
     groups.push(Group::new(location).header("LOCATION").footer("Apps that may use your location while you use them. A switch is on only when you allow it."));
