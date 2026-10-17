@@ -913,6 +913,7 @@ pub mod model_provider;
 pub mod model_attachment;
 pub mod music;
 pub mod loudness;
+pub mod codec_manifest;
 pub mod indexset;
 pub mod tracking;
 pub mod wheel;
