@@ -15,7 +15,7 @@ windows (`shell/mod.rs`, `pip::draw_window`).
 
 - The window sits in a corner of the usable screen, which excludes the menu bar and the Dock. The rectangle is computed
   for the video's aspect ratio. The visible part is clipped to the surface, with fractions rounded outward.
-- Settings > Desktop has the "Start PiP Automatically" switch (`pip_auto`). The switch only gates the automatic start.
+- The "Start PiP Automatically" switch in Settings is stored as `pip_auto`. The switch only gates the automatic start.
   The player's own opt-in still applies.
 
 ## Gaps
