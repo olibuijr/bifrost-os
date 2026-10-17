@@ -40,11 +40,22 @@ pub struct ManagedContext<R> {
     /// Saved objects whose values are not in memory (faults). Each is also in `saved` and never in `working`.
     faults: BTreeSet<ObjectId>,
     next_id: ObjectId,
+    /// Each saved change with the transaction (save) it was saved in, oldest first.
+    history: Vec<(u64, ObjectId, Change)>,
+    /// The number of saves so far: the transaction token of the latest save. Zero before the first save.
+    transactions: u64,
 }
 
 impl<R> Default for ManagedContext<R> {
     fn default() -> Self {
-        ManagedContext { saved: BTreeMap::new(), working: BTreeMap::new(), faults: BTreeSet::new(), next_id: 1 }
+        ManagedContext {
+            saved: BTreeMap::new(),
+            working: BTreeMap::new(),
+            faults: BTreeSet::new(),
+            next_id: 1,
+            history: Vec::new(),
+            transactions: 0,
+        }
     }
 }
 
@@ -155,7 +166,21 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
             }
         }
         self.saved = next;
+        self.transactions += 1;
+        let token = self.transactions;
+        self.history.extend(changes.iter().map(|(id, change)| (token, *id, *change)));
         changes
+    }
+
+    /// The transaction token of the latest save: zero before the first save, and one more after each save.
+    pub fn transaction_token(&self) -> u64 {
+        self.transactions
+    }
+
+    /// The changes saved after `token`, oldest first, each with its identity. A sync client keeps the token of its last
+    /// pull and asks for what came after it. A context restored from a store starts its history again at zero.
+    pub fn changes_since(&self, token: u64) -> Vec<(ObjectId, Change)> {
+        self.history.iter().filter(|(t, _, _)| *t > token).map(|(_, id, change)| (*id, *change)).collect()
     }
 
     /// Discards the working changes: the working copy becomes the saved state again.
@@ -184,6 +209,8 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
             saved,
             faults: BTreeSet::new(),
             next_id: next_id.max(floor),
+            history: Vec::new(),
+            transactions: 0,
         }
     }
 
@@ -244,6 +271,34 @@ impl<R: Clone + PartialEq + Record> FetchedResults<R> {
 mod tests {
     use super::*;
     use crate::fetch::{Field, Op, Predicate};
+
+    #[test]
+    fn changes_are_recorded_per_save_and_pulled_from_a_token() {
+        let mut c = ManagedContext::new();
+        assert_eq!(c.transaction_token(), 0);
+        let a = c.insert(note("a", 1));
+        c.save();
+        assert_eq!(c.transaction_token(), 1);
+        assert_eq!(c.changes_since(0), vec![(a, Change::Inserted)]);
+        c.update(a, |n| n.pages = 2).unwrap();
+        let b = c.insert(note("b", 3));
+        c.save();
+        assert_eq!(c.transaction_token(), 2);
+        assert_eq!(c.changes_since(1), vec![(a, Change::Updated), (b, Change::Inserted)]);
+        assert!(c.changes_since(2).is_empty(), "a client up to date gets nothing");
+    }
+
+    #[test]
+    fn rolled_back_edits_are_not_in_the_history() {
+        let mut c = ManagedContext::new();
+        let a = c.insert(note("a", 1));
+        c.save();
+        c.update(a, |n| n.pages = 9).unwrap();
+        c.rollback();
+        assert!(!c.has_changes());
+        assert_eq!(c.changes_since(0), vec![(a, Change::Inserted)]);
+        assert_eq!(c.transaction_token(), 1);
+    }
 
     #[test]
     fn live_results_refresh_only_when_the_rows_change() {
