@@ -286,11 +286,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
    "status": "partial",
    "note": "from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::sound_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::list::action_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "Local notifications are complete: categories and their buttons (drawn on banners), requests, delivery with the per-request sound, and the user's response. Remote push, calendar and location triggers and the runtime authorization query stay open in the matrix."
   },
   {
    "id": "path:/System/Library/Frameworks/UserNotificationsUI.framework",
@@ -307,11 +326,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications-ui.json",
+   "bifrost": "docs/parity-matrix/data/user-notifications-ui.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
    "status": "partial",
    "note": "from SDK matrix user-notifications-ui.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::sound_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::list::action_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "The shell draws the notification cards: banners with their category's action buttons, stacks on the lock screen and in Notification Center."
   },
   {
    "id": "path:/System/Library/Frameworks/VideoDecodeAcceleration.framework",
@@ -3511,11 +3549,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
    "status": "partial",
    "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::sound_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::list::action_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "The local-notification model behind UserNotifications (requests, categories, delivery and responses) is covered by the same checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserNotificationsKit.framework",
@@ -3532,11 +3589,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
    "status": "partial",
    "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::sound_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::list::action_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif::tests"
+    }
+   ],
+   "ready_note": "The local-notification model behind UserNotifications (requests, categories, delivery and responses) is covered by the same checks."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserNotificationsServices.framework",
