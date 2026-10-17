@@ -13,6 +13,7 @@ pub mod icon_doc;
 pub mod imgdec;
 pub mod image_tiles;
 pub mod ui;
+pub mod theme;
 pub mod cache;
 pub mod purgeable;
 pub mod clipboard;
