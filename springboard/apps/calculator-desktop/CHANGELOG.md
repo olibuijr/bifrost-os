@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.0 — 2026-10-17
+
+- Window > Always on Top: a checked item that keeps the calculator window above the other windows. The shell
+  keeps the level while the app runs (`bifrost_app::windows::set_level`).
+
 ## 1.11.3 — 2026-10-14
 
 - History uses the shared Golden Gate source-list rows; calculator geometry now names its display, menu and history

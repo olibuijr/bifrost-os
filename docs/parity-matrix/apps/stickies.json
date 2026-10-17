@@ -11,10 +11,10 @@
  "summary": {
   "features": 33,
   "parity": 5,
-  "partial": 25,
-  "gap": 2,
+  "partial": 26,
+  "gap": 1,
   "n/a": 1,
-  "coverage_pct": 54.7
+  "coverage_pct": 56.3
  },
  "features": [
   {
@@ -210,10 +210,10 @@
    "feature": "Float on Top",
    "area": "menu",
    "apple": "MainMenu: Window > Float on Top",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the shell protocol has no window level message, so an app cannot ask for an always-on-top window. Notes share one window.",
-   "wire": "Add a window level message to the shell protocol (proto) and the window manager; then make each note its own window or offer Float on Top for the board window, with a checked item."
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1127",
+   "note": "Window > Float on Top is a ticked item for the board window, routed as Calculator's Always on Top (ToShell::WindowLevel, desk band order, bifrost_window_level_v1, window server band). Notes still share one window, so the float covers the whole board window. Built and run only on the host by reading: not verified on Midget.",
+   "wire": "Build the workspace and check Window > Float on Top on Midget with another window raised over the board; make each note its own window if a per-note float is wanted."
   },
   {
    "feature": "Translucent",

@@ -1690,6 +1690,7 @@ impl Calculator {
 }
 
 mod menu;
+pub use menu::{window_menu, MENU_ALWAYS_ON_TOP};
 
 #[cfg(test)]
 mod convert_tests;

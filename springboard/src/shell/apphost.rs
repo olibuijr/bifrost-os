@@ -404,6 +404,8 @@ pub struct AppHost {
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
     /// activity keeps the app from being suspended when it leaves the foreground.
     pub activity: u32,
+    /// `ToShell::WindowLevel`: the stacking level the app asked for its window (`Normal` until it asks).
+    pub window_level: bifrost_proto::WindowLevel,
     /// Set by `begin_quit`: when (monotonic ms) a Quit that was not answered turns into SIGKILL.
     quit_at: Option<f64>,
     /// The dock badge the app set (`ToShell::SetBadge`), already cleaned by `clean_badge`.
@@ -521,6 +523,7 @@ impl AppHost {
             quick_actions: Vec::new(),
             sudden: false,
             activity: 0,
+            window_level: Default::default(),
             quit_at: None,
             doc_title: String::new(),
             doc_edited: false,
@@ -908,6 +911,12 @@ impl AppHost {
             ToShell::Activity { options } => {
                 self.activity = options;
                 crate::bare::sleep::note_app_activity(&self.id, options);
+            }
+            ToShell::WindowLevel(level) => {
+                if self.window_level != level {
+                    self.window_level = level;
+                    out.frame = true;
+                }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.frame=true;}},
@@ -2246,6 +2255,19 @@ mod route_tests {
         assert_eq!(rest.requests.len(), 4, "the rest of the flood is read on the next passes, in order");
         assert_eq!(rest.requests.first(), Some(&ToShell::Notify { title: "6".into(), body: String::new() }));
         assert!(matches!(peer.recv(false), Ok(Recv::Empty)));
+    }
+
+    #[test]
+    fn a_window_level_request_is_kept_for_the_app() {
+        let (mut host, _peer) = fixture_host();
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Floating), Vec::new(), &mut out);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Floating);
+        assert!(out.requests.is_empty(), "the level is not passed on to the shell's requests");
+        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Normal), Vec::new(), &mut out);
+        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
+        host.kill();
     }
 
     #[test]

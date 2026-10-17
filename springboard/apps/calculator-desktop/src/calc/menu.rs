@@ -27,6 +27,15 @@ const MENU_ROLL_DOWN: u32 = 53;
 
 /// The history row context menu.
 const CTX_COPY_RESULT: u32 = 1;
+
+/// Window > Always on Top: the item's id (outside the ids of the calculator's own menus). The shell app keeps the
+/// checked state (`CalculatorApp.floating`) and sends the window level.
+pub const MENU_ALWAYS_ON_TOP: u32 = 300;
+
+/// The Window menu: Always on Top, checked while the window floats.
+pub fn window_menu(floating: bool) -> AppMenu {
+    AppMenu { title: "Window".into(), items: vec![AppMenuItem::new(MENU_ALWAYS_ON_TOP, "Always on Top").checked(floating)] }
+}
 const CTX_COPY_EXPRESSION: u32 = 2;
 const CTX_DELETE: u32 = 3;
 
@@ -302,6 +311,21 @@ mod tests {
         assert_eq!(item(&menus, "View", "Scientific").key, "cmd+2");
         assert_eq!(item(&menus, "View", "Programmer").key, "cmd+3");
         assert_eq!(item(&menus, "View", "RPN Mode").key, "cmd+r");
+    }
+
+    #[test]
+    fn the_window_menu_lists_always_on_top_checked_while_it_floats() {
+        let (ui, app) = landscape();
+        let mut menus = app.menus(&ui);
+        let ids: Vec<u32> = menus.iter().flat_map(|m| m.items.iter()).map(|i| i.id).collect();
+        assert!(!ids.contains(&MENU_ALWAYS_ON_TOP), "the Window item id is not one of the calculator's own");
+        menus.push(window_menu(false));
+        assert!(!item(&menus, "Window", "Always on Top").checked);
+        assert_eq!(item(&menus, "Window", "Always on Top").id, MENU_ALWAYS_ON_TOP);
+        let mut floating = app.menus(&ui);
+        floating.push(window_menu(true));
+        assert!(item(&floating, "Window", "Always on Top").checked);
+        assert_eq!(floating.last().map(|m| m.title.as_str()), Some("Window"), "the Window menu comes after the calculator's");
     }
 
     #[test]

@@ -30,6 +30,7 @@ pub mod wl_touch;
 pub mod wayland;
 #[cfg(feature = "desktop-wayland")]
 pub mod material_client;
+pub mod window_level_client;
 
 #[cfg(feature="desktop-wayland")]
 pub mod desktop_input;
