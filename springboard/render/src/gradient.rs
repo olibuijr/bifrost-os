@@ -94,6 +94,22 @@ pub fn cross_fade(from: &Ramp, to: &Ramp, phase: f32, t: f32) -> Rgb {
     Rgb::new(a.r + (b.r - a.r) * p, a.g + (b.g - a.g) * p, a.b + (b.b - a.b) * p)
 }
 
+/// One frame of an animated diagonal poster: each pixel of a `width` by `height` buffer (row-major)
+/// takes the cross-faded colour of `from` and `to` along the line from the top-left corner to the
+/// bottom-right corner, at the phase `ping_pong_phase(time, period)`. An empty size gives an empty buffer.
+pub fn animated_frame(from: &Ramp, to: &Ramp, width: usize, height: usize, time: f32, period: f32) -> Vec<Rgb> {
+    let phase = ping_pong_phase(time, period);
+    let (w, h) = (width as f32, height as f32);
+    let mut out = Vec::with_capacity(width.saturating_mul(height));
+    for y in 0..height {
+        for x in 0..width {
+            let t = linear_t((0.0, 0.0), (w, h), x as f32 + 0.5, y as f32 + 0.5);
+            out.push(cross_fade(from, to, phase, t));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +200,17 @@ mod tests {
         assert!(close(half.r, 0.5) && close(half.g, 0.5) && close(half.b, 0.5));
         assert_eq!(cross_fade(&black, &white, 2.0, 0.3), WHITE, "phase above one is clamped");
         assert_eq!(cross_fade(&black, &white, f32::NAN, 0.3), BLACK);
+    }
+
+    #[test]
+    fn animated_frame_follows_the_phase_over_the_whole_buffer() {
+        let black = Ramp::new(&[(0.0, BLACK), (1.0, BLACK)]).unwrap();
+        let white = Ramp::new(&[(0.0, WHITE), (1.0, WHITE)]).unwrap();
+        let start = animated_frame(&black, &white, 4, 3, 0.0, 4.0);
+        assert_eq!(start.len(), 12);
+        assert!(start.iter().all(|&c| c == BLACK));
+        let peak = animated_frame(&black, &white, 4, 3, 2.0, 4.0);
+        assert!(peak.iter().all(|&c| c == WHITE));
+        assert!(animated_frame(&black, &white, 0, 3, 0.0, 4.0).is_empty());
     }
 }

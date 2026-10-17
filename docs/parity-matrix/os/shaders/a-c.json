@@ -690,7 +690,16 @@
    "status": "partial",
    "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    }
+   ],
+   "ready_note": "Ready: the depth-driven portrait blur is implemented as CPU pixel code in springboard/render/src/depth_blur.rs (disparity-to-depth mapping, blur weights from focus and falloff, depth_blur over an image), with tests render::depth_blur::tests. The Core Image kernel itself is not reproduced; large images run slower."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/CIPortraitBlurStitchableV3.metallib",
@@ -711,7 +720,16 @@
    "status": "partial",
    "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    }
+   ],
+   "ready_note": "Ready: the depth-driven portrait blur is implemented as CPU pixel code in springboard/render/src/depth_blur.rs (disparity-to-depth mapping, blur weights from focus and falloff, depth_blur over an image), with tests render::depth_blur::tests. The Core Image kernel itself is not reproduced; large images run slower."
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_filters.metallib",
@@ -1287,7 +1305,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the physically based shading function is in springboard/render/src/pbr.rs (GGX distribution, Smith geometry, Schlick Fresnel, Lambert diffuse, one directional light, metallic blend), with tests render::pbr::tests. The GPU shader is not reproduced yet; the 3D scene (springboard/ui/src/scene_material.rs, scene_light.rs) does not yet draw through it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/Metal/ComputeShaders.metallib",
