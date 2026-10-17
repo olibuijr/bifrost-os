@@ -82,8 +82,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Overlay for HealthKit, an Apple health-record framework (n/a in the SDK matrix). BifrOSt has no health data store, so the App Intents health layer has no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -124,8 +124,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
-   "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
+   "status": "n/a",
+   "note": "Overlay for the visionOS compositor (spatial rendering). BifrOSt runs on flat displays only, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -268,8 +268,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "n/a",
+   "note": "Overlay for FinanceKit, which reads Apple Wallet and bank data from Apple financial services. BifrOSt has no financial data source, so there is no counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -1401,8 +1401,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/weather/data.rs; springboard/src/shell/photos/exif.rs",
-   "status": "partial",
-   "note": "Place geocoding for the Weather app is in weather/data.rs, and GPS fields are read from photos in exif.rs. BifrOSt has no device position source, location permission or geofencing.",
+   "status": "n/a",
+   "note": "Overlay for GeoToolbox, an Apple hosted geo data service (n/a in the SDK matrix). The Weather place lookup in springboard/src/shell/weather/data.rs is a separate feature and does not use that service.",
    "rea": [],
    "method": "assessed"
   },

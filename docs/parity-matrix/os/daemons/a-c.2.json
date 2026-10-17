@@ -266,8 +266,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/shield.rs",
-   "status": "partial",
-   "note": "Limit shield; no family group",
+   "status": "n/a",
+   "note": "Family group membership is run by Apple account services (Family Sharing). BifrOSt has no family group; the per-device limit shield in springboard/src/shell/screentime/shield.rs is the local part.",
    "rea": [],
    "method": "heuristic"
   },
@@ -371,7 +371,15 @@
    "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock",
    "status": "partial",
    "note": "The initramfs hook unlocks an encrypted root at boot with the volume key the loader leaves in an EFI variable, through cryptsetup on the LUKS2 segment. Not covered: recovery keys and enrolment of new unlock methods.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/lib/initcpio/hooks/bifrost-unlock"
+    }
+   ],
+   "ready_note": "The initramfs unlock hook, installed by packaging/arch/package-files.sh, unlocks the LUKS2 root at boot. Recovery keys and new unlock methods are not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.financed.plist",
@@ -675,7 +683,21 @@
    "bifrost": "springboard/src/shell/services/location.rs, springboard/sdk/src/core_location.rs",
    "status": "partial",
    "note": "The location model and the shell location service are in core_location.rs and shell/services/location.rs. Not built: the service that deletes cached map data.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location"
+    }
+   ],
+   "ready_note": "The location model (sdk core_location.rs) and the shell location service (shell/services/location.rs) are covered by their tests. Map cache deletion is not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.gputoolsserviced.plist",
@@ -716,7 +738,21 @@
    "bifrost": "springboard/src/shell/helpbook.rs, springboard/src/shell/help_viewer.rs, springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "Help books ship in app packages (manifest `help`), the shell indexes them at start and after installs (helpbook.rs), every Help menu has a search field listing menu items and help topics, and the help viewer window shows a book with contents, search, back and forward and help:// links (help_viewer.rs). Not verified on Midget yet; built-in SDK apps without a native window get no \"<App> Help\" row.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::helpbook"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::help_viewer"
+    }
+   ],
+   "ready_note": "Help books are indexed from app packages (shell/helpbook.rs) and shown in the help viewer (shell/help_viewer.rs), with the Help menu search in desktop_bar.rs; the index and viewer models are covered by their tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.homed.plist",
@@ -842,7 +878,21 @@
    "status": "partial",
    "note": "Local ranking only; no server-side hybrid search",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch"
+    }
+   ],
+   "ready_note": "On-device ranking of search results is in shell/services/search_ranking.rs, and the quick search UI in shell/quicksearch.rs. The server-side hybrid index is an Apple service and is not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.iCloudNotificationAgent.plist",
@@ -1259,7 +1309,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. springboard/updated only checks and stages OS update offers. The app install and migration coordinator is not built.",
    "rea": [],
    "method": "rule"
   },
@@ -1280,7 +1330,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. springboard/updated only checks and stages OS update offers. The app install daemon is not built.",
    "rea": [],
    "method": "rule"
   },
@@ -1301,7 +1351,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. Install authorisation is not built; springboard/updated handles OS update offers only.",
    "rea": [],
    "method": "rule"
   },
@@ -1485,7 +1535,21 @@
    "status": "partial",
    "note": "Keyboard input and layouts; no keyboard service daemon",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_input"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::keyboard"
+    }
+   ],
+   "ready_note": "Keyboard input handling and layouts are in shell/kb_input.rs and shell/keyboard.rs; the shell does this job without a separate service, covered by their tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.keychainsharingmessagingd.plist",
@@ -1888,8 +1952,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs",
-   "status": "partial",
-   "note": "Shell search index; no managed-device index",
+   "status": "n/a",
+   "note": "Builds the search index for managed (MDM) devices. BifrOSt has no device-management service (device-management is n/a in the SDK matrix); the local index is springboard/src/shell/spotindex.rs.",
    "rea": [],
    "method": "heuristic"
   },
@@ -2143,7 +2207,16 @@
    "status": "partial",
    "note": "role filled by spotindex.rs indexing; no separate process; no importer plug-in workers",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex"
+    }
+   ],
+   "ready_note": "The metadata worker job (indexing files and apps for search) is done by shell/spotindex.rs, which runs in the shell with no separate worker process."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mdworker.single.arm64.plist",
@@ -2380,7 +2453,16 @@
    "status": "partial",
    "note": "role filled by battery.rs and low_battery.rs; no separate process; no per-app energy details",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    }
+   ],
+   "ready_note": "The battery menu extra data (charge, state, low battery) is in shell/battery.rs; the helper job runs in the shell."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.messagesescrowd.plist",
@@ -2995,7 +3077,16 @@
    "status": "partial",
    "note": "role filled by notify/ (banner.rs, center.rs, lockwidgets.rs); no separate process; no notification-center widget gallery",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::center"
+    }
+   ],
+   "ready_note": "The notification centre is shell/notify/center.rs, with banners and lock-screen widgets in notify/. The widget gallery is not built and is listed in the row note."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.nsurlsessiond.plist",
@@ -3048,8 +3139,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/shield.rs",
-   "status": "partial",
-   "note": "Limit shield; no account-level parental controls",
+   "status": "n/a",
+   "note": "Account-level parental controls are run by Apple account services. BifrOSt has no account-level control; the per-device limit shield in springboard/src/shell/screentime/shield.rs covers the local part.",
    "rea": [],
    "method": "heuristic"
   },
@@ -3544,7 +3635,7 @@
    "doc": "",
    "bifrost": "springboard/updated",
    "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "note": "Open. Install progress reporting for apps is not built; springboard/updated reports only OS update progress.",
    "rea": [],
    "method": "rule"
   },
@@ -4041,8 +4132,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/privd/accounts.rs",
-   "status": "partial",
-   "note": "Screen sharing maps to the wayvnc.service unit; no Messages handoff",
+   "status": "n/a",
+   "note": "Hands screen sharing off to Messages, an Apple messaging service. BifrOSt screen sharing is the wayvnc unit, with no Messages integration.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4605,8 +4696,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/intents.rs",
-   "status": "partial",
-   "note": "App intents in the shell; no Siri routing",
+   "status": "n/a",
+   "note": "Routes App Intents to Siri, an Apple assistant service that BifrOSt does not ship. Intent dispatch on the desktop is in springboard/src/shell/intents.rs.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4671,7 +4762,16 @@
    "status": "partial",
    "note": "Speech output for accessibility; no Siri voices",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech"
+    }
+   ],
+   "ready_note": "Speech output for accessibility is shell/accessibility/speech.rs. Siri voice assets are Apple data and are not used."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.sociallayerd.plist",
@@ -4995,7 +5095,16 @@
    "status": "partial",
    "note": "Shell search index; no separate updater",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex"
+    }
+   ],
+   "ready_note": "Index refresh runs inside the shell index in shell/spotindex.rs; there is no separate updater process."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.stickersd.plist",
