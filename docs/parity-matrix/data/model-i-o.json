@@ -12,7 +12,7 @@
       "apple": "MDLAsset, MDLObject, MDLObjectContainer, MDLNamed",
       "bifrost": "springboard/ui/src/scene_object.rs (SceneObjects::add_root, add_child, find, descendants, is_rendered); springboard/ui/tests/parity_sdk-tests-18.rs",
       "status": "partial",
-      "note": "Headless tests in parity_sdk-tests-18 cover the named-node arena: paths, hidden subtrees, depth-first order and refused names. The module is not wired into apps or the shell, and it has no asset loader, so no 3D file format is read."
+      "note": "Headless tests in parity_sdk-tests-18 cover the named-node arena: paths, hidden subtrees, depth-first order and refused names. The module is not wired into apps or the shell, and it has no asset loader, so no 3D file format is read. Refreshed 2026-10-17: The file readers exist: ui mesh_file (OBJ read and write, STL and PLY read) and ui scene_source (OBJ into meshes, one per object). They do not yet fill a SceneObjects tree."
     },
     {
       "feature": "Transforms (local coordinate space)",
@@ -100,11 +100,11 @@
     }
   ],
   "gaps": [
-    "3D scene graph: no MDLAsset or MDLObject equivalent, and no 3D transform stack",
-    "Mesh data: no vertex descriptor, index buffer, submesh or buffer allocator exposed to apps",
-    "Material and shading model: no material properties, scattering functions or physically based lights",
-    "Import and export of 3D formats (OBJ, USD, PLY, STL, Alembic) and no 3D UTTypes in springboard/ui/src/uttype.rs",
-    "3D cameras and stereoscopic output",
+    "3D scene graph: no MDLAsset or MDLObject equivalent. ui scene_object::SceneObjects is an in-memory node arena with a transform stack and no asset file loader.",
+    "Mesh data: primitive meshes and mesh_process smooth normals exist in ui; no vertex descriptor, index buffer, submesh or buffer allocator is exposed to apps.",
+    "Material and shading model: scene_material properties and the CPU shading model in ui shading are not joined; there are no scattering functions, and scene_light lights are not rendered.",
+    "Import and export of 3D formats: OBJ read and write, STL and PLY read (ui mesh_file); OBJ objects via scene_source; 3D type identifiers for OBJ, STL and PLY exist in ui uttype. USD and Alembic are not read or written.",
+    "3D cameras and stereoscopic output: view_camera has projection and view matrices but no renderer consumes them, and there is no stereoscopic output.",
     "Skeletal animation (skeletons, joints, animated quaternions) and keyframe animation",
     "Procedural texture generators, texture samplers and mip filters for 3D surfaces",
     "Mesh processing: subdivision, ambient occlusion baking, light probe generation",

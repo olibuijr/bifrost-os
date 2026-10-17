@@ -19,7 +19,7 @@
    "apple": "MPSImageGaussianBlur, MPSImageBox, MPSImageTent",
    "bifrost": "springboard/render/src/gaussian_filter.rs (separable Gaussian by sigma, box and tent); springboard/render/src/gfx.rs:476 (three-pass CPU box blur); springboard/src/gpu/wl.rs:300 (GPU dual-Kawase blur pyramid)",
    "status": "partial",
-   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API."
+   "note": "Built on parity/team-k-metal-performance-shaders (commit 3a45ebef1): pure model with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Shell glass blur is still the separate GPU pyramid and CPU box blur; there is no app API. Refreshed 2026-10-17: sdk image_blur::BlurFilter::Gaussian applies the render crate's gaussian_blur to an app Image (tests image_blur::tests)."
   },
   {
    "feature": "Morphological filters (erode, dilate, area min and max)",
@@ -68,7 +68,7 @@
    "apple": "MPSImageScale, MPSImageLanczosScale, MPSImageBilinearScale",
    "bifrost": "springboard/render/src/lanczos.rs (Lanczos-3, antialiased when shrinking); springboard/render/src/gfx/rotate.rs:341 (bilinear taps); springboard/render/src/emoji.rs:401 (area-average down, bilinear up); springboard/render/src/gfx.rs:359 (bilinear asset resize)",
    "status": "partial",
-   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API."
+   "note": "Lanczos-3 and bilinear and area-average paths. The Lanczos model is pure, with host unit tests; not wired into apps or the shell, not yet verified on the VM or Midget. Not exposed through an SDK image API. Refreshed 2026-10-17: ui/src/image_kernels.rs has the LanczosScale kernel (CILanczosScaleTransform) behind the ImageKernel trait; no sdk call resamples with it yet."
   },
   {
    "feature": "Image arithmetic and pixel conversion",
@@ -129,10 +129,9 @@
  ],
  "gaps": [
   "No app-facing GPU compute or image-filter API. The GPU path (springboard/src/gpu/) serves the shell only.",
-  "No histogram, threshold, morphology, convolution or statistics filters for images.",
-  "No neural network or recurrent layers, and no ML inference runtime anywhere in springboard.",
-  "No GPU matrix or linear algebra kernels.",
-  "Resampling is bilinear or area-average in the shell. Lanczos exists only as an unwired pure model (springboard/render/src/lanczos.rs).",
-  "Blur is shell-internal. The Gaussian, box and tent model (springboard/render/src/gaussian_filter.rs) has no SDK entry point and is not used by the shell."
+  "No app-facing convolution with a caller kernel and no app-facing image statistics; plane_stats is shell-side. Histogram, threshold, morphology, median, Sobel and Laplacian are app-facing in sdk pixel_filter (2026-10-17).",
+  "No graph object and no GPU path for neural network layers. CPU layers exist (ui cnn_layers: convolution, pooling, dense, relu, LSTM and GRU steps; sdk core_ml: dense, relu and softmax models), but apps cannot build a graph or serialise a model beyond its text form.",
+  "No GPU matrix or linear algebra kernels. CPU vector, matrix and quaternion types are in sdk linear_algebra.",
+  "Resampling is bilinear or area-average in the shell. Lanczos is the LanczosScale kernel in ui image_kernels, with no sdk resample call."
  ]
 }
