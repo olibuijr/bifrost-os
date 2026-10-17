@@ -711,6 +711,8 @@ pub mod voxel_array;
 pub mod mesh_primitives;
 pub mod mesh_file;
 pub mod mesh_process;
+/// Lossy compact byte format for `PrimitiveMesh` data (quantized positions, octahedral normals, delta indices).
+pub mod mesh_compress;
 pub mod procedural_texture;
 pub mod asset_resolver;
 pub mod stereo_camera;
