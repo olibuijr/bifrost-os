@@ -62,6 +62,9 @@ pub(crate) const MENU_COPY_PATH: u32 = 30;
 pub(crate) const MENU_SAVE_SEARCH: u32 = 31;
 /// File > New Window (⌘N): a second Files window at the home folder.
 pub(crate) const MENU_NEW_WINDOW: u32 = 32;
+/// View > Group By Name and Group By Size (the panel offers None, Kind and Date).
+pub(crate) const MENU_GROUP_NAME: u32 = 33;
+pub(crate) const MENU_GROUP_SIZE: u32 = 34;
 
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
@@ -116,6 +119,8 @@ impl Files {
                 ContextItem { id: MENU_GROUP_NONE, label: if self.vo.group == Group::None { "✓ Group By None".into() } else { "Group By None".into() }, enabled: true },
                 ContextItem { id: MENU_GROUP_KIND, label: if self.vo.group == Group::Kind { "✓ Group By Kind".into() } else { "Group By Kind".into() }, enabled: true },
                 ContextItem { id: MENU_GROUP_DATE, label: if self.vo.group == Group::Date { "✓ Group By Date".into() } else { "Group By Date".into() }, enabled: true },
+                ContextItem { id: MENU_GROUP_NAME, label: if self.vo.group == Group::Name { "✓ Group By Name".into() } else { "Group By Name".into() }, enabled: true },
+                ContextItem { id: MENU_GROUP_SIZE, label: if self.vo.group == Group::Size { "✓ Group By Size".into() } else { "Group By Size".into() }, enabled: true },
                 ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
             ];
             if !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin() {
@@ -168,8 +173,8 @@ impl Files {
             MENU_STATUS_BAR => self.toggle_status_bar(),
             MENU_GALLERY => self.set_gallery(),
             MENU_VIEW_OPTIONS => { self.vo.show = !self.vo.show; self.revision += 1 }
-            MENU_GROUP_NONE | MENU_GROUP_KIND | MENU_GROUP_DATE => {
-                self.vo.group = match id { MENU_GROUP_KIND => Group::Kind, MENU_GROUP_DATE => Group::Date, _ => Group::None };
+            MENU_GROUP_NONE | MENU_GROUP_KIND | MENU_GROUP_DATE | MENU_GROUP_NAME | MENU_GROUP_SIZE => {
+                self.vo.group = match id { MENU_GROUP_KIND => Group::Kind, MENU_GROUP_DATE => Group::Date, MENU_GROUP_NAME => Group::Name, MENU_GROUP_SIZE => Group::Size, _ => Group::None };
                 self.sort_rows();
                 self.revision += 1;
             }
