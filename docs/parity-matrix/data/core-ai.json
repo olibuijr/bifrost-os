@@ -1,102 +1,109 @@
 {
-  "framework": "Core AI",
-  "doc": "https://developer.apple.com/documentation/coreai",
-  "macos_since": "27.0",
-  "status": "partial",
-  "bifrost": "none on-device. Remote model clients only: springboard/apps/daw/src/ai.rs, springboard/apps/assistant-desktop/src/model.rs. Text prediction is a word list, not a model: springboard/apps/keyboard/src/predict.rs",
-  "summary": "Core AI runs specialized models on Apple silicon (CPU, GPU, Neural Engine) with model assets, cached specialization, inference functions and tensor types. BifrOSt has no on-device inference runtime and no tensor or compute API for apps. Its AI features call the Anthropic cloud API, and its predictive text is a trie with bigrams.",
-  "rea_evidence": "ev_d5a497b99b8bee740ff9134aa7978e7596ef3614efb76bbb2ec57ef802f765e0",
-  "features": [
-    {
-      "feature": "Integrating on-device models",
-      "apple": "AIModel, AIModelAsset (Core AI landing page, Essentials)",
-      "bifrost": "springboard/ui/src/model_assets.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
-    },
-    {
-      "feature": "Inference functions and values",
-      "apple": "InferenceFunction, InferenceFunctionDescriptor, InferenceValue",
-      "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing in the repo describes a typed model signature."
-    },
-    {
-      "feature": "Multidimensional arrays",
-      "apple": "NDArray, NDArrayDescriptor",
-      "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tensor or shape type in springboard/sdk/src/ or springboard/ui/src/. Image buffers are decoded by springboard/render/src/imgdec.rs, which has no shape or scalar-type model."
-    },
-    {
-      "feature": "Image input descriptors",
-      "apple": "ImageDescriptor",
-      "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode)",
-      "status": "partial",
-      "note": "PNG and JPEG decode to 8-bit pixels and the screen fitting helpers are tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no descriptor for passing pixels to a model. Refreshed 2026-10-17: covered by springboard/render/src/imgdec.rs; tests imgdec::tests."
-    },
-    {
-      "feature": "Compute streams",
-      "apple": "ComputeStream",
-      "bifrost": "springboard/ui/src/work_stream.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
-    },
-    {
-      "feature": "Background inference",
-      "apple": "Background Inference entitlement (Neural Engine)",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "The Neural Engine is Apple hardware. No counterpart on the Linux PC."
-    },
-    {
-      "feature": "Compute unit selection",
-      "apple": "ComputeUnitKind, SpecializationOptions",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "The options name CPU, GPU and Neural Engine units. The PC has no Neural Engine, so there is nothing to choose between."
-    },
-    {
-      "feature": "Model cache and specialization",
-      "apple": "AIModelCache, managing model specialization and caching",
-      "bifrost": "springboard/ui/src/model_specialization.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
-    },
-    {
-      "feature": "Ahead-of-time model compilation",
-      "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
-      "bifrost": "springboard/ui/src/model_compile.rs (compile, prepare); springboard/ui/src/model_specialization.rs",
-      "status": "partial",
-      "note": "compile checks the widths of an operator chain and serializes a canonical plan per target, and prepare reuses the artifact through the specialization cache (headless tests in ui/tests/parity_sdk-complete-37.rs). Gap: there is no model importer and no kernel generation, and the cache is not wired into the shell or apps or measured on Midget. Refreshed 2026-10-17: covered by springboard/ui/src/model_compile.rs and springboard/ui/src/model_specialization.rs; tests as cited in the note."
-    },
-    {
-      "feature": "Model debugging and profiling",
-      "apple": "Debug gauge, Instruments, Core AI Debugger",
-      "bifrost": "springboard/core/src/log.rs (unified logging), bifrost pc log",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. General logging and performance tooling exist (tools/bench.py). Nothing traces inference or tensor values."
-    },
-    {
-      "feature": "On-device text prediction",
-      "apple": "Not a Core AI feature. Relates to Foundation Models and language models",
-      "bifrost": "springboard/apps/keyboard/src/predict.rs (prefix trie, bigram bonus, edit-distance-1 autocorrect)",
-      "status": "partial",
-      "note": "Prediction runs on-device but uses frequency lists, not a neural model. The Assistant app (springboard/apps/assistant-desktop/src/model.rs) sends its requests to the cloud."
-    },
-    {
-      "feature": "Inference errors",
-      "apple": "AssetError",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "The error type belongs to Core AI's asset pipeline, which BifrOSt does not have."
-    }
-  ],
-  "gaps": [
-    "No on-device model runtime (load, specialize, run) for apps in the SDK or the system layer.",
-    "No compute stream API for apps, so GPU or CPU inference cannot be offloaded from an app.",
-    "No model cache or ahead-of-time compile step.",
-    "No inference-level profiling or tracing in the debug tools.",
-    "The AI features (daw/ai.rs, assistant model.rs) depend on the cloud API, not local inference."
-  ]
+ "framework": "Core AI",
+ "doc": "https://developer.apple.com/documentation/coreai",
+ "macos_since": "27.0",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/core_ai.rs (InferenceSession: load, cached plan, typed call), inference.rs, ndarray.rs; springboard/ui/src/model_compile.rs, model_specialization.rs, model_assets.rs, work_stream.rs, ml_model.rs. Remote model clients: springboard/apps/daw/src/ai.rs, springboard/apps/assistant-desktop/src/model.rs. Text prediction is a word list: springboard/apps/keyboard/src/predict.rs",
+ "summary": "Core AI runs specialized models on Apple silicon (CPU, GPU, Neural Engine) with model assets, cached specialization, inference functions and tensor types. BifrOSt runs small dense, relu and softmax models on the CPU through bifrost_app::core_ai (typed inference functions, cached plans); it has no GPU or large-model runtime and no compute stream that runs work. Its AI features call the Anthropic cloud API, and its predictive text is a trie with bigrams.",
+ "rea_evidence": "ev_d5a497b99b8bee740ff9134aa7978e7596ef3614efb76bbb2ec57ef802f765e0",
+ "features": [
+  {
+   "feature": "Running a model as an inference function",
+   "apple": "InferenceFunction call, AIModel loading and specialization",
+   "bifrost": "springboard/sdk/src/core_ai.rs (InferenceModel, InferenceSession); springboard/ui/src/ml_model.rs",
+   "status": "partial",
+   "note": "Built 2026-10-17 (wave 13): a session loads a model once, compiles its plan into the specialization cache, checks every call against the typed signature (named float32 arrays) and runs the CPU evaluator, returning an NDArray; tests core_ai::tests. Gap: only dense, relu and softmax chains run (no GPU kernels, no importer for other formats); not checked on Midget."
+  },
+  {
+   "feature": "Integrating on-device models",
+   "apple": "AIModel, AIModelAsset (Core AI landing page, Essentials)",
+   "bifrost": "springboard/ui/src/model_assets.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
+  },
+  {
+   "feature": "Inference functions and values",
+   "apple": "InferenceFunction, InferenceFunctionDescriptor, InferenceValue",
+   "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing in the repo describes a typed model signature."
+  },
+  {
+   "feature": "Multidimensional arrays",
+   "apple": "NDArray, NDArrayDescriptor",
+   "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tensor or shape type in springboard/sdk/src/ or springboard/ui/src/. Image buffers are decoded by springboard/render/src/imgdec.rs, which has no shape or scalar-type model."
+  },
+  {
+   "feature": "Image input descriptors",
+   "apple": "ImageDescriptor",
+   "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode)",
+   "status": "partial",
+   "note": "PNG and JPEG decode to 8-bit pixels and the screen fitting helpers are tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no descriptor for passing pixels to a model. Refreshed 2026-10-17: covered by springboard/render/src/imgdec.rs; tests imgdec::tests."
+  },
+  {
+   "feature": "Compute streams",
+   "apple": "ComputeStream",
+   "bifrost": "springboard/ui/src/work_stream.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
+  },
+  {
+   "feature": "Background inference",
+   "apple": "Background Inference entitlement (Neural Engine)",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "The Neural Engine is Apple hardware. No counterpart on the Linux PC."
+  },
+  {
+   "feature": "Compute unit selection",
+   "apple": "ComputeUnitKind, SpecializationOptions",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "The options name CPU, GPU and Neural Engine units. The PC has no Neural Engine, so there is nothing to choose between."
+  },
+  {
+   "feature": "Model cache and specialization",
+   "apple": "AIModelCache, managing model specialization and caching",
+   "bifrost": "springboard/ui/src/model_specialization.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
+  },
+  {
+   "feature": "Ahead-of-time model compilation",
+   "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
+   "bifrost": "springboard/ui/src/model_compile.rs (compile, prepare); springboard/ui/src/model_specialization.rs",
+   "status": "partial",
+   "note": "compile checks the widths of an operator chain and serializes a canonical plan per target, and prepare reuses the artifact through the specialization cache (headless tests in ui/tests/parity_sdk-complete-37.rs). Gap: there is no model importer and no kernel generation, and the cache is not wired into the shell or apps or measured on Midget. Refreshed 2026-10-17: covered by springboard/ui/src/model_compile.rs and springboard/ui/src/model_specialization.rs; tests as cited in the note."
+  },
+  {
+   "feature": "Model debugging and profiling",
+   "apple": "Debug gauge, Instruments, Core AI Debugger",
+   "bifrost": "springboard/core/src/log.rs (unified logging), bifrost pc log",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. General logging and performance tooling exist (tools/bench.py). Nothing traces inference or tensor values."
+  },
+  {
+   "feature": "On-device text prediction",
+   "apple": "Not a Core AI feature. Relates to Foundation Models and language models",
+   "bifrost": "springboard/apps/keyboard/src/predict.rs (prefix trie, bigram bonus, edit-distance-1 autocorrect)",
+   "status": "partial",
+   "note": "Prediction runs on-device but uses frequency lists, not a neural model. The Assistant app (springboard/apps/assistant-desktop/src/model.rs) sends its requests to the cloud."
+  },
+  {
+   "feature": "Inference errors",
+   "apple": "AssetError",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "The error type belongs to Core AI's asset pipeline, which BifrOSt does not have."
+  }
+ ],
+ "gaps": [
+  "The on-device runtime evaluates dense, relu and softmax chains on the CPU only (bifrost_app::core_ai); no GPU or large-model kernels, no importer for other model formats.",
+  "No compute stream API for apps, so GPU or CPU inference cannot be offloaded from an app.",
+  "No model cache or ahead-of-time compile step.",
+  "No inference-level profiling or tracing in the debug tools.",
+  "The AI features (daw/ai.rs, assistant model.rs) depend on the cloud API, not local inference."
+ ]
 }

@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/glkit.json",
-   "status": "partial",
-   "note": "from SDK matrix glkit.json",
+   "bifrost": "springboard/ui/src/linalg.rs, mesh.rs, shading.rs, shader_effect.rs, gl_requirements.rs; springboard/sdk/src/linear_algebra.rs; docs/gpu-first.md",
+   "status": "n/a",
+   "note": "n/a: GLKit is the deprecated OpenGL and OpenGL ES helper layer (its vendor deprecated it on macOS from 10.14; the index shows only BridgeSupport and the iOSSupport shim). BifrOSt apps draw through the SDK draw, layer and animation path and the window server composes them (docs/gpu-first.md, docs/graphics-architecture.md), so apps never create a GL context by design. The parts of GLKit that are not tied to a context exist anyway: vectors, matrices and quaternions as bifrost_app::linear_algebra, meshes (ui mesh.rs), shading and shader effects.",
    "rea": [],
-   "method": "assessed"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/GLUT.framework",

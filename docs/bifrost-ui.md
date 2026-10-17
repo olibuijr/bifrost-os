@@ -3917,6 +3917,7 @@ wiring.
 - `bluetooth_service`: The shell's `bluetooth` service as an app uses it
 - `call_stack_tree`: Call stacks captured with a diagnostic report, as a pure model.
 - `central`: Central role for apps
+- `core_ai`: Core AI for apps: load a model once, keep its specialized plan in the cache, and call it as a typed inference function (`InferenceSession`, `InferenceModel`); CPU dense, relu and softmax chains only, no GPU or Neural Engine (Apple parity: Core AI inference functions; not matched yet: other model formats and GPU kernels)
 - `crash_report`: Crash reporter extension (the crash-report hook and the crashed-process view)
 - `csv_writer`: Tabular data CSV writing (`CSVWritingError` and the writer that reports it)
 - `daily_metric_report`: Daily metric reports as a pure model.
