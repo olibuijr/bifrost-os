@@ -893,6 +893,7 @@ pub mod gpu_device;
 pub mod image_capture;
 pub mod network_stream;
 pub mod link_fetch;
+pub mod map_snapshotter;
 pub mod avahi_browse;
 pub mod drawable_pool;
 pub mod gpu_pass;
