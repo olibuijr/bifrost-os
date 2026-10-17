@@ -152,6 +152,29 @@ pub fn flash(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option<
     }))
 }
 
+/// `CIModTransition`: a radial reveal of `to` from `center` (pixels) whose front is modulated by
+/// `lobes` bumps around the centre, so it spreads as a flower rather than a circle. A pixel shows `to`
+/// once its distance over the far-corner distance is below `time * (1.25 + 0.25 * cos(lobes * theta))`.
+/// Time 0 shows `from` everywhere and time 1 shows `to` everywhere. `None` when the sizes differ or
+/// `center` is not finite. A `lobes` of 0 is treated as 1.
+pub fn mod_reveal(from: &Image, to: &Image, time: f32, center: (f32, f32), lobes: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let k = lobes.max(1) as f32;
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let (dx, dy) = (x as f32 + 0.5 - center.0, y as f32 + 0.5 - center.1);
+        let d = (dx * dx + dy * dy).sqrt();
+        let theta = dy.atan2(dx);
+        let front = t * (1.25 + 0.25 * (k * theta).cos());
+        if d / reach < front { b } else { a }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,6 +263,17 @@ mod tests {
         let mid = flash(&a, &b, 0.5, (4.0, 4.0)).unwrap();
         assert!(mid.px[4 * 8 + 4] & 0xff > 0xe0, "the centre is nearly white at the peak");
         assert!(mid.px[4 * 8 + 4] & 0xff > mid.px[0] & 0xff, "the glow fades with distance");
+    }
+
+    #[test]
+    fn mod_reveals_in_flower_lobes_and_ends_on_to() {
+        let (a, b) = (flat(9, 9, BLACK), flat(9, 9, GREY));
+        assert_eq!(mod_reveal(&a, &b, 0.0, (4.0, 4.0), 1).unwrap(), a);
+        assert_eq!(mod_reveal(&a, &b, 1.0, (4.0, 4.0), 1).unwrap(), b);
+        let mid = mod_reveal(&a, &b, 0.25, (4.0, 4.0), 1).unwrap();
+        // One lobe: the front reaches further along +x than along -x, so (8, 4) is revealed and (0, 4) is not.
+        assert_eq!(mid.px[4 * 9 + 8], GREY);
+        assert_eq!(mid.px[4 * 9], BLACK);
     }
 
     #[test]
