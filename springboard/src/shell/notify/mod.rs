@@ -469,6 +469,19 @@ impl Shell {
         self.notify.store.get(id).is_some()
     }
 
+    /// Gives the banner for notification `id` its category's action buttons (none when it is not showing).
+    pub(in crate::shell) fn usernotif_banner_actions(&mut self, id: u64, actions: &[bifrost_proto::NotifAction]) {
+        if let Some(card) = self.notify.banner_card.as_mut().filter(|c| c.id == id) {
+            card.set_actions(&self.ui, actions, &|name| crate::first_frame_cache::cached_icon(name, 16));
+        }
+    }
+
+    /// The identifier of the banner's action button under (x, y), if one is there.
+    fn banner_action_at(&self, x: f32, y: f32, t: f64) -> Option<String> {
+        let (bx, by, _, _) = self.banner_rect(t)?;
+        self.notify.banner_card.as_ref()?.action_at(&self.ui, bx, by, x, y).map(str::to_string)
+    }
+
     fn start_banner(&mut self, id: u64, app: AppId) {
         let now = self.notify.now();
         let Some(n) = self.notify.store.get(id).cloned() else { return };
@@ -866,7 +879,8 @@ impl Shell {
     fn banner_rect(&self, t: f64) -> Option<(f32, f32, f32, f32)> {
         let b = self.notify.banner.as_ref()?;
         let ui = &self.ui;
-        let (w, h) = (ui.pt(CARD_W_PT), ui.pt(CARD_H_PT));
+        let w = ui.pt(CARD_W_PT);
+        let h = self.notify.banner_card.as_ref().map_or(ui.pt(CARD_H_PT), |c| c.height(ui));
         let rest = ui.pt(BANNER_TOP_PT);
         let y = rest - (1.0 - b.shown(t)) * (rest + h) - b.pull();
         Some((((self.w as f32 - w) / 2.0).round(), y, w, h))
@@ -884,6 +898,14 @@ impl Shell {
         let pulling = self.notify.banner.as_ref().is_some_and(Banner::pulling);
         match ev {
             Event::Down(x, y) if !pulling => {
+                // a button on the banner answers its notification and clears the banner; the rest of the card is a tap
+                if let Some(action) = self.banner_action_at(x, y, t) {
+                    let id = self.notify.banner.as_ref()?.id;
+                    self.notify.banner.as_mut()?.dismiss(t);
+                    self.usernotif_respond(id, &action, "", t);
+                    self.dirty = true;
+                    return Some(vec![]);
+                }
                 let (bx, by, bw, bh) = self.banner_rect(t)?;
                 let b = self.notify.banner.as_mut()?;
                 if b.animating() || x < bx || x >= bx + bw || y < by || y >= by + bh {

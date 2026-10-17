@@ -750,6 +750,9 @@ impl super::Shell {
             }
         }
         self.usernotif.record_delivery(app, req, id);
+        // the banner was built before the delivery was recorded, so its category's buttons are added now
+        let actions = self.usernotif.actions(id);
+        self.usernotif_banner_actions(id, &actions);
     }
 
     /// Delivers the requests whose trigger fired; called every tick.
