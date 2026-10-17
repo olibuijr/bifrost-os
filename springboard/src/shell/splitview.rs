@@ -405,6 +405,7 @@ impl Shell {
             AppId::Deildu => self.deildu.iter_mut().for_each(|a| a.set_size(w, h)),
             AppId::Photos => self.photos.iter_mut().for_each(|a| a.set_size(w, h)),
             AppId::External(_) => {}
+            AppId::ExternalWindow(slot, id) => self.ext_window_resize(slot as usize, u32::from(id), w, h),
             AppId::Magnifier => self.magnifier.iter_mut().for_each(|a| a.set_size(w, h)),
             // Terminal and Files keep the screen; the newer apps lay out from the full size
             _ => {}
