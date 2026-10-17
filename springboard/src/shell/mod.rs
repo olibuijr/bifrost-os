@@ -2659,7 +2659,33 @@ impl Shell {
         }
     }
 
+    /// A touch on an extra window's body, in the window's own points (the app's `WindowTouch`).
+    fn ext_window_touch(&mut self, slot: usize, id: u32, ev: Event, t: f64) {
+        let k = self.ui.pt(1.0) as f32;
+        let (kind, x, y) = match ev {
+            Event::Down(x, y) => (bifrost_proto::TouchKind::Down, x, y),
+            Event::Move(x, y) => (bifrost_proto::TouchKind::Move, x, y),
+            Event::Up(x, y) => (bifrost_proto::TouchKind::Up, x, y),
+            _ => return,
+        };
+        if let Some(Some(host)) = self.ext.get_mut(slot) {
+            host.touch_window(id, 1, kind, x / k, y / k, t as u32);
+        }
+    }
+
+    /// The desk resized an extra window's body (px): the app is told its size in points (`WindowConfigure`).
+    pub(super) fn ext_window_resize(&mut self, slot: usize, id: u32, w: i32, h: i32) {
+        let k = self.ui.pt(1.0) as f32;
+        if let Some(Some(host)) = self.ext.get_mut(slot) {
+            host.configure_window(id, w as f32 / k, h as f32 / k);
+        }
+    }
+
     fn app_touch_single(&mut self, app: AppId, ev: Event, t: f64) -> Vec<Effect> {
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.ext_window_touch(slot as usize, u32::from(id), ev, t);
+            return Vec::new();
+        }
         // the home swipe works in frame coordinates; the apps laid out for the portrait panel
         // see touches mapped into their letterbox
         let frame_ev = ev;

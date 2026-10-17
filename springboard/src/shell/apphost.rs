@@ -1051,6 +1051,26 @@ impl AppHost {
         Some((b.map.pixels(), wb.size.0, wb.size.1))
     }
 
+    /// Copies an extra window's newest frame into `s` (top left, clipped to `s`), then gives the frame back to the app.
+    /// False when the window has no frame yet.
+    pub fn blit_window(&mut self, s: &mut Surface, id: u32) -> bool {
+        let copied = match self.window_frame(id) {
+            Some((px, w, h)) => {
+                let n = w.min(s.w);
+                for y in 0..h.min(s.h) {
+                    let to = y * s.stride;
+                    s.px[to..to + n].copy_from_slice(&px[y * w..y * w + n]);
+                }
+                true
+            }
+            None => false,
+        };
+        if copied {
+            self.window_blitted(id);
+        }
+        copied
+    }
+
     /// The desk copied an extra window's newest frame: the buffer that frame replaced goes back to the app.
     #[allow(dead_code)]
     pub fn window_blitted(&mut self, id: u32) {
@@ -1877,6 +1897,8 @@ impl Shell {
         if self.desk.is_some() {
             for slot in fell_back { self.desk_open(super::AppId::External(slot), t); }
         }
+        // the extra windows follow each app's table: opened ones get a desk window, closed ones leave the desk
+        self.desk_sync_extra_windows();
         if badge_changed { self.dirty = true; }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
@@ -1938,6 +1960,13 @@ impl Shell {
             self.keyboard.draw(s, &self.ui, kb_top, t);
             let below = (kb_top + self.keyboard.h() + self.keyboard.offset(t)) as usize;
             s.fill_rect(0, below, self.w as usize, self.h as usize, super::keyboard::BG);
+        }
+    }
+
+    /// The desk copies an extra window's newest frame into its body (`s`).
+    pub(super) fn ext_window_blit(&mut self, s: &mut Surface, slot: usize, id: u32) {
+        if let Some(Some(h)) = self.ext.get_mut(slot) {
+            h.blit_window(s, id);
         }
     }
 

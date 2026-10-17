@@ -104,6 +104,10 @@ const MENU_DUPLICATES: u32 = 26;
 const MENU_LAST_IMPORT: u32 = 27;
 /// Card > Add Field: item `MENU_FIELD + n` adds the field `Detail::ALL[n]`.
 const MENU_FIELD: u32 = 30;
+/// Card > Open in Separate Window: the open card gets a window of its own (`take_card_request`).
+const MENU_OPEN_WINDOW: u32 = 60;
+/// Two presses on one row this close together (ms) open its card in a window.
+const DOUBLE_CLICK_MS: f64 = 400.0;
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
@@ -601,6 +605,13 @@ pub struct Contacts {
     /// The contact, with its extra values, that a Copy Contact press asked to put on the pasteboard; `main.rs` takes it
     /// with `take_copy`.
     copy_out: Option<(Contact, Vec<Extra>)>,
+    /// The contact whose card asked for its own window (Card > Open in Separate Window, or a double-click on a row);
+    /// `main.rs` takes it with `take_card_request`.
+    card_req: Option<u64>,
+    /// The last row press: a second press on the same contact within `DOUBLE_CLICK_MS` opens its card in a window.
+    last_row_click: Option<(u64, f64)>,
+    /// True while a card window draws (`draw_card`): the detail pane fills the whole surface.
+    card_window: bool,
     confirm_delete: bool,
     /// A failed load must not turn into an overwrite of unknown data.
     load_failed: bool,
@@ -715,6 +726,9 @@ impl Contacts {
             scroll_list: None,
             share_req: None,
             copy_out: None,
+            card_req: None,
+            last_row_click: None,
+            card_window: false,
             confirm_delete: false,
             load_failed,
             extras,
@@ -811,6 +825,37 @@ impl Contacts {
         self.share_req.take()
     }
 
+    /// The contact whose card asked for its own window, with its name for the window title (taken once).
+    pub fn take_card_request(&mut self) -> Option<(u64, String)> {
+        let id = self.card_req.take()?;
+        let name = self.contacts.iter().find(|c| c.id == id).map(|c| self.title_of(c)).unwrap_or_default();
+        Some((id, name))
+    }
+
+    /// Card > Open in Separate Window: asks for the open card's window. False when no card is open.
+    fn ask_card_window(&mut self) -> bool {
+        match self.screen {
+            Screen::Detail(id) => {
+                self.card_req = Some(id);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// One contact's card drawn at the size of its own window (`s`, px): the detail pane fills the surface, with no list
+    /// or sidebar beside it. The main window's screen and layout are restored afterwards.
+    pub fn draw_card(&mut self, s: &mut Surface, ui: &Ui, id: u64) {
+        let saved = (self.w, self.h, self.screen, self.card_window);
+        self.w = s.w as f32 / ui.s;
+        self.h = s.h as f32 / ui.s;
+        self.screen = Screen::Detail(id);
+        self.card_window = true;
+        s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        self.draw_detail(s, ui, 0.0);
+        (self.w, self.h, self.screen, self.card_window) = saved;
+    }
+
     /// The contact the user asked to copy to the pasteboard, if any (taken once).
     pub fn take_copy(&mut self) -> Option<(Contact, Vec<Extra>)> {
         self.copy_out.take()
@@ -832,6 +877,9 @@ impl Contacts {
     }
     /// Left edge of the detail pane.
     fn detail_x(&self) -> f32 {
+        if self.card_window {
+            return 0.0;
+        }
         self.side() + self.list_w()
     }
     /// The detail pane's readable column: (left, width).
@@ -1816,6 +1864,7 @@ impl Contacts {
         let mut card = vec![
             AppMenuItem::new(MENU_MY_CARD, "Make This My Card").enabled(ready && open),
             AppMenuItem::new(MENU_GO_MY_CARD, "Go to My Card").enabled(self.prefs.me.is_some()),
+            AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(ready && open),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_COMPANY, "Mark as a Company").checked(company).enabled(ready && on_card),
             AppMenuItem::submenu("Add Field"),
@@ -1891,6 +1940,7 @@ impl Contacts {
             MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
             MENU_LAST_IMPORT => self.show_list(ui, Filter::LastImport),
             MENU_DUPLICATES => self.show_list(ui, Filter::Duplicates),
+            MENU_OPEN_WINDOW => self.ask_card_window(),
             MENU_MY_CARD => self.make_my_card(),
             MENU_GO_MY_CARD => self.go_to_my_card(ui),
             MENU_COMPANY => self.toggle_company(ui),
@@ -2909,6 +2959,13 @@ impl Contacts {
                     }
                 } else if let Some(row) = self.rows.get(i) {
                     let id = self.contacts[row.contact].id;
+                    // a second press on the same row within the double-click time opens the card in its own window
+                    let again = self.last_row_click.is_some_and(|(last, at)| last == id && t - at <= DOUBLE_CLICK_MS);
+                    self.last_row_click = Some((id, t));
+                    if again {
+                        self.last_row_click = None;
+                        self.card_req = Some(id);
+                    }
                     self.open_detail(ui, id);
                 }
             }

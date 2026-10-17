@@ -1250,7 +1250,7 @@ impl Shell {
     /// Focus follows the frontmost visible window; with none, the desktop (Home) shows.
     pub(super) fn desk_refocus(&mut self) {
         self.screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
-            Some(app) => Screen::App(app),
+            Some(app) => Screen::App(app.parent()),
             None => Screen::Home,
         };
         self.dirty = true;
@@ -1318,6 +1318,11 @@ impl Shell {
     }
 
     pub(super) fn desk_close_app(&mut self, app: AppId) {
+        // an extra window's traffic light closes that window through its app; the app keeps running
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.desk_close_extra_window(slot, id);
+            return;
+        }
         #[cfg(feature = "desktop-wayland")]
         if let AppId::External(slot)=app { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.route()==apphost::Route::Direct) { self.ext_close(slot as usize); return; } }
         // the close effect starts while the window is still listed; its last frame is kept for the effect
@@ -1332,6 +1337,82 @@ impl Shell {
             }
         }
         self.desk_refocus();
+    }
+
+    /// The extra windows follow each app host's table (`app_window_table::desk_changes`): a window the app opened gets a
+    /// desk window of its own, one the app closed (or the table dropped) leaves the desk. Runs from the app host tick.
+    pub(super) fn desk_sync_extra_windows(&mut self) {
+        let Some(d) = self.desk.as_ref() else { return };
+        let k = self.ui.pt(1.0) as f32;
+        let mut plan = Vec::new();
+        for (slot, host) in self.ext.iter().enumerate() {
+            let Some(h) = host else { continue };
+            let shown: Vec<u32> = d
+                .wins
+                .iter()
+                .filter_map(|w| match w.app {
+                    AppId::ExternalWindow(s, id) if s as usize == slot => Some(u32::from(id)),
+                    _ => None,
+                })
+                .collect();
+            let (open, close) = h.windows.desk_changes(&h.id, &shown);
+            if !open.is_empty() || !close.is_empty() {
+                let sizes: Vec<(u32, f32, f32)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h)).collect();
+                plan.push((slot as u8, open, close, sizes));
+            }
+        }
+        if plan.is_empty() {
+            return;
+        }
+        let m = self.desk_metrics();
+        for (slot, open, close, sizes) in plan {
+            for id in &close {
+                if let Ok(id) = u16::try_from(*id) {
+                    self.desk_drop_extra_window(slot, id);
+                }
+            }
+            for id in open {
+                let Ok(id16) = u16::try_from(id) else { continue };
+                // the table's size is in points; the desk window is outer px (body plus title bar)
+                let (w, h) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0), |s| (s.1, s.2));
+                let size = ((w * k) as i32, (h * k) as i32 + m.title);
+                if let Some(d) = self.desk.as_mut() {
+                    let i = d.open(&m, AppId::ExternalWindow(slot, id16), size);
+                    self.desk_layout(i);
+                }
+            }
+        }
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// Removes an extra window's desk window without telling its app (the app's table already dropped it).
+    fn desk_drop_extra_window(&mut self, slot: u8, id: u16) {
+        if let Some(d) = self.desk.as_mut() {
+            if let Some(i) = d.index_of(AppId::ExternalWindow(slot, id)) {
+                d.close(i);
+            }
+        }
+    }
+
+    /// The traffic light (or the app switcher) closes an extra window: the app is told (`WindowClosed`) and keeps running.
+    pub(super) fn desk_close_extra_window(&mut self, slot: u8, id: u16) {
+        if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
+            h.close_window_from_shell(u32::from(id));
+        }
+        self.desk_drop_extra_window(slot, id);
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// Raises an extra window (Window menu, Dock app menu). False when the window is not on the desk.
+    pub(super) fn desk_focus_extra_window(&mut self, slot: u8, id: u16) -> bool {
+        let Some(d) = self.desk.as_mut() else { return false };
+        let Some(i) = d.index_of(AppId::ExternalWindow(slot, id)) else { return false };
+        d.raise(i);
+        self.desk_refocus();
+        self.dirty = true;
+        true
     }
 
     /// Touches over the desktop. `None` leaves the event to the normal path.
@@ -1360,7 +1441,7 @@ impl Shell {
                     d.raise(i)
                 };
                 let app = self.desk.as_ref()?.wins[i].app;
-                self.screen = Screen::App(app);
+                self.screen = Screen::App(app.parent());
                 self.fullscreen = false;
                 // the window now in front takes over the keyboard's lift
                 self.desk_keyboard_lift();
@@ -1627,7 +1708,7 @@ impl Shell {
         let reach = self.ui.pt(desk_occlusion::SHADOW_REACH_PT).ceil() as i32;
         d.wins.iter().map(|w| {
             let animating = win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s));
-            if w.minimized || animating || matches!(w.app, AppId::External(_)) {
+            if w.minimized || animating || matches!(w.app.parent(), AppId::External(_)) {
                 return None;
             }
             let radius = if w.maximized { 0 } else { self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS).ceil() as i32 };
@@ -1660,7 +1741,8 @@ impl Shell {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
-            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+            // an extra window has no window-server id yet: it is drawn by the software path below (its frame blitted)
+            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && win_id(w.app).is_some() {
                 let id = apps().iter().position(|a| a.id == w.app).unwrap() as u32 + 1;
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
@@ -1676,6 +1758,8 @@ impl Shell {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
                 }
                 let quiet = match w.app {
+                    // an extra window always takes its app's newest frame (it is blitted each frame)
+                    AppId::ExternalWindow(..) => false,
                     AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref)
                         .is_some_and(|h| h.running() && h.frame().is_some() && !h.has_pending()),
                     // A focused Settings window keeps its pixels until input, a reported change or an animation
@@ -1693,7 +1777,7 @@ impl Shell {
                 };
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
-                let opaque=!matches!(w.app,AppId::External(_));
+                let opaque=!matches!(w.app.parent(),AppId::External(_));
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
                     // dropped so that it repaints in full once it is uncovered
@@ -1873,7 +1957,10 @@ impl Shell {
         {
             let mut sub = Surface { w: bw, h: bh, stride: bw, px: &mut buf, y0: 0 };
             let app = w.app;
-            if reuse && !fresh {
+            if let AppId::ExternalWindow(slot, id) = app {
+                // an extra window's body is its app's newest frame for that window
+                self.ext_window_blit(&mut sub, slot as usize, u32::from(id));
+            } else if reuse && !fresh {
                 // the body is the one drawn last time: nothing in it changed
             } else if persistent && !fresh && !self.keyboard.shown() && !self.keyboard.animating() {
                 if let AppId::External(slot) = app { self.ext_blit_damage(&mut sub,slot as usize,&mut crate::gfx::Damage::new(bw,bh)); }
