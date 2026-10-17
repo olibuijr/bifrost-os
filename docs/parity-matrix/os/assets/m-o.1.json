@@ -503,9 +503,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "MarkerFelt resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual marker hand (no packaged marker face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Menlo.ttc",
@@ -689,9 +701,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Noteworthy resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual marker hand (no packaged marker face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/NotoNastaliq.ttc",
@@ -1276,9 +1300,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "note": "open equivalent Noto Serif Hebrew (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifHebrew-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Hebrew (noto-fonts, OFL-1.1) for the same role (a Hebrew-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansAdlam-Regular.ttf",

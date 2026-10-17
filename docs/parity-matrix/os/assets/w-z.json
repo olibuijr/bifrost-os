@@ -49,9 +49,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Symbols 2 (noto-fonts, OFL-1.1) for the same role (a pictogram symbol face (glyph shapes differ; Wingdings-style private-use code points are not remapped)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings 2.ttf",
@@ -70,9 +82,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute D050000L (gsfonts, AGPL-3.0 with font exception) for the same role (a dingbat face (Zapf Dingbats design; private-use code points are not remapped)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings 3.ttf",
@@ -91,9 +115,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Symbols (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Symbols (noto-fonts, OFL-1.1) for the same role (an arrow and triangle symbol face (private-use code points are not remapped)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings.ttf",
@@ -112,9 +148,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute D050000L (gsfonts, AGPL-3.0 with font exception) for the same role (a dingbat face (Zapf Dingbats design; private-use code points are not remapped)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Zapfino.ttf",
@@ -133,9 +181,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (an ornate calligraphic script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/ZapfDingbats.ttf",
@@ -895,9 +955,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Symbols 2 (noto-fonts, OFL-1.1) for the same role (a private icon and symbol face); design-similar."
   }
  ]
 }
