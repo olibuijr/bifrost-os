@@ -192,6 +192,11 @@ impl AuthView {
     pub fn points(&self) -> f32 {
         self.size.points()
     }
+
+    /// The biometric kind the icon was made for.
+    pub fn kind(&self) -> BiometryKind {
+        self.kind
+    }
 }
 
 #[cfg(test)]

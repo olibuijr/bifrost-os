@@ -54,6 +54,7 @@ mod keyanim;
 mod overlay;
 mod scroll;
 mod picker;
+mod local_auth_view;
 mod content_unavailable;
 mod large_content;
 pub use keyanim::ViewState;
@@ -69,6 +70,7 @@ pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
 pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 pub use picker::PickerView;
+pub use local_auth_view::{kind_label, LocalAuthenticationView};
 pub use content_unavailable::ContentUnavailableView;
 pub use large_content::LargeContentView;
 
