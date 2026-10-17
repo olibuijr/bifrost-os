@@ -3264,10 +3264,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/battery.rs",
+   "bifrost": "springboard/src/shell/battery.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Covers live battery state in the shell; the reference's on-device power log history is not recorded.",
-   "rea": []
+   "note": "Covers live battery state and a battery history: the shell appends a sample on a timer, keeps two days, and draws it as a graph",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery::tests"
+    }
+   ],
+   "ready_note": "battery history: the shell appends a sample on a timer (SAMPLE_MS), keeps two days, bins it for the graph; battery::tests"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.preferences.timezone.admintool.plist",
