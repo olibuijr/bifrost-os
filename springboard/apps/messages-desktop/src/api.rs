@@ -467,6 +467,21 @@ impl Api {
         self.send_content(room, &content)
     }
 
+    /// Downloads the ciphertext behind a received encrypted picture or file and opens it with its `file` object (see
+    /// [`attachment::parse_file_object`]). Fails when the server does not answer with the media or the hash does not match.
+    pub fn fetch_attachment(&self, info: &attachment::FileInfo) -> Result<Vec<u8>, String> {
+        let url = protocol::media_download_url(&self.base, &info.url)?;
+        let auth = format!("Bearer {}", self.token);
+        let response = self
+            .http
+            .request_with_headers("GET", &url, &[("Authorization", auth.as_str())], None, UPLOAD_LIMIT)
+            .map_err(|e| e.to_string())?;
+        if !(200..300).contains(&response.status) {
+            return Err(format!("the server answered HTTP {}", response.status));
+        }
+        attachment::decrypt(info, &response.body)
+    }
+
     fn send_content(&self, room: &str, content: &str) -> Result<(), String> {
         if self.is_encrypted(room) {
             let plain = json::parse(content)?;

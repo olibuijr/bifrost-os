@@ -779,6 +779,17 @@ fn media_url(content: &Json) -> String {
     content.str_field("url").or_else(|| content.get("file").and_then(|f| f.str_field("url"))).unwrap_or_default()
 }
 
+/// The authenticated download address of an `mxc://server/media-id` URI, on the client media endpoint. `None` for any
+/// other address.
+pub fn media_download_url(base: &str, mxc: &str) -> Result<String, String> {
+    let rest = mxc.strip_prefix("mxc://").ok_or("the media address is not an mxc URI")?;
+    let (server, media) = rest.split_once('/').ok_or("the media address is damaged")?;
+    if server.is_empty() || media.is_empty() || media.contains('/') {
+        return Err("the media address is damaged".into());
+    }
+    Ok(format!("{base}/_matrix/client/v1/media/download/{}/{}", encode(server), encode(media)))
+}
+
 /// The content of a picture or file message in an encrypted room: the `file` object (see [`crate::attachment::file_object`])
 /// stands in for `url`. It is sent inside the Megolm event, so the server never sees the file name or the key.
 pub fn encrypted_media_content(image: bool, name: &str, mime: &str, size: u64, file: &Json) -> String {
@@ -1229,6 +1240,14 @@ mod tests {
         assert_eq!(file_mime("a.png"), "image/png");
         assert_eq!(file_mime("a.weird"), "application/octet-stream");
         assert_eq!(file_mime("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn media_downloads_use_the_authenticated_endpoint() {
+        assert_eq!(media_download_url("https://m", "mxc://example.org/abc").unwrap(), "https://m/_matrix/client/v1/media/download/example.org/abc");
+        assert!(media_download_url("https://m", "https://example.org/abc").is_err());
+        assert!(media_download_url("https://m", "mxc://example.org/a/b").is_err());
+        assert!(media_download_url("https://m", "mxc://example.org/").is_err());
     }
 
     #[test]
