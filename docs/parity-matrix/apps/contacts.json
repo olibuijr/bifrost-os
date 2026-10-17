@@ -202,10 +202,10 @@
    "feature": "Open card in separate window",
    "area": "menu",
    "apple": "Card > Open in Separate Window; ABContactCardWindowController.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Open a second SDK window showing one card."
+   "status": "partial",
+   "bifrost": "springboard/sdk/src/app_windows.rs (AppWindows, WindowId, App::window_event, draw_window, window_closed); springboard/apps/contacts-desktop/src/card_windows.rs (CardWindows)",
+   "note": "The SDK window registry exists: open, close, focus, ids that are never reused, routing by window id. The Contacts card model (one card per window, a card already open is focused) is written and tested headless. Not done: the shell does not host a second window of an app, so the card window has no surface and is not on screen; Card > Open in Separate Window and the double-click are not wired.",
+   "wire": "Draw the card in the second window once the shell hosts extra windows, then wire Card > Open in Separate Window and the double-click to CardWindows::open_card."
   },
   {
    "feature": "Show / hide sidebar",
@@ -328,9 +328,9 @@
  "summary": {
   "features": 35,
   "parity": 14,
-  "partial": 18,
-  "gap": 1,
+  "partial": 19,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 69.7
+  "coverage_pct": 71.2
  }
 }

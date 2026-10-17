@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.0 — 2026-10-17
+
+- Card windows model (`card_windows.rs`): a contact can be opened in its own window through the SDK window registry, and a card that is already open is focused. The window is not drawn yet, because the shell does not host a second window of an app; the Card > Open in New Window menu item and the double-click are not wired.
+
 ## 1.10.1 — 2026-10-14
 
 - Removed unused keychain access; the company avatar and background printing now use shared appearance-aware colours and dispatch.

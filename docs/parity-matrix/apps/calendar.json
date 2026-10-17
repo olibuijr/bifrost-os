@@ -330,8 +330,8 @@
    "apple": "PreferencesPanel.nib option",
    "status": "gap",
    "bifrost": "",
-   "note": "",
-   "wire": "Offer opening the editor in a second window through the SDK multi-window API."
+   "note": "The SDK window registry exists (bifrost_app::app_windows). Not done: the shell does not host a second window of an app yet.",
+   "wire": "Offer opening the editor in a second window through the SDK multi-window API (bifrost_app::app_windows, App::window_event and draw_window)."
   },
   {
    "feature": "Zoom in / out of the time grid",
