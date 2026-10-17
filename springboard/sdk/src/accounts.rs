@@ -564,6 +564,52 @@ pub fn credential_from_reply(reply: &Reply) -> Result<Credential, AccountError> 
     }
 }
 
+/// The form body of an OAuth 2 refresh request (RFC 6749, section 6): `grant_type=refresh_token`, the refresh token
+/// and the client identifier, encoded as `application/x-www-form-urlencoded`. An app posts it to its token endpoint and
+/// passes the answer to [`renewal_from_token_response`].
+pub fn oauth2_refresh_body(refresh_token: &str, client_id: &str) -> String {
+    format!("grant_type=refresh_token&refresh_token={}&client_id={}", form_encode(refresh_token), form_encode(client_id))
+}
+
+/// Percent-encodes one form value: unreserved characters stay, every other byte becomes `%XX`.
+fn form_encode(value: &str) -> String {
+    let mut out = String::new();
+    for b in value.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// Reads a token endpoint's JSON answer to [`oauth2_refresh_body`] into a renewal outcome for `previous`, the saved
+/// OAuth 2 credential. A new `access_token` with `expires_in` seconds from `now` is `Renewed`. The refresh token is
+/// kept from `previous` when the answer omits it. An `invalid_grant` error means the service no longer accepts the
+/// refresh token, which is `Rejected`. Anything else (a non-JSON body, no access token, a `previous` that is not OAuth 2)
+/// is `Failed`. An answer without `expires_in` is due for renewal at once.
+pub fn renewal_from_token_response(body: &str, previous: &Credential, now: SystemTime) -> RenewOutcome {
+    let Ok(json) = bifrost_core::json::parse(body) else {
+        return RenewOutcome::Failed;
+    };
+    if json.get("error").and_then(Json::as_str) == Some("invalid_grant") {
+        return RenewOutcome::Rejected;
+    }
+    let Credential::OAuth2 { refresh_token: old_refresh, .. } = previous else {
+        return RenewOutcome::Failed;
+    };
+    let Some(token) = json.get("access_token").and_then(Json::as_str).filter(|t| !t.is_empty()) else {
+        return RenewOutcome::Failed;
+    };
+    let refresh_token = json.get("refresh_token").and_then(Json::as_str).filter(|t| !t.is_empty()).unwrap_or(old_refresh);
+    let lifetime = match json.get("expires_in") {
+        Some(Json::Num(secs)) if *secs >= 0.0 => Duration::from_secs(*secs as u64),
+        _ => Duration::ZERO,
+    };
+    RenewOutcome::Renewed(Credential::oauth2(token, refresh_token, now + lifetime))
+}
+
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
 pub const SHARED_FILE: &str = account_store::FILE_NAME;
 
@@ -1091,6 +1137,34 @@ mod tests {
         assert_eq!(store.renew_credentials(&id, RenewOutcome::Rejected), Ok(RenewResult::Rejected));
         assert_eq!(store.account_type("mail.example").map(|t| t.access_granted), Some(false));
         assert_eq!(store.credential(&id).map(|c| c.oauth_token()), Ok("old"));
+    }
+
+    #[test]
+    fn the_refresh_body_is_a_form_with_the_grant_and_encoded_values() {
+        assert_eq!(
+            oauth2_refresh_body("r 1&x", "app.example"),
+            "grant_type=refresh_token&refresh_token=r%201%26x&client_id=app.example"
+        );
+    }
+
+    #[test]
+    fn a_token_answer_renews_the_credential_and_keeps_the_refresh_token_when_omitted() {
+        let old = Credential::oauth2("old", "r1", at(1_000));
+        let answer = r#"{"access_token":"new","expires_in":3600}"#;
+        assert_eq!(renewal_from_token_response(answer, &old, at(5_000)), RenewOutcome::Renewed(Credential::oauth2("new", "r1", at(8_600))));
+        let rotated = r#"{"access_token":"new","refresh_token":"r2","expires_in":60}"#;
+        assert_eq!(renewal_from_token_response(rotated, &old, at(0)), RenewOutcome::Renewed(Credential::oauth2("new", "r2", at(60))));
+    }
+
+    #[test]
+    fn an_invalid_grant_rejects_and_any_other_bad_answer_fails() {
+        let old = Credential::oauth2("old", "r1", at(1_000));
+        assert_eq!(renewal_from_token_response(r#"{"error":"invalid_grant"}"#, &old, at(0)), RenewOutcome::Rejected);
+        assert_eq!(renewal_from_token_response(r#"{"error":"server_error"}"#, &old, at(0)), RenewOutcome::Failed);
+        assert_eq!(renewal_from_token_response("<html>", &old, at(0)), RenewOutcome::Failed);
+        assert_eq!(renewal_from_token_response(r#"{"access_token":""}"#, &old, at(0)), RenewOutcome::Failed);
+        let oauth1 = Credential::oauth("t", "s");
+        assert_eq!(renewal_from_token_response(r#"{"access_token":"new"}"#, &oauth1, at(0)), RenewOutcome::Failed);
     }
 
     #[test]

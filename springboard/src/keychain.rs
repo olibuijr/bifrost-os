@@ -456,6 +456,38 @@ fn chacha20_xor(key: &[u8; 32], nonce: &[u8; 12], data: &mut [u8]) {
     }
 }
 
+/// The keychain service that holds SMB share logins (the network-authentication agent's items).
+pub const SHARE_LOGIN_SERVICE: &str = "bifrost.network-auth.smb";
+
+/// The account of a share's login: `host/share`, in lower case, so one share is found whatever the case it is named in.
+pub fn share_login_account(host: &str, share: &str) -> String {
+    format!("{}/{}", host.trim().to_ascii_lowercase(), share.trim().to_ascii_lowercase())
+}
+
+/// Stores a share's login as `user NUL password`. Replaces the login already stored for that share (`SecItemUpdate`
+/// after `DuplicateItem`). A user name with a NUL byte is `Param`, because the NUL separates the two fields.
+pub fn save_share_login(store: &Store, host: &str, share: &str, user: &str, password: &str) -> Result<(), Error> {
+    if user.contains('\0') {
+        return Err(Error::Param);
+    }
+    let account = share_login_account(host, share);
+    let value = format!("{user}\0{password}");
+    match store.add(SHARE_LOGIN_SERVICE, &account, value.as_bytes()) {
+        Err(Error::DuplicateItem) => store.update(SHARE_LOGIN_SERVICE, &account, value.as_bytes()),
+        other => other,
+    }
+}
+
+/// Reads a share's login back as `(user, password)`. `ItemNotFound` when none is stored, or the stored item is not a
+/// login.
+pub fn share_login(store: &Store, host: &str, share: &str) -> Result<(String, String), Error> {
+    let bytes = store.get(SHARE_LOGIN_SERVICE, &share_login_account(host, share))?;
+    let at = bytes.iter().position(|&b| b == 0).ok_or(Error::ItemNotFound)?;
+    let user = String::from_utf8(bytes[..at].to_vec()).map_err(|_| Error::ItemNotFound)?;
+    let password = String::from_utf8(bytes[at + 1..].to_vec()).map_err(|_| Error::ItemNotFound)?;
+    Ok((user, password))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,6 +501,19 @@ mod tests {
 
     fn enc(d: &Path, app: &str) -> Store {
         Store::with_master(d.join(format!("{app}.kc")), &[9u8; 32], app)
+    }
+
+    #[test]
+    fn a_share_login_is_saved_found_and_replaced_without_case() {
+        let d = dir("share-login");
+        let s = enc(&d, "files");
+        assert_eq!(share_login(&s, "NAS.local", "Music"), Err(Error::ItemNotFound));
+        save_share_login(&s, "NAS.local", "Music", "ola", "pw1").unwrap();
+        assert_eq!(share_login(&s, "nas.local", "music"), Ok(("ola".to_string(), "pw1".to_string())));
+        save_share_login(&s, "nas.local", "music", "ola", "pw2").unwrap();
+        assert_eq!(share_login(&s, "nas.local", "MUSIC"), Ok(("ola".to_string(), "pw2".to_string())));
+        assert_eq!(share_login(&s, "nas.local", "photos"), Err(Error::ItemNotFound), "another share has no login");
+        assert_eq!(save_share_login(&s, "nas.local", "music", "o\0la", "x"), Err(Error::Param));
     }
 
     #[test]

@@ -102,9 +102,74 @@ pub fn finish(purpose: &Purpose, text: &str) -> Result<(), String> {
     }
 }
 
+/// One folder the SMB server shares: its share name, its path, and whether network users may write to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SharedFolder {
+    pub name: String,
+    pub path: String,
+    pub writable: bool,
+}
+
+/// The smb.conf section that shares a folder: `[name]` with its path, browseable, and read only unless writable.
+pub fn share_section(folder: &SharedFolder) -> String {
+    format!(
+        "[{}]\n   path = {}\n   browseable = yes\n   read only = {}\n",
+        folder.name,
+        folder.path,
+        if folder.writable { "no" } else { "yes" }
+    )
+}
+
+/// The folder shares in an smb.conf text, in file order. `[global]` and `[homes]` are not folder shares, and a section
+/// without a `path` is skipped. `read only = no` or `writable = yes` makes a folder writable.
+pub fn shares_in_conf(conf: &str) -> Vec<SharedFolder> {
+    let mut out: Vec<SharedFolder> = Vec::new();
+    let mut current: Option<SharedFolder> = None;
+    for raw in conf.lines() {
+        let line = raw.trim();
+        if let Some(name) = line.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+            out.extend(current.take());
+            let name = name.trim();
+            if !name.eq_ignore_ascii_case("global") && !name.eq_ignore_ascii_case("homes") {
+                current = Some(SharedFolder { name: name.to_string(), path: String::new(), writable: false });
+            }
+            continue;
+        }
+        let Some(folder) = current.as_mut() else { continue };
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let (key, value) = (key.trim().to_ascii_lowercase(), value.trim());
+        match key.as_str() {
+            "path" => folder.path = value.to_string(),
+            "read only" if value.eq_ignore_ascii_case("no") => folder.writable = true,
+            "writable" | "writeable" if value.eq_ignore_ascii_case("yes") => folder.writable = true,
+            _ => {}
+        }
+    }
+    out.extend(current);
+    out.retain(|f| !f.path.is_empty());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_share_is_written_as_a_section_and_read_back() {
+        let docs = SharedFolder { name: "Docs".into(), path: "/srv/docs".into(), writable: false };
+        let drop = SharedFolder { name: "Drop".into(), path: "/srv/drop".into(), writable: true };
+        let conf = format!("[global]\n   workgroup = HOME\n\n{}\n{}", share_section(&docs), share_section(&drop));
+        assert_eq!(shares_in_conf(&conf), vec![docs, drop]);
+    }
+
+    #[test]
+    fn global_homes_and_pathless_sections_are_not_folder_shares() {
+        let conf = "[global]\n path = /x\n[homes]\n path = /home\n[empty]\n read only = no\n[Music]\nPath=/srv/music\nWritable = Yes\n";
+        assert_eq!(
+            shares_in_conf(conf),
+            vec![SharedFolder { name: "Music".into(), path: "/srv/music".into(), writable: true }]
+        );
+    }
 
     fn off(_: &str) -> bool {
         false
