@@ -1,146 +1,146 @@
 {
-  "framework": "SiriKit",
-  "doc": "https://developer.apple.com/documentation/sirikit",
-  "macos_since": "12.0",
-  "status": "partial",
-  "bifrost": "bifrost_app::intents (springboard/sdk/src/intents.rs), springboard/src/shell/intents.rs, [[intent]] tables in manifest.toml",
-  "summary": "SiriKit's legacy domain intents (messaging, lists and notes, media, payments, rides, workouts, reservations, calling, car) and its voice path have no BifrOSt counterpart. BifrOSt has a typed, control-socket intent API (parameters, entities, results, Search shortcuts) modelled on App Intents, which Apple's SiriKit page names as the modern replacement; Siri voice input, parameter resolution and donation are missing.",
-  "rea_evidence": "ev_2f7315c5ab55a20c7efa9b8a6381904a5d20a2faa90b084ea8d978da8ee78e5d",
-  "features": [
-    {
-      "feature": "Intent objects and dispatch (INIntent, INIntentResponse)",
-      "apple": "INIntent, INIntentResponse, Dispatching intents to handlers",
-      "bifrost": "springboard/sdk/src/intents.rs (Intent, IntentResult, dispatch)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. Apps declare intents and answer intent.<id> over the control socket. No handler protocol and no per-intent handler classes; the app is one dispatch target."
-    },
-    {
-      "feature": "Parameter resolution, confirmation and disambiguation",
-      "apple": "Resolving the Parameters of an Intent, Confirming the Details of an Intent, Resolution Results",
-      "bifrost": "springboard/ui/src/intent_resolve.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs resolve (unchanged this round)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Common data types (strings, dates, URLs, entities)",
-      "apple": "Common Data Types, INParameter",
-      "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type). No currency, contact, image or person types."
-    },
-    {
-      "feature": "Entities and entity queries",
-      "apple": "INParameter (entity parameters), Common Data Types (contacts, people, lists)",
-      "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. Suggested, by id and by string. Nothing in the shell shows an entity picker yet."
-    },
-    {
-      "feature": "Intent results and dialog",
-      "apple": "INIntentResponse, Handling an Intent",
-      "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. Returns a JSON value and a dialog string to the caller. The dialog is not shown or spoken by Search."
-    },
-    {
-      "feature": "Shortcuts in Search (suggested actions)",
-      "apple": "Offering Actions in the Shortcuts App, INShortcut, INVoiceShortcutCenter",
-      "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line); springboard/src/shell/quicksearch.rs (shortcut_items, the Search 'Shortcuts' section); springboard/src/shell/apphost.rs (Manifest::parse reads [[intent]] with shortcut = true); springboard/tests/parity_sdk-tests-11.rs",
-      "status": "partial",
-      "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage. Built 2026-10-17: Search's shortcut list now comes from the shared shell::intents::runnable_shortcuts; tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app."
-    },
-    {
-      "feature": "Donating interactions and shortcuts",
-      "apple": "Donating Shortcuts, Donating Reservations, INInteraction, INIntentDonationMetadata, Deleting Donated Shortcuts",
-      "bifrost": "springboard/sdk/src/donation.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (siri-kit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot tell the system what the user did so Search can suggest it later."
-    },
-    {
-      "feature": "Shortcuts app integration",
-      "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
-      "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, Intent::manifest_toml, intent.list)",
-      "status": "partial",
-      "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Gap: the Shortcuts app does not read those listings yet, so it cannot list or run another app's intents. Built 2026-10-17: springboard/src/shell/intents.rs runnable_shortcuts(apps) lists every installed app's runnable shortcut intents from its manifest (no app launched), and quicksearch.rs shortcut_items uses it; tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app. The Shortcuts app's action library still lists only its own intents."
-    },
-    {
-      "feature": "Siri voice input and spoken responses",
-      "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
-      "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs, springboard/ui/src/voice_reply.rs, springboard/ui/tests/parity_sdk-complete-28.rs",
-      "status": "partial",
-      "note": "Spoken replies are tested headless in voice_reply.rs: a confirmed click, an ambiguous name, an unknown name and an unknown phrase get a sentence queued on the speech synthesizer in the chosen language, and silent commands get none. Gap: nothing recognises speech and the shell does not call the reply model yet; the Assistant app sends typed text only, and the voice path needs Midget."
-    },
-    {
-      "feature": "Custom vocabulary, synonyms and intent phrases",
-      "apple": "Registering Custom Vocabulary with SiriKit, INVocabulary, Specifying Synonyms for Your App Name, Intent Phrases, Parameter Vocabularies",
-      "bifrost": "springboard/ui/src/intent_vocab.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vocabulary file or phrase registration. Search matches titles and app names only."
-    },
-    {
-      "feature": "Messaging intents (send, search messages, contacts)",
-      "apple": "Messaging, Improving interactions between Siri and your messaging app",
-      "bifrost": "springboard/sdk/src/messaging.rs (SendRequest",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No messaging intent domain. A messaging app would need a conversation and contact entity model first."
-    },
-    {
-      "feature": "Lists and Notes intents",
-      "apple": "Lists and Notes",
-      "bifrost": "springboard/apps/notes-desktop/src/main.rs:222 (intents: new-note, create-note, search-notes)",
-      "status": "partial",
-      "note": "Notes exposes its own intents, not the SiriKit list and note domain. No Siri voice or domain matching."
-    },
-    {
-      "feature": "Media intents (play, add to queue, search media)",
-      "apple": "Media, Managing Audio with SiriKit, Improving Siri Media Interactions and App Selection",
-      "bifrost": "springboard/ui/src/media_request.rs (MediaVerb)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
-    },
-    {
-      "feature": "Ride, payment, workout, reservation, car and calling domains",
-      "apple": "Ride Booking, Payments, Workouts, Restaurant Reservations, Car Commands, VoIP Calling",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "These domains depend on vendor services, hardware or telephony that BifrOSt does not provide."
-    },
-    {
-      "feature": "Intents app extension and Intents UI extension",
-      "apple": "Creating an Intents App Extension, Creating an Intents UI Extension, Structuring Your Code to Support App Extensions",
-      "bifrost": "springboard/sdk/src/intents.rs (out-of-process call over the app control socket)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. The app itself serves intents over its control socket, so no extension target is needed. No separate extension process, no UI extension and no custom Siri or Maps view."
-    },
-    {
-      "feature": "Vocabulary files and intent declarations in the bundle",
-      "apple": "Global Vocabulary Reference, Intent Class Identifiers",
-      "bifrost": "manifest.toml [[intent]] tables (springboard/sdk/src/intents.rs manifest_toml)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 32 tests. Intent declarations are in the manifest. No vocabulary or global phrase file."
-    },
-    {
-      "feature": "Authorization to use Siri",
-      "apple": "Requesting Authorization to Use Siri",
-      "bifrost": "springboard/ui/src/intent_access.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
-    },
-    {
-      "feature": "Watch face and Maps relevance",
-      "apple": "Defining Relevant Shortcuts for the Siri Watch Face, Providing Live Status Updates, Generating a List of Ride Options",
-      "bifrost": "none",
-      "status": "n/a",
-      "note": "Apple Watch and Maps surfaces. BifrOSt has no watch or Maps host."
-    }
-  ],
-  "gaps": [
-    "No Siri voice input or spoken dialog; IntentResult.dialog is returned to the caller but not shown or spoken by Search (docs/bifrost-ui.md 'App Intents').",
-    "No parameter resolution, disambiguation or confirmation steps; Search runs only parameterless intents (springboard/sdk/src/intents.rs Intent::validate).",
-    "No intent donation (INInteraction and donated shortcuts), so Search cannot suggest what the user did.",
-    "No SiriKit domain intents for messaging, media, lists beyond Notes' own intents, or payments; media and messaging are the most relevant for a desktop.",
-    "The Shortcuts app does not list or run app intents (springboard/apps/shortcuts-desktop).",
-    "No vocabulary registration or synonyms for app names.",
-    "No authorization flow for intent access."
-  ]
+ "framework": "SiriKit",
+ "doc": "https://developer.apple.com/documentation/sirikit",
+ "macos_since": "12.0",
+ "status": "partial",
+ "bifrost": "bifrost_app::intents (springboard/sdk/src/intents.rs), springboard/src/shell/intents.rs, [[intent]] tables in manifest.toml",
+ "summary": "SiriKit's legacy domain intents (messaging, lists and notes, media, payments, rides, workouts, reservations, calling, car) and its voice path have no BifrOSt counterpart. BifrOSt has a typed, control-socket intent API (parameters, entities, results, Search shortcuts) modelled on App Intents, which Apple's SiriKit page names as the modern replacement; Siri voice input, parameter resolution and donation are missing.",
+ "rea_evidence": "ev_2f7315c5ab55a20c7efa9b8a6381904a5d20a2faa90b084ea8d978da8ee78e5d",
+ "features": [
+  {
+   "feature": "Intent objects and dispatch (INIntent, INIntentResponse)",
+   "apple": "INIntent, INIntentResponse, Dispatching intents to handlers",
+   "bifrost": "springboard/sdk/src/intents.rs (Intent, IntentResult, dispatch)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. Apps declare intents and answer intent.<id> over the control socket. No handler protocol and no per-intent handler classes; the app is one dispatch target."
+  },
+  {
+   "feature": "Parameter resolution, confirmation and disambiguation",
+   "apple": "Resolving the Parameters of an Intent, Confirming the Details of an Intent, Resolution Results",
+   "bifrost": "springboard/ui/src/intent_resolve.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs resolve (unchanged this round)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Common data types (strings, dates, URLs, entities)",
+   "apple": "Common Data Types, INParameter",
+   "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type). No currency, contact, image or person types."
+  },
+  {
+   "feature": "Entities and entity queries",
+   "apple": "INParameter (entity parameters), Common Data Types (contacts, people, lists)",
+   "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. Suggested, by id and by string. Nothing in the shell shows an entity picker yet."
+  },
+  {
+   "feature": "Intent results and dialog",
+   "apple": "INIntentResponse, Handling an Intent",
+   "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. Returns a JSON value and a dialog string to the caller. The dialog is not shown or spoken by Search."
+  },
+  {
+   "feature": "Shortcuts in Search (suggested actions)",
+   "apple": "Offering Actions in the Shortcuts App, INShortcut, INVoiceShortcutCenter",
+   "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line); springboard/src/shell/quicksearch.rs (shortcut_items, the Search 'Shortcuts' section); springboard/src/shell/apphost.rs (Manifest::parse reads [[intent]] with shortcut = true); springboard/tests/parity_sdk-tests-11.rs",
+   "status": "partial",
+   "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage. Built 2026-10-17: Search's shortcut list now comes from the shared shell::intents::runnable_shortcuts; tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app."
+  },
+  {
+   "feature": "Donating interactions and shortcuts",
+   "apple": "Donating Shortcuts, Donating Reservations, INInteraction, INIntentDonationMetadata, Deleting Donated Shortcuts",
+   "bifrost": "springboard/sdk/src/donation.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (siri-kit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot tell the system what the user did so Search can suggest it later."
+  },
+  {
+   "feature": "Shortcuts app integration",
+   "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
+   "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, Intent::manifest_toml, intent.list)",
+   "status": "partial",
+   "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Built 2026-10-17: springboard/src/shell/intents.rs runnable_shortcuts(apps) lists every installed app's runnable shortcut intents from its manifest (no app launched), quicksearch.rs shortcut_items uses it, and the Shortcuts app's action library lists them under From Apps (automation::app_intents, widget.rs Target::AppIntent); tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app, bifrost-shortcuts automation::tests::app_intents_lists_the_shortcut_intents_of_installed_apps and widget::tests::an_intent_of_another_app_is_listed_in_the_library_and_asks_for_a_run. Gap: a library tap runs another app's intent only while that app is open, because the shell starts apps and the Shortcuts app does not."
+  },
+  {
+   "feature": "Siri voice input and spoken responses",
+   "apple": "Requesting Authorization to Use Siri, SiriKit voice requests, Localizing Your Vocabulary",
+   "bifrost": "springboard/ui/src/speech.rs, springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/voice_commands.rs, springboard/ui/src/voice_reply.rs, springboard/ui/tests/parity_sdk-complete-28.rs",
+   "status": "partial",
+   "note": "Spoken replies are tested headless in voice_reply.rs: a confirmed click, an ambiguous name, an unknown name and an unknown phrase get a sentence queued on the speech synthesizer in the chosen language, and silent commands get none. Gap: nothing recognises speech and the shell does not call the reply model yet; the Assistant app sends typed text only, and the voice path needs Midget. Built 2026-10-17: with Settings > Assistant > Speak Answers on (off by default, assistant.speak), the assistant reads each answer and each run's reply aloud through the speech service under the shell's own speaker key (shell.assistant); tests shell::assistant_panel::tests::an_answer_is_handed_to_speech_once_and_a_failure_is_not and shell::services::speech::tests::the_shell_speaker_is_not_ended_as_an_app_that_quit. Voice recognition is still not built."
+  },
+  {
+   "feature": "Custom vocabulary, synonyms and intent phrases",
+   "apple": "Registering Custom Vocabulary with SiriKit, INVocabulary, Specifying Synonyms for Your App Name, Intent Phrases, Parameter Vocabularies",
+   "bifrost": "springboard/ui/src/intent_vocab.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vocabulary file or phrase registration. Search matches titles and app names only."
+  },
+  {
+   "feature": "Messaging intents (send, search messages, contacts)",
+   "apple": "Messaging, Improving interactions between Siri and your messaging app",
+   "bifrost": "springboard/sdk/src/messaging.rs (SendRequest",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No messaging intent domain. A messaging app would need a conversation and contact entity model first."
+  },
+  {
+   "feature": "Lists and Notes intents",
+   "apple": "Lists and Notes",
+   "bifrost": "springboard/apps/notes-desktop/src/main.rs:222 (intents: new-note, create-note, search-notes)",
+   "status": "partial",
+   "note": "Notes exposes its own intents, not the SiriKit list and note domain. No Siri voice or domain matching. Built 2026-10-17: Reminders has Create List Item (create-list-item: title, list, optional due date) beside Open List and Create List, which already show or make a list; tests bifrost-reminders actions_tests::create_list_item_adds_to_the_named_list_and_add_reminder_keeps_the_default_list."
+  },
+  {
+   "feature": "Media intents (play, add to queue, search media)",
+   "apple": "Media, Managing Audio with SiriKit, Improving Siri Media Interactions and App Selection",
+   "bifrost": "springboard/ui/src/media_request.rs (MediaVerb)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
+  },
+  {
+   "feature": "Ride, payment, workout, reservation, car and calling domains",
+   "apple": "Ride Booking, Payments, Workouts, Restaurant Reservations, Car Commands, VoIP Calling",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "These domains depend on vendor services, hardware or telephony that BifrOSt does not provide."
+  },
+  {
+   "feature": "Intents app extension and Intents UI extension",
+   "apple": "Creating an Intents App Extension, Creating an Intents UI Extension, Structuring Your Code to Support App Extensions",
+   "bifrost": "springboard/sdk/src/intents.rs (out-of-process call over the app control socket)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. The app itself serves intents over its control socket, so no extension target is needed. No separate extension process, no UI extension and no custom Siri or Maps view."
+  },
+  {
+   "feature": "Vocabulary files and intent declarations in the bundle",
+   "apple": "Global Vocabulary Reference, Intent Class Identifiers",
+   "bifrost": "manifest.toml [[intent]] tables (springboard/sdk/src/intents.rs manifest_toml)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 32 tests. Intent declarations are in the manifest. No vocabulary or global phrase file."
+  },
+  {
+   "feature": "Authorization to use Siri",
+   "apple": "Requesting Authorization to Use Siri",
+   "bifrost": "springboard/ui/src/intent_access.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
+  },
+  {
+   "feature": "Watch face and Maps relevance",
+   "apple": "Defining Relevant Shortcuts for the Siri Watch Face, Providing Live Status Updates, Generating a List of Ride Options",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Apple Watch and Maps surfaces. BifrOSt has no watch or Maps host."
+  }
+ ],
+ "gaps": [
+  "No Siri voice input: nothing recognises speech. The assistant reads its answers aloud behind Speak Answers; Search does not speak IntentResult.dialog (docs/bifrost-ui.md 'App Intents').",
+  "No parameter resolution, disambiguation or confirmation steps; Search runs only parameterless intents (springboard/sdk/src/intents.rs Intent::validate).",
+  "No intent donation (INInteraction and donated shortcuts), so Search cannot suggest what the user did.",
+  "No SiriKit domain intents for messaging, media, lists beyond Reminders' and Notes' own intents, or payments; media and messaging are the most relevant for a desktop.",
+  "The Shortcuts app lists every installed app's shortcut intents but runs one only while its app is open (springboard/apps/shortcuts-desktop).",
+  "No vocabulary registration or synonyms for app names.",
+  "No authorization flow for intent access."
+ ]
 }

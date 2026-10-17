@@ -26,6 +26,8 @@ pub const KEY_ENABLED: &str = "assistant.enabled";
 pub const KEY_CHORD: &str = "assistant.shortcut";
 pub const KEY_BACKEND: &str = "assistant.backend";
 pub const KEY_HISTORY: &str = "assistant.history";
+/// Answers are read aloud through the speech service (`services::speech`). Off by default.
+pub const KEY_SPEAK: &str = "assistant.speak";
 /// Per-app access: `assistant.app.<app id>` is `1` when the assistant may use that app's intents.
 pub const KEY_APP_PREFIX: &str = "assistant.app.";
 
@@ -129,13 +131,15 @@ pub struct Settings {
     pub backend: Backend,
     /// Keep conversations (and send earlier turns to the backend). Off by default.
     pub history: bool,
+    /// Read each answer aloud through the speech service. Off by default.
+    pub speak: bool,
     /// App ids whose intents the assistant may use.
     pub allowed: BTreeSet<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { enabled: false, chord: Chord::default(), backend: Backend::Off, history: false, allowed: BTreeSet::new() }
+        Settings { enabled: false, chord: Chord::default(), backend: Backend::Off, history: false, speak: false, allowed: BTreeSet::new() }
     }
 }
 
@@ -147,6 +151,7 @@ impl Settings {
             chord: prefs.get(KEY_CHORD).and_then(Chord::parse).unwrap_or(d.chord),
             backend: prefs.get(KEY_BACKEND).and_then(Backend::parse).unwrap_or(d.backend),
             history: prefs.get_bool(KEY_HISTORY, d.history),
+            speak: prefs.get_bool(KEY_SPEAK, d.speak),
             allowed: prefs
                 .entries()
                 .filter_map(|(k, v)| match k.strip_prefix(KEY_APP_PREFIX) {
@@ -165,6 +170,7 @@ impl Settings {
             (KEY_CHORD.into(), self.chord.key().into()),
             (KEY_BACKEND.into(), self.backend.key().into()),
             (KEY_HISTORY.into(), flag(self.history).into()),
+            (KEY_SPEAK.into(), flag(self.speak).into()),
         ];
         for app in &self.allowed {
             pairs.push((format!("{KEY_APP_PREFIX}{app}"), "1".into()));
@@ -316,7 +322,7 @@ mod tests {
     #[test]
     fn settings_round_trip_through_prefs() {
         let mut prefs = Prefs::memory();
-        let s = Settings { enabled: true, chord: Chord::Off, backend: Backend::Anthropic, history: true, allowed: allowed(&["a.b", "c.d"]).allowed };
+        let s = Settings { enabled: true, chord: Chord::Off, backend: Backend::Anthropic, history: true, speak: true, allowed: allowed(&["a.b", "c.d"]).allowed };
         s.save(&mut prefs).unwrap();
         assert_eq!(Settings::load(&prefs), s);
         assert_eq!(prefs.get("assistant.app.a.b"), Some("1"));

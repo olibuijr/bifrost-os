@@ -104,6 +104,8 @@ pub struct Panel {
     history: bool,
     /// lines scrolled off the top of the answer
     skip: usize,
+    /// the answer that arrived and is not yet handed to the speech service (see `take_answer`)
+    to_speak: Option<String>,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
 }
@@ -119,6 +121,7 @@ impl Panel {
             turns: Vec::new(),
             history: false,
             skip: 0,
+            to_speak: None,
             tx,
             rx,
         }
@@ -217,6 +220,7 @@ impl Panel {
                 if self.history {
                     self.turns.push((false, text.clone()));
                 }
+                self.to_speak = Some(text.clone());
                 self.phase = Phase::Answer(text);
             }
             Msg::Reply(Ok(Reply::Intent(call))) => {
@@ -224,10 +228,19 @@ impl Panel {
                 self.phase = Phase::Card(card);
             }
             Msg::Reply(Err(e)) => self.phase = Phase::Failed(e.to_string()),
-            Msg::Ran(Ok(Some(text))) => self.phase = Phase::Answer(text),
+            Msg::Ran(Ok(Some(text))) => {
+                self.to_speak = Some(text.clone());
+                self.phase = Phase::Answer(text);
+            }
             Msg::Ran(Ok(None)) => self.phase = Phase::Answer("Done.".into()),
             Msg::Ran(Err(e)) => self.phase = Phase::Failed(e),
         }
+    }
+
+    /// The answer that arrived since the last call, once: the shell hands it to the speech service when the setting is
+    /// on. A failure or a card is never an answer, so it is never spoken.
+    pub fn take_answer(&mut self) -> Option<String> {
+        self.to_speak.take()
     }
 
     /// Applies every result that has arrived. True when the screen must be drawn again.
@@ -438,7 +451,21 @@ impl Shell {
 
     /// Takes the worker results that arrived and redraws when there are some. True when a frame is needed.
     pub(super) fn assistant_tick(&mut self) -> bool {
-        self.assistant.receive()
+        let changed = self.assistant.receive();
+        if let Some(answer) = self.assistant.take_answer() {
+            if self.assistant_settings().speak {
+                self.assistant_speak(&answer);
+            }
+        }
+        changed
+    }
+
+    /// Reads an answer aloud through the speech service, under the shell's own speaker key. The answer is on screen
+    /// either way, so a missing engine is not reported here.
+    fn assistant_speak(&mut self, answer: &str) {
+        use super::services::speech::{clip, SERVICE, SHELL_SPEAKER};
+        let body = bifrost_core::json::Json::Obj(vec![("text".to_string(), bifrost_core::json::Json::Str(clip(answer).to_string()))]).encode();
+        let _ = self.service_call(SHELL_SPEAKER, SERVICE, "speak", &body, 0.0);
     }
 
     /// Touches while the panel is open belong to it: a tap outside closes it, and Run and Cancel act on the card.
@@ -710,5 +737,20 @@ mod tests {
         assert!(p.receive(), "a result arrived, so a frame is needed");
         assert_eq!(p.phase(), &Phase::Answer("Later.".into()));
         assert!(!p.receive());
+    }
+
+    #[test]
+    fn an_answer_is_handed_to_speech_once_and_a_failure_is_not() {
+        let ui = ui();
+        let mut p = shown(&ui);
+        p.apply(Msg::Reply(Err(Error::Unreachable("no route".into()))));
+        assert_eq!(p.take_answer(), None, "a failure is not spoken");
+        p.apply(Msg::Reply(Ok(Reply::Answer("It is noon.".into()))));
+        assert_eq!(p.take_answer(), Some("It is noon.".into()));
+        assert_eq!(p.take_answer(), None, "an answer is spoken once");
+        p.apply(Msg::Ran(Ok(Some("Saved.".into()))));
+        assert_eq!(p.take_answer(), Some("Saved.".into()), "a run's reply is an answer too");
+        p.apply(Msg::Ran(Err("The app did not answer".into())));
+        assert_eq!(p.take_answer(), None);
     }
 }

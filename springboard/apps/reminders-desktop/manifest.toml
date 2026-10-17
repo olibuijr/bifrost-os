@@ -23,6 +23,13 @@ shortcut = false
 params = ["title:string", "due:date?"]
 
 [[intent]]
+id = "create-list-item"
+title = "Create List Item"
+description = "Adds a reminder to the named list, with an optional due date."
+shortcut = false
+params = ["title:string", "list:string", "due:date?"]
+
+[[intent]]
 id = "quick-reminder"
 title = "Add Quick Reminder"
 description = "Adds a reminder from a line such as \"call mum tomorrow 9am\"."

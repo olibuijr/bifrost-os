@@ -17,6 +17,8 @@ pub enum Edit {
     Backend(Backend),
     /// conversations kept and sent with later questions
     History(bool),
+    /// answers read aloud
+    Speak(bool),
     /// the app `id` may (or may not) have its intents used
     App { id: String, on: bool },
 }
@@ -33,6 +35,7 @@ pub fn apply(prefs: &mut Prefs, edit: &Edit) -> io::Result<()> {
         Edit::Enabled(on) => s.enabled = *on,
         Edit::Backend(b) => s.backend = *b,
         Edit::History(on) => s.history = *on,
+        Edit::Speak(on) => s.speak = *on,
         Edit::App { id, on } => {
             if *on {
                 s.allowed.insert(id.clone());
@@ -58,6 +61,8 @@ pub fn spec(s: &AssistantSettings, apps: &[(String, String)]) -> Spec {
         .footer("Anthropic API sends each question, and the actions of the apps you allow, to api.anthropic.com. Its key is read from the keychain item is.olibuijr.assistant."),
         Group::new(vec![Item::new("Keep Conversation History").switch(s.history, Action::Assistant(Edit::History(!s.history)))])
             .footer("Off: each question stands alone and nothing is kept. On: earlier turns are kept here and sent with new questions."),
+        Group::new(vec![Item::new("Speak Answers").switch(s.speak, Action::Assistant(Edit::Speak(!s.speak)))])
+            .footer("The answer is read aloud by the speech engine when it arrives. Nothing is read while the setting is off."),
     ];
     let rows: Vec<Item> = if apps.is_empty() {
         vec![Item::new("No installed app declares actions.")]
@@ -101,13 +106,14 @@ mod tests {
         assert_eq!(backend[0].accessory, Accessory::Check(true), "Off is the chosen backend");
         assert_eq!(backend[1].accessory, Accessory::Check(false));
         assert_eq!(switch_on(&s.groups[3].items[0]), Some(false), "history is off");
+        assert_eq!(switch_on(&s.groups[4].items[0]), Some(false), "answers are not spoken");
     }
 
     #[test]
     fn each_installed_app_with_intents_gets_an_access_switch() {
         let allowed = AssistantSettings { allowed: ["is.olibuijr.calendar".to_string()].into_iter().collect(), ..AssistantSettings::default() };
         let s = spec(&allowed, &apps());
-        let rows = &s.groups[4].items;
+        let rows = &s.groups[5].items;
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].label, "Notes");
         assert_eq!(switch_on(&rows[0]), Some(false));
@@ -119,7 +125,7 @@ mod tests {
     #[test]
     fn with_no_app_declaring_intents_the_page_says_so() {
         let s = spec(&AssistantSettings::default(), &[]);
-        assert_eq!(s.groups[4].items[0].label, "No installed app declares actions.");
+        assert_eq!(s.groups[5].items[0].label, "No installed app declares actions.");
     }
 
     #[test]
@@ -128,6 +134,7 @@ mod tests {
         assert_eq!(s.groups[0].items[0].action, Action::Assistant(Edit::Enabled(false)));
         assert_eq!(s.groups[2].items[1].action, Action::Assistant(Edit::Backend(Backend::Anthropic)));
         assert_eq!(s.groups[3].items[0].action, Action::Assistant(Edit::History(false)));
+        assert_eq!(s.groups[4].items[0].action, Action::Assistant(Edit::Speak(true)));
     }
 
     #[test]
@@ -136,9 +143,10 @@ mod tests {
         apply(&mut prefs, &Edit::Enabled(true)).unwrap();
         apply(&mut prefs, &Edit::Backend(Backend::Anthropic)).unwrap();
         apply(&mut prefs, &Edit::History(true)).unwrap();
+        apply(&mut prefs, &Edit::Speak(true)).unwrap();
         apply(&mut prefs, &Edit::App { id: "is.olibuijr.notes".into(), on: true }).unwrap();
         let s = AssistantSettings::load(&prefs);
-        assert!(s.enabled && s.history);
+        assert!(s.enabled && s.history && s.speak);
         assert_eq!(s.backend, Backend::Anthropic);
         assert!(s.allowed.contains("is.olibuijr.notes"));
         apply(&mut prefs, &Edit::App { id: "is.olibuijr.notes".into(), on: false }).unwrap();

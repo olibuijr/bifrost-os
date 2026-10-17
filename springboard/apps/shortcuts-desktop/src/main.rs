@@ -38,6 +38,8 @@ struct ShortcutsApp {
     export: Option<(u32, Vec<u8>)>,
     /// the request of the open panel an import waits for
     import: Option<u32>,
+    /// whether the other apps' shortcut intents have been read from disk (the library lists them)
+    app_intents_loaded: bool,
 }
 
 impl ShortcutsApp {
@@ -83,6 +85,7 @@ impl ShortcutsApp {
             c.show_run(&s.name, &steps, t);
         }
         let requests = c.take_intent_requests();
+        let app_requests = c.take_app_intent_requests();
         let login_request = c.take_login_request();
         let export = c.take_export_request();
         let import = c.take_import_request();
@@ -104,6 +107,9 @@ impl ShortcutsApp {
         for (id, params) in requests {
             self.run_intent(&ctx.data_dir, &id, &params, t);
         }
+        for (app_id, name, id) in app_requests {
+            self.run_app_intent(&app_id, &name, &id);
+        }
     }
 
     /// Shows `text` in the window for a few seconds.
@@ -119,6 +125,33 @@ impl ShortcutsApp {
     fn sync(&mut self, ctx: &Ctx) {
         let list = self.shortcuts(&ctx.data_dir);
         self.reminders = Some(services::sync_reminders(ctx, self.reminders.as_deref(), &list));
+        self.sync_app_intents();
+    }
+
+    /// Gives the library the shortcut intents of the installed apps. They are read from the manifests on disk, again
+    /// only when the apps registry changed (a cheap stat), so an input never rescans the apps.
+    fn sync_app_intents(&mut self) {
+        let changed = springboard::shell::apphost::disk_changed();
+        if self.app_intents_loaded && !changed {
+            return;
+        }
+        self.app_intents_loaded = true;
+        let list = automation::app_intents(&springboard::shell::apphost::root());
+        if let Some(c) = self.w.as_mut() {
+            c.set_app_intents(list);
+        }
+    }
+
+    /// Runs an intent another app declares, from the library's "From Apps" section, and shows its dialog (or why it
+    /// did not run) in the window.
+    fn run_app_intent(&mut self, app_id: &str, app_name: &str, intent_id: &str) {
+        let outcome = automation::run_app_intent(app_id, app_name, intent_id);
+        let Some(c) = self.w.as_mut() else { return };
+        let t = c.now();
+        match outcome {
+            Ok(dialog) => c.show_result(&dialog.unwrap_or_else(|| "Done.".to_string()), t),
+            Err(e) => c.show_result(&e, t),
+        }
     }
 }
 
@@ -315,5 +348,6 @@ fn main() {
         keyboard: false,
         export: None,
         import: None,
+        app_intents_loaded: false,
     });
 }
