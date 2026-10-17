@@ -11,9 +11,13 @@
 use super::display_services::require_screen_recording;
 use super::privacy_permissions;
 use super::{app_pid, Event, Shell, SystemService};
-use crate::gfx::{Image, Surface};
+use crate::gfx::{pack, Image, Surface};
 use bifrost_core::json::Json;
 use bifrost_ui::capture_config::StreamConfig;
+use bifrost_ui::capture_content::{CaptureDisplay, CaptureWindow, ShareableContent};
+use bifrost_ui::capture_filter::{ContentFilter, Rule};
+use bifrost_ui::Rect;
+use super::super::apps::AppId;
 use bifrost_ui::capture_stream::{Frame, FrameKind, ScreenStream};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -26,6 +30,8 @@ pub const DEFAULT_INTERVAL: f64 = 1.0 / 30.0;
 /// One running stream: its pacing, the hash of the last picture, and the file of the last fresh frame.
 struct Active {
     stream: ScreenStream,
+    /// what the stream shows: the whole display, one window, or one app
+    filter: ContentFilter,
     hash: Option<u64>,
     path: Option<PathBuf>,
 }
@@ -81,6 +87,89 @@ pub fn file_stem(app_id: &str) -> String {
     }
 }
 
+/// The one display the shell has. Its id in the content and filters.
+const DISPLAY: u32 = 0;
+
+/// The filter a start request asks for. `{"window": id}` shows one window. `{"app": pid}` shows one app's windows.
+/// `{"excludeApps": [pid, ...]}`, or nothing, shows the display without those apps.
+pub fn filter_from(params: &Json) -> Result<ContentFilter, String> {
+    let pid = |v: &Json| v.number().filter(|n| *n >= 0.0 && n.fract() == 0.0).map(|n| n as u32);
+    if let Some(window) = params.get("window") {
+        return Ok(ContentFilter::window(pid(window).ok_or("window must be a window id")?));
+    }
+    if let Some(app) = params.get("app") {
+        let app = pid(app).ok_or("app must be a process id")?;
+        return Ok(ContentFilter::display(DISPLAY, Rule::IncludeApps { pids: vec![app], except: Vec::new() }));
+    }
+    let excluded = match params.get("excludeApps") {
+        Some(list) => list.as_array().ok_or("excludeApps must be a list")?.iter().map(|v| pid(v).ok_or("excludeApps holds process ids")).collect::<Result<Vec<u32>, &str>>()?,
+        None => Vec::new(),
+    };
+    Ok(ContentFilter::display(DISPLAY, Rule::ExcludeApps { pids: excluded, except: Vec::new() }))
+}
+
+/// What the shell can stream: its display and the windows on the desk that are not minimized. A window's id is its
+/// position in the desk's list, so it holds while that list does not change.
+pub fn shareable_content(shell: &Shell) -> ShareableContent {
+    let displays = vec![CaptureDisplay { id: DISPLAY, frame: Rect { x: 0.0, y: 0.0, w: shell.w as f32, h: shell.h as f32 } }];
+    let windows: Vec<CaptureWindow> = shell.desk.as_ref().map_or_else(Vec::new, |d| {
+        d.wins
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| !w.minimized)
+            .map(|(i, w)| CaptureWindow {
+                id: i as u32,
+                title: String::new(),
+                app_pid: window_pid(shell, w.app),
+                frame: Rect { x: w.r.x as f32, y: w.r.y as f32, w: w.r.w as f32, h: w.r.h as f32 },
+                on_screen: true,
+                desktop: false,
+            })
+            .collect()
+    });
+    ShareableContent::new(displays, Vec::new(), windows)
+}
+
+/// The process id of the app that owns a window. Built-in apps have none, so they read as 0.
+fn window_pid(shell: &Shell, app: AppId) -> u32 {
+    match app {
+        AppId::External(slot) | AppId::ExternalWindow(slot, _) => shell.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h| h.pid()).unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// The picture a stream sends: `base` with the masked rectangles blanked, cropped to `region` (the whole picture when
+/// None), and the pointer drawn on top when it is inside the region. `base` is not changed.
+pub fn frame_for(base: &Image, region: Option<Rect>, masks: &[Rect], pointer: Option<(i32, i32)>) -> Image {
+    let mut full = Image { w: base.w, h: base.h, px: base.px.clone() };
+    for m in masks {
+        let (x0, y0, x1, y1) = clip(m, base.w, base.h);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                full.px[y * full.w + x] = pack(0, 0, 0, 255);
+            }
+        }
+    }
+    let (ox, oy, w, h) = match region {
+        Some(r) => {
+            let (x0, y0, x1, y1) = clip(&r, base.w, base.h);
+            (x0, y0, x1 - x0, y1 - y0)
+        }
+        None => (0, 0, base.w, base.h),
+    };
+    let img = if (ox, oy, w, h) == (0, 0, base.w, base.h) { full } else { full.crop(ox, oy, w, h) };
+    with_pointer(&img, pointer.map(|(x, y)| (x - ox as i32, y - oy as i32)))
+}
+
+/// The pixel box of `r` inside a `w` by `h` picture, as (x0, y0, x1, y1). Empty when `r` is off the picture.
+fn clip(r: &Rect, w: usize, h: usize) -> (usize, usize, usize, usize) {
+    let x0 = r.x.floor().clamp(0.0, w as f32) as usize;
+    let y0 = r.y.floor().clamp(0.0, h as f32) as usize;
+    let x1 = (r.x + r.w).ceil().clamp(0.0, w as f32) as usize;
+    let y1 = (r.y + r.h).ceil().clamp(0.0, h as f32) as usize;
+    (x0, y0, x1.max(x0), y1.max(y0))
+}
+
 /// A copy of `base` with the pointer arrow drawn at `pointer` (display pixels). The pointer is left out when it is
 /// off the display or unknown. `base` itself is not changed, so the presented picture stays clean.
 pub fn with_pointer(base: &Image, pointer: Option<(i32, i32)>) -> Image {
@@ -131,7 +220,8 @@ impl SystemService for ScreenStreamService {
                 require_screen_recording(app_id)?;
                 let config = config_from(params, app_id, shell.w as u32, shell.h as u32);
                 let stream = ScreenStream::start(&privacy_permissions::access(app_id), config, t / 1000.0).map_err(|e| e.describe().to_string())?;
-                self.active.insert(app_id.to_string(), Active { stream, hash: None, path: None });
+                let filter = filter_from(params)?;
+                self.active.insert(app_id.to_string(), Active { stream, filter, hash: None, path: None });
                 Ok(Json::Obj(Vec::new()))
             }
             "stop" => {
@@ -165,20 +255,22 @@ impl SystemService for ScreenStreamService {
             shell.dirty = true;
             img
         });
-        // the pointer is part of the picture: a moved pointer makes a fresh frame
-        let framed = with_pointer(img, super::screen_sample::pointer_position());
-        let hash = frame_hash(&framed.px);
+        let pointer = super::screen_sample::pointer_position();
+        let content = shareable_content(shell);
         let (unix, _) = shell.wall_now(t);
         let dir = shell.data_dir.join("ScreenStream");
         let mut out = Vec::new();
         for app in due {
             let Some(a) = self.active.get_mut(&app) else { continue };
-            let changed = a.hash != Some(hash);
-            let Some(frame) = a.stream.tick(now, changed) else { continue };
+            // each stream sends its own filter's picture: its region, its blanked windows, and the pointer
+            let composed = frame_for(img, a.filter.source_region(&content), &a.filter.masked_frames(&content), pointer);
+            // a moved pointer or a changed window makes a fresh frame
+            let hash = frame_hash(&composed.px);
+            let Some(frame) = a.stream.tick(now, a.hash != Some(hash)) else { continue };
             a.hash = Some(hash);
             if frame.kind == FrameKind::Fresh {
                 let name = format!("{}.png", file_stem(&app));
-                match super::super::screenshot::write(&dir, &name, &super::super::screenshot::encode(&framed), unix) {
+                match super::super::screenshot::write(&dir, &name, &super::super::screenshot::encode(&composed), unix) {
                     Ok(path) => a.path = Some(path),
                     Err(e) => {
                         eprintln!("springboard: screen stream {app}: {e}");
@@ -225,6 +317,38 @@ mod tests {
     }
 
     #[test]
+    fn a_start_request_names_its_filter() {
+        let num = |k: &str, v: f64| Json::Obj(vec![(k.into(), Json::Num(v))]);
+        assert_eq!(filter_from(&num("window", 5.0)).unwrap(), ContentFilter::window(5));
+        let app = filter_from(&num("app", 7.0)).unwrap();
+        assert_eq!(app, ContentFilter::display(DISPLAY, Rule::IncludeApps { pids: vec![7], except: Vec::new() }));
+        let everything = filter_from(&Json::Obj(Vec::new())).unwrap();
+        assert_eq!(everything, ContentFilter::display(DISPLAY, Rule::ExcludeApps { pids: Vec::new(), except: Vec::new() }));
+        let minus = Json::Obj(vec![("excludeApps".into(), Json::Arr(vec![Json::Num(3.0)]))]);
+        assert_eq!(filter_from(&minus).unwrap(), ContentFilter::display(DISPLAY, Rule::ExcludeApps { pids: vec![3], except: Vec::new() }));
+        assert!(filter_from(&Json::Obj(vec![("window".into(), Json::Str("x".into()))])).is_err());
+        assert!(filter_from(&num("app", -1.0)).is_err());
+    }
+
+    #[test]
+    fn a_frame_is_the_region_with_masked_windows_blanked() {
+        let base = Image { w: 4, h: 4, px: vec![1u32; 16] };
+        let black = pack(0, 0, 0, 255);
+        // the region is the lower right 2 by 2; the mask covers its top left pixel
+        let region = Rect { x: 2.0, y: 2.0, w: 2.0, h: 2.0 };
+        let masks = [Rect { x: 0.0, y: 0.0, w: 3.0, h: 3.0 }];
+        let frame = frame_for(&base, Some(region), &masks, None);
+        assert_eq!((frame.w, frame.h), (2, 2));
+        assert_eq!(frame.px[0], black, "the masked pixel (2, 2) is blanked");
+        assert_eq!(frame.px[3], 1, "the unmasked pixel (3, 3) is kept");
+        // the whole picture without a region, and the pointer drawn inside the region
+        assert_eq!(frame_for(&base, None, &[], None).px, base.px);
+        let pointed = frame_for(&base, Some(region), &[], Some((3, 3)));
+        assert_ne!(pointed.px[3], 1, "the pointer at (3, 3) is drawn in the region");
+        assert_eq!(frame_for(&base, Some(region), &[], Some((0, 0))).px, frame_for(&base, Some(region), &[], None).px, "off the region draws nothing");
+    }
+
+    #[test]
     fn the_picture_is_drawn_again_only_when_the_shell_changed() {
         use std::cell::Cell;
         let draws = Cell::new(0);
@@ -260,8 +384,9 @@ mod tests {
         access.request(bifrost_ui::capture_access::Media::Screen, true);
         let stream = || ScreenStream::start(&access, StreamConfig::default(), 0.0).unwrap();
         let mut active = HashMap::new();
-        active.insert("is.a".to_string(), Active { stream: stream(), hash: None, path: None });
-        active.insert("is.b".to_string(), Active { stream: stream(), hash: None, path: None });
+        let filter = || ContentFilter::display(0, Rule::ExcludeWindows(Vec::new()));
+        active.insert("is.a".to_string(), Active { stream: stream(), filter: filter(), hash: None, path: None });
+        active.insert("is.b".to_string(), Active { stream: stream(), filter: filter(), hash: None, path: None });
         let gone = stop_exited(&mut active, |app| app == "is.b");
         assert_eq!(gone, vec!["is.a".to_string()]);
         assert!(active.contains_key("is.b") && !active.contains_key("is.a"));
