@@ -226,6 +226,8 @@ pub struct Info {
     pub display_mode: Option<(u32, u32, u32)>,
     /// the refresh rates the panel offers at its current size, fastest first (Settings > Displays > Refresh Rate)
     pub display_rates: Vec<f32>,
+    /// the sizes the panel offers, largest first (Settings > Displays > Resolution)
+    pub display_sizes: Vec<(u32, u32)>,
     pub brightness_supported: bool,
     pub battery_present: bool,
     pub desktop_network: Option<desktop_network::Snapshot>,

@@ -15,7 +15,7 @@ use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
 use super::services::privacy_permissions::{self, Row};
-use super::services::display_services::{rate_label, RefreshChoice};
+use super::services::display_services::{rate_label, resolution_label, RefreshChoice};
 use crate::bare::bluetooth::{Cmd, State as BtState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -64,6 +64,8 @@ pub enum PageId {
     Display,
     /// Displays > Refresh Rate: Highest Available or one of the panel's rates (see `refresh_rate_page`)
     RefreshRate,
+    /// Displays > Resolution: Native or one of the sizes the panel offers (see `resolution_page`)
+    Resolution,
     NightShift,
     AutoLock,
     /// Lock Screen > Require Password: the grace after the display goes off (see `options::REQUIRE_AFTER`)
@@ -285,6 +287,8 @@ pub enum Pick {
     TrackpadSecondary(usize),
     /// Displays > Refresh Rate: 0 is Highest Available, n the (n-1)th rate the panel offers (see `services::display_services::choice_at`)
     RefreshRate(usize),
+    /// Displays > Resolution: 0 is Native, n the (n-1)th size the panel offers (see `services::display_services::resolution_at`)
+    Resolution(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -459,6 +463,8 @@ pub struct Model<'a> {
     pub fonts: &'a FontsView,
     /// Displays > Refresh Rate: the choice kept in the display-refresh file (Highest Available when missing)
     pub refresh: RefreshChoice,
+    /// Displays > Resolution: the size chosen (None is Native), kept in the display-resolution file
+    pub resolution: Option<(u32, u32)>,
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
     /// the Sharing page: the computer name and the service states (read off the UI thread, see `settings_load`)
@@ -1047,6 +1053,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::RefreshRate => refresh_rate_page(m),
+        PageId::Resolution => resolution_page(m),
         PageId::Dictionary => page(
             "Dictionary",
             false,
@@ -1658,6 +1665,7 @@ pub fn desktop_display(m: &Model<'_>) -> Spec {
     let mut display = vec![];
     if let Some((w, h, _)) = m.info.display_mode {
         display.push(Item::new("Resolution").value(format!("{w} × {h}")));
+        display.push(Item::new("Resolution").value(resolution_label(m.resolution)).link(PageId::Resolution));
         display.push(Item::new("Refresh Rate").value(m.refresh.label()).link(PageId::RefreshRate));
     }
     display.push(Item::new("Appearance").value(bifrost_render::appearance::mode_label(bifrost_render::appearance::mode())).link(PageId::Appearance));
@@ -1688,6 +1696,17 @@ pub fn refresh_rate_page(m: &Model<'_>) -> Spec {
     }));
     Spec { id: PageId::RefreshRate, title: "Refresh Rate".into(), large: false, groups: vec![
         Group::new(rows).footer("The highest refresh rate is used unless another is chosen. Rates are the ones the display offers at its resolution."),
+    ] }
+}
+
+/// Displays > Resolution: Native (the default) and each size the panel offers, the chosen one checked.
+pub fn resolution_page(m: &Model<'_>) -> Spec {
+    let mut rows = vec![Item::new(resolution_label(None)).check(m.resolution.is_none(), Action::Pick(Pick::Resolution(0)))];
+    rows.extend(m.info.display_sizes.iter().enumerate().map(|(i, &(w, h))| {
+        Item::new(resolution_label(Some((w, h)))).check(m.resolution == Some((w, h)), Action::Pick(Pick::Resolution(i + 1)))
+    }));
+    Spec { id: PageId::Resolution, title: "Resolution".into(), large: false, groups: vec![
+        Group::new(rows).footer("Native is the panel's own size. Choosing another size changes the whole screen until it is changed back."),
     ] }
 }
 
@@ -1770,7 +1789,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, resolution: None, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
     }
 
     #[test]
@@ -1956,6 +1975,38 @@ mod tests {
         assert_eq!((row.label.as_str(), row.value.as_str()), ("Refresh Rate", "144 Hz"));
         assert_eq!(row.action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("highest refresh rate is used unless another is chosen"));
+    }
+
+    #[test]
+    fn the_resolution_row_shows_native_or_the_chosen_size_and_opens_the_picker() {
+        let mut info = info();
+        info.display_mode = Some((2560, 1600, 165));
+        info.display_sizes = vec![(2560, 1600), (1920, 1200)];
+        let opts = Options::default();
+        let s = desktop_display(&Model { resolution: Some((1920, 1200)), ..model(&info, &opts) });
+        let row = &s.groups[0].items[0];
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("Resolution", "1920 × 1200"));
+        assert_eq!(row.action, Action::Push(PageId::Resolution));
+        let native = desktop_display(&model(&info, &opts));
+        assert_eq!(native.groups[0].items[0].value, "Native");
+    }
+
+    #[test]
+    fn the_resolution_picker_lists_native_then_each_size_with_the_choice_checked() {
+        let mut info = info();
+        info.display_sizes = vec![(2560, 1600), (1920, 1200), (1280, 800)];
+        let opts = Options::default();
+        let p = spec(PageId::Resolution, &Model { resolution: Some((1920, 1200)), ..model(&info, &opts) });
+        assert_eq!(p.title, "Resolution");
+        let rows = &p.groups[0].items;
+        let labels: Vec<&str> = rows.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Native", "2560 × 1600", "1920 × 1200", "1280 × 800"]);
+        let checked: Vec<bool> = rows.iter().map(|i| i.accessory == Accessory::Check(true)).collect();
+        assert_eq!(checked, [false, false, true, false], "only the chosen size is checked");
+        assert_eq!(rows[0].action, Action::Pick(Pick::Resolution(0)));
+        assert_eq!(rows[3].action, Action::Pick(Pick::Resolution(3)));
+        let native = spec(PageId::Resolution, &model(&info, &opts));
+        assert!(native.groups[0].items[0].accessory == Accessory::Check(true), "Native is checked when nothing is chosen");
     }
 
     #[test]

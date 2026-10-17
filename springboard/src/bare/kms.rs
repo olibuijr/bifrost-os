@@ -541,8 +541,30 @@ pub fn wlr_randr_rates(text: &str) -> Vec<f32> {
     rates
 }
 
+/// The sizes `wlr-randr` lists (`2560x1440 px, ...` lines), each once, largest first: the Resolution choices.
+pub fn wlr_randr_sizes(text: &str) -> Vec<(u32, u32)> {
+    let mut sizes: Vec<(u32, u32)> = text
+        .lines()
+        .filter_map(|l| {
+            let (size, _) = l.trim().split_once(" px, ")?;
+            let (w, h) = size.split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .collect();
+    sizes.sort_by(|a, b| (b.0 * b.1).cmp(&(a.0 * a.1)).then(b.0.cmp(&a.0)));
+    sizes.dedup();
+    sizes
+}
+
 #[cfg(test)]
 mod wlr_rates_tests {
+    #[test]
+    fn sizes_are_listed_once_largest_first() {
+        let t = "eDP-1 \"panel\"\n  Modes:\n    1280x800 px, 60.000000 Hz\n    2560x1600 px, 165.000000 Hz (current)\n    1920x1200 px, 60.000000 Hz\n    2560x1600 px, 60.000000 Hz\n";
+        assert_eq!(super::wlr_randr_sizes(t), vec![(2560, 1600), (1920, 1200), (1280, 800)]);
+        assert!(super::wlr_randr_sizes("no modes").is_empty());
+    }
+
     #[test]
     fn rates_at_the_current_size_fastest_first() {
         let t = "DP-2 \"x\"\n  Modes:\n    2560x1440 px, 59.951000 Hz (preferred)\n    2560x1440 px, 164.847000 Hz (current)\n    2560x1440 px, 143.998993 Hz\n    1920x1080 px, 60.000000 Hz\n";
@@ -582,6 +604,8 @@ pub struct Display {
     pub mode: ModeInfo,
     /// the refresh rates the panel offers at the current size, fastest first (Settings > Displays > Refresh Rate)
     pub rates: Vec<f32>,
+    /// the sizes the panel offers, largest first (Settings > Displays > Resolution)
+    pub sizes: Vec<(u32, u32)>,
     bufs: [Buffer; 2],
     owed: Owed,
     back: usize,
@@ -731,7 +755,7 @@ impl Display {
         };
         let bufs = [make()?, make()?];
         let owed = Owed::new(w as usize, h as usize);
-        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, rates, bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None, cursor_on: false };
+        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, rates, sizes: Vec::new(), bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None, cursor_on: false };
         disp.set_crtc(0)?;
         Ok(disp)
     }
@@ -796,9 +820,10 @@ impl Display {
         let (w,h) = backend.size();
         let mut display = Self::virtual_panel(w,h,60);
         display.mode.vrefresh = backend.refresh();
-        // the rates Settings > Displays > Refresh Rate offers: the window server's modes at the current size
-        display.rates = std::process::Command::new("wlr-randr").output().ok()
-            .map(|o| wlr_randr_rates(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default();
+        // the rates Settings > Displays > Refresh Rate offers and the sizes Resolution offers: the window server's modes
+        let randr = std::process::Command::new("wlr-randr").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+        display.rates = wlr_randr_rates(&randr);
+        display.sizes = wlr_randr_sizes(&randr);
         display.wayland = Some(backend);
         // No shell copy of the boot frame under bifrost-wm: its surface can be scaled, so a frame drawn here would not
         // match the loader's mark box in panel pixels. Bootweave's frame stays up until the first present.
@@ -888,7 +913,7 @@ impl Display {
     pub fn virtual_panel(w: usize, h: usize, hz: u32) -> Self {
         let mode = ModeInfo { hdisplay: w as u16, vdisplay: h as u16, vrefresh: hz.max(1), ..Default::default() };
         let none = || Buffer { fb: 0, pitch: 0, map: std::ptr::null_mut() };
-        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, cursor_on: false, mode, rates: Vec::new(), bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
+        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, cursor_on: false, mode, rates: Vec::new(), sizes: Vec::new(), bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
     }
 
     /// The panel's physical size in mm, when the connector reported one (never for a virtual panel).

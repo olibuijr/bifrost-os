@@ -232,6 +232,7 @@ fn run() -> std::io::Result<()> {
     let slow: std::cell::RefCell<(f64, (u64, u64), Vec<(String, String)>)> = std::cell::RefCell::new((f64::NEG_INFINITY, (0, 0), Vec::new()));
     let panel_mode = (w as u32, h as u32, disp.mode.vrefresh);
     let panel_rates = disp.rates.clone();
+    let panel_sizes = disp.sizes.clone();
     let brightness_supported = power::find_backlight(std::path::Path::new("/sys/class/backlight")).is_some();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
@@ -269,6 +270,7 @@ fn run() -> std::io::Result<()> {
         Info {
             display_mode: Some(panel_mode),
             display_rates: panel_rates.clone(),
+            display_sizes: panel_sizes.clone(),
             brightness_supported,
             battery_present,
             desktop_network: None,
