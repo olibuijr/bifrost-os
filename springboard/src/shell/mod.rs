@@ -112,6 +112,7 @@ mod recent_items;
 #[cfg(feature = "desktop-wayland")]
 mod print_sheet;
 mod character_viewer;
+mod help_viewer;
 mod keyboard_viewer;
 pub mod session;
 pub mod prefs;
@@ -695,6 +696,7 @@ pub struct Shell {
     print_sheet: Option<print_sheet::PrintSheet>,
     /// Edit > Emoji & Symbols: the character viewer panel (see `character_viewer.rs`)
     char_viewer: Option<character_viewer::CharacterViewer>,
+    help_viewer: Option<help_viewer::HelpViewer>,
     /// Option+Cmd+F5: the Accessibility Shortcut panel with a checkbox per chosen feature (see `accessibility::shortcut_panel`)
     a11y_panel: Option<accessibility::shortcut_panel::ShortcutPanel>,
     /// Input Sources > Show Keyboard Viewer: the keyboard board panel (see `keyboard_viewer.rs`)
@@ -990,6 +992,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
             char_viewer: None,
+            help_viewer: None,
             a11y_panel: None,
             keyboard_viewer: None,
             share: None,
@@ -1380,6 +1383,10 @@ impl Shell {
         }
         if let Some(fx) = self.keyboard_viewer_touch(ev) {
             return Some(fx);
+        }
+        if self.help_viewer.is_some() {
+            // the Help viewer takes every touch until Done
+            return Some(self.help_viewer_event(ev));
         }
         if self.char_viewer.is_some() {
             // the character viewer takes every touch until Done
@@ -3533,7 +3540,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3563,6 +3570,9 @@ impl Shell {
             if let Some(v) = &self.char_viewer {
                 v.draw(s, &self.ui, self.w, self.h);
             }
+            if let Some(v) = &self.help_viewer {
+                v.draw(s, &self.ui, self.w, self.h);
+            }
             if let Some(v) = &self.keyboard_viewer {
                 v.draw(s, &self.ui, self.w, self.h, self.keyboard_viewer_layout());
             }
@@ -3588,7 +3598,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3609,7 +3619,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -4347,6 +4357,11 @@ impl Shell {
     }
 
     fn type_out(&mut self, out: Out, t: f64) {
+        // the Help viewer's search field takes the typing while the viewer is up
+        if self.help_viewer.is_some() && out != Out::Hide {
+            self.help_viewer_key(out);
+            return;
+        }
         // a Wayland client's text field has focus: the keyboard types into it through the window server's input method
         if self.im.active {
             if out == Out::Hide {
