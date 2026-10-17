@@ -1,5 +1,6 @@
 //! App Intent `world-clock-time`: the time in a World Clock city, or on this
-//! device when no city is named. Search lists it as a shortcut.
+//! device when no city is named. Search lists it as a shortcut. App Intent
+//! `next-alarm`: when the next alarm rings.
 
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
@@ -8,12 +9,26 @@ use springboard::shell::clock::tz::{self, City, CITIES};
 use springboard::shell::fuzzy::fold;
 
 pub const TIME_INTENT: &str = "world-clock-time";
+pub const NEXT_ALARM_INTENT: &str = "next-alarm";
 
 /// The intents this app declares to the shell.
 pub fn intents() -> Vec<Intent> {
-    vec![Intent::new(TIME_INTENT, "World Clock Time", "Reports the time in a World Clock city, or on this device when no city is named.")
-        .param(Param::new("city", "City", ParamType::String).optional())
-        .shortcut()]
+    vec![
+        Intent::new(TIME_INTENT, "World Clock Time", "Reports the time in a World Clock city, or on this device when no city is named.")
+            .param(Param::new("city", "City", ParamType::String).optional())
+            .shortcut(),
+        Intent::new(NEXT_ALARM_INTENT, "Next Alarm", "Reports when the next alarm rings, or that none is set.").shortcut(),
+    ]
+}
+
+/// Runs the alarm intent. `next` is the summary the Alarms page shows for the next armed alarm ("Alarm in 7 hr 5 min"),
+/// or `None` when no alarm is armed.
+pub fn perform_alarm(id: &str, next: Option<String>) -> Result<IntentResult, RpcError> {
+    if id != NEXT_ALARM_INTENT {
+        return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
+    }
+    let text = next.unwrap_or_else(|| "No alarm is set".to_string());
+    Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&text))
 }
 
 /// Runs the intent at Unix time `unix`, with the device at `home_offset` seconds from UTC.
@@ -60,9 +75,24 @@ mod tests {
     }
 
     #[test]
+    fn next_alarm_reports_the_summary_or_none() {
+        let armed = perform_alarm(NEXT_ALARM_INTENT, Some("Alarm in 7 hr 5 min".into())).unwrap();
+        assert_eq!(text(&armed), "Alarm in 7 hr 5 min");
+        let none = perform_alarm(NEXT_ALARM_INTENT, None).unwrap();
+        assert_eq!(text(&none), "No alarm is set");
+        assert!(perform_alarm(TIME_INTENT, None).is_err());
+    }
+
+    #[test]
+    fn declares_the_next_alarm_intent_as_a_shortcut() {
+        let declared = intents();
+        assert!(declared.iter().any(|i| i.id == NEXT_ALARM_INTENT && i.shortcut));
+    }
+
+    #[test]
     fn declares_one_runnable_shortcut_with_optional_city() {
         let list = intents();
-        assert_eq!(list.len(), 1);
+        assert_eq!(list.len(), 2);
         assert_eq!(list[0].id, TIME_INTENT);
         assert!(list[0].shortcut);
         assert_eq!(list[0].params.len(), 1);
