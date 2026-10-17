@@ -93,7 +93,7 @@
     }
   ],
   "gaps": [
-    "No DataFrame in the SDK or ui crates; typed columns are built (sdk tabular_columns.rs)",
+    "No DataFrame in the ui crate; a DataFrame over the typed columns is built in the SDK (sdk tabular_frame.rs, tests tabular_frame::tests); typed columns are built (sdk tabular_columns.rs)",
     "No statistical summaries (numeric or categorical)",
     "CSV reading and writing exist in the SDK (csv::parse_table, sdk csv_writer.rs); there is no spreadsheet file reader or writer"
   ]

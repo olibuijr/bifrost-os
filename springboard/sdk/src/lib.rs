@@ -253,6 +253,8 @@ pub mod search_card_provider;
 pub mod embedding;
 pub mod tabular_summary;
 pub mod tabular_columns;
+pub mod tabular_frame;
+pub mod type_conversion;
 pub mod tabular_json;
 pub mod pixel_transfer;
 pub mod icon_images;
