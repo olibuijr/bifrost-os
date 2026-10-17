@@ -51,8 +51,10 @@ pub struct IcsEvent {
     /// Minutes before the start, one per alert.
     pub alarms: Vec<u32>,
     pub color: Option<String>,
-    /// Invitees and their responses (ATTENDEE lines), read-only.
+    /// Invitees and their responses (ATTENDEE lines); `rsvp` answers them for the account.
     pub attendees: Vec<Participant>,
+    /// The ORGANIZER value as written (`mailto:bo@example.is`): the address a reply goes to.
+    pub organizer: Option<String>,
 }
 
 impl IcsEvent {
@@ -71,6 +73,7 @@ impl IcsEvent {
             alarms: vec![],
             color: None,
             attendees: vec![],
+            organizer: None,
         }
     }
 
@@ -281,6 +284,7 @@ struct Builder {
     alarms: Vec<u32>,
     color: Option<String>,
     attendees: Vec<Participant>,
+    organizer: Option<String>,
 }
 
 impl Builder {
@@ -310,6 +314,7 @@ impl Builder {
             alarms,
             color: self.color,
             attendees: self.attendees,
+            organizer: self.organizer,
         })
     }
 }
@@ -399,6 +404,7 @@ pub fn parse(text: &str) -> IcsCalendar {
                     "DTEND" => b.end = parse_when(&line.value, line.param("VALUE")).map(|w| w.0),
                     "DURATION" => b.duration = parse_duration(&line.value),
                     "RRULE" => b.rule = recur::parse_rrule(&line.value),
+                    "ORGANIZER" => b.organizer = Some(line.value.trim().to_string()).filter(|v| !v.is_empty()),
                     "ATTENDEE" => {
                         let (cn, role, cutype, partstat) = (line.param("CN"), line.param("ROLE"), line.param("CUTYPE"), line.param("PARTSTAT"));
                         if let Some(p) = invitees::attendee(&line.value, cn, role, cutype, partstat) {
@@ -500,6 +506,9 @@ fn write_event(out: &mut String, e: &IcsEvent, stamp: &str) {
     }
     if !e.notes.is_empty() {
         add(format!("DESCRIPTION:{}", escape(&e.notes)));
+    }
+    if let Some(organizer) = &e.organizer {
+        add(format!("ORGANIZER:{organizer}"));
     }
     for p in &e.attendees {
         add(invitees::attendee_line(p));

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.17.0 — 2026-10-17
+
+- View > Show Reminders: the open, dated reminders of the Reminders app are drawn as all-day items with a checkbox glyph in
+  Day, Week and Month. Read-only; completing one stays in Reminders, which has no shared write API yet.
+- Invitations: an imported event where the account is an invitee with no answer yet shows Accept, Maybe and Decline in the
+  editor. The answer is written to calendar.ics and an iTIP REPLY (RFC 5546) is saved to `itip-replies/`. The reply is not
+  sent yet.
+- View > Show Declined Events (off by default) shows the events the account declined.
+
 ## 1.16.1 — 2026-10-14
 
 - Remove the unused keychain permission; Calendar accesses accounts through the shell's account service.
