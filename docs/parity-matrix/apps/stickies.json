@@ -213,7 +213,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/stickies-desktop/src/main.rs:1127",
    "note": "Window > Float on Top is a ticked item for the board window, routed as Calculator's Always on Top (ToShell::WindowLevel, desk band order, bifrost_window_level_v1, window server band). Notes still share one window, so the float covers the whole board window. Built and run only on the host by reading: not verified on Midget.",
-   "wire": "Build the workspace and check Window > Float on Top on Midget with another window raised over the board; make each note its own window if a per-note float is wanted."
+   "wire": "Per-note float needs two shell changes first: ToShell::WindowOpen (proto) carries no position, so a note window cannot be placed where its note is, and ToShell::WindowLevel (proto tag 0x165) carries no window id, so one note cannot float alone. Add a window id to WindowLevel and a position to WindowOpen, then give each note its own window. Until then, verify Window > Float on Top on Midget with another window raised over the board."
   },
   {
    "feature": "Translucent",
@@ -303,7 +303,7 @@
    "status": "gap",
    "bifrost": "",
    "note": "Not done: notes hold text with one style per character. Images and attachments need the rich note model (the SDK AttributedString and RichTextView types have a richer model than the note body).",
-   "wire": "Long-term: store the note body as an AttributedString (SDK attributed.rs) with attachments; this also covers RTF export."
+   "wire": "Reuse needs a shared rich model first: the RTFD reader and writer (textedit-desktop rtfd.rs) use TextEdit's text::Cell, text::Attachment, rtf.rs and properties.rs, while the folder I/O is already in the SDK (document_package.rs). Move those types into the SDK, then store the note body as cells with attachments. Image layout also waits for per-note windows."
   },
   {
    "feature": "Help",
