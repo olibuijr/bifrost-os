@@ -509,7 +509,8 @@ pub enum ToApp {
     /// The user acted on a notification the app posted (`userNotificationCenter(_:didReceive:)`). `action` is the action
     /// identifier, `NOTIF_DEFAULT_ACTION` for opening it or `NOTIF_DISMISS_ACTION`; `text` is the reply of a text-input
     /// action. Delivered on start if the app was not running.
-    NotificationAction { id: String, action: String, text: String, thread: String, category: String },
+    /// `userInfo` of the request is returned with the response, as `UNNotificationResponse.notification.request.content`.
+    NotificationAction { id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)> },
     /// The user opened an indexed item from Search (`NativeUserActivity` of `quicksearch::ACTION_TYPE`, `continue(_:)`). 0x1c2.
     ContinueActivity { activity_type: String, unique_id: String, domain: String },
     /// The answer to `ToShell::WorkspaceRequest`. Tag 100.

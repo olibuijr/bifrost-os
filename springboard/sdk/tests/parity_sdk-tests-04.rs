@@ -211,7 +211,7 @@ fn headless_status_and_list_events_keep_their_request_ids() {
 
 #[test]
 fn headless_a_text_reply_response_carries_the_typed_text() {
-    let e = Event::Response(Response { id: "msg".into(), action: "reply".into(), text: "on my way".into(), thread: "t".into(), category: "reply".into() });
+    let e = Event::Response(Response { id: "msg".into(), action: "reply".into(), text: "on my way".into(), thread: "t".into(), category: "reply".into(), user_info: vec![] });
     assert!(matches!(&e, Event::Response(r) if r.text == "on my way" && r.action == "reply"));
 }
 

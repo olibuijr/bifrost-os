@@ -32,6 +32,8 @@ pub struct Response {
     pub text: String,
     pub thread: String,
     pub category: String,
+    /// the request's `userInfo` (`UNNotificationContent.userInfo`), as the app set it
+    pub user_info: Vec<(String, String)>,
 }
 
 /// What `App::notification` is called with.
@@ -134,8 +136,8 @@ impl Request {
 }
 
 impl Event {
-    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String) -> Event {
-        Event::Response(Response { id, action, text, thread, category })
+    pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String, user_info: Vec<(String, String)>) -> Event {
+        Event::Response(Response { id, action, text, thread, category, user_info })
     }
 }
 
@@ -296,10 +298,11 @@ mod tests {
 
     #[test]
     fn response_event_carries_every_field() {
-        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into());
+        let info = vec![("room".to_string(), "7".to_string())];
+        let e = Event::response("id".into(), NOTIF_DEFAULT_ACTION.into(), "typed".into(), "th".into(), "cat".into(), info.clone());
         assert_eq!(
             e,
-            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into() })
+            Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into(), user_info: info })
         );
         assert_ne!(NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION);
     }

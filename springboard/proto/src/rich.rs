@@ -286,6 +286,25 @@ fn fit_body<'a>(body: &'a str, instead: &'a str) -> &'a str {
 pub const MAX_DIST_INFO: usize = 32;
 pub const MAX_DIST_VALUE: usize = 1024;
 
+/// The `userInfo` pairs of a request, bounded like the request's own (`put_request`).
+fn put_user_info(b: &mut Vec<u8>, info: &[(String, String)]) {
+    let n = info.len().min(MAX_NOTIF_USER_INFO);
+    u32_(b, n as u32);
+    for (k, v) in &info[..n] {
+        put(b, k, MAX_NOTIF_ID);
+        put(b, v, MAX_NOTIF_USER_INFO_VALUE);
+    }
+}
+
+fn get_user_info(r: &mut Reader) -> Result<Vec<(String, String)>, DecodeError> {
+    let n = count(r, MAX_NOTIF_USER_INFO)?;
+    let mut info = Vec::with_capacity(n);
+    for _ in 0..n {
+        info.push((get(r, MAX_NOTIF_ID)?, get(r, MAX_NOTIF_USER_INFO_VALUE)?));
+    }
+    Ok(info)
+}
+
 fn put_dist(b: &mut Vec<u8>, name: &str, info: &[(String, String)]) {
     put(b, name, MAX_NOTIF_ID);
     let n = info.len().min(MAX_DIST_INFO);
@@ -558,13 +577,14 @@ pub(crate) mod tag {
 /// Encodes the variants of `ToApp` that belong to this module (anything else writes nothing).
 pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
     match m {
-        ToApp::NotificationAction { id, action, text, thread, category } => {
+        ToApp::NotificationAction { id, action, text, thread, category, user_info } => {
             u32_(b, tag::NOTIFICATION_ACTION);
             put(b, id, MAX_NOTIF_ID);
             put(b, action, MAX_NOTIF_ID);
             put(b, text, MAX_NOTIF_TEXT * 4);
             put(b, thread, MAX_NOTIF_ID);
             put(b, category, MAX_NOTIF_ID);
+            put_user_info(b, user_info);
         }
         ToApp::NotificationStatus { request, status } => {
             u32_(b, tag::NOTIFICATION_STATUS);
@@ -644,6 +664,7 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             text: get(r, MAX_NOTIF_TEXT * 4)?,
             thread: get(r, MAX_NOTIF_ID)?,
             category: get(r, MAX_NOTIF_ID)?,
+            user_info: get_user_info(r)?,
         },
         tag::NOTIFICATION_STATUS => ToApp::NotificationStatus { request: r.u32()?, status: NotifStatus::from_wire(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_LIST => ToApp::NotificationList { request: r.u32()?, delivered: flag(r)?, ids: get_ids(r)? },
@@ -882,7 +903,8 @@ mod tests {
         shell_rt(ToShell::NotifyRemove { delivered: true, ids: vec!["a".into(), "b".into()] });
         shell_rt(ToShell::NotifyRemove { delivered: false, ids: vec![] });
         shell_rt(ToShell::NotifyQuery { request: 9, delivered: true });
-        app_rt(ToApp::NotificationAction { id: "n1".into(), action: "reply".into(), text: "ok".into(), thread: "t".into(), category: "MESSAGE".into() });
+        app_rt(ToApp::NotificationAction { id: "n1".into(), action: "reply".into(), text: "ok".into(), thread: "t".into(), category: "MESSAGE".into(), user_info: vec![("room".into(), "7 ü".into())] });
+        app_rt(ToApp::NotificationAction { id: "n2".into(), action: NOTIF_DEFAULT_ACTION.into(), text: String::new(), thread: String::new(), category: String::new(), user_info: vec![] });
         app_rt(ToApp::NotificationStatus { request: 4, status: NotifStatus::Param });
         app_rt(ToApp::NotificationList { request: 9, delivered: false, ids: vec!["x".into()] });
     }

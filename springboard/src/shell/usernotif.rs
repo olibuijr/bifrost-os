@@ -249,7 +249,7 @@ impl Registry {
                 String::new()
             }
         };
-        Some((d.app.clone(), ToApp::NotificationAction { id: d.req.id.clone(), action: action.to_string(), text, thread: d.req.thread.clone(), category: d.req.category.clone() }))
+        Some((d.app.clone(), ToApp::NotificationAction { id: d.req.id.clone(), action: action.to_string(), text, thread: d.req.thread.clone(), category: d.req.category.clone(), user_info: d.req.user_info.clone() }))
     }
 
     /// A request waits until the person answers the first-time alert of its app (`take_held` returns it then).
@@ -893,7 +893,11 @@ mod tests {
         assert_eq!(r.actions(5).iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["archive", "reply", "delete"]);
         let (app, msg) = r.respond(5, "reply", "on my way").unwrap();
         assert_eq!(app, APP);
-        assert_eq!(msg, ToApp::NotificationAction { id: "m1".into(), action: "reply".into(), text: "on my way".into(), thread: "room".into(), category: "MSG".into() });
+        assert_eq!(msg, ToApp::NotificationAction { id: "m1".into(), action: "reply".into(), text: "on my way".into(), thread: "room".into(), category: "MSG".into(), user_info: vec![] });
+        // the request's userInfo comes back with the response
+        r.record_delivery(APP, NotifRequest { category: "MSG".into(), user_info: vec![("room".into(), "7".into())], ..req("m2") }, 6);
+        let ToApp::NotificationAction { user_info, .. } = r.respond(6, "archive", "").unwrap().1 else { panic!() };
+        assert_eq!(user_info, vec![("room".to_string(), "7".to_string())]);
         // text is only passed to a text-input action
         let ToApp::NotificationAction { text, .. } = r.respond(5, "archive", "ignored").unwrap().1 else { panic!() };
         assert_eq!(text, "");

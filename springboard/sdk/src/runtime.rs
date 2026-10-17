@@ -857,9 +857,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     kit::clipboard::set_text(&text);
                     clip_seen = kit::clipboard::text();
                 }
-                ToApp::NotificationAction { id, action, text, thread, category } => {
+                ToApp::NotificationAction { id, action, text, thread, category, user_info } => {
                     if let Some(c) = &ctx {
-                        need_frame |= app.notification(c, crate::usernotif::Event::response(id, action, text, thread, category));
+                        need_frame |= app.notification(c, crate::usernotif::Event::response(id, action, text, thread, category, user_info));
                     }
                 }
                 ToApp::NotificationStatus { request, status } => {
