@@ -136,6 +136,7 @@ pub mod gss_context;
 pub mod gss_message;
 pub mod gss_krb5;
 pub mod krb5_client;
+pub mod ldap_directory;
 pub mod typed_path;
 pub mod archive;
 pub mod tar_package;
