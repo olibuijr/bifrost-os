@@ -965,7 +965,7 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // unit immediately inside the target root and otherwise aborts the
         // install with status 1 on a fresh system.
         r.write(&sys("/etc/systemd/system/bifrost-irq-priority.service"), irq_priority_unit())?;
-        r.chroot(&["systemctl", "enable", "bifrost-update-guard.service", "springboard.service", "NetworkManager.service", "sshd.service", "seatd.service", "power-profiles-daemon.service", "bifrost-irq-priority.service", "bifrost-mcp.service"])?;
+        r.chroot(&["systemctl", "enable", "bifrost-update-guard.service", "springboard.service", "NetworkManager.service", "sshd.service", "seatd.service", "power-profiles-daemon.service", "bluetooth.service", "bifrost-irq-priority.service", "bifrost-mcp.service"])?;
         r.chroot(&["systemctl", "set-default", "graphical.target"])?;
         // one initramfs: the fallback image is a second full build nobody boots on a fresh install
         r.write(&sys(&format!("/etc/mkinitcpio.d/{kernel}.preset")), &mkinitcpio_preset(kernel))?;

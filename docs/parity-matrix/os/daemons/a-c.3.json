@@ -127,7 +127,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "udisksctl status",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Unmount and eject are done by udisks2 (udisksctl unmount/eject)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.usbnotificationagent.plist",
@@ -419,7 +433,26 @@
    "status": "partial",
    "note": "rule: Wi-Fi models over the Linux wireless stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "nmcli --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_status::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "NetworkManager's secret agent path answers credential prompts; wifi_status.rs holds the status model."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.xpc.loginitemregisterd.plist",
@@ -566,7 +599,21 @@
    "status": "partial",
    "note": "rule: GSS and Kerberos models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "klist -V",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gss_krb5::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Single sign-on via Kerberos tickets from the krb5 package; gss_krb5.rs holds the model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.AppleCredentialManagerDaemon.plist",
@@ -625,8 +672,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple software-update content cache (Apple service); BifrOSt does not run Apple content caching.",
    "rea": [],
    "method": "rule"
   },
@@ -646,8 +693,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple software-update content cache locator (Apple service); not run on BifrOSt.",
    "rea": [],
    "method": "rule"
   },
@@ -667,8 +714,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple software-update content cache manager (Apple service); not run on BifrOSt.",
    "rea": [],
    "method": "rule"
   },
@@ -688,8 +735,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple software-update content cache tetherer (Apple service); not run on BifrOSt.",
    "rea": [],
    "method": "rule"
   },
@@ -712,7 +759,26 @@
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bluetooth.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "bluetoothctl --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "BLE service handling is BlueZ's (bluetooth.service); bluetooth_service.rs holds the service model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.BlueTool.plist",
@@ -751,8 +817,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried reading the launchd plist (remote services, run at load); the name suggests vendor support tooling, but the binary is not extracted, so the purpose is unconfirmed.",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple vendor support service (CSCSupportd); reference index shows only the binary and plist, its job is Apple support reporting, not an OS function.",
    "rea": []
   },
   {
@@ -815,7 +881,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "coredumpctl --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "systemd-coredump captures dumps; crash_report.rs holds the report model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.CryptoTokenKit.ahp.plist",
@@ -1025,7 +1105,21 @@
    "status": "partial",
    "note": "rule: GSS and Kerberos models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "klist -V",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gss_krb5::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Kerberos client tools (krb5) provide the credential cache; gss_krb5.rs models the GSS names."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.GameController.gamecontrollerd.plist",
@@ -1193,7 +1287,15 @@
    "status": "partial",
    "note": "rule: GSS and Kerberos models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmind"
+    }
+   ],
+   "ready": true,
+   "ready_note": "krb5 package ships kadmind; not started by default."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.Kerberos.kcm.plist",
@@ -1235,7 +1337,15 @@
    "status": "partial",
    "note": "rule: GSS and Kerberos models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/krb5kdc"
+    }
+   ],
+   "ready": true,
+   "ready_note": "krb5 package ships krb5kdc; it is not started by default (client OS), operators run it when a realm is configured."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.Kerberos.kpasswdd.plist",
@@ -1277,7 +1387,21 @@
    "status": "partial",
    "note": "rule: HID and game controller models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "udevadm --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "udev delivers kernel device events; hid_devices.rs holds the HID model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.LocalAuthentication.UIAgent.login.plist",
@@ -1528,7 +1652,26 @@
    "status": "partial",
    "note": "rule: power and thermal service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "power-profiles-daemon.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "powerprofilesctl version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_service::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "power-profiles-daemon (enabled by the installer) applies power profiles; power_service.rs holds the model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.RFBEventHelper.plist",
@@ -1591,7 +1734,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "coredumpctl --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "systemd-coredump captures dumps; crash_report.rs holds the report model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ReportMemoryException.plist",
@@ -1968,7 +2125,26 @@
    "status": "partial",
    "note": "rule: Wi-Fi models over the Linux wireless stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "iw --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Wi-Fi is NetworkManager over wpa_supplicant and nl80211 (iw); wlan.rs holds the model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.akd.plist",
@@ -2302,7 +2478,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "journalctl --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "systemd-journald is the system log; log.rs is the unified logging model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.asr.plist",
@@ -2340,8 +2530,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple asset subscription service for Apple's content delivery; BifrOSt updates come from its own repo (updated).",
    "rea": [],
    "method": "rule"
   },
@@ -2427,7 +2617,21 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-audiod.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "bifrost-audiod is the audio server (enabled by the springboard package); audio_engine.rs holds the engine model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.audio.micactivityd.plist",
@@ -2574,7 +2778,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "udisksctl status",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Automount is udisks2's job on BifrOSt."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.avbdeviced.plist",
@@ -2742,7 +2960,26 @@
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bluetooth.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "bluetoothctl --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "BlueZ (bluez-utils, bluetooth.service enabled by the installer) does the Bluetooth job; bluetooth_service.rs models sit on top."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.bluetoothuiservice.plist",
@@ -3181,7 +3418,21 @@
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "colormgr --help",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "colord (colormgr) manages device profiles; render/src/icc.rs holds the profile model."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.configd.plist",
@@ -3222,7 +3473,15 @@
    "status": "partial",
    "note": "rule: GSS and Kerberos models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kdb5_util"
+    }
+   ],
+   "ready": true,
+   "ready_note": "krb5 package provides kdb5_util for local realm setup."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.containermanagerd.system.plist",
@@ -3908,7 +4167,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "udisksctl status",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "udisks2 is the disk arbiter; disk_session.rs models the session."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskimagesiod.plist",
@@ -3929,7 +4202,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "losetup --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Disk images attach through loop devices (util-linux losetup, udisks2 loop-setup)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskimagesiod.ram.plist",
@@ -3992,7 +4279,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "losetup --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Disk image spawning is the loop device path (losetup, udisks2)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.diskmanagementstartup.plist",
@@ -4197,7 +4498,21 @@
    "status": "partial",
    "note": "rule: Wi-Fi models over the Linux wireless stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "wpa_supplicant -v",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "802.1X authentication is wpa_supplicant (installed with the Wi-Fi stack)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ecosystemanalyticsd.plist",
@@ -4425,8 +4740,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/shield.rs",
-   "status": "partial",
-   "note": "Limit shield; no family group",
+   "status": "n/a",
+   "note": "rule: Apple service with no BifrOSt counterpart. Apple Family group service backed by an Apple account; BifrOSt has no Apple accounts or family groups.",
    "rea": [],
    "method": "heuristic"
   },
