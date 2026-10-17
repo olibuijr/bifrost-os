@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_MASK};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -39,6 +39,10 @@ pub struct Response {
 pub enum Event {
     /// the user acted on a notification (`userNotificationCenter(_:didReceive:)`)
     Response(Response),
+    /// a notification of this app arrives while the app is in front, and the app opted in with
+    /// [`set_presentation_delegate`]. Answer with [`will_present`] using this `token`; without an answer in time the
+    /// notification is not shown.
+    WillPresent { token: u32, id: String, thread: String, category: String, title: String, body: String },
     /// the result of an [`add`]
     Status { request: u32, status: NotifStatus },
     /// the answer to [`delivered`] or [`pending`]
@@ -188,6 +192,18 @@ pub fn request_authorization(ctx: &Ctx, options: AuthorizationOptions) -> u32 {
     let request = ctx.next_request();
     ctx.send_to_shell(ToShell::NotifyAuthorize { request, options: options.0 & NOTIF_AUTH_MASK });
     request
+}
+
+/// `UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:)`: opts the app in (`true`) or out. Only
+/// an app that opted in is asked, and only for notifications that arrive while it is in front.
+pub fn set_presentation_delegate(ctx: &Ctx, enabled: bool) {
+    ctx.send_to_shell(ToShell::NotifyPresentDelegate { enabled });
+}
+
+/// The completion handler of `willPresent`: `options` says how the notification shows while the app is in front.
+/// [`PresentationOptions::NONE`] hides it. Bits the shell does not know are dropped.
+pub fn will_present(ctx: &Ctx, token: u32, options: PresentationOptions) {
+    ctx.send_to_shell(ToShell::NotifyPresentReply { token, options: options.0 & NOTIF_PRESENT_MASK });
 }
 
 #[cfg(test)]

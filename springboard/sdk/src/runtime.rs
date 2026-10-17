@@ -882,6 +882,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.notification(c, crate::usernotif::Event::Authorization { request, granted });
                     }
                 }
+                ToApp::NotificationWillPresent { token, id, thread, category, title, body } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.notification(c, crate::usernotif::Event::WillPresent { token, id, thread, category, title, body });
+                    }
+                }
                 ToApp::LoginItemStatus { request, status } => {
                     crate::service_management::mirror(status);
                     crate::service_management::complete(request, status);
