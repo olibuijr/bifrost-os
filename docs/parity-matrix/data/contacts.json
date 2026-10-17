@@ -54,14 +54,14 @@
    "apple": "CNContainer, CNGroup, CNMutableGroup, CNContainerTypeKey",
    "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs; wired: springboard/ui/src/contact_groups.rs (wired in springboard/apps/contacts-desktop/src/contacts.rs and group_file.rs)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 23 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+   "note": "verified on Midget 0.7.25 by 23 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Built 2026-10-17: SDK contacts::groups exposes nested groups and recursive membership (test groups_nest_and_list_members_recursively). The shell store still keeps no groups; wiring them into the contacts service is open."
   },
   {
    "feature": "Change history and contacts-changed notification",
    "apple": "CNChangeHistoryFetchRequest, CNChangeHistoryEvent family, CNChangeHistoryEventVisitor, Contacts changed notifications",
    "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 23 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log: the shell posts system.contacts.change to apps with contacts access when the store file changes, not per-record events. Search results are rebuilt from the store when the file is loaded."
+   "note": "verified on Midget 0.7.25 by 23 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log: the shell posts system.contacts.change to apps with contacts access when the store file changes, not per-record events. Search results are rebuilt from the store when the file is loaded. Built 2026-10-17: SDK contacts::history exposes batched saves, sequence tokens and observers (test a_batch_of_contact_changes_is_recorded_and_fetched_by_token). The shell store does not keep a change log yet."
   },
   {
    "feature": "Formatting names and addresses",
@@ -82,7 +82,7 @@
    "apple": "CNContactsUserDefaults",
    "bifrost": "springboard/ui/src/contact_display.rs; wired: springboard/apps/contacts-desktop/src/display_file.rs (name line in display.txt)",
    "status": "partial",
-   "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Built 2026-10-17: SDK contacts::display exposes ContactsDefaults, sort order and country code helpers (test display_preferences_sort_and_resolve_the_user_default). Shell wiring of the stored preference is open."
   },
   {
    "feature": "Search index for system search",
@@ -96,21 +96,21 @@
    "apple": "Contact access button, Contact access picker (sample code)",
    "bifrost": "springboard/ui/src/contact_access.rs (access model, wired in springboard/src/shell/services/contacts.rs); springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063)",
    "status": "partial",
-   "note": "The Contacts app uses the picker model for its Add People flow. No SDK picker lets an app ask the user to choose a contact and receive the result, so that part is still missing. Not yet tested on the VM or Midget."
+   "note": "The Contacts app uses the picker model for its Add People flow. No SDK picker lets an app ask the user to choose a contact and receive the result, so that part is still missing. Not yet tested on the VM or Midget. Built 2026-10-17: SDK contacts::picker exposes the picker model so an app can receive one contact or one value (test a_picker_returns_only_the_chosen_contact_or_value). The shell access sheet is still not built."
   },
   {
    "feature": "Errors and validation",
    "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys",
    "bifrost": "springboard/sdk/src/contacts.rs:ContactsError (from_message, From<contact_access::Error>, decode_error); springboard/ui/src/contact_access.rs:Error; springboard/src/shell/services/contacts.rs:247 (read-only message); springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
    "status": "partial",
-   "note": "Apps get a typed ContactsError from the SDK for access, read-only and access-model failures; the mapping from shell messages and access errors is tested headless in springboard/sdk/tests/parity_sdk-tests-03b.rs. The store still reports fixed io text for file-level failures (invalid contact, file too large, unknown format). The CNErrorCode raw values are not mapped: they are not verified against Apple's reference, so apps match on the variant."
+   "note": "Apps get a typed ContactsError from the SDK for access, read-only and access-model failures; the mapping from shell messages and access errors is tested headless in springboard/sdk/tests/parity_sdk-tests-03b.rs. The store still reports fixed io text for file-level failures (invalid contact, file too large, unknown format). The CNErrorCode raw values are not mapped: they are not verified against Apple's reference, so apps match on the variant. Built 2026-10-17: SDK ContactsError maps save and file failures to typed variants (NothingToSave, MissingId, InvalidContact, FileTooLarge, UnknownFormat; test shell_messages_map_to_typed_errors)."
   },
   {
    "feature": "Notes and images",
    "apple": "CNContactNoteKey, com.apple.developer.contacts.notes, CNContactImageDataKey, CNContactThumbnailImageDataKey",
    "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000); springboard/ui/src/contact_photo.rs (Photos: the picture model, not stored by the shell yet); PHOTO output in springboard/ui/src/contact_vcard.rs. Thumbnail is not serialized.",
    "status": "partial",
-   "note": "Notes are plain text with a 4000-character limit, tested headless in springboard/tests/parity_sdk-tests-03.rs, with no entitlement. The UI kit has a picture model (PNG and JPEG detection, size cap, thumbnail fit), but the shell does not store pictures yet, so the Contacts app keeps no contact photo or thumbnail."
+   "note": "Notes are plain text with a 4000-character limit, tested headless in springboard/tests/parity_sdk-tests-03.rs, with no entitlement. The UI kit has a picture model (PNG and JPEG detection, size cap, thumbnail fit), but the shell does not store pictures yet, so the Contacts app keeps no contact photo or thumbnail. Built 2026-10-17: SDK contacts::photos exposes the picture model (test a_refused_picture_keeps_the_contacts_old_picture). The shell store still keeps no pictures."
   }
  ],
  "gaps": [
