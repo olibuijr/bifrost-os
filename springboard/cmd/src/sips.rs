@@ -7,7 +7,9 @@
 //! and `--resampleHeight H` set one side and keep the aspect. The picture is decoded with the shell's image decoders
 //! (`bifrost_ui::cg::imageio`), resized, and written as PNG: in place, or to `--out FILE.png` (one file only). A JPEG or
 //! GIF is written back only with `--out` naming a `.png`, because no JPEG or GIF encoder is built.
-//! Refused with a message: conversion (`-s` and `--setProperty`), rotation, flips, DPI and colour profile properties,
+//! Conversion: `-s format png|jpeg FILE --out FILE` decodes the picture and writes it in the new format (`--out` is
+//! required, so the source is never overwritten). Only PNG and JPEG are written; GIF is refused.
+//! Refused with a message: other properties to set, rotation, flips, DPI and colour profile properties,
 //! and every other option. Those need an image pipeline; the message names `magick` from the imagemagick package for them.
 //! Gap: TIFF, BMP, HEIC and the other formats are reported as unsupported.
 
@@ -96,6 +98,16 @@ pub enum Action {
     Help,
     Query { keys: Vec<Key>, files: Vec<String> },
     Resample { target: Target, out: Option<String>, files: Vec<String> },
+    Convert { to: Format, out: String, file: String },
+}
+
+/// The format a `-s format VALUE` names. Only PNG and JPEG can be written.
+fn output_format(value: &str) -> Result<Format, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "png" => Ok(Format::Png),
+        "jpeg" | "jpg" => Ok(Format::Jpeg),
+        other => Err(format!("format {other} cannot be written; sips here writes png and jpeg")),
+    }
 }
 
 /// The positive number after option `arg` at `args[i]`.
@@ -114,6 +126,7 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
     let mut files = Vec::new();
     let mut target = None;
     let mut out = None;
+    let mut convert: Option<Format> = None;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -140,6 +153,16 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
                 i += 2;
                 continue;
             }
+            "-s" | "--setProperty" => {
+                let name = args.get(i + 1).ok_or_else(|| format!("{arg} needs a property name and a value"))?;
+                let value = args.get(i + 2).ok_or_else(|| format!("{arg} {name} needs a value"))?;
+                if name != "format" {
+                    return Err(format!("property {name} cannot be set yet; sips here sets format"));
+                }
+                convert = Some(output_format(value)?);
+                i += 3;
+                continue;
+            }
             "--out" => {
                 out = Some(args.get(i + 1).ok_or_else(|| "--out needs a file name".to_string())?.clone());
                 i += 2;
@@ -151,6 +174,16 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
             _ => files.push(arg.to_string()),
         }
         i += 1;
+    }
+    if let Some(to) = convert {
+        if target.is_some() || !keys.is_empty() {
+            return Err("a conversion is its own run: give -s alone".to_string());
+        }
+        if files.len() != 1 {
+            return Err("a conversion takes one image file".to_string());
+        }
+        let out = out.ok_or_else(|| "a conversion needs --out FILE with the new extension".to_string())?;
+        return Ok(Action::Convert { to, out, file: files.remove(0) });
     }
     if let Some(target) = target {
         if !keys.is_empty() {
@@ -207,6 +240,25 @@ pub fn resample(data: &[u8], target: Target, out_is_png: bool) -> Result<Vec<u8>
     let (w, h) = target_size(img.w, img.h, target)?;
     let img = if (w, h) == (img.w, img.h) { img } else { img.resized(w, h) };
     Ok(springboard::pngenc::encode_rgb(img.w, img.h, &img.px))
+}
+
+/// The JPEG quality used by a conversion, 0.0 to 1.0.
+const JPEG_QUALITY: f32 = 0.8;
+
+/// Converts the picture in `data` to `to` (PNG or JPEG) and returns the new file's bytes. The picture is decoded with the
+/// shell's image decoders; alpha is dropped, as a JPEG has none.
+pub fn convert(data: &[u8], to: Format) -> Result<Vec<u8>, String> {
+    info(data)?;
+    let img = bifrost_ui::cg::imageio::decode(data).ok_or_else(|| "the picture could not be decoded".to_string())?;
+    match to {
+        Format::Png => Ok(springboard::pngenc::encode_rgb(img.w, img.h, &img.px)),
+        Format::Jpeg => {
+            let rgba: Vec<u8> = img.px.iter().flat_map(|&p| [p as u8, (p >> 8) as u8, (p >> 16) as u8, 255]).collect();
+            bifrost_app::graphics_imageio::encode_jpeg(img.w, img.h, &rgba, JPEG_QUALITY)
+                .ok_or_else(|| "the picture could not be encoded as JPEG".to_string())
+        }
+        Format::Gif => Err("GIF is not written: sips here writes png and jpeg".to_string()),
+    }
 }
 
 /// Reads the format and size from the header of an image file's bytes.
@@ -373,8 +425,34 @@ mod tests {
     }
 
     #[test]
+    fn parses_a_conversion_to_png_or_jpeg() {
+        assert_eq!(
+            parse(&args(&["-s", "format", "jpeg", "a.png", "--out", "b.jpg"])).unwrap(),
+            Action::Convert { to: Format::Jpeg, out: "b.jpg".to_string(), file: "a.png".to_string() }
+        );
+        assert_eq!(
+            parse(&args(&["--setProperty", "format", "PNG", "a.gif", "--out", "b.png"])).unwrap(),
+            Action::Convert { to: Format::Png, out: "b.png".to_string(), file: "a.gif".to_string() }
+        );
+        assert!(parse(&args(&["-s", "format", "jpeg", "a.png", "b.png", "--out", "c.jpg"])).unwrap_err().contains("one image"));
+        assert!(parse(&args(&["-s", "format", "jpeg", "-Z", "9", "a.png", "--out", "b.jpg"])).unwrap_err().contains("own run"));
+    }
+
+    #[test]
+    fn a_png_converts_to_a_jpeg_and_back() {
+        let px = vec![0xff00_00ffu32; 8]; // 4 x 2
+        let png = springboard::pngenc::encode_rgb(4, 2, &px);
+        let jpeg = convert(&png, Format::Jpeg).unwrap();
+        assert_eq!(info(&jpeg).unwrap(), Info { format: Format::Jpeg, width: 4, height: 2 });
+        let back = convert(&jpeg, Format::Png).unwrap();
+        assert_eq!(info(&back).unwrap(), Info { format: Format::Png, width: 4, height: 2 });
+    }
+
+    #[test]
     fn refuses_what_it_cannot_do() {
-        assert!(parse(&args(&["-s", "format", "png", "a.png"])).unwrap_err().contains("-s"));
+        assert!(parse(&args(&["-s", "format", "gif", "a.png", "--out", "b.gif"])).unwrap_err().contains("gif"));
+        assert!(parse(&args(&["-s", "dpiWidth", "72", "a.png", "--out", "b.png"])).unwrap_err().contains("dpiWidth"));
+        assert!(parse(&args(&["-s", "format", "jpeg", "a.png"])).unwrap_err().contains("--out"));
         assert!(parse(&args(&["-g", "dpiWidth", "a.png"])).unwrap_err().contains("dpiWidth"));
         assert!(parse(&args(&["-g"])).unwrap_err().contains("needs a property name"));
         assert!(parse(&args(&["-g", "format"])).unwrap_err().contains("at least one image file"));

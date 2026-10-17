@@ -1,4 +1,4 @@
-//! `sips`: reads an image's properties and resamples pictures. See `bifrost_cmd::sips`.
+//! `sips`: reads an image's properties, resamples pictures and converts them to PNG or JPEG. See `bifrost_cmd::sips`.
 
 use bifrost_cmd::die;
 use bifrost_cmd::sips::{self, Action};
@@ -17,6 +17,11 @@ fn main() {
                 let info = sips::info(&data).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
                 print!("{}", sips::render(file, &info, &keys));
             }
+        }
+        Action::Convert { to, out, file } => {
+            let data = std::fs::read(&file).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
+            let bytes = sips::convert(&data, to).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
+            std::fs::write(&out, bytes).unwrap_or_else(|e| die("sips", &format!("{out}: {e}"), 1));
         }
         Action::Resample { target, out, files } => {
             for file in &files {
