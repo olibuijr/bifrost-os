@@ -8,7 +8,8 @@
 //! arrows, math, currency and punctuation marks in text presentation. Those glyphs are drawn with the UI text font, not
 //! the emoji font, and a pick copies or types the same character.
 //!
-//! Not yet: a search field over the catalogue, and recent emoji.
+//! Search: `search_text_symbols` finds the text symbols by their names (`TEXT_NAMES`). Not yet: the search field that
+//! calls it, names for the emoji, and recent emoji.
 
 use super::keyboard::Out;
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
@@ -32,6 +33,39 @@ pub const TEXT_SYMBOLS: &[&str] = &[
     "≤", "≥", "∞", "√", "∑", "∏", "∫", "∂", "∆", "∇", "∈", "∉", "∩", "∪", "⊂", "⊃", "∀", "∃", "∅", "∴", "∝", "°", "€", "£",
     "¥", "$", "¢", "₹", "₩", "₿", "₽", "₺", "₪", "₫", "₴", "₦", "₡", "₵", "§", "¶", "†", "‡", "•", "′", "″", "‰", "©",
 ];
+
+/// The name a person types to find each text symbol. Every symbol of `TEXT_SYMBOLS` has one.
+const TEXT_NAMES: &[(&str, &str)] = &[
+    ("←", "left arrow"), ("↑", "up arrow"), ("→", "right arrow"), ("↓", "down arrow"), ("↔", "left right arrow"),
+    ("↕", "up down arrow"), ("⇐", "left double arrow"), ("⇑", "up double arrow"), ("⇒", "right double arrow"),
+    ("⇓", "down double arrow"), ("⇔", "left right double arrow"), ("↩", "return arrow"), ("↪", "redo arrow"),
+    ("↰", "up left arrow"), ("↱", "up right arrow"), ("↲", "down left arrow"), ("↳", "down right arrow"),
+    ("↺", "counterclockwise arrow"), ("↻", "clockwise arrow"), ("±", "plus minus"), ("×", "multiply times"),
+    ("÷", "divide"), ("≠", "not equal"), ("≈", "approximately equal"), ("≤", "less than or equal"),
+    ("≥", "greater than or equal"), ("∞", "infinity"), ("√", "square root"), ("∑", "sum"), ("∏", "product"),
+    ("∫", "integral"), ("∂", "partial derivative"), ("∆", "delta increment"), ("∇", "nabla gradient"), ("∈", "element of"),
+    ("∉", "not element of"), ("∩", "intersection"), ("∪", "union"), ("⊂", "subset"), ("⊃", "superset"),
+    ("∀", "for all"), ("∃", "there exists"), ("∅", "empty set"), ("∴", "therefore"), ("∝", "proportional"),
+    ("°", "degree"), ("€", "euro"), ("£", "pound"), ("¥", "yen"), ("$", "dollar"), ("¢", "cent"), ("₹", "rupee"),
+    ("₩", "won"), ("₿", "bitcoin"), ("₽", "ruble"), ("₺", "lira"), ("₪", "shekel"), ("₫", "dong"), ("₴", "hryvnia"),
+    ("₦", "naira"), ("₡", "colon"), ("₵", "cedi"), ("§", "section"), ("¶", "paragraph pilcrow"), ("†", "dagger"),
+    ("‡", "double dagger"), ("•", "bullet"), ("′", "prime minute"), ("″", "double prime second"), ("‰", "per mille"),
+    ("©", "copyright"),
+];
+
+/// The text symbols a search finds: those whose name holds every word of `query` (case-insensitive) or whose glyph is
+/// the query itself. Results keep the tab's order. An empty query finds nothing.
+pub fn search_text_symbols(query: &str) -> Vec<&'static str> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return vec![];
+    }
+    TEXT_NAMES
+        .iter()
+        .filter(|&&(glyph, name)| words.iter().all(|w| glyph == w.as_str() || name.split_whitespace().any(|n| n == w.as_str())))
+        .map(|&(glyph, _)| glyph)
+        .collect()
+}
 
 /// The Text Symbols tab: after the Symbols tab, the last one.
 pub fn text_tab() -> usize {
@@ -431,6 +465,34 @@ mod tests {
             w.page_items().len()
         }).sum();
         assert_eq!(total, v.tab_items().len());
+    }
+
+    #[test]
+    fn every_text_symbol_has_a_name_once() {
+        assert_eq!(TEXT_NAMES.len(), TEXT_SYMBOLS.len());
+        for s in TEXT_SYMBOLS {
+            assert_eq!(TEXT_NAMES.iter().filter(|(g, _)| g == s).count(), 1, "{s} is named once");
+        }
+    }
+
+    #[test]
+    fn a_search_finds_symbols_by_their_name_words() {
+        assert_eq!(search_text_symbols("euro"), vec!["€"]);
+        assert_eq!(search_text_symbols("Dollar"), vec!["$"], "case does not matter");
+        assert_eq!(search_text_symbols("not equal"), vec!["≠"]);
+        assert_eq!(search_text_symbols("square root"), vec!["√"]);
+        let arrows = search_text_symbols("arrow");
+        assert!(arrows.contains(&"←") && arrows.contains(&"⇔"));
+        assert!(!arrows.contains(&"€"));
+    }
+
+    #[test]
+    fn a_search_matches_the_glyph_and_finds_nothing_for_empty_or_unknown_text() {
+        assert_eq!(search_text_symbols("→"), vec!["→"]);
+        assert!(search_text_symbols("").is_empty());
+        assert!(search_text_symbols("   ").is_empty());
+        assert!(search_text_symbols("zzzz").is_empty());
+        assert!(search_text_symbols("arrow zzzz").is_empty(), "every word must match");
     }
 
     #[test]

@@ -120,6 +120,12 @@ mod tests {
     }
 
     #[test]
+    fn users_and_groups_intent_opens_the_users_pane_that_lists_groups() {
+        assert_eq!(page_for("open-users-groups"), Some(PageId::Users));
+        assert_eq!(find("open-users-groups").map(|i| i.title), Some("Open Users & Groups"));
+    }
+
+    #[test]
     fn language_and_region_is_reachable_outside_setup() {
         assert_eq!(page_for("open-language-region"), Some(PageId::Language));
         assert_eq!(find("open-language-region").map(|i| i.title), Some("Open Language & Region"));

@@ -71,7 +71,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/character_viewer.rs",
    "status": "partial",
-   "note": "existing character viewer (emoji catalogue) with a Symbols tab of symbol emoji (character_viewer SYMBOLS); Built 2026-10-17: a Text Symbols tab with arrows, math, currency and punctuation in text presentation, drawn with the text font (character_viewer TEXT_SYMBOLS; tests character_viewer::tests). Still open: the search field over the catalogue.",
+   "note": "existing character viewer (emoji catalogue) with a Symbols tab of symbol emoji (character_viewer SYMBOLS); Built 2026-10-17: a Text Symbols tab with arrows, math, currency and punctuation in text presentation, drawn with the text font (character_viewer TEXT_SYMBOLS; tests character_viewer::tests). Still open: the search field over the catalogue. Built 2026-10-17: search_text_symbols finds text symbols by their names (TEXT_NAMES); tests character_viewer::tests. Still missing: the search field that calls it, and names for the emoji.",
    "rea": [],
    "method": "manual"
   },
