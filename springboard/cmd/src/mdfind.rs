@@ -1,10 +1,9 @@
 //! `mdfind`: finds files under a folder by their names, from the command line. The desktop's quick search reads a
 //! content index that the command line cannot reach yet, so this walks the folder tree instead: it matches each file
 //! and folder name against the query, ignoring case, and skips hidden entries and symbolic links.
-//! Supported: `-onlyin <dir>` (default: the home folder), `-name` (the name match; it is also the only match today),
-//! `-count` (print how many paths matched), `-content` (also match text inside regular files, a case-insensitive
-//! substring scan of files up to `CONTENT_LIMIT` bytes that skips binary files; the index's content search is still
-//! missing). Gap: `-live` needs the index's change feed, which the command line cannot
+//! Supported: `-onlyin <dir>` (default: the home folder), `-name` (accepted; names are always matched), `-count` (print
+//! how many paths matched), `-content` (also match text inside regular files, a case-insensitive substring scan of files
+//! up to `CONTENT_LIMIT` bytes that skips binary files; the index's content search is still missing). Gap: `-live` needs the index's change feed, which the command line cannot
 //! reach yet, so it is refused rather than run as a one-off search. Metadata queries (`kMDItem...`) are not parsed; the
 //! query is plain text.
 

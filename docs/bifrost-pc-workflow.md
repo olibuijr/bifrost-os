@@ -505,6 +505,19 @@ Checked and kept in `/usr/bin`: `open`, `leave`, `say`, `defaults`, `pbcopy` and
 and `lastcomm` did not show up in the local snapshot); file ownership needs `pacman -Fq` on a synced file database. Add a name to
 the array when a new Arch package claims it. Any other name collision fails at install time (pacman reports the file conflict).
 
+Tools added or extended on 2026-10-17 (each tool's `--help` and module doc in `springboard/cmd/src/` are the reference):
+
+- `purge`: `sync`, then writes `3` to `/proc/sys/vm/drop_caches`. Needs root; a non-root run says so and changes nothing.
+- `b64encode` / `b64decode`: base64 of a file or standard input. `-r` turns off the 76-column wrapping on output. No `begin-base64` header and no `-w` width.
+- `newsyslog`: reads `/etc/newsyslog.conf` (or `-f FILE`) and runs `logrotate` on the translated rules; `-n` prints the logrotate configuration instead. `B`, `X`, `G` and `M` flags are reported and not translated.
+- `sips`: `-g` reads width, height and format from the header; `-Z`, `--resampleWidth` and `--resampleHeight` resample through the shell's image decoders; `-s format png|jpeg --out FILE` converts. Rotation, flips, DPI and profiles are refused.
+- `plutil`: `-convert binary1` and `-create binary1` write `bplist00`. The `swift` and `objc` formats are refused.
+- `pbcopy` / `pbpaste`: `-pboard general|ruler|find|font`. The named boards are files under `$XDG_DATA_HOME/bifrost/pasteboards`; the shell's pasteboard service does not read them yet, so they are not the same data as an app's Find or Ruler board.
+- `mdfind`: name matching is the default. `-content` adds a case-insensitive substring scan of regular files up to 4 MiB that skips binary files. `-live` is refused (no index change feed on the command line yet).
+- `osascript` / `osacompile`: `osascript` sends `tell app` commands to a running app's control socket. It does not launch the app, and `display dialog` and `display notification` print on standard error. `osacompile` writes the `bifrost-osa` JSON form that `osascript` reads back.
+- `units`: `meter` and `metre` (and their plurals and prefixes) resolve as the same unit.
+- `vis` / `unvis`: the vis(3) styles with `-b -c -e -f -F -h -l -m -n -o -s -t -w`.
+
 ## Store packages and the SDK protocol (2026-10-13)
 
 The shell and an app talk over the SDK protocol (`SDK_VERSION` in `springboard/proto/src/lib.rs`). An app built for

@@ -13,7 +13,7 @@
 //! and every other option. Those need an image pipeline; the message names `magick` from the imagemagick package for them.
 //! Gap: TIFF, BMP, HEIC and the other formats are reported as unsupported.
 
-pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE";
+pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE\n       sips -s format png|jpeg --out OUTFILE FILE";
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
