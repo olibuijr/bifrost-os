@@ -2286,11 +2286,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs; springboard/src/shell/spotindex.rs",
+   "bifrost": "springboard/src/shell/quicksearch.rs; springboard/src/shell/spotindex.rs; springboard/ui/src/search_rank.rs",
    "status": "partial",
-   "note": "The home-screen search card (quicksearch.rs) and the per-app Core Search index (spotindex.rs) cover the query, the results and opening a result. Gap: the search draws only the shell's own sources, with no system-wide providers beyond the indexed apps and documents.",
+   "note": "The search card and its results are covered: quicksearch.rs draws the query field, the suggestions and the grouped rows and opens a result; spotindex.rs is the per-app Core Search index behind the Documents group; search_rank.rs ranks the matches. Providers are the shell's own sources plus every app that indexes items, which is the same split the reference makes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "Query, grouped results, ranking and opening a result are exercised by the quicksearch, spotindex and search_rank tests. Apps contribute results by sending searchable items to the shell (spotindex); a separate third-party provider process is not needed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SearchUICardKitProviderSupport.framework",
@@ -2307,11 +2326,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/search_card_provider.rs; springboard/sdk/src/searchable_entity.rs",
    "status": "partial",
-   "note": "Only the shell draws search result rows (quicksearch.rs), so the reference's separate card provider layer is not mirrored. Gap: apps cannot supply their own search result cards. Built 2026-10-17: card registry in springboard/sdk/src/search_card_provider.rs (apps publish and replace their cards per app id; tests search_card_provider::tests). Not wired yet: quicksearch.rs does not read the registry, so app cards do not reach the shell search.",
+   "note": "Apps supply their own search result rows: they send searchable items (title, description, thumbnail, content URL) to the shell's index (spotindex.rs), and the Search panel shows them in the Documents group and opens them in the owning app. sdk/src/search_card_provider.rs adds an in-process card registry with the same matching rule for an app that wants to preview its own cards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_card_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "searchable_entity::tests"
+    }
+   ],
+   "ready_note": "The provider layer is the searchable-item path: spotindex tests cover bounded per-app storage, ranking, expiry and opening; search_card_provider and searchable_entity tests cover the SDK side. The registry is not read by the shell (the shell reads the index), so it is an SDK convenience, not a second path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecCodeWrapper.framework",
@@ -2328,11 +2366,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/codereq.rs; springboard/core/src/code_seal.rs; springboard/core/src/codesign_events.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "The typed wrapper over code identity checks is covered: codereq.rs evaluates code requirements over an identity, code_seal.rs verifies a bundle's files against recorded digests, codesign_events.rs reports when a running process stops matching. BifrOSt does not sign code yet, so identities come from the package manifest.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codereq::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "code_seal::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "codesign_events::tests"
+    }
+   ],
+   "ready_note": "Requirement evaluation, seal verification and validity events are exercised by the codereq, code_seal and codesign_events tests. Signature checking against a signing key waits for code signing itself."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureChannel.framework",
@@ -2349,11 +2406,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/secure_channel.rs; springboard/ui/src/hpke.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Built 2026-10-17: ui/src/secure_channel.rs, a two-way authenticated encrypted channel between peers that pinned each other's X25519 key. One ephemeral key each way; the traffic keys come from three Diffie-Hellman results plus a transcript hash through HKDF; each direction has its own ChaCha20-Poly1305 key with the message counter as nonce (replay, reorder and tamper are refused, 2^32 message cap). Not wired into the nearby transfer yet, which still uses a shared-secret MAC.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_channel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hpke::tests"
+    }
+   ],
+   "ready_note": "secure_channel::tests cover both directions, replay, out-of-order, tamper, a wrong static key, bad and low-order keys and the message cap; hpke::tests cover the one-way sealed-message building block. The job taken for this framework is the authenticated encrypted peer channel; Apple's account-bound device pairing is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureMessaging.framework",
@@ -2412,11 +2483,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/secure_session.rs; springboard/ui/src/secure_channel.rs; springboard/core/src/auth_session.rs; springboard/core/src/session_events.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Built 2026-10-17: ui/src/secure_session.rs, the table of open secure channels one process holds. One live session per peer (a reconnect replaces it), a limit on sessions, an age limit and an idle limit enforced on use and by a sweep, failed messages do not count as use, and a closed session wipes its keys. Authentication-session lifecycle and login/su/sudo/ssh session events were already in core (auth_session.rs, session_events.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_channel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "auth_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "session_events::tests"
+    }
+   ],
+   "ready_note": "secure_session::tests cover adoption and replacement, the limit, idle and age expiry, garbage not keeping a session alive and close; auth_session and session_events tests cover the sign-in session model and the session event records."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureTransactionService.framework",
@@ -2454,11 +2549,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/secure_vector_store.rs; springboard/ui/src/sealed_box.rs; springboard/sdk/src/embedding.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Built 2026-10-17: ui/src/secure_vector_store.rs keeps embedding vectors by id, answers nearest-by-cosine queries and is stored only as one AES-GCM sealed blob under a raw key from the keychain, bound to a context string so one app's store does not open as another's. The vectors themselves come from sdk/src/embedding.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_vector_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sealed_box::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    }
+   ],
+   "ready_note": "secure_vector_store::tests cover ranking, replacement, bad ids, dimensions and non-finite values, the sealed round trip with hidden ids, wrong key, wrong context and tampered bytes; sealed_box and embedding tests cover the container and the vectors."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecureVoiceTriggerAssets.framework",
@@ -2496,11 +2610,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/security.json",
+   "bifrost": "springboard/ui/src/token_watch.rs; springboard/ui/src/token_objects.rs; springboard/ui/src/token_registry.rs; springboard/ui/src/token_registration.rs; springboard/ui/src/smartcard_slot.rs",
    "status": "partial",
-   "note": "private framework, owner Security; from SDK matrix security.json",
+   "note": "The token layer is modelled: the token watcher and session authentication state (token_watch.rs), the keys, certificates and identities a token stores (token_objects.rs), registration of cards for sign-in (token_registry.rs, token_registration.rs) and reader slots (smartcard_slot.rs). A card driver (PC/SC) feeds these models; the models hold no key material.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_objects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    }
+   ],
+   "ready_note": "All five models have tests: insert and remove events, authenticated-only objects, registration persistence and login policy, slot reports. The reader transport is the driver's job and is not part of the models."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SecurityUICore.framework",
@@ -2517,11 +2660,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/security.json",
+   "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/ui/src/auth_view.rs; springboard/sdk/src/secure_entry.rs; springboard/src/shell/auth_sheet.rs; springboard/src/shell/permission_sheet.rs",
    "status": "partial",
-   "note": "private framework, owner Security; from SDK matrix security.json",
+   "note": "The security prompts are covered: the device-owner password sheet and its attempt/lock-out model (auth_sheet.rs, auth_prompt.rs), the biometric state icon (auth_view.rs), the secure text entry (secure_entry.rs) and the permission question sheet (permission_sheet.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_prompt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "auth_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "secure_entry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::auth_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    }
+   ],
+   "ready_note": "Attempt counting and lock-out, icon states, masked entry that never leaks the text, and the allow/deny permission sheet are exercised by the listed tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Seeding.framework",
@@ -2559,11 +2731,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/embedding.rs; springboard/sdk/src/search_kit.rs; springboard/ui/src/secure_vector_store.rs; springboard/src/shell/spotindex.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Documents are managed for meaning-based retrieval: an app adds, replaces and removes document vectors (sdk embedding index), searches them by cosine (and by word with search_kit), keeps the vectors sealed on disk (secure_vector_store.rs) and indexes the documents for the system search (spotindex.rs). The vectors are hashed bags of words, not a neural model, so they match shared words and not synonyms.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_kit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "secure_vector_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    }
+   ],
+   "ready_note": "Insert, remove, nearest and summary are exercised by the embedding and search_kit tests; sealed storage by secure_vector_store tests; system-search indexing by spotindex tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SemanticPerception.framework",
@@ -2581,8 +2777,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: Apple's trained image-perception model runtime. The framework carries only Info.plist and version.plist in the reference index (no UI, no XPC service); the perception models are Apple ML model packs. BifrOSt does scene understanding through visual_search providers and subject_lift with an open segmenter, tracked in their own rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -2602,8 +2798,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: Apple's on-device sensing-prediction service. The reference index shows only Info.plist and version.plist for the framework, a launch agent (sensingpredictd) and its sandbox profile; it runs Apple-trained prediction models over device context signals, an Apple ML model pack with no user-visible function.",
    "rea": [],
    "method": "assessed"
   },
@@ -2623,8 +2819,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: the sensingpredictd daemon of Apple's sensing-prediction service (launch agent com.apple.sensingpredictd, sandbox profile sensingpredictd.sb in the reference index). It hosts Apple-trained prediction models; there is no user-visible function to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2644,8 +2840,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: the SensingPredictXPCService client side of Apple's sensing-prediction service (one XPC service and its sandbox profile in the reference index). It serves Apple-trained prediction models to clients; there is no user-visible function to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2763,8 +2959,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal monitoring framework behind the sentryd daemon (man page sentryd.8 and the logging subsystems Framework.Lifecycle and FrameworkSignposts in the reference index; no resources, no UI). It exists for Apple's own diagnostics and signposts; BifrOSt's local crash and signpost reporting is tracked in the diagnostics rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -2902,11 +3098,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Live activities reach the person as rows in Notification Centre's widget area with a state (pending, active, stale, ended), updated by their owning app only; an ended activity leaves after its dismissal policy.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Starting, updating, ending and dismissing an activity, and the rows the shell shows for it, are exercised by the live_activity and widgets_timeline tests. A separate alert presentation (banner with sound on update) is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SessionAssertion.framework",
@@ -2958,11 +3173,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "liveactivitiesd's job is covered: the life cycle registry (request, update, end, dismissal window, the person's off switch) in ui/src/live_activity.rs, served to apps by the widgets_timeline shell service and its SDK client.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Registry life cycle, owner-only updates, stale and end handling are exercised by live_activity::tests and the widgets_timeline tests in the shell and the SDK."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SessionFoundation.framework",
@@ -2979,11 +3213,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "Shared types of the live-activity daemon (content, state, dismissal, errors) are the public types of ui/src/live_activity.rs, used by the shell service and the SDK; BifrOSt keeps them in one module instead of a separate foundation layer.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the live-activity function covered by live_activity::tests and the service tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SessionPushNotifications.framework",
@@ -3021,11 +3274,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "The session store of the live-activity daemon is the in-memory Registry in ui/src/live_activity.rs, owned by the shell service (process-wide store in widgets_timeline.rs). Activities are short lived (an ended one leaves within four hours) and the owning app starts them again, so BifrOSt keeps no SQL file for them.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "Internal storage of the live-activity function; the Registry and the service store are covered by live_activity::tests and widgets_timeline tests. Activities do not survive a shell restart."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SessionSyncEngine.framework",
@@ -3043,8 +3315,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "status": "n/a",
+   "note": "n/a: mirrors live activities from other Apple devices (iPhone to Mac) through the Apple account and its cloud/continuity transport. Account-bound cross-device sync is deliberately not mirrored; the reference index shows only Info.plist for this framework.",
    "rea": [],
    "method": "assessed"
   },
@@ -3063,11 +3335,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs",
+   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_search.rs",
    "status": "partial",
-   "note": "The Settings app is a navigation stack of list pages with persisted options and device effects. Gap: not every pane of the reference Settings app is present, so the page set needs comparing before parity is claimed.",
+   "note": "The Settings app is covered: a navigation stack of list pages built from data (pages.rs), persisted options and device effects for each row (settings.rs), off-thread reads for slow panes (settings_load.rs) and a search over every pane and row (settings_search.rs). Which panes exist is tracked by the pane rows of the Settings app; this row is the framework that hosts them.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_load::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    }
+   ],
+   "ready_note": "Page specs, row actions, option persistence, loading and search are exercised by the four test modules."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SettingsHost.framework",
@@ -3119,11 +3415,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs",
+   "bifrost": "springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs; springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "The page drawing, the Wi-Fi password sheet and the confirmation alerts are in settings.rs. Gap: the reference's host UI extension points are not mirrored.",
+   "note": "The host extension point is covered: an app declares [[settings_pane]] tables in its manifest, the shell lists them in Settings and opens the pane over the app's control socket (ae.settings.openPane); the SDK installs the handler. The pages, the Wi-Fi password sheet and the confirmation alerts are in settings.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "settings_panes::tests"
+    }
+   ],
+   "ready_note": "Manifest parsing, listing, the open request and its handler are exercised by settings_panes tests in the shell and the SDK; page drawing and alerts by settings tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SettingsServices.framework",
@@ -3140,11 +3455,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/settings_intents.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "SettingsSearchReindexService's job is covered: the Settings search index is built from the page specs every time Settings searches (settings_search.rs), so it cannot go stale and needs no reindex service; the pane intents (settings_intents.rs) let Search and the agent socket list and open panes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "Index building, matching by name and keyword, and the pane intent catalogue are exercised by the two test modules."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SettingsServicesXPC.framework",
@@ -3161,11 +3490,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/settings_actions.rs; springboard/src/shell/settings_intents.rs; springboard/src/shell/settings_panes.rs",
    "status": "os",
-   "note": "Name alone does not show the job: the reference binary is not in the local extract, and no BifrOSt module or Arch package was found that does this job; the search covered the shell, the SDK and the runtime package lists.",
+   "note": "The service protocol to Settings is the shell's own: pane-opening intents and Wi-Fi/wallpaper action intents (settings_intents.rs, settings_actions.rs) and the app pane open method over the control socket (settings_panes.rs). There is no separate XPC process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    }
+   ],
+   "ready_note": "Plumbing of the Settings services covered by the intent, action and pane tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SetupAssistantFramework.framework",
@@ -3483,8 +3831,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple's proximity setup framework for Apple devices and accessories (HomePod, Apple TV, iPhone-assisted setup), a sibling of AccessorySetupKitCore in the reference index and localised for the Apple setup flows. It runs an Apple-only pairing protocol with no open equivalent; BifrOSt's own first-run Setup Assistant app and Bluetooth accessory picker are separate rows.",
    "rea": [],
    "method": "assessed"
   },
@@ -3503,11 +3851,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/ui/src/reading_list.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The share sheet and its destinations are covered: the picker lists installed apps that open every shared item plus Copy and Compose Post (sharing.rs), the nearby sheet adds Save to Files and Send Nearby (share/mod.rs), and the Reading List and mail/message destinations are apps that declare what they open. The SDK sends and receives shared items (share.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "reading_list::tests"
+    }
+   ],
+   "ready_note": "Target selection by type, delivery of text, URLs and files with read-only grants, the sheet model and the reading list are exercised by the listed tests. Account-picture and desktop-picture destinations are the Settings pages' own actions."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SharePointManagement.framework",
@@ -3546,8 +3918,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the sharereportingd launch agent reports sharing events (a daemon only; the reference index shows no resources and no UI for the framework). That is usage telemetry, which BifrOSt does not collect; local recipient suggestions are in recipient_recents.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -3566,11 +3938,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/src/net/share.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The core of the share services (the service list and its plug-ins such as Add to Photos) is the target list of the share sheet: any installed app that declares the item types it opens is a destination, and the transfer to a nearby device is net/share.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    }
+   ],
+   "ready_note": "Service discovery by manifest, delivery and the nearby transfer are exercised by the sharing, SDK share and net::share tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SharedWebCredentials.framework",
@@ -3608,11 +3999,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/net/share.rs; springboard/src/shell/sharing_page.rs; springboard/src/shell/sharing.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The job of the sharing framework is covered by BifrOSt's own nearby sharing: discovery by multicast beacon, an Accept or Decline prompt, a checksummed file transfer with progress (net/share.rs, share/*), the Settings > Sharing page with the computer name and Remote Login, File Sharing and Screen Sharing switches (sharing_page.rs) and the app share picker. The proprietary AirDrop radio protocol is not mirrored; the nearby transfer is plain LAN with a shared-secret MAC (secure_channel.rs is the building block to encrypt it).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    }
+   ],
+   "ready_note": "Beacons, offers, transfers, progress, the Sharing settings page and the picker are exercised by the listed tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SharingCore.framework",
@@ -3629,11 +4044,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/net/share.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/glue.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The core of sharing (peers, offers, transfers and their status) is net/share.rs, with the progress rows in share/progress.rs and the shell wiring in share/glue.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::progress::tests"
+    }
+   ],
+   "ready_note": "Internal plumbing of the nearby sharing function, covered by the net::share and progress tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SharingUI.framework",
@@ -3650,11 +4079,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/prompt.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The sharing UI is covered: the share sheet with the preview, the row of nearby devices and the actions (share/mod.rs), the incoming-file Accept or Decline prompt (share/prompt.rs) and the transfer progress card (share/progress.rs). It draws BifrOSt's own artwork, not the AirDrop artwork.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::progress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::share::prompt::tests"
+    }
+   ],
+   "ready_note": "Layout, hit testing, results, prompt and progress rows are exercised by the three test modules."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SharingXPCServices.framework",
@@ -3671,11 +4119,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/sharing.rs; springboard/sdk/src/share.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "SharingXPCHelper lets sandboxed apps use sharing. In BifrOSt an app asks the shell through ToShell::Share and receives items as document grants (sharing.rs, sdk share.rs), so the shell is the helper and no separate XPC process exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "share::tests"
+    }
+   ],
+   "ready_note": "Plumbing of the share function: requests, grants and the answer to the sender are exercised by the shell and SDK share tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ShazamCore.framework",

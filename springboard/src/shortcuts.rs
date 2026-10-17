@@ -8,6 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod describe;
+pub mod droplet;
 pub mod flow;
 #[cfg(test)]
 mod parity_app_shortcuts;
