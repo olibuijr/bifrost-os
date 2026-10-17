@@ -842,6 +842,7 @@ pub mod gpu_device;
 pub mod drawable_pool;
 pub mod gpu_pass;
 pub mod biquad;
+pub mod fft;
 pub mod extent_map;
 pub mod os_services;
 pub mod buffer_handoff;

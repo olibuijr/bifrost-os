@@ -103,7 +103,7 @@
     "No shared audio format description type (sample rate, channel count, bits per sample, format flags) for apps or services; formats are passed as two loose integers.",
     "No channel layout model: channel labels and layout tags are not carried through the audio path.",
     "No timestamp model beyond presentation and decode times in microseconds (no host time or sample time).",
-    "No buffer-list type shared between the decoders, the speaker and the capture path.",
+    "No buffer-list type shared between the decoders, the speaker and the capture path. Built 2026-10-17: bifrost_app::audio_format::AudioBufferList (interleaved or planar buffers, to_interleaved, to_pcm16), tests audio_format::tests; the decoders and the speaker do not use it yet.",
     "No public format or codec identifier enum; APAC is not supported.",
     "SMPTE timecode is absent (n/a on a desktop with no timecode source)."
   ]

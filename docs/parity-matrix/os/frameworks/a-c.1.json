@@ -909,11 +909,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/core_location.rs (LocationManager)",
+   "bifrost": "springboard/sdk/src/core_location.rs (LocationLogEntry, LocationLog over Location)",
    "status": "partial",
    "note": "built on arm; not yet verified on Midget. Location manager and geocoding exist. No location log entry type.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::log_entry_tests"
+    }
+   ],
+   "ready_note": "LocationLogEntry records a fix as a tab-separated line that parses back and refuses invalid coordinates; LocationLog keeps the latest N entries in order. Host tests in core_location.rs. The location source it logs is the partial CoreLocation row, which is not verified on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/CalendarStore.framework",
@@ -1225,11 +1234,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/combine.json",
+   "bifrost": "springboard/sdk/src/observable.rs (publishers, operators: combine_latest, merge, filter, flat_map, debounce, throttle; Subjects), springboard/sdk/src/schedulers.rs, springboard/sdk/src/async_publisher.rs",
    "status": "partial",
    "note": "from SDK matrix combine.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "observable::merge_flat_map_tests"
+    }
+   ],
+   "ready_note": "Publisher, operator, subject, cancellation and scheduler tests in observable.rs (host, pure model). The matrix gap list for this row is stale: combineLatest, merge, filter, flatMap, debounce and throttle exist there. Not verified on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework",

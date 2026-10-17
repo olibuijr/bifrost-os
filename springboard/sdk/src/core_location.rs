@@ -332,6 +332,148 @@ pub fn error_named(message: &str) -> Option<LocationError> {
     crate::controls::location_auth::ERRORS.iter().copied().find(|e| format!("{e:?}") == message)
 }
 
+/// One line of a location log (`CLLocation` history as diagnostics record it): when, where, how accurate, and from
+/// which source. Lines are tab separated so a log can be read back, field by field, with [`LocationLogEntry::parse`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct LocationLogEntry {
+    /// Unix seconds, as in [`Location::timestamp`].
+    pub timestamp: f64,
+    pub coordinate: Coordinate,
+    /// Radius of uncertainty in metres.
+    pub horizontal_accuracy: f64,
+    pub source: String,
+}
+
+impl LocationLogEntry {
+    /// Records a location fix. The source keeps its name; city and country are not logged.
+    pub fn from_location(location: &Location) -> LocationLogEntry {
+        LocationLogEntry {
+            timestamp: location.timestamp,
+            coordinate: location.coordinate,
+            horizontal_accuracy: location.horizontal_accuracy,
+            source: location.source.clone(),
+        }
+    }
+
+    /// `timestamp\tlatitude\tlongitude\taccuracy\tsource`, with six decimals on the coordinates.
+    pub fn to_line(&self) -> String {
+        format!(
+            "{:.3}\t{:.6}\t{:.6}\t{:.1}\t{}",
+            self.timestamp, self.coordinate.latitude, self.coordinate.longitude, self.horizontal_accuracy, self.source
+        )
+    }
+
+    /// Reads a line written by [`LocationLogEntry::to_line`]. Refuses a malformed line or an invalid coordinate.
+    pub fn parse(line: &str) -> Option<LocationLogEntry> {
+        let mut parts = line.splitn(5, '\t');
+        let timestamp = parts.next()?.parse::<f64>().ok()?;
+        let latitude = parts.next()?.parse::<f64>().ok()?;
+        let longitude = parts.next()?.parse::<f64>().ok()?;
+        let horizontal_accuracy = parts.next()?.parse::<f64>().ok()?;
+        let source = parts.next()?.to_string();
+        let coordinate = Coordinate::new(latitude, longitude);
+        if !coordinate.is_valid() || !timestamp.is_finite() {
+            return None;
+        }
+        Some(LocationLogEntry { timestamp, coordinate, horizontal_accuracy, source })
+    }
+}
+
+/// A bounded, ordered location log. When full, the oldest entry is dropped so the log keeps the latest fixes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LocationLog {
+    entries: Vec<LocationLogEntry>,
+    capacity: usize,
+}
+
+impl LocationLog {
+    /// A log that keeps at most `capacity` entries; a zero capacity keeps one.
+    pub fn new(capacity: usize) -> LocationLog {
+        LocationLog { entries: Vec::new(), capacity: capacity.max(1) }
+    }
+
+    pub fn append(&mut self, entry: LocationLogEntry) {
+        if self.entries.len() == self.capacity {
+            self.entries.remove(0);
+        }
+        self.entries.push(entry);
+    }
+
+    pub fn entries(&self) -> &[LocationLogEntry] {
+        &self.entries
+    }
+
+    pub fn latest(&self) -> Option<&LocationLogEntry> {
+        self.entries.last()
+    }
+
+    /// The whole log, one line per entry, oldest first.
+    pub fn to_text(&self) -> String {
+        self.entries.iter().map(|e| e.to_line()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+#[cfg(test)]
+mod log_entry_tests {
+    use super::*;
+
+    fn fix(timestamp: f64, lat: f64, lon: f64) -> Location {
+        Location {
+            coordinate: Coordinate::new(lat, lon),
+            altitude: None,
+            horizontal_accuracy: 65.0,
+            timestamp,
+            source: "ip".to_string(),
+            city: "Reykjavik".to_string(),
+            country: "Iceland".to_string(),
+        }
+    }
+
+    #[test]
+    fn a_fix_is_recorded_without_the_place_names() {
+        let entry = LocationLogEntry::from_location(&fix(1_700_000_000.5, 64.14, -21.94));
+        assert_eq!(entry.coordinate, Coordinate::new(64.14, -21.94));
+        assert_eq!(entry.source, "ip");
+        assert_eq!(entry.to_line(), "1700000000.500\t64.140000\t-21.940000\t65.0\tip");
+    }
+
+    #[test]
+    fn a_line_reads_back_to_the_same_entry() {
+        let entry = LocationLogEntry::from_location(&fix(1_700_000_010.0, 65.68, -18.10));
+        let back = LocationLogEntry::parse(&entry.to_line()).unwrap();
+        assert_eq!(back, entry);
+    }
+
+    #[test]
+    fn a_malformed_or_out_of_range_line_is_refused() {
+        assert!(LocationLogEntry::parse("").is_none());
+        assert!(LocationLogEntry::parse("1.0\t1.0\tnot-a-number\t5.0\tip").is_none());
+        assert!(LocationLogEntry::parse("1.0\t95.0\t0.0\t5.0\tip").is_none());
+        assert!(LocationLogEntry::parse("nan\t0.0\t0.0\t5.0\tip").is_none());
+    }
+
+    #[test]
+    fn the_log_keeps_the_latest_entries_in_order() {
+        let mut log = LocationLog::new(2);
+        for t in [1.0, 2.0, 3.0] {
+            log.append(LocationLogEntry::from_location(&fix(t, 0.0, 0.0)));
+        }
+        assert_eq!(log.entries().len(), 2);
+        assert_eq!(log.entries()[0].timestamp, 2.0);
+        assert_eq!(log.latest().unwrap().timestamp, 3.0);
+        assert_eq!(log.to_text().lines().count(), 2);
+    }
+
+    #[test]
+    fn a_zero_capacity_log_still_keeps_one_entry() {
+        let mut log = LocationLog::new(0);
+        log.append(LocationLogEntry::from_location(&fix(1.0, 1.0, 1.0)));
+        log.append(LocationLogEntry::from_location(&fix(2.0, 1.0, 1.0)));
+        assert_eq!(log.entries().len(), 1);
+        assert_eq!(log.latest().unwrap().timestamp, 2.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
