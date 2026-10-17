@@ -4,14 +4,49 @@
 //! picks. It takes every touch while it is up; Close or Escape hides it. Pure geometry and paging live here; the shell
 //! wiring is in `Shell::char_viewer_*`.
 //!
-//! Not yet: a search field over the catalogue, recent emoji, and the symbols tabs of the reference viewer (the catalogue
-//! holds emoji only).
+//! The last tab is Symbols (`SYMBOLS`): the symbol emoji the emoji font draws. Text-presentation symbols (arrows, math,
+//! currency signs) need a text font the emoji catalogue does not carry, so they are not here yet.
+//!
+//! Not yet: a search field over the catalogue, recent emoji, and the text symbol sets.
 
 use super::keyboard::Out;
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
 use super::{Drawn, Effect, Event, Shell};
-use crate::emoji::CATEGORIES;
+use crate::emoji::{Category, CATEGORIES};
 use crate::gfx::Surface;
+
+/// The Symbols tab, after the emoji categories: symbol emoji with a default emoji presentation (plus and minus, digit and
+/// letter blocks, the boxed words, the arrows-in-circles and the coloured shapes).
+pub const SYMBOLS: Category = Category {
+    icon: "🔣",
+    emoji: &[
+        "➕", "➖", "➗", "💲", "💱", "🔠", "🔡", "🔢", "🔣", "🔤", "🆗", "🆕", "🆙", "🆒", "🆓", "🆖", "🆑", "🔝", "🔙", "🔚", "🔛",
+        "🔜", "🔀", "🔁", "🔂", "🔃", "🔄", "⏩", "⏪", "⏫", "⏬", "🔟", "💯", "🔴", "🔵", "🔘", "🔺", "🔻", "🔶", "🔷", "🔸", "🔹",
+    ],
+};
+
+/// Number of tabs: the emoji categories, then Symbols.
+pub fn tab_count() -> usize {
+    CATEGORIES.len() + 1
+}
+
+/// The emoji on tab `tab`, empty past the last tab.
+fn tab_emoji(tab: usize) -> &'static [&'static str] {
+    match CATEGORIES.get(tab) {
+        Some(c) => c.emoji,
+        None if tab == CATEGORIES.len() => SYMBOLS.emoji,
+        None => &[],
+    }
+}
+
+/// The tab's icon, empty past the last tab.
+fn tab_icon(tab: usize) -> &'static str {
+    match CATEGORIES.get(tab) {
+        Some(c) => c.icon,
+        None if tab == CATEGORIES.len() => SYMBOLS.icon,
+        None => "",
+    }
+}
 
 /// Emoji per row and rows per page: one page is a 10 by 5 grid.
 const COLS: usize = 10;
@@ -75,10 +110,7 @@ impl CharacterViewer {
 
     /// The emoji of the open tab, in display order.
     pub fn tab_items(&self) -> &'static [&'static str] {
-        match CATEGORIES.get(self.tab) {
-            Some(c) => c.emoji,
-            None => &[],
-        }
+        tab_emoji(self.tab)
     }
 
     /// The pages in the open tab (at least one, so an empty tab still shows a page).
@@ -97,7 +129,7 @@ impl CharacterViewer {
 
     /// Opens tab `tab` on its first page. A tab past the catalogue is ignored.
     pub fn select_tab(&mut self, tab: usize) {
-        if tab < CATEGORIES.len() {
+        if tab < tab_count() {
             self.tab = tab;
             self.page = 0;
         }
@@ -124,7 +156,7 @@ impl CharacterViewer {
 
     fn tab_rect(ui: &Ui, w: i32, h: i32, i: usize) -> Rect {
         let (x, y, _, _) = Self::panel(ui, w, h);
-        let tw = ui.pt(COLS as f32 * CELL_PT) / CATEGORIES.len() as f32;
+        let tw = ui.pt(COLS as f32 * CELL_PT) / tab_count() as f32;
         (x + ui.pt(PAD_PT) + tw * i as f32, y + ui.pt(TITLE_PT), tw, ui.pt(TAB_PT))
     }
 
@@ -163,7 +195,7 @@ impl CharacterViewer {
         if inside(Self::done_rect(ui, w, h), x, y) {
             return Some(Hit::Done);
         }
-        if let Some(i) = (0..CATEGORIES.len()).find(|&i| inside(Self::tab_rect(ui, w, h, i), x, y)) {
+        if let Some(i) = (0..tab_count()).find(|&i| inside(Self::tab_rect(ui, w, h, i), x, y)) {
             return Some(Hit::Tab(i));
         }
         if let Some(i) = (0..self.page_items().len()).find(|&i| inside(Self::cell_rect(ui, w, h, i), x, y)) {
@@ -189,12 +221,12 @@ impl CharacterViewer {
         let done = ui.text("Done", MAC_BODY_PT, Weight::Semibold, WHITE);
         s.blit_colored(&done, (dx + (dw - done.w as f32) / 2.0) as i32, (dy + (dh - done.h as f32) / 2.0) as i32, LINK, 255);
 
-        for i in 0..CATEGORIES.len() {
+        for i in 0..tab_count() {
             let (tx, ty, tw, th) = Self::tab_rect(ui, w, h, i);
             if i == self.tab() {
                 s.fill_rrect(tx + 1.0, ty + 1.0, tw - 2.0, th - 2.0, ui.pt(TAB_RADIUS_PT), FILL_GRAY);
             }
-            if let Some(img) = crate::emoji::render(CATEGORIES[i].icon, ui.pt(TAB_GLYPH_PT)) {
+            if let Some(img) = crate::emoji::render(tab_icon(i), ui.pt(TAB_GLYPH_PT)) {
                 s.blit(&img, (tx + (tw - img.w as f32) / 2.0) as i32, (ty + (th - img.h as f32) / 2.0) as i32, 255, 255);
             }
         }
@@ -312,8 +344,18 @@ mod tests {
         let mut v = CharacterViewer::new();
         v.select_tab(2);
         assert_eq!(v.tab(), 2);
-        v.select_tab(CATEGORIES.len());
+        v.select_tab(tab_count());
         assert_eq!(v.tab(), 2, "a tab past the catalogue is ignored");
+    }
+
+    #[test]
+    fn the_symbols_tab_is_last_and_shows_the_symbol_set() {
+        let mut v = CharacterViewer::new();
+        v.select_tab(tab_count() - 1);
+        assert_eq!(v.tab(), CATEGORIES.len());
+        assert_eq!(v.tab_items(), SYMBOLS.emoji);
+        assert!(!v.tab_items().is_empty());
+        assert_eq!(v.page_items().len(), v.tab_items().len().min(PER_PAGE));
     }
 
     #[test]
@@ -340,7 +382,7 @@ mod tests {
 
     #[test]
     fn every_category_has_emoji_and_an_icon() {
-        for c in CATEGORIES.iter() {
+        for c in CATEGORIES.iter().chain(std::iter::once(&SYMBOLS)) {
             assert!(!c.emoji.is_empty());
             assert!(!c.icon.is_empty());
         }
