@@ -172,7 +172,7 @@ mod tests {
         let t = token(r#"{"access_token":"a","expires_in":300,"refresh_token":"r 1"}"#);
         let req = t.refresh_request("https://id.example.is/token", "client").unwrap();
         assert_eq!(req.method.as_str(), "POST");
-        let mut url = req.prepared_url_request().unwrap();
+        let url = req.prepared_url_request().unwrap();
         assert!(url.url.starts_with("https://id.example.is/token"));
         let body = String::from_utf8_lossy(url.body.as_deref().unwrap_or(&[])).to_string();
         assert!(body.contains("grant_type=refresh_token"), "{body}");

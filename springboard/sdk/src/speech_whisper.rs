@@ -25,7 +25,7 @@ use crate::speech_recognizer::{
     SFTranscriptionSegment,
 };
 use bifrost_core::json::Json;
-use bifrost_ui::analyzer_input::{AnalyzerInput, AudioFormat};
+use bifrost_ui::analyzer_input::AnalyzerInput;
 use bifrost_ui::whisper::{locale_supported, PollReply, Transcript};
 
 /// The service name, as the shell registers it.

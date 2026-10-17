@@ -9,6 +9,7 @@ pub const FILE: &str = "install-failures.log";
 const MAX_BYTES: u64 = 256 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub struct Failure {
     pub unix: i64,
     /// what failed, such as "system update"
@@ -26,6 +27,7 @@ pub fn line(unix: i64, what: &str, message: &str) -> String {
     format!("{unix}\t{}\t{}\n", clean(what), clean(message))
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn parse(text: &str) -> Vec<Failure> {
     text.lines()
         .filter_map(|l| {
@@ -50,11 +52,13 @@ pub fn append(dir: &Path, unix: i64, what: &str, message: &str) -> std::io::Resu
 }
 
 /// Every recorded failure, oldest first. A missing file is an empty log.
+#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn read(dir: &Path) -> Vec<Failure> {
     std::fs::read_to_string(path(dir)).map(|t| parse(&t)).unwrap_or_default()
 }
 
 /// The newest `max` failures, newest first, for the diagnostics page.
+#[cfg_attr(not(test), allow(dead_code))] // not wired yet: the diagnostics page does not list update failures
 pub fn recent(dir: &Path, max: usize) -> Vec<Failure> {
     let mut all = read(dir);
     all.reverse();

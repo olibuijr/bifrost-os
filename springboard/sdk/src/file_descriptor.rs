@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn a_received_descriptor_keeps_the_access_it_was_given() {
-        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
         let fd = writer.into_owned();
         let mut wrapped = FileDescriptor::from_received(fd, Access::Write);
         assert_eq!(wrapped.access(), Access::Write);
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn a_duplicated_pipe_end_still_reaches_the_same_pipe() {
-        let (mut reader, mut writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
         let mut second = writer.duplicate().expect("duplicate the writer");
         second.write(b"z").expect("write through the copy");
         drop(writer);

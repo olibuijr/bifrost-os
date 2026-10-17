@@ -3496,22 +3496,24 @@ impl Shell {
         self.anim.map_or(1.0, |(_, s)| (((t - s) / accessibility::anim_ms(gestures::SPRING_MS)).clamp(0.0, 1.0)) as f32)
     }
 
-    /// Draws what changed since the last frame into `s` and returns it as
-    /// damage for the presenter; a frame with nothing new draws nothing.
-    /// The home and lock screens compare against `drawn` and paint only the
-    /// touched rows, spread over worker threads; apps repaint in full.
     /// Shows the Picture in Picture window (the delegate events are for the app, which the caller delivers).
+    #[allow(dead_code)] // not wired yet: no player reports that it can show a window
     pub(super) fn pip_start(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
         self.dirty = true;
         self.pip.start()
     }
 
     /// Takes the Picture in Picture window down.
+    #[allow(dead_code)] // not wired yet: no player reports that it can show a window
     pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
         self.dirty = true;
         self.pip.stop()
     }
 
+    /// Draws what changed since the last frame into `s` and returns it as
+    /// damage for the presenter; a frame with nothing new draws nothing.
+    /// The home and lock screens compare against `drawn` and paint only the
+    /// touched rows, spread over worker threads; apps repaint in full.
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
         self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)

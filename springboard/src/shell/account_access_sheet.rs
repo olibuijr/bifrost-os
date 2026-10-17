@@ -7,7 +7,7 @@
 //! until the person answers it.
 
 use super::services::accounts_access::{self, Request};
-use super::ui::{AlertCard, Ui, Weight, LINK, MAC_BODY_PT};
+use super::ui::{AlertCard, Weight, LINK, MAC_BODY_PT};
 use super::Drawn;
 use crate::gfx::{rgba, Surface};
 use bifrost_core::json::Json;
