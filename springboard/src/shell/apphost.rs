@@ -221,7 +221,12 @@ impl Installed {
     pub fn exec_path(&self) -> PathBuf {
         self.dir.join(&self.manifest.exec)
     }
+    /// The app's icon file: its `icon.json` (layers) when the package has one, else the manifest's flat icon.
     pub fn icon_path(&self) -> PathBuf {
+        let doc = self.dir.join("icon.json");
+        if doc.is_file() {
+            return doc;
+        }
         self.dir.join(&self.manifest.icon)
     }
 }
