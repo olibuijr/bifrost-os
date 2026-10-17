@@ -4046,7 +4046,16 @@
    "status": "partial",
    "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::route::tests"
+    }
+   ],
+   "ready_note": "The connected Bluetooth audio device is the Now Playing route and the sound output (media/route.rs bluetooth_sink, tested by media::route::tests; shell use_bluetooth_output). Apps still have no API to pick an output; that is the system audio layer's job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BluetoothManager.framework",
@@ -4130,7 +4139,21 @@
    "status": "partial",
    "note": "Process launch and hosting live in the shell (app_policy.rs, apphost.rs). No separate layer exists for the reference's process and scene services, and its poster-board parts have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    }
+   ],
+   "ready_note": "Process launch, hosting and app slots live in the shell (bare/app_policy.rs, shell/apphost.rs) and are tested by their tests modules. The poster-board and scene parts of the reference service are Apple's graphics layers and have no counterpart."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Bom.framework",
@@ -4244,7 +4267,26 @@
    "status": "partial",
    "note": "The Books app is the counterpart for the library and reading UI. The store, the purchase flow and the reference agent service have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::highlight_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::narrate_tests"
+    }
+   ],
+   "ready_note": "The library and reading UI are in the Books app (books::tests, highlight_tests, narrate_tests). The Apple store, purchase flow and agent service are not mirrored: they belong to Apple's store and are out of scope for BifrOSt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookKitFoundation.framework",
@@ -4286,7 +4328,16 @@
    "status": "partial",
    "note": "The Books app covers the local library side only. Purchase records, the download database and the Books permission extension of the reference system are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "books::library_tests"
+    }
+   ],
+   "ready_note": "The local library (Want to Read, Finished, collections, sorting, adding books, reading goal) is built in the Books app and tested by books::library_tests. Purchase records and the download database are part of Apple's store and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/BookUtility.framework",
@@ -4712,7 +4763,21 @@
    "status": "partial",
    "note": "CalDAV calendars and CardDAV address books sync for Calendar and Contacts through the shared Internet Accounts model. Other account types and a separate data access daemon have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    }
+   ],
+   "ready_note": "CalDAV and CardDAV sync for Calendar and Contacts: account choice per service, queued edits sent as PUT or DELETE, flush order and conflicts (dav_sync::tests); account kinds and services (internet_accounts::tests). The separate data access daemon is not a process here: the sync runs inside the apps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CDDataAccessExpress.framework",
@@ -4733,7 +4798,21 @@
    "status": "partial",
    "note": "The same CalDAV and CardDAV sync serves this lightweight variant; there is no separate component for it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    }
+   ],
+   "ready_note": "The same CalDAV and CardDAV sync serves this variant (dav_sync::tests, internet_accounts::tests); there is no separate component to build."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CDMFoundation.framework",
@@ -5360,7 +5439,16 @@
    "status": "partial",
    "note": "Calendar access answers are modelled in calendar_access.rs and the event store runs in the calendar app; the reference access daemon, its background database cleanup and its analytics are not a separate process here.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "calendar_access::tests"
+    }
+   ],
+   "ready_note": "Calendar access answers (not determined, write only, full access, read and write per entity type) are modelled in ui calendar_access and tested there. The event store runs in the calendar app. The reference daemon's analytics and background database cleanup are not built and are not needed for the access job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarDatabase.framework",
@@ -5411,7 +5499,16 @@
    "status": "partial",
    "note": "The calendar grid for the Day, Week and Year views is drawn in timeview.rs; the reference invitation artwork is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "The Day, Week and Year grids are drawn in calendar/timeview.rs and exercised by calendar::tests (week start, zoom, hit regions, travel span, event blocks). The reference invitation artwork is Apple's and is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarFoundation.framework",
@@ -5578,7 +5675,16 @@
    "status": "partial",
    "note": "The calendar's views, toolbar and event editing are in the desktop app; the reference inspector nibs and the search-result preview extension are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "The calendar views, toolbar and event editing run in the desktop app (timeview.rs, chrome.rs), tested by calendar::tests. The reference inspector nibs and the search-result preview extension are Apple's own interface files and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarUIKit.framework",
@@ -5599,7 +5705,16 @@
    "status": "partial",
    "note": "The calendar views the desktop app shares (timeview.rs); BifrOSt has no separate toolkit layer for them, and the tablet build of these views is not verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "The shared calendar views (timeview.rs) are tested by calendar::tests. The tablet build of these views is a device check on Midget or the tablet, not a code gap."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CalendarUIKitInternal.framework",
@@ -5662,7 +5777,16 @@
    "status": "partial",
    "note": "The calendar feeds the Up Next widget from connect.rs; BifrOSt has no separate calendar widget extension, and the calendar widget's own intents are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::connect::tests"
+    }
+   ],
+   "ready_note": "The Up Next feed that the calendar supplies to the shell is built in calendar/connect.rs and tested by calendar::connect::tests. The shell's widget surface is the Up Next card; a separate widget extension is not needed for that job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CallAudioServiceClient.framework",
@@ -5680,8 +5804,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/audio_session.rs",
-   "status": "partial",
-   "note": "App audio sessions with categories and interruption handling (audio_session.rs) cover the audio side of calls for apps; no telephony call-audio routing is built, since BifrOSt has no cellular calls.",
+   "status": "n/a",
+   "note": "n/a: the call-audio route for telephony calls belongs to Apple's Phone stack, and BifrOSt has no cellular calls, so there is no call audio to route. The app audio sessions (sdk/src/audio_session.rs) cover the audio side of calls for apps.",
    "rea": [],
    "method": "assessed"
   },
