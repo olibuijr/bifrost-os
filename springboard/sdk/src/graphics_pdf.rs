@@ -17,9 +17,33 @@
 
 use bifrost_render::cg::pdf::doc::Doc;
 use bifrost_render::cg::pdf::draw;
+use bifrost_render::cg::pdf::outline_tree::{self, OutlineNode};
 use bifrost_render::cg::pdf::page::{self, PageBox};
 use bifrost_render::cg::pdf::writer::{self, Page as OutPage, PageImage};
 use bifrost_render::gfx::Image;
+
+/// One outline (bookmark) entry: its title, the zero based index of the page it opens when that page is in the
+/// document, its level, and the entries nested under it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutlineEntry {
+    pub title: String,
+    pub page: Option<usize>,
+    pub level: u8,
+    pub children: Vec<OutlineEntry>,
+}
+
+/// The nodes as entries, each destination's page object number mapped to a page index by `page_index`.
+fn entries(nodes: &[OutlineNode], page_index: &dyn Fn(u32) -> Option<usize>) -> Vec<OutlineEntry> {
+    nodes
+        .iter()
+        .map(|n| OutlineEntry {
+            title: n.item.title.clone(),
+            page: page_index(n.item.dest.page),
+            level: n.item.level,
+            children: entries(&n.children, page_index),
+        })
+        .collect()
+}
 
 /// A PDF file that has been read and checked for its structure.
 pub struct Document {
@@ -45,6 +69,15 @@ impl Document {
     pub fn page_size(&self, index: usize) -> Option<(f64, f64)> {
         let pages = page::pages(&self.doc);
         pages.get(index).map(|p| p.size(PageBox::Crop))
+    }
+
+    /// The outline (bookmarks) as a tree in reading order. An entry's `page` is the index of the page its
+    /// destination names, or None when the destination is not a page of this document.
+    pub fn outline(&self) -> Vec<OutlineEntry> {
+        let pages = page::pages(&self.doc);
+        let items = page::outline(&self.doc);
+        let page_index = |num: u32| pages.iter().find(|p| p.num == Some(num)).map(|p| p.index);
+        entries(&outline_tree::outline_tree(&items), &page_index)
     }
 
     /// Page `index` as a picture scaled to fit `max_w` x `max_h` pixels, keeping its aspect.
@@ -190,6 +223,32 @@ mod tests {
         assert_eq!(w.pages[0].images.len(), 0);
         w.add_page(100.0, 100.0).draw_rgb_image(vec![255; 12], 2, 2, 0.0, 0.0, 10.0, 10.0);
         assert_eq!(w.pages[1].images.len(), 1);
+    }
+
+    #[test]
+    fn outline_entries_nest_and_name_their_page_indexes() {
+        use bifrost_render::cg::pdf::page::{Dest, OutlineItem};
+        let item = |title: &str, page: u32, level: u8| OutlineItem {
+            title: title.to_string(),
+            dest: Dest { page, left: None, top: None, zoom: None },
+            level,
+        };
+        let items = vec![item("Intro", 10, 0), item("Setup", 11, 1), item("Ending", 12, 0)];
+        let tree = outline_tree::outline_tree(&items);
+        let index = |num: u32| match num {
+            10 => Some(0),
+            11 => Some(1),
+            _ => None,
+        };
+        let got = entries(&tree, &index);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].title, "Intro");
+        assert_eq!(got[0].page, Some(0));
+        assert_eq!(got[0].children.len(), 1);
+        assert_eq!(got[0].children[0].title, "Setup");
+        assert_eq!(got[0].children[0].page, Some(1));
+        assert_eq!(got[0].children[0].level, 1);
+        assert_eq!(got[1].page, None);
     }
 
     #[test]
