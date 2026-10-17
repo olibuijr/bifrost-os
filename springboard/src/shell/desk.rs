@@ -1216,18 +1216,24 @@ impl Shell {
             self.desk_focus_extra_window(slot, id);
             return;
         }
+
+        // a limit already reached covers the window this opens (see `st_launch_check`); a blocked app's own
+        // process (native route) is then never started
+        let blocked = self.st_launch_check(app, t);
         self.recent_note(app);
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
         if let Some(k)=apps().iter().position(|a|a.id==app){self.dock_start_bounce(k,t);}
         #[cfg(feature = "desktop-wayland")]
-        if let AppId::External(slot)=app { if self.desk_direct_open(slot as usize) { return; } }
+        if let AppId::External(slot)=app { if !blocked && self.desk_direct_open(slot as usize) { return; } }
         #[cfg(feature = "desktop-wayland")]
-        if app == AppId::Browser {
+        if app == AppId::Browser && !blocked {
             if let Some(slot)=apphost::slot_of("is.olibuijr.browser.desktop") {self.desk_native_open(AppId::External(slot as u8));return;}
         }
         #[cfg(feature = "desktop-wayland")]
-        if self.desk_native_open(app) { return; }
+        if !blocked && self.desk_native_open(app) { return; }
+        #[cfg(not(feature = "desktop-wayland"))]
+        let _ = blocked;
         let app = if app == AppId::Files {
             apphost::slot_of("is.olibuijr.files.desktop").map(|i| AppId::External(i as u8)).unwrap_or(AppId::AppStore)
         } else { app };
@@ -1757,6 +1763,45 @@ impl Shell {
         }).collect()
     }
 
+    /// The body rectangle of `app`'s window (below its title bar) that a Time Limit cover fills.
+    pub(super) fn desk_cover_rect(&self, app: AppId) -> Option<(i32, i32, i32, i32)> {
+        let d = self.desk.as_ref()?;
+        let w = d.wins.iter().find(|w| w.app == app && !w.minimized)?;
+        let top = title_of(app, &self.desk_metrics());
+        let h = w.r.h - top;
+        (h > 0 && w.r.w > 0).then_some((w.r.x, w.r.y + top, w.r.w, h))
+    }
+
+    /// Draws the Time Limit cover over its window's body. The frame, title bar and lights are drawn
+    /// before this, so the window can still be moved or closed. Clipped to the surface.
+    fn desk_cover(&mut self, s: &mut Surface, w: &Win, m: &Metrics, t: f64) {
+        let top = title_of(w.app, m);
+        let (cw, ch) = (w.r.w, w.r.h - top);
+        let Some(sh) = self.shield.as_mut() else { return };
+        if sh.app != w.app || cw <= 0 || ch <= 0 { return; }
+        sh.resize(cw, ch);
+        let (cx, cy) = (w.r.x, w.r.y + top);
+        let mut img = vec![0u32; cw as usize * ch as usize];
+        sh.draw(&mut Surface { w: cw as usize, h: ch as usize, stride: cw as usize, px: &mut img, y0: 0 }, &self.ui, t);
+        let (x_lo, x_hi) = (cx.max(0), (cx + cw).min(s.w as i32));
+        let (y_lo, y_hi) = (cy.max(s.y0 as i32), (cy + ch).min(s.h as i32));
+        for y in y_lo..y_hi {
+            for x in x_lo..x_hi {
+                let src = img[((y - cy) * cw + (x - cx)) as usize];
+                s.px[(y - s.y0 as i32) as usize * s.stride + x as usize] = src;
+            }
+        }
+    }
+
+    /// A Time Limit cover was raised or dropped: the desktop's window caches are stale.
+    pub(super) fn desk_cover_changed(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            d.window_cache.clear();
+            d.body_cache.clear();
+        }
+        self.dirty = true;
+    }
+
     /// The wallpaper, the windows back to front, the menu bar and the dock.
     pub(super) fn draw_desk(&mut self, s: &mut Surface, t: f64) {
         let m = self.desk_metrics();
@@ -1903,7 +1948,11 @@ impl Shell {
                 px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
                 let mut image = Image { w: w.r.w as usize, h: w.r.h as usize, px };
                 let mut local = *w; local.r.x = 0; local.r.y = 0;
-                self.draw_window(&mut Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 }, &local, Some(i) == front, &m, t, false);
+                {
+                    let mut surf = Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 };
+                    self.draw_window(&mut surf, &local, Some(i) == front, &m, t, false);
+                    self.desk_cover(&mut surf, &local, &m, t);
+                }
                 if !w.maximized { clip_corners(&mut image,corner); }
                 let previous = cached.as_ref().filter(|c| c.width == image.w && c.height == image.h).map_or(&[][..], |c| c.pixels.as_ref());
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
@@ -1926,6 +1975,7 @@ impl Shell {
                 continue;
             }
             self.draw_window(s, w, Some(i) == front, &m, t, true);
+            self.desk_cover(s, w, &m, t);
         }
         #[cfg(feature = "desktop-wayland")]
         if let Some(d) = self.desk.as_mut() {
