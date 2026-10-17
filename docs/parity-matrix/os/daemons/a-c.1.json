@@ -3494,11 +3494,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
+   "bifrost": "springboard/ui/src/audio_components.rs, springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
    "status": "partial",
-   "note": "Missing: a registry of audio components (plug-in units) that hosts can discover and load. audio_engine nodes exist only in process.",
+   "note": "Missing: a registry of audio components (plug-in units) that hosts can discover and load. audio_engine nodes exist only in process. Built 2026-10-17: component registry (ui/src/audio_components.rs) with discovery by kind and replace-by-id; tests audio_components::tests.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_components::tests"
+    }
+   ],
+   "ready_note": "audio_components.rs: register, find, discover by kind, replace by id, unregister"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.avatarsd.plist",
@@ -4106,11 +4115,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
    "status": "partial",
-   "note": "Missing: widget timelines (a timeline service that schedules widget refreshes). Live activities and notifications exist; timelines do not.",
+   "note": "Widget timelines are built: the shell widgets_timeline service keeps dated entries with a reload policy and asks the owning app for a new timeline when its reload date passes. Live activities and notifications exist too.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "widgets_timeline service: entry on screen, reload due at its date and at the end, live activities, unknown methods refused"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ciphermld.plist",
@@ -4669,9 +4687,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/recent_items.rs",
+   "bifrost": "springboard/src/shell/recent_items.rs, springboard/src/shell/recent_items.rs",
    "status": "partial",
-   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites, and the recents are session only.",
+   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites, and the recents are session only. Built 2026-10-17: favourites on the recents list (recent_items set_favourite and favourite_apps; favourites are kept past the recents cap); tests shell::recent_items::tests. Still missing: a surface that shows the favourites, and recents that persist across sessions.",
    "rea": [],
    "method": "audit"
   },
@@ -4725,9 +4743,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
+   "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs, springboard/sdk/src/user_activity.rs",
    "status": "partial",
-   "note": "Missing: user activity handoff between apps (activity continuation). No user activity model exists.",
+   "note": "Missing: user activity handoff between apps (activity continuation). No user activity model exists. Built 2026-10-17: the activity model (sdk/src/user_activity.rs, ActivityCenter) with one current activity per type, resume state, continuation by another app and search eligibility; tests user_activity::tests. Not wired: the shell does not route a continuation to the other app yet.",
    "rea": [],
    "method": "rule"
   },

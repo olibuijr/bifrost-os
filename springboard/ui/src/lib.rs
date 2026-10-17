@@ -1015,6 +1015,7 @@ pub mod video_session;
 pub mod video_compression;
 pub mod media_block;
 pub mod sample_attach;
+pub mod audio_components;
 pub mod audio_engine;
 pub mod audio_player;
 pub mod audio_recorder;
