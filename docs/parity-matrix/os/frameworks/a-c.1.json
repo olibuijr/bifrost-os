@@ -2308,8 +2308,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Lite variant of the cloud account framework with a plist only in the extracted tree. Its role is not confirmed without contents, so it is left as handled by the OS.",
+   "status": "n/a",
+   "note": "Apple account cloud library (Apple ID sign-in). BifrOSt accounts are the BifrOSt Cloud service, not Apple accounts; the reference holds only Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -2518,8 +2518,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. Only the framework directory is in the reference extract, and the name alone suggests secure-world support.",
+   "status": "n/a",
+   "note": "Exclave secure-world support for Apple silicon secure enclave. Depends on Apple hardware and firmware; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -2539,8 +2539,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. The reference extract has the directory tree only, with no binary or property list to read.",
+   "status": "n/a",
+   "note": "Apple-internal device support service with an Apple signing key (OctaneSigningKey.p12) and an XPC helper. Apple tooling with no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3388,8 +3388,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined. The reference extract has the directory tree only, and the name does not match a BifrOSt counterpart with certainty.",
+   "status": "n/a",
+   "note": "Apple accessory platform (MFi and HomeKit accessory services). BifrOSt has no Apple accessory program; the reference holds only Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -3430,8 +3430,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined beyond the name, which suggests accessory type definitions. No binary or property list was extracted to confirm.",
+   "status": "n/a",
+   "note": "Apple accessory platform type definitions (MFi and HomeKit). BifrOSt has no Apple accessory program; the reference holds only Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -3619,8 +3619,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined beyond the name, which suggests room acoustic material tables for spatial audio. Only the directory tree is in the reference extract.",
+   "status": "n/a",
+   "note": "Apple room-acoustics material database (AMDatabase.db) that feeds Apple spatial audio. Apple data pack with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5091,8 +5091,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; it is the sign-in sheet of the single sign-on broker, which is n/a, so it is left unassessed.",
+   "status": "n/a",
+   "note": "Sign-in sheet of the Apple single sign-on broker, which relies on Apple Account and enterprise identity; BifrOSt has no such broker (BifrOSt Cloud sign-in is separate).",
    "rea": [],
    "method": "assessed"
   },
@@ -5210,8 +5210,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference index; it is the support kit of the store components daemon, which is n/a, so it is left unassessed.",
+   "status": "n/a",
+   "note": "Support kit for the Apple App Store components daemon (vendor purchase and store services); no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5261,8 +5261,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The install-to-disk sheet and free-space prompts; BifrOSt installs silently through the store service (springboard/src/shell/store/install.rs), so the sheet has no counterpart.",
+   "status": "n/a",
+   "note": "Apple App Store UI service (StoreUIService XPC) for the vendor purchase and install sheets; BifrOSt installs silently through its own store service (springboard/src/shell/store/install.rs).",
    "rea": [],
    "method": "assessed"
   }
