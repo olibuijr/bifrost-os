@@ -3071,7 +3071,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/one_time_code.rs; springboard/ui/src/credential_identity.rs",
    "status": "partial",
-   "note": "One-time-code detection and credential identities for suggestions exist as pure models. Gap: no system suggestion panel draws them yet.",
+   "note": "One-time-code detection and credential identities for suggestions exist as pure models. Gap: no system suggestion panel draws them yet. Built 2026-10-17: the suggestion panel model in springboard/ui/src/autofill_panel.rs (rows from the saved identities for a service, filtered by the typed user name, with the highlight and Return choice); tests autofill_panel::tests. Still open: the shell does not draw the panel or fill the field.",
    "rea": [],
    "method": "assessed"
   },
@@ -3460,7 +3460,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced.",
+   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced. Built 2026-10-17: the background agent switch gate, background_agent_enabled and runnable_background_agents in springboard/src/shell/login_items_page.rs; tests background_gate_tests. Still open: no launcher calls the gate, so the switch is still not enforced until a background-agent launcher exists.",
    "rea": [],
    "method": "assessed"
   },
@@ -4584,7 +4584,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt:120 (gdb, for gcore and symbolication of one core file)",
    "status": "partial",
-   "note": "The gdb package symbolicates one core dump at a time. No service symbolicates many crash logs in a batch.",
+   "note": "The gdb package symbolicates one core dump at a time. No service symbolicates many crash logs in a batch. Built 2026-10-17: batch crash triage, triage_crashes in springboard/sdk/src/crash_report.rs, which symbolicates many stacked crashes and groups them by signature with counts; tests triage_tests. Still open: no service runs it over the crash logs on disk yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -5255,7 +5255,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Ships word language models for European languages and segmentation models for Chinese, Japanese and Korean, which predictive text and word splitting need; build predictive text on the text input path, starting from springboard/sdk/src/spellcheck.rs.",
+   "note": "Ships word language models for European languages and segmentation models for Chinese, Japanese and Korean, which predictive text and word splitting need; build predictive text on the text input path, starting from springboard/sdk/src/spellcheck.rs. Built 2026-10-17: prefix completion for predictive text in bifrost_core::spellcheck (SpellChecker::completions, Dictionary::completions; learned words first, then dictionary words, shortest first); tests completion_tests. Still open: the word language models for European languages and the segmentation models for Chinese, Japanese and Korean.",
    "rea": [],
    "method": "assessed"
   },
