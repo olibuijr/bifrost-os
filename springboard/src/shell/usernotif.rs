@@ -6,6 +6,7 @@
 //! Identity is always the app id of the connection, never anything in the message.
 
 use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
+use crate::gfx::Image;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 
@@ -13,6 +14,9 @@ use std::collections::{HashMap, HashSet};
 pub const MAX_PENDING: usize = 64;
 /// Answers kept for an app that is not running.
 const MAX_QUEUED: usize = 32;
+/// The largest attachment file the shell reads (bytes), and the side of its thumbnail (pixels).
+const MAX_ATTACHMENT_BYTES: u64 = 4 * 1024 * 1024;
+const ATTACHMENT_PX: usize = 96;
 /// How long a frontmost app has to answer `willPresent` (shell clock, ms). No answer hides the notification, which is
 /// what an app without the delegate gets.
 pub const PRESENT_TIMEOUT_MS: f64 = 1000.0;
@@ -610,6 +614,19 @@ impl super::Shell {
         hidden_text(options, req)
     }
 
+    /// The thumbnail of the request's first attachment. Only a PNG inside the app's own data directory is read (a link or a
+    /// path elsewhere is refused), and a file over 4 MiB is not read at all.
+    fn usernotif_thumbnail(&self, app: &str, req: &NotifRequest) -> Option<Image> {
+        let path = std::path::Path::new(req.attachments.first()?);
+        let base = std::fs::canonicalize(super::apphost::root().join("appdata").join(app)).ok()?;
+        let file = std::fs::canonicalize(path).ok()?;
+        let png = file.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
+        if !png || !file.starts_with(&base) || std::fs::metadata(&file).ok()?.len() > MAX_ATTACHMENT_BYTES {
+            return None;
+        }
+        super::spotindex::decode_thumbnail(&std::fs::read(&file).ok()?, ATTACHMENT_PX)
+    }
+
     /// Shows a delivered request. `presented` is the `willPresent` plan of a request that arrived in front; None applies
     /// the grant and mute state alone.
     fn usernotif_show(&mut self, slot: u8, app: &str, req: NotifRequest, replaced: Vec<u64>, t: f64, presented: Option<u8>) {
@@ -619,6 +636,7 @@ impl super::Shell {
         let (title, body) = self.usernotif_text(slot, app, &req);
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
+        n.image = self.usernotif_thumbnail(app, &req);
         let (banner, sound, badge_allowed) = match presented {
             None => {
                 let (banner, sound) = delivery_plan(self.usernotif.granted(app), self.notify.store().is_muted(super::AppId::External(slot)), req.sound_kind);

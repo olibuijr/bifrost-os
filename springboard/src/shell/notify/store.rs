@@ -22,6 +22,8 @@ pub struct Notification {
     pub id: u64,
     /// the app's thread identifier (`threadIdentifier`); empty when the app gave none
     pub thread: String,
+    /// the thumbnail of the request's first attachment, decoded when it was delivered
+    pub image: Option<crate::gfx::Image>,
 }
 
 /// Which part of the file the parser is in.
@@ -36,7 +38,7 @@ enum Section {
 
 impl Notification {
     pub fn new(app: AppId, title: impl Into<String>, body: impl Into<String>, time: i64) -> Self {
-        Notification { app, title: title.into(), body: body.into(), time, id: 0, thread: String::new() }
+        Notification { image: None, app, title: title.into(), body: body.into(), time, id: 0, thread: String::new() }
     }
 }
 
@@ -134,7 +136,7 @@ impl Store {
                     _ => Section::Item,
                 };
                 if section == Section::Item {
-                    current = id.parse().ok().map(|id| Notification { app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id, thread: String::new() });
+                    current = id.parse().ok().map(|id| Notification { image: None, app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id, thread: String::new() });
                 }
                 continue;
             }
@@ -411,7 +413,7 @@ mod tests {
     }
 
     fn threaded(app: AppId, thread: &str, title: &str, time: i64) -> Notification {
-        Notification { thread: thread.into(), ..note(app, title, time) }
+        Notification { image: None, thread: thread.into(), ..note(app, title, time) }
     }
 
     #[test]

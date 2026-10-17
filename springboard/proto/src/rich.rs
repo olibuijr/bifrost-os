@@ -19,6 +19,9 @@ pub const MAX_NOTIF_IDS: usize = 64;
 /// `userInfo` entries of one request, and the longest value.
 pub const MAX_NOTIF_USER_INFO: usize = 16;
 pub const MAX_NOTIF_USER_INFO_VALUE: usize = 512;
+/// Attachments of one request, and the longest path.
+pub const MAX_NOTIF_ATTACHMENTS: usize = 10;
+pub const MAX_NOTIF_ATTACHMENT_PATH: usize = 1024;
 
 /// A text-reply action (`UNTextInputNotificationAction`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,6 +96,9 @@ pub struct NotifRequest {
     pub interruption_level: u8,
     /// `content.relevanceScore` in thousandths, 0 to 1000
     pub relevance_milli: u16,
+    /// `UNNotificationAttachment` images: absolute paths of PNG files in the app's data directory. The first one shows
+    /// on the card as a thumbnail.
+    pub attachments: Vec<String>,
 }
 
 /// The answer to `ToShell::NotifyRequest` (`add(_:withCompletionHandler:)`'s error).
@@ -449,6 +455,11 @@ fn put_request(b: &mut Vec<u8>, q: &NotifRequest) {
     }
     b.push(q.interruption_level);
     b.extend_from_slice(&q.relevance_milli.to_le_bytes());
+    let n = q.attachments.len().min(MAX_NOTIF_ATTACHMENTS);
+    u32_(b, n as u32);
+    for path in &q.attachments[..n] {
+        put(b, path, MAX_NOTIF_ATTACHMENT_PATH);
+    }
 }
 
 fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
@@ -474,10 +485,15 @@ fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
     }
     let interruption_level = r.u8()?;
     let relevance_milli = u16::from_le_bytes([r.u8()?, r.u8()?]);
+    let n = count(r, MAX_NOTIF_ATTACHMENTS)?;
+    let mut attachments = Vec::with_capacity(n);
+    for _ in 0..n {
+        attachments.push(get(r, MAX_NOTIF_ATTACHMENT_PATH)?);
+    }
     if interruption_level > 3 || relevance_milli > 1000 {
         return Err(DecodeError::BadValue);
     }
-    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli })
+    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli, attachments })
 }
 
 fn put_payload(b: &mut Vec<u8>, p: &Payload) {
@@ -924,7 +940,7 @@ mod tests {
         shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { options: 0, id: "EMPTY".into(), actions: vec![] }]));
         shell_rt(ToShell::NotifyRequest {
             request: 4,
-            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750 },
+            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750, attachments: vec!["/home/app/a.png".into()] },
         });
         shell_rt(ToShell::NotifyRequest { request: 6, req: NotifRequest { id: "n3".into(), sound_kind: 2, sound_name: "chime.wav".into(), ..Default::default() } });
         shell_rt(ToShell::NotifyRequest { request: 5, req: NotifRequest { id: "n2".into(), ..Default::default() } });
@@ -997,6 +1013,17 @@ mod tests {
         shell_rt(ToShell::NotifyCategories(vec![icons.clone()]));
         assert_eq!(icons.actions[0].icon, "trash");
         assert!(icons.actions[1].icon.is_empty());
+    }
+
+    #[test]
+    fn notification_attachments_are_bounded() {
+        let mut bytes = ToShell::NotifyRequest { request: 1, req: NotifRequest { id: "a".into(), ..Default::default() } }.encode();
+        // the attachment count is the last u32 of an empty request
+        let at = bytes.len() - 4;
+        bytes[at..].copy_from_slice(&(MAX_NOTIF_ATTACHMENTS as u32 + 1).to_le_bytes());
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        let many = NotifRequest { attachments: vec!["/a.png".into(); 3], ..Default::default() };
+        shell_rt(ToShell::NotifyRequest { request: 2, req: many });
     }
 
     #[test]

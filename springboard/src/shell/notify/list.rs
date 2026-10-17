@@ -16,6 +16,9 @@ pub const CARD_H_PT: f32 = 80.0;
 pub const RADIUS_PT: f32 = 23.0;
 pub const ICON_PT: f32 = 20.0;
 const PAD_PT: f32 = 14.0;
+/// The attachment thumbnail at the right of a card, and the gap before the text.
+const THUMB_PT: f32 = 40.0;
+const THUMB_GAP_PT: f32 = 8.0;
 const TEXT_X_PT: f32 = PAD_PT;
 /// between the cards of an expanded group
 const GAP_PT: f32 = 8.0;
@@ -94,6 +97,8 @@ pub struct Card {
     time: Image,
     /// the header row's app name (uppercase, secondary)
     name: Image,
+    /// the first attachment, at the right of the card; none while the text is private
+    thumb: Option<Image>,
     /// drawn with the app's name and "Notification" instead of its text (Show Previews)
     pub private: bool,
 }
@@ -105,7 +110,9 @@ impl Card {
         let d = ui.pt(ICON_PT).round() as usize;
         let time = ui.text(&age_text(n.time, now), 13.0, Weight::Regular, TIME);
         let name = ui.text(&app_name(n.app).to_uppercase(), 13.0, Weight::Regular, TIME);
-        let text_w = ui.pt(CARD_W_PT - TEXT_X_PT - PAD_PT);
+        let thumb = if private { None } else { n.image.as_ref().map(|i| i.resized(ui.pt(THUMB_PT).round() as usize, ui.pt(THUMB_PT).round() as usize)) };
+        let beside = if thumb.is_some() { THUMB_PT + THUMB_GAP_PT } else { 0.0 };
+        let text_w = ui.pt(CARD_W_PT - TEXT_X_PT - PAD_PT - beside);
         let title_w = text_w;
         let (title, body) = if private { (app_name(n.app).to_string(), "Notification".to_string()) } else { (n.title.clone(), n.body.clone()) };
         Card {
@@ -116,6 +123,7 @@ impl Card {
             body: ui.text(&ui.fit(&body, 15.0, text_w), 15.0, Weight::Regular, BODY),
             time,
             name,
+            thumb,
             private,
         }
     }
@@ -134,6 +142,9 @@ impl Card {
         s.blit(&self.title, tx, (title_mid - self.title.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.body, tx, (body_mid - self.body.h as f32 / 2.0).round() as i32, 255, alpha);
         s.blit(&self.time, (x + w - ui.pt(PAD_PT) - self.time.w as f32) as i32, (head_mid - self.time.h as f32 / 2.0).round() as i32, 255, alpha);
+        if let Some(t) = &self.thumb {
+            s.blit(t, (x + w - ui.pt(PAD_PT) - t.w as f32) as i32, (y + (h - t.h as f32) / 2.0).round() as i32, 255, alpha);
+        }
     }
 }
 
@@ -472,7 +483,7 @@ mod tests {
     use crate::shell::tests::ui;
 
     fn groups() -> Vec<Group> {
-        let n = |app, title: &str, id| Notification { app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new() };
+        let n = |app, title: &str, id| Notification { image: None, app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new() };
         vec![
             Group { app: AppId::Files, thread: String::new(), items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
             Group { app: AppId::Settings, thread: String::new(), items: vec![n(AppId::Settings, "Low Battery", 4)] },
@@ -572,6 +583,18 @@ mod tests {
         let empty = ListView::new(&ui, Mode::Lock, &[], &icon, 0, NONE);
         assert_eq!(empty.footer_h(&ui), 0.0);
         assert_eq!(empty.hit(&ui, 1200, top, bx + bw / 2.0, top + ui.pt(GROUP_GAP_PT) + 5.0), None, "nothing to clear");
+    }
+
+    #[test]
+    fn an_attachment_shows_as_a_thumbnail_unless_previews_are_hidden() {
+        let ui = ui();
+        let icon = Image::new(8, 8);
+        let mut n = Notification::new(AppId::Files, "T", "B", 0);
+        n.image = Some(Image::new(96, 96));
+        assert!(Card::new(&ui, &n, &icon, 0, false).thumb.is_some());
+        assert!(Card::new(&ui, &n, &icon, 0, true).thumb.is_none(), "private text hides the picture too");
+        n.image = None;
+        assert!(Card::new(&ui, &n, &icon, 0, false).thumb.is_none());
     }
 
     #[test]

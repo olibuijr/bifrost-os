@@ -1672,7 +1672,7 @@ mod tests {
         let mut sh = shell();
         unlock(&mut sh);
         sh.tick(1000.0);
-        let threaded = |thread: &str, title: &str| Notification { thread: thread.into(), ..note(AppId::Files, title) };
+        let threaded = |thread: &str, title: &str| Notification { image: None, thread: thread.into(), ..note(AppId::Files, title) };
         sh.notify(threaded("chat:1", "hi"));
         sh.notify(threaded("chat:2", "yo"));
         sh.notify(threaded("chat:1", "again"));
