@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "Mail window (main.rs 83 lines) over the bifrost_mail library, with app menu, keyboard and paste; mail features live in the library",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::"
+    }
+   ],
+   "ready_note": "mail library: IMAP, SMTP, MIME, search, threads, rules and export tests"
   },
   {
    "id": "path:/System/Applications/Maps.app",
@@ -41,9 +50,18 @@
    "doc": "",
    "bifrost": "springboard/apps/maps-desktop",
    "status": "partial",
-   "note": "model library only (Web Mercator tiles, tile cache, geocoding, view and pins, routes via OSRM or straight-line estimate); no window or main.rs yet, so nothing to launch; needs an app shell over the library",
+   "note": "map app: window and main.rs present (apps/maps-desktop/src/window.rs, main.rs); tiles, geocoding, routing and transit in library",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "geocode::"
+    }
+   ],
+   "ready_note": "tiles, geocoding, routing, transit and window tests; window and main.rs present"
   },
   {
    "id": "path:/System/Applications/Messages.app",
@@ -64,7 +82,16 @@
    "status": "partial",
    "note": "Matrix chat app: homeserver accounts in the passwords group, rooms, timelines, background sync, paste; lacks iMessage/SMS service, tapbacks, effects, Shared with You",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-messages",
+     "filter": "crypto::"
+    }
+   ],
+   "ready_note": "Matrix client crypto, protocol, store and window tests; iMessage and SMS services are Apple-only and not applicable"
   },
   {
    "id": "path:/System/Applications/Mission Control.app",
@@ -85,7 +112,16 @@
    "status": "partial",
    "note": "Overview, the shell's window overview",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::overview"
+    }
+   ],
+   "ready_note": "window overview tests"
   },
   {
    "id": "path:/System/Applications/Music.app",
@@ -106,7 +142,16 @@
    "status": "partial",
    "note": "Music app: library and playback (app.rs 560 lines, music.rs 2100 lines); no streaming service",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "app::"
+    }
+   ],
+   "ready_note": "library, playback, playlists, lyrics and equaliser tests; streaming service is an Apple service and not applicable"
   },
   {
    "id": "path:/System/Applications/News.app",
@@ -127,7 +172,16 @@
    "status": "partial",
    "note": "News app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed::"
+    }
+   ],
+   "ready_note": "feed model, cache, wire and reader tests"
   },
   {
    "id": "path:/System/Applications/Notes.app",
@@ -148,7 +202,16 @@
    "status": "partial",
    "note": "Notes app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "store::"
+    }
+   ],
+   "ready_note": "notes store, folders, tags, sketch, PDF and scripting tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Magnifier.app",
@@ -169,7 +232,16 @@
    "status": "partial",
    "note": "Magnifier (bifrost.magnifier) in the shell",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier"
+    }
+   ],
+   "ready_note": "magnifier zoom and layout tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Migration Assistant.app",

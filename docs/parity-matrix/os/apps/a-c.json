@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "App Store (bifrost.appstore) in the shell",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store"
+    }
+   ],
+   "ready_note": "shell store module: listing, install state and purchase flow tests"
   },
   {
    "id": "path:/System/Applications/Apps.app",
@@ -43,7 +52,16 @@
    "status": "partial",
    "note": "app grid, the launch surface for installed apps",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::appgrid"
+    }
+   ],
+   "ready_note": "app grid tests: launch surface for installed apps"
   },
   {
    "id": "path:/System/Applications/Automator.app",
@@ -64,7 +82,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "model::"
+    }
+   ],
+   "ready_note": "workflow model and actions tests"
   },
   {
    "id": "path:/System/Applications/Books.app",
@@ -85,7 +112,16 @@
    "status": "partial",
    "note": "Books app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-books",
+     "filter": "store::"
+    }
+   ],
+   "ready_note": "library store, settings and narration tests"
   },
   {
    "id": "path:/System/Applications/Calculator.app",
@@ -106,7 +142,16 @@
    "status": "partial",
    "note": "Calculator app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calculator",
+     "filter": "rpn::"
+    }
+   ],
+   "ready_note": "calculator engine, RPN, conversion and formatting tests"
   },
   {
    "id": "path:/System/Applications/Calendar.app",
@@ -127,7 +172,16 @@
    "status": "partial",
    "note": "Calendar app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "recur::"
+    }
+   ],
+   "ready_note": "calendar model: recurrence, alerts, ICS, search and printing tests"
   },
   {
    "id": "path:/System/Applications/Chess.app",
@@ -148,7 +202,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-chess",
+     "filter": "moves::"
+    }
+   ],
+   "ready_note": "board, move generation and AI tests"
   },
   {
    "id": "path:/System/Applications/Clock.app",
@@ -169,7 +232,16 @@
    "status": "partial",
    "note": "Clock app, shell/clock holds alarms and timers",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "stopwatch::"
+    }
+   ],
+   "ready_note": "world clock, stopwatch and alarm intent tests"
   },
   {
    "id": "path:/System/Applications/Contacts.app",
@@ -190,7 +262,16 @@
    "status": "partial",
    "note": "Contacts app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "dupes::"
+    }
+   ],
+   "ready_note": "contacts model, vCard import/export, duplicates and printing tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Activity Monitor.app",
@@ -211,7 +292,16 @@
    "status": "partial",
    "note": "process table with CPU, Memory, Energy, Disk and Network tabs, filter, sort, search, inspect and force quit, history graphs; lacks Sample Process, Spindump and open files/ports panes",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "job::"
+    }
+   ],
+   "ready_note": "process table, sampling and diagnostics tests; Spindump and open files/ports panes still missing"
   },
   {
    "id": "path:/System/Applications/Utilities/AirPort Utility.app",
@@ -253,7 +343,16 @@
    "status": "partial",
    "note": "audio device setup app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-audio-setup",
+     "filter": "device::"
+    }
+   ],
+   "ready_note": "audio device model tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Bluetooth File Exchange.app",
@@ -274,7 +373,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-bluetooth-exchange",
+     "filter": "transport::"
+    }
+   ],
+   "ready_note": "transfer transport and model tests"
   },
   {
    "id": "path:/System/Applications/Utilities/ColorSync Utility.app",
@@ -295,7 +403,16 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-colour-utility",
+     "filter": "library::"
+    }
+   ],
+   "ready_note": "colour profile library tests"
   },
   {
    "id": "path:/System/Applications/Utilities/Console.app",
@@ -316,7 +433,16 @@
    "status": "partial",
    "note": "Console app, unified log viewer round 75, host only: app 1.5.0 (log view, export).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "model::"
+    }
+   ],
+   "ready_note": "unified log model, filter, export and security tests"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/About This Mac.app",
@@ -337,7 +463,16 @@
    "status": "partial",
    "note": "About page in the settings specs",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "About page rows and settings page specs"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Archive Utility.app",
