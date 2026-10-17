@@ -31,7 +31,9 @@ use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_
 use bifrost_app::ContextItem;
 use bifrost_core::json::Json;
 use bifrost_app::controls::chart_marks::Frame;
-use bifrost_app::controls::location_auth::AuthorizationStatus;
+use bifrost_app::controls::location_auth::{AuthorizationStatus, LocationError, RequestOutcome};
+use bifrost_app::core_location::{Delegate, Location as Fix, LocationManager};
+use bifrost_app::{privacy_permissions, Ctx};
 use crate::control;
 use crate::insights::{self, wind_text, Column};
 use crate::notify::{self, Notice, RainWatch};
@@ -142,8 +144,11 @@ const MAP_NOTE_TOP: f32 = 176.0;
 const FOOTER_TOP: f32 = MAP_TOP + MAP_H + 16.0;
 const FOOTER_LINE: f32 = 18.0;
 const CONTENT_H: f32 = FOOTER_TOP + 2.0 * FOOTER_LINE + 16.0;
-/// Location access for Weather. The shell gives apps no location service yet, so the status stays "not asked".
-const LOCATION: AuthorizationStatus = AuthorizationStatus::NotDetermined;
+/// My Location: its row id (sidebar and controls; no saved place gets it), how long an Allow sheet is waited for (ms)
+/// and how often the permission is read meanwhile (ms).
+const HERE_ROW_ID: u32 = 99;
+const ALLOW_WAIT_MS: f64 = 90_000.0;
+const STATUS_POLL_MS: f64 = 1_500.0;
 /// Grouped cards and fields: the system card radius (`prefs_layout`).
 const RADIUS: f32 = m::CARD_RADIUS;
 /// a shown forecast is fetched again after this long (ms), a missing one after `RETRY_MS`
@@ -174,6 +179,8 @@ enum Target {
     Share,
     /// the Notifications switch of a place on the Locations page
     Notify(usize),
+    /// the My Location entry
+    Here,
 }
 
 enum Done {
@@ -186,6 +193,8 @@ enum Done {
 
 enum Row {
     Head(String),
+    /// the My Location entry, listed above the saved places
+    Here,
     Place(usize),
     Result(usize),
 }
@@ -194,6 +203,44 @@ enum Row {
 enum SideTarget {
     Search,
     Place(usize),
+    Here,
+}
+
+/// What a pending call to the location or privacy service was for.
+#[derive(Clone, Copy, PartialEq)]
+enum LocCall {
+    /// the permission request: its reply says whether to show the Allow sheet, go on or stop
+    Authorize,
+    /// a status, a position or a start or stop: the location manager reads the reply
+    Other,
+}
+
+/// What the location manager reported while it handled one reply or event.
+#[derive(Default)]
+struct LocSink {
+    fixes: Vec<Fix>,
+    errors: Vec<LocationError>,
+    statuses: Vec<AuthorizationStatus>,
+}
+
+impl Delegate for LocSink {
+    fn did_update_locations(&mut self, locations: &[Fix]) {
+        self.fixes.extend_from_slice(locations);
+    }
+    fn did_fail_with_error(&mut self, error: LocationError) {
+        self.errors.push(error);
+    }
+    fn did_change_authorization(&mut self, status: AuthorizationStatus) {
+        self.statuses.push(status);
+    }
+}
+
+/// The My Location place for a fix: its coordinates rounded to two decimals (about 1 km) and the name "My Location".
+/// Open-Meteo has no reverse lookup, so the coordinates are the only label.
+fn here_place(fix: &Fix) -> Location {
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    let (lat, lon) = (round(fix.coordinate.latitude), round(fix.coordinate.longitude));
+    Location { name: "My Location".into(), region: format!("{lat:.2}, {lon:.2}"), lat, lon }
 }
 
 /// A finger that went down on a sidebar place row: a tap, or after `DRAG_START_PT` a drag to reorder.
@@ -250,6 +297,20 @@ pub struct Weather {
     done: Arc<Mutex<Vec<Done>>>,
     places: Vec<Location>,
     selected: usize,
+    /// location: the manager, its pending calls, the My Location place once the shell gave a fix, and the error that
+    /// last stopped it (`loc_error`)
+    loc: LocationManager,
+    loc_calls: Vec<(u32, LocCall)>,
+    my_location: Option<Location>,
+    loc_error: Option<LocationError>,
+    /// the person picked My Location: show it when a fix arrives (`here_pick`), and ask for location now (`locate_wanted`)
+    here_pick: bool,
+    locate_wanted: bool,
+    /// My Location is the selected place (only with a fix)
+    here_selected: bool,
+    /// when an Allow sheet stops being waited for (ms), and when its answer is read next (ms)
+    allow_until: Option<f64>,
+    next_status_poll: f64,
     units: Units,
     forecasts: HashMap<String, Forecast>,
     /// when each place was last asked for (ms), and the asks in flight
@@ -321,6 +382,15 @@ impl Weather {
             fetcher,
             done: Arc::new(Mutex::new(Vec::new())),
             places,
+            loc: LocationManager::new(),
+            loc_calls: Vec::new(),
+            my_location: None,
+            loc_error: None,
+            here_pick: false,
+            locate_wanted: false,
+            here_selected: false,
+            allow_until: None,
+            next_status_poll: 0.0,
             units,
             forecasts,
             tried: HashMap::new(),
@@ -379,20 +449,26 @@ impl Weather {
     /// before the name is reserved by an invisible dot; `draw_sidebar` draws the sky glyph in it. A place with no
     /// forecast yet shows its region and no temperature.
     fn sidebar(&self) -> SourceList {
-        let items = self
-            .places
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                let row = SidebarItem::row(PLACE_ID + i as u32, &p.name).with_dot(0);
-                match self.forecasts.get(&p.key()) {
-                    Some(f) => row.with_subtitle(Sky::from_code(f.current.code).label()).with_trailing(&self.units.degrees(f.current.temp)),
-                    None => row.with_subtitle(p.subtitle()),
-                }
-            })
-            .collect();
+        let mut items: Vec<SidebarItem> = vec![];
+        if self.has_here_row() {
+            let hint = self.here_hint();
+            let row = SidebarItem::row(HERE_ROW_ID, "My Location").with_dot(0);
+            items.push(match self.my_location.as_ref().and_then(|p| self.forecasts.get(&p.key())) {
+                Some(f) => row.with_subtitle(Sky::from_code(f.current.code).label()).with_trailing(&self.units.degrees(f.current.temp)),
+                None => row.with_subtitle(&hint),
+            });
+        }
+        let places = self.places.iter().enumerate().map(|(i, p)| {
+            let row = SidebarItem::row(PLACE_ID + i as u32, &p.name).with_dot(0);
+            match self.forecasts.get(&p.key()) {
+                Some(f) => row.with_subtitle(Sky::from_code(f.current.code).label()).with_trailing(&self.units.degrees(f.current.temp)),
+                None => row.with_subtitle(p.subtitle()),
+            }
+        });
+        items.extend(places);
         let mut list = SourceList::new(items, SIDEBAR_ROW_PT, SIDEBAR_ROW_PT);
-        list.set_selected((self.screen != Screen::Stocks).then_some(PLACE_ID + self.selected as u32));
+        let selected = if self.here_shown() { HERE_ROW_ID } else { PLACE_ID + self.selected as u32 };
+        list.set_selected((self.screen != Screen::Stocks).then_some(selected));
         list
     }
 
@@ -417,7 +493,7 @@ impl Weather {
         if self.side_search().contains(x, y) {
             return Some(SideTarget::Search);
         }
-        self.sidebar().hit(self.side_list(), 0.0, x, y).map(|id| SideTarget::Place((id - PLACE_ID) as usize))
+        self.sidebar().hit(self.side_list(), 0.0, x, y).map(|id| if id == HERE_ROW_ID { SideTarget::Here } else { SideTarget::Place((id - PLACE_ID) as usize) })
     }
 
     /// The detail pane's toolbar: Locations (only without the sidebar) and Stocks on the main page, Done on
@@ -480,17 +556,27 @@ impl Weather {
     fn side_rows(&self) -> Vec<Node> {
         let list = self.sidebar();
         let bounds = self.side_list();
-        self.places.iter().enumerate().map(|(i, p)| {
+        let o = self.here_offset();
+        let here = self.has_here_row().then(|| Node {
+            id: HERE_ROW_ID as u64,
+            role: Role::Row,
+            label: "My Location".into(),
+            value: if list.selected() == Some(HERE_ROW_ID) { "selected".into() } else { String::new() },
+            bounds: list.item_rect(0, bounds, 0.0),
+            enabled: true,
+        });
+        let places = self.places.iter().enumerate().map(|(i, p)| {
             let id = PLACE_ID + i as u32;
             Node {
                 id: id as u64,
                 role: Role::Row,
                 label: p.name.clone(),
                 value: if list.selected() == Some(id) { "selected".into() } else { String::new() },
-                bounds: list.item_rect(i, bounds, 0.0),
+                bounds: list.item_rect(i + o, bounds, 0.0),
                 enabled: true,
             }
-        }).collect()
+        });
+        here.into_iter().chain(places).collect()
     }
 
     /// The detail pane's controls (units, the search or symbol field, place and stock rows with their buttons), in
@@ -520,9 +606,13 @@ impl Weather {
                         continue;
                     }
                     match row {
+                        Row::Here => {
+                            let value = if self.here_shown() { "selected".to_string() } else { String::new() };
+                            nodes.push(node(HERE_ROW_ID as u64, Role::Button, "My Location".into(), value, rect(x, y, card_w, rh - 4.0)));
+                        }
                         Row::Place(i) => {
                             let name = self.places[i].name.clone();
-                            let value = if i == self.selected { "selected".to_string() } else { String::new() };
+                            let value = if i == self.selected && !self.here_shown() { "selected".to_string() } else { String::new() };
                             nodes.push(node(PLACE_ROW_ID + i as u64, Role::Button, name.clone(), value, rect(x, y, card_w, rh - 4.0)));
                             let remove_w = if self.places.len() > 1 { REMOVE_W } else { 0.0 };
                             let on = self.notify_on.contains(&self.places[i].key());
@@ -564,6 +654,7 @@ impl Weather {
             _ if id == BAR_STOCKS as u64 => Target::Stocks,
             _ if id == BAR_SHARE as u64 => Target::Share,
             _ if id == BAR_DONE as u64 || id == BAR_BACK as u64 => Target::Back,
+            _ if id == HERE_ROW_ID as u64 => Target::Here,
             UNITS_CELSIUS => Target::Units(Units::Celsius),
             UNITS_FAHRENHEIT => Target::Units(Units::Fahrenheit),
             FIELD_ID => Target::Field,
@@ -593,15 +684,22 @@ impl Weather {
 
     fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui) {
         let p = ui.pt(1.0);
-        let pressed = match self.side_pressed { Some(SideTarget::Place(i)) => Some(PLACE_ID + i as u32), _ => None };
+        let pressed = match self.side_pressed {
+            Some(SideTarget::Place(i)) => Some(PLACE_ID + i as u32),
+            Some(SideTarget::Here) => Some(HERE_ROW_ID),
+            _ => None,
+        };
         widgets::source_list(s, ui, KRect { x: 0.0, y: 0.0, w: self.side / p, h: self.h as f32 / p }, &SourceList::new(vec![], SIDEBAR_ROW_PT, SIDEBAR_ROW_PT), 0.0, None);
         widgets::search_field(s, ui, &self.side_query, self.side_search(), "Search", false);
         let (list, bounds) = (self.sidebar(), self.side_list());
         widgets::source_list(s, ui, bounds, &list, 0.0, pressed);
-        // the sky glyph of each place in the slot its row reserves
-        for (i, place) in self.places.iter().enumerate() {
+        // the sky glyph of each place in the slot its row reserves (My Location first, when listed)
+        let o = self.here_offset();
+        let here = self.my_location.as_ref().filter(|_| o == 1).map(|p| (0usize, p));
+        let rows = here.into_iter().chain(self.places.iter().enumerate().map(|(i, p)| (i + o, p)));
+        for (row, place) in rows {
             let Some(f) = self.forecasts.get(&place.key()) else { continue };
-            let r = list.item_rect(i, bounds, 0.0);
+            let r = list.item_rect(row, bounds, 0.0);
             if r.y + r.h > bounds.y + bounds.h {
                 continue;
             }
@@ -610,7 +708,7 @@ impl Weather {
         // a row being dragged: a line where it will be dropped
         if let Some(drag) = self.side_drag.filter(|d| d.active) {
             let to = insights::drop_index(&self.side_row_spans(), drag.y / p);
-            let r = list.item_rect(to, bounds, 0.0);
+            let r = list.item_rect(to + self.here_offset(), bounds, 0.0);
             let y = if to > drag.from { r.y + r.h } else { r.y };
             s.fill_rect(ui.pt(r.x + SPACE_M) as usize, (ui.pt(y) as usize).saturating_sub(1), ui.pt(r.w - 2.0 * SPACE_M).max(0.0) as usize, 2, LINK);
         }
@@ -620,7 +718,8 @@ impl Weather {
     /// The `(top, height)` in points of each place's sidebar row.
     fn side_row_spans(&self) -> Vec<(f32, f32)> {
         let (list, bounds) = (self.sidebar(), self.side_list());
-        (0..self.places.len()).map(|i| list.item_rect(i, bounds, 0.0)).map(|r| (r.y, r.h)).collect()
+        let o = self.here_offset();
+        (0..self.places.len()).map(|i| list.item_rect(i + o, bounds, 0.0)).map(|r| (r.y, r.h)).collect()
     }
 
     fn draw_bar(&mut self, s: &mut Surface, ui: &Ui) {
@@ -666,7 +765,35 @@ impl Weather {
     }
 
     fn place(&self) -> &Location {
+        if let (true, Some(here)) = (self.here_shown(), self.my_location.as_ref()) {
+            return here;
+        }
         &self.places[self.selected.min(self.places.len() - 1)]
+    }
+
+    /// Whether the My Location row is listed: not while location is off for Weather (denied, restricted or refused).
+    fn has_here_row(&self) -> bool {
+        let off = matches!(self.loc.authorization_status(), AuthorizationStatus::Denied | AuthorizationStatus::Restricted)
+            || matches!(self.loc_error, Some(LocationError::Denied | LocationError::PromptDeclined));
+        !off
+    }
+
+    /// The rows the My Location entry takes above the saved places: 1 when it is listed, else 0.
+    fn here_offset(&self) -> usize {
+        self.has_here_row() as usize
+    }
+
+    /// My Location is the selected place (it has a fix and the person chose it).
+    fn here_shown(&self) -> bool {
+        self.here_selected && self.my_location.is_some()
+    }
+
+    /// The My Location entry's second line: its rounded coordinates once a fix came, else what to do.
+    fn here_hint(&self) -> String {
+        match &self.my_location {
+            Some(p) => p.region.clone(),
+            None => "Tap to find this place".into(),
+        }
     }
 
     fn save_summary(&mut self) {
@@ -798,7 +925,9 @@ impl Weather {
         }
         let mut next = f64::INFINITY;
         let mut due: Vec<Location> = vec![];
-        for p in &self.places {
+        let mut all: Vec<Location> = self.my_location.iter().cloned().collect();
+        all.extend(self.places.iter().cloned());
+        for p in &all {
             let key = p.key();
             if self.pending.contains(&key) {
                 next = next.min(t + RETRY_MS);
@@ -892,6 +1021,10 @@ impl Weather {
     fn place_rows(&self) -> Vec<(Row, f32, f32)> {
         let mut rows = vec![];
         let mut top = 0.0;
+        if self.has_here_row() {
+            rows.push((Row::Here, top, ROW));
+            top += ROW;
+        }
         for i in 0..self.places.len() {
             rows.push((Row::Place(i), top, ROW));
             top += ROW;
@@ -914,7 +1047,7 @@ impl Weather {
         }
         // the location footer: plain words about what Weather may read (footnote size, secondary grey)
         top += 12.0;
-        rows.push((Row::Head(insights::location_note(LOCATION, None)), top, HEAD));
+        rows.push((Row::Head(insights::location_note(self.loc.authorization_status(), self.loc_error)), top, HEAD));
         rows
     }
 
@@ -984,6 +1117,7 @@ impl Weather {
                     Row::Place(i) if x >= self.w as f32 - ui.pt(MARGIN + REMOVE_W) && self.places.len() > 1 => Some(Target::Remove(i)),
                     Row::Place(i) if x >= self.notify_left(ui) && x < self.notify_left(ui) + ui.pt(NOTIFY_W) => Some(Target::Notify(i)),
                     Row::Place(i) => Some(Target::Place(i)),
+                    Row::Here => Some(Target::Here),
                     Row::Result(i) => Some(Target::Result(i)),
                     Row::Head(_) => None,
                 })
@@ -1019,7 +1153,13 @@ impl Weather {
                 self.field.tap(ui, x - r.0 - ui.pt(SPACE_M), t);
                 self.fit_scroll(ui);
             }
+            Target::Here => {
+                // the fix shows My Location when it comes (`set_fix`), after the Allow sheet if one is needed
+                self.here_pick = true;
+                self.locate_wanted = true;
+            }
             Target::Place(i) => {
+                self.here_selected = false;
                 self.selected = i;
                 self.store.save_settings(self.units, i);
                 self.save_summary();
@@ -1236,7 +1376,7 @@ impl Weather {
         self.maintain_at = f64::NEG_INFINITY;
         self.dirty = true;
         // Delete with no field being typed in removes the selected place; so does Backspace on the forecast page
-        if !self.field.focused && self.screen != Screen::Stocks && (out == Out::Named("Delete") || (self.screen == Screen::Main && out == Out::Backspace)) {
+        if !self.field.focused && !self.here_shown() && self.screen != Screen::Stocks && (out == Out::Named("Delete") || (self.screen == Screen::Main && out == Out::Backspace)) {
             self.activate(ui, Target::Remove(self.selected), 0.0, t);
             return;
         }
@@ -1317,6 +1457,7 @@ impl Weather {
                                 self.activate(ui, Target::Field, self.field_rect(ui).0 + ui.pt(SPACE_M), t);
                             }
                             SideTarget::Place(i) => self.activate(ui, Target::Place(i), 0.0, t),
+                            SideTarget::Here => self.activate(ui, Target::Here, 0.0, t),
                         }
                     }
                 }
@@ -1403,7 +1544,150 @@ impl Weather {
         if self.maintain_at.is_finite() {
             due = Some(due.map_or(self.maintain_at, |d| d.min(self.maintain_at)));
         }
+        if let Some(until) = self.allow_until {
+            let poll = self.next_status_poll.min(until);
+            due = Some(due.map_or(poll, |d| d.min(poll)));
+        }
         due
+    }
+
+    // ---- My Location: the shell's location service, asked only once the person picks My Location ----
+
+    /// Reads the location permission once at start. This asks nothing: no Allow sheet is shown, and an earlier answer
+    /// lists the entry.
+    pub fn read_location_status(&mut self, ctx: &Ctx) {
+        let id = self.loc.refresh_authorization(ctx);
+        self.loc_calls.push((id, LocCall::Other));
+    }
+
+    /// Acts on the pick of My Location (called from the app loop, which has the context): the Allow sheet is shown when
+    /// the person has not answered yet, and a position is asked for once location is allowed.
+    pub fn locate(&mut self, ctx: &Ctx) {
+        if !std::mem::take(&mut self.locate_wanted) {
+            return;
+        }
+        if self.loc.authorization_status().is_authorized() {
+            self.ask_fix(ctx);
+        } else {
+            let id = self.loc.request_when_in_use_authorization(ctx);
+            self.loc_calls.push((id, LocCall::Authorize));
+        }
+    }
+
+    /// One position now, and every change after it (the place follows the shell's fixes while the window lives).
+    fn ask_fix(&mut self, ctx: &Ctx) {
+        let id = self.loc.request_location(ctx);
+        self.loc_calls.push((id, LocCall::Other));
+        if !self.loc.is_updating() {
+            let id = self.loc.start_updating_location(ctx);
+            self.loc_calls.push((id, LocCall::Other));
+        }
+    }
+
+    /// Location is allowed: a position is asked for when the person picked My Location.
+    fn authorized(&mut self, ctx: &Ctx) {
+        self.loc_error = None;
+        self.allow_until = None;
+        if self.here_pick {
+            self.ask_fix(ctx);
+        }
+    }
+
+    /// Location is off or was refused: My Location goes away with its fix, and the reason shows in the note.
+    fn stop_here(&mut self, why: LocationError) {
+        self.loc_error = Some(why);
+        self.allow_until = None;
+        self.here_pick = false;
+        self.locate_wanted = false;
+        self.my_location = None;
+        self.here_selected = false;
+    }
+
+    /// A fix arrived: My Location takes it, and when the person picked it the window shows it.
+    fn set_fix(&mut self, ctx: &Ctx, fix: &Fix) {
+        self.my_location = Some(here_place(fix));
+        self.loc_error = None;
+        self.maintain_at = f64::NEG_INFINITY;
+        if self.here_pick {
+            self.here_pick = false;
+            self.here_selected = true;
+            self.hscroll.jump_top();
+            let t = bifrost_app::proto::sys::now_ms();
+            self.go(&ctx.ui, Screen::Main, t);
+            self.save_summary();
+        } else if self.here_selected {
+            self.save_summary();
+        }
+    }
+
+    /// The Allow sheet's answer is read from the permission while it is waited for (`next_wake` schedules it).
+    pub fn location_tick(&mut self, ctx: &Ctx, t: f64) {
+        let Some(until) = self.allow_until else { return };
+        if t >= until {
+            self.stop_here(LocationError::PromptDeclined);
+            self.dirty = true;
+        } else if t >= self.next_status_poll {
+            self.next_status_poll = t + STATUS_POLL_MS;
+            let id = self.loc.refresh_authorization(ctx);
+            self.loc_calls.push((id, LocCall::Other));
+        }
+    }
+
+    /// A reply to a call this window made to the location or privacy service. False for any other reply.
+    pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        let Some(at) = self.loc_calls.iter().position(|(id, _)| *id == request) else { return false };
+        let (_, call) = self.loc_calls.remove(at);
+        match call {
+            LocCall::Authorize => match result.as_ref().ok().and_then(privacy_permissions::decode_location_outcome) {
+                Some(RequestOutcome::AlreadyGranted) => self.authorized(ctx),
+                Some(RequestOutcome::Prompt) => {
+                    // the Allow sheet is up; its answer is read from the permission
+                    let now = bifrost_app::proto::sys::now_ms();
+                    self.allow_until = Some(now + ALLOW_WAIT_MS);
+                    self.next_status_poll = now + STATUS_POLL_MS;
+                }
+                Some(RequestOutcome::Refused) | None => self.stop_here(LocationError::PromptDeclined),
+            },
+            LocCall::Other => {
+                let mut sink = LocSink::default();
+                self.loc.handle_reply(result, &mut sink);
+                self.apply_location(ctx, sink);
+            }
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// A push from the location service (a changed position, a failure). False for any other event.
+    pub fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        let mut sink = LocSink::default();
+        if !self.loc.handle_event(service, event, body, &mut sink) {
+            return false;
+        }
+        self.apply_location(ctx, sink);
+        self.dirty = true;
+        true
+    }
+
+    /// Carries out what the location manager reported: permission changes, failures, then the newest fix.
+    fn apply_location(&mut self, ctx: &Ctx, sink: LocSink) {
+        for status in sink.statuses {
+            if status.is_authorized() {
+                self.authorized(ctx);
+            } else if matches!(status, AuthorizationStatus::Denied | AuthorizationStatus::Restricted) {
+                self.stop_here(LocationError::Denied);
+            }
+        }
+        for error in sink.errors {
+            if error.needs_user_action() {
+                self.stop_here(error);
+            } else {
+                self.loc_error = Some(error);
+            }
+        }
+        if let Some(fix) = sink.fixes.last() {
+            self.set_fix(ctx, fix);
+        }
     }
 
     // ---- drawing ----
@@ -1588,6 +1872,12 @@ impl Weather {
         } else {
             "None expected in the next 24 hours".to_string()
         };
+        // the coming days with rain, after the 24 hours the note already gives
+        let ahead: Vec<(String, f64)> = f.days.iter().map(|d| (d.label.clone(), d.precip_sum)).collect();
+        let precip_note = match insights::rain_ahead_text(&ahead) {
+            Some(later) => format!("{precip_note}. {later}"),
+            None => precip_note,
+        };
         let visibility = f.hours.first().and_then(|h| h.visibility_m);
         let pressure = f.current.pressure_hpa.or_else(|| f.hours.first().and_then(|h| h.pressure_hpa));
         let (average_value, average_note) = insights::average_text(today.map_or(f.current.temp, |d| d.max), f.average_high, units);
@@ -1769,10 +2059,25 @@ impl Weather {
                         let color = LABEL_2.now();
                         self.put(&mut c, ui, &text, MAC_FOOTNOTE_PT, Weight::Semibold, color, Align::Left, x + ui.pt(SPACE_XS), mid);
                     }
+                    Row::Here => {
+                        c.fill_rrect(x, y, w, ui.pt(rh - 4.0), ui.pt(RADIUS), CARD_BG.now());
+                        if self.here_shown() {
+                            c.fill_rect(x as usize, (y + ui.pt(SPACE_S)) as usize, ui.pt(SPACE_XS) as usize, ui.pt(rh - 20.0) as usize, LINK);
+                        }
+                        let room = (w - ui.pt(150.0)).max(ui.pt(SPACE_HUGE));
+                        self.put(&mut c, ui, "My Location", MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                        let hint = ui.fit(&self.here_hint(), MAC_FOOTNOTE_PT, room);
+                        self.put(&mut c, ui, &hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(37.0));
+                        let temp = match self.my_location.as_ref().and_then(|p| self.forecasts.get(&p.key())) {
+                            Some(f) => self.units.degrees(f.current.temp),
+                            None => "\u{2013}".to_string(),
+                        };
+                        self.put(&mut c, ui, &temp, MAC_TITLE1_PT, Weight::Regular, LABEL.now(), Align::Right, x + w - ui.pt(SPACE_L), y + ui.pt(26.0));
+                    }
                     Row::Place(i) => {
                         let p = self.places[i].clone();
                         c.fill_rrect(x, y, w, ui.pt(rh - 4.0), ui.pt(RADIUS), CARD_BG.now());
-                        if i == self.selected {
+                        if i == self.selected && !self.here_shown() {
                             c.fill_rect(x as usize, (y + ui.pt(SPACE_S)) as usize, ui.pt(SPACE_XS) as usize, ui.pt(rh - 20.0) as usize, LINK);
                         }
                         let room = (w - ui.pt(150.0 + NOTIFY_W)).max(ui.pt(SPACE_HUGE));
@@ -2254,7 +2559,7 @@ mod tests {
     #[test]
     fn the_sidebar_shows_each_places_sky_and_temperature_once_its_forecast_is_known() {
         let (mut app, _ui, dir) = app_with("rows", &["A", "B"]);
-        let row = |app: &Weather, i: usize| match &app.sidebar().items[i] {
+        let row = |app: &Weather, i: usize| match &app.sidebar().items[i + app.here_offset()] {
             SidebarItem::Row { subtitle, trailing, .. } => (subtitle.clone(), trailing.clone()),
             other => panic!("a row, not {other:?}"),
         };
@@ -2365,7 +2670,7 @@ mod tests {
     fn the_locations_page_has_a_notifications_hit_zone_between_the_temperature_and_remove() {
         let (mut app, ui, dir) = app_with("zone", &["A", "B"]);
         app.activate(&ui, Target::Places, 0.0, 0.0);
-        let y = ui.pt(places_list_top_pt() + ROW / 2.0);
+        let y = ui.pt(places_list_top_pt() + ROW * (app.here_offset() as f32 + 0.5));
         let left = app.notify_left(&ui);
         assert_eq!(app.hit(&ui, left + ui.pt(10.0), y), Some(Target::Notify(0)));
         assert_eq!(app.hit(&ui, left - ui.pt(10.0), y), Some(Target::Place(0)));
@@ -2408,6 +2713,35 @@ mod wire_tests {
         assert_eq!(moon_text(reference_new_moon), ("0%".to_string(), "New Moon".to_string()));
         let half = reference_new_moon + bifrost_app::controls::weather_model::SYNODIC_MONTH_DAYS / 2.0 * 86_400.0;
         assert_eq!(moon_text(half), ("100%".to_string(), "Full Moon".to_string()));
+    }
+
+    #[test]
+    fn my_location_is_named_and_its_coordinates_rounded_to_two_decimals() {
+        let fix = Fix {
+            coordinate: bifrost_app::core_location::Coordinate::new(64.146_57, -21.942_61),
+            altitude: None,
+            horizontal_accuracy: 100.0,
+            timestamp: 0.0,
+            source: "manual".into(),
+            city: String::new(),
+            country: String::new(),
+        };
+        let here = here_place(&fix);
+        assert_eq!(here.name, "My Location");
+        assert_eq!(here.region, "64.15, -21.94", "the label is the rounded position");
+        assert_eq!((here.lat, here.lon), (64.15, -21.94), "the forecast is asked for the rounded position too");
+    }
+
+    #[test]
+    fn my_location_leads_the_sidebar_until_location_is_refused() {
+        let (mut app, _ui, dir) = app_with("here-row", &["A", "B"]);
+        assert_eq!(app.here_offset(), 1, "listed while location is not asked, so the person can pick it");
+        assert_eq!(app.sidebar().items.len(), 3);
+        app.stop_here(LocationError::Denied);
+        assert_eq!(app.here_offset(), 0, "gone once location is off for Weather");
+        assert_eq!(app.sidebar().items.len(), 2);
+        assert!(!app.here_shown());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

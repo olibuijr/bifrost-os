@@ -9,10 +9,10 @@
  "summary": {
   "features": 32,
   "parity": 11,
-  "partial": 19,
-  "gap": 1,
+  "partial": 20,
+  "gap": 0,
   "n/a": 1,
-  "coverage_pct": 66.1
+  "coverage_pct": 67.7
  },
  "features": [
   {
@@ -55,10 +55,10 @@
    "feature": "My Location",
    "area": "location",
    "apple": "First entry follows the device location and asks for permission (NSLocationUsageDescription)",
-   "status": "gap",
-   "bifrost": "springboard/apps/weather-desktop/src/weather.rs:142",
-   "note": "The shell has a location service now (springboard/src/shell/services/location.rs), but the Weather app does not talk to the shell through an SDK Ctx, so LOCATION (weather.rs:146) is still NotDetermined and there is no My Location entry. The purpose string for Weather would come from its manifest [privacy] location key, which is parsed by the shell.",
-   "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:142) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:167) already words the states."
+   "status": "partial",
+   "bifrost": "springboard/apps/weather-desktop/src/weather.rs (My Location: set_fix, locate, service_reply, here_place, has_here_row); springboard/apps/weather-desktop/src/main.rs (service hooks); manifest.toml [privacy] location",
+   "note": "Picking My Location asks for When In Use authorization (never at launch). Once allowed, the shell's fix is listed first in the sidebar and the Locations list, rounded to two decimals and labelled with its coordinates, and it is refreshed on each fix. Open-Meteo has no reverse lookup, so the label is the coordinates rather than a place name. Not yet verified on Midget.",
+   "wire": "Verify on Midget: the Allow sheet from a pick, the My Location row, the refresh on a new fix and the refused state. A place name for the fix needs a reverse lookup (the shell's reverse_geocode is city-level and not wired yet)."
   },
   {
    "feature": "Current conditions",
@@ -75,8 +75,8 @@
    "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
-   "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
-   "wire": "Verify on Midget; the strip shows no chance below 10%."
+   "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers sit between the hours (Column::Sun in insights::strip_columns, drawn in draw_main_with).",
+   "wire": "Verify on Midget: the sunrise and sunset markers in the strip and the chance under each glyph."
   },
   {
    "feature": "10-day forecast",
@@ -165,8 +165,8 @@
    "apple": "Rain or snow amount for 24 hours and the next days",
    "status": "partial",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1435 (draw_main_with: the forecast page, its tiles and strips)",
-   "note": "Today's total as the value; the note gives the next 24 hours, or how much of today's total is snow when there is snow. The coming days are not listed. Not yet verified on Midget.",
-   "wire": "The tile lists today's total and the next 24 hours, with snow named when the day has it; it does not list the coming days."
+   "note": "Today's total as the value; the note gives the next 24 hours, or how much of today's total is snow when there is snow, and names the coming days (up to three) with rain, from the daily sums (insights::rain_ahead_text). Amounts for each coming day are not listed.",
+   "wire": "Verify the note on Midget; list the amount for each coming day if the tile needs the full ten-day breakdown."
   },
   {
    "feature": "Visibility tile",

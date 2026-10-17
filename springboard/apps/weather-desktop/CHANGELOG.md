@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0 — 2026-10-17
+
+- My Location: picking it asks for location (When In Use, never at launch), then lists the device position first in the sidebar and the Locations list, rounded to two decimals and labelled with its coordinates. Weather's purpose string is in the manifest.
+- The precipitation tile names the coming days with rain.
+
 ## 1.7.3 — 2026-10-14
 
 - Wind and pressure dial tick spacing uses the shared extra-small spacing token.
