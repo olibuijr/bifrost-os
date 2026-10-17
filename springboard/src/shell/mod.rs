@@ -14,6 +14,7 @@ pub mod helpbook;
 pub mod folder_actions;
 pub mod touch_frames;
 pub mod intents;
+pub mod preview_gen;
 pub mod app_controls;
 pub mod assistant;
 pub mod assistant_panel;

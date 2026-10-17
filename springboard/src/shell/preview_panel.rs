@@ -20,6 +20,7 @@
 //! `quick-look`); an app's own `PreviewClose` is not echoed back.
 
 use super::ui::{Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SEPARATOR_C};
+use super::preview_gen::{Generator, Generators};
 use super::Shell;
 use crate::cg::pdf::doc::Doc;
 use crate::cg::pdf::draw;
@@ -515,6 +516,8 @@ pub struct Panel {
     /// the body's height and the point scale of the last frame: the viewport a PDF scrolls in
     viewport: usize,
     scale: f32,
+    /// the installed apps' preview generators (see `preview_gen`): a file of a declared type waits for its app's picture
+    generators: Generators,
     /// the card's size as the user dragged it (None for the default); kept while the panel is shown
     size: Option<(f32, f32)>,
     full: bool,
@@ -695,13 +698,44 @@ impl Panel {
         Some(data)
     }
 
+    /// Replaces the installed apps' generators (on each `show`, so an install shows up at once).
+    pub fn set_generators(&mut self, generators: Generators) {
+        self.generators = generators;
+    }
+
+    /// The generator an installed app declared for the file at `path`, when one takes it.
+    pub fn generator_for_path(&self, path: &str) -> Option<Generator> {
+        let name = Path::new(path).file_name()?.to_str()?;
+        self.generators.for_file(name).cloned()
+    }
+
+    /// A generator could not answer for `file` (no app, an error, or the deadline passed): the built-in preview of the
+    /// file is shown instead. Returns true when the body changed. An image's body waits for the thumbnails service
+    /// again, so the caller asks for `wanted` next.
+    pub fn generator_fallback(&mut self, file: &str) -> bool {
+        let waits = matches!(self.body, Body::Loading) && self.current().and_then(|i| local_path(&i.url)) == Some(file);
+        if !waits {
+            return false;
+        }
+        self.load(false);
+        true
+    }
+
     fn reload(&mut self) {
+        self.load(true);
+    }
+
+    /// Loads the current item. With `generators` on, a file an app declared waits for that app's picture; otherwise the
+    /// built-in preview is loaded (the fallback after a generator).
+    fn load(&mut self, generators: bool) {
         self.face = None;
         self.dirty = true;
         let url = self.current().map(|i| (i.url.clone(), i.title.clone()));
         let path = self.current().and_then(|i| local_path(&i.url)).map(str::to_string);
         let item = self.current().cloned();
+        let claimed = generators && path.as_deref().is_some_and(|p| self.generators.for_file(Path::new(p).file_name().and_then(|n| n.to_str()).unwrap_or("")).is_some());
         self.body = match path.as_deref() {
+            Some(_) if claimed => Body::Loading,
             Some(p) => match kind_for_path(Path::new(p)) {
                 Kind::Pdf => match PdfView::open(Path::new(p)) {
                     Ok(v) => Body::Pdf(Box::new(v)),
@@ -994,6 +1028,26 @@ impl Shell {
     /// The file the panel's body waits for a picture of, once (see [`Panel::take_wanted`]).
     pub(super) fn quick_look_take_wanted(&mut self) -> Option<String> {
         self.quick_look.take_wanted()
+    }
+
+    /// The installed apps' preview generators, read before the panel shows (see `Panel::set_generators`).
+    pub(super) fn quick_look_set_generators(&mut self, generators: Generators) {
+        self.quick_look.set_generators(generators);
+    }
+
+    /// The generator an app declared for the file at `path`, when one takes it.
+    pub(super) fn quick_look_generator_for(&self, path: &str) -> Option<Generator> {
+        self.quick_look.generator_for_path(path)
+    }
+
+    /// A generator could not answer for `file`: the built-in preview takes its place. True when the body now waits for
+    /// a thumbnail, which the caller asks for.
+    pub(super) fn quick_look_generator_fallback(&mut self, file: &str) -> bool {
+        let changed = self.quick_look.generator_fallback(file);
+        if changed {
+            self.dirty = true;
+        }
+        changed
     }
 
     /// A thumbnail answer for the panel: redraws when the body changed.
