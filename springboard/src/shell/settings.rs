@@ -137,6 +137,7 @@ impl Alert {
         }
         let (title, message, confirm, destructive) = match &command {
             Command::ResetSettings => ("Reset All Settings?", "Every setting goes back to its default. Saved Wi-Fi networks are kept.".to_string(), "Reset", true),
+            Command::EraseContent => ("Erase All Content and Settings?", "Your files, notes, accounts, passwords and settings are removed from this computer when BifrOSt restarts, and it starts again as new. Local backups in the data folder are removed too. The system stays installed. This cannot be undone.".to_string(), "Erase", true),
             Command::Restart => ("Restart BifrOSt?", "The shell quits and starts again.".to_string(), "Restart", true),
             Command::ShutDown => ("Shut Down?", "The computer powers off.".to_string(), "Shut Down", true),
             Command::Reboot => ("Restart?", "The computer restarts.".to_string(), "Restart", true),
@@ -3163,6 +3164,13 @@ impl Settings {
                 self.rebuild(ui);
                 vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true)]
             }
+            Command::EraseContent => match bifrost_core::erase_content::request(&self.data_dir) {
+                Ok(()) => vec![Effect::Restart],
+                Err(e) => {
+                    eprintln!("springboard: erase not started: {e}");
+                    vec![]
+                }
+            },
             Command::Notice(_) => vec![],
             Command::RemovePackage(name) => {
                 let name = name.clone();

@@ -361,6 +361,8 @@ pub enum Slider {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     ResetSettings,
+    /// Transfer or Reset › Erase All Content and Settings: staged, done at the next start (`bifrost_core::erase_content`)
+    EraseContent,
     Restart,
     /// power the computer off (General › Shut Down)
     ShutDown,
@@ -1286,6 +1288,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![
                 Group::new(vec![Item::new("Reset All Settings").tint(Tint::Blue).action(Action::Run(Command::ResetSettings))]).footer("Returns every setting, including the wallpaper, to its default. Saved Wi-Fi networks are kept."),
                 Group::new(vec![Item::new("Restart BifrOSt").tint(Tint::Blue).action(Action::Run(Command::Restart))]).footer("Quits the shell and starts it again."),
+                Group::new(vec![Item::new("Erase All Content and Settings").tint(Tint::Red).action(Action::Run(Command::EraseContent))]).footer("Removes your files, accounts, passwords and settings from this computer and starts again as new. The system stays installed."),
             ],
         ),
         PageId::Display => page(
