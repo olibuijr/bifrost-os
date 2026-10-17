@@ -200,7 +200,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "note": "App Intents plumbing for this feature, no counterpart yet. Reviewed 2026-10-17: the App Intents framework exists (sdk/src/intents.rs, src/shell/intents.rs) and VpnManager exists (core/src/vpn_manager.rs), but no Settings host serves intent.<id> for the VPN page. Open: declare the VPN intents (enable, disable, status) and serve them from the Settings app; status stays gap.",
    "rea": []
   },
   {

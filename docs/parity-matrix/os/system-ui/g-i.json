@@ -400,7 +400,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "note": "reviewed: no BifrOSt counterpart yet. Built 2026-10-17: render::gradient::render_linear_rgba renders a linear gradient over a pixel grid as opaque RGBA, sampled at pixel centres; tests render::gradient::tests. Open: the gradient entry in the wallpaper page (src/shell/wallpaper_page.rs) and the shell wiring that draws it as a wallpaper; status stays gap.",
    "rea": []
   },
   {
