@@ -526,7 +526,7 @@ pub struct Model<'a> {
 /// The Sharing page before its first read lands.
 /// The Print & Scan page before its first read lands.
 /// The Users & Groups pages before their first read lands.
-pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new() };
+pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new(), limits: bifrost_ui::account_policy::PolicyTable::empty(), limits_damaged: false };
 
 /// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
 #[derive(Clone, Debug, Default, PartialEq)]

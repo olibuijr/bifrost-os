@@ -134,6 +134,11 @@ pub struct PolicyTable {
 }
 
 impl PolicyTable {
+    /// An empty table, usable in a `static` (no account has limits).
+    pub const fn empty() -> Self {
+        PolicyTable { accounts: BTreeMap::new() }
+    }
+
     /// An empty table: every account is unrestricted.
     pub fn new() -> PolicyTable {
         PolicyTable::default()
