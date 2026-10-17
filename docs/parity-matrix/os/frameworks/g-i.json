@@ -1800,9 +1800,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/document.rs, springboard/sdk/src/revisions.rs",
    "status": "gap",
-   "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell.",
+   "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell. Built 2026-10-17: DocumentController records the saved bytes as a revision on every save (sdk document.rs, test document::tests::every_save_keeps_a_revision_of_the_bytes_written). Open: no Versions browser yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -2247,11 +2247,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/model_tool.rs, springboard/sdk/src/language_model.rs, springboard/sdk/src/intent_tools.rs",
    "status": "gap",
-   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs.",
+   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs. Built 2026-10-17: intent_tools bridges App intents to model tools (schema from ParamType, auth-gated); tests intent_tools::tests.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_tool::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_tools::tests"
+    }
+   ],
+   "ready_note": "Typed functions a model invokes: named Tool with an argument schema, checked calls and a bounded tool loop (model_tool, model_provider::run_turn). App intents are offered as tools (intent_tools, tests intent_tools::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsFoundation.framework",
@@ -2268,11 +2282,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs",
    "status": "gap",
    "note": "Foundation types for model-invoked functions, the base of the function layer. BifrOSt has none; build with the function layer, after the on-device model runtime exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_schema::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "transcript::tests"
+    }
+   ],
+   "ready_note": "Foundation types of the function layer: the argument schema and its validation (generation_schema) and the typed transcript of calls and outputs (transcript)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsInstrumentation.framework",
@@ -2396,7 +2424,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine.",
+   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider.",
    "rea": [],
    "method": "assessed"
   },
@@ -2415,11 +2443,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs, springboard/sdk/src/language_model.rs",
    "status": "gap",
    "note": "Model foundation types (requests, responses, model identifiers) under the on-device model runtime. BifrOSt has none; build it with the local model session API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    }
+   ],
+   "ready_note": "Foundation types for requests, responses and sessions: Session, Profile, Reply and ModelProvider (model_session, model_provider). The runtime that answers is not built; availability reports unavailable (language_model::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativePartnerService.framework",
