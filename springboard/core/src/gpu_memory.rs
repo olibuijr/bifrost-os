@@ -87,6 +87,25 @@ pub fn collect(descriptors: &[(u32, &str)]) -> BTreeMap<u32, Vec<ClientMemory>> 
     by_pid
 }
 
+/// The background collector's pass: read every `<proc_root>/<pid>/fdinfo/<fd>` and group the DRM clients by process.
+/// Descriptors that cannot be read (the process exited, or another user's process) are skipped, and entries whose
+/// name is not a process id are ignored. `proc_root` is `/proc` in the shell and a temporary directory in tests.
+pub fn scan_proc(proc_root: &std::path::Path) -> BTreeMap<u32, Vec<ClientMemory>> {
+    let mut texts: Vec<(u32, String)> = Vec::new();
+    let Ok(procs) = std::fs::read_dir(proc_root) else { return BTreeMap::new() };
+    for proc_entry in procs.flatten() {
+        let Some(pid) = proc_entry.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else { continue };
+        let Ok(fds) = std::fs::read_dir(proc_entry.path().join("fdinfo")) else { continue };
+        for fd in fds.flatten() {
+            if let Ok(text) = std::fs::read_to_string(fd.path()) {
+                texts.push((pid, text));
+            }
+        }
+    }
+    let refs: Vec<(u32, &str)> = texts.iter().map(|(pid, text)| (*pid, text.as_str())).collect();
+    collect(&refs)
+}
+
 /// The processes holding video or system memory through the GPU, as `(pid, bytes)`, largest first. Ties sort by
 /// pid. Processes with no GPU memory are left out.
 pub fn ranked(by_pid: &BTreeMap<u32, Vec<ClientMemory>>) -> Vec<(u32, u64)> {
@@ -140,6 +159,24 @@ mod tests {
         assert_eq!(rows[0].0, 40);
         assert_eq!(rows[0].1, 8192 + (1 << 20) + 2048 + (1 << 20));
         assert_eq!(rows.len(), 1, "pid 7 holds no memory and is left out");
+    }
+
+    #[test]
+    fn the_scan_reads_each_process_fdinfo_and_skips_what_is_not_a_process() {
+        let root = tempfile::tempdir().unwrap();
+        let write = |pid: &str, fd: &str, text: &str| {
+            let dir = root.path().join(pid).join("fdinfo");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(fd), text).unwrap();
+        };
+        write("40", "5", CLIENT);
+        write("40", "6", CLIENT);
+        write("41", "3", "pos:\t0\nflags:\t02\n");
+        write("self", "3", CLIENT);
+        let map = scan_proc(root.path());
+        assert_eq!(map.keys().copied().collect::<Vec<_>>(), vec![40], "one client, counted once, for pid 40 only");
+        assert_eq!(map[&40][0].vram, 8192);
+        assert!(scan_proc(&root.path().join("missing")).is_empty());
     }
 
     #[test]
