@@ -12,7 +12,7 @@
    "apple": "Extension model: define extension points, talk to extensions at runtime",
    "bifrost": "springboard/sdk/src/extension.rs, springboard/ui/src/extensions.rs",
    "status": "partial",
-   "note": "Extension points, identities, a registry that discovers the enabled extensions for a point, a per-extension process table and a manifest writer work and are tested in the host unit tests of sdk/src/extension.rs and ui/src/extension.rs. Gap: no shell or app host calls them yet, so no extension is launched on a device; Midget is needed to confirm the process lifecycle."
+   "note": "Extension points, identities, a registry that discovers the enabled extensions for a point, a per-extension process table and a manifest writer work and are tested in the host unit tests of sdk/src/extension.rs and ui/src/extension.rs. Gap: no shell or app host calls them yet, so no extension is launched on a device; Midget is needed to confirm the process lifecycle. Refreshed 2026-10-17: covered by springboard/sdk/src/extension.rs, springboard/ui/src/extensions.rs; tests extension::tests, extensions::tests."
   },
   {
    "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",
@@ -45,7 +45,7 @@
  ],
  "gaps": [
   "Extension model is pure data: no shell wiring, no package loading and no XPC transport yet",
-  "Discovery of installed extensions by host apps",
+  "Discovery is a registry over the enabled extensions for an extension point (springboard/ui/src/extensions.rs); nothing scans installed packages on disk.",
   "Host-initiated launch of an extension process in its own sandbox with a connection",
   "Share-sheet extensions installed by apps"
  ]

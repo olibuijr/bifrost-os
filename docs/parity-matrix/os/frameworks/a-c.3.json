@@ -2763,7 +2763,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-audio.json",
    "status": "partial",
-   "note": "private framework, owner CoreAudio; from SDK matrix core-audio.json",
+   "note": "private framework, owner CoreAudio; from SDK matrix core-audio.json Refreshed 2026-10-17: Remaining: no app device or stream I/O and no plug-in publication, as for CoreAudio.",
    "rea": [],
    "method": "assessed"
   },

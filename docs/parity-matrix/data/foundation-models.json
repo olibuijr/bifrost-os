@@ -12,14 +12,14 @@
       "apple": "SystemLanguageModel, LanguageModelError",
       "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs",
       "status": "partial",
-      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: bifrost_app::language_model re-exports the session, profile, tool, schema and budget types and run_turn, and on_device_availability reports the on-device model Unavailable (NoOnDeviceModel) because BifrOSt ships none; the SDK has no network provider (tests language_model::tests). No on-device model runtime exists yet."
+      "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (model_session.rs, model_provider.rs); not wired into the shell or apps, not tested on Midget. no local model runtime in the SDK or the shell; springboard/apps/assistant-desktop/src/model.rs DEFAULT_MODEL is a cloud model id Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: bifrost_app::language_model re-exports the session, profile, tool, schema and budget types and run_turn, and on_device_availability reports the on-device model Unavailable (NoOnDeviceModel) because BifrOSt ships none; the SDK has no network provider (tests language_model::tests). No on-device model runtime exists yet. Refreshed 2026-10-17: covered by springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs; tests model_session::tests, model_provider::tests."
     },
     {
       "feature": "Sessions and prompts",
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
       "bifrost": "springboard/ui/src/model_session.rs (Session::prompt, Session::respond); wired: springboard/apps/assistant-desktop/src/session.rs (session, request)",
       "status": "partial",
-      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget. Built 2026-10-17: The Assistant's empty conversation now states that messages go to a cloud model, because on_device_availability is unavailable (apps/assistant-desktop connect::cloud_notice, test connect::tests::the_cloud_notice_shows_until_an_on_device_model_exists)."
+      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget. Built 2026-10-17: The Assistant's empty conversation now states that messages go to a cloud model, because on_device_availability is unavailable (apps/assistant-desktop connect::cloud_notice, test connect::tests::the_cloud_notice_shows_until_an_on_device_model_exists). Refreshed 2026-10-17: covered by springboard/ui/src/model_session.rs; tests model_session::tests."
     },
     {
       "feature": "Streaming responses",
@@ -33,7 +33,7 @@
       "apple": "Generable, Guide(description:), GenerationSchema, DynamicGenerationSchema, GeneratedContent",
       "bifrost": "springboard/ui/src/generation_schema.rs (Kind, Property, validate, parse, instructions, read_reply)",
       "status": "partial",
-      "note": "The schema becomes the instruction a model gets (instructions), and a reply is read back against it (read_reply), which accepts a Markdown code fence and reports either a parse failure or each member that does not fit; tested headless in springboard/ui/tests/parity_sdk-tests-09.rs and springboard/ui/tests/parity_sdk-complete-06.rs. Nothing constrains a model while it writes, so output is only checked after the reply, and the model call needs the lab machine."
+      "note": "The schema becomes the instruction a model gets (instructions), and a reply is read back against it (read_reply), which accepts a Markdown code fence and reports either a parse failure or each member that does not fit; tested headless in springboard/ui/tests/parity_sdk-tests-09.rs and springboard/ui/tests/parity_sdk-complete-06.rs. Nothing constrains a model while it writes, so output is only checked after the reply, and the model call needs the lab machine. Refreshed 2026-10-17: covered by springboard/ui/src/generation_schema.rs; tests generation_schema::tests."
     },
     {
       "feature": "Tool calling (Tool)",
@@ -54,7 +54,7 @@
       "apple": "ContextOptions, managing the context window",
       "bifrost": "springboard/ui/src/context_window.rs (estimate_tokens, fit); wired: springboard/apps/assistant-desktop/src/session.rs (request_within, BUDGET_TOKENS)",
       "status": "partial",
-      "note": "Token budget fitting is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (the_token_estimate_rounds_up_per_four_characters, fit_keeps_the_reserve_free_for_the_answer, fit_never_starts_the_history_with_an_answer). The estimate counts characters, not model tokens, because no tokenizer runs in the SDK."
+      "note": "Token budget fitting is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (the_token_estimate_rounds_up_per_four_characters, fit_keeps_the_reserve_free_for_the_answer, fit_never_starts_the_history_with_an_answer). The estimate counts characters, not model tokens, because no tokenizer runs in the SDK. Refreshed 2026-10-17: covered by springboard/ui/src/context_window.rs; tests context_window::tests."
     },
     {
       "feature": "Session transcripts",
@@ -75,21 +75,21 @@
       "apple": "LanguageModelSession.Profile, DynamicProfile, DynamicInstructions",
       "bifrost": "springboard/ui/src/model_session.rs (Profile, DynamicInstructions, Session::switch_profile); wired: springboard/apps/assistant-desktop/src/session.rs (profile, fixed instructions only)",
       "status": "partial",
-      "note": "Dynamic parts that read the turn and the session properties are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (dynamic_instructions_see_the_turn_and_empty_parts_are_left_out, switching_profiles_keeps_history_and_changes_the_next_instructions). The Assistant uses only fixed instructions; app-level dynamic profiles are not verified on Midget."
+      "note": "Dynamic parts that read the turn and the session properties are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (dynamic_instructions_see_the_turn_and_empty_parts_are_left_out, switching_profiles_keeps_history_and_changes_the_next_instructions). The Assistant uses only fixed instructions; app-level dynamic profiles are not verified on Midget. Refreshed 2026-10-17: covered by springboard/ui/src/model_session.rs; tests model_session::tests."
     },
     {
       "feature": "Custom language model provider",
       "apple": "LanguageModel, LanguageModelExecutor, LanguageModelCapabilities",
       "bifrost": "springboard/ui/src/model_provider.rs (ModelProvider, run_turn)",
       "status": "partial",
-      "note": "run_turn against a scripted provider is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_tool_call_runs_the_tool_records_its_output_and_asks_again, a_turn_stops_when_the_model_keeps_asking_for_tools, a_provider_failure_and_an_empty_tool_request_are_both_reported). No app implements the trait yet: the Assistant is hard-wired to the Anthropic Messages API. Built 2026-10-17: bifrost_app::language_model exposes ModelProvider and run_turn to apps (tests language_model::tests::a_turn_runs_against_a_provider_and_records_the_answer)."
+      "note": "run_turn against a scripted provider is tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_tool_call_runs_the_tool_records_its_output_and_asks_again, a_turn_stops_when_the_model_keeps_asking_for_tools, a_provider_failure_and_an_empty_tool_request_are_both_reported). No app implements the trait yet: the Assistant is hard-wired to the Anthropic Messages API. Built 2026-10-17: bifrost_app::language_model exposes ModelProvider and run_turn to apps (tests language_model::tests::a_turn_runs_against_a_provider_and_records_the_answer). Refreshed 2026-10-17: covered by springboard/ui/src/model_provider.rs; tests model_provider::tests."
     },
     {
       "feature": "Session properties",
       "apple": "SessionPropertyKey, SessionPropertyValues, LanguageModelSession.SessionProperty",
       "bifrost": "springboard/ui/src/model_session.rs (PropertyKey, PropertyValue, SessionProperties)",
       "status": "partial",
-      "note": "Typed properties with defaults and refusal of a value of another kind are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_property_reads_its_default_and_refuses_a_value_of_another_kind, session_properties_store_each_key_separately). No app reads a session property yet."
+      "note": "Typed properties with defaults and refusal of a value of another kind are tested headless in springboard/ui/tests/parity_sdk-tests-09.rs (a_property_reads_its_default_and_refuses_a_value_of_another_kind, session_properties_store_each_key_separately). No app reads a session property yet. Refreshed 2026-10-17: covered by springboard/ui/src/model_session.rs; tests model_session::tests."
     },
     {
       "feature": "Safety guardrails for generated output",
@@ -122,8 +122,8 @@
   ],
   "gaps": [
     "The SystemLanguageModel API is in the SDK (sdk language_model.rs), but no on-device model is installed, so availability is always Unavailable and apps cannot generate text on the device.",
-    "No model session type with instructions, prompts, generation options and streamed partial output.",
-    "No guided generation: model output cannot be constrained to a typed schema.",
+    "No generation options (such as temperature or a token limit) and no streamed partial output in springboard/ui/src/model_session.rs; Session::respond returns a whole reply.",
+    "Guided generation is a prompt plus a read-back check (springboard/ui/src/generation_schema.rs); output is not constrained while decoding, and no local model runs.",
     "No model-invoked tool calling; App Intents (springboard/sdk/src/intents.rs) exist but are not exposed to a model.",
     "No transcript type shared across apps; the token budget is modelled in the SDK (language_model.rs).",
     "The Assistant (springboard/apps/assistant-desktop) is a cloud client for the Anthropic API, not an on-device or Apple-equivalent feature, so it does not count as parity."

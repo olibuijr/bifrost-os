@@ -33,7 +33,7 @@
       "apple": "ImageDescriptor",
       "bifrost": "springboard/render/src/imgdec.rs (fit, cover, contain); springboard/render/src/cg/imageio/mod.rs (PNG and JPEG decode)",
       "status": "partial",
-      "note": "PNG and JPEG decode to 8-bit pixels and the screen fitting helpers are tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no descriptor for passing pixels to a model."
+      "note": "PNG and JPEG decode to 8-bit pixels and the screen fitting helpers are tested headless in springboard/render/tests/parity_sdk-tests-07-w7.rs. Gap: there is no descriptor for passing pixels to a model. Refreshed 2026-10-17: covered by springboard/render/src/imgdec.rs; tests imgdec::tests."
     },
     {
       "feature": "Compute streams",
@@ -68,7 +68,7 @@
       "apple": "coreai-build command-line tool, compiling Core AI models ahead of time",
       "bifrost": "springboard/ui/src/model_compile.rs (compile, prepare); springboard/ui/src/model_specialization.rs",
       "status": "partial",
-      "note": "compile checks the widths of an operator chain and serializes a canonical plan per target, and prepare reuses the artifact through the specialization cache (headless tests in ui/tests/parity_sdk-complete-37.rs). Gap: there is no model importer and no kernel generation, and the cache is not wired into the shell or apps or measured on Midget."
+      "note": "compile checks the widths of an operator chain and serializes a canonical plan per target, and prepare reuses the artifact through the specialization cache (headless tests in ui/tests/parity_sdk-complete-37.rs). Gap: there is no model importer and no kernel generation, and the cache is not wired into the shell or apps or measured on Midget. Refreshed 2026-10-17: covered by springboard/ui/src/model_compile.rs and springboard/ui/src/model_specialization.rs; tests as cited in the note."
     },
     {
       "feature": "Model debugging and profiling",

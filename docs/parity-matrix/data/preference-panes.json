@@ -47,7 +47,7 @@
    "apple": "updateHelpMenu(with:), NSPrefPaneHelpMenuInfoPListKey, NSPrefPaneHelpMenuTitleKey, NSPrefPaneHelpMenuAnchorKey",
    "bifrost": "springboard/ui/src/help_menu.rs (PaneHelpMenu, HelpEntry); springboard/src/shell/desktop_bar.rs:193 (Help menu rows, fixed)",
    "status": "partial",
-   "note": "PaneHelpMenu holds the entries of each selected pane (title and anchor), replaces them on update and removes them on unselect, tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the shell does not draw pane entries yet (its Help menu rows are fixed at desktop_bar.rs:193), no pane selection calls the model, and there is no help-book lookup for the anchor."
+   "note": "PaneHelpMenu holds the entries of each selected pane (title and anchor), replaces them on update and removes them on unselect, tested headless in springboard/ui/tests/parity_sdk-gaps-04.rs. Gap: the shell does not draw pane entries yet (its Help menu rows are fixed at desktop_bar.rs:193), no pane selection calls the model, and there is no help-book lookup for the anchor. Refreshed 2026-10-17: covered by springboard/ui/src/help_menu.rs; tests tests/parity_sdk-gaps-04.rs."
   },
   {
    "feature": "Settings pages for system preferences",
@@ -75,7 +75,7 @@
    "apple": "x-apple.systempreferences: URL with a pane identifier and an optional ?anchor (System Settings deep links)",
    "bifrost": "springboard/ui/src/pane_link.rs (pane_url, parse_pane_url, PaneLink, route, Route)",
    "status": "partial",
-   "note": "Pure builder, reader and router with headless tests in springboard/ui/tests/parity_sdk-complete-46.rs: plain-token identifiers and anchors, split at the first '?', and a link sorted into an open pane, an unlisted pane or a non-link. Not wired: the shell does not call the router yet, Settings pages have no identifier table (macOS 27 identifiers are not verified in docs/parity-matrix/os/settings; com.apple.preference.displays appears only as a LaunchAgent name in the daemons inventory), and no link opens the Settings app. Not tested on the VM or Midget."
+   "note": "Pure builder, reader and router with headless tests in springboard/ui/tests/parity_sdk-complete-46.rs: plain-token identifiers and anchors, split at the first '?', and a link sorted into an open pane, an unlisted pane or a non-link. Not wired: the shell does not call the router yet, Settings pages have no identifier table (macOS 27 identifiers are not verified in docs/parity-matrix/os/settings; com.apple.preference.displays appears only as a LaunchAgent name in the daemons inventory), and no link opens the Settings app. Not tested on the VM or Midget. Refreshed 2026-10-17: covered by springboard/ui/src/pane_link.rs; tests pane_link::tests."
   }
  ],
  "gaps": [
