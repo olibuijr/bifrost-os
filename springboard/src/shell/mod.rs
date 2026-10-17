@@ -473,6 +473,8 @@ pub struct Shell {
     base_icons: Vec<Image>,
     /// the icon style generation the icons were drawn in (`icon_doc::style_generation`)
     icon_gen: u64,
+    /// counts the icon rebuilds; the Dock client drops its cached icons when it changes
+    icon_rebuilds: u32,
     /// the `installed.json` stamp the icons were drawn against (`helpbook::installed_stamp`)
     installed_stamp: Option<std::time::SystemTime>,
     zoom: f32,
@@ -825,8 +827,16 @@ impl Shell {
         let tile = |a: &AppDef, decoded: Option<Image>| {
             // the Terminal's own artwork outranks a stale packaged `icons/*.raw`
             let own = (a.id == AppId::Terminal).then(|| a.icon_image.map(|f| f(size))).flatten();
-            let mut img = decoded.or(own).or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
-            img.apply_mask(&mask);
+            // an icon from `app_icon` is already the squircle body; a flat one (the cached raw icon, a software
+            // icon or the placeholder) is masked into it
+            let img = match decoded.or(own) {
+                Some(rendered) => rendered,
+                None => {
+                    let mut flat = icon(a.icon, size).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
+                    flat.apply_mask(&mask);
+                    flat
+                }
+            };
             Tile { icon: img, label: ui.styled(&ui.fit(a.name, 12.0, layout.label_w as f32), 12.0, Weight::Regular, WHITE, true) }
         };
         let mut decoded = decoded.into_iter();
@@ -864,6 +874,7 @@ impl Shell {
             grid,
             base_icons,
             icon_gen: bifrost_render::icon_doc::style_generation(),
+            icon_rebuilds: 0,
             installed_stamp: helpbook::installed_stamp(&apphost::root()),
             zoom: 1.0,
             pager,
@@ -1571,17 +1582,27 @@ impl Shell {
     /// refreshes what holds them: the Dock and grid tiles, the App Library, Spotlight and the Overview. Runs when the
     /// icon style changes and when an app is installed or updated.
     pub(super) fn rebuild_app_icons(&mut self) {
+        self.icon_rebuilds = self.icon_rebuilds.wrapping_add(1);
         let size = self.layout.icon as usize;
         let mask = squircle_mask(size);
         let all = apps();
         let decoded = apps::decode_icons(all, size);
         for (i, (d, a)) in decoded.into_iter().zip(all.iter()).enumerate().take(self.base_icons.len()) {
-            let mut img = d.or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
-            img.apply_mask(&mask);
-            self.base_icons[i] = img.clone();
+            // `app_icon` output is shaped; a built-in's software icon is masked; an app with neither keeps its icon
+            let fresh = match d {
+                Some(rendered) => rendered,
+                None => match a.icon_image.map(|f| f(size)) {
+                    Some(mut flat) => {
+                        flat.apply_mask(&mask);
+                        flat
+                    }
+                    None => self.base_icons[i].clone(),
+                },
+            };
+            self.base_icons[i] = fresh.clone();
             let tile = if i < IN_DOCK { self.dock.get_mut(i) } else { self.grid.get_mut(i - IN_DOCK) };
             if let Some(t) = tile {
-                t.icon = img;
+                t.icon = fresh;
             }
         }
         self.quicksearch.clear_icons();
@@ -1620,8 +1641,14 @@ impl Shell {
             return;
         }
         for a in &all[self.base_icons.len()..] {
-            let mut icon = apphost::icon_image(a.icon, size).unwrap_or_else(|| scene::placeholder_icon(size));
-            icon.apply_mask(&mask);
+            let icon = match apphost::icon_image(a.icon, size) {
+                Some(rendered) => rendered,
+                None => {
+                    let mut flat = a.icon_image.map(|f| f(size)).unwrap_or_else(|| scene::placeholder_icon(size));
+                    flat.apply_mask(&mask);
+                    flat
+                }
+            };
             let label = self.ui.styled(&self.ui.fit(a.name, 12.0, self.layout.label_w as f32), 12.0, Weight::Regular, WHITE, true);
             self.base_icons.push(icon.clone());
             self.grid.push(Tile { icon, label });

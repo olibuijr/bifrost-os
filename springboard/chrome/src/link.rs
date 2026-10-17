@@ -305,7 +305,7 @@ mod tests {
         let id = hello[0].0;
         assert_eq!(host.client_count(), 1);
 
-        let model = ToChrome::Dock(DockModel { items: vec![], size: 48.0, magnified: 0.0, position: DockPosition::Bottom, autohide: false });
+        let model = ToChrome::Dock(DockModel { items: vec![], size: 48.0, magnified: 0.0, position: DockPosition::Bottom, autohide: false, icon_variant: 0, icon_tint: [0; 3], icon_gen: 0 });
         host.send(id, &model);
         assert_eq!(recv_until(&mut link, 1), vec![model]);
 
@@ -342,7 +342,7 @@ mod tests {
         let mut host = HostLink::bind_at(&server).expect("bind the host");
         let mut link = Link::connect_to(&server, "chrome-panels").expect("connect");
         let id = poll_until(&mut host, 1)[0].0;
-        let model = |n: u32| ToChrome::Dock(DockModel { items: vec![], size: n as f32, magnified: 0.0, position: DockPosition::Bottom, autohide: false });
+        let model = |n: u32| ToChrome::Dock(DockModel { items: vec![], size: n as f32, magnified: 0.0, position: DockPosition::Bottom, autohide: false, icon_variant: 0, icon_tint: [0; 3], icon_gen: 0 });
         // the client never reads: publish until the queue refuses and a model is held back
         let mut n = 0;
         while host.pending.is_empty() {
