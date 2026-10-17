@@ -169,6 +169,9 @@ impl Shell {
                 }
                 self.terminal_close_panel(t);
             }
+            36 => self.terminal_copy_special(copy::Mode::Colors),
+            37 => self.terminal_copy_special(copy::Mode::ColorsNoBackground),
+            38 => self.terminal_open_look(t),
             8 => {
                 if let Some(text) = self.term.as_ref().and_then(|term| term.selected_text()) {
                     clipboard::set_text(&text);

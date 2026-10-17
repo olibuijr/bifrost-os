@@ -11,10 +11,10 @@
  "summary": {
   "features": 37,
   "parity": 10,
-  "partial": 21,
-  "gap": 5,
+  "partial": 24,
+  "gap": 2,
   "n/a": 1,
-  "coverage_pct": 56.9
+  "coverage_pct": 61.1
  },
  "features": [
   {
@@ -120,10 +120,10 @@
    "feature": "Open a .command or executable file in Terminal",
    "area": "shell",
    "apple": "document types: shell script, unix-executable",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No file association. Terminal already receives shell scripts (defaultapps.rs:39) but does not run the file they open with; the document path into the Terminal is not built.",
-   "wire": "Run the opened file in a new tab through spawn_terminal_tab once the Terminal takes a document path."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/open.rs:10 (open_argv), open.rs:31 (terminal_open_documents); springboard/src/shell/workspace.rs:303 (OpenFile hands the granted files to Terminal)",
+   "note": "A .command file, or an executable, that the workspace opens with Terminal runs in its own new tab in its own folder, through a /bin/sh wrapper that takes the path as an argument. The tab stays at a login shell when the program ends. Other files are refused with a message. Tested: open_argv refuses relative paths and non-runnable files and never splices the path into the script (open.rs tests).",
+   "wire": "Check on Midget: Open With > Terminal on a .command and on an executable from Files. A Terminal that was not running also opens its default tab. Confirm that .command has a Terminal document type (shell/defaultapps.rs:39 lists public.shell-script only), and that Services and drop on the Dock are not wired yet."
   },
   {
    "feature": "Window groups (save and open workspaces)",
@@ -147,10 +147,10 @@
    "feature": "Profile editor: ANSI colours, bold, blink, text",
    "area": "settings",
    "apple": "Profiles > Text: font, character and line spacing, ANSI colours, bright for bold, antialias, blinking text",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No profile editor exists yet. The profiles are fixed in profile_table.rs (PROFILES), so the font, spacing, ANSI palette and bold, bright and blink options cannot be set.",
-   "wire": "Add a font picker, character and line spacing steppers, ANSI palette wells and bold, bright and blink toggles stored per profile."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/look_panel.rs (Profile Editor, More row 38); springboard/src/term/look.rs (Look, saved and from_prefs); springboard/src/term/render.rs (cell_pair, Metrics::with_spacing); springboard/src/term/mod.rs (set_look)",
+   "note": "Profile Editor (More > Profile Editor): 16 ANSI colour wells with red, green and blue steppers, Reset palette to theme, Bold as Bright, Allow Blink, character and line spacing steppers (0.8 to 2.0) and the cursor style. Saved in prefs as terminal.look.*, applied to every tab and to new tabs; the grid paints with the palette and the spacing. Tested: palette persistence round trip (look.rs), spacing changes the cell metrics (render.rs, term/mod.rs). Allow Blink is stored but nothing blinks yet.",
+   "wire": "Allow Blink needs an SGR 5 (blink) attribute in the iosterm core: its cell attributes use all eight bits. The font picker and the window background image (see Window background image and translucency) are still missing."
   },
   {
    "feature": "Cursor style and blink",
@@ -210,10 +210,10 @@
    "feature": "Copy Special: plain text and without background colour",
    "area": "edit",
    "apple": "Edit > Copy Special",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Copy yields plain text only. The clipboard (render/src/clipboard.rs) holds text and images, no styled text, so Copy Special has nothing to carry colours with. Needs a rich pasteboard type first.",
-   "wire": "Add rich copy (colour runs) to Term::selected_text variants and a Copy Special submenu."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/copy.rs:33 (terminal_copy_special); springboard/src/term/rtf.rs (to_rtf); springboard/src/term/mod.rs (selected_runs, selected_rtf); springboard/src/shell/terminal/menus.rs:172-174 (More rows 36 to 38); springboard/src/shell/desktop_bar.rs (Edit > Copy Special)",
+   "note": "Edit > Copy Special has Plain Text (Copy), Text with Colors (RTF with each cell colour and the background) and Without Background Colour (RTF with the foreground only). Both colour copies put plain text and public.rtf on the shell pasteboard, and the RTF is offered to Wayland clients. The RTF writer is local to the Terminal because the SDK writer (sdk/attributed.rs to_rtf) only takes named colour tokens; it follows the same escaping. Tested: RTF of a styled selection (rtf.rs, term/mod.rs copy_special test).",
+   "wire": "Check on Midget that a rich-text app pastes the coloured text. The two colour copies have no key equivalents; they are Edit menu and More rows only."
   },
   {
    "feature": "Word and line selection",

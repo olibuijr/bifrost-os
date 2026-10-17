@@ -25,6 +25,8 @@ impl Shell {
                     clipboard::set_text(&text);
                 }
             }
+            TermKey::CopyStyled => self.terminal_copy_special(copy::Mode::Colors),
+            TermKey::CopyStyledPlain => self.terminal_copy_special(copy::Mode::ColorsNoBackground),
             TermKey::SelectAll => {
                 if let Some(term) = self.term.as_mut() {
                     term.select_all();
@@ -140,7 +142,7 @@ impl Shell {
         };
         let modal = matches!(
             self.terminal_ui.panel,
-            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command
+            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command | Panel::Look
         );
         match ev {
             Event::Down(x, y)
@@ -169,6 +171,7 @@ impl Shell {
                         Panel::Connections => (self.terminal_ui.config.entries().len(), 52.0),
                         Panel::Processes => (self.terminal_ui.processes.len(), 40.0),
                         Panel::More => (MENU.len(), 44.0),
+                        Panel::Look => (look_panel::ROWS, 44.0),
                         _ => (0, 0.0),
                     };
                     let limit =

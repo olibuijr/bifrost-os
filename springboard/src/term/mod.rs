@@ -7,6 +7,8 @@ mod pty;
 mod render;
 mod sessions;
 pub mod process;
+pub mod look;
+pub mod rtf;
 pub mod tab_order;
 pub use sessions::Sessions;
 
@@ -18,7 +20,9 @@ use termcore::keys::{encode, Key, Mods};
 pub use termcore::select::Selection;
 use termcore::term::{CursorShape, Term};
 use pty::Pty;
-use render::{paint_row, px, Cursor, GlyphCache, Metrics, THEME};
+use look::Look;
+use render::{cell_pair, paint_row, px, Cursor, GlyphCache, Metrics, THEME};
+use termcore::palette::Theme;
 use std::ffi::c_int;
 use std::io;
 
@@ -159,6 +163,11 @@ pub struct Terminal {
     custom_title: Option<String>,
     /// View > Allow Mouse Reporting: when off, programs get no mouse or wheel reports
     mouse_reporting: bool,
+    /// the profile's look (ANSI palette, Bold as Bright, spacing); `colors` is the theme with its palette
+    look: Look,
+    colors: Theme,
+    /// the px size the font was last laid out at (kept so a look change can re-lay the grid)
+    px_size: f32,
 }
 
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
@@ -197,7 +206,7 @@ impl Terminal {
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
         let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, custom_title: None, mouse_reporting: true, look: Look::default(), colors: Look::default().theme(0), px_size })
     }
 
     /// The px rect the terminal occupies.
@@ -225,6 +234,60 @@ impl Terminal {
 
     pub fn selection(&self) -> Option<Selection> {
         self.selection
+    }
+
+    /// The selection as styled runs: each cell's colours as the grid shows them, the trailing blanks of each row
+    /// trimmed, rows joined by newlines. `with_background` keeps cells that differ from the theme background.
+    pub fn selected_runs(&self, with_background: bool) -> Option<Vec<rtf::Run>> {
+        let sel = self.selection?;
+        let cols = self.term.cols();
+        let mut runs: Vec<rtf::Run> = Vec::new();
+        let mut rows_out = 0;
+        for y in 0..self.term.rows() {
+            let Some((start, end)) = sel.span_in_row(y, cols) else { continue };
+            if rows_out > 0 {
+                runs.push(rtf::Run { text: "\n".into(), fg: self.colors.fg, bg: None, bold: false, italic: false, underline: false });
+            }
+            rows_out += 1;
+            let cells = self.term.visible_row(y);
+            let mut row: Vec<rtf::Run> = Vec::new();
+            for cell in cells.iter().take(end).skip(start) {
+                if cell.attrs & termcore::cell::attr::SPACER != 0 {
+                    continue;
+                }
+                let (fg, bg) = cell_pair(&self.colors, cell, false, self.look.bold_bright);
+                let bg = (with_background && bg != self.colors.bg).then_some(bg);
+                let piece = rtf::Run {
+                    text: cell.ch.to_string(),
+                    fg,
+                    bg,
+                    bold: cell.attrs & termcore::cell::attr::BOLD != 0,
+                    italic: cell.attrs & termcore::cell::attr::ITALIC != 0,
+                    underline: cell.attrs & termcore::cell::attr::UNDERLINE != 0,
+                };
+                match row.last_mut() {
+                    Some(last) if last.same_style(&piece) => last.text.push(cell.ch),
+                    _ => row.push(piece),
+                }
+            }
+            // the trailing blanks of a row are not copied, as the plain text copy does
+            while let Some(last) = row.last_mut() {
+                let kept = last.text.trim_end_matches(' ').len();
+                last.text.truncate(kept);
+                if last.text.is_empty() {
+                    row.pop();
+                } else {
+                    break;
+                }
+            }
+            runs.extend(row);
+        }
+        (!runs.is_empty()).then_some(runs)
+    }
+
+    /// The selection as RTF (`public.rtf`), `font_pt` points high; None when nothing is selected.
+    pub fn selected_rtf(&self, with_background: bool, font_pt: f32) -> Option<String> {
+        self.selected_runs(with_background).map(|runs| rtf::to_rtf(&runs, font_pt))
     }
 
     /// Selects a range of visible cells (None clears).
@@ -369,7 +432,7 @@ impl Terminal {
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
             let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &self.colors), y, cells, cols, cursor, self.look.bold_bright);
                 changed.push(y);
             }
         }
@@ -424,6 +487,18 @@ impl Terminal {
         (self.term.cursor_visible() && (!self.blink || self.blink_on), shape)
     }
 
+    /// Sets the profile look (ANSI palette, Bold as Bright, spacing) and re-lays the grid with it.
+    pub fn set_look(&mut self, look: Look) {
+        self.look = look;
+        let (theme, px_size) = (self.theme, self.px_size);
+        self.appearance(theme, px_size);
+    }
+
+    /// The profile look in use.
+    pub fn look(&self) -> Look {
+        self.look
+    }
+
     /// Nothing is drawn over the grid (no selection, no find highlights).
     pub fn plain(&self) -> bool {
         self.selection.is_none() && self.find.is_empty()
@@ -439,7 +514,7 @@ impl Terminal {
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
             let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &self.colors), y, cells, cols, cursor, self.look.bold_bright);
             }
         }
         s.copy(self.canvas.view(), self.area.0, self.area.1);
@@ -495,10 +570,12 @@ impl Terminal {
 
     pub fn appearance(&mut self, theme: usize, px_size: f32) {
         self.theme = theme.min(termcore::palette::THEMES.len() - 1);
-        let theme = &termcore::palette::THEMES[self.theme];
-        self.term.set_default_colors(theme.fg, theme.bg);
+        let base = &termcore::palette::THEMES[self.theme];
+        self.term.set_default_colors(base.fg, base.bg);
+        self.colors = self.look.theme(self.theme);
+        self.px_size = px_size;
         let font = Font::parse(self.font_data).expect("validated terminal font");
-        self.metrics = Metrics::new(&font, px_size);
+        self.metrics = Metrics::with_spacing(&font, px_size, self.look.char_spacing, self.look.line_spacing);
         self.glyphs = GlyphCache::new(font, px_size);
         self.resize(self.area);
     }
@@ -773,6 +850,35 @@ mod tests {
         assert!(t.viewport_text().contains("got:hi"));
         t.scroll(5);
         assert_eq!(t.term.view_offset(), 0, "no history yet");
+    }
+
+    #[test]
+    fn copy_special_exports_the_colours_of_a_styled_selection() {
+        let mut t = Terminal::spawn(font(), (10, 20, 400, 300), 20.0, &["/bin/sh", "-c", "printf '\\033[31mred\\033[0m plain\\n'; read x"]).unwrap();
+        pump_until(&mut t, "plain");
+        t.select(Some(Selection { anchor: (0, 0), head: (8, 0) }));
+        let runs = t.selected_runs(true).unwrap();
+        assert_eq!(runs[0].text, "red");
+        assert_eq!(runs[0].fg, THEME.ansi[1]);
+        assert_eq!(runs[0].bg, None, "the default background is not a background run");
+        assert_eq!(runs[1].text, " plain");
+        let rtf = t.selected_rtf(false, 12.0).unwrap();
+        assert!(rtf.contains("{\\cf1 red}"), "{rtf}");
+        assert!(!rtf.contains("\\cb"), "without background colour: {rtf}");
+    }
+
+    #[test]
+    fn profile_look_sets_spacing_and_palette_on_the_grid() {
+        let mut t = Terminal::spawn(font(), (10, 20, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        let (before, cols) = (t.metrics, t.cols());
+        t.set_look(Look { char_spacing: 1.5, line_spacing: 1.2, ..Look::default() });
+        assert!(t.metrics.cw > before.cw && t.metrics.ch > before.ch, "{:?}", t.metrics);
+        assert!(t.cols() < cols, "wider cells fit fewer columns");
+        let mut ansi = THEME.ansi;
+        ansi[1] = (1, 2, 3);
+        t.set_look(Look { ansi: Some(ansi), ..Look::default() });
+        assert_eq!(t.colors.ansi[1], (1, 2, 3));
+        assert_eq!(t.look().ansi, Some(ansi));
     }
 
     #[test]

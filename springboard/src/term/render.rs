@@ -3,7 +3,7 @@
 use crate::font::{Font, Style};
 use crate::gfx::{pack, Image};
 use termcore::cell::{attr, Cell};
-use termcore::palette::{cell_colors_in, Rgb, Theme, THEMES};
+use termcore::palette::{color_rgb_in, mix, Rgb, Theme, THEMES};
 use termcore::term::CursorShape;
 use std::collections::HashMap;
 
@@ -28,10 +28,19 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new(font: &Font, px: f32) -> Self {
+        Self::with_spacing(font, px, 1.0, 1.0)
+    }
+
+    /// Cell metrics with the profile's character and line spacing (multipliers of the font's own advance and line
+    /// height; 1.0 is the default). The extra line height is split above and below the text.
+    pub fn with_spacing(font: &Font, px: f32, char_spacing: f32, line_spacing: f32) -> Self {
         let k = px / font.upem;
-        let cw = (font.advance(font.glyph('M')) * k).round().max(1.0) as i32;
-        let ch = ((font.ascent - font.descent) * k).ceil().max(1.0) as i32;
-        Metrics { cw, ch, baseline: (font.ascent * k).round() as i32, pad: cw / 2 }
+        let base_cw = (font.advance(font.glyph('M')) * k).round().max(1.0);
+        let base_ch = ((font.ascent - font.descent) * k).ceil().max(1.0);
+        let cw = (base_cw * char_spacing.max(0.1)).round().max(1.0) as i32;
+        let ch = (base_ch * line_spacing.max(0.1)).round().max(1.0) as i32;
+        let baseline = (font.ascent * k).round() as i32 + (ch - base_ch as i32) / 2;
+        Metrics { cw, ch, baseline, pad: cw / 2 }
     }
 
     /// Columns and rows that fit a `w` x `h` px area (at least 1 x 1).
@@ -115,9 +124,25 @@ pub struct Cursor {
     pub shape: CursorShape,
 }
 
+/// `(foreground, background)` of a cell in `theme`, as the grid draws it. The cursor block inverts the pair. With
+/// `bold_bright` off, bold text keeps its ANSI 0-7 colour (the profile's Bold as Bright setting); the terminal core's
+/// own resolution always brightens, so the grid resolves colours here.
+pub fn cell_pair(theme: &Theme, c: &Cell, cursor: bool, bold_bright: bool) -> (Rgb, Rgb) {
+    let bold = c.attrs & attr::BOLD != 0;
+    let mut fg = color_rgb_in(theme, c.fg, theme.fg, bold && bold_bright);
+    let mut bg = color_rgb_in(theme, c.bg, theme.bg, false);
+    if (c.attrs & attr::INVERSE != 0) != cursor {
+        std::mem::swap(&mut fg, &mut bg);
+    }
+    if c.attrs & attr::DIM != 0 {
+        fg = mix(fg, bg);
+    }
+    (fg, bg)
+}
+
 /// Paints screen row `row` of `cells` (padded to `cols` with blanks) into `img`.
 /// Glyphs are clipped to the row band so rows can be redrawn independently.
-pub fn paint_row(img: &mut Image, cache: &mut GlyphCache, appearance: (&Metrics, &Theme), row: usize, cells: &[Cell], cols: usize, cursor: Option<Cursor>) {
+pub fn paint_row(img: &mut Image, cache: &mut GlyphCache, appearance: (&Metrics, &Theme), row: usize, cells: &[Cell], cols: usize, cursor: Option<Cursor>, bold_bright: bool) {
     let (m, theme) = appearance;
     let blank = Cell::default();
     let cell_at = |x: usize| cells.get(x).unwrap_or(&blank);
@@ -125,13 +150,13 @@ pub fn paint_row(img: &mut Image, cache: &mut GlyphCache, appearance: (&Metrics,
     let (_, top) = m.cell_origin(0, row);
     fill(img, 0, top, img.w as i32, m.ch, px(theme.bg));
     for x in 0..cols {
-        let (_, bg) = cell_colors_in(theme, cell_at(x), block(x));
+        let (_, bg) = cell_pair(theme, cell_at(x), block(x), bold_bright);
         let (cx, cy) = m.cell_origin(x, row);
         fill(img, cx, cy, m.cw, m.ch, px(bg));
     }
     for x in 0..cols {
         let c = cell_at(x);
-        let (fg, _) = cell_colors_in(theme, c, block(x));
+        let (fg, _) = cell_pair(theme, c, block(x), bold_bright);
         let (cx, cy) = m.cell_origin(x, row);
         let span = if c.attrs & attr::WIDE != 0 { 2 * m.cw } else { m.cw };
         if c.attrs & attr::SPACER == 0 && c.ch != ' ' {
@@ -147,7 +172,7 @@ pub fn paint_row(img: &mut Image, cache: &mut GlyphCache, appearance: (&Metrics,
         }
     }
     if let Some(Cursor { col, shape }) = cursor {
-        let (fg, _) = cell_colors_in(theme, cell_at(col), false);
+        let (fg, _) = cell_pair(theme, cell_at(col), false, bold_bright);
         let (cx, cy) = m.cell_origin(col, row);
         let t = 2 * m.line();
         match shape {
@@ -219,7 +244,27 @@ mod tests {
     fn colours_map_to_opaque_pixels() {
         assert_eq!(px((1, 2, 3)), 0xff03_0201);
         let red = Cell { fg: Color::Indexed(1), ..Cell::default() };
-        assert_eq!(cell_colors_in(THEME, &red, false).0, THEME.ansi[1]);
+        assert_eq!(cell_pair(THEME, &red, false, true).0, THEME.ansi[1]);
+    }
+
+    #[test]
+    fn spacing_scales_cells_and_default_spacing_is_unchanged() {
+        let data = mono();
+        let f = Font::parse(&data).unwrap();
+        let base = Metrics::new(&f, 20.0);
+        assert_eq!(Metrics::with_spacing(&f, 20.0, 1.0, 1.0), base);
+        let wide = Metrics::with_spacing(&f, 20.0, 1.5, 1.0);
+        assert!(wide.cw > base.cw && wide.ch == base.ch, "{wide:?}");
+        let tall = Metrics::with_spacing(&f, 20.0, 1.0, 1.5);
+        assert!(tall.ch > base.ch && tall.cw == base.cw && tall.baseline >= base.baseline, "{tall:?}");
+        assert!(Metrics::with_spacing(&f, 20.0, 0.8, 0.8).cw < base.cw);
+    }
+
+    #[test]
+    fn bold_as_bright_switches_the_bold_colour_of_ansi_0_to_7() {
+        let bold_red = Cell { fg: Color::Indexed(1), attrs: attr::BOLD, ..Cell::default() };
+        assert_eq!(cell_pair(THEME, &bold_red, false, true).0, THEME.ansi[9]);
+        assert_eq!(cell_pair(THEME, &bold_red, false, false).0, THEME.ansi[1]);
     }
 
     #[test]
@@ -248,7 +293,7 @@ mod tests {
         let m = Metrics::new(&f, 20.0);
         let mut img = Image::new((2 * m.pad + 4 * m.cw) as usize, (2 * m.pad + 2 * m.ch) as usize);
         let mut cache = GlyphCache::new(f, 20.0);
-        paint_row(&mut img, &mut cache, (&m, THEME), 1, cells, 4, cursor);
+        paint_row(&mut img, &mut cache, (&m, THEME), 1, cells, 4, cursor, true);
         (img, m)
     }
 
