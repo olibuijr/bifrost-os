@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-console"
-version = "1.7.1"
+version = "1.8.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-shortcuts"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

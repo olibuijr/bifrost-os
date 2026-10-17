@@ -417,3 +417,27 @@ fn save_messages_without_a_panel_writes_the_selection_or_every_shown_message() {
     assert!(text.contains("beta") && !text.contains("alpha"), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn marked_messages_are_what_save_messages_writes_and_a_mark_toggles() {
+    let mut c = console_with(vec![msg(1, "a", "alpha"), msg(2, "b", "beta"), msg(3, "c", "gamma")]);
+    let seqs: Vec<u64> = c.buffer.iter().map(|(s, _)| s).collect();
+    c.selected = None;
+    c.toggle_mark();
+    assert!(c.marked.is_empty(), "no message selected, nothing marked");
+    c.selected = Some(seqs[0]);
+    c.toggle_mark();
+    assert!(c.selected_marked());
+    c.selected = Some(seqs[2]);
+    c.toggle_mark();
+    let text = c.messages_to_save();
+    assert!(text.contains("alpha") && text.contains("gamma") && !text.contains("beta"), "{text}");
+    assert_eq!(text.lines().count(), 2);
+    c.toggle_mark();
+    assert!(!c.selected_marked(), "a second mark takes it out again");
+    assert_eq!(c.messages_to_save().lines().count(), 1);
+    c.selected = None;
+    c.clear_marks();
+    assert!(c.marked.is_empty());
+    assert_eq!(c.messages_to_save().lines().count(), 3, "with no marks, every shown message is saved");
+}

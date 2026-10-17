@@ -71,8 +71,8 @@
    "apple": "Reports sidebar, ReportViewController.nib",
    "status": "partial",
    "bifrost": "springboard/apps/console-desktop/src/kernel.rs:81; springboard/apps/console-desktop/src/diagnostics.rs:146",
-   "note": "Reports has Crash Reports, Hang Diagnostics (each stall of the UI loop of 20 seconds or more, diagnostics.rs:146) and a Kernel Reports row: each file in /sys/fs/pstore is a fault row whose detail pane shows the record, with the previous boot's kernel warnings and errors from journalctl -k -b -1. Spin reports are not built: no data source exists yet. Not yet verified on Midget.",
-   "wire": "Verify on Midget: needs a machine with a pstore record or a persistent journal. Spin reports have no data source yet."
+   "note": "Reports has Crash Reports, Hang Diagnostics (each stall of the UI loop of 20 seconds or more, diagnostics.rs:146), Spin Reports (each .spin file in the spin folder under the shell crash-log directories is a row whose detail pane shows its text, springboard/apps/console-desktop/src/spin.rs) and a Kernel Reports row: each file in /sys/fs/pstore is a fault row whose detail pane shows the record, with the previous boot's kernel warnings and errors from journalctl -k -b -1. The shell does not write spin files yet, so Spin Reports is empty until it does. Not yet verified on Midget.",
+   "wire": "Verify on Midget: needs a machine with a pstore record or a persistent journal; put a .spin file in the shell's spin folder and check its row and text. The shell must write spin samples before the list is non-empty."
   },
   {
    "feature": "Detail pane for selected message",
@@ -133,9 +133,9 @@
    "area": "menu",
    "apple": "File > Save",
    "status": "partial",
-   "bifrost": "springboard/apps/console-desktop/src/main.rs:104 (begin_save_messages)",
-   "note": "Log > Save Messages opens the save panel and writes the selected message or every shown message to the chosen file; a shell without the panel gets the old Documents/Console file. built on parity/team-d-console; not yet verified on Midget.",
-   "wire": "Verify on Midget: save from the panel, cancel it, and check the file's content."
+   "bifrost": "springboard/apps/console-desktop/src/main.rs:104 (begin_save_messages); springboard/apps/console-desktop/src/console.rs (toggle_mark, messages_to_save)",
+   "note": "Log > Save Messages opens the save panel and writes the selected message or every shown message to the chosen file; a shell without the panel gets the old Documents/Console file. Log > Mark Message toggles marks on messages, Clear Marks forgets them, and while any message is marked Save Messages writes only the marked ones in list order (console.rs toggle_mark, messages_to_save). Built on parity/team-d-console; not yet verified on Midget.",
+   "wire": "Verify on Midget: mark two messages, save from the panel, cancel it, and check the file holds only the marked messages."
   },
   {
    "feature": "Open log files and archives (document types)",

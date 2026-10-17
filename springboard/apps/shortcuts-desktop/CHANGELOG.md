@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.0 — 2026-10-17
+
+- Automations can start on more events: when an app closes, at login, when a Focus turns on or off, and at a time of day (every day or on weekdays). The Automation row steps through them.
+- Ask Before Running is on for each automation by default; its row under Automation switches it off to run at once.
+- A Run Shell Script step records a one-time confirmation per shortcut, kept in the list file. The app still refuses shell steps until the shell runs them.
+- The shell does not deliver app, login, Focus or time events to the app yet, so automations do not run by themselves on the device.
+
 ## 1.12.0 — 2026-10-17
 
 - Add a Run Script step: runs a line of the BifrOSt script language with the previous output as the first item of argv. Notifications from the script are shown; dialogs, other apps and shell commands are refused with a reason.

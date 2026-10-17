@@ -167,8 +167,10 @@ enum Target {
     Grip(usize),
     /// the Menu Key row of the open shortcut: steps to the next key
     MenuKey,
-    /// the Automation row of the open shortcut: steps to the next app or battery level
+    /// the Automation row of the open shortcut: steps to the next trigger (app, time, Focus, login or battery)
     Automation,
+    /// the Ask Before Running row, shown under an automation: switches between asking and running at once
+    AskBeforeRunning,
     /// a variable row under an open text step: inserts `{name}` into the text (the index is into `variable_names`)
     InsertVar(usize),
     /// a row of the menu a long press opens on a tile
@@ -777,7 +779,13 @@ impl Shortcuts {
                 let key = if sc.key == 0 { "None".to_string() } else { format!("Ctrl+Cmd+{}", sc.key) };
                 self.row(ui, &mut cells, &mut y, "Menu Key", &key, LABEL.now(), 0, Some(Target::MenuKey));
                 let automation = model::automation_label(sc.automation);
-                self.row(ui, &mut cells, &mut y, "Automation", &automation, LABEL.now(), ROW_POS_LAST, Some(Target::Automation));
+                // with an automation, its Ask Before Running row follows it, so Automation is no longer the last row
+                let (auto_pos, ask_row) = if sc.automation.is_some() { (ROW_POS_FIRST, true) } else { (ROW_POS_LAST, false) };
+                self.row(ui, &mut cells, &mut y, "Automation", &automation, LABEL.now(), auto_pos, Some(Target::Automation));
+                if ask_row {
+                    let ask = if sc.ask { "On" } else { "Off" };
+                    self.row(ui, &mut cells, &mut y, "Ask Before Running", ask, LABEL.now(), ROW_POS_LAST, Some(Target::AskBeforeRunning));
+                }
                 y += ui.pt(35.0) - ui.pt(SPACE_S);
                 cells.push(Cell { target: None, rect: (m + ui.pt(SPACE_L), y, w, ui.pt(SPACE_XXXL)), look: Look::Header("Color".into()) });
                 y += ui.pt(SPACE_XXXL);
@@ -1295,6 +1303,12 @@ impl Shortcuts {
             Target::Automation => {
                 if let Some(s) = self.editing() {
                     s.automation = model::next_automation(s.automation);
+                    self.save();
+                }
+            }
+            Target::AskBeforeRunning => {
+                if let Some(s) = self.editing() {
+                    s.ask = !s.ask;
                     self.save();
                 }
             }
@@ -2350,9 +2364,9 @@ mod tests {
         w.view = View::Editor(0);
         assert!(w.list()[0].automation.is_none());
         w.activate(Target::Automation);
-        assert_eq!(w.list()[0].automation, Some(model::Automation::AppOpens(0)));
+        assert_eq!(w.list()[0].automation, Some(model::Automation::AtLogin));
         let saved = std::fs::read_to_string(&w.path).unwrap();
-        assert!(saved.lines().next().unwrap().contains("open:0"), "the automation is saved with the line");
+        assert!(saved.lines().next().unwrap().contains("login"), "the automation is saved with the line");
     }
 
     #[test]
@@ -2361,6 +2375,21 @@ mod tests {
         w.view = View::Editor(0);
         let (cells, _) = w.layout(&ui());
         assert!(cells.iter().any(|c| c.target == Some(Target::Automation)));
+        assert!(!cells.iter().any(|c| c.target == Some(Target::AskBeforeRunning)), "no ask row without an automation");
+    }
+
+    #[test]
+    fn the_ask_row_toggles_the_open_automation_and_is_saved() {
+        let mut w = window("automation-ask");
+        w.view = View::Editor(0);
+        w.activate(Target::Automation);
+        let (cells, _) = w.layout(&ui());
+        assert!(cells.iter().any(|c| c.target == Some(Target::AskBeforeRunning)), "the ask row follows an automation");
+        assert!(w.list()[0].ask, "asking is on by default");
+        w.activate(Target::AskBeforeRunning);
+        assert!(!w.list()[0].ask);
+        let saved = std::fs::read_to_string(&w.path).unwrap();
+        assert!(saved.lines().next().unwrap().contains("\tlogin\t0\t0"), "the ask flag is saved after the automation");
     }
 
     #[test]
