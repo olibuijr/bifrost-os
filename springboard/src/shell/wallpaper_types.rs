@@ -134,6 +134,43 @@ impl Provided {
             Kind::Day => wallpaper_schedule::still_at(&self.images, minute),
         }
     }
+
+    /// The index of the picture shown at `minute` of the day (0 for a still).
+    pub fn index_at(&self, minute: u32) -> usize {
+        match self.kind {
+            Kind::Still => 0,
+            Kind::Day => wallpaper_schedule::slice_at(self.images.len(), minute).unwrap_or(0),
+        }
+    }
+}
+
+/// The app id with every character that is not ASCII alphanumeric turned into `_`, as used in cached still names.
+pub fn stem(app: &str) -> String {
+    app.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
+}
+
+/// The cached still id of picture `index` of an app's wallpaper. Picture 0 is the id Settings lists (`app_<stem>`);
+/// the other pictures of a day are `appday_<stem>_<index>`, so no app id can make two pictures share an id.
+pub fn picture_id(app: &str, index: usize) -> String {
+    if index == 0 {
+        format!("app_{}", stem(app))
+    } else {
+        format!("appday_{}_{index}", stem(app))
+    }
+}
+
+/// The day wallpaper whose cached stills include `still_id` (the one on screen now), if any. This is how the shell
+/// knows that the current wallpaper is a day wallpaper that must change with the clock.
+pub fn day_of<'a>(provided: &'a [Provided], still_id: &str) -> Option<&'a Provided> {
+    provided
+        .iter()
+        .filter(|p| p.kind == Kind::Day)
+        .find(|p| (0..p.images.len()).any(|i| picture_id(&p.app, i) == still_id))
+}
+
+/// The cached still id a day wallpaper shows at `minute` of the day.
+pub fn current_id(p: &Provided, minute: u32) -> String {
+    picture_id(&p.app, p.index_at(minute))
 }
 
 #[cfg(test)]
@@ -237,5 +274,27 @@ mod tests {
         let still = from_manifest("is.x.app", "still", &pics(&["only.png"])).unwrap().unwrap();
         assert_eq!(still.picture_at(0), Some("only.png"));
         assert_eq!(still.picture_at(900), Some("only.png"));
+    }
+
+    #[test]
+    fn every_picture_of_a_day_has_its_own_cached_still_id() {
+        assert_eq!(picture_id("is.x.dawn", 0), "app_is_x_dawn");
+        assert_eq!(picture_id("is.x.dawn", 2), "appday_is_x_dawn_2");
+        assert_ne!(picture_id("is.x.dawn", 1), picture_id("is.x.dawn_1", 0), "a numbered picture never equals another app's first");
+    }
+
+    #[test]
+    fn the_shell_finds_the_day_wallpaper_on_screen_and_steps_through_its_pictures() {
+        let day = from_manifest("is.x.dawn", "day", &pics(&["a.png", "b.png", "c.png", "d.png"])).unwrap().unwrap();
+        let still = from_manifest("is.y.still", "still", &pics(&["s.png"])).unwrap().unwrap();
+        let provided = [still, day];
+        assert!(day_of(&provided, "app_is_y_still").is_none(), "a still never changes");
+        assert!(day_of(&provided, "wallpaper_other").is_none());
+        let day = day_of(&provided, "app_is_x_dawn").expect("the first picture belongs to the day");
+        assert!(day_of(&provided, "appday_is_x_dawn_3").is_some());
+        assert_eq!(current_id(day, 0), "app_is_x_dawn");
+        assert_eq!(current_id(day, 400), "appday_is_x_dawn_1", "06:40 is the second quarter");
+        assert_eq!(current_id(day, 1439), "appday_is_x_dawn_3");
+        assert_eq!(day.index_at(1439), 3);
     }
 }
