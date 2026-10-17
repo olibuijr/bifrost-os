@@ -326,7 +326,7 @@ pub fn load_checked(path: &Path) -> std::io::Result<Data> {
         ));
     }
     let text = std::fs::read_to_string(path)?;
-    if !matches!(text.lines().next(), Some(HEADER | HEADER_V2 | HEADER_V1)) {
+    if !matches!(text.lines().next(), Some(HEADER | HEADER_V3 | HEADER_V2 | HEADER_V1)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Unknown reminders format",
