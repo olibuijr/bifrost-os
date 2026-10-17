@@ -255,6 +255,15 @@ pub mod history {
     pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
 }
 
+/// Contact display preferences (CNContactsUserDefaults and CNContactFormatter sort order): the sort order a list uses,
+/// the country code a phone number is written with, and the sort helpers. `ContactsDefaults` keeps the user's choice;
+/// `effective_sort_order` resolves "system default" against the system's order.
+pub mod display {
+    pub use bifrost_ui::contact_display::{
+        compare_names, normalize_country_code, sort_contacts, sort_key, ContactsDefaults, SortOrder,
+    };
+}
+
 /// The contact picker (ContactsUI, CNContactPicker and the people picker): the user chooses one whole contact, or one
 /// value of a contact such as a phone number. The app gets only the final [`picker::Choice`], so it needs no read
 /// access to the store. `Picker::new` takes the entries the shell shows, `select` picks or opens a contact, and
@@ -316,6 +325,17 @@ mod tests {
         store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
         assert_eq!(store.changes_since(token).unwrap().len(), 1);
         assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
+    }
+
+    #[test]
+    fn display_preferences_sort_and_resolve_the_user_default() {
+        let mut people = vec![("Zoe", "Adams"), ("ada", "Lovelace")];
+        display::sort_contacts(&mut people, display::SortOrder::FamilyName, |p| (p.0, p.1));
+        assert_eq!(people[0], ("Zoe", "Adams"));
+        let defaults = display::ContactsDefaults::new();
+        assert_eq!(defaults.effective_sort_order(display::SortOrder::UserDefault), display::SortOrder::GivenName);
+        assert_eq!(display::normalize_country_code(" is "), Some("IS".to_string()));
+        assert_eq!(display::normalize_country_code("Iceland"), None);
     }
 
     #[test]
