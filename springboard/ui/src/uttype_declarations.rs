@@ -58,7 +58,7 @@ fn leak_all(v: &[String]) -> &'static [&'static str] {
 }
 
 /// The quoted strings in a value: `"a"` gives one, `["a", "b"]` gives two. `None` when a quote is left open.
-fn quoted(value: &str) -> Option<Vec<String>> {
+pub(crate) fn quoted(value: &str) -> Option<Vec<String>> {
     let mut out = Vec::new();
     let mut buf = String::new();
     let mut in_str = false;
