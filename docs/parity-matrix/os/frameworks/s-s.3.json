@@ -511,7 +511,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/social.json",
    "status": "partial",
-   "note": "private framework, owner Social; from SDK matrix social.json",
+   "note": "private framework, owner Social; from SDK matrix social.json Built 2026-10-17: Token refresh and bearer signing for OAuth 2 in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests).",
    "rea": [],
    "method": "assessed"
   },

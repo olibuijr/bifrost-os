@@ -33,7 +33,7 @@
       "apple": "IOBluetoothDevicePair, IOBluetoothDevicePairDelegate",
       "bifrost": "springboard/sdk/src/bluetooth_service.rs (pair, Bluetooth::busy); springboard/sdk/src/bluetooth_picker.rs (BluetoothPicker)",
       "status": "partial",
-      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps."
+      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps. Built 2026-10-17: the input the pairing step needs is checked and shaped as a PIN (1 to 16 letters or digits), a six-digit passkey, a numeric comparison code, or a confirmation (bluetooth_pairing.rs: validate_pin, validate_passkey, numeric_code, answer_for); tests bluetooth_pairing::tests. The shell does not ask the user yet."
     },
     {
       "feature": "Connect, disconnect and forget a device",
@@ -118,7 +118,7 @@
     "No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).",
     "No hands-free (call control) profile.",
     "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
-    "Pairing has no user-entered PIN or passkey flow; only Just Works and a fixed \"0000\" legacy PIN are handled.",
+    "Pairing: the shell does not ask the user for a PIN or passkey, so the input checks in bluetooth_pairing are not yet used by the radio path.",
     "No HID device counts or ignore controls exposed to apps."
   ]
 }

@@ -61,7 +61,7 @@
    "apple": "SLRequest.account (signed-in account used to authenticate)",
    "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/accounts.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (social.rs, accounts.rs); not wired into the shell or apps, not tested on Midget. No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo."
+   "note": "Audit 2026-10-13: the row predated this code. Pure model with host unit tests (social.rs, accounts.rs); not wired into the shell or apps, not tested on Midget. No account store and no OAuth or token signing. BifrOSt Cloud accounts live in ~/Projects/bifrost-cloud, outside this repo. Built 2026-10-17: OAuth 2 token model (springboard/sdk/src/social_oauth2.rs: from_response, needs_refresh, refresh_request, sign); tests social_oauth2::tests. Bearer and OAuth 1.0a signing are unchanged."
   },
   {
    "feature": "Receiving shared content in an extension",
@@ -81,7 +81,7 @@
  "gaps": [
   "No compose sheet in the shell that edits a draft and posts it through draft_request (SLComposeViewController equivalent).",
   "No sign-in flow or account provider: accounts can be modelled and signed, but the user cannot add one from the shell (SLRequest.account equivalent).",
-  "OAuth 2 and token refresh are not modelled; signing covers bearer tokens and OAuth 1.0a only.",
+  "OAuth 2 tokens are read, refreshed and used for bearer signing (social_oauth2); the sign-in flow that obtains the first token is not in the shell.",
   "The share services have no image property and perform(withItems:) reaches only Copy; an app or Compose Post is performed through the menu, because the shell has no message for one named target (see docs/bifrost-ui.md, 'Share sheet' gaps)."
  ]
 }
