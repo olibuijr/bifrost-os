@@ -41,6 +41,16 @@ pub struct WifiInterface {
     pub ssid: Option<String>,
     /// Its IPv4 address, or an empty string.
     pub address: String,
+    /// The interface type as the radio reports it: `managed`, `AP` (a hotspot) or `IBSS` (ad-hoc). None when unknown.
+    pub mode: Option<String>,
+    /// The channel the radio is on, when it is on one.
+    pub channel: Option<u16>,
+    /// The centre frequency of that channel in MHz.
+    pub frequency_mhz: Option<u32>,
+    /// The channel width in MHz.
+    pub width_mhz: Option<u16>,
+    /// The transmit power in dBm.
+    pub tx_power_dbm: Option<f64>,
 }
 
 /// One network from the last scan, as `CWNetwork` reports it.
@@ -161,7 +171,24 @@ fn interface_from_json(item: &Json) -> Result<WifiInterface, String> {
         other => Some(other.as_str().ok_or("wifi ssid is not text")?.to_string()),
     };
     let address = field(item, "address")?.as_str().ok_or("wifi address is not text")?.to_string();
-    Ok(WifiInterface { name, powered, connected, ssid, address })
+    // the radio detail is optional: a shell that does not send it, or a null, reads as unknown
+    let mode = match item.get("mode") {
+        Some(Json::Str(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let number = |key: &str| item.get(key).and_then(Json::number);
+    Ok(WifiInterface {
+        name,
+        powered,
+        connected,
+        ssid,
+        address,
+        mode,
+        channel: number("channel").map(|n| n as u16),
+        frequency_mhz: number("frequency_mhz").map(|n| n as u32),
+        width_mhz: number("width_mhz").map(|n| n as u16),
+        tx_power_dbm: number("tx_power_dbm"),
+    })
 }
 
 fn network_from_json(item: &Json) -> Result<WifiNetwork, String> {
@@ -215,6 +242,39 @@ mod tests {
         assert_eq!(list[0].ssid.as_deref(), Some("Den"));
         assert_eq!(list[1].ssid, None);
         assert!(!list[1].powered);
+    }
+
+    #[test]
+    fn an_interface_reads_its_radio_detail_and_treats_nulls_as_unknown() {
+        let reply = Json::Arr(vec![Json::Obj(vec![
+            ("name".into(), Json::Str("wlan0".into())),
+            ("powered".into(), Json::Bool(true)),
+            ("connected".into(), Json::Bool(true)),
+            ("ssid".into(), Json::Str("Den".into())),
+            ("address".into(), Json::Str("192.168.1.9".into())),
+            ("mode".into(), Json::Str("AP".into())),
+            ("channel".into(), Json::Num(6.0)),
+            ("frequency_mhz".into(), Json::Num(2437.0)),
+            ("width_mhz".into(), Json::Num(20.0)),
+            ("tx_power_dbm".into(), Json::Num(17.5)),
+        ])]);
+        let items = decode_interfaces(Ok(reply)).unwrap();
+        assert_eq!(items[0].mode.as_deref(), Some("AP"));
+        assert_eq!(items[0].channel, Some(6));
+        assert_eq!(items[0].frequency_mhz, Some(2437));
+        assert_eq!(items[0].width_mhz, Some(20));
+        assert_eq!(items[0].tx_power_dbm, Some(17.5));
+        let bare = Json::Arr(vec![Json::Obj(vec![
+            ("name".into(), Json::Str("wlan1".into())),
+            ("powered".into(), Json::Bool(false)),
+            ("connected".into(), Json::Bool(false)),
+            ("ssid".into(), Json::Null),
+            ("address".into(), Json::Str(String::new())),
+            ("channel".into(), Json::Null),
+        ])]);
+        let items = decode_interfaces(Ok(bare)).unwrap();
+        assert_eq!(items[0].mode, None);
+        assert_eq!(items[0].channel, None);
     }
 
     #[test]

@@ -4,7 +4,9 @@
 //!
 //! Methods (every one takes an optional `interface`, the wireless interface name; the first Wi-Fi interface is
 //! used when it is absent):
-//! - `interfaces` returns `[{name, powered, connected, ssid, address}]`, one per Wi-Fi interface.
+//! - `interfaces` returns `[{name, powered, connected, ssid, address, mode, channel, frequency_mhz, width_mhz,
+//!   tx_power_dbm}]`, one per Wi-Fi interface. The radio fields come from `iw dev <name> info` (`net::wifi_phy`) and
+//!   are null when iw does not report them.
 //! - `networks` returns the visible networks `[{ssid, bars, secure, saved}]`, as the last scan saw them.
 //! - `power` `{on}` turns the radio on or off.
 //! - `scan` starts a rescan. Results arrive in the next `networks` read.
@@ -75,6 +77,29 @@ pub fn interfaces_json(net: Option<&Snapshot>) -> Json {
         })
         .collect();
     Json::Arr(items)
+}
+
+/// Adds each interface's radio detail to its item in an interface list: `mode`, `channel`, `frequency_mhz`,
+/// `width_mhz` and `tx_power_dbm`, each null when the radio does not report it. `phy` looks an interface up by name.
+pub fn with_phy(list: Json, phy: impl Fn(&str) -> Option<crate::net::wifi_phy::Phy>) -> Json {
+    let Json::Arr(items) = list else { return list };
+    let number = |v: Option<f64>| v.map_or(Json::Null, Json::Num);
+    Json::Arr(
+        items
+            .into_iter()
+            .map(|item| {
+                let Json::Obj(mut fields) = item else { return item };
+                let name = fields.iter().find(|(k, _)| k == "name").and_then(|(_, v)| v.as_str()).map(str::to_string);
+                let radio = name.as_deref().and_then(&phy).unwrap_or_default();
+                fields.push(("mode".into(), radio.mode.map_or(Json::Null, Json::Str)));
+                fields.push(("channel".into(), number(radio.channel.map(f64::from))));
+                fields.push(("frequency_mhz".into(), number(radio.frequency_mhz.map(f64::from))));
+                fields.push(("width_mhz".into(), number(radio.width_mhz.map(f64::from))));
+                fields.push(("tx_power_dbm".into(), number(radio.tx_power_dbm)));
+                Json::Obj(fields)
+            })
+            .collect(),
+    )
 }
 
 /// The wire form of the visible networks from the last scan.
@@ -172,7 +197,7 @@ impl SystemService for WifiService {
     fn call(&mut self, shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let net = shell.info.desktop_network.as_ref();
         match method {
-            "interfaces" => Ok(interfaces_json(net)),
+            "interfaces" => Ok(with_phy(interfaces_json(net), crate::net::wifi_phy::read)),
             "networks" => Ok(networks_json(net)),
             "power" => {
                 pick_interface(net, interface_param(params)?)?;
@@ -274,6 +299,27 @@ mod tests {
         assert_eq!(items[0].get("address").and_then(Json::as_str), Some("192.168.1.9"));
         assert_eq!(bool_of(items[1].get("connected")), Some(true));
         assert!(matches!(items[1].get("ssid"), Some(Json::Null)));
+    }
+
+    #[test]
+    fn interfaces_carry_their_radio_detail_or_nulls() {
+        let phy = |name: &str| {
+            (name == "wlan0").then(|| crate::net::wifi_phy::Phy {
+                mode: Some("managed".into()),
+                channel: Some(36),
+                frequency_mhz: Some(5180),
+                width_mhz: Some(80),
+                tx_power_dbm: Some(20.0),
+            })
+        };
+        let json = with_phy(interfaces_json(Some(&snapshot())), phy);
+        let items = json.as_array().unwrap();
+        assert_eq!(items[0].get("name").and_then(Json::as_str), Some("wlan0"));
+        assert_eq!(items[0].get("channel").and_then(Json::number), Some(36.0));
+        assert_eq!(items[0].get("width_mhz").and_then(Json::number), Some(80.0));
+        assert_eq!(items[0].get("mode").and_then(Json::as_str), Some("managed"));
+        assert!(matches!(items[1].get("channel"), Some(Json::Null)));
+        assert!(matches!(items[1].get("mode"), Some(Json::Null)));
     }
 
     #[test]
