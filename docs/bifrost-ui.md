@@ -4293,3 +4293,37 @@ Until the wiring is built, the cloud accepts no location from this app, and the 
 Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
 `{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
 `202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.
+
+## Help books and the help index (`shell::helpbook`, the `helpd` counterpart)
+
+Reference: `com.apple.helpd` (daemons, `a-c.json`), status `partial`. Apple's help viewer reads help books an app
+ships in its bundle; BifrOSt has the same shape as a package.
+
+- **Format.** An app ships a `help/` directory and names it in `manifest.toml` (`help = "help"`). `aap.py pack`
+  packs that tree and refuses a missing directory or a path that is absolute or contains `..`. Each page is Markdown
+  with flat front matter (`title`, `keywords` as a comma list or `[a, b]`) between `---` lines. A heading may end in
+  `{#id}`; without it the anchor is the slugified heading. The page title is the front matter's `title`, else the
+  first heading. A page larger than 256 KiB, or a page with broken front matter, fails its whole book.
+- **Index.** `HelpIndex::rebuild(apps_dir)` reads the built-in books (Settings, from `springboard/help/settings/`,
+  `include_str!`) and every `apps/<id>/current/manifest.toml` with a `help` key. Broken books are returned as
+  problems and the others still index. `set_book` / `remove_book` replace one app's book on an update or removal.
+- **Search.** `search(query, limit)` splits on non-alphanumerics (any script), lowercases, and requires every query
+  word to match somewhere on a page; a prefix counts. Weights: title word 30 (prefix 15), keyword 20 (prefix 10),
+  heading 8, body word 1 to 4. Ties sort by app id, then page slug. Each hit names the first matching heading as its
+  anchor.
+- **Links.** `resolve("help://app/...")`: `help://app` is the first page; `help://app/<page>` a page; `<page>#<id>`
+  a page at an anchor (an unknown anchor drops to the page); `help://app/<id>` the page declaring that anchor.
+- **Menu search.** `search_menu(items, query)` takes the frontmost app's menu items (`MenuItem { menu, title,
+  enabled }`) and returns indices, best first: whole-word title 20, title prefix 10, menu name prefix 3, enabled +5.
+  Disabled items stay listed, dimmed.
+- **Books shipped.** Files (`springboard/apps/files/help`: basics, organize, info and archives), TextEdit
+  (`springboard/apps/textedit-desktop/help`: writing, formatting, find and print) and Settings (overview, appearance,
+  desktop and dock). Each describes menu items that the app's source defines.
+- **Not built yet (gap).** (a) the shell does not yet call `rebuild` at start or after an install or update; (b) the
+  Help menu (`desktop_bar.rs`, `Menu::Help`) still shows its fixed rows: the search field that calls `search_menu` for
+  the frontmost app's menus and `search` for topics is not drawn; (c) no Help viewer window exists: the planned window
+  has a sidebar table of contents from `pages_of`, back and forward, a search field, and renders bodies with
+  `shell::md::classify`; it opens from the Help menu and from `help://` links. Each needs its own round on Midget
+  before the row becomes `parity`.
+- **Tests.** `springboard/src/shell/helpbook.rs` (front matter, anchors, ranking, AND matching, link resolution,
+  menu search, built-in book, reading a book from disk). Run by the lead: `cargo test -p springboard helpbook`.
