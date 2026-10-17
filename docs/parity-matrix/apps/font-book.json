@@ -74,9 +74,9 @@
    "area": "menu",
    "apple": "File > New Smart Collection",
    "status": "partial",
-   "bifrost": "springboard/apps/fontbook-desktop/src/model.rs::Rule",
-   "note": "Preset rules (fixed, variable, static, TrueType, OpenType, name contains) created from the Font menu and tested in model.rs smart_collections_follow_their_rule; no style or language rules and no free-form rule editor sheet",
-   "wire": "Add rule-based collections (style, language, kind) to model.rs and an editor sheet"
+   "bifrost": "springboard/apps/fontbook-desktop/src/model.rs::Rule (Italic); springboard/apps/fontbook-desktop/src/main.rs::main_menu (Italic Fonts)",
+   "note": "Preset rules (fixed, variable, static, TrueType, OpenType, Italic by file name, name contains) created from the Font menu and tested in model.rs smart_collections_follow_their_rule and italic_rule_matches_italic_and_oblique_file_names; no style or language rules and no free-form rule editor sheet.",
+   "wire": "Add a language rule and a free-form rule editor sheet (needs font language data from the font tables)."
   },
   {
    "feature": "Libraries (separate font sets)",

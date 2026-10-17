@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.5 — 2026-10-17
+
+- Add the Italic Fonts smart collection (a face whose file name says italic or oblique), in the Font menu.
+
 ## 0.6.4 — 2026-10-14
 
 - Use the macOS Title 2 type token for repertoire glyph samples.
