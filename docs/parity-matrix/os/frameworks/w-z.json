@@ -220,7 +220,21 @@
    "status": "partial",
    "note": "Wallpaper selection and cover fit are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs; no SDK wallpaper API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper selection, cover fit and the day schedule are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs. No SDK wallpaper API."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperServices.framework",
@@ -241,7 +255,16 @@
    "status": "partial",
    "note": "Wallpaper changes go through the shell's wallpaper page and schedule; there is no wallpaper service process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_schedule::tests"
+    }
+   ],
+   "ready_note": "Wallpaper changes and the day/night schedule run in the shell (wallpaper_page.rs, wallpaper_schedule.rs). There is no separate wallpaper service process, by design."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperSettingsUI.framework",
@@ -397,7 +420,16 @@
    "status": "partial",
    "note": "Forecast model and parsing live in springboard/src/shell/weather/data.rs and the Weather app; no SDK weather module.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast model, parsing, units, air quality and the store live in springboard/src/shell/weather/data.rs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherDaemon.framework",
@@ -469,7 +501,16 @@
    "status": "partial",
    "note": "Forecast data types live in springboard/src/shell/weather/data.rs; no SDK API for other apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests"
+    }
+   ],
+   "ready_note": "Forecast data types and parsing in springboard/src/shell/weather/data.rs. No SDK API for other apps (see WeatherKit row)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherResources.framework",
@@ -490,7 +531,16 @@
    "status": "partial",
    "note": "Weather glyphs and icons are in springboard/src/shell/weather/glyph.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::glyph::tests"
+    }
+   ],
+   "ready_note": "Sky glyphs and weather icons are drawn in springboard/src/shell/weather/glyph.rs and tested there."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebContentAnalysis.framework",
@@ -508,8 +558,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Screen Time web content analysis with Apple-maintained allow lists; Apple account service.",
    "rea": [],
    "method": "assessed"
   },
@@ -529,8 +579,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Screen Time web content restrictions and Apple-maintained filter lists; Apple account service.",
    "rea": [],
    "method": "assessed"
   },
@@ -798,7 +848,16 @@
    "status": "partial",
    "note": "Widgets are drawn by the shell (springboard/src/shell/widgets/mod.rs); apps cannot supply widget rendering.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::widgets::tests"
+    }
+   ],
+   "ready_note": "The shell draws every desktop widget (springboard/src/shell/widgets/*.rs, mod.rs). Apps cannot supply widget rendering, which is a known limit."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManagement.framework",
@@ -819,7 +878,21 @@
    "status": "partial",
    "note": "Window placement and tiling live in the shell (springboard/src/shell/desk.rs, desk_occlusion.rs); no app-facing API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "tiling::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    }
+   ],
+   "ready_note": "Window placement, tiling into halves and quarters, snap zones and maximize live in bifrost-wm (wm/src/tiling.rs, wm/src/wm.rs). The shell desk code (springboard/src/shell/desk.rs) draws the desktop windows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManager.framework",
@@ -840,7 +913,21 @@
    "status": "partial",
    "note": "Window management is in the shell (springboard/src/shell/desk.rs); apps get their own toplevels, and there is no app-facing window manager API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "tiling::tests"
+    }
+   ],
+   "ready_note": "The window server bifrost-wm (springboard/wm) owns placement, stacking, focus, hit testing, move and resize grabs, maximize and tiling (wm/src/wm.rs, tiling.rs). Apps get their own toplevels; there is no app-facing window manager API."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WirelessCoexManager.framework",
@@ -858,8 +945,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple Wi-Fi and Bluetooth coexistence power tables for Apple chips; Apple hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -900,8 +987,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device proximity framework for Apple devices (Continuity); Apple hardware and services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1215,8 +1302,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple internal XGBoost model runtime for Apple ML models; Apple ML, not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -1236,8 +1323,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple JIT for Xcode and playground tooling; Apple developer tooling, no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -1257,8 +1344,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple JIT executor for Xcode and playground tooling; Apple developer tooling.",
    "rea": [],
    "method": "assessed"
   },
