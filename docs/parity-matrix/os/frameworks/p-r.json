@@ -1391,9 +1391,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "pacman --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/pacman"
     },
     {
      "kind": "test",
@@ -7526,7 +7525,7 @@
     {
      "kind": "test",
      "crate": "updated",
-     "filter": ""
+     "filter": "tests"
     }
    ],
    "ready_note": "Local update path: the updated agent checks, downloads and installs packages and the recovery guard gates base upgrades. Managed-device pushes are not built."

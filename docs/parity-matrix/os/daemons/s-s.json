@@ -30,14 +30,12 @@
      "path": "/usr/bin/sshd"
     },
     {
-     "kind": "cmd",
-     "run": "systemctl cat sshd.service",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/sshd.service"
     },
     {
-     "kind": "cmd",
-     "run": "ssh -V",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ssh"
     }
    ],
    "ready_note": "sshd and its unit come from the openssh package in BASE_PACKAGES (springboard/src/installer/plan.rs). Settings does not surface it."

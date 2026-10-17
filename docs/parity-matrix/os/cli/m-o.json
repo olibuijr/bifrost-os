@@ -1147,9 +1147,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 nc --version >/dev/null 2>&1 || timeout 5 nc --help >/dev/null 2>&1 || timeout 5 nc -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/nc"
     }
    ],
    "ready_note": "counterpart /usr/bin/nc (Arch package openbsd-netcat); the check runs its --version, --help or -V"

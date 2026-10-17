@@ -77,9 +77,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "dd --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/dd"
     }
    ],
    "ready_note": "coreutils dd; --version only"

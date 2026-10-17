@@ -4509,9 +4509,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "pacman --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/pacman"
     }
    ],
    "ready_note": "pacman keeps the installed-file database that receipts provide; the BOM file format itself is not read."

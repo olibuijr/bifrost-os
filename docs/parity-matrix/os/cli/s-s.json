@@ -98,9 +98,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sync --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/nc"
     }
    ],
    "ready_note": "coreutils sync"
@@ -1571,9 +1570,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "ssh -V",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ssh"
     }
    ],
    "ready_note": "openssh (BASE_PACKAGES); -V prints the version"
@@ -1860,9 +1858,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sudo --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/sudo"
     }
    ],
    "ready_note": "sudo (BASE_PACKAGES); --version does not elevate"

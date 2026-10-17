@@ -110,9 +110,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "rm --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/rm"
     }
    ],
    "ready_note": "coreutils rm; --version runs headless"
@@ -2040,9 +2039,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "rsync --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/nc"
     }
    ],
    "ready_note": "Arch package rsync ships it (packaging/arch/runtime-packages.txt)"

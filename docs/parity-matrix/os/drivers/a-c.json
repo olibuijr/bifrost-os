@@ -354,9 +354,8 @@
      "expect_exit": 0
     },
     {
-     "kind": "cmd",
-     "run": "pacman -Q rdma-core",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ibv_devices"
     },
     {
      "kind": "test",

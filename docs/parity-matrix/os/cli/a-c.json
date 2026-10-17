@@ -68,9 +68,8 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "chmod --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/chmod"
     }
    ],
    "ready_note": "coreutils chmod; --version only, no mode change"

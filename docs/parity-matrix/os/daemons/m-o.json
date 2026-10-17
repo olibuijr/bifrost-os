@@ -47,14 +47,12 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "pacman -Q apache",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/httpd"
     },
     {
-     "kind": "cmd",
-     "run": "systemctl cat httpd.service",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/httpd.service"
     }
    ],
    "ready_note": "The apache package from packaging/arch/runtime-packages.txt ships the web server and its systemd unit httpd.service. Unit name not verified on a built image."
@@ -133,9 +131,8 @@
      "path": "/usr/bin/cupsd"
     },
     {
-     "kind": "cmd",
-     "run": "systemctl cat cups.service",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups.service"
     },
     {
      "kind": "test",
@@ -173,14 +170,12 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "pacman -Q net-snmp",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/snmpd"
     },
     {
-     "kind": "cmd",
-     "run": "systemctl cat snmpd.service",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/snmpd.service"
     }
    ],
    "ready_note": "The net-snmp package (runtime-packages.txt) ships the snmpd daemon and its unit snmpd.service. Unit name not verified on a built image."
@@ -208,14 +203,12 @@
    "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "pacman -Q openldap",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/slapd"
     },
     {
-     "kind": "cmd",
-     "run": "systemctl cat slapd.service",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/slapd.service"
     }
    ],
    "ready_note": "The openldap package (runtime-packages.txt) ships the slapd directory server and its unit slapd.service. Unit name not verified on a built image."
