@@ -461,7 +461,8 @@ impl Desk {
 
     /// Whether the windows of `app` float.
     pub(super) fn is_floating(&self, app: AppId) -> bool {
-        self.floating.contains(&app)
+        // a window floats with its app (the window level is per app, `ToShell::WindowLevel`)
+        self.floating.contains(&app.parent())
     }
 
     /// The index a window of `app` takes on the top of its band: after every window at its level or below, so a normal
@@ -576,7 +577,7 @@ impl Desk {
         {
             freed |= self.body_cache.remove(&app).is_some();
             let before = self.window_cache.len();
-            self.window_cache.retain(|id, _| apps().get((*id as usize).wrapping_sub(1)).map_or(false, |a| a.id != app));
+            self.window_cache.retain(|id, _| frame_app(*id).is_some_and(|a| a != app));
             freed |= self.window_cache.len() != before;
         }
         let _ = app;
@@ -671,7 +672,28 @@ pub(super) enum FxCall { Open, Minimize, Restore, Zoom, Close }
 
 /// The id the frames and the presenter use for the window of `app` (its index in `apps()` plus one).
 fn win_id(app: AppId) -> Option<u32> {
-    apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1)
+    match app {
+        AppId::ExternalWindow(slot, id) => Some(WINDOW_ID_FLAG | ((slot as u32) << 16) | id as u32),
+        _ => apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1),
+    }
+}
+
+/// Set in the window-server id of an extra window: `WINDOW_ID_FLAG | slot << 16 | window id`. The catalogue ids (1 to
+/// `apps().len()`) never reach it.
+const WINDOW_ID_FLAG: u32 = 0x0100_0000;
+
+/// The desk window a window-server id names (the reverse of `win_id`).
+pub(super) fn frame_app(id: u32) -> Option<AppId> {
+    if id & WINDOW_ID_FLAG != 0 {
+        return Some(AppId::ExternalWindow(((id >> 16) & 0xff) as u8, (id & 0xffff) as u16));
+    }
+    apps().get((id as usize).checked_sub(1)?).map(|a| a.id)
+}
+
+/// The title a frame carries to the window server: the app's name (an extra window shows its parent's name here).
+fn frame_title(id: u32) -> &'static str {
+    let Some(app) = frame_app(id) else { return "" };
+    apps().iter().find(|a| a.id == app.parent()).map_or("", |a| a.name)
 }
 
 impl Shell {
@@ -684,9 +706,9 @@ impl Shell {
         if !desk.fx.is_empty() {return false;}
         let mut frames=Vec::new();
         for w in desk.wins.iter().filter(|w|!w.minimized) {
-            let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
+            let Some(id)=win_id(w.app) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -772,7 +794,7 @@ impl Shell {
             let mut frames = std::mem::take(&mut d.frames);
             // a floating window's frame goes last, so the window server stacks it above the normal ones
             for f in frames.iter_mut() {
-                f.floating = apps().get((f.id as usize).wrapping_sub(1)).is_some_and(|a| d.is_floating(a.id));
+                f.floating = frame_app(f.id).is_some_and(|a| d.is_floating(a));
             }
             frames.sort_by_key(|f| f.floating);
             // Lock/overlays destroy the backend's windows; rebuilding must send
@@ -1067,7 +1089,7 @@ impl Shell {
             FxCall::Zoom => window_fx::Effect::Zoom,
             FxCall::Close => window_fx::Effect::Close,
         };
-        let behavior = match app {
+        let behavior = match app.parent() {
             AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(Default::default, |a| a.manifest.animation_behavior()),
             _ => window_fx::AnimationBehavior::Default,
         };
@@ -1741,9 +1763,8 @@ impl Shell {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
-            // an extra window has no window-server id yet: it is drawn by the software path below (its frame blitted)
-            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && win_id(w.app).is_some() {
-                let id = apps().iter().position(|a| a.id == w.app).unwrap() as u32 + 1;
+            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+                let id = win_id(w.app).unwrap_or(0);
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
                 let mut cached = self.desk.as_mut().unwrap().window_cache.remove(&id);
@@ -1782,7 +1803,7 @@ impl Shell {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
                     // dropped so that it repaints in full once it is uncovered
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
-                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                        id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
@@ -1791,7 +1812,7 @@ impl Shell {
                 }
                 if unchanged && quiet {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
-                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                        id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
@@ -1846,7 +1867,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
                         continue;
                     }
                 }
@@ -1875,7 +1896,7 @@ impl Shell {
                 let desk = self.desk.as_mut().unwrap();
                 desk.window_buf = image.px;
                 desk.frames.push(crate::bare::wayland::WindowFrame {
-                    id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                    id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
                     drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false,
                 });
