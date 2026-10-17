@@ -1006,6 +1006,7 @@ pub mod media_changes;
 pub mod media_kind;
 pub mod media_group;
 pub mod media_attributes;
+pub mod smart_group;
 pub mod channel_layout;
 pub mod default_device;
 pub mod volume_control;
