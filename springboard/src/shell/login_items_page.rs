@@ -73,13 +73,17 @@ pub struct LoginExtensions {
     pub background: Vec<BackgroundAgent>,
     /// app ids whose background agent is turned off
     pub background_off: Vec<String>,
+    /// apps that declare background tasks (`[background] tasks`), sorted by app name
+    pub refresh: Vec<BackgroundAgent>,
+    /// app ids whose Background App Refresh the user turned off (`background.refresh.off`)
+    pub refresh_off: Vec<String>,
     /// sorted by app name, then by kind (install order is kept within an app)
     pub extensions: Vec<Extension>,
 }
 
 /// The empty list, for pages that show no extensions (a `const` so a page model can borrow it).
 #[cfg_attr(not(test), allow(dead_code))] // the empty set for tests and previews (a static: a const with Vecs cannot be borrowed for 'static)
-pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), extensions: Vec::new() };
+pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), refresh: Vec::new(), refresh_off: Vec::new(), extensions: Vec::new() };
 
 /// The tables of one manifest that this page reads.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -144,12 +148,16 @@ where
         if tables.background {
             out.background.push(BackgroundAgent { app_id: id.to_string(), app_name: name.to_string() });
         }
+        if !super::services::background::parse_tasks(text).is_empty() {
+            out.refresh.push(BackgroundAgent { app_id: id.to_string(), app_name: name.to_string() });
+        }
         for (kind, label) in tables.extensions {
             let label = if label.is_empty() { kind.label().to_string() } else { label };
             out.extensions.push(Extension { app_id: id.to_string(), app_name: name.to_string(), kind, name: label });
         }
     }
     out.background.sort_by_key(|b| b.app_name.to_lowercase());
+    out.refresh.sort_by_key(|b| b.app_name.to_lowercase());
     out.extensions.sort_by_key(|e| e.app_name.to_lowercase());
     out
 }
@@ -214,6 +222,16 @@ pub fn background_group(ext: &LoginExtensions) -> Option<Group> {
     }
     let rows = ext.background.iter().map(|b| Item::new(b.app_name.as_str()).switch(!ext.background_off.contains(&b.app_id), Action::BackgroundAgentToggle(b.app_id.clone()))).collect();
     Some(Group::new(rows).header("ALLOW IN THE BACKGROUND").footer("Apps with a background agent may run when no window is open. Turn one off to stop its agent until you turn it back on."))
+}
+
+/// The per-app list under Background App Refresh: a switch per app that declares background tasks. The system-wide
+/// switch is the page's first group. None when no installed app declares a task.
+pub fn refresh_group(ext: &LoginExtensions) -> Option<Group> {
+    if ext.refresh.is_empty() {
+        return None;
+    }
+    let rows = ext.refresh.iter().map(|b| Item::new(b.app_name.as_str()).switch(!ext.refresh_off.contains(&b.app_id), Action::RefreshToggle(b.app_id.clone()))).collect();
+    Some(Group::new(rows).header("APPS").footer("Apps with background tasks may refresh their content while no window is open. Turn one off to stop its refresh."))
 }
 
 /// The EXTENSIONS groups: one group per kind that some app declares, each row the extension's name and its app.

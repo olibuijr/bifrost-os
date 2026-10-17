@@ -79,6 +79,7 @@ pub mod thumbnails;
 pub mod thumb_providers;
 pub mod disks;
 pub mod photos;
+pub mod background;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -152,6 +153,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(thumbnails::Thumbnails::default()),
         Box::new(disks::Disks::default()),
         Box::new(photos::Photos),
+        Box::new(background::BackgroundService::at(super::apphost::root().join(background::STORE_FILE))),
     ]
 }
 

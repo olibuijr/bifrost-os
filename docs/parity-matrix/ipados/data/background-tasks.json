@@ -3,30 +3,37 @@
   "doc": "https://developer.apple.com/documentation/backgroundtasks",
   "macos_since": "",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/background_tasks.rs, springboard/sdk/src/activity_schedule.rs, springboard/sdk/src/background_download.rs",
-  "summary": "The SDK has a pure model of deferred background tasks (requests, a pending queue and the rule for which may run now) and a background activity schedule with an interval and tolerance. Nothing in the shell or the SDK calls the scheduler on this branch, so no app task runs in the background. Continuous and continued tasks are missing. iPadOS 13.0 and later per the index; not tested on a tablet.",
+  "bifrost": "springboard/core/src/background_tasks.rs, springboard/sdk/src/background_tasks.rs, springboard/src/shell/services/background.rs, springboard/src/shell/login_items_page.rs (refresh_group), springboard/src/shell/pages.rs (BackgroundRefresh), springboard/sdk/src/activity_schedule.rs, springboard/sdk/src/background_download.rs",
+  "summary": "Background App Refresh runs on this branch end to end, on the host only: an app declares its task identifiers in manifest.toml ([background] tasks), submits app-refresh and processing requests through the SDK (bifrost_app::background_tasks), and the shell's background service (services/background.rs) persists the queue, starts the task when it is due and the machine allows it (network and external power when the request needs them, not in Low Power Mode, the system switch and the per-app switch on, one task per app, 8 runs a day per app), launches the app without a window (or sends the event to the running app), warns 5 s before the limit (30 s refresh, 10 min processing) and ends the app it launched when the task completes or the limit passes. Not yet verified on Midget or a tablet. The repeating activity schedule is still not connected to the shell. Continued processing, background GPU access and the development start and terminate hook are missing. iPadOS 13.0 and later per the index.",
   "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
   "features": [
     {
       "feature": "Scheduling and task requests",
       "apple": "BGTaskScheduler, BGTaskRequest",
-      "bifrost": "springboard/sdk/src/background_tasks.rs",
+      "bifrost": "springboard/core/src/background_tasks.rs (Request, Scheduler, JSON codec); springboard/sdk/src/background_tasks.rs (submit, cancel, completed); springboard/src/shell/services/background.rs (BackgroundService::submit, call)",
       "status": "partial",
-      "note": "Requests and a pending queue are modelled; no caller submits them to the shell."
+      "note": "Wired on the host: submit is refused unless the identifier is in the manifest, the queue is saved to background-tasks.txt under the shell root and reloaded at start-up, and at most 16 requests are pending per app. Not run on Midget."
     },
     {
       "feature": "Refresh and processing task types",
       "apple": "BGAppRefreshTask, BGProcessingTask",
-      "bifrost": "springboard/sdk/src/background_tasks.rs",
+      "bifrost": "springboard/src/shell/services/background.rs (limit_secs, plan_app, phase, start_app, stop_app); springboard/src/shell/apphost.rs (Manifest.background_tasks)",
       "status": "partial",
-      "note": "The rule for which request may run now is modelled; the task types are not wired to a run loop."
+      "note": "Refresh has a 30 s limit and processing a 600 s limit; a request runs when its earliest time has come and its network or power needs hold; the warning arrives at 5 s before the limit. The app gets taskStarted and taskExpiring events. The launch is hidden (no window); the app's own work is not verified without a window. Unverified on Midget."
+    },
+    {
+      "feature": "Budget, switches and Low Power Mode",
+      "apple": "Background App Refresh settings and budget",
+      "bifrost": "springboard/src/shell/services/background.rs (may_start, Budget); springboard/src/shell/pages.rs (BackgroundRefresh page); springboard/src/shell/settings.rs (RefreshToggle)",
+      "status": "partial",
+      "note": "System switch (the existing bg_refresh option), per-app switches in General > Background App Refresh (APPS group, pref background.refresh.off), 8 runs per app per UTC day, refused in Low Power Mode. The per-app switches are read into the Settings model when the page is touched, so they may show their default until then (unverified)."
     },
     {
       "feature": "Repeating or one-shot schedule",
       "apple": "Choosing background strategies",
       "bifrost": "springboard/sdk/src/activity_schedule.rs",
       "status": "partial",
-      "note": "An activity runs no sooner than its interval and at latest within a tolerance; not connected to the shell scheduler."
+      "note": "An activity runs no sooner than its interval and at latest within a tolerance. Still not connected to the shell scheduler; the app-refresh queue above is the only path that runs app work."
     },
     {
       "feature": "Background URL sessions",
@@ -58,8 +65,11 @@
     }
   ],
   "gaps": [
-    "No caller for the scheduler: the shell does not run app tasks in the background on this branch.",
+    "The repeating activity schedule (activity_schedule.rs) is not connected to the shell scheduler.",
+    "A hidden task launch skips the notification and extension hooks a Dock launch runs; an app the user opens during a task is ended when the task completes.",
+    "Apps that are running are not suspended after a task (only the apps the shell launched for it are ended).",
     "No continued processing task and no background GPU budget.",
-    "No development hook to start or stop tasks."
+    "No development hook to start or stop tasks.",
+    "Not verified on Midget or a tablet: the hidden launch, the event delivery and the Settings page."
   ]
 }

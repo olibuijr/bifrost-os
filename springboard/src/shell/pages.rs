@@ -396,6 +396,8 @@ pub enum Action {
     LoginItemMove(String),
     /// Login Items & Extensions: turn an app's background agent on or off (the switch in ALLOW IN THE BACKGROUND)
     BackgroundAgentToggle(String),
+    /// Background App Refresh: turn one app's refresh on or off (the APPS switches under General > Background App Refresh)
+    RefreshToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
     /// Users & Groups: add, promote, set a password, edit a group (see `users_page`)
@@ -995,8 +997,12 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::BackgroundRefresh => page(
             "Background App Refresh",
             false,
-            vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
-                .footer("Allow apps to refresh their content when on Wi-Fi in the background. Turning off apps may help preserve battery life.")],
+            {
+                let mut groups = vec![Group::new(vec![Item::new("Background App Refresh").switch(o.bg_refresh, Action::Toggle(Toggle::BgRefresh))])
+                    .footer("Allow apps to refresh their content in the background. Turning off apps may help preserve battery life. Refresh is paused in Low Power Mode.")];
+                groups.extend(super::login_items_page::refresh_group(m.ext));
+                groups
+            },
         ),
         PageId::Gestures => page(
             "Gestures",

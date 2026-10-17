@@ -1555,6 +1555,39 @@ or under `is.olibuijr.springboard`, keeps its message, loses the subsystem and c
 `[claimed subsystem …]`. System binaries may use any subsystem. `bifrost_core::log::may_log_as` is the rule.
 Gap: apps still write the datagram themselves, so the check is on read; Console reads the registry once at launch.
 
+## Background App Refresh (`BGTaskScheduler` parity)
+
+Apps run deferred work while no window is open. Status: wired end to end on the host, not yet verified on Midget
+(`docs/parity-matrix/ipados/data/background-tasks.json`, status `partial`).
+
+- Manifest: `[background] tasks = ["com.x.app.refresh"]` (`springboard/src/shell/apphost.rs`, `Manifest.background_tasks`;
+  parsed by `shell::services::background::parse_tasks`). Identifiers are ASCII letters, digits, `.`, `-`, `_`, at most 128
+  bytes, at most 16 per manifest. Requests for any other identifier are refused.
+- SDK (`bifrost_app::background_tasks`, `springboard/sdk/src/background_tasks.rs`): `submit(ctx, &Request)` with
+  `Request::refresh(id)` or `Request::processing(id)`, `.earliest(epoch_secs)`, `.network()`, `.external_power()`;
+  `cancel`; `completed(ctx, id)` when the task is done; `task_event(service, event, body)` reads the shell's events.
+  All of it goes over the `background` system service (`ToShell::ServiceCall`, `ServiceEvent`), so no new wire tags.
+- Model (`bifrost_core::background_tasks`, moved from the SDK so the shell can use it): `Request`, `Scheduler` (pending
+  queue, due rule for time, network and external power) and the JSON codec.
+- Shell (`springboard/src/shell/services/background.rs`): the queue is saved to `background-tasks.txt` under the shell root.
+  A run starts when a request is due and `may_start` passes: system switch (`bg_refresh`) on, the app not switched off
+  (pref `background.refresh.off`), not in Low Power Mode, no task running for the app, runs left in the budget.
+  Limits: refresh 30 s, processing 600 s, warning `taskExpiring` 5 s before the limit. The budget is 8 runs per app per
+  UTC day. Power: a machine with no battery counts as on external power, otherwise a mains or USB supply must be
+  `online`. Network: any interface other than `lo` with `operstate` up.
+- Launch: an app not running is spawned without a window (`AppHost::spawn_with`, no session restore) and gets
+  `taskStarted` `{identifier, limit}`; a running app gets the same event. When the task completes or its limit passes,
+  the shell ends the app it launched (an app the user had open is left running).
+- Settings: General > Background App Refresh has the system switch and an APPS group with a switch per app that declares
+  tasks (`login_items_page::refresh_group`, `Action::RefreshToggle`).
+- Gaps: the repeating `ActivitySchedule` is not connected; a hidden launch skips the notification and extension hooks;
+  an app the user opens during a task is ended when the task completes; the Settings per-app switch state comes from
+  the page's model, which is refreshed on touch (not verified); continued processing, background GPU access and the
+  development hook are missing.
+- Tests (run by the lead): `bifrost-core` `background_tasks` (queue, codec), `shell::services::background` (manifest
+  parsing, power and network rules, the gate order, budget and day reset, phase timing with a fake clock, one task per app,
+  low power and switches, persistence to disk and broken store lines), `bifrost_app::background_tasks` (event parsing).
+
 ## File system events (`FSEventStream`, `NSFilePresenter` gap)
 
 `bifrost_app::fswatch::WatchStream::new(paths, latency, flags)` (Apple's `FSEventStream`) watches folders recursively over inotify (new

@@ -2134,6 +2134,18 @@ impl Settings {
                 self.rebuild_visible(ui);
                 vec![]
             }
+            Action::RefreshToggle(id) => {
+                let off = &mut self.login_ext.refresh_off;
+                match off.iter().position(|a| *a == id) {
+                    Some(i) => {
+                        off.remove(i);
+                    }
+                    None => off.push(id),
+                }
+                let _ = prefs.set(super::services::background::PREF_OFF, &super::services::background::off_to_pref(&off[..]));
+                self.rebuild_visible(ui);
+                vec![]
+            }
             Action::LoginItemMove(id) => {
                 if let Some(i) = self.login_items.iter().position(|(a, _)| *a == id) {
                     if i > 0 {

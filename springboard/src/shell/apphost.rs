@@ -53,6 +53,9 @@ pub struct Manifest {
     /// `animation_behavior = "default" | "document" | "utility" | "alert" | "none"`: which window animations play.
     pub animation_behavior: String,
     pub wayland_app_id: String,
+    /// `[background] tasks = ["com.x.refresh"]`: the task identifiers the app may submit to Background App Refresh
+    /// (`shell::services::background`). A request for any other identifier is refused.
+    pub background_tasks: Vec<String>,
     /// What the app opens, `type` or `type:rank` (rank owner, default, alternate, none; default is `default`): `handles = ["public.png:owner", "public.text"]`.
     pub handles: Vec<String>,
     /// URL schemes the app opens: `schemes = ["https"]`.
@@ -171,6 +174,7 @@ impl Manifest {
             }
         }
         m.quick_actions = super::quick_actions::parse_static(text);
+        m.background_tasks = super::services::background::parse_tasks(text);
         // ids become directory names: keep them to a safe alphabet
         let safe = !m.id.is_empty() && m.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
         if super::kinds::Kind::parse(&m.kind).is_none() {
@@ -340,7 +344,7 @@ fn remember_incompatible(id: &str, exec: &Path) {
 }
 
 /// True when this exact binary was already found incompatible with the shell's SDK protocol.
-fn is_known_incompatible(id: &str, exec: &Path) -> bool {
+pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
     INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
 }
 
