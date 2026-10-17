@@ -77,6 +77,8 @@ pub struct Manifest {
     pub services: Vec<bifrost_ui::app_services::ServiceDecl>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
     pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
+    /// `[[settings_pane]]` tables: the app's panes, listed under the app in Settings (`shell::settings_panes`).
+    pub settings_panes: Vec<super::settings_panes::SettingsPane>,
     /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
     /// location request without it is refused, so no prompt shows without a reason.
     pub location_purpose: String,
@@ -200,6 +202,7 @@ impl Manifest {
         m.controls = super::app_controls::parse_controls(text);
         m.focus_intents = super::services::focus_filter::parse_declarations(text).into_iter().filter_map(|d| d.intent).collect();
         m.quick_actions = super::quick_actions::parse_static(text);
+        m.settings_panes = super::settings_panes::parse_static(text);
         m.background_tasks = super::services::background::parse_tasks(text);
         // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here
         m.scripting = bifrost_core::script::dictionary::Dictionary::parse(text);

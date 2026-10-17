@@ -1180,6 +1180,7 @@ pub mod capture_error;
 pub mod capture_picker;
 pub mod capture_shot;
 pub mod capture_session;
+pub mod capture_stream;
 pub mod photo_capture;
 pub mod control_widget;
 pub mod surface_use;
