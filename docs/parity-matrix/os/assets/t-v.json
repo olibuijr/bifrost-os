@@ -19,8 +19,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,8 +82,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -103,8 +103,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -124,8 +124,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -145,8 +145,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +166,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +187,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -208,8 +208,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +229,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -250,8 +250,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -271,8 +271,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -292,8 +292,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -313,8 +313,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +334,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +355,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +376,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -397,8 +397,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -418,8 +418,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -439,8 +439,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -460,8 +460,8 @@
    "role": "Picker thumbnail or asset catalogue of a wallpaper extension",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -481,8 +481,8 @@
    "role": "Picker thumbnail or asset catalogue of a wallpaper extension",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -502,8 +502,8 @@
    "role": "Picker thumbnail or asset catalogue of a wallpaper extension",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -673,7 +673,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Bold.ttf"
+    }
+   ],
+   "ready_note": "Liberation Serif (ttf-liberation) is metric compatible with Times New Roman; glyph shapes differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf",
@@ -694,7 +702,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Bold.ttf"
+    }
+   ],
+   "ready_note": "Liberation Serif (ttf-liberation) is metric compatible with Times New Roman; glyph shapes differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf",
@@ -715,7 +731,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Italic.ttf"
+    }
+   ],
+   "ready_note": "Liberation Serif (ttf-liberation) is metric compatible with Times New Roman; glyph shapes differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Times New Roman.ttf",
@@ -736,7 +760,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Regular.ttf"
+    }
+   ],
+   "ready_note": "Liberation Serif (ttf-liberation) is metric compatible with Times New Roman; glyph shapes differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Trattatello.ttf",
@@ -755,7 +787,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Trattatello resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -967,7 +999,15 @@
    "status": "partial",
    "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/liberation/LiberationSerif-Regular.ttf"
+    }
+   ],
+   "ready_note": "Liberation Serif (ttf-liberation) is metric compatible with Times New Roman; glyph shapes differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/TheHandSerif-semibold.otf",
@@ -986,7 +1026,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "TheHandSerif-semibold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1007,7 +1047,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "TwentiethCentury resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1028,7 +1068,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Type Embellishments One LET resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1238,7 +1278,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ToppanBunkyuGothicPr6N resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1259,7 +1299,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ToppanBunkyuMidashiGothicStdN-ExtraBold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1280,7 +1320,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ToppanBunkyuMidashiMinchoStdN-ExtraBold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1301,7 +1341,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ToppanBunkyuMinchoPr6N-Regular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1322,7 +1362,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "TsukushiAMaruGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1343,7 +1383,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "TsukushiBMaruGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1366,7 +1406,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'tracking-off' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/TrackingOn.aiff",
@@ -1387,7 +1436,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'tracking-on' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/TrackingSystemElement.aiff",
@@ -1408,7 +1466,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'tracking-system-element' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/Sounds/Tink.aiff",
@@ -1429,7 +1496,16 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   }
  ]
 }

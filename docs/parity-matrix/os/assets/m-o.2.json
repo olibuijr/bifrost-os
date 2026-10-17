@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldSouthArabian-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldTurkic-Regular.ttf",
@@ -43,7 +51,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOldTurkic-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOsage-Regular.ttf",
@@ -64,7 +80,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOsage-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOsmanya-Regular.ttf",
@@ -85,7 +109,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansOsmanya-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPahawhHmong-Regular.ttf",
@@ -106,7 +138,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPahawhHmong-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPalmyrene-Regular.ttf",
@@ -127,7 +167,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPalmyrene-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPauCinHau-Regular.ttf",
@@ -148,7 +196,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPauCinHau-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPhagsPa-Regular.ttf",
@@ -169,7 +225,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPhagsPa-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPhoenician-Regular.ttf",
@@ -190,7 +254,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPhoenician-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPsalterPahlavi-Regular.ttf",
@@ -211,7 +283,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansPsalterPahlavi-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansRejang-Regular.ttf",
@@ -232,7 +312,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansRejang-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSamaritan-Regular.ttf",
@@ -253,7 +341,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSamaritan-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSaurashtra-Regular.ttf",
@@ -274,7 +370,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSaurashtra-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSharada-Regular.ttf",
@@ -295,7 +399,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSharada-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSiddham-Regular.otf",
@@ -337,7 +449,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSoraSompeng-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSundanese-Regular.ttf",
@@ -358,7 +478,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSundanese-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSunuwar-Regular.otf",
@@ -400,7 +528,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSylotiNagri-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSyriac-Regular.ttf",
@@ -421,7 +557,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansSyriac-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTagalog-Regular.ttf",
@@ -442,7 +586,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTagalog-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTagbanwa-Regular.ttf",
@@ -463,7 +615,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTagbanwa-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiLe-Regular.ttf",
@@ -484,7 +644,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTaiLe-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiTham-Regular.ttf",
@@ -505,7 +673,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTaiTham-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiViet-Regular.ttf",
@@ -526,7 +702,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTaiViet-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTakri-Regular.ttf",
@@ -547,7 +731,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTakri-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansThaana-Regular.ttf",
@@ -568,7 +760,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThaana-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTifinagh-Regular.otf",
@@ -610,7 +810,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansTirhuta-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansUgaritic-Regular.ttf",
@@ -631,7 +839,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansUgaritic-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansVai-Regular.ttf",
@@ -652,7 +868,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansVai-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansWancho-Regular.ttf",
@@ -673,7 +897,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansWancho-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansWarangCiti-Regular.ttf",
@@ -694,7 +926,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansWarangCiti-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansYi-Regular.ttf",
@@ -715,7 +955,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansYi-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifAhom-Regular.ttf",
@@ -736,7 +984,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifAhom-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifBalinese-Regular.ttf",
@@ -757,7 +1013,15 @@
    "status": "partial",
    "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifBalinese-Regular.ttf"
+    }
+   ],
+   "ready_note": "Same-script Noto face from the noto-fonts package, the open script set BifrOSt ships for this script. Glyph shapes are Noto's, not the reference face."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifNyiakengPuachueHmong-Regular.ttf",
@@ -904,7 +1168,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Move), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn Move shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/move-top.pdf",
@@ -925,7 +1198,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::Move), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn Move shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-bottom.pdf",
@@ -1051,7 +1333,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthEastSouthWest shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthEastSouthWest-top.pdf",
@@ -1072,7 +1363,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthEastSouthWest shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthSouth-bottom.pdf",
@@ -1135,7 +1435,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthWestSouthEast shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthWestSouthEast-top.pdf",
@@ -1156,7 +1465,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "Code-drawn ResizeNorthWestSouthEast shape with both layers in bifrost-ui cursor_art. Not the original PDF art."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Mona Lisa Solid ITC TT.ttf",
@@ -1364,7 +1682,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "NanumGothic resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1385,7 +1703,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "NanumMyeongjo resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -1406,7 +1724,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "NanumScript resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2141,7 +2459,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Osaka resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2185,7 +2503,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'menu-down' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Misspelled.aiff",
@@ -2206,7 +2533,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'misspelled' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/MoreContentAvailable.aiff",
@@ -2227,7 +2563,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'more-content' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/MouseDown.aiff",
@@ -2248,7 +2593,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'mouse-down' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/MouseDrag.aiff",
@@ -2269,7 +2623,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'mouse-drag' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/MouseUp.aiff",
@@ -2290,7 +2653,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'mouse-up' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/NotFound.aiff",
@@ -2311,7 +2683,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'not-found' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/NothingTracking.aiff",
@@ -2332,7 +2713,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::earcon"
+    }
+   ],
+   "ready_note": "Synthesised earcon 'nothing-tracking' in shell::earcon, played by SoundPlayer::earcon (media::system_sound). Not a recording. Screen-reader event triggers do not call it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/MacintoshSkeletal.otf",
@@ -2351,7 +2741,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "MacintoshSkeletal resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -2374,7 +2764,16 @@
    "status": "partial",
    "note": "synthesised equivalent, not the original recording; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "BifrOSt synthesises every alert tone in shell::alert_sound from notes, not recordings. The Apple tone itself is not reproduced."
   },
   {
    "id": "path:/System/Library/Wallpapers/.thumbnails/Macintosh.heic",
@@ -2392,8 +2791,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple picker thumbnail cache (HEIC preview of a reference picture). BifrOSt builds its own previews from its packed stills (springboard/src/bin/shell.rs, wallpapers/index.ini), so this cache has no role on BifrOSt.",
    "rea": [],
    "method": "assessed"
   }

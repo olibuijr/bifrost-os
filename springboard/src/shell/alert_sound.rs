@@ -87,7 +87,11 @@ pub fn notes(index: usize) -> &'static [Note] {
 
 /// Mono i16 PCM of alert `index` at `RATE`, scaled by `volume` (0..=1).
 pub fn pcm(index: usize, volume: f32) -> Vec<i16> {
-    let notes = notes(index);
+    render(notes(index), volume)
+}
+
+/// Mono i16 PCM of an arbitrary note sequence at `RATE`, scaled by `volume` (0..=1). Shared with `earcon`.
+pub fn render(notes: &[Note], volume: f32) -> Vec<i16> {
     let end_ms = notes.iter().map(|n| n.at_ms + n.len_ms).fold(0.0f32, f32::max);
     let n = (RATE as f32 * end_ms / 1000.0).ceil() as usize;
     let gain = volume.clamp(0.0, 1.0);

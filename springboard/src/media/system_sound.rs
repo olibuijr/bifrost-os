@@ -5,6 +5,7 @@
 
 use super::audio_out::AudioOut;
 use crate::shell::alert_sound;
+use crate::shell::earcon;
 use crate::shell::kb_clicks::{self, Click};
 use crate::shell::options::ALERT_SOUNDS;
 use bifrost_audio_toolbox::system_sound::SystemSounds;
@@ -27,6 +28,11 @@ fn alert_id(index: usize) -> u32 {
     10 + index as u32
 }
 
+/// Sound id of earcon `index` (alert ids run 10 up to 10 + the alert count, so earcons start at 40).
+fn earcon_id(index: usize) -> u32 {
+    40 + index as u32
+}
+
 pub struct SoundPlayer {
     out: Box<dyn AudioOut>,
     sounds: SystemSounds,
@@ -44,6 +50,10 @@ impl SoundPlayer {
         for index in 0..ALERT_SOUNDS.len() {
             let mono: Vec<f32> = alert_sound::pcm(index, 1.0).iter().map(|&s| s as f32 / 32768.0).collect();
             sounds.register_samples(alert_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
+        }
+        for index in 0..earcon::count() {
+            let mono: Vec<f32> = earcon::pcm(index, 1.0).iter().map(|&s| s as f32 / 32768.0).collect();
+            sounds.register_samples(earcon_id(index), kb_clicks::RATE, 1, &mono).map_err(other)?;
         }
         Ok(SoundPlayer { out, sounds })
     }
@@ -65,6 +75,14 @@ impl SoundPlayer {
             return Err(io::Error::other(format!("no alert sound {index}")));
         }
         self.play(alert_id(index), gain)
+    }
+
+    /// Plays earcon `index` (an index into `shell::earcon::EARCONS`) at `gain` (0 through 1).
+    pub fn earcon(&mut self, index: usize, gain: f32) -> io::Result<()> {
+        if index >= earcon::count() {
+            return Err(io::Error::other(format!("no earcon {index}")));
+        }
+        self.play(earcon_id(index), gain)
     }
 
     /// Mixes sound `id` through the toolbox player and queues the result on the stream.
@@ -125,6 +143,15 @@ mod tests {
         // Chime is 900 ms: 43200 frames of stereo
         assert_eq!(pcm.len(), 43_200 * 2);
         assert!(pcm.iter().any(|&s| s != 0));
+    }
+
+    #[test]
+    fn an_earcon_plays_through_the_stream() {
+        let got = Arc::new(Mutex::new(Vec::new()));
+        let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
+        k.earcon(0, 1.0).unwrap();
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|&s| s != 0));
+        assert!(k.earcon(earcon::count(), 1.0).is_err());
     }
 
     #[test]
