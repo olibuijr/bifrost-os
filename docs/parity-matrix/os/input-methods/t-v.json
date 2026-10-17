@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "built on os/team-l-09-input-methods; not yet verified on Midget; standard zhuyin layout with a seed dictionary only, no full dictionary shipped",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::zhuyin"
+    }
+   ],
+   "ready_note": "covers: built on os/team-l-09-input-methods; not yet verified on Midget; standard zhuyin layout with a seed dictionary only, no full dictionary shipped"
   },
   {
    "id": "path:/System/Library/Input Methods/TYIM.app",
@@ -64,7 +73,16 @@
    "status": "partial",
    "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Tamil phonetic romanization, not the Tamil99 layout",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::indic"
+    }
+   ],
+   "ready_note": "covers: built on os/team-l-09-input-methods; not yet verified on Midget; Tamil phonetic romanization, not the Tamil99 layout"
   },
   {
    "id": "path:/System/Library/Input Methods/TrackpadIM.app",
@@ -106,7 +124,16 @@
    "status": "partial",
    "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Devanagari (Hindi) phonetic transliteration",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::indic"
+    }
+   ],
+   "ready_note": "covers: built on os/team-l-09-input-methods; not yet verified on Midget; Devanagari (Hindi) phonetic transliteration"
   },
   {
    "id": "path:/System/Library/Input Methods/VietnameseIM.app",
@@ -127,7 +154,16 @@
    "status": "partial",
    "note": "Pure-Rust Telex and VNI composers: marks, bar, tones with modern placement, tone removal, backspace replay. No Simple Telex or VIQR, no syllable validation. Host tests only; needs a Midget check and wiring in kb_input.rs.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::telex"
+    }
+   ],
+   "ready_note": "covers: Pure-Rust Telex and VNI composers: marks, bar, tones with modern placement, tone removal, backspace replay. No Simple Telex or VIQR, no syllable validation. Host tests only; needs a Midget check and wiring in kb_input.rs."
   }
  ]
 }

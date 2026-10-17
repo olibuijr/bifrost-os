@@ -81,7 +81,16 @@
    "bifrost": "springboard/src/shell/music/nowplaying.rs",
    "status": "partial",
    "note": "now playing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying"
+    }
+   ],
+   "ready_note": "covers: now playing"
   },
   {
    "id": "path:/System/Library/CoreServices/MediaRemoteUIService.app",
@@ -101,7 +110,16 @@
    "bifrost": "springboard/src/shell/services/now_playing.rs",
    "status": "partial",
    "note": "now playing service",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing"
+    }
+   ],
+   "ready_note": "covers: now playing service"
   },
   {
    "id": "path:/System/Library/CoreServices/Medical Imaging Calibrator.app",
@@ -161,7 +179,16 @@
    "bifrost": "springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "menu bar and menu extras",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar"
+    }
+   ],
+   "ready_note": "covers: menu bar and menu extras"
   },
   {
    "id": "path:/System/Library/CoreServices/MusicRecognitionMac.app",
@@ -221,7 +248,16 @@
    "bifrost": "springboard/src/shell/notify/center.rs",
    "status": "partial",
    "note": "notification centre",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::center"
+    }
+   ],
+   "ready_note": "covers: notification centre"
   },
   {
    "id": "path:/System/Library/CoreServices/NowPlayingTouchUI.app",
@@ -261,7 +297,16 @@
    "bifrost": "springboard/apps/bluetooth-exchange-desktop/src/transport.rs, springboard/core/src/obex_packet.rs",
    "status": "partial",
    "note": "OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "obex_packet"
+    }
+   ],
+   "ready_note": "covers: OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/OSDUIHelper.app",
@@ -281,7 +326,16 @@
    "bifrost": "springboard/src/shell/volume_hud.rs",
    "status": "partial",
    "note": "volume and brightness HUD",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud"
+    }
+   ],
+   "ready_note": "covers: volume and brightness HUD"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MADViewServiceExtension.appex",
@@ -641,7 +695,16 @@
    "bifrost": "springboard/src/thumbs/images.rs (OfficeProvider)",
    "status": "partial",
    "note": "Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget"
   }
  ]
 }

@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/diagnostics_page.rs",
    "status": "partial",
    "note": "diagnostics page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diagnostics_page"
+    }
+   ],
+   "ready_note": "covers: diagnostics page"
   },
   {
    "id": "path:/System/Library/CoreServices/DiscHelper.app",
@@ -78,10 +87,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "disk image mounting, the Linux base mounts images",
-   "rea": []
+   "bifrost": "springboard/src/shell/disk_image.rs",
+   "status": "partial",
+   "note": "attach and detach run through udisksctl (udisks2 added to runtime-packages); the Files app reaches them through hdiutil; not verified on the installed system",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "command -v udisksctl",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::disk_image"
+    }
+   ],
+   "ready_note": "covers: loop-device attach and udisksctl mount and unmount through privd (shell/disk_image.rs)"
   },
   {
    "id": "path:/System/Library/CoreServices/Dock.app",
@@ -101,7 +124,16 @@
    "bifrost": "springboard/src/shell/desktop_dock.rs",
    "status": "partial",
    "note": "desktop dock",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock"
+    }
+   ],
+   "ready_note": "covers: desktop dock"
   },
   {
    "id": "path:/System/Library/CoreServices/Dwell Control.app",
@@ -141,7 +173,16 @@
    "bifrost": "springboard/apps/console-desktop",
    "status": "partial",
    "note": "Console app, unified logging",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "model"
+    }
+   ],
+   "ready_note": "covers: Console app, unified logging"
   },
   {
    "id": "path:/System/Library/CoreServices/Erase Assistant.app",
@@ -261,7 +302,16 @@
    "bifrost": "springboard/apps/files",
    "status": "partial",
    "note": "Files app",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "ops"
+    }
+   ],
+   "ready_note": "covers: Files app"
   },
   {
    "id": "path:/System/Library/CoreServices/FolderActionsDispatcher.app",
@@ -441,7 +491,16 @@
    "bifrost": "springboard/apps/calendar-desktop",
    "status": "partial",
    "note": "calendar event UI",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "covers: calendar event UI"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ExclavesInferenceProvider.appex",
@@ -741,7 +800,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: sample glyphs drawn with the font (thumbs::images::FontProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: sample glyphs drawn with the font (thumbs::images::FontProvider). Needs a Midget check for parity."
   }
  ]
 }

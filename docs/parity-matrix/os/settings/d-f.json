@@ -21,7 +21,16 @@
    "bifrost": "springboard/src/shell/datetime_page.rs",
    "status": "partial",
    "note": "has: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone; missing: time server choice",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::datetime_page"
+    }
+   ],
+   "ready_note": "covers: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DateTimeIntentsExtension.appex",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1439",
    "status": "partial",
    "note": "has: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide; missing: Stage Manager and minimise-effect choices",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettingsIntents.appex",
@@ -101,7 +119,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1663",
    "status": "partial",
    "note": "has: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock; missing: arrangement and mirroring of several displays (one output only; set_rotation and mirror fail in services/display_services.rs), colour profile; Resolution is not re-applied at boot",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysSettingsIntentsExtension.appex",
@@ -181,7 +208,16 @@
    "bifrost": "springboard/src/shell/focus.rs",
    "status": "partial",
    "note": "has: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model; missing: per-mode allowed apps, people and schedule UI",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus"
+    }
+   ],
+   "ready_note": "covers: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FollowUpSettingsExtension.appex",
@@ -221,7 +257,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1075",
    "status": "partial",
    "note": "has: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time; missing: time server choice",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::datetime_page"
+    }
+   ],
+   "ready_note": "covers: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time"
   },
   {
    "id": "path:/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane",
@@ -241,7 +286,16 @@
    "bifrost": "springboard/src/shell/screensaver.rs",
    "status": "partial",
    "note": "has: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After; missing: desktop screen effects beyond the saver",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screensaver"
+    }
+   ],
+   "ready_note": "covers: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After"
   },
   {
    "id": "path:/System/Library/PreferencePanes/DigiHubDiscs.prefPane",
@@ -281,7 +335,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1663",
    "status": "partial",
    "note": "has: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness; missing: arrangement and mirroring of several displays, colour profile",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Dock.prefPane",
@@ -301,7 +364,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1247",
    "status": "partial",
    "note": "has: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position; missing: minimise effect and tile badge switches",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_dock"
+    }
+   ],
+   "ready_note": "covers: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position"
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaver.prefPane",
@@ -321,7 +393,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1240",
    "status": "partial",
    "note": "has: Energy page (pages.rs:1240): put the computer to sleep when the display is off; missing: sleep schedule and power adapter versus battery split",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Energy page (pages.rs:1240): put the computer to sleep when the display is off"
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaverPref.prefPane",
@@ -341,7 +422,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1240",
    "status": "partial",
    "note": "has: Energy page (pages.rs:1240): display-off sleep; missing: the battery and adapter split",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Energy page (pages.rs:1240): display-off sleep"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Expose.prefPane",
@@ -361,7 +451,16 @@
    "bifrost": "springboard/src/shell/overview.rs",
    "status": "partial",
    "note": "has: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs; missing: Mission Control shortcut listing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::overview"
+    }
+   ],
+   "ready_note": "covers: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Extensions.prefPane",

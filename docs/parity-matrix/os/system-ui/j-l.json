@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/keyboard.rs",
    "status": "partial",
    "note": "keyboard access",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::keyboard"
+    }
+   ],
+   "ready_note": "covers: keyboard access"
   },
   {
    "id": "path:/System/Library/CoreServices/KeyboardSetupAssistant.app",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "keyboard layouts",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: keyboard layouts"
   },
   {
    "id": "path:/System/Library/CoreServices/Keychain Circle Notification.app",
@@ -141,7 +159,16 @@
    "bifrost": "springboard/src/shell/login.rs",
    "status": "partial",
    "note": "login and lock",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login"
+    }
+   ],
+   "ready_note": "covers: login and lock"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LegacyPluginEnablement.appex",
@@ -181,7 +208,16 @@
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "Language & Region page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Language & Region page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreen.appex",
@@ -201,7 +237,16 @@
    "bifrost": "springboard/src/shell/login.rs",
    "status": "partial",
    "note": "lock screen",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login"
+    }
+   ],
+   "ready_note": "covers: lock screen"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreenIntentsExtension.appex",

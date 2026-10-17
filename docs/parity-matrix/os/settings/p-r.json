@@ -81,7 +81,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1253",
    "status": "partial",
    "note": "has: Energy page (pages.rs:1240) and Battery page (pages.rs:1253): power mode, low power, battery percentage; missing: power adapter versus battery split",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Energy page (pages.rs:1240) and Battery page (pages.rs:1253): power mode, low power, battery percentage"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PrefPaneSearchIntent.appex",
@@ -121,7 +130,16 @@
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
    "note": "has: Print & Scan page (print_scan_page.rs:114): printers, default printer, add by address, scanners; missing: printer options and supplies",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::print_scan_page"
+    }
+   ],
+   "ready_note": "covers: Print & Scan page (print_scan_page.rs:114): printers, default printer, add by address, scanners"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ProfilesSettingsExt.appex",
@@ -181,7 +199,16 @@
    "bifrost": "springboard/src/shell/passwords_page.rs",
    "status": "partial",
    "note": "has: passwords page (passwords_page.rs:46): list and detail; missing: import and export",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::passwords_page"
+    }
+   ],
+   "ready_note": "covers: passwords page (passwords_page.rs:46): list and detail"
   },
   {
    "id": "path:/System/Library/PreferencePanes/PrintAndFax.prefPane",
@@ -199,8 +226,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
-   "status": "partial",
-   "note": "has: Print & Scan page (print_scan_page.rs:114); missing: fax",
+   "status": "n/a",
+   "note": "no fax modem or fax service on the target hardware; CUPS fax backends are not shipped",
    "rea": []
   },
   {
@@ -221,7 +248,16 @@
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
    "note": "has: Print & Scan page (print_scan_page.rs:114): printers from the local scheduler, default printer, add by address, scanners listed; missing: printer options and supplies, sharing a printer",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::print_scan_page"
+    }
+   ],
+   "ready_note": "covers: Print & Scan page (print_scan_page.rs:114): printers from the local scheduler, default printer, add by address, scanners listed"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Profiles.prefPane",
