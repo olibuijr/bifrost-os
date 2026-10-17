@@ -681,6 +681,10 @@ impl Shell {
             self.compose_type(out);
             return vec![];
         }
+        // the character viewer takes the typing for its search, unless a Search field or the assistant panel is open
+        if self.char_viewer.is_some() && !self.quicksearch.is_shown() && !self.assistant.is_shown() {
+            return self.char_viewer_key(out);
+        }
         // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
         if self.screen == Screen::Lock {
             self.login_ensure(t);
