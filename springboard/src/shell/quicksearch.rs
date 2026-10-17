@@ -19,7 +19,9 @@ use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, LABEL, LABEL_2, MAC
 use super::{fuzzy, glyphs, settings, AppId, Effect, Event, Screen, Shell, apps};
 use crate::gfx::{rgba, scale, Image, Surface};
 use bifrost_ui::{search_rank, uttype};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const CARD_W_PT: f32 = 556.0;
 const CARD_TOP_PT: f32 = 41.0;
@@ -180,6 +182,8 @@ pub enum Hit {
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+    /// a calendar event: opens the Calendar app
+    Event { title: String },
 }
 
 /// The label of an indexed result: its title, then its content type when it has one ("Q1 report · PDF document").
@@ -291,52 +295,253 @@ fn fixed() -> &'static Fixed {
     })
 }
 
+/// Deildu titles, contacts, files and calendar events as a query searches them, each with its folded form (`fuzzy::fold`,
+/// or the folded fields for a contact), kept by the caller between keystrokes.
+struct Corpus<'a> {
+    deildu: &'a [String],
+    deildu_folded: &'a [String],
+    contacts: &'a [super::contactstore::Contact],
+    contacts_folded: &'a [[String; 3]],
+    files: &'a [crate::files::fs::Entry],
+    files_folded: &'a [String],
+    events: &'a [super::calendar::store::CalendarEvent],
+}
+
+/// The usage key of an app: its opens are counted under it (see `QuickSearch::note_open`).
+fn app_usage_key(app: AppId) -> String {
+    format!("app:{}", app_key(app))
+}
+
+/// The usage key of a Settings page.
+fn settings_usage_key(page: &str) -> String {
+    format!("settings:{page}")
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// How long a query waits for its sources before the panel shows what has come in. The rest streams in afterwards.
+const RUN_GRACE: std::time::Duration = std::time::Duration::from_millis(12);
+/// The longest a query waits for its slowest source before it goes on without it.
+const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
+/// The wait of a query merged at once (`results`, used by the look-up popover and by tests).
+const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// One section of results as a search source: its rows (the item the ranker sees, and the folded text the fuzzy matcher
+/// tests). It owns its rows, so a query can run it on its own thread. The hit a row opens is kept by `build_tables`.
+struct Table {
+    name: &'static str,
+    rows: Vec<(search_rank::Item, String)>,
+}
+
+impl search_rank::Source for Table {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn search(&self, query: &str) -> Vec<search_rank::Item> {
+        let m = fuzzy::Matcher::new(query);
+        self.rows.iter().filter(|(_, folded)| m.rank_folded(folded).is_some()).map(|(item, _)| item.clone()).collect()
+    }
+}
+
+/// One row of a section: its item, and the hit it opens (kept under the item's id).
+fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: String, kind: search_rank::Kind, hit: Hit, folded: String) -> (search_rank::Item, String) {
+    hits.insert(key.clone(), hit);
+    (search_rank::Item { id: key, title: title.to_string(), text, kind, modified: 0 }, folded)
+}
+
+/// The sections of a query in display order (apps, Settings, clock, Deildu, contacts, shortcuts, files, calendar), and
+/// the hit each item id opens.
+fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
+    let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
+    let fx = fixed();
+    let apps_rows = apps().iter().map(|a| table_row(&mut hits, app_usage_key(a.id), a.name, String::new(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))).collect();
+    let settings_rows = settings::PAGES
+        .iter()
+        .map(|&page| {
+            // the keyword aliases ("brightness", "dark mode") are part of the page's text
+            let aliases: Vec<&str> = fx.aliases.iter().filter(|(h, _)| *h == Hit::Settings(page)).map(|(_, f)| f.as_str()).collect();
+            let text = aliases.join(" ");
+            let folded = format!("{} {}", fuzzy::fold(page), text);
+            table_row(&mut hits, settings_usage_key(page), page, text, search_rank::Kind::Settings, Hit::Settings(page), folded)
+        })
+        .collect();
+    let city_rows = CITIES.iter().map(|city| table_row(&mut hits, format!("city:{}", city.name), city.name, String::new(), search_rank::Kind::Other, Hit::City(city.name), fuzzy::fold(city.name))).collect();
+    let deildu_rows = c.deildu.iter().zip(c.deildu_folded).map(|(title, f)| table_row(&mut hits, format!("deildu:{title}"), title, String::new(), search_rank::Kind::Other, Hit::Deildu(title.clone()), f.clone())).collect();
+    let contact_rows = c
+        .contacts
+        .iter()
+        .zip(c.contacts_folded)
+        .map(|(contact, f)| {
+            let name = contact.display_name().to_string();
+            let text = format!("{} {}", contact.phone, contact.email);
+            let hit = Hit::Contact { id: contact.id, name: name.clone() };
+            table_row(&mut hits, format!("contact:{}", contact.id), &name, text, search_rank::Kind::Contact, hit, f.join(" "))
+        })
+        .collect();
+    let shortcut_rows = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
+    let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
+    let event_rows = c
+        .events
+        .iter()
+        .map(|e| {
+            let text = format!("{} {}", e.location, e.notes);
+            let folded = fuzzy::fold(&format!("{} {}", e.title, e.location));
+            table_row(&mut hits, format!("event:{}", e.id), &e.title, text, search_rank::Kind::Other, Hit::Event { title: e.title.clone() }, folded)
+        })
+        .collect();
+    let tables = vec![
+        Table { name: "Applications", rows: apps_rows },
+        Table { name: "Settings", rows: settings_rows },
+        Table { name: "Clock", rows: city_rows },
+        Table { name: "Deildu", rows: deildu_rows },
+        Table { name: "Contacts", rows: contact_rows },
+        Table { name: "Shortcuts", rows: shortcut_rows },
+        Table { name: "Files", rows: file_rows },
+        Table { name: "Calendar", rows: event_rows },
+    ];
+    (tables, hits)
+}
+
+/// The tables as the sources a query runs on.
+fn sources_of(tables: Vec<Table>) -> Vec<Arc<dyn search_rank::Source>> {
+    tables.into_iter().map(|t| Arc::new(t) as Arc<dyn search_rank::Source>).collect()
+}
+
+/// The calculator answer for the query, as its group.
+fn calculator_group(query: &str) -> Option<Group> {
+    quicksearch_math::answer(query).map(|a| Group { title: "Calculator", hits: vec![Hit::Answer(a)] })
+}
+
+/// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it).
+/// `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
+fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top: Option<Hit>) -> (Option<Group>, Vec<Group>, Vec<Group>) {
+    let top_group = top.clone().map(|h| Group { title: "Top Hit", hits: vec![h] });
+    let mut sections = vec![];
+    let mut files = vec![];
+    for section in &merged.sections {
+        let rows: Vec<Hit> = section.hits.iter().filter_map(|r| hits.get(&r.item.id).cloned()).filter(|h| top.as_ref() != Some(h)).collect();
+        if rows.is_empty() {
+            continue;
+        }
+        if section.source == "Files" {
+            let show = match rows.first() {
+                Some(Hit::File { path, name }) => Some(Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }] }),
+                _ => None,
+            };
+            files.push(Group { title: "Files", hits: rows });
+            files.extend(show);
+        } else {
+            sections.push(Group { title: section.source, hits: rows });
+        }
+    }
+    (top_group, sections, files)
+}
+
+/// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
+/// "Search in Apps" action last.
+fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
+    let mut groups: Vec<Group> = calc.into_iter().chain(top).collect();
+    groups.extend(sections);
+    groups.extend(documents);
+    groups.extend(files);
+    groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
+    groups
+}
+
 /// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
-/// both kept by the caller between keystrokes.
+/// both kept by the caller between keystrokes. The sources are merged at once here; the Search panel streams them.
 fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact], contacts_folded: &[[String; 3]]) -> Vec<Group> {
     let query = query.trim();
     if query.is_empty() {
         return vec![];
     }
-    let m = fuzzy::Matcher::new(query);
-    let fx = fixed();
-    let rank_all = |items: &[(Hit, String)]| fuzzy::sorted_folded(&m, items.iter().map(|(h, f)| (h.clone(), f.as_str())));
-    let app_items: Vec<(Hit, String)> = apps().iter().map(|a| (Hit::App(a.id), fuzzy::fold(a.name))).collect();
-    let deildu_items: Vec<(Hit, &str)> = deildu.iter().zip(deildu_folded).map(|(t, f)| (Hit::Deildu(t.clone()), f.as_str())).collect();
-    let titles = ["Applications", "Settings", "Clock", "Deildu"];
-    let mut ranked: Vec<Vec<(fuzzy::Rank, Hit)>> =
-        vec![rank_all(&app_items), rank_all(&fx.settings), rank_all(&fx.cities), fuzzy::sorted_folded(&m, deildu_items)];
-    // keyword aliases ("brightness", "dark mode") lead to their Settings page
-    let mut seen: Vec<Hit> = vec![];
-    ranked[1].retain(|(_, h)| !seen.contains(h) && { seen.push(h.clone()); true });
-    for (rank, hit) in rank_all(&fx.aliases) {
-        if !seen.contains(&hit) {
-            seen.push(hit.clone());
-            ranked[1].push((rank, hit));
+    let corpus = Corpus { deildu, deildu_folded, contacts, contacts_folded, files: &[], files_folded: &[], events: &[] };
+    let (tables, hits) = build_tables(&corpus);
+    let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
+    run.wait();
+    let merged = run.merge(PER_GROUP, &search_rank::Usage::default(), now_secs(), &search_rank::NoSemantic);
+    let top = merged.top.as_ref().and_then(|t| hits.get(&t.item.id).cloned());
+    let (top, sections, files) = split_merged(&merged, &hits, top);
+    compose(query, calculator_group(query), top, sections, vec![], files)
+}
+
+impl QuickSearch {
+    /// Starts `query` on every source. Waits a moment for the quick ones, so the first frame usually has them; the
+    /// rest come in through `run_groups` as they answer.
+    fn start_run(&mut self, query: &str) {
+        let corpus = Corpus {
+            deildu: &self.deildu_titles,
+            deildu_folded: &self.deildu_folded,
+            contacts: &self.contacts,
+            contacts_folded: &self.contacts_folded,
+            files: &self.files,
+            files_folded: &self.files_folded,
+            events: &self.events,
+        };
+        let (tables, hits) = build_tables(&corpus);
+        let mut run = search_rank::Query::start(query, &sources_of(tables), RUN_DEADLINE);
+        run.wait_for(RUN_GRACE);
+        self.run = Some(run);
+        self.run_hits = hits;
+        self.run_query = query.to_string();
+        self.frozen_top = None;
+        self.shown.clear();
+    }
+
+    /// Takes the answers that have arrived and merges them into (Top Hit, sections, files). The top hit is frozen the
+    /// first time one is shown for the query, so a late source cannot move the row the person is looking at.
+    fn run_groups(&mut self) -> (Option<Group>, Vec<Group>, Vec<Group>) {
+        let Some(run) = self.run.as_mut() else { return (None, vec![], vec![]) };
+        run.poll();
+        let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
+        let empty = search_rank::Usage::default();
+        let usage = guard.as_ref().unwrap_or(&empty);
+        let merged = run.merge(PER_GROUP, usage, now_secs(), &search_rank::NoSemantic);
+        drop(guard);
+        if self.frozen_top.is_none() {
+            let hits = &self.run_hits;
+            self.frozen_top = merged.top.as_ref().and_then(|t| hits.get(&t.item.id).cloned());
         }
+        split_merged(&merged, &self.run_hits, self.frozen_top.clone())
     }
-    let mut people: Vec<_> = contacts.iter().zip(contacts_folded).filter_map(|(contact, folded)| {
-        folded.iter().filter_map(|field| m.rank_folded(field)).min()
-            .map(|rank| (rank, Hit::Contact { id: contact.id, name: contact.display_name().into() }))
-    }).collect();
-    people.sort_by_key(|(rank, _)| *rank);
-    ranked.push(people);
-    ranked.push(rank_all(&shortcut_items()));
-    let mut groups = vec![];
-    if let Some(a) = quicksearch_math::answer(query) {
-        groups.push(Group { title: "Calculator", hits: vec![Hit::Answer(a)] });
-    }
-    if let Some(i) = ranked.iter().enumerate().filter_map(|(i, v)| v.first().map(|(r, _)| (r.kind, i, r.len))).min().map(|(_, i, _)| i) {
-        let (_, hit) = ranked[i].remove(0);
-        groups.push(Group { title: "Top Hit", hits: vec![hit] });
-    }
-    for (title, v) in titles.into_iter().chain(["Contacts", "Shortcuts"]).zip(ranked) {
-        if !v.is_empty() {
-            groups.push(Group { title, hits: v.into_iter().take(PER_GROUP).map(|(_, h)| h).collect() });
+
+    /// The result groups for the query, as they stand now. Groups already on screen keep their order, and new ones
+    /// follow them (before "Search in Apps"), so a late source adds rows below what is shown.
+    fn groups_for(&mut self, query: &str) -> Vec<Group> {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            self.run = None;
+            self.run_query.clear();
+            self.frozen_top = None;
+            self.shown.clear();
+            return vec![];
         }
+        if query != self.run_query {
+            self.start_run(&query);
+        }
+        let (top, sections, files) = self.run_groups();
+        let groups = compose(&query, calculator_group(&query), top, sections, indexed_groups(&query), files);
+        let groups = self.keep_shown_order(groups);
+        self.shown = groups.iter().map(|g| g.title).collect();
+        groups
     }
-    groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
-    groups
+
+    /// The groups already shown keep their order; new groups follow them, and "Search in Apps" stays last.
+    fn keep_shown_order(&self, mut groups: Vec<Group>) -> Vec<Group> {
+        let tail = groups.iter().position(|g| g.title == "Search in Apps").map(|i| groups.remove(i));
+        let mut out: Vec<Group> = vec![];
+        for title in &self.shown {
+            if let Some(i) = groups.iter().position(|g| g.title == *title) {
+                out.push(groups.remove(i));
+            }
+        }
+        out.extend(groups);
+        out.extend(tail);
+        out
+    }
 }
 
 /// The key an indexed result's opens are counted under.
@@ -385,21 +590,6 @@ fn indexed_groups(query: &str) -> Vec<Group> {
     vec![Group { title: "Documents", hits }]
 }
 
-/// "Files" section (names containing the query, newest first), up to three rows, then a
-/// "Show in Folder" row for the top match. `folded` holds `fuzzy::fold` of each file's name,
-/// so "bjork" finds "Björk.mp3".
-fn file_note_groups(query: &str, files: &[crate::files::fs::Entry], folded: &[String]) -> Vec<Group> {
-    let q = fuzzy::fold(query.trim());
-    if q.is_empty() {
-        return vec![];
-    }
-    let matches: Vec<&crate::files::fs::Entry> = files.iter().zip(folded).filter(|(_, f)| f.contains(&q)).map(|(e, _)| e).take(PER_GROUP).collect();
-    let Some(top) = matches.first() else { return vec![] };
-    let hits = matches.iter().map(|e| Hit::File { path: e.path.clone(), name: e.name.clone() }).collect();
-    let folder = top.path.parent().map_or_else(|| top.path.clone(), Path::to_path_buf);
-    vec![Group { title: "Files", hits }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder, name: top.name.clone() }] }]
-}
-
 /// A release title from a torrent name: dots and underscores become
 /// spaces and the quality tags are dropped.
 fn title_of(name: &str) -> String {
@@ -439,6 +629,8 @@ struct SourcesRead {
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     titles: Option<Vec<String>>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    events: Option<Vec<super::calendar::store::CalendarEvent>>,
+    calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
 }
 
 /// What a touch on the home screen turned out to be.
@@ -565,6 +757,19 @@ pub struct QuickSearch {
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
     /// where the indexed-result open counts are saved (beside quicksearch.ini); None until `load`
     usage_path: Option<PathBuf>,
+    /// the query being shown: its sources (started by `start_run`) and what they answer with
+    run: Option<search_rank::Query>,
+    /// the query `run` was started for ("" when none)
+    run_query: String,
+    /// the hit each item id of `run` opens
+    run_hits: BTreeMap<String, Hit>,
+    /// the top hit of `run_query`, kept once shown so a late source cannot replace it
+    frozen_top: Option<Hit>,
+    /// the titles of the groups on screen, in order
+    shown: Vec<&'static str>,
+    /// the calendar events, read on a worker (see `refresh_sources`)
+    events: Vec<super::calendar::store::CalendarEvent>,
+    calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
     suggestions: Image,
     chevron: Image,
     icon_colour: Vec<(&'static str, u32)>,
@@ -630,6 +835,13 @@ impl QuickSearch {
             contacts_stamp: None,
             deildu_stamp: None,
             usage_path: None,
+            run: None,
+            run_query: String::new(),
+            run_hits: BTreeMap::new(),
+            frozen_top: None,
+            shown: vec![],
+            events: vec![],
+            calendar_stamp: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
             icon_colour: vec![
@@ -663,7 +875,7 @@ impl QuickSearch {
     }
 
     /// Counts an open of an indexed result (`indexed_key`) and saves the counts beside quicksearch.ini. Local only.
-    pub fn note_indexed_open(&mut self, key: &str) {
+    pub fn note_open(&mut self, key: &str) {
         let text = match OPENS.lock() {
             Ok(mut g) => {
                 let u = g.get_or_insert_with(Default::default);
@@ -749,17 +961,20 @@ impl QuickSearch {
     /// cache can hold many torrents). Scans `root` for files on a worker thread when the list is older than
     /// `FILES_MAX_AGE` (or was scanned under another root). The list shown meanwhile is the last one, so the card
     /// opens with results; a new list fills in on a later tick.
-    pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, root: PathBuf) {
+    pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, calendar: &Path, root: PathBuf) {
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let contacts_stamp = mtime(contacts).map(|t| (contacts.to_path_buf(), t));
         let want_contacts = contacts_stamp.is_none() || contacts_stamp != self.contacts_stamp;
         let cache = deildu_dir.join("cache");
         let deildu_stamp = mtime(&cache).map(|t| (cache.clone(), t));
         let want_titles = deildu_stamp.is_none() || deildu_stamp != self.deildu_stamp;
-        if (want_contacts || want_titles) && self.sources_rx.is_none() {
+        let calendar_stamp = mtime(calendar).map(|t| (calendar.to_path_buf(), t));
+        let want_events = calendar_stamp.is_some() && calendar_stamp != self.calendar_stamp;
+        if (want_contacts || want_titles || want_events) && self.sources_rx.is_none() {
             let (tx, rx) = std::sync::mpsc::channel();
             let contacts = contacts.to_path_buf();
             let deildu_dir = deildu_dir.to_path_buf();
+            let calendar = calendar.to_path_buf();
             crate::bare::sys::spawn_named("quicksearch-sources", move || {
                 let loaded = want_contacts.then(|| super::contactstore::load_checked(&contacts).unwrap_or_default());
                 let contacts_folded: Option<Vec<[String; 3]>> = loaded.as_ref().map(|c| c.iter().map(folded_fields).collect());
@@ -769,6 +984,8 @@ impl QuickSearch {
                     contacts_stamp,
                     titles: want_titles.then(|| cached_titles(&deildu_dir)),
                     deildu_stamp,
+                    events: want_events.then(|| super::calendar::store::load(&calendar).unwrap_or_default()),
+                    calendar_stamp,
                 });
             });
             self.sources_rx = Some(rx);
@@ -796,7 +1013,11 @@ impl QuickSearch {
             }
         };
         self.sources_rx = None;
-        let changed = read.contacts.is_some() || read.titles.is_some();
+        let changed = read.contacts.is_some() || read.titles.is_some() || read.events.is_some();
+        if let Some(events) = read.events {
+            self.events = events;
+        }
+        self.calendar_stamp = read.calendar_stamp;
         if let Some(contacts) = read.contacts {
             self.contacts = contacts;
         }
@@ -913,7 +1134,12 @@ impl QuickSearch {
         let mut dirty = false;
         let files = self.take_files();
         let sources = self.take_sources();
-        if (files || sources) && self.active() && !self.field.text().is_empty() {
+        // a new file scan or contacts read changes the rows, so the query starts again on them
+        if files || sources {
+            self.run_query.clear();
+        }
+        let answered = self.run.as_mut().is_some_and(|r| r.poll());
+        if (files || sources || answered) && self.active() && !self.field.text().is_empty() {
             self.search(ui, h);
             dirty = true;
         }
@@ -947,7 +1173,7 @@ impl QuickSearch {
         if self.keyboard.animating() {
             return Some(t);
         }
-        if self.files_rx.is_some() || self.sources_rx.is_some() {
+        if self.files_rx.is_some() || self.sources_rx.is_some() || self.run.as_ref().is_some_and(|r| r.pending()) {
             return Some(t + 50.0);
         }
         self.is_shown().then(|| self.field.next_blink(t)).flatten()
@@ -1004,13 +1230,10 @@ impl QuickSearch {
     /// Rebuilds the result rows for the query, keeping what fits above the keyboard.
     fn search(&mut self, ui: &Ui, h: i32) {
         let m = self.m();
-        let mut groups = results_folded(self.field.text(), &self.deildu_titles, &self.deildu_folded, &self.contacts, &self.contacts_folded);
-        let mut extra = indexed_groups(self.field.text());
-        extra.extend(file_note_groups(self.field.text(), &self.files, &self.files_folded));
-        if !groups.is_empty() {
-            let at = groups.len() - 1;
-            groups.splice(at..at, extra);
-        }
+        let query = self.field.text().to_string();
+        let groups = self.groups_for(&query);
+        // the row the person is on stays selected, wherever the late rows put it
+        let keep = self.selected_hit();
         let mut sections = vec![];
         let mut y = self.content_top(ui) + ui.pt(m.bottom_pad);
         let bottom = if self.mac { h as f32 - ui.pt(12.0) } else { self.keyboard_top(ui, h) - ui.pt(8.0) };
@@ -1040,6 +1263,7 @@ impl QuickSearch {
                     Hit::Settings(name) | Hit::City(name) => name.to_string(),
                     Hit::Deildu(title) => title.clone(),
                     Hit::Contact { name, .. } => name.clone(),
+                    Hit::Event { title } => title.clone(),
                     Hit::Terminal(_) => "Search in Terminal".to_string(),
                     Hit::Answer(a) => format!("= {a}"),
                     Hit::File { name, .. } => name.clone(),
@@ -1056,6 +1280,7 @@ impl QuickSearch {
             }
         }
         self.sections = sections;
+        self.selected = keep.and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
         self.selected = None;
     }
 
@@ -1410,6 +1635,7 @@ impl QuickSearch {
                         Hit::Answer(_) => super::apphost::slot_of(super::apphost::CALCULATOR).map(|n| AppId::External(n as u8)),
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
+                        Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
                         Hit::Settings(_) => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
@@ -1541,7 +1767,7 @@ impl Shell {
             self.quicksearch.set_icons(&self.ui, icons);
         }
         let root = self.files_locations.first().map_or_else(|| crate::files::fs::home(), |l| l.path.clone());
-        self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, root);
+        self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, &super::services::calendar::store_path(&self.data_dir), root);
         self.quicksearch.open(&self.ui, self.h, y0, y, t, range);
     }
 
@@ -1566,8 +1792,19 @@ impl Shell {
         self.quicksearch.note_search();
         self.quicksearch.hide();
         match hit {
-            Hit::App(app) => self.open(app, t),
-            Hit::Settings(name) => return self.open_settings_page(name, t),
+            Hit::App(app) => {
+                self.quicksearch.note_open(&app_usage_key(app));
+                self.open(app, t)
+            }
+            Hit::Settings(name) => {
+                self.quicksearch.note_open(&settings_usage_key(name));
+                return self.open_settings_page(name, t);
+            }
+            Hit::Event { .. } => {
+                if let Some(n) = super::apphost::slot_of(super::services::calendar::STORE_APP) {
+                    self.open(AppId::External(n as u8), t);
+                }
+            }
             Hit::Contact { id, .. } => {
                 let _ = id;
                 if let Some(n) = super::apphost::slot_of("is.olibuijr.contacts") {
@@ -1615,7 +1852,7 @@ impl Shell {
                 }
             }
             Hit::Indexed { app_id, unique_id, domain, .. } => {
-                self.quicksearch.note_indexed_open(&indexed_key(&app_id, &unique_id));
+                self.quicksearch.note_open(&indexed_key(&app_id, &unique_id));
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
                     // the app may still be starting: the message waits in its socket until it reads it
@@ -2174,17 +2411,38 @@ mod file_actions_tests {
         Entry { kind: kind_of(name, false), name: name.into(), path: PathBuf::from(dir).join(name), is_dir: false, size: 1, mtime: 0, items: None }
     }
 
+    /// The Files and Show in Folder groups of `query` over `files`, merged the way the panel merges them.
+    fn file_groups(query: &str, files: &[crate::files::fs::Entry]) -> Vec<Group> {
+        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
+        let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files, files_folded: &folded, events: &[] };
+        let (tables, hits) = build_tables(&corpus);
+        let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
+        run.wait();
+        let merged = run.merge(PER_GROUP, &search_rank::Usage::default(), 0, &search_rank::NoSemantic);
+        split_merged(&merged, &hits, None).2
+    }
+
+    #[test]
+    fn groups_that_arrive_late_follow_the_ones_on_screen() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        q.shown = vec!["Applications", "Files"];
+        let g = |title: &'static str| Group { title, hits: vec![] };
+        let out = q.keep_shown_order(vec![g("Search in Apps"), g("Settings"), g("Applications"), g("Files")]);
+        let titles: Vec<&str> = out.iter().map(|g| g.title).collect();
+        assert_eq!(titles, vec!["Applications", "Files", "Settings", "Search in Apps"]);
+    }
+
     #[test]
     fn a_file_match_comes_with_show_in_folder_for_the_top_match() {
         let files = vec![entry("/home/me/Docs", "Q1 report.pdf"), entry("/home/me/Pics", "Beach.png")];
-        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
-        let groups = file_note_groups("report", &files, &folded);
+        let groups = file_groups("report", &files);
         assert_eq!(groups.len(), 2, "{groups:?}");
         assert_eq!(groups[0].title, "Files");
         assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into() }]);
         assert_eq!(groups[1], Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "Q1 report.pdf".into() }] });
-        assert!(file_note_groups("zzz", &files, &folded).is_empty());
-        assert!(file_note_groups("  ", &files, &folded).is_empty());
+        assert!(file_groups("zzz", &files).is_empty());
+        assert!(file_groups("  ", &files).is_empty());
     }
 
     #[test]

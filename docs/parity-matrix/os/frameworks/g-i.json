@@ -3715,7 +3715,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs (indexed_groups, indexed_key); springboard/src/shell/spotindex.rs (Found.text, Found.modified)",
    "status": "partial",
-   "note": "Partial: each app indexed item reaches the Search panel with its text, indexed time and an open-count key (app/unique id). Not done: a per-source adapter for apps, settings, contacts and files that feeds the runtime (bifrost_ui::search_rank::Source is implemented only by tests).",
+   "note": "Partial: each source of the Search panel is an adapter over its rows (springboard/src/shell/quicksearch.rs, build_tables and the Table source): apps, Settings pages, clock, Deildu titles, contacts, shortcuts, files and calendar events; indexed items reach the panel with their text, indexed time and open-count key. Not done: notes (no shell-side store), and per-app ranking inputs beyond text, time and opens.",
    "rea": [],
    "method": "assessed"
   },
@@ -3736,7 +3736,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/search_rank.rs (Bm25, rank, order, Usage, Kind, SemanticHook)",
    "status": "partial",
-   "note": "Partial: BM25 over weighted title and text fields with a coverage factor, plus title match, a kind prior for short queries (apps, settings, documents), recency of indexing, and local open counts on a log scale. The semantic term is a SemanticHook; the shell passes NoSemantic because no local text model is bundled. Not done: ranking across apps, settings, contacts and files in one list (only the Documents section is re-ranked).",
+   "note": "Partial: BM25 over weighted title and text fields with a coverage factor, plus title match, a kind prior for short queries (apps, settings, documents), recency of indexing, and local open counts on a log scale; the panel merges every source through it (springboard/ui/src/search_rank.rs, rank and Query::merge). The semantic term is a SemanticHook; the shell passes NoSemantic because no local text model is bundled.",
    "rea": [],
    "method": "assessed"
   },
@@ -3757,7 +3757,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/search_rank.rs (Source, run, Merged, Section, Hit)",
    "status": "partial",
-   "note": "Partial: run queries several sources on their own threads, waits at most a deadline, merges sections in source order with one top hit, and names late sources in missing. Not done: the Search panel does not call run yet, so the deadline and the model swap are not used on the desktop.",
+   "note": "Partial: search_rank::Query runs each source on its own thread with a deadline, and the Search panel polls it every frame while a query is pending, so late sections stream in and the top hit and row order do not move once shown (springboard/src/shell/quicksearch.rs, start_run and groups_for). Not done: notes as a source, and a swappable on-device model behind the runtime.",
    "rea": [],
    "method": "assessed"
   },
