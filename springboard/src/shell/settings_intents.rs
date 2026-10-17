@@ -28,7 +28,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-sharing", title: "Open Sharing", description: "Show the sharing settings", page: PageId::Sharing },
     SettingsIntent { id: "open-software-update", title: "Open Software Update", description: "Show the software update settings", page: PageId::SoftwareUpdate },
     SettingsIntent { id: "open-about", title: "Open About", description: "Show information about this computer", page: PageId::About },
-    SettingsIntent { id: "open-account", title: "Open BifrOSt Account", description: "Show the account settings", page: PageId::Root },
+    SettingsIntent { id: "open-account", title: "Open BifrOSt Account", description: "Show the account settings", page: PageId::Account },
     SettingsIntent { id: "open-accessibility", title: "Open Accessibility", description: "Show the accessibility settings", page: PageId::Accessibility },
     SettingsIntent { id: "open-users-groups", title: "Open Users & Groups", description: "Show the users and groups on this computer", page: PageId::Users },
     SettingsIntent { id: "open-appearance", title: "Open Appearance", description: "Show the light, dark and accent settings", page: PageId::Appearance },
@@ -100,6 +100,11 @@ mod tests {
         assert_eq!(find("open-displays").map(|i| i.title), Some("Open Displays"));
         assert_eq!(page_for("missing"), None);
         assert_eq!(find(""), None);
+    }
+
+    #[test]
+    fn open_account_opens_the_account_page() {
+        assert_eq!(page_for("open-account"), Some(PageId::Account));
     }
 
     #[test]

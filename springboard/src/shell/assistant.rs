@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn a_missing_required_parameter_is_refused_and_an_optional_one_is_not_needed() {
         let c = sample();
-        assert!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"folder":"Work"}}"#, &c).unwrap_err().contains("Missing parameter text"));
+        assert!(matches!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"folder":"Work"}}"#, &c), Ok(Reply::Ask(q)) if q.contains("text")));
         assert!(matches!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"text":"a"}}"#, &c), Ok(Reply::Intent(_))));
     }
 

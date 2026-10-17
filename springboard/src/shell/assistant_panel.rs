@@ -212,7 +212,8 @@ impl Panel {
     pub fn apply(&mut self, msg: Msg) {
         self.skip = 0;
         match msg {
-            Msg::Reply(Ok(Reply::Answer(text))) => {
+            // a question (missing parameter, or which app) is shown like an answer; the person's reply comes next
+            Msg::Reply(Ok(Reply::Answer(text) | Reply::Ask(text))) => {
                 if self.history {
                     self.turns.push((false, text.clone()));
                 }
@@ -614,6 +615,20 @@ mod tests {
         type_text(&mut p, &ui, "second");
         let messages = p.begin(&ui, &on()).unwrap();
         assert_eq!(messages, vec![(true, "second".to_string())]);
+    }
+
+    #[test]
+    fn a_question_from_the_assistant_is_shown_and_kept_as_a_turn() {
+        let ui = ui();
+        let mut p = shown(&ui);
+        let history = Settings { history: true, ..on() };
+        type_text(&mut p, &ui, "make a note");
+        p.begin(&ui, &history);
+        p.apply(Msg::Reply(Ok(Reply::Ask("What text should I use to create note in Notes?".into()))));
+        type_text(&mut p, &ui, "Groceries");
+        let messages = p.begin(&ui, &history).unwrap();
+        assert_eq!(messages[1], (false, "What text should I use to create note in Notes?".to_string()));
+        assert_eq!(messages[2], (true, "Groceries".to_string()));
     }
 
     #[test]

@@ -120,6 +120,27 @@ pub struct Call {
 pub enum Reply {
     Answer(String),
     Intent(Call),
+    /// A question the person must answer before the call can be made: a missing parameter, or an intent several apps
+    /// offer ([`missing_question`], [`disambiguation_question`]). Shown as text; the answer comes in the next turn.
+    Ask(String),
+}
+
+/// The question for a required parameter the reply left out: "What text should I use to create note in Notes?"
+pub fn missing_question(entry: &Entry, param: &Param) -> String {
+    format!("What {} should I use to {} in {}?", param.name, entry.title.to_lowercase(), entry.app_name)
+}
+
+/// The question that tells apart several apps' intents with one id: "Which one do you mean: A in X or B in Y?"
+pub fn disambiguation_question(candidates: &[&Entry]) -> String {
+    let mut options: Vec<String> = candidates.iter().map(|e| format!("{} in {}", e.title, e.app_name)).collect();
+    let list = match options.len() {
+        0 | 1 => options.concat(),
+        n => {
+            let last = options.remove(n - 1);
+            format!("{} or {last}", options.join(", "))
+        }
+    };
+    format!("Which one do you mean: {list}?")
 }
 
 /// The JSON object inside a reply (a fenced block or prose around it is allowed), from its first `{` to its last `}`.
@@ -141,12 +162,19 @@ pub fn parse_reply(text: &str, catalogue: &Catalogue) -> Result<Reply, String> {
     if let Some(answer) = v.str_field("answer") {
         return Ok(Reply::Answer(answer));
     }
-    let (Some(app_id), Some(intent_id)) = (v.str_field("app"), v.str_field("intent")) else {
+    let Some(intent_id) = v.str_field("intent") else {
         return Err("The assistant's reply was neither an answer nor an action.".into());
     };
-    let entry = catalogue
-        .find(&app_id, &intent_id)
-        .ok_or_else(|| format!("The assistant asked for an action that is not allowed: {intent_id}."))?;
+    let not_allowed = || format!("The assistant asked for an action that is not allowed: {intent_id}.");
+    let entry = match v.str_field("app") {
+        Some(app_id) => catalogue.find(&app_id, &intent_id).ok_or_else(not_allowed)?,
+        // no app named: the intent id decides it when one app offers it; several apps make it a question
+        None => match catalogue.entries.iter().filter(|e| e.intent_id == intent_id).collect::<Vec<_>>().as_slice() {
+            [] => return Err(not_allowed()),
+            [only] => *only,
+            several => return Ok(Reply::Ask(disambiguation_question(several))),
+        },
+    };
     let mut params: Vec<(String, String)> = Vec::new();
     if let Some(Json::Obj(pairs)) = v.get("params") {
         for (name, value) in pairs {
@@ -158,7 +186,7 @@ pub fn parse_reply(text: &str, catalogue: &Catalogue) -> Result<Reply, String> {
         }
     }
     if let Some(missing) = entry.params.iter().find(|p| !p.optional && !params.iter().any(|(n, _)| n == &p.name)) {
-        return Err(format!("Missing parameter {}.", missing.name));
+        return Ok(Reply::Ask(missing_question(entry, missing)));
     }
     Ok(Reply::Intent(Call {
         app_id: entry.app_id.clone(),
@@ -264,8 +292,35 @@ mod tests {
         assert!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"delete-all","params":{}}"#, &c).unwrap_err().contains("not allowed"));
         assert!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"text":"a","colour":"red"}}"#, &c).unwrap_err().contains("Unknown parameter colour"));
         assert!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"text":3}}"#, &c).unwrap_err().contains("not text"));
-        assert!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"folder":"Work"}}"#, &c).unwrap_err().contains("Missing parameter text"));
+        assert!(matches!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"folder":"Work"}}"#, &c), Ok(Reply::Ask(q)) if q == "What text should I use to create note in Notes?"));
         assert!(matches!(parse_reply(r#"{"app":"is.olibuijr.notes","intent":"create-note","params":{"text":"a"}}"#, &c), Ok(Reply::Intent(_))));
+    }
+
+    #[test]
+    fn an_intent_named_without_an_app_is_resolved_or_asked_about() {
+        let mut c = sample();
+        let mut copy = c.entries[0].clone();
+        copy.app_id = "is.example.journal".into();
+        copy.app_name = "Journal".into();
+        c.entries.push(copy);
+        // two apps offer create-note: the person is asked which one
+        assert_eq!(
+            parse_reply(r#"{"intent":"create-note","params":{"text":"a"}}"#, &c),
+            Ok(Reply::Ask("Which one do you mean: Create note in Notes or Create note in Journal?".into()))
+        );
+        // one app offers add-event: it is the call
+        let Ok(Reply::Intent(call)) = parse_reply(r#"{"intent":"add-event","params":{"title":"Lunch"}}"#, &c) else { panic!("expected a call") };
+        assert_eq!((call.app_id.as_str(), call.intent_id.as_str()), ("is.olibuijr.calendar", "add-event"));
+        assert!(parse_reply(r#"{"intent":"delete-all","params":{}}"#, &c).unwrap_err().contains("not allowed"));
+    }
+
+    #[test]
+    fn disambiguation_lists_every_option() {
+        let c = sample();
+        let refs: Vec<&Entry> = c.entries.iter().collect();
+        assert_eq!(disambiguation_question(&refs[..1]), "Which one do you mean: Create note in Notes?");
+        assert_eq!(disambiguation_question(&refs), "Which one do you mean: Create note in Notes or Add event in Calendar?");
+        assert_eq!(disambiguation_question(&[refs[0], refs[1], refs[0]]), "Which one do you mean: Create note in Notes, Add event in Calendar or Create note in Notes?");
     }
 
     #[test]
