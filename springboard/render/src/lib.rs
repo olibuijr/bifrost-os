@@ -38,6 +38,7 @@ pub mod gradient;
 pub mod colorspace;
 pub mod rendering_intent;
 pub mod icc;
+pub mod icc_lut;
 pub mod pixel_layout;
 pub mod bezier;
 pub mod colorlab;

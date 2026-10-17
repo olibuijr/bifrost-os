@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use super::colorspace::{self, Mat3, Space};
+use super::icc_lut::{parse_mab, parse_mft, Lut};
 
 /// The fixed part of the header, in bytes.
 const HEADER_LEN: usize = 128;
@@ -153,6 +154,31 @@ impl Profile {
         Some(MatrixShaper { colorants, curves })
     }
 
+    /// The media white point (`wtpt`) as XYZ with luminance 1, when the profile has one.
+    pub fn media_white(&self, data: &[u8]) -> Option<[f64; 3]> {
+        parse_xyz(data, find_tag(&self.tags, "wtpt")?)
+    }
+
+    /// The grey tone curve (`kTRC`) of a grey profile.
+    pub fn gray_curve(&self, data: &[u8]) -> Option<Curve> {
+        parse_curve(data, find_tag(&self.tags, "kTRC")?)
+    }
+
+    /// A lookup-table pipeline from the tag `sig` (`A2B0` to `A2B2` or `B2A0` to `B2A2`), in any of the three tag
+    /// types. `None` when the tag is missing or malformed.
+    pub fn lut(&self, data: &[u8], sig: &str) -> Option<Lut> {
+        let body = tag_body(data, find_tag(&self.tags, sig)?)?;
+        let pcs_lab = self.header.connection_space == "Lab ";
+        let b2a = sig.starts_with("B2A");
+        match body.get(0..4)? {
+            b"mft1" => parse_mft(body, false, b2a, pcs_lab),
+            b"mft2" => parse_mft(body, true, b2a, pcs_lab),
+            b"mAB " => parse_mab(body, false, pcs_lab),
+            b"mBA " => parse_mab(body, true, pcs_lab),
+            _ => None,
+        }
+    }
+
     /// The video card gamma table (`vcgt`) of a display profile, when it has a well-formed one.
     pub fn vcgt(&self, data: &[u8]) -> Option<Vcgt> {
         let tag = find_tag(&self.tags, "vcgt")?;
@@ -181,32 +207,51 @@ fn parse_xyz(data: &[u8], tag: &Tag) -> Option<[f64; 3]> {
 
 /// Reads a tone curve tag: `curv` (identity, a gamma or a sampled table) or `para` (a parametric function).
 fn parse_curve(data: &[u8], tag: &Tag) -> Option<Curve> {
-    let body = tag_body(data, tag)?;
+    curve_in(tag_body(data, tag)?).map(|(c, _)| c)
+}
+
+/// Number of parameters of a parametric curve function type.
+fn param_count(kind: u16) -> Option<usize> {
+    match kind {
+        0 => Some(1),
+        1 => Some(3),
+        2 => Some(4),
+        3 => Some(5),
+        4 => Some(7),
+        _ => None,
+    }
+}
+
+/// Reads one tone curve at the start of `body` and returns it with the bytes it occupies, padded to four.
+fn curve_in(body: &[u8]) -> Option<(Curve, usize)> {
+    let pad4 = |n: usize| (n + 3) & !3;
     match body.get(0..4)? {
-        b"curv" => match be_u32(body, 8)? as usize {
-            0 => Some(Curve::Identity),
-            // A single entry is a gamma in unsigned 8.8 fixed point.
-            1 => Some(Curve::Gamma(be_u16(body, 12)? as f64 / 256.0)),
-            n => {
-                let table = (0..n).map(|i| be_u16(body, 12 + 2 * i).map(|v| v as f64 / 65535.0)).collect::<Option<Vec<_>>>()?;
-                Some(Curve::Table(table))
+        b"curv" => {
+            let n = be_u32(body, 8)? as usize;
+            match n {
+                0 => Some((Curve::Identity, 12)),
+                // A single entry is a gamma in unsigned 8.8 fixed point.
+                1 => Some((Curve::Gamma(be_u16(body, 12)? as f64 / 256.0), 16)),
+                n => {
+                    let table = (0..n).map(|i| be_u16(body, 12 + 2 * i).map(|v| v as f64 / 65535.0)).collect::<Option<Vec<_>>>()?;
+                    Some((Curve::Table(table), pad4(12 + 2 * n)))
+                }
             }
-        },
+        }
         b"para" => {
             let kind = be_u16(body, 8)?;
-            let count = match kind {
-                0 => 1,
-                1 => 3,
-                2 => 4,
-                3 => 5,
-                4 => 7,
-                _ => return None,
-            };
+            let count = param_count(kind)?;
             let params = (0..count).map(|i| s15(body, 12 + 4 * i)).collect::<Option<Vec<_>>>()?;
-            Some(Curve::Parametric { kind, params })
+            Some((Curve::Parametric { kind, params }, pad4(12 + 4 * count)))
         }
         _ => None,
     }
+}
+
+/// Reads the tone curve at byte offset `at` of `data` (a curve inside a lookup-table tag). Returns the curve and
+/// the number of bytes it occupies, padded to four.
+pub(crate) fn curve_at(data: &[u8], at: usize) -> Option<(Curve, usize)> {
+    curve_in(data.get(at..)?)
 }
 
 /// Reads a `vcgt` tag. Type 0 holds a table of one or three channels with one-byte or two-byte entries; type 1 holds
@@ -321,6 +366,28 @@ impl Curve {
             Curve::Parametric { kind, params } => parametric(*kind, params, x),
         }
     }
+
+    /// The encoded input whose output is `y`, for a curve that rises from 0 to 1. `y` is clamped to 0..=1. Gamma and
+    /// identity curves invert in closed form; the others by bisection on `eval`.
+    pub fn invert(&self, y: f64) -> f64 {
+        let y = y.clamp(0.0, 1.0);
+        match self {
+            Curve::Identity => y,
+            Curve::Gamma(g) if *g > 0.0 => y.powf(1.0 / g),
+            _ => {
+                let (mut lo, mut hi) = (0.0f64, 1.0f64);
+                for _ in 0..48 {
+                    let mid = 0.5 * (lo + hi);
+                    if self.eval(mid) < y {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                0.5 * (lo + hi)
+            }
+        }
+    }
 }
 
 /// The model of an RGB matrix-shaper profile: colorants relative to the D50 connection space and one tone curve per
@@ -337,6 +404,19 @@ impl MatrixShaper {
     pub fn to_xyz_d50(&self, rgb: [f64; 3]) -> [f64; 3] {
         let lin = [0, 1, 2].map(|i| self.curves[i].eval(rgb[i]));
         colorspace::apply(self.colorants, lin)
+    }
+
+    /// Builds a matrix-shaper model from colorants (XYZ relative to D50, columns red, green, blue) and one curve per
+    /// channel, as a profile would store them.
+    pub fn new(colorants: Mat3, curves: [Curve; 3]) -> Self {
+        MatrixShaper { colorants, curves }
+    }
+
+    /// XYZ relative to D50 back to encoded profile RGB: the inverse of `to_xyz_d50`. Values outside the profile's
+    /// gamut come out clamped to 0..=1.
+    pub fn from_xyz_d50(&self, xyz: [f64; 3]) -> [f64; 3] {
+        let lin = colorspace::apply(colorspace::inverse(self.colorants), xyz);
+        [0, 1, 2].map(|i| self.curves[i].invert(lin[i]))
     }
 
     /// Converts encoded profile RGB to the working space `to`, returned encoded. Colours outside the target gamut come
