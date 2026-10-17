@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::gfx::{pack, Image};
@@ -554,10 +554,17 @@ impl IconCache {
     pub fn clear(&mut self) {
         self.map.clear();
     }
+
+    /// Drops every size, scale and variant of `app`'s icon (after it was installed or updated).
+    pub fn invalidate_app(&mut self, app: &str) {
+        self.map.retain(|k, _| k.app != app);
+    }
 }
 
 static VARIANT: AtomicU8 = AtomicU8::new(Variant::Default as u8);
 static TINT: AtomicU32 = AtomicU32::new(0);
+/// Counts the style changes, so the shell can tell that its icons are stale without comparing them.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
 static CACHE: OnceLock<Mutex<IconCache>> = OnceLock::new();
 
 fn cache() -> &'static Mutex<IconCache> {
@@ -579,9 +586,22 @@ pub fn set_style(variant: Variant, tint: [u8; 3]) {
     let v_changed = VARIANT.swap(variant as u8, Ordering::Relaxed) != variant as u8;
     let t_changed = TINT.swap(pack_tint(tint), Ordering::Relaxed) != pack_tint(tint);
     if v_changed || t_changed {
+        GENERATION.fetch_add(1, Ordering::Relaxed);
         if let Ok(mut c) = cache().lock() {
             c.clear();
         }
+    }
+}
+
+/// How many times the style has changed since start (see [`set_style`]).
+pub fn style_generation() -> u64 {
+    GENERATION.load(Ordering::Relaxed)
+}
+
+/// Forgets the cached icons of `app` (its id as the shell names it). Called when the app is installed or updated.
+pub fn invalidate_app(app: &str) {
+    if let Ok(mut c) = cache().lock() {
+        c.invalidate_app(app);
     }
 }
 
@@ -868,6 +888,29 @@ mod tests {
         assert_ne!(a, IconKey::new("bifrost.files", 29.0, 2.0, Variant::Default));
         assert_ne!(a, IconKey::new("is.olibuijr.term", 29.0, 1.0, Variant::Default));
         assert_ne!(a, IconKey::new("is.olibuijr.term", 29.0, 2.0, Variant::Dark));
+    }
+
+    #[test]
+    fn invalidating_an_app_drops_only_its_icons() {
+        let mut c = IconCache::new(8);
+        for (app, size) in [("a", 29.0), ("a", 58.0), ("b", 29.0)] {
+            c.get_or_try_insert_with(IconKey::new(app, size, 1.0, Variant::Default), || Some(solid(1, 1, 0)));
+        }
+        c.invalidate_app("a");
+        assert_eq!(c.len(), 1);
+        c.get_or_try_insert_with(IconKey::new("b", 29.0, 1.0, Variant::Default), || None);
+        assert_eq!(c.len(), 1, "b's icon is still cached");
+    }
+
+    #[test]
+    fn style_changes_bump_the_generation_only_when_they_change() {
+        let before = style_generation();
+        set_style(Variant::Dark, DEFAULT_TINT);
+        let after = style_generation();
+        assert!(after > before);
+        set_style(Variant::Dark, DEFAULT_TINT);
+        assert_eq!(style_generation(), after, "the same style is not a change");
+        set_style(Variant::Default, DEFAULT_TINT);
     }
 
     #[test]

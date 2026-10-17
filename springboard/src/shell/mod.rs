@@ -471,6 +471,10 @@ pub struct Shell {
     /// every app's masked icon at the standard size (apps() order), the source
     /// the tiles are resampled from under Display Zoom
     base_icons: Vec<Image>,
+    /// the icon style generation the icons were drawn in (`icon_doc::style_generation`)
+    icon_gen: u64,
+    /// the `installed.json` stamp the icons were drawn against (`helpbook::installed_stamp`)
+    installed_stamp: Option<std::time::SystemTime>,
     zoom: f32,
     pager: Pager,
     /// persisted home-screen edits (widgets, page order, hidden pages)
@@ -856,6 +860,8 @@ impl Shell {
             dock,
             grid,
             base_icons,
+            icon_gen: bifrost_render::icon_doc::style_generation(),
+            installed_stamp: helpbook::installed_stamp(&apphost::root()),
             zoom: 1.0,
             pager,
             conf: HomeConf::default(),
@@ -1153,6 +1159,8 @@ impl Shell {
             let mode = bifrost_render::appearance::Mode::parse(self.prefs.get(settings::APPEARANCE_PREF).unwrap_or("dark"));
             bifrost_render::appearance::publish_mode(mode);
             bifrost_render::appearance::set_accent(bifrost_render::appearance::Accent::parse(self.prefs.get(settings::ACCENT_PREF).unwrap_or("blue")));
+            // after the accent, which the Tinted icons take as their tint
+            settings::apply_icon_style(bifrost_render::icon_doc::Variant::parse(self.prefs.get(settings::ICON_STYLE_PREF).unwrap_or("default")));
             let (unix, offset) = self.wall_now(0.0);
             bifrost_render::appearance::jump_to(mode.is_light(((unix + offset as i64).rem_euclid(86_400) / 3600) as u32));
         }
@@ -1554,9 +1562,52 @@ impl Shell {
         }
     }
 
+    /// Draws every app's icon again through the icon renderer (`apps::decode_icons`, in the current style) and
+    /// refreshes what holds them: the Dock and grid tiles, the App Library, Spotlight and the Overview. Runs when the
+    /// icon style changes and when an app is installed or updated.
+    pub(super) fn rebuild_app_icons(&mut self) {
+        let size = self.layout.icon as usize;
+        let mask = squircle_mask(size);
+        let all = apps();
+        let decoded = apps::decode_icons(all, size);
+        for (i, (d, a)) in decoded.into_iter().zip(all.iter()).enumerate().take(self.base_icons.len()) {
+            let mut img = d.or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
+            img.apply_mask(&mask);
+            self.base_icons[i] = img.clone();
+            let tile = if i < IN_DOCK { self.dock.get_mut(i) } else { self.grid.get_mut(i - IN_DOCK) };
+            if let Some(t) = tile {
+                t.icon = img;
+            }
+        }
+        self.quicksearch.clear_icons();
+        self.overview.clear_icons();
+        self.rebuild_library();
+        self.rebuild_home();
+        self.drawn = Drawn::Nothing;
+        self.dirty = true;
+    }
+
+    /// Re-draws the icons when the icon style changed in Settings (the style publishes a new generation).
+    pub(super) fn refresh_icon_style(&mut self) {
+        let gen = bifrost_render::icon_doc::style_generation();
+        if gen != self.icon_gen {
+            self.icon_gen = gen;
+            self.rebuild_app_icons();
+        }
+    }
+
     /// Adds home-screen tiles for apps installed since start-up (`apphost::refresh`); they join
     /// the end of the grid and the App Library like any app.
     pub(super) fn installed_changed(&mut self) {
+        // an install or an update rewrote installed.json: the icons of every app are drawn again
+        let stamp = helpbook::installed_stamp(&apphost::root());
+        if stamp != self.installed_stamp {
+            self.installed_stamp = stamp;
+            for a in apps().iter() {
+                bifrost_render::icon_doc::invalidate_app(a.icon);
+            }
+            self.rebuild_app_icons();
+        }
         let size = self.layout.icon as usize;
         let mask = squircle_mask(size);
         let all = apps();
@@ -3247,6 +3298,7 @@ impl Shell {
     /// The home and lock screens compare against `drawn` and paint only the
     /// touched rows, spread over worker threads; apps repaint in full.
     pub fn draw(&mut self, s: &mut Surface, t: f64) -> &Damage {
+        self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
         let was_dirty = std::mem::replace(&mut self.dirty, false);

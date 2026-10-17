@@ -715,6 +715,12 @@ impl QuickSearch {
         &self.recents
     }
 
+    /// Forgets the app icons, so the next pull takes them from the home screen's tiles again (an icon style change
+    /// or an install).
+    pub fn clear_icons(&mut self) {
+        self.icons.clear();
+    }
+
     /// Icons for the suggestion row and the result rows, from the home
     /// screen's tiles; built once by the shell before the first show.
     pub fn set_icons(&mut self, ui: &Ui, icons: Vec<(AppId, &Image)>) {

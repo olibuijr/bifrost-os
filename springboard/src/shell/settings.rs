@@ -61,6 +61,16 @@ pub const PERF_HUD_PREF: &str = "perf_hud";
 pub const GPU_SCANOUT_PREF: &str = "gpu_scanout";
 /// Displays › Liquid Glass clarity, 0 (clear) to 1 (tinted).
 pub const LIQUID_GLASS_PREF: &str = "liquid_glass";
+/// Appearance > Icon & widget style: the variant key (`default`, `dark`, `tinted`).
+pub const ICON_STYLE_PREF: &str = "icon_style";
+
+/// Publishes the icon style: the variant, with the current accent's colour as the Tinted tint. Icons drawn after this
+/// use it; the shell rebuilds its icons on its next frame (`Shell::refresh_icon_style`).
+pub fn apply_icon_style(variant: bifrost_render::icon_doc::Variant) {
+    let (dark, _) = bifrost_render::appearance::accent().colours();
+    let tint = [(dark & 255) as u8, ((dark >> 8) & 255) as u8, ((dark >> 16) & 255) as u8];
+    bifrost_render::icon_doc::set_style(variant, tint);
+}
 
 enum View {
     List(ListPage),
@@ -2312,6 +2322,8 @@ impl Settings {
                             eprintln!("springboard: settings.ini: {e}");
                         }
                         set_accent(accent);
+                        // the Tinted icons take the accent as their tint
+                        apply_icon_style(bifrost_render::icon_doc::current_style().0);
                         vec![]
                     }
                     Pick::MinimizeEffect(k) => {
@@ -2371,6 +2383,15 @@ impl Settings {
                         let v = if k == 0 { 1.0 } else { 0.0 };
                         bifrost_render::glass::set_clarity(v);
                         let _ = prefs.set(LIQUID_GLASS_PREF, &format!("{v:.3}"));
+                        vec![]
+                    }
+                    Pick::IconStyle(k) => {
+                        use bifrost_render::icon_doc::Variant;
+                        let variant = [Variant::Default, Variant::Dark, Variant::Tinted][k.min(2)];
+                        if let Err(e) = prefs.set(ICON_STYLE_PREF, variant.key()) {
+                            eprintln!("springboard: settings.ini: {e}");
+                        }
+                        apply_icon_style(variant);
                         vec![]
                     }
                     Pick::RefreshRate(k) => {
