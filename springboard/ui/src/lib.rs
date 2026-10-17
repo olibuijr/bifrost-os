@@ -861,6 +861,7 @@ pub mod contact_display;
 pub mod contact_photo;
 pub mod postal_address;
 pub mod fetch;
+pub mod managed_context;
 pub mod history;
 pub mod model_history;
 pub mod shape;
