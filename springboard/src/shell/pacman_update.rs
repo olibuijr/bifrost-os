@@ -116,6 +116,24 @@ pub fn install_command(root: bool) -> (&'static str, Vec<&'static str>) {
     }
 }
 
+/// The packages the person installed explicitly that Storage may offer to remove: the list `pacman -Qqe` prints,
+/// without the ones `remove_args` refuses (the shell, the base system, names that read as flags). Blocking: it reads
+/// the local package database, so it runs on a worker.
+pub fn removable_packages() -> Vec<String> {
+    match run("pacman", &["-Qqe"]) {
+        Ok((0, out)) => removable_from(&out),
+        _ => Vec::new(),
+    }
+}
+
+/// The removable names in `pacman -Qqe` output: one name per line, sorted, without duplicates.
+pub fn removable_from(listing: &str) -> Vec<String> {
+    let mut names: Vec<String> = listing.lines().map(str::trim).filter(|n| remove_args(n).is_ok()).map(str::to_string).collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
 /// Packages that cannot be removed from Software Update: the shell itself and the base system that the recovery
 /// guard protects.
 pub const PROTECTED_PACKAGES: [&str; 9] = ["springboard-shell", "base", "linux", "linux-rt", "linux-firmware", "pacman", "systemd", "glibc", "sudo"];
@@ -258,6 +276,13 @@ mod tests {
         assert!(remove_args("Firefox").is_err(), "package names are lower case");
         assert!(remove_args("foo bar").is_err());
         assert!(remove_args("foo;rm").is_err());
+    }
+
+    #[test]
+    fn removable_from_keeps_plain_names_once_and_drops_the_base_system() {
+        let listing = "zed\nbase\nfirefox\n\n  gimp \nfirefox\nlinux\n--flag\nspringboard-shell\n";
+        assert_eq!(removable_from(listing), vec!["firefox", "gimp", "zed"]);
+        assert!(removable_from("").is_empty());
     }
 
     #[test]
