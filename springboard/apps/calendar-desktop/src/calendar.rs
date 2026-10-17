@@ -276,6 +276,8 @@ pub struct Calendar {
     panes: Vec<window::Pane>,
     open_request: Option<u64>,
     last_tap: Option<(u64, f64)>,
+    /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.
+    outbox: Vec<rsvp::Outgoing>,
     labels: TextCache,
     scroll: Scroller,
     pressed: Option<Target>,
@@ -387,6 +389,7 @@ impl Calendar {
             panes: Vec::new(),
             open_request: None,
             last_tap: None,
+            outbox: Vec::new(),
             labels: TextCache::default(),
             scroll: Scroller::new(),
             pressed: None,
@@ -906,6 +909,7 @@ impl Calendar {
         let Some(draft) = &self.editor else {
             return;
         };
+        let (original, existing) = (draft.event.clone(), draft.existing);
         let mut event = draft.event.clone();
         event.title = self.fields[0].text().trim().to_string();
         event.location = self.fields[1].text().trim().to_string();
@@ -947,6 +951,10 @@ impl Calendar {
                 self.error = None;
                 self.picked = (!delete).then_some(event.id);
                 self.undo = removed.map(|e| (e, t + UNDO_MS));
+                // an event the account organises, with invitees, goes to them again (`rsvp::invite_attendees`)
+                if !delete && existing {
+                    self.invite_attendees(&original, &event);
+                }
                 self.close();
                 self.scroll.jump_top();
                 self.fit_scroll(ui);

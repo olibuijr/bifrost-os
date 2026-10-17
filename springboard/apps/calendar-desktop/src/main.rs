@@ -7,7 +7,9 @@ use bifrost_app::widgets_timeline;
 use bifrost_app::control::RpcError;
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
 use bifrost_app::print::{PrintError, PrintOperation};
-use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::proto::{DocErrorCode, DocMode, GrantId};
+use bifrost_app::controls::compose_handoff::Compose;
+use bifrost_app::mail_compose;
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_calendar::calendar::archive;
@@ -34,6 +36,8 @@ struct CalendarApp {
     jobs: HashMap<u32, Job>,
     /// Reads the subscribed calendars in the background.
     fetcher: Fetcher,
+    /// The grants of files attached to a Mail message, by the compose request: released when Mail answers.
+    attached: HashMap<u32, GrantId>,
 }
 
 /// Menu ids of File > Unsubscribe from, one per subscription, clear of the commands and the settings.
@@ -48,6 +52,8 @@ enum Job {
     Import,
     /// File > Export Archive...: the archive text, written to the chosen place.
     Export(Vec<u8>),
+    /// A reply or an invitation: the message, sent to Mail once the .ics file it attaches is granted.
+    Attach(Compose),
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
@@ -352,7 +358,9 @@ impl App for CalendarApp {
         }
         if let Input::Key(key) = &ev {
             let Some(c) = &mut self.cal else { return false };
-            return key_input(c, ctx, key);
+            let used = key_input(c, ctx, key);
+            self.send_outbox(ctx);
+            return used;
         }
         let (Some(c), Input::Touch { kind, x, y, t, .. }) = (&mut self.cal, ev) else { return false };
         let e = match kind {
@@ -363,10 +371,12 @@ impl App for CalendarApp {
         c.touch(&ctx.ui, e, t);
         share_copy(c, ctx);
         self.open_event_window(ctx);
+        self.send_outbox(ctx);
         true
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        self.send_outbox(ctx);
         let Some(c) = &mut self.cal else { return false };
         if t - self.last_wall > 30_000.0 {
             self.last_wall = t;
@@ -421,9 +431,24 @@ impl App for CalendarApp {
         let Some(c) = &mut self.cal else { return false };
         match ev {
             DocumentEvent::Opened(mut doc) => {
-                if !matches!(self.jobs.remove(&doc.request), Some(Job::Import)) {
-                    ctx.release_document(doc.grant);
-                    return false;
+                match self.jobs.remove(&doc.request) {
+                    Some(Job::Attach(draft)) => {
+                        match mail_compose::compose(ctx, &draft, &[doc.grant]) {
+                            Ok(request) => {
+                                self.attached.insert(request, doc.grant);
+                            }
+                            Err(e) => {
+                                ctx.release_document(doc.grant);
+                                c.show_error(&format!("Mail could not be opened: {e}"));
+                            }
+                        }
+                        return true;
+                    }
+                    Some(Job::Import) => {}
+                    _ => {
+                        ctx.release_document(doc.grant);
+                        return false;
+                    }
                 }
                 let text = archive::read_text(&mut doc.file);
                 // one import is one use of the file: the app keeps no grant to it
@@ -473,7 +498,11 @@ impl App for CalendarApp {
         }
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // Mail has answered the compose call: the file it attached is no longer needed here
+        if let Some(grant) = self.attached.remove(&request) {
+            ctx.release_document(grant);
+        }
         if self.dav.reply(request, result) {
             return true;
         }
@@ -537,6 +566,7 @@ impl App for CalendarApp {
             // the editor closed (Save, Delete or Cancel): its window goes too
             let _ = ctx.close_window(window);
         }
+        self.send_outbox(ctx);
         used
     }
 
@@ -550,6 +580,17 @@ impl App for CalendarApp {
 }
 
 impl CalendarApp {
+    /// Hands the queued replies and invitations to Mail. Each .ics file is granted first; the message follows in
+    /// `document` (`Job::Attach`).
+    fn send_outbox(&mut self, ctx: &Ctx) {
+        let Some(c) = &mut self.cal else { return };
+        for mail in c.take_outgoing() {
+            let draft = Compose { to: mail.to, subject: mail.subject, body: mail.body, ..Default::default() };
+            let request = ctx.grant_path(&mail.file.to_string_lossy());
+            self.jobs.insert(request, Job::Attach(draft));
+        }
+    }
+
     /// Opens the editor of an event that was double-clicked, in a window of its own. An event whose editor is already
     /// open in a window is not opened again.
     fn open_event_window(&mut self, ctx: &Ctx) {
@@ -622,5 +663,5 @@ fn pane_input(c: &mut calendar::Calendar, ctx: &Ctx, ev: Input) -> bool {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default() });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default(), attached: HashMap::new() });
 }
