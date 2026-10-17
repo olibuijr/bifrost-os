@@ -1268,6 +1268,7 @@ pub mod sealed_box;
 pub mod compose_handoff;
 pub mod stroke_recognizer;
 pub mod glyph_recognizer;
+pub mod found_in;
 pub mod barcode;
 pub mod frame_metrics;
 pub mod haptics;
