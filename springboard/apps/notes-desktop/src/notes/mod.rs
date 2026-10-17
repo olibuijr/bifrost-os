@@ -3525,6 +3525,11 @@ impl Notes {
                 disclosure(&mut content, cx, cy, size, folded, LABEL_2.now());
             }
         }
+        if let Some(line) = self.linked_label() {
+            // the Linked Notes line: how many other notes link to the open one, under the text at the right edge
+            let img = self.labels.get(ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+            s.blit(img, (ex + ew - m - img.w as f32) as i32, (bottom - img.h as f32 - ui.pt(6.0)) as i32, 255, 255);
+        }
         if self.find_strip() {
             let ftop = self.find_top(ui);
             let (cur, total) = self.match_state();
@@ -3571,6 +3576,15 @@ impl Notes {
             self.keyboard.draw(s, ui, kb_top, t);
             s.fill_rect(0, (kb_top + self.keyboard.h() + slide) as usize, self.w as usize, self.h as usize, keyboard::BG);
         }
+    }
+
+    /// The Linked Notes line of the open note ("2 linked notes"), or `None` when no other note links to it.
+    fn linked_label(&self) -> Option<String> {
+        let Screen::Editor(i) = self.screen else { return None };
+        let target = self.notes.get(i)?.id.as_str();
+        let pairs: Vec<(&str, &str)> = self.notes.iter().map(|n| (n.id.as_str(), n.text.as_str())).collect();
+        let panel = note_url::linked_panel(&pairs, target);
+        (!panel.ids.is_empty()).then_some(panel.label)
     }
 
     /// The folder-name prompt at the top of the list column.
