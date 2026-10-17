@@ -272,6 +272,7 @@ pub mod sensors;
 pub mod session_assertion;
 pub mod image_analysis;
 pub mod text_recognition;
+pub mod weather_service;
 pub mod core_ml;
 pub mod language_model;
 pub mod document_scan;
