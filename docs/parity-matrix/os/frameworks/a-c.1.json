@@ -60,11 +60,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avfaudio.json",
+   "bifrost": "springboard/sdk/src/audio_session.rs, springboard/sdk/src/audio_application.rs, springboard/sdk/src/audio_player_control.rs, springboard/sdk/src/speech.rs, springboard/ui/src/audio_engine.rs, springboard/ui/src/audio_recorder.rs, springboard/core/src/midi_synth.rs, springboard/core/src/smf.rs, springboard/src/media/audioplayer.rs, springboard/src/media/capture.rs, springboard/src/shell/services/speech.rs, springboard/audiod/src/main.rs",
    "status": "partial",
    "note": "From SDK matrix avfaudio.json. Open: AVAudioSession, route and interruption events and the recording permission are modelled but not wired to audiod or the shell; no MIDI playback or sound bank; speech has no word events; player pan, rate and fade are not applied by audiod.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_application::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_player_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_recorder::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "midi_synth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "smf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audioplayer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::speech::tests"
+    }
+   ],
+   "ready_note": "App audio: the system audio service (audiod) with the SDK client, the session, application and player-control models, the engine graph and recorder, MIDI synthesis and standard MIDI files, and speech through the shell speech service. Host tests only. Open: session interruptions and route events are modelled but not driven by audiod, speech has no word events, and player pan, rate and fades are not applied by audiod."
   },
   {
    "id": "path:/System/Library/Frameworks/AVFoundation.framework",
@@ -81,11 +145,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avfoundation-capture-audio.json, docs/parity-matrix/data/avfoundation-playback-editing.json",
+   "bifrost": "springboard/ui/src/composition.rs, springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs, springboard/ui/src/render_synchronizer.rs, springboard/ui/src/video_settings.rs, springboard/ui/src/audio_engine.rs, springboard/src/media/player.rs, springboard/src/media/mp4.rs, springboard/src/media/capture.rs, springboard/src/media/v4l2.rs, springboard/src/media/metadata.rs, springboard/src/media/queue.rs, springboard/sdk/src/av_capture_session.rs",
    "status": "partial",
    "note": "from SDK matrix avfoundation-capture-audio.json, avfoundation-playback-editing.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "composition::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "export_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "frame_grab::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "render_synchronizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "video_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::player::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::mp4::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::capture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::metadata::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::queue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "av_capture_session::tests"
+    }
+   ],
+   "ready_note": "Playback, capture and editing: the media player, queue, MP4 and metadata readers, V4L2 camera and audio capture, the capture session in the SDK, and the composition, export session, frame grab, render synchroniser and video settings models. Host tests only. Open: hardware-decoded frame delivery to apps and some export presets are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/AVKit.framework",
@@ -177,11 +310,80 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accelerate.json",
+   "bifrost": "springboard/ui/src/fourier.rs, springboard/ui/src/linalg.rs, springboard/ui/src/lu.rs, springboard/ui/src/quadrature.rs, springboard/ui/src/vector_ops.rs, springboard/ui/src/cnn_layers.rs, springboard/render/src/histogram.rs, springboard/render/src/pixel_layout.rs, springboard/sdk/src/dct.rs, springboard/sdk/src/spectrogram.rs, springboard/sdk/src/pixel_buffer.rs, springboard/sdk/src/compression.rs, springboard/sdk/src/pixel_transfer.rs",
    "status": "partial",
    "note": "from SDK matrix accelerate.json Built 2026-10-17: DCT (dct::tests) and spectrogram (spectrogram::tests) in the SDK; convolution, geometry, colour and neural-network gaps remain. Built 2026-10-17: gamma and histogram specification (render histogram::tests); morphology and histogram reachable through the SDK kit (sdk kit_image_tools tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fourier::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "lu::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "quadrature::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "vector_ops::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cnn_layers::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "histogram::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pixel_layout::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dct::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "spectrogram::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pixel_buffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "compression::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pixel_transfer::tests"
+    }
+   ],
+   "ready_note": "Numerics for apps: vector operations, linear algebra and LU, FFT, quadrature, DCT and spectrograms, neural-network layers, pixel buffer conversion and transfer, histograms and compression. Host tests only. Open: some convolution, geometry and colour kernels of the full vImage surface."
   },
   {
    "id": "path:/System/Library/Frameworks/Accessibility.framework",
@@ -268,11 +470,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessory-access.json",
+   "bifrost": "springboard/core/src/usb_bus_source.rs, springboard/core/src/accessory_manager.rs, springboard/core/src/usb_descriptors.rs, springboard/sdk/src/accessory_access.rs",
    "status": "partial",
-   "note": "From SDK matrix accessory-access.json. Open: no bus source calls attach or detach for USB accessories; no USB device permission in the app manifest; descriptors come from the caller; no USB device nodes are bound into app sandboxes.",
+   "note": "From SDK matrix accessory-access.json. Open: no bus source calls attach or detach for USB accessories; no USB device permission in the app manifest; descriptors come from the caller; no USB device nodes are bound into app sandboxes. Built 2026-10-17: sysfs bus source that reports real USB attach and detach to the manager (core usb_bus_source, tests usb_bus_source::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_bus_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "accessory_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "usb_descriptors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessory_access::tests"
+    }
+   ],
+   "ready_note": "Accessory listeners for apps: the manager, the accessory object, matching criteria and attach and detach events (sdk accessory_access over core accessory_manager), now fed by a bus source that reads /sys/bus/usb/devices into accessories with their interfaces (core usb_bus_source, polled with accessory_access::bus::poll). Host tests use a temporary sysfs tree. Open: the app sandbox does not bind USB device nodes and there is no USB permission grant yet, so an app can match an accessory but not open its device."
   },
   {
    "id": "path:/System/Library/Frameworks/Accounts.framework",
@@ -289,11 +515,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/oauth_credential.rs (OAuthCredential: access and refresh tokens, expiry, renewal, opaque keychain encoding); springboard/sdk/src/keychain.rs",
+   "bifrost": "springboard/sdk/src/accounts.rs, springboard/sdk/src/oauth_credential.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/sign_in.rs, springboard/src/shell/services/accounts_access.rs, springboard/src/shell/internet_accounts_page.rs, springboard/ui/src/account_store.rs, springboard/ui/src/internet_accounts.rs",
    "status": "partial",
    "note": "Wave 2 added the typed OAuth credential (oauth_credential.rs: expiry, renewal window, refresh token kept on renewal, keychain encoding, headless tests). Still missing: a shared account list, an account type registry and the access-grant prompt (SDK matrix accounts.json). Built 2026-10-17: installed local account model (local_account::tests). Still open: the sign-in and account creation sheet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "oauth_credential::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "sign_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accounts_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::internet_accounts_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "internet_accounts::tests"
+    }
+   ],
+   "ready_note": "Accounts for apps: the account store with types and credentials, OAuth credentials with renewal, the keychain, the access-grant sheet and its service, and the Internet Accounts settings page. Host tests only. Open: the sign-in and account creation sheet for new accounts."
   },
   {
    "id": "path:/System/Library/Frameworks/ActivityKit.framework",
@@ -538,11 +813,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/appkit-app-structure.json, docs/parity-matrix/data/appkit-graphics-printing.json, docs/parity-matrix/data/appkit-text.json, docs/parity-matrix/data/appkit-user-interactions.json, docs/parity-matrix/data/appkit-user-interface.json",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/view/controls.rs, springboard/sdk/src/view/forms.rs, springboard/sdk/src/view/app.rs, springboard/sdk/src/document.rs, springboard/sdk/src/pasteboard.rs, springboard/sdk/src/print_panel.rs, springboard/sdk/src/attributed.rs, springboard/src/shell/print_sheet.rs",
    "status": "partial",
    "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json Refreshed 2026-10-17 (graphics and printing area): Bezier paths, PDF access and the shell print sheet are covered. Still open: the page layout panel, NSImage drawing in the kit, the colour picker, the user accent colour, and the symbol catalogue.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests_controls"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests_app"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests_overlay"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pasteboard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "print_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::print_sheet::tests"
+    }
+   ],
+   "ready_note": "The app UI framework is the SDK view layer (bifrost_app::view): windows, responders, controls, forms, scroll and stack layout, document model, pasteboard, attributed text and the print panel, with the Golden Gate kit on top. Host tests only. Open per the SDK matrix: the page layout panel, the colour picker, the user accent colour and the symbol catalogue."
   },
   {
    "id": "path:/System/Library/Frameworks/AppTrackingTransparency.framework",
@@ -622,11 +946,75 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/application-services.json",
+   "bifrost": "springboard/render/src/colorspace.rs, springboard/render/src/icc.rs, springboard/render/src/cg/color.rs, springboard/sdk/src/pasteboard.rs, springboard/sdk/src/print_panel.rs, springboard/sdk/src/attributed.rs, springboard/ui/src/ax.rs, springboard/ui/src/text_marker.rs, springboard/ui/src/print.rs, springboard/ui/src/geometry.rs, springboard/src/shell/atspi/model.rs, springboard/src/shell/magnifier.rs",
    "status": "partial",
    "note": "From SDK matrix application-services.json. Open: accessibility text markers, selection and caret events are not bridged through AT-SPI; no ColorSync CMM or profile matching for apps; no print panel plug-ins; HIShape boolean operations; no universal access zoom focus API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorspace::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::color::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pasteboard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "print_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "text_marker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "print::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi::model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::tests"
+    }
+   ],
+   "ready_note": "An umbrella over graphics, colour, printing and accessibility services; the parts are covered by their own modules: colour spaces and ICC profiles, the pasteboard, attributed text, the print panel, the accessibility tree with text markers and the AT-SPI bridge, geometry and the screen magnifier. Host tests only. Open: selection and caret events are not bridged through AT-SPI and HIShape boolean operations are missing."
   },
   {
    "id": "path:/System/Library/Frameworks/AudioAccessoryKit.framework",
@@ -664,11 +1052,70 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/audio-toolbox.json",
+   "bifrost": "springboard/ui/src/pcm_convert.rs, springboard/ui/src/audio_render.rs, springboard/ui/src/plugin_host.rs, springboard/ui/src/scheduled_region.rs, springboard/ui/src/echo_cancel.rs, springboard/sdk/src/system_sound.rs, springboard/sdk/src/audio_session.rs, springboard/src/media/codec.rs, springboard/src/media/audiofile.rs, springboard/src/media/symfile.rs, springboard/src/media/mp4.rs",
    "status": "partial",
    "note": "from SDK matrix audio-toolbox.json Refreshed 2026-10-17: not ready. Still open: raw buffer and render callbacks, audio unit and component hosts, an app-facing demuxer and encoder, a shell-driven audio session, system sound playback, scheduled file regions and voice processing. See data/audio-toolbox.json gaps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pcm_convert::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_render::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "plugin_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scheduled_region::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "echo_cancel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_sound::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::codec::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::audiofile::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::symfile::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::mp4::tests"
+    }
+   ],
+   "ready_note": "Audio services for apps: format conversion, the render unit and component registry, the plug-in host with parameter trees and presets, scheduled file regions, echo cancellation, system sounds, the session model, and file, codec and container readers. Host tests only. Open: the audio service does not yet play system sounds or drive the session, and apps get no raw buffer callbacks."
   },
   {
    "id": "path:/System/Library/Frameworks/AudioUnit.framework",
@@ -685,11 +1132,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/audio-unit.json",
+   "bifrost": "springboard/ui/src/plugin_host.rs, springboard/ui/src/audio_extension.rs, springboard/ui/src/midi_events.rs, springboard/ui/src/audio_render.rs, springboard/sdk/src/midi.rs, springboard/sdk/src/system_audio.rs",
    "status": "partial",
    "note": "from SDK matrix audio-unit.json Refreshed 2026-10-17: not ready, remaining: No plug-in host for AU v2 or v3, and no way to load third-party audio processors into the DAW or any app. | No app-facing audio unit or render API; the DAW's rendering and devices are internal. | No MIDI input or MIDI event API. | The audio service (springboard/audiod) has an SDK client (springboard/sdk/src/system_audio.rs), but no app uses it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "plugin_host::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_extension::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "midi_events::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_render::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "midi::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_audio::tests"
+    }
+   ],
+   "ready_note": "The plug-in side of audio: the host model (instances, buses, parameter trees, presets), the extension manifest and registry, MIDI event and UMP handling, the render unit and the audio service client. Host tests only. Open: no third-party plug-in binary is loaded and no separate extension process is started; the DAW's own devices are built in. The reference page marks the framework deprecated in favour of Audio Toolbox."
   },
   {
    "id": "path:/System/Library/Frameworks/AudioVideoBridging.framework",
@@ -783,11 +1264,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/background-assets.json",
+   "bifrost": "springboard/sdk/src/asset_packs.rs, springboard/sdk/src/background_download.rs, springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs, springboard/ui/src/managed_download.rs, springboard/ui/src/assetmock.rs",
    "status": "partial",
-   "note": "from SDK matrix background-assets.json Refreshed 2026-10-17: not ready, remaining: No app-facing asset-pack API (list, download on demand, status, remove, manifest) | No download scheduling that continues or starts while the app is closed, including before first launch",
+   "note": "from SDK matrix background-assets.json Refreshed 2026-10-17: not ready, remaining: No app-facing asset-pack API (list, download on demand, status, remove, manifest) | No download scheduling that continues or starts while the app is closed, including before first launch Built 2026-10-17: AssetPackStore with install, remove, persisted state and on-demand availability (sdk asset_packs, tests asset_packs::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "asset_packs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "downloadqueue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "managed_download::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetmock::tests"
+    }
+   ],
+   "ready_note": "Asset packs for apps: the manifest and manager, the on-disk store with install, removal and on-demand availability (sdk asset_packs, new), the download queue with budgets, managed downloads with conditions and retries, the mock pack source for tests, and URL downloads with size and hash checks. Host tests only. Open: a shell service that runs the managed queue while the app is closed."
   },
   {
    "id": "path:/System/Library/Frameworks/BackgroundTasks.framework",
@@ -804,11 +1324,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/url_background.rs",
+   "bifrost": "springboard/sdk/src/background_tasks.rs, springboard/sdk/src/url_background.rs, springboard/src/shell/services/background.rs",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_tasks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background::tests"
+    }
+   ],
+   "ready_note": "Deferred work for apps: the app declares task identifiers in its manifest, submits requests (earliest time, network and power conditions) and the shell background service launches the app hidden when a request is due (sdk background_tasks over the background service). Host tests only; not verified on Midget."
   },
   {
    "id": "path:/System/Library/Frameworks/BrowserEngineCore.framework",
@@ -847,8 +1386,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/webview.rs (WebProcessPool)",
-   "status": "partial",
-   "note": "built on arm; not yet verified on Midget. Pages run in a separate engine process. No entitlement or engine-registration API for third-party engines.",
+   "status": "n/a",
+   "note": "n/a: the framework lets a third-party web engine run inside an app sandbox that gates engines by entitlement (separate web content, networking and rendering extension processes, with the host app's sandbox policy brokered by the OS). Evidence: the reference carries only an 8.6 KB BridgeSupport file and Info.plist for it, no XPC services or plug-ins. BifrOSt has no engine gate to mirror: any app may run its own engine in a separate process, and the shell's own web view already does so through WebProcessPool (sdk webview.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -888,11 +1427,60 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/proxy_settings.rs (ProxySettings, ProxyServer); springboard/sdk/src/http_cookies.rs (HTTPCookie, HTTPCookieStorage, parse_http_date); springboard/sdk/src/reachability.rs; springboard/sdk/src/url.rs",
+   "bifrost": "springboard/sdk/src/http_cookies.rs, springboard/sdk/src/http_auth.rs, springboard/sdk/src/ftp.rs, springboard/sdk/src/dns_service.rs, springboard/sdk/src/host_addressing.rs, springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/http_message.rs, springboard/core/src/proxy.rs",
    "status": "partial",
    "note": "System proxy model (proxy_settings.rs) and cookie storage (http_cookies.rs). Built 2026-10-17: Set-Cookie Expires is read in IMF-fixdate form when there is no Max-Age (tests http_cookies::tests). Still missing: cookie storage is not wired into URLSession, URL credentials, host lookup, Bonjour browse and register, network diagnostics, FTP and raw HTTP messages (SDK matrix cfnetwork.json). Built 2026-10-17: raw HTTP message model (http_message::tests). Still open: cookie storage is not wired into URLSession, host lookup, Bonjour and network diagnostics as listed in the data file.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_cookies::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ftp::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dns_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "host_addressing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "net_diagnostic::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "http_message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "proxy::tests"
+    }
+   ],
+   "ready_note": "Network plumbing for apps: cookie parsing and storage, HTTP authentication, FTP, DNS service discovery and registration, host addressing, network diagnostics, network path state, raw HTTP messages and the system proxy settings. Host tests only. Open: cookie storage is not yet wired into URLSession requests."
   },
   {
    "id": "path:/System/Library/Frameworks/CLLogEntry.framework",
@@ -969,11 +1557,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/callkit.json",
+   "bifrost": "springboard/ui/src/call.rs, springboard/ui/src/call_directory.rs, springboard/ui/src/call_ui.rs, springboard/ui/src/call_apps.rs",
    "status": "partial",
    "note": "From SDK matrix callkit.json. Open: the shell does not draw incoming or outgoing call UI; caller ID and blocking has no system directory source.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call_directory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call_ui::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call_apps::tests"
+    }
+   ],
+   "ready_note": "Call integration for voice-over-IP apps: the provider and controller model with call state and actions, the call directory (caller ID and blocking lists), the call UI model and the registry of call-capable apps. Host tests only. Open: the shell does not draw incoming or outgoing call windows yet and the directory has no system source."
   },
   {
    "id": "path:/System/Library/Frameworks/CarKey.framework",
@@ -1150,11 +1762,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/cloudkit.json",
+   "bifrost": "springboard/sdk/src/cloud_records.rs, springboard/ui/src/record_sync.rs, springboard/ui/src/record_share.rs, springboard/ui/src/record_asset.rs, springboard/ui/src/record_store.rs, springboard/ui/src/web_service_token.rs, springboard/src/shell/backup.rs",
    "status": "partial",
    "note": "from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_records::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_share::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_asset::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "record_store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "web_service_token::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests"
+    }
+   ],
+   "ready_note": "Record storage and sync for apps against BifrOSt Cloud, not an Apple service: zones and records (sdk cloud_records), the sync engine with server change tokens and conflict handling (ui record_sync), sharing, assets and the record store. Host tests only. Open: record queries, subscriptions and push, and per-app containers."
   },
   {
    "id": "path:/System/Library/Frameworks/Cocoa.framework",
@@ -1171,11 +1822,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/appkit-app-structure.json, docs/parity-matrix/data/appkit-graphics-printing.json, docs/parity-matrix/data/appkit-text.json, docs/parity-matrix/data/appkit-user-interactions.json, docs/parity-matrix/data/appkit-user-interface.json, docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
+   "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/view/app.rs, springboard/sdk/src/operation_queue.rs, springboard/sdk/src/document.rs, springboard/sdk/src/defaults.rs, springboard/sdk/src/dispatch.rs, springboard/sdk/src/pasteboard.rs, springboard/sdk/src/attributed.rs",
    "status": "partial",
    "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json, foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (graphics and printing area): Bezier paths, PDF access and the shell print sheet are covered. Still open: the page layout panel, NSImage drawing in the kit, the colour picker, the user accent colour, and the symbol catalogue.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::tests_app"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "operation_queue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dispatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pasteboard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    }
+   ],
+   "ready_note": "The umbrella over the app UI framework, the foundation layer and the data layer is the SDK as a whole (bifrost_app): the view layer, documents, defaults, queues, dispatch, pasteboard and attributed text. Each constituent is covered under AppKit and Foundation rows; the checks here are the ones every app links. Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/Collaboration.framework",
@@ -1213,11 +1908,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/colorsync.json",
+   "bifrost": "springboard/sdk/src/colorsync.rs, springboard/render/src/icc.rs, springboard/render/src/icc_transform.rs, springboard/render/src/icc_builtin.rs, springboard/render/src/icc_lut.rs, springboard/render/src/rendering_intent.rs, springboard/render/src/colorspace.rs",
    "status": "partial",
    "note": "from SDK matrix colorsync.json Built 2026-10-17: ROMM RGB built-in profile (render icc_builtin::tests). Refreshed 2026-10-17: profile-to-profile transform in springboard/sdk/src/colorsync.rs (tests colorsync::tests). Still open: profile creation and embedding, CMYK profiles, the hardware gamma ramp, and the PDF ICCBased path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "colorsync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc_transform::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc_builtin::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc_lut::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "rendering_intent::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorspace::tests"
+    }
+   ],
+   "ready_note": "Colour management: ICC profile parsing and the built-in profiles, lookup tables, rendering intents, profile-to-profile transforms and colour spaces, exposed to apps in sdk colorsync. Host tests only. Open: profile creation and embedding, CMYK profiles, the hardware gamma ramp and the PDF ICCBased path."
   },
   {
    "id": "path:/System/Library/Frameworks/Combine.framework",
