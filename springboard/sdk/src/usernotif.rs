@@ -6,7 +6,7 @@
 //! app was not running (the shell starts it and delivers the response once it is up). Needs the `notifications`
 //! permission in the manifest; without it every `add` answers `NotifStatus::NotPermitted`.
 
-pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
+pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, TextInput, NOTIF_AUTH_MASK, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -45,6 +45,8 @@ pub enum Event {
     List { request: u32, delivered: bool, ids: Vec<String> },
     /// the answer to [`settings`]
     Settings { request: u32, settings: NotifSettings },
+    /// the answer to [`request_authorization`]: `granted` is whether the app may post notifications
+    Authorization { request: u32, granted: bool },
 }
 
 /// A request under construction (`UNMutableNotificationContent` plus a trigger).
@@ -175,6 +177,16 @@ pub fn pending(ctx: &Ctx) -> u32 {
 pub fn settings(ctx: &Ctx) -> u32 {
     let request = ctx.next_request();
     ctx.send_to_shell(ToShell::NotifySettings { request });
+    request
+}
+
+/// `requestAuthorization(options:)`: asks the person to allow notifications for the app. An app asked before gets its
+/// stored answer without a prompt; otherwise the shell shows the first-time alert and answers after it. The answer
+/// arrives as [`Event::Authorization`]. `options` is the [`AuthorizationOptions`] bit set; a bit outside the
+/// [`NOTIF_AUTH_MASK`] is refused by the shell, so only the known bits are passed on.
+pub fn request_authorization(ctx: &Ctx, options: AuthorizationOptions) -> u32 {
+    let request = ctx.next_request();
+    ctx.send_to_shell(ToShell::NotifyAuthorize { request, options: options.0 & NOTIF_AUTH_MASK });
     request
 }
 
