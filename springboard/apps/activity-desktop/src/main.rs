@@ -15,6 +15,8 @@ mod model;
 #[allow(dead_code)]
 mod sample;
 #[allow(dead_code)]
+mod sample_net;
+#[allow(dead_code)]
 mod sample_proc;
 #[allow(dead_code)]
 mod window;

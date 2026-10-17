@@ -18,6 +18,7 @@ pub mod cloud_keys;
 pub mod universal_clipboard;
 pub mod cloud_session;
 pub mod keychain;
+pub mod net_auth;
 pub mod credentials;
 pub mod installer;
 pub mod layout;
