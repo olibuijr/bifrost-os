@@ -268,6 +268,7 @@ pub mod layer_tree {
     pub use bifrost_ui::layer_tree::*;
 }
 pub mod document;
+pub mod document_package;
 pub mod markup;
 pub mod log;
 pub mod signpost;

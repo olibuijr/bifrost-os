@@ -1,6 +1,6 @@
 id = "is.olibuijr.textedit.desktop"
 name = "Text Editor"
-version = "1.7.0"
+version = "1.8.0"
 exec = "bifrost-textedit"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,4 +9,5 @@ category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["documents"]
+package_types = ["rtfd"]
 window = "full-size"

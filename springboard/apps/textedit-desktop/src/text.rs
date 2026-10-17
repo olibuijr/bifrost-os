@@ -117,10 +117,27 @@ pub struct Style {
     /// Writing direction of the paragraph (Format > Text > Writing Direction): right to left when true. A paragraph
     /// property, stored on every cell of the paragraph like `align`.
     pub rtl: bool,
+    /// The attachment an `OBJECT` cell shows: its number in the document's attachment list plus one, 0 for none. Not
+    /// character formatting: typing never inherits it.
+    pub attachment: u16,
 }
 
 /// The largest space a paragraph takes before or after, in points.
 pub const MAX_PARAGRAPH_SPACE: u8 = 200;
+
+/// The character an attachment (an image or other file inside the document) occupies: one cell, selected, deleted and
+/// undone like a letter, drawn as the attachment instead of a glyph.
+pub const OBJECT: char = '\u{fffc}';
+
+/// A file embedded in the document (Insert > Image, a paste or a drop of an image). `width` and `height` are its size in
+/// points as the line draws it; `data` is the file's bytes, saved with the document's package.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Attachment {
+    pub file: String,
+    pub width: f32,
+    pub height: f32,
+    pub data: Vec<u8>,
+}
 
 impl Default for Style {
     fn default() -> Self {
@@ -141,6 +158,7 @@ impl Default for Style {
             space_before: 0,
             space_after: 0,
             rtl: false,
+            attachment: 0,
         }
     }
 }
@@ -158,6 +176,7 @@ impl Style {
             && self.script == other.script
             && self.highlight == other.highlight
             && self.link == other.link
+            && self.attachment == other.attachment
     }
 }
 
@@ -225,6 +244,9 @@ pub struct Text {
     epoch: u32,
     /// The distance between tab stops, in points. A document property, kept in the file.
     tab: f32,
+    /// The embedded files, numbered from 1 by `Style::attachment`. Only grows while the document is open, so an undone
+    /// insert leaves its entry behind (harmless: saving writes only the attachments still in the text).
+    attachments: Vec<Attachment>,
     /// The family typing takes when the caret is where no character gives one (an empty document): the preference
     /// for new documents. Not part of the text.
     default_font: u8,
@@ -238,7 +260,7 @@ impl Default for Text {
 
 impl Text {
     pub fn new() -> Self {
-        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB, default_font: 0 }
+        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB, attachments: Vec::new(), default_font: 0 }
     }
 
     /// The family new text takes where no character sets one (the Preferences' default font). Setting it changes no
@@ -252,7 +274,13 @@ impl Text {
 
     /// Replaces the content (a file was read). Undo, redo and the selection start over.
     pub fn load(&mut self, cells: Vec<Cell>) {
+        self.load_with_attachments(cells, Vec::new());
+    }
+
+    /// Replaces the content with cells and the attachments their `OBJECT` cells number (a file with pictures was read).
+    pub fn load_with_attachments(&mut self, cells: Vec<Cell>, attachments: Vec<Attachment>) {
         self.cells = cells;
+        self.attachments = attachments;
         self.anchor = 0;
         self.head = 0;
         self.typing = Style::default();
@@ -266,6 +294,36 @@ impl Text {
 
     pub fn cells(&self) -> &[Cell] {
         &self.cells
+    }
+
+    /// The embedded files, in the order their attachment numbers give them.
+    pub fn attachments(&self) -> &[Attachment] {
+        &self.attachments
+    }
+
+    /// The attachment a character's style points at, if it is an attachment.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn attachment_of(&self, style: &Style) -> Option<&Attachment> {
+        (style.attachment as usize).checked_sub(1).and_then(|i| self.attachments.get(i))
+    }
+
+    /// Whether the text holds any attachment (Format > Make Plain Text asks before dropping them).
+    pub fn has_attachments(&self) -> bool {
+        self.cells.iter().any(|c| c.ch == OBJECT)
+    }
+
+    /// Inserts an attachment at the caret (replacing the selection) as one `OBJECT` cell. One undo entry.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn insert_attachment(&mut self, attachment: Attachment, kind: Kind) {
+        self.record(kind);
+        self.attachments.push(attachment);
+        let style = Style { attachment: self.attachments.len() as u16, ..self.typing };
+        let range = self.selection();
+        let at = range.start;
+        self.cells.splice(range, [Cell { ch: OBJECT, style }]);
+        self.anchor = at + 1;
+        self.head = self.anchor;
+        self.sync_typing();
     }
 
     pub fn len(&self) -> usize {
@@ -358,6 +416,8 @@ impl Text {
             self.cells.first().map(|c| c.style)
         };
         self.typing = style.unwrap_or(Style { font: self.default_font, ..Style::default() });
+        // typing after an attachment is text, not another attachment
+        self.typing.attachment = 0;
         // typing continues a link only from inside it, not from its end
         let before = if at > 0 { self.cells[at - 1].style.link } else { 0 };
         let after = self.cells.get(at).map_or(0, |c| c.style.link);
@@ -602,12 +662,16 @@ impl Text {
     }
 
     /// Makes the document plain text: every character and paragraph loses its formatting. One undo entry.
+    /// Attachments are dropped (the caller asks first when `has_attachments`).
     pub fn make_plain(&mut self) {
         self.record(Kind::Formatting);
+        self.cells.retain(|c| c.ch != OBJECT);
         for c in &mut self.cells {
             c.style = Style::default();
         }
         self.typing = Style::default();
+        self.anchor = self.anchor.min(self.cells.len());
+        self.head = self.head.min(self.cells.len());
     }
 
     /// Strikethrough on when the first selected character has none, off otherwise.
@@ -1443,3 +1507,84 @@ mod tests {
         assert_eq!(t.history().epoch, saved.epoch + 1);
     }
 }
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+
+    fn picture(file: &str) -> Attachment {
+        Attachment { file: file.into(), width: 40.0, height: 20.0, data: vec![1, 2, 3] }
+    }
+
+    fn doc_with(s: &str) -> Text {
+        let mut t = Text::new();
+        t.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
+        t
+    }
+
+    #[test]
+    fn an_attachment_is_one_selectable_character_that_types_do_not_inherit() {
+        let mut t = doc_with("ab");
+        t.select(1, 1);
+        t.insert_attachment(picture("a.png"), Kind::Pasting);
+        assert_eq!(t.text(), format!("a{OBJECT}b"));
+        assert_eq!(t.attachment_of(&t.cells()[1].style).map(|a| a.file.as_str()), Some("a.png"));
+        // the caret is after the picture; typing there is text, not another picture
+        t.type_text("x");
+        assert_eq!(t.cells()[2].style.attachment, 0);
+        assert_eq!(t.attachment_of(&t.cells()[2].style), None);
+        // selecting the picture alone selects one character
+        t.select(1, 2);
+        assert_eq!(t.selected_text(), Some(OBJECT.to_string()));
+    }
+
+    #[test]
+    fn deleting_an_attachment_is_one_undo_entry() {
+        let mut t = doc_with("ab");
+        t.select(1, 1);
+        t.insert_attachment(picture("a.png"), Kind::Pasting);
+        assert!(t.has_attachments());
+        t.select(1, 2);
+        t.delete_backward();
+        assert_eq!(t.text(), "ab");
+        assert!(!t.has_attachments());
+    }
+
+    #[test]
+    fn undo_restores_a_deleted_attachment_and_redo_removes_it_again() {
+        let mut t = doc_with("ab");
+        t.select(1, 1);
+        t.insert_attachment(picture("a.png"), Kind::Pasting);
+        let with_picture = t.text();
+        t.select(1, 2);
+        t.delete_backward();
+        assert!(!t.has_attachments());
+        assert!(t.undo());
+        assert_eq!(t.text(), with_picture);
+        assert_eq!(t.attachment_of(&t.cells()[1].style).map(|a| a.file.as_str()), Some("a.png"));
+        assert!(t.redo());
+        assert!(!t.has_attachments());
+    }
+
+    #[test]
+    fn make_plain_drops_the_attachments_and_keeps_the_text() {
+        let mut t = doc_with("ab");
+        t.select(1, 1);
+        t.insert_attachment(picture("a.png"), Kind::Pasting);
+        t.make_plain();
+        assert_eq!(t.text(), "ab");
+        assert!(!t.has_attachments());
+        assert!(t.undo(), "one undo entry brings the picture back");
+        assert!(t.has_attachments());
+    }
+
+    #[test]
+    fn the_attachment_table_survives_a_load_only_when_given() {
+        let mut t = doc_with("x");
+        t.load_with_attachments(vec![Cell { ch: OBJECT, style: Style { attachment: 1, ..Style::default() } }], vec![picture("p.png")]);
+        assert_eq!(t.attachments().len(), 1);
+        t.load(vec![]);
+        assert!(t.attachments().is_empty());
+    }
+}
+

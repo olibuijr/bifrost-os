@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.0 — 2026-10-17
+
+- Rich text packages (RTFD) are read and written as a folder: `TXT.rtf` plus the files its attachments name, saved
+  atomically. The SDK has the folder-package type (`bifrost_app::document_package`) and the manifest key `package_types`.
+- An attachment is one character in the text (a NeXTGraphic group in RTF). Format > Make Plain Text is refused while the
+  document has attachments, so none are dropped silently.
+
 ## 1.7.0 — 2026-10-17
 
 - Text > Speech: Start Speaking speaks the selection (else the whole document) through the shell speech service; Stop Speaking ends it.
