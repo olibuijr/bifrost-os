@@ -105,6 +105,7 @@ pub mod services;
 pub mod chrome_host;
 pub mod sticky_keys;
 pub mod slow_keys;
+pub mod scripts_menu;
 pub mod mouse_keys;
 pub mod game_controllers_page;
 mod now_playing_menu;
