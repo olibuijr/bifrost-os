@@ -19,7 +19,7 @@
       "apple": "LanguageModelSession, Instructions, Prompt, GenerationOptions",
       "bifrost": "springboard/ui/src/model_session.rs (Session::prompt, Session::respond); wired: springboard/apps/assistant-desktop/src/session.rs (session, request)",
       "status": "partial",
-      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget."
+      "note": "Pure session model, tested headless in parity_sdk-tests-09 (a_session_records_prompts_and_responses_in_order, switching_profiles_keeps_history_and_changes_the_next_instructions) and in model_session::tests. It runs no model; the Assistant builds its own Messages API requests on top of it, and on-device sessions are not verified on Midget. Built 2026-10-17: The Assistant's empty conversation now states that messages go to a cloud model, because on_device_availability is unavailable (apps/assistant-desktop connect::cloud_notice, test connect::tests::the_cloud_notice_shows_until_an_on_device_model_exists)."
     },
     {
       "feature": "Streaming responses",

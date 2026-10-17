@@ -1048,6 +1048,9 @@ impl Assistant {
             } else if self.key.is_none() && self.get_req.is_none() {
                 put_centred(s, &mut self.labels, ui, "Add your API key in Settings to start.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), cx, mid + ui.pt(18.0));
             }
+            if let Some(notice) = connect::cloud_notice() {
+                put_centred(s, &mut self.labels, ui, notice, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), cx, mid + ui.pt(44.0));
+            }
             return;
         }
         let users: Vec<bool> = conv.messages.iter().map(|m| m.user).collect();
