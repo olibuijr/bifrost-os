@@ -691,9 +691,10 @@ mod tests {
         assert_eq!(decode_from_chrome(&nan), Err(DecodeError::BadValue));
         // Invalid UTF-8 in a string.
         assert_eq!(decode_from_chrome(&[VERSION, FROM_HELLO, 1, 0, 0, 0, 0xff]), Err(DecodeError::BadValue));
-        // A dock position of 7 (the autohide bool follows it, so it sits two bytes from the end).
+        // A dock position of 7. The autohide bool, the icon variant, the three tint bytes and the
+        // u32 icon generation follow it, so it sits ten bytes from the end.
         let mut bad_pos = encode_to_chrome(&ToChrome::Dock(DockModel::default()));
-        let pos_index = bad_pos.len() - 2;
+        let pos_index = bad_pos.len() - 10;
         bad_pos[pos_index] = 7;
         assert_eq!(decode_to_chrome(&bad_pos), Err(DecodeError::UnknownTag(7)));
     }

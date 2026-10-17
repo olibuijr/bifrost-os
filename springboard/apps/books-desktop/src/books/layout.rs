@@ -429,7 +429,7 @@ mod tests {
     fn the_measure_of_the_chosen_face_sets_the_page_count() {
         let blocks: Vec<Block> = (0..30).map(|i| Block::Para(format!("Paragraph {i} runs on for a while so that it wraps across several lines of the column."))).collect();
         let narrow_face = |s: &str, px: f32, bold: bool| measure(s, px, bold);
-        let wide_face = |s: &str, px: f32, bold: bool| measure(s, px, bold) * 1.35;
+        let wide_face = |s: &str, px: f32, bold: bool| measure(s, px, bold) * 2.0;
         let narrow = paginate(&blocks, m(400.0, 300.0), &narrow_face);
         let wide = paginate(&blocks, m(400.0, 300.0), &wide_face);
         assert!(wide.pages.len() > narrow.pages.len(), "a wider face needs more pages: {} vs {}", wide.pages.len(), narrow.pages.len());

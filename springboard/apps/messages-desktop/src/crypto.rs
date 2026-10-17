@@ -803,7 +803,8 @@ mod tests {
         let mut b = Machine::new("@b:x", "DEVB");
         assert_eq!(b.ingest_query(&query_answer(&a)), Ok(1));
         let mut forged = query_answer(&a);
-        let Json::Obj(users) = &mut forged else { panic!() };
+        let Json::Obj(top) = &mut forged else { panic!() };
+        let Json::Obj(users) = &mut top[0].1 else { panic!() };
         let Json::Obj(devices) = &mut users[0].1 else { panic!() };
         let Json::Obj(fields) = &mut devices[0].1 else { panic!() };
         fields.retain(|(k, _)| k != "signatures");

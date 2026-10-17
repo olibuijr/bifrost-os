@@ -521,7 +521,9 @@ impl App for MusicApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let mut menus = self.app.as_ref().map(|m| menus::build(&m.menu_state())).unwrap_or_default();
+        // With no window there is nothing to act on, so there are no menus at all.
+        let Some(m) = self.app.as_ref() else { return Vec::new() };
+        let mut menus = menus::build(&m.menu_state());
         menus.push(menus::window_menu(self.mini.is_some(), self.mini_on_top));
         menus
     }

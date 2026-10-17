@@ -53,6 +53,10 @@ impl VideoFilter {
 
     /// Filters one decoded frame. `None` when the frame's pixel count does not match its size.
     pub fn process(&mut self, frame: &Image) -> Option<Image> {
+        // A frame whose pixels do not fill its size is refused, chain or no chain.
+        if frame.px.len() != frame.w.checked_mul(frame.h)? {
+            return None;
+        }
         let filtered = if self.chain.is_empty() { frame.clone() } else { self.chain.apply(frame)? };
         let Some(retain) = self.retain else {
             return Some(filtered);

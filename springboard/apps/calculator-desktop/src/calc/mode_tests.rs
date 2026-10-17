@@ -219,7 +219,7 @@ fn the_history_draws_day_captions() {
 }
 
 #[test]
-fn convert_shows_all_thirteen_categories_in_two_rows() {
+fn convert_shows_all_fourteen_categories_in_two_rows() {
     let ui = crate::test_ui();
     let mut app = Calculator::new(&ui, 1200, 1920);
     let (x, y) = centre(app.bar_rect(&ui, BAR_CONVERT));
@@ -235,7 +235,7 @@ fn convert_shows_all_thirteen_categories_in_two_rows() {
     tap(&mut app, &ui, x, y);
     assert_eq!(app.convert.as_ref().unwrap().category, Category::FuelEconomy);
     let controls = app.controls(&ui);
-    assert_eq!(controls.iter().filter(|c| Category::ALL.iter().any(|k| k.title() == c.label)).count(), 13);
+    assert_eq!(controls.iter().filter(|c| Category::ALL.iter().any(|k| k.title() == c.label)).count(), Category::ALL.len());
     let mut ids: Vec<u64> = controls.iter().map(|c| c.id).collect();
     let n = ids.len();
     ids.sort_unstable();

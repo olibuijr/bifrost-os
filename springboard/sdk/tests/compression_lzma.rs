@@ -87,13 +87,15 @@ fn a_stream_with_a_bad_magic_is_refused() {
 
 #[test]
 fn a_stored_chunk_with_a_bad_crc64_is_refused() {
-    // 200 random bytes do not shrink, so the chunk is stored raw: the control byte 0x01 is at 12, the 2-byte
-    // size at 13 to 14, and the data starts at 15. Changing one data byte breaks the CRC64 of the block.
+    // 200 random bytes do not shrink, so the chunk is stored raw. The 12-byte stream header is followed by the
+    // block header, whose first byte gives its size as (byte + 1) * 4; the chunk's control byte 0x01 comes next,
+    // then a 2-byte size, then the data. Changing one data byte breaks the CRC64 of the block.
     let data = lcg_bytes(200, 21);
     let mut enc = encode_buffer(&data);
-    assert_eq!(enc[12], 0x01, "the chunk is expected to be stored raw");
+    let chunk = 12 + (enc[12] as usize + 1) * 4;
+    assert_eq!(enc[chunk], 0x01, "the chunk is expected to be stored raw");
     assert_eq!(decode_buffer(&enc, usize::MAX).unwrap(), data);
-    enc[15 + 10] ^= 0x40;
+    enc[chunk + 3 + 10] ^= 0x40;
     assert_eq!(decode_buffer(&enc, usize::MAX), Err(Error::InvalidData));
 }
 

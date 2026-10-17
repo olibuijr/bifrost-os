@@ -3656,7 +3656,10 @@ mod tests {
     }
 
     fn app(ui: &Ui, dir: &Path) -> Notes {
-        Notes::new(ui, 2400, 1500, dir.to_path_buf(), wall()) // a desktop window: the three-column toolbar fits
+        let mut n = Notes::new(ui, 2400, 1500, dir.to_path_buf(), wall()); // a desktop window: the three-column toolbar fits
+        // The tests type plain body text; the Title start is covered by the settings tests.
+        n.note_settings.new_note_start = settings::NewNoteStart::Body;
+        n
     }
 
     fn tap(n: &mut Notes, ui: &Ui, x: f32, y: f32, t: f64) {
