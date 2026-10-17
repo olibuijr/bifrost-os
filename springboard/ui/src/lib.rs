@@ -604,6 +604,7 @@ pub mod directory_contacts;
 /// The local account directory: users and groups read from `/etc/passwd` and `/etc/group` into a directory node.
 pub mod directory_local;
 pub mod access_control;
+pub mod recovery_key;
 pub mod permission_question;
 pub mod trust;
 pub mod focus;
