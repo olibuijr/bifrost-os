@@ -1412,7 +1412,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/combine.json",
    "status": "partial",
-   "note": "private framework, owner Combine; from SDK matrix combine.json",
+   "note": "Refreshed 2026-10-17, still open: Operators beyond map, filter, merge, flatMap, debounce, throttle, combineLatest, scan, compactMap and zip (for example prefix, reduce, drop, collect) receive(on:) and subscribe(on:); schedulers are a main-thread RunLoop and DispatchQueue, and no operator moves a publisher between them Demand and back pressure (Subscribers.Demand); completions and failures exist only on Finite and Future ObservableObject objectWillChange is partial: the aggregate publisher emits after the value has changed (observable_object.rs) Thread-safe publishers (Send) Notification, Timer, URLSession publishers",
    "rea": [],
    "method": "assessed"
   },

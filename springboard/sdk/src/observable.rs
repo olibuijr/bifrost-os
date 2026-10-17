@@ -481,6 +481,91 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
     }
 }
 
+impl<T: 'static> PassthroughSubject<T> {
+    /// `compactMap(_:)`: a derived subject that sends the value inside each `Some` that `f` returns and drops
+    /// the `None`s. The returned `Subscription` links it to this subject.
+    pub fn compact_map<U: 'static>(&self, f: impl Fn(&T) -> Option<U> + 'static) -> (PassthroughSubject<U>, Subscription) {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            if let Some(u) = f(v) {
+                o.send(u);
+            }
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `scan(_:_:)`: a derived subject that starts from `initial` and sends the running result of `f` on
+    /// each value. The initial value itself is not sent, as in Combine.
+    pub fn scan<U: Clone + 'static>(
+        &self,
+        initial: U,
+        f: impl Fn(&U, &T) -> U + 'static,
+    ) -> (PassthroughSubject<U>, Subscription) {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let acc = RefCell::new(initial);
+        let sub = self.sink(move |v| {
+            let next = f(&*acc.borrow(), v);
+            acc.replace(next.clone());
+            o.send(next);
+        });
+        (out, sub)
+    }
+
+    /// `zip(_:)`: a subject that sends `(a, b)` pairs by position: the first value of this subject with the
+    /// first of `other`, then the second with the second, and so on. Values that wait for a partner are
+    /// buffered in arrival order. The returned `Cancellables` keeps both links alive.
+    pub fn zip<B: Clone + 'static>(&self, other: &PassthroughSubject<B>) -> (PassthroughSubject<(T, B)>, Cancellables) {
+        let out: PassthroughSubject<(T, B)> = PassthroughSubject::new();
+        let state: Rc<RefCell<(VecDeque<T>, VecDeque<B>)>> = Rc::new(RefCell::new((VecDeque::new(), VecDeque::new())));
+        let mut links = Cancellables::new();
+
+        let (o1, s1) = (out.clone(), state.clone());
+        self.sink(move |a: &T| {
+            let pair = {
+                let mut q = s1.borrow_mut();
+                let waiting = q.1.pop_front();
+                match waiting {
+                    Some(b) => Some((a.clone(), b)),
+                    None => {
+                        q.0.push_back(a.clone());
+                        None
+                    }
+                }
+            };
+            if let Some(p) = pair {
+                o1.send(p);
+            }
+        })
+        .store(&mut links);
+
+        let (o2, s2) = (out.clone(), state);
+        other
+            .sink(move |b: &B| {
+                let pair = {
+                    let mut q = s2.borrow_mut();
+                    let waiting = q.0.pop_front();
+                    match waiting {
+                        Some(a) => Some((a, b.clone())),
+                        None => {
+                            q.1.push_back(b.clone());
+                            None
+                        }
+                    }
+                };
+                if let Some(p) = pair {
+                    o2.send(p);
+                }
+            })
+            .store(&mut links);
+
+        (out, links)
+    }
+}
+
 impl<T: Clone + 'static> PassthroughSubject<T> {
     /// `merge(with:)`: a subject that sends every value sent on either this subject or `other`, in the order
     /// they are sent. The returned `Cancellables` keeps both links alive; dropping it detaches the merge.
@@ -1231,6 +1316,80 @@ mod tests {
     fn counter_u32() -> (Rc<RefCell<Vec<u32>>>, Rc<RefCell<Vec<u32>>>) {
         let l = Rc::new(RefCell::new(Vec::new()));
         (l.clone(), l)
+    }
+}
+
+#[cfg(test)]
+mod scan_compact_zip_tests {
+    use super::*;
+
+    fn log_of<T: Clone + 'static>(subject: &PassthroughSubject<T>) -> (Rc<RefCell<Vec<T>>>, Subscription) {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let sub = subject.sink(move |v: &T| l.borrow_mut().push(v.clone()));
+        (log, sub)
+    }
+
+    #[test]
+    fn compact_map_sends_only_the_some_values() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.compact_map(|n: &i32| if *n % 2 == 0 { Some(*n * 10) } else { None });
+        let (log, _log_sub) = log_of(&out);
+        for n in 1..=4 {
+            src.send(n);
+        }
+        assert_eq!(*log.borrow(), vec![20, 40]);
+    }
+
+    #[test]
+    fn scan_sends_the_running_total_and_not_the_initial_value() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, _sub) = src.scan(100, |acc: &i32, v: &i32| acc + v);
+        let (log, _log_sub) = log_of(&out);
+        src.send(1);
+        src.send(2);
+        src.send(3);
+        assert_eq!(*log.borrow(), vec![101, 103, 106]);
+    }
+
+    #[test]
+    fn scan_works_with_a_non_copy_accumulator() {
+        let src: PassthroughSubject<&'static str> = PassthroughSubject::new();
+        let (out, _sub) = src.scan(String::new(), |acc: &String, v: &&str| format!("{acc}{v}"));
+        let (log, _log_sub) = log_of(&out);
+        src.send("a");
+        src.send("b");
+        assert_eq!(*log.borrow(), vec!["a".to_string(), "ab".to_string()]);
+    }
+
+    #[test]
+    fn zip_pairs_values_by_position_and_buffers_the_faster_side() {
+        let left: PassthroughSubject<i32> = PassthroughSubject::new();
+        let right: PassthroughSubject<&'static str> = PassthroughSubject::new();
+        let (out, _links) = left.zip(&right);
+        let (log, _log_sub) = log_of(&out);
+        left.send(1);
+        left.send(2);
+        assert!(log.borrow().is_empty());
+        right.send("x");
+        assert_eq!(*log.borrow(), vec![(1, "x")]);
+        right.send("y");
+        right.send("z");
+        left.send(3);
+        assert_eq!(*log.borrow(), vec![(1, "x"), (2, "y"), (3, "z")]);
+    }
+
+    #[test]
+    fn dropping_zip_links_detaches_both_sides() {
+        let left: PassthroughSubject<i32> = PassthroughSubject::new();
+        let right: PassthroughSubject<i32> = PassthroughSubject::new();
+        let (out, links) = left.zip(&right);
+        let (log, _log_sub) = log_of(&out);
+        drop(links);
+        left.send(1);
+        right.send(2);
+        assert!(log.borrow().is_empty());
+        assert_eq!(left.subscriber_count(), 0);
     }
 }
 

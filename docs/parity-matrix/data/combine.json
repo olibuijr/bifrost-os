@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "bifrost_app::observable, bifrost_ui::observe",
-  "summary": "A single-threaded Observable<T> with sink, map, remove_duplicates and cancel-on-drop subscriptions covers the CurrentValueSubject and @Published cases. PassthroughSubject has filter, map, merge, flat_map, debounce and throttle, and combine_latest is a free function. receive(on:), back pressure and threading are missing.",
+  "summary": "A single-threaded Observable<T> with sink, map, remove_duplicates and cancel-on-drop subscriptions covers the CurrentValueSubject and @Published cases. PassthroughSubject has filter, map, merge, flat_map, compact_map, scan, zip, debounce and throttle, and combine_latest is a free function. receive(on:), back pressure and threading are missing.",
   "rea_evidence": "ev_0b035d0628a1f6916e5d04d51a3633c387bc1193a863233411039893aa6a8710",
   "features": [
     {
@@ -12,7 +12,7 @@
       "apple": "Publisher, Publishers (map, filter, merge, combineLatest, debounce...)",
       "bifrost": "springboard/sdk/src/observable.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 23 tests. map and remove_duplicates on Observable; filter, merge, flat_map, debounce and throttle on PassthroughSubject; combine_latest as a free function Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. flatMap with Future inners is built (flat_map_future, resolution order). LocalScheduler (run_loop.rs) is the main-thread scheduler; debounce and throttle take it. Not done: receive(on:) and subscribe(on:), since publishers are single-threaded by design."
+      "note": "verified on Midget 0.7.25 by 23 tests. map and remove_duplicates on Observable; filter, merge, flat_map, debounce and throttle on PassthroughSubject; combine_latest as a free function Built 2026-10-17: PassthroughSubject merge(with:) (merge) and flat_map for inner publishers that replay synchronously (Finite); tests springboard/sdk/src/observable.rs::merge_flat_map_tests. Built 2026-10-17: debounce and throttle(latest:) on a main-thread RunLoop (springboard/sdk/src/run_loop.rs, advanced by the app tick); tests in springboard/sdk/src/observable.rs and run_loop.rs. flatMap with Future inners is built (flat_map_future, resolution order). LocalScheduler (run_loop.rs) is the main-thread scheduler; debounce and throttle take it. Not done: receive(on:) and subscribe(on:), since publishers are single-threaded by design. Refreshed 2026-10-17 (built): scan, compact_map (compactMap) and zip on PassthroughSubject, tests springboard/sdk/src/observable.rs::scan_compact_zip_tests."
     },
     {
       "feature": "Type-erased publishers",
@@ -107,7 +107,7 @@
     }
   ],
   "gaps": [
-    "Operators beyond map, filter, merge, flatMap, debounce, throttle and combineLatest (for example scan, compactMap, zip)",
+    "Operators beyond map, filter, merge, flatMap, debounce, throttle, combineLatest, scan, compactMap and zip (for example prefix, reduce, drop, collect)",
     "receive(on:) and subscribe(on:); schedulers are a main-thread RunLoop and DispatchQueue, and no operator moves a publisher between them",
     "Demand and back pressure (Subscribers.Demand); completions and failures exist only on Finite and Future",
     "ObservableObject objectWillChange is partial: the aggregate publisher emits after the value has changed (observable_object.rs)",

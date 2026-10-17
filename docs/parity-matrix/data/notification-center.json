@@ -19,7 +19,7 @@
       "apple": "NCWidgetController: widgetController(), setHasContent(_:forWidgetWithBundleIdentifier:), default()",
       "bifrost": "springboard/ui/src/widget.rs (Controller); tests: springboard/ui/tests/parity_sdk-tests-15.rs",
       "status": "partial",
-      "note": "The has-content flag per widget is tested headless in ui/tests/parity_sdk-tests-15.rs: unreported widgets show, empty ones are left out in order, and forgetting an app restores its widget. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf."
+      "note": "The has-content flag per widget is tested headless in ui/tests/parity_sdk-tests-15.rs: unreported widgets show, empty ones are left out in order, and forgetting an app restores its widget. Wave 1 (parity/integration 0d0412c3): pure model; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing lets an app tell the shell that its widget has content to show or hide, so the shell cannot hide an empty widget on the app's behalf. Refreshed 2026-10-17: covered by springboard/sdk/src/today_widgets.rs (WidgetSet::set_has_content, visible); tests today_widgets::tests."
     },
     {
       "feature": "Widget editing and ordering",
@@ -65,8 +65,7 @@
     }
   ],
   "gaps": [
-    "No app-facing Today widget extension point (NCWidgetProviding): apps cannot supply widget content to the Today View or the home-screen gallery.",
-    "No NCWidgetController equivalent: apps cannot report whether their widget has content.",
+    "No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding).",
     "No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController).",
     "The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet.",
     "WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives."

@@ -1633,7 +1633,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-foundation.json",
    "status": "partial",
-   "note": "from SDK matrix core-foundation.json",
+   "note": "Refreshed 2026-10-17, still open: No CFURL value type for paths (appending or deleting components, standardizing); springboard/sdk/src/file_manager.rs covers paths, resource values and directory enumeration. UserDefaults (defaults.rs) is not yet backed by PrefStore domains; no suite or global-domain fallback for the per-app store. Calendar/TimeZone are not yet used by DateFormatter (it takes an explicit tz_offset).",
    "rea": [],
    "method": "assessed"
   },
