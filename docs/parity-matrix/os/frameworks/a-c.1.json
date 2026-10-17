@@ -102,11 +102,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avkit.json",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/pickers.rs, springboard/ui/src/pip_window.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
    "status": "partial",
    "note": "from SDK matrix avkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Picture in Picture window drawing and the route menu drawing (pip.rs, pickers.rs) over the pure PiP and route models. Not verified on Midget; no shell PiP controller or frame source yet, and the route button is not wired. Multiview, capture and Continuity remain gaps."
   },
   {
    "id": "path:/System/Library/Frameworks/AVRouting.framework",
@@ -3132,11 +3146,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avkit.json",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/pickers.rs, springboard/ui/src/pip_window.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
    "status": "partial",
    "note": "private framework, owner AVKit; from SDK matrix avkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Picture in Picture window drawing and the route menu drawing (pip.rs, pickers.rs) over the pure PiP and route models. Not verified on Midget; no shell PiP controller or frame source yet, and the route button is not wired. Multiview, capture and Continuity remain gaps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AVKitMacHelper.framework",
@@ -3153,11 +3181,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/avkit.json",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/pickers.rs, springboard/ui/src/pip_window.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
    "status": "partial",
    "note": "private framework, owner AVKit; from SDK matrix avkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pickers::tests"
+    }
+   ],
+   "ready_note": "Host tests for the Picture in Picture window drawing and the route menu drawing (pip.rs, pickers.rs) over the pure PiP and route models. Not verified on Midget; no shell PiP controller or frame source yet, and the route button is not wired. Multiview, capture and Continuity remain gaps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AXAggregateStatisticsServices.framework",

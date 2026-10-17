@@ -54,7 +54,7 @@
       "apple": "MPMediaPickerController",
       "bifrost": "springboard/ui/src/media_picker.rs",
       "status": "partial",
-      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify. Built 2026-10-17: SDK row model over the picker (bifrost_app::media_picker_view: rows, footer, tap); the shell draws nothing yet. Tests springboard/sdk/src/media_picker_view.rs::tests."
+      "note": "Pure model, tested headless in parity_sdk-complete-26.rs: kinds accepted, one or many selection with a limit, the remaining count, select-all over the listed playable items, clearing the choice, playable filter, title and fuzzy search, and a confirmed choice returned to the app. Gap: no SDK widget or shell sheet draws it yet, which needs the lab machine to verify. Built 2026-10-17: SDK row model over the picker (bifrost_app::media_picker_view: rows, footer, tap); the shell draws nothing yet. Tests springboard/sdk/src/media_picker_view.rs::tests. Built 2026-10-17: shell/pickers.rs draw_media_picker draws the rows (title, subtitle, check mark, dimmed unplayable rows) and the chosen-count footer; tests springboard shell::pickers::tests. No sheet opens it yet."
     },
     {
       "feature": "Volume control and route button",
@@ -103,7 +103,7 @@
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
       "bifrost": "springboard/ui/src/media_feedback.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system Built 2026-10-17: SDK feedback body and like/dislike/bookmark and rate event decoding (bifrost_app::now_playing_feedback); shell side not wired yet. Tests springboard/sdk/src/now_playing_feedback.rs::tests."
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system Built 2026-10-17: SDK feedback body and like/dislike/bookmark and rate event decoding (bifrost_app::now_playing_feedback); shell side not wired yet. Tests springboard/sdk/src/now_playing_feedback.rs::tests. Built 2026-10-17: the lock card draws the like, dislike and bookmark icons and the rating track from the owner's feedback, and a tap sends set_toggle or set_rating (music/nowplaying.rs, music/system.rs, audiosvc.rs svc_lock_action); tests springboard shell::music::nowplaying::tests and shell::music::system::tests."
     },
     {
       "feature": "Now Playing sessions and focus",

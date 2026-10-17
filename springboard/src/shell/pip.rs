@@ -3,12 +3,15 @@
 //! its delegate events come from `bifrost_ui::pip_window`; the Settings toggle "Start PiP Automatically" (`pip_auto`)
 //! gates the automatic start here, since the controller only reads the player's own opt-in.
 
-use crate::gfx::{Image, Surface};
+use super::music::icons;
+use super::switcher::draw_scaled;
+use super::ui::Ui;
+use crate::gfx::{rgba, Image, Surface};
 use bifrost_ui::pip_window::{self, Controller, Corner, Event};
 use bifrost_ui::Rect;
 
-/// The window's backing colour behind the video: opaque black.
-const BACKING: u32 = 0xFF00_0000;
+/// The floating window's corner radius in pt: the grouped-card radius of the macOS-style design.
+pub const WINDOW_RADIUS_PT: f32 = 13.0;
 
 /// The part of `rect` that lies on a `w` by `h` surface, as `(x, y, width, height)` in pixels, or `None` when nothing
 /// of it is on the surface. Fractions are rounded outward so no edge pixel is lost.
@@ -23,21 +26,23 @@ pub fn clip_to(rect: Rect, w: usize, h: usize) -> Option<(usize, usize, usize, u
     Some((x0 as usize, y0 as usize, (x1 - x0) as usize, (y1 - y0) as usize))
 }
 
-/// Draws the floating window on top of whatever the shell has drawn: a black backing over `rect`, then `frame` when
-/// the player has one. The frame must already be scaled to the window's size; this does not scale it. Called last in
-/// the frame so the window sits above the windows, the menu bar and the dock.
-pub fn draw_window(s: &mut Surface, rect: Rect, frame: Option<&Image>) {
-    let Some((x, y, cw, ch)) = clip_to(rect, s.w, s.h) else { return };
-    s.fill_rect(x, y, cw, ch, BACKING);
-    if let Some(img) = frame {
-        s.blit(img, rect.x as i32, rect.y as i32, 0xFFFF_FFFF, 0xFF);
-    }
-}
-
 /// The floating window's rectangle for a video of `aspect` (width over height) in `corner` of `usable`.
 pub fn window_rect(usable: Rect, aspect: f32, corner: Corner) -> Rect {
     let size = pip_window::window_size(usable.w, usable.h, aspect);
     pip_window::place(usable, size, corner)
+}
+
+/// Draws the floating window at `r`: a black rounded frame with the video `frame` scaled to fill it (a placeholder
+/// note while there is no frame yet) and a thin light edge. Nothing is drawn outside `r`.
+pub fn draw_window(s: &mut Surface, ui: &Ui, r: Rect, frame: Option<&Image>) {
+    let radius = ui.pt(WINDOW_RADIUS_PT);
+    s.fill_rrect(r.x, r.y, r.w, r.h, radius, rgba(0, 0, 0, 255));
+    let slot = crate::layout::Rect { x: r.x as i32, y: r.y as i32, w: r.w as i32, h: r.h as i32 };
+    match frame {
+        Some(img) => draw_scaled(s, img, slot, radius, 255),
+        None => draw_scaled(s, &icons::placeholder(64, 0.0), slot, radius, 255),
+    }
+    s.stroke_rrect(r.x, r.y, r.w, r.h, radius, 1.0, rgba(255, 255, 255, 60));
 }
 
 /// The app left the foreground. Starts the window when the Settings toggle is on and the controller allows it (see
@@ -76,15 +81,6 @@ mod tests {
     }
 
     #[test]
-    fn the_window_is_clipped_to_the_surface() {
-        assert_eq!(clip_to(Rect { x: 10.0, y: 20.0, w: 100.0, h: 50.0 }, 800, 600), Some((10, 20, 100, 50)));
-        assert_eq!(clip_to(Rect { x: 750.0, y: 560.0, w: 100.0, h: 100.0 }, 800, 600), Some((750, 560, 50, 40)));
-        assert_eq!(clip_to(Rect { x: -20.0, y: -10.0, w: 100.0, h: 50.0 }, 800, 600), Some((0, 0, 80, 40)));
-        assert_eq!(clip_to(Rect { x: 900.0, y: 0.0, w: 100.0, h: 50.0 }, 800, 600), None, "off the right edge");
-        assert_eq!(clip_to(Rect { x: 0.0, y: 0.0, w: 0.0, h: 50.0 }, 800, 600), None, "an empty window draws nothing");
-    }
-
-    #[test]
     fn the_settings_toggle_gates_the_automatic_start() {
         let mut off = player();
         assert_eq!(enter_background(false, &mut off, true), None, "toggle off: no window");
@@ -96,8 +92,31 @@ mod tests {
     }
 
     #[test]
+    fn the_window_draws_inside_its_rectangle_only() {
+        let ui = crate::shell::tests::ui();
+        let (w, h) = (400usize, 300usize);
+        let mut px = vec![0u32; w * h];
+        {
+            let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+            draw_window(&mut s, &ui, Rect { x: 100.0, y: 100.0, w: 200.0, h: 150.0 }, None);
+        }
+        assert_eq!(px[0], 0, "the corner of the screen is untouched");
+        assert_ne!(px[175 * w + 200], 0, "the middle of the window is drawn");
+        assert_eq!(px[299 * w + 399], 0, "the far corner is untouched");
+    }
+
+    #[test]
     fn a_paused_player_does_not_start_in_the_background() {
         let mut c = player();
         assert_eq!(enter_background(true, &mut c, false), None);
+    }
+
+    #[test]
+    fn the_window_is_clipped_to_the_surface() {
+        assert_eq!(clip_to(Rect { x: 10.0, y: 20.0, w: 100.0, h: 50.0 }, 800, 600), Some((10, 20, 100, 50)));
+        assert_eq!(clip_to(Rect { x: 750.0, y: 560.0, w: 100.0, h: 100.0 }, 800, 600), Some((750, 560, 50, 40)));
+        assert_eq!(clip_to(Rect { x: -20.0, y: -10.0, w: 100.0, h: 50.0 }, 800, 600), Some((0, 0, 80, 40)));
+        assert_eq!(clip_to(Rect { x: 900.0, y: 0.0, w: 100.0, h: 50.0 }, 800, 600), None, "off the right edge");
+        assert_eq!(clip_to(Rect { x: 0.0, y: 0.0, w: 0.0, h: 50.0 }, 800, 600), None, "an empty window draws nothing");
     }
 }
