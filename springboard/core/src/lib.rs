@@ -8,6 +8,7 @@ pub mod sha256;
 pub mod sha512;
 pub mod sha3;
 pub mod mlkem;
+pub mod mldsa;
 pub mod md5;
 pub mod sha1;
 pub mod hkdf;
