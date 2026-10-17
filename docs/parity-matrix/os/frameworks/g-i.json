@@ -4611,7 +4611,7 @@
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/imap.rs",
    "status": "partial",
-   "note": "The Mail app's IMAP wire parser and command builder (RFC 3501) are in imap.rs. Gap: literal responses are read by the connection layer, not by this module, and there is no system-wide IMAP account service for other apps.",
+   "note": "The Mail app's IMAP wire parser and command builder (RFC 3501) are in imap.rs. Gap: literal responses are read by the connection layer, not by this module, and there is no system-wide IMAP account service for other apps. Built 2026-10-17: imap::literal_size reads the announced count of a {n} or {n+} literal; tests imap::tests.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -4620,6 +4620,11 @@
      "kind": "test",
      "crate": "bifrost-mail",
      "filter": "imap::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "imap::tests::literal_size_reads_the_announced_count"
     }
    ],
    "ready_note": "IMAP wire parser and command builder (RFC 3501) are covered by imap host tests. Literal reads happen in the connection layer and there is no system-wide IMAP account service (open gap in the note)."
