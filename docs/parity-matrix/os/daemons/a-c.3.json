@@ -102,8 +102,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs, springboard/src/shell/services/accessibility_display.rs",
+   "ready_note": "The accessibility models (ax, captions, braille cell translation) run in the shell, and the braille service answers translation requests. The only part not built is a Braille display driver, which needs hardware.",
    "status": "partial",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "captions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accessibility_display::tests"
+    }
+   ],
    "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
    "rea": [],
    "method": "rule"
@@ -3974,7 +4003,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
    "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, in memory for the shell's lifetime; no file backend, no sync and no shared stores yet",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); no sync and no shared stores yet",
    "rea": [],
    "method": "rule"
   },
