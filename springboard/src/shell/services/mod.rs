@@ -51,6 +51,7 @@ pub mod contacts;
 pub mod calendar;
 pub mod location;
 pub mod screen_sample;
+pub mod screen_stream;
 pub mod power_service;
 pub mod audio_devices;
 pub mod quick_look;
@@ -146,6 +147,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(calendar::Calendar),
         Box::new(location::Location::default()),
         Box::new(screen_sample::ScreenSample),
+        Box::new(screen_stream::ScreenStreamService::default()),
         Box::new(widgets_timeline::WidgetsTimeline),
         Box::new(power_service::PowerService::default()),
         Box::new(audio_devices::AudioDevices::new()),
