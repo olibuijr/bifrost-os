@@ -53,11 +53,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/tabular_summary.rs (summarize, ColumnSummary); springboard/core/src/csv.rs (parse_table, Table); springboard/sdk/src/csv_writer.rs (CsvWriter)",
+   "bifrost": "springboard/sdk/src/tabular_frame.rs, springboard/sdk/src/tabular_columns.rs, springboard/sdk/src/tabular_summary.rs, springboard/sdk/src/tabular_json.rs, springboard/sdk/src/csv_writer.rs, springboard/ui/src/column_summary.rs, springboard/ui/src/table.rs, springboard/ui/src/format.rs",
    "status": "partial",
    "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial. Built 2026-10-17: column-aware JSON (sdk tabular_json.rs) and typed columns (sdk tabular_columns.rs); tests tabular_json::tests, tabular_columns::tests. Built 2026-10-17: DataFrame over the typed columns (sdk tabular_frame.rs: from_table, from_columns, select, filter, sort_by, to_table; tests tabular_frame::tests) and tab-delimited reading (core csv parse_table_delimited; tests parity_sdk-complete-11). Still missing: a spreadsheet file reader or writer.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tabular_frame::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tabular_columns::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tabular_summary::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tabular_json::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "csv_writer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "column_summary::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "table::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "format::tests"
+    }
+   ],
+   "ready_note": "Typed columns and data frames, per-column statistical summaries, sorting, CSV reading and writing, and JSON import and export: bifrost_app::{tabular_frame, tabular_columns, tabular_summary, tabular_json, csv_writer} with core csv::parse_table. Host tests only."
   },
   {
    "id": "path:/System/Library/Frameworks/Tcl.framework",
@@ -223,11 +267,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation.rs",
    "status": "partial",
    "note": "from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "translation::run_tests"
+    }
+   ],
+   "ready_note": "Language availability, translation sessions and tasks, formatted text and errors over on-device phrase-table language packs (bifrost_app::translation, translation_popover). Host tests only. Not covered: a neural translation engine (none is packaged for Arch) and the shell drawing the popover."
   },
   {
    "id": "path:/System/Library/Frameworks/USDKit.framework",
@@ -385,11 +448,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/hwdec/mod.rs; springboard/src/media/hwdec/vaapi.rs; springboard/src/media/hwdec/ffmpeg.rs",
+   "bifrost": "springboard/src/media/hwdec/mod.rs, springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
    "status": "partial",
    "note": "VA-API decode runs through a dlopened libavcodec with a software fallback; NAL splitting and NV12 conversion are tested headless. Gap: hardware decode is unverified on the lab machine and no app-facing decode API exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "hwdec::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "vaapi::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "ffmpeg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "every_decoded_picture_reaches_the_output_handler_in_submission_order"
+    }
+   ],
+   "ready_note": "VA-API hardware decode through a dlopened libavcodec with a software fallback, NAL splitting and the support probe (media::hwdec), and the app-facing decode session over it (bifrost_app::video_decompression). Host tests only; hardware decode is unverified on the lab machine."
   },
   {
    "id": "path:/System/Library/Frameworks/VideoSubscriberAccount.framework",
@@ -427,11 +514,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/pixel_transfer.rs (PixelTransfer); springboard/render/src/video_transfer.rs; springboard/sdk/src/video_decompression.rs",
+   "bifrost": "springboard/sdk/src/pixel_transfer.rs, springboard/sdk/src/video_compression.rs, springboard/ui/src/video_session.rs, springboard/render/src/video_transfer.rs, springboard/render/src/hdr_metadata.rs, springboard/render/src/block_motion.rs, springboard/src/media/hwdec/ffmpeg.rs",
    "status": "os",
    "note": "Built 2026-10-17: PixelTransfer session in the SDK for NV12 to RGBA conversion, RGBA scaling and quarter-turn rotation with mirrors, tests pixel_transfer::tests. Still missing: encoding, a shared app buffer type, HDR and RAW input, and frame processing (super resolution, interpolation, motion), so the row stays os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "pixel_transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "video_compression::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "video_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "hdr_metadata::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "block_motion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "ffmpeg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "every_decoded_picture_reaches_the_output_handler_in_submission_order"
+    }
+   ],
+   "ready_note": "Decompression sessions (bifrost_app::video_decompression over media::hwdec), compression sessions with properties, multi-pass storage and frame silo (video_compression), pixel transfer and rotation (pixel_transfer over render video_transfer), HDR metadata and block motion estimation. Host tests only. Not covered: H.264 and HEVC encoding (the built-in encoder is intra-frame PNG; screen movies use ffmpeg or Motion JPEG)."
   },
   {
    "id": "path:/System/Library/Frameworks/Virtualization.framework",
@@ -448,11 +579,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/virtualization.json",
+   "bifrost": "springboard/core/src/guest_vm.rs, springboard/core/src/guest_display.rs, springboard/core/src/guest_clipboard.rs, springboard/core/src/guest_audio.rs, springboard/core/src/guest_usb.rs, springboard/core/src/virtio.rs, springboard/core/src/disk_image.rs",
    "status": "partial",
    "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge. Refreshed 2026-10-17 (virtualization area): the stale doc reference to docs/arch-vm.md is dropped from the data file (the doc is docs/arch-x86-vm.md). Still open: the guest SDK module with a launcher, a guest display view in a window, shared folders and clipboard, and guest audio and USB passthrough.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_vm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_display::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_clipboard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_audio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "guest_usb::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "virtio::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_image::inspect_tests"
+    }
+   ],
+   "ready_note": "Guest machine configuration and lifecycle (start, pause, resume, state), virtio devices (storage, network, entropy, balloon, console, sockets), shared directories, clipboard, display, audio and USB bridges in bifrost_core, with the QEMU launch tooling. Host tests only. Not covered: macOS guests (not applicable)."
   },
   {
    "id": "path:/System/Library/Frameworks/Vision.framework",
@@ -469,10 +639,64 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/image_analysis.rs, springboard/ui/src/subject_lift.rs, springboard/ui/src/scan.rs",
+   "bifrost": "springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs, springboard/sdk/src/visual_search.rs, springboard/ui/src/subject_lift.rs, springboard/ui/src/scan.rs, springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/detect.rs, springboard/ui/src/visual_lookup.rs",
    "status": "partial",
    "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_analysis::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "data_scanner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "subject_lift::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "analysis::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "docscan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_lookup::tests"
+    }
+   ],
+   "ready_note": "Image analysis requests (subject segmentation, visual lookup), barcode and text scanning, document scanning, data detectors and visual search: bifrost_app::{image_analysis, data_scanner, document_scan, visual_search} over bifrost_ui::{subject_lift, scan, analysis, docscan, detect}. Host tests only. Not covered: an ML segmentation model and a lookup service; the colour-key segmenter and the models give the API shape and data."
   },
   {
    "id": "path:/System/Library/Frameworks/VisionKit.framework",
