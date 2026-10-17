@@ -38,19 +38,40 @@ pub struct Frame {
     pub path: String,
 }
 
-/// The `start` params: `width`, `height` and `minFrameInterval` (seconds between frames).
-pub fn start_params(width: u32, height: u32, min_frame_interval: f64) -> Json {
-    Json::Obj(vec![
+/// What a stream shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Filter {
+    /// The whole display minus these apps (by process id). An empty list is the whole display.
+    DisplayExcept(Vec<u32>),
+    /// One window, by the id the shell reports for it.
+    Window(u32),
+    /// The windows of one app (by process id).
+    App(u32),
+}
+
+/// The `start` params: the size, `minFrameInterval` (seconds between frames), the filter, and `record` (a movie file
+/// name, when the stream should also be written to a movie).
+pub fn start_params(width: u32, height: u32, min_frame_interval: f64, filter: &Filter, record: Option<&str>) -> Json {
+    let mut fields = vec![
         ("width".into(), Json::Num(f64::from(width))),
         ("height".into(), Json::Num(f64::from(height))),
         ("minFrameInterval".into(), Json::Num(min_frame_interval)),
-    ])
+    ];
+    match filter {
+        Filter::DisplayExcept(pids) => fields.push(("excludeApps".into(), Json::Arr(pids.iter().map(|p| Json::Num(f64::from(*p))).collect()))),
+        Filter::Window(id) => fields.push(("window".into(), Json::Num(f64::from(*id)))),
+        Filter::App(pid) => fields.push(("app".into(), Json::Num(f64::from(*pid)))),
+    }
+    if let Some(name) = record {
+        fields.push(("record".into(), Json::Str(name.into())));
+    }
+    Json::Obj(fields)
 }
 
-/// Starts the display stream. Returns the request id; the shell refuses the start unless the app holds the Screen
-/// permission. A later `start` replaces the running stream.
-pub fn start(ctx: &Ctx, width: u32, height: u32, min_frame_interval: f64) -> u32 {
-    service::call(ctx, SERVICE, "start", &start_params(width, height, min_frame_interval))
+/// Starts a stream. Returns the request id; the shell refuses the start unless the app holds the Screen permission.
+/// A later `start` replaces the running stream.
+pub fn start(ctx: &Ctx, width: u32, height: u32, min_frame_interval: f64, filter: &Filter, record: Option<&str>) -> u32 {
+    service::call(ctx, SERVICE, "start", &start_params(width, height, min_frame_interval, filter, record))
 }
 
 /// Stops the stream.
@@ -114,9 +135,22 @@ mod tests {
 
     #[test]
     fn the_start_params_carry_the_size_and_interval() {
-        let p = start_params(640, 360, 0.1);
+        let p = start_params(640, 360, 0.1, &Filter::DisplayExcept(Vec::new()), None);
         assert_eq!(p.get("width").and_then(Json::number), Some(640.0));
         assert_eq!(p.get("height").and_then(Json::number), Some(360.0));
         assert_eq!(p.get("minFrameInterval").and_then(Json::number), Some(0.1));
+        assert!(p.get("record").is_none());
+    }
+
+    #[test]
+    fn the_filter_and_movie_name_go_in_the_start_params() {
+        let window = start_params(1, 1, 0.1, &Filter::Window(7), None);
+        assert_eq!(window.get("window").and_then(Json::number), Some(7.0));
+        let app = start_params(1, 1, 0.1, &Filter::App(42), None);
+        assert_eq!(app.get("app").and_then(Json::number), Some(42.0));
+        let except = start_params(1, 1, 0.1, &Filter::DisplayExcept(vec![3, 9]), Some("clip.mov"));
+        let list = except.get("excludeApps").and_then(Json::as_array).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(except.get("record").and_then(Json::as_str), Some("clip.mov"));
     }
 }
