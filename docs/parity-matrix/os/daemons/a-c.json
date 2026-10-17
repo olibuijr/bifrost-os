@@ -1741,8 +1741,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "shell assistant service (springboard/src/shell/assistant.rs): settings, per-app intent catalogue, backend reply protocol and confirmation gate are built and unit-tested; the Cmd+Shift+A panel, the Settings > Assistant page, the HTTPS transport and speech input (no local engine yet) are not wired",
+   "status": "gap",
+   "note": "groundwork only: springboard/src/shell/assistant.rs has the settings, per-app intent catalogue, reply protocol and confirmation gate (unit-tested, not compiled in this round). Not wired: the Cmd+Shift+A shortcut and panel, the shared API client, the assistant service registration and Settings > Assistant",
    "rea": [],
    "method": "heuristic"
   },
