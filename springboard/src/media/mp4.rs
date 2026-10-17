@@ -640,7 +640,7 @@ pub fn asc_params(asc: &[u8]) -> Option<(u32, u16)> {
     parse_asc(asc).map(|c| (c.sample_rate, c.channels))
 }
 
-fn sample_table(stbl: &[u8]) -> Result<Vec<SampleInfo>, Error> {
+pub(crate) fn sample_table(stbl: &[u8]) -> Result<Vec<SampleInfo>, Error> {
     let table = |name: &[u8; 4]| child(stbl, name);
     let Some(stts) = table(b"stts") else { return Ok(Vec::new()) };
     // the sample count the size table declares caps everything else

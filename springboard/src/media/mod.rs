@@ -24,6 +24,7 @@
 pub mod aac;
 pub mod aacstream;
 pub mod audiofile;
+pub mod chapters;
 pub mod codec;
 pub mod convert;
 #[cfg(target_os = "linux")]

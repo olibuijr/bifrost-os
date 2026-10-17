@@ -19,7 +19,10 @@ pub fn read(src: &mut dyn Source) -> Result<Tags, Error> {
         if &kind == b"moov" {
             let mut moov = vec![0u8; size as usize];
             src.read_at(pos, &mut moov)?;
-            return Ok(parse_moov(&moov[hl..]));
+            let body = &moov[hl..];
+            let mut tags = parse_moov(body);
+            tags.chapters = super::chapters::from_moov(body, src);
+            return Ok(tags);
         }
         if size == 0 {
             return Err(Error::Invalid("no moov box"));

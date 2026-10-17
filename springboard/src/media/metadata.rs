@@ -228,6 +228,7 @@ mod tests {
             year: Some(1999),
             cover: Some(vec![0xFF, 0xD8]),
             lyrics: None,
+            chapters: Vec::new(),
         }
     }
 

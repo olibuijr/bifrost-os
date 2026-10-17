@@ -84,6 +84,8 @@ pub struct Tags {
     pub cover: Option<Vec<u8>>,
     /// the unsynchronised lyrics text as tagged (ID3 USLT), when the file carries it
     pub lyrics: Option<String>,
+    /// the chapters in play order (ID3 CHAP frames, an MP4 chapter list or chapter track); empty when there are none
+    pub chapters: Vec<super::chapters::Chapter>,
 }
 
 /// A decoded audio stream: interleaved S16 at its own rate and channel
