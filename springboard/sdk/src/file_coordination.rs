@@ -25,7 +25,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use crate::fswatch::{WatchEvent, WatchEventFlags};
+use crate::fswatch::{WatchEvent, WatchEventFlags, WatchStream};
 
 extern "C" {
     fn flock(fd: i32, op: i32) -> i32;
@@ -205,6 +205,12 @@ pub fn deliver_events(events: &[WatchEvent]) {
     }
 }
 
+/// Callback delivery for presenters: polls `stream` at `now` and hands each non-empty batch to the registered
+/// presenters, so an app does not write its own poll loop. Returns the number of events delivered.
+pub fn pump(stream: &mut WatchStream, now: Instant) -> usize {
+    stream.deliver(now, deliver_events)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,6 +301,25 @@ mod tests {
         // the presenter is still registered after the refusal
         let _ = NativeFileCoordinator.coordinate_writing(&file, |_| ());
         assert_eq!(log.borrow().len(), 2);
+    }
+
+    #[test]
+    fn pump_feeds_presenters_from_a_watch_stream() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("g.txt");
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let _t = NativeFileCoordinator::add_presenter(Box::new(P { url: file.clone(), log: log.clone() }));
+        let flags = WatchStreamFlags::FILE_EVENTS.union(WatchStreamFlags::NO_DEFER);
+        let mut stream = WatchStream::new(&[dir.path().to_path_buf()], Duration::from_millis(20), flags);
+        assert!(stream.start());
+        // another process (not coordinated) writes the item
+        std::fs::write(&file, b"y").unwrap();
+        let end = Instant::now() + Duration::from_secs(3);
+        while log.borrow().is_empty() && Instant::now() < end {
+            pump(&mut stream, Instant::now());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(*log.borrow(), ["change g.txt"]);
     }
 
     #[test]
