@@ -312,6 +312,15 @@ pub fn display(req: &NotifRequest) -> (String, String) {
     (req.title.clone(), body)
 }
 
+/// What a delivery shows for a grant (None when the app was never decided): (banner, sound). The banner needs the alert
+/// option and the sound needs the sound option and an unmuted app; a request without a sound (kind 0) plays none. A
+/// critical sound has no grant here, so it plays as the default sound.
+pub fn delivery_plan(grant: Option<u8>, muted: bool, sound_kind: u8) -> (bool, bool) {
+    let banner = grant.is_none_or(|bits| bits & NOTIF_AUTH_ALERT != 0);
+    let sound = sound_kind != 0 && !muted && grant.is_none_or(|bits| bits & NOTIF_AUTH_SOUND != 0);
+    (banner, sound)
+}
+
 /// True when the app `app` (its id) has the `notifications` permission in its manifest.
 pub(super) fn permitted(app: &str) -> bool {
     super::apphost::installed().iter().any(|p| p.manifest.id == app && p.manifest.permissions.iter().any(|x| x == "notifications"))
@@ -485,7 +494,12 @@ impl super::Shell {
         let (title, body) = display(&req);
         let mut n = super::notify::Notification::new(super::AppId::External(slot), title, body, self.wall.now(t));
         n.thread = req.thread.clone();
-        let id = self.notify_id(n);
+        let (banner, sound) = delivery_plan(self.usernotif.granted(app), self.notify.store().is_muted(super::AppId::External(slot)), req.sound_kind);
+        let id = self.notify_id_banner(n, banner);
+        if sound {
+            let name = if req.sound_kind == 2 { req.sound_name.as_str() } else { super::options::ALERT_SOUNDS[0] };
+            super::apphost::queue_request_sound(name);
+        }
         if let Some(count) = req.badge.filter(|_| self.usernotif.granted(app).is_none_or(|bits| bits & NOTIF_AUTH_BADGE != 0)) {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
                 h.badge = if count == 0 { String::new() } else { super::apphost::clean_badge(&count.to_string()) };
@@ -588,6 +602,16 @@ mod tests {
         r.hold_authorization(APP, 2, 9, 0);
         r.forget_app(APP);
         assert!(r.take_authorization(APP).is_empty());
+    }
+
+    #[test]
+    fn delivery_follows_the_alert_and_sound_options() {
+        assert_eq!(delivery_plan(None, false, 1), (true, true));
+        assert_eq!(delivery_plan(Some(NOTIF_AUTH_ALERT), false, 1), (true, false));
+        assert_eq!(delivery_plan(Some(NOTIF_AUTH_SOUND), false, 1), (false, true));
+        assert_eq!(delivery_plan(Some(NOTIF_AUTH_BADGE), false, 2), (false, false));
+        assert_eq!(delivery_plan(Some(NOTIF_AUTH_ALERT | NOTIF_AUTH_SOUND), true, 1), (true, false));
+        assert_eq!(delivery_plan(Some(NOTIF_AUTH_ALERT | NOTIF_AUTH_SOUND), false, 0), (true, false));
     }
 
     #[test]

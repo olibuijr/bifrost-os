@@ -428,11 +428,20 @@ impl Shell {
 
     /// `notify`, returning the id the store gave the notification.
     pub fn notify_id(&mut self, n: Notification) -> u64 {
+        self.notify_id_banner(n, true)
+    }
+
+    /// Like `notify_id`; with `banner` false the notification is only stored and listed (an app whose alert option
+    /// was not granted), so no banner or wake is shown for it.
+    pub fn notify_id_banner(&mut self, n: Notification, banner: bool) -> u64 {
         let app = n.app;
         let id = self.notify.store.push(n);
         self.screentime.note_notification(app);
         self.store_changed();
         self.notify.refresh_schedule();
+        if !banner {
+            return id;
+        }
         // the delivery model decides: Stored (Alert Style None, muted, or Focus) is listed and badged only
         let decision = presentation_of(&self.app_notif(app), self.notify.delivers(app));
         if decision.presentation == bifrost_ui::notifdelivery::Presentation::Stored {
