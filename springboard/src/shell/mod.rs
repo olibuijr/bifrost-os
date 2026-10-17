@@ -1225,6 +1225,11 @@ impl Shell {
         self.game.update(wanted, now_ms)
     }
 
+    /// The menu bar's "Turn Off Game Mode": off for the game in front until it leaves. True if it was on.
+    pub fn game_mode_turn_off(&mut self) -> bool {
+        self.game.turn_off()
+    }
+
     /// Whether Game Mode is on now (the CPU profile is Performance while it is).
     pub fn game_mode_on(&self) -> bool {
         self.game.is_on()

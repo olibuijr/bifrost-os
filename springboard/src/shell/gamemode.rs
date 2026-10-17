@@ -80,6 +80,8 @@ pub fn plan(change: Change) -> Vec<Effect> {
 #[derive(Debug, Default)]
 pub struct Model {
     on: bool,
+    /// the player turned Game Mode off for the game in front: it stays off until that game leaves the front
+    suppressed: bool,
     /// when the game first stopped qualifying, while Game Mode is still on
     leaving_since: Option<u64>,
     notified: bool,
@@ -92,6 +94,10 @@ impl Model {
 
     /// `wanted`: Game Mode is allowed and a game is in front, full screen. Returns the change, if any.
     pub fn update(&mut self, wanted: bool, now: u64) -> Option<Change> {
+        if !wanted {
+            self.suppressed = false;
+        }
+        let wanted = wanted && !self.suppressed;
         if wanted {
             self.leaving_since = None;
             if !self.on {
@@ -115,6 +121,16 @@ impl Model {
             }
             Some(_) => None,
         }
+    }
+
+    /// The player turns Game Mode off from the menu bar: it is off until the game in front leaves. Returns whether
+    /// it was on.
+    pub fn turn_off(&mut self) -> bool {
+        let was_on = self.on;
+        self.on = false;
+        self.leaving_since = None;
+        self.suppressed = true;
+        was_on
     }
 
     /// When `update` next has to run to let Game Mode leave, if it is waiting to.
@@ -172,6 +188,18 @@ mod tests {
         assert_eq!(m.update(false, 0), None);
         assert_eq!(m.update(false, 10 * LEAVE_MS), None);
         assert!(!m.is_on());
+    }
+
+    #[test]
+    fn turning_it_off_holds_until_the_game_leaves() {
+        let mut m = Model::default();
+        m.update(true, 0);
+        assert!(m.turn_off());
+        assert!(!m.is_on());
+        assert_eq!(m.update(true, 100), None, "the same game does not turn it back on");
+        assert_eq!(m.update(false, 200), None, "the game leaves");
+        assert_eq!(m.update(true, 300), Some(Change::Enter), "the next game gets it again");
+        assert!(!Model::default().turn_off(), "off already: nothing to turn off");
     }
 
     #[test]

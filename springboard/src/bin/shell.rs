@@ -428,6 +428,7 @@ fn run() -> std::io::Result<()> {
     let mut last_profile_check = f64::NEG_INFINITY;
     // Game Mode is checked four times a second: entering must feel immediate (see `shell::gamemode`)
     let mut last_game_check = f64::NEG_INFINITY;
+    let mut profile_game = false;
     boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, power::battery().0, power::battery().1, low_power));
     let chord_key = |code: u16| match code {
         input::KEY_POWER => Some(springboard::shell::chord::Key::Power),
@@ -1060,7 +1061,8 @@ fn run() -> std::io::Result<()> {
             }
         }
         // every 10 s, and at once when Power Mode, Low Power Mode or Game Mode changed
-        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power {
+        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power || shell.game_mode_on() != profile_game {
+            profile_game = shell.game_mode_on();
             last_profile_check = t;
             profile_pref = shell.power_pref();
             profile_low_power = low_power;

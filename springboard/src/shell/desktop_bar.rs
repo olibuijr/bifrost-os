@@ -44,10 +44,12 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Input,
     /// the Now Playing extra: shown while an app has a session, its menu is `now_playing_menu::panel`
     NowPlaying,
+    /// the Game Mode extra: shown while Game Mode is on; its one row turns it off for this game (`gamemode`)
+    GameMode,
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -224,6 +226,7 @@ impl Shell {
         // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
         if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
+        if self.game_mode_on(){let label=String::from("Game Mode");let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::GameMode,w,label));}
         if let Some(p)=super::now_playing_menu::panel(){let label=self.fit_chrome(&p.label,12.,self.ui.pt(160.));let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
         // menu extras of running apps (`NativeStatusItem`) sit left of the system extras; an empty title shows the app's initial
         for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
@@ -295,6 +298,7 @@ impl Shell {
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock)]);rows},
             Menu::ControlCenter=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
+            Menu::GameMode=>vec![Row::action("Turn Off Game Mode",Action::GameModeOff)],
             // the apps using location now, by name: a label, not a choice (nothing here changes the grant)
             Menu::Location=>super::services::location::in_use_now().into_iter().map(|id|{let name=super::apphost::installed().iter().find(|a|a.manifest.id==id).map_or_else(|| id.clone(),|a|a.manifest.name.clone());Row::label(name)}).collect(),
             // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
@@ -545,6 +549,7 @@ impl Shell {
                     Action::Bluetooth(command)=>effects.push(Effect::Bluetooth(command)),
                     Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
                     Action::RecordStop=>self.recording_stop_from_menu(),
+                    Action::GameModeOff=>{self.game_mode_turn_off();}
                     Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
                     Action::PhotoEditWith(key)=>self.photo_edit_with_viewed(&key,t),
                 }effects
