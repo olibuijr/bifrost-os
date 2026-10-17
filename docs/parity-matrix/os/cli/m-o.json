@@ -1532,7 +1532,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/osacompile.rs; springboard/core/src/script/mod.rs (format)",
    "status": "partial",
-   "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt\'s own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts.",
+   "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt's own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts.",
    "rea": [],
    "method": "assessed"
   },
@@ -1595,7 +1595,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/osascript.rs; springboard/core/src/script/ (language, dictionaries)",
    "status": "partial",
-   "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app\'s dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error.",
+   "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app's dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error.",
    "rea": [],
    "method": "assessed"
   },
