@@ -183,9 +183,26 @@ impl Coordinator {
     }
 }
 
+unsafe extern "C" {
+    fn geteuid() -> u32;
+}
+
+/// The effective user of this process: the session owner the coordinator checks requests against.
+pub fn current_uid() -> u32 {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    unsafe { geteuid() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_session_owner_is_this_process_user() {
+        use std::os::unix::fs::MetadataExt;
+        // the files under /proc/self belong to the effective user of this process
+        assert_eq!(current_uid(), std::fs::metadata("/proc/self/status").unwrap().uid());
+    }
 
     #[test]
     fn only_the_owner_or_root_may_request_an_install() {

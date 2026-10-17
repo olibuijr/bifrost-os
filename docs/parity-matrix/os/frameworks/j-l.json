@@ -403,7 +403,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Bridges JavaScript to the event channel used to script other apps. Build a JavaScript automation bridge that calls the app control sockets (bifrost pc control) so scripts can drive apps.",
+   "note": "Not built. Existing pieces: the Boa JavaScript engine that the browser runs (boa_engine 0.22, one Context per tab in springboard/src/shell/browser/js), and the app control sockets that `bifrost pc control list|info|methods|call` speak (JSON-RPC; bifrost-app-control skill). Missing: (1) a host object in a Boa Context that maps an app id to its control socket, forwards one method call and returns its JSON result; (2) a permission rule that decides which apps a script may address; (3) an event channel that delivers app notifications into a script. Left open because the permission model is not designed yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -424,7 +424,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Runs JavaScript automation scripts through the scripting component layer. Build a JavaScript script runner on the app control sockets, shared with the JavaScript event bridge row.",
+   "note": "Not built. There is no script runner or script store in the shell; the only JavaScript execution is the browser's page engine (springboard/src/shell/browser/js). Missing: a runner that evaluates a script file in a fresh Boa Context with the automation host object from JavaScriptAppleEvents, and returns each script's result or error to the caller. Blocked on the AppleEvents row: the runner needs its host object and the permission rule.",
    "rea": [],
    "method": "assessed"
   },

@@ -567,11 +567,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/store/coordination.rs",
+   "bifrost": "springboard/src/shell/store/coordination.rs, springboard/src/shell/store/mod.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: the install queue, one live install per app and the owner-or-root authorisation check, in springboard/src/shell/store/coordination.rs (tests shell::store::coordination::tests), with phase and byte progress events. Gap: the store's start() does not route installs through the queue yet, so downloads still start directly; springboard/updated still handles only OS update offers.",
+   "note": "Built 2026-10-17: the install queue (one live install per app, owner-or-root authorisation, phase and byte events) in springboard/src/shell/store/coordination.rs, and the App Store routes every install through it (springboard/src/shell/store/mod.rs start_queued, sync_coordinator, cancel).",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::tests::an_install_request_goes_through_the_coordinator"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::tests::a_second_install_waits_while_one_downloads"
+    }
+   ],
+   "ready_note": "Install queue, authorisation and progress events are in springboard/src/shell/store/coordination.rs, wired into the App Store's install path in springboard/src/shell/store/mod.rs."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.installcoordinationd.plist",
@@ -588,11 +607,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/store/coordination.rs",
+   "bifrost": "springboard/src/shell/store/coordination.rs, springboard/src/shell/store/mod.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: the install queue, one live install per app and the owner-or-root authorisation check, in springboard/src/shell/store/coordination.rs (tests shell::store::coordination::tests), with phase and byte progress events. Gap: the store's start() does not route installs through the queue yet, so downloads still start directly; springboard/updated still handles only OS update offers.",
+   "note": "Built 2026-10-17: the install queue (one live install per app, owner-or-root authorisation, phase and byte events) in springboard/src/shell/store/coordination.rs, and the App Store routes every install through it (springboard/src/shell/store/mod.rs start_queued, sync_coordinator, cancel).",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::coordination::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::tests::an_install_request_goes_through_the_coordinator"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::tests::a_second_install_waits_while_one_downloads"
+    }
+   ],
+   "ready_note": "Install queue, authorisation and progress events are in springboard/src/shell/store/coordination.rs, wired into the App Store's install path in springboard/src/shell/store/mod.rs."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.installd.plist",

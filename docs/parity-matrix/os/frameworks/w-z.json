@@ -464,11 +464,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/weather/data.rs",
+   "bifrost": "springboard/src/shell/weather/mod.rs, springboard/src/shell/weather/data.rs, springboard/src/shell/mod.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: refresh_summary keeps the summary for the Today widget and lock screen current from the saved place, reusing the cached forecast under a maximum age (tests shell::weather::data::tests). Gap: nothing calls it on a timer yet, so the summary still refreshes only while the weather app or Today runs.",
+   "note": "Built 2026-10-17: the shell refreshes the shared summary for the Today widget and lock screen with no app window open. Refresher (springboard/src/shell/weather/mod.rs) asks once an hour from the shell tick and again on every wake (screen_woke), on a worker thread; data::refresh_summary reuses a forecast cached under 15 minutes, and does nothing until the weather app has saved a place.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::weather::data::tests::the_service_refreshes_the_summary_for_the_selected_place"
+    }
+   ],
+   "ready_note": "Refresher due/wake schedule and the refresh_summary service are tested; the shell tick and wake hooks call them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherData.framework",
