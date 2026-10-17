@@ -156,6 +156,7 @@ pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;
+pub mod spotlight_scope;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
@@ -2304,6 +2305,7 @@ impl Shell {
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.
     pub fn set_wallpapers(&mut self, wallpapers: Vec<Wallpaper>) {
+        quicksearch::set_wallpaper_catalogue(wallpapers.iter().map(|w| (w.id.clone(), w.name.clone())).collect());
         self.wallpapers = Rc::new(wallpapers);
     }
 
@@ -3133,6 +3135,7 @@ impl Shell {
                 let mut ext = self.login_ext_cache.get();
                 ext.refresh_off = services::background::off_from_pref(self.prefs.get(services::background::PREF_OFF));
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
+                ext.extensions_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::EXTENSIONS_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
                 st.set_login_items(logins, pending);
                 st.set_login_extensions(ext, background_off);

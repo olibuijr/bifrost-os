@@ -18,10 +18,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
    "status": "partial",
    "note": "has: Backup page (backup_page.rs:34): Backup now, latest backup, backup before update; missing: choosing a backup disk",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests::a_chosen_disk"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests::the_destination_group"
+    }
+   ],
+   "ready_note": "covers: the Backup page with the choice of backup disk (This Computer or a removable disk); backups, restore and delete use the chosen place."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TimeMachineSettingsIntents.appex",
@@ -278,10 +292,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/backup_page.rs",
+   "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
    "status": "partial",
    "note": "has: Backup page (backup_page.rs:34); missing: choosing a backup disk",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests::a_chosen_disk"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup_page::tests::the_destination_group"
+    }
+   ],
+   "ready_note": "covers: Settings > Backup with the backup destination choice and the backup, restore and delete actions."
   },
   {
    "id": "path:/System/Library/PreferencePanes/TouchID.prefPane",

@@ -793,10 +793,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/src/shell/spotlight_scope.rs, springboard/src/shell/pages.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "has: search and index (quicksearch.rs); missing: a Spotlight settings page with indexed locations",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotlight_scope::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::spotlight_scope_hides"
+    }
+   ],
+   "ready_note": "covers: Settings > Spotlight with a switch per kind of result and the excluded folder list; Search applies both (quicksearch::scoped)."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightSettingsIntentsExtension.appex",

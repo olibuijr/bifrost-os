@@ -508,7 +508,16 @@
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
    "note": "has: EXTENSIONS group (extension_groups) listing share, preview, file provider and widget extensions of installed manifests; missing: a separate extension manager (enable and disable)",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests::a_turned_off_extension"
+    }
+   ],
+   "ready_note": "covers: the EXTENSIONS group in Login Items & Extensions, with a switch per extension (login.extensions.off)."
   },
   {
    "id": "path:/System/Library/PreferencePanes/FamilySharingPrefPane.prefPane",

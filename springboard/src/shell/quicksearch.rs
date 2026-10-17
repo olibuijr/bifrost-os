@@ -181,6 +181,8 @@ pub enum Hit {
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
     /// a Settings intent (`settings_intents`, "Open Keyboard"): opens the pane it names in Settings
     SettingsIntent { id: &'static str, title: &'static str },
+    /// a shell action intent (`settings_actions`) with its parameters already set: runs the same effect the Settings pane does
+    SettingsAction { intent: super::settings_actions::SettingsIntent, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
@@ -239,6 +241,38 @@ fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
         .iter()
         .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
         .collect()
+}
+
+/// The wallpaper catalogue as (id, name), for the "Set Wallpaper to" Search rows. The shell sets it whenever its
+/// wallpaper list changes (`Shell::set_wallpapers`).
+static WALLPAPERS: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+/// Records the wallpaper catalogue Search offers rows for.
+pub fn set_wallpaper_catalogue(list: Vec<(String, String)>) {
+    *WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()) = list;
+}
+
+/// The shell action intents (`settings_actions`) Search lists: the Wi-Fi scan, the two Wi-Fi switch states, and one
+/// "Set Wallpaper to" row per picture in the catalogue.
+fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    use super::settings_actions::SettingsIntent;
+    let fixed: [(&str, &str, &str, SettingsIntent); 3] = [
+        ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
+        ("wifi-on", "Turn Wi-Fi On", "Switch the Wi-Fi radio on", SettingsIntent::WifiPower(true)),
+        ("wifi-off", "Turn Wi-Fi Off", "Switch the Wi-Fi radio off", SettingsIntent::WifiPower(false)),
+    ];
+    let mut rows: Vec<(search_rank::Item, String)> = fixed
+        .into_iter()
+        .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title: title.to_string() }, fuzzy::fold(title)))
+        .collect();
+    let pictures = WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for (id, name) in pictures {
+        let title = format!("Set Wallpaper to {name}");
+        let folded = fuzzy::fold(&title);
+        let hit = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper(id.clone()), title: title.clone() };
+        rows.push(table_row(hits, format!("settings-action:wallpaper:{id}"), &title, "Use this picture as the desktop wallpaper".to_string(), search_rank::Kind::Settings, hit, folded));
+    }
+    rows
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
@@ -409,6 +443,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         .collect();
     let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
     shortcut_rows.extend(settings_intent_rows(&mut hits));
+    shortcut_rows.extend(settings_action_rows(&mut hits));
     let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
     let event_rows = c
         .events
@@ -477,7 +512,40 @@ fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<G
     groups.extend(documents);
     groups.extend(files);
     groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
+    scoped(groups, &super::spotlight_scope::current())
+}
+
+/// The category a hit is listed under in Settings > Spotlight, and the path it names when it is a file. `None` for
+/// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
+fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
+    use super::spotlight_scope::Category as C;
+    match hit {
+        Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
+        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => (Some(C::Settings), None),
+        Hit::Contact { .. } => (Some(C::Contacts), None),
+        Hit::Event { .. } => (Some(C::CalendarEvents), None),
+        Hit::File { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
+        Hit::Indexed { .. } => (Some(C::Documents), None),
+        Hit::City(_) => (Some(C::Cities), None),
+        Hit::Answer(_) => (Some(C::Calculator), None),
+        Hit::Deildu(_) | Hit::Terminal(_) => (None, None),
+    }
+}
+
+/// Drops the hits Settings > Spotlight hides, and any group left empty. A group with no hits stays only when it was
+/// empty to begin with (the "Search in Apps" action is never hidden).
+fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
     groups
+        .into_iter()
+        .filter_map(|mut g| {
+            let had = !g.hits.is_empty();
+            g.hits.retain(|h| {
+                let (cat, path) = hit_category(h);
+                !cat.is_some_and(|c| scope.hides(c, path))
+            });
+            (!had || !g.hits.is_empty()).then_some(g)
+        })
+        .collect()
 }
 
 /// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
@@ -1328,6 +1396,7 @@ impl QuickSearch {
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
+                    Hit::SettingsAction { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -1695,7 +1764,7 @@ impl QuickSearch {
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
-                        Hit::Settings(_) | Hit::SettingsIntent { .. } => None,
+                        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
                     let thumb_img = match hit {
@@ -1900,6 +1969,10 @@ impl Shell {
                     f.show_folder(&self.ui, &folder, t);
                 }
             }
+            Hit::SettingsAction { intent, .. } => {
+                // the same effect the Settings pane and the agent socket apply; no window opens
+                return vec![intent.into_effect()];
+            }
             Hit::SettingsIntent { id, .. } => {
                 self.quicksearch.note_open(&format!("settings-intent:{id}"));
                 if let Some(page) = super::settings_intents::page_for(id) {
@@ -2064,6 +2137,40 @@ mod tests {
         assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
         assert!(super::super::settings_intents::page_for("open-keyboard").is_some());
         assert!(super::super::settings_intents::page_for("no-such-intent").is_none());
+    }
+
+    #[test]
+    fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
+        use super::super::settings_actions::SettingsIntent;
+        let groups = results("turn wi-fi off", &[]);
+        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off".into() };
+        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
+        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks".into() };
+        assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
+        set_wallpaper_catalogue(vec![("kirkjufell_dusk".into(), "Kirkjufell Dusk".into())]);
+        let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
+        assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
+        set_wallpaper_catalogue(Vec::new());
+    }
+
+    #[test]
+    fn spotlight_scope_hides_switched_off_kinds_and_excluded_folders() {
+        use super::super::spotlight_scope::{Category, Scope};
+        let mut scope = Scope::default();
+        scope.set_allowed(Category::Settings, false);
+        scope.exclude(Path::new("/home/u/Private"));
+        let groups = vec![Group {
+            title: "Top Hit",
+            hits: vec![
+                Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" },
+                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into() },
+                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() },
+            ],
+        }, Group { title: "Settings", hits: vec![Hit::SettingsIntent { id: "open-sound", title: "Open Sound" }] }, Group { title: "Search in Apps", hits: vec![Hit::Terminal("x".into())] }];
+        let kept = scoped(groups, &scope);
+        assert_eq!(kept.len(), 2, "the Settings group empties and goes: {kept:?}");
+        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() }]);
+        assert_eq!(kept[1].title, "Search in Apps", "the action is never hidden");
     }
 
     /// A one-piece torrent named `name`.

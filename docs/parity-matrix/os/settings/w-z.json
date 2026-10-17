@@ -245,10 +245,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "has: wallpaper-set intent (catalogue, parse, effect); missing: Search listing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::wifi_action_intents_are_found"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "covers: the wallpaper-set intent, listed in Search as one Set Wallpaper to <name> row per picture in the catalogue."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSonomaExtension.appex",
@@ -305,10 +319,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "has: wifi-power and wifi-scan intents (catalogue, parse, effect); missing: Search listing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::wifi_action_intents_are_found"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_actions::tests"
+    }
+   ],
+   "ready_note": "covers: the Wi-Fi power and scan intents, listed in Search (Turn Wi-Fi On, Turn Wi-Fi Off, Scan for Wi-Fi Networks) and run through the same effect as the agent socket."
   },
   {
    "id": "path:/System/Library/PreferencePanes/Wallet.prefPane",

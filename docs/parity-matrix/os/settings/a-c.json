@@ -167,7 +167,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
    "rea": [],
    "ready": true,
    "checks": [
@@ -547,7 +547,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
-   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
    "rea": [],
    "ready": true,
    "checks": [
