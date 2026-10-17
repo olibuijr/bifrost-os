@@ -32,6 +32,12 @@ ttf-dejavu
 ttf-liberation
 ttf-croscore
 gsfonts
+tex-gyre-fonts
+otf-libertinus
+adobe-source-serif-fonts
+adobe-source-sans-fonts
+inter-font
+ttf-lato
 systemd-ukify
 alsa-utils
 apache

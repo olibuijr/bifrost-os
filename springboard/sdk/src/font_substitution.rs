@@ -168,6 +168,24 @@ const FACES: &[(&str, &str)] = &[
     ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
     ("charter", "Charis SIL"),
     ("american typewriter", "IBM Plex Serif"),
+    ("helvetica neue", "TeX Gyre Heros"),
+    ("georgia", "Source Serif 4"),
+    ("garamond", "Libertinus Serif"),
+    ("hoefler text", "Libertinus Serif"),
+    ("iowan old style", "Libertinus Serif"),
+    ("domaine display", "Libertinus Serif"),
+    ("herculanum", "Libertinus Serif"),
+    ("gill sans", "Lato"),
+    ("geneva", "Lato"),
+    ("forgotten futurist", "Lato"),
+    ("dash", "Inter"),
+    ("founders grotesk", "Inter"),
+    ("founders grotesk condensed", "Inter"),
+    ("founders grotesk text", "Inter"),
+    ("graphik", "Inter"),
+    ("graphik compact", "Inter"),
+    ("headline a", "Inter"),
+    ("kefa iii", "Noto Sans Ethiopic"),
 ];
 
 /// The open face mapped to `family` in `FACES`, if any.
@@ -295,10 +313,25 @@ mod tests {
 
     #[test]
     fn substitute_lists_open_equivalents_preferred_first() {
-        assert_eq!(substitute("Helvetica Neue")[0], "Inter");
+        assert_eq!(substitute("Helvetica Neue")[0], "TeX Gyre Heros");
+        assert_eq!(substitute("Helvetica Neue")[1], "Inter");
         assert_eq!(substitute("Futura")[0], "Outfit");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
+    }
+
+    #[test]
+    fn licensed_faces_get_their_open_substitute_first() {
+        assert_eq!(substitute("Georgia")[0], "Source Serif 4");
+        assert_eq!(substitute("Garamond")[0], "Libertinus Serif");
+        assert_eq!(substitute("Gill Sans")[0], "Lato");
+        assert_eq!(substitute("Founders Grotesk Condensed")[0], "Inter");
+        assert_eq!(substitute("Kefa III")[0], "Noto Sans Ethiopic");
+        let c = candidates(&FontSpec::new().family("Georgia"));
+        assert_eq!(c[0].family.as_deref(), Some("Source Serif 4"));
+        let dash: Vec<String> = candidates(&FontSpec::new().family("Dash")).into_iter().filter_map(|c| c.family).collect();
+        assert_eq!(dash[0], "Inter");
+        assert!(dash.iter().all(|f| f != "Dash"));
     }
 
     #[test]

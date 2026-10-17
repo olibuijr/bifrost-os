@@ -541,9 +541,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ForgottenFuturist resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "ForgottenFuturist resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Lato (ttf-lato, OFL-1.1) for the same role; design-similar, the reference face is not shipped."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Dash.ttc",
@@ -562,9 +575,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Dash resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "Dash resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar, the reference face is not shipped."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/DomaineDisplay.ttc",
@@ -583,9 +609,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar display serif."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FahKwang.ttc",
@@ -633,9 +672,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskCondensed.ttc",
@@ -654,9 +706,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not condensed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskText.ttc",
@@ -675,9 +740,22 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DragShort.aiff",
