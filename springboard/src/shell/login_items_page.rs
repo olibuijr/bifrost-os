@@ -228,6 +228,16 @@ pub fn background_off_to_pref(off: &[String]) -> String {
     off.join(",")
 }
 
+/// Whether the background agent of `app_id` may run: its switch is on, so its id is not in the turned-off list.
+pub fn background_agent_enabled(off: &[String], app_id: &str) -> bool {
+    !off.iter().any(|id| id == app_id)
+}
+
+/// The background agents whose switch is on, in the order given. A launcher starts these and skips the rest.
+pub fn runnable_background_agents<'a>(agents: &'a [BackgroundAgent], off: &[String]) -> Vec<&'a BackgroundAgent> {
+    agents.iter().filter(|a| background_agent_enabled(off, &a.app_id)).collect()
+}
+
 /// The START ORDER group: one row per login item in start order, each showing its place. Choosing a row moves that
 /// app one place earlier. None when there is nothing to order (fewer than two items).
 pub fn order_group(items: &[(String, String)]) -> Option<Group> {
@@ -379,5 +389,31 @@ mod tests {
         let off = background_off_from_pref(Some(" is.a, ,is.b "));
         assert_eq!(off, ["is.a", "is.b"]);
         assert_eq!(background_off_to_pref(&off), "is.a,is.b");
+    }
+}
+
+#[cfg(test)]
+mod background_gate_tests {
+    use super::*;
+
+    fn agent(id: &str) -> BackgroundAgent {
+        BackgroundAgent { app_id: id.into(), app_name: id.into() }
+    }
+
+    #[test]
+    fn a_turned_off_background_agent_does_not_run() {
+        let agents = [agent("is.a"), agent("is.b"), agent("is.c")];
+        let off = background_off_from_pref(Some("is.b, is.c"));
+        assert!(background_agent_enabled(&off, "is.a"));
+        assert!(!background_agent_enabled(&off, "is.b"));
+        let run: Vec<&str> = runnable_background_agents(&agents, &off).iter().map(|a| a.app_id.as_str()).collect();
+        assert_eq!(run, ["is.a"]);
+    }
+
+    #[test]
+    fn with_no_switch_turned_off_every_agent_runs_in_order() {
+        let agents = [agent("is.b"), agent("is.a")];
+        let run: Vec<&str> = runnable_background_agents(&agents, &[]).iter().map(|a| a.app_id.as_str()).collect();
+        assert_eq!(run, ["is.b", "is.a"]);
     }
 }

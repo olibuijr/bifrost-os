@@ -145,6 +145,113 @@ pub trait CrashReporter {
     fn process_crash_report(&mut self, process: &ProcessCrash);
 }
 
+/// One crash with the return addresses of its stack, innermost first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StackedCrash {
+    pub process: ProcessCrash,
+    pub stack: Vec<u64>,
+}
+
+/// A set of crashes with the same signature.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CrashGroup {
+    /// The reason followed by the top frames, joined with ` < `.
+    pub signature: String,
+    pub count: usize,
+    /// Position in the input of the first crash in the group.
+    pub first_index: usize,
+}
+
+/// Symbolicates a batch of crashes and groups them by signature (the reason and the top `depth` frames), so a crash
+/// that happens a hundred times is one row. Each frame is `image:symbol`, or `image:+0xOFFSET` when the address has no
+/// symbol. Inline frames count as frames of their own. Groups are sorted by count, most first; ties keep the order
+/// of the first crash.
+pub fn triage_crashes(crashes: &[StackedCrash], depth: usize) -> Vec<CrashGroup> {
+    let mut groups: Vec<CrashGroup> = Vec::new();
+    for (index, crash) in crashes.iter().enumerate() {
+        let signature = signature_of(crash, depth);
+        match groups.iter_mut().find(|g| g.signature == signature) {
+            Some(group) => group.count += 1,
+            None => groups.push(CrashGroup { signature, count: 1, first_index: index }),
+        }
+    }
+    groups.sort_by(|a, b| b.count.cmp(&a.count).then(a.first_index.cmp(&b.first_index)));
+    groups
+}
+
+fn signature_of(crash: &StackedCrash, depth: usize) -> String {
+    let mut frames: Vec<String> = Vec::new();
+    for address in &crash.stack {
+        for frame in crash.process.symbolicate_address(*address) {
+            if frames.len() == depth {
+                break;
+            }
+            let name = frame.symbol.unwrap_or_else(|| format!("+{:#x}", frame.symbol_offset));
+            frames.push(format!("{}:{}", frame.image, name));
+        }
+    }
+    let mut signature = crash.process.reason.description.clone();
+    for frame in frames {
+        signature.push_str(" < ");
+        signature.push_str(&frame);
+    }
+    signature
+}
+
+#[cfg(test)]
+mod triage_tests {
+    use super::*;
+
+    fn app() -> BinaryImageInfo {
+        BinaryImageInfo::new("app", 0x1000, 0x100).with_symbol(0x40, &["parse"]).with_symbol(0x80, &["inner", "outer"])
+    }
+
+    fn crash(reason: &str, stack: &[u64]) -> StackedCrash {
+        StackedCrash { process: ProcessCrash::new(reason, vec![app()]), stack: stack.to_vec() }
+    }
+
+    #[test]
+    fn the_same_stack_is_one_group_and_the_most_common_group_comes_first() {
+        let crashes = vec![
+            crash("SIGSEGV", &[0x1040]),
+            crash("SIGABRT", &[0x1080]),
+            crash("SIGSEGV", &[0x1041]),
+            crash("SIGSEGV", &[0x1042]),
+        ];
+        let groups = triage_crashes(&crashes, 4);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].count, 3);
+        assert_eq!(groups[0].first_index, 0);
+        assert_eq!(groups[0].signature, "SIGSEGV < app:parse");
+        assert_eq!(groups[1].count, 1);
+        assert_eq!(groups[1].first_index, 1);
+        assert_eq!(groups[1].signature, "SIGABRT < app:inner < app:outer");
+    }
+
+    #[test]
+    fn depth_limits_the_frames_that_make_the_signature() {
+        let crashes = vec![crash("SIGSEGV", &[0x1080]), crash("SIGSEGV", &[0x1040])];
+        let groups = triage_crashes(&crashes, 1);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].signature, "SIGSEGV < app:inner");
+        assert_eq!(triage_crashes(&crashes, 0).len(), 1);
+    }
+
+    #[test]
+    fn an_unsymbolicated_address_is_named_by_its_offset_in_the_image() {
+        let crashes = vec![crash("SIGILL", &[0x1010]), crash("SIGILL", &[0x1010])];
+        let groups = triage_crashes(&crashes, 2);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].count, 2);
+        assert_eq!(groups[0].signature, "SIGILL < app:+0x10");
+    }
+
+    #[test]
+    fn an_empty_batch_has_no_groups() {
+        assert!(triage_crashes(&[], 3).is_empty());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
