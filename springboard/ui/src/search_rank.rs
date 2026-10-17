@@ -466,67 +466,166 @@ pub struct Section {
 
 /// Queries every source at once and waits at most `deadline` for them. Items from the sources that answered are ranked
 /// together with [`rank`]; each section keeps at most `per_section` hits. An empty query asks nobody.
-pub fn run(query: &str, sources: &[Arc<dyn Source>], deadline: Duration, per_section: usize, usage: &Usage, now: u64, semantic: &dyn SemanticHook) -> Merged {
-    let query = query.trim();
-    if query.is_empty() {
-        return Merged::default();
-    }
-    let (tx, rx) = mpsc::channel::<(usize, Vec<Item>)>();
-    for (i, source) in sources.iter().enumerate() {
-        let source = Arc::clone(source);
-        let tx = tx.clone();
-        let q = query.to_string();
-        thread::spawn(move || {
-            let items = source.search(&q);
-            let _ = tx.send((i, items));
-        });
-    }
-    drop(tx);
-    let start = Instant::now();
-    let mut got: Vec<Option<Vec<Item>>> = (0..sources.len()).map(|_| None).collect();
-    let mut waiting = sources.len();
-    while waiting > 0 {
-        let left = deadline.saturating_sub(start.elapsed());
-        match rx.recv_timeout(left) {
-            Ok((i, items)) => {
-                if got[i].is_none() {
-                    got[i] = Some(items);
-                    waiting -= 1;
-                }
-            }
-            // the deadline passed, or every source has finished without answering
-            Err(_) => break,
+/// One query running against sources on their own threads. The caller polls it (the Search panel does, every frame
+/// while it is pending) and merges whatever has arrived, so late sources stream in without blocking the frame.
+pub struct Query {
+    query: String,
+    names: Vec<&'static str>,
+    rx: Option<mpsc::Receiver<(usize, Vec<Item>)>>,
+    answers: Vec<Option<Vec<Item>>>,
+    started: Instant,
+    deadline: Duration,
+    /// every sender is gone: no more answers can come
+    closed: bool,
+}
+
+impl Query {
+    /// Starts `query` on every source. A blank query starts nothing.
+    pub fn start(query: &str, sources: &[Arc<dyn Source>], deadline: Duration) -> Query {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            return Query { query, names: vec![], rx: None, answers: vec![], started: Instant::now(), deadline, closed: true };
+        }
+        let (tx, rx) = mpsc::channel::<(usize, Vec<Item>)>();
+        for (i, source) in sources.iter().enumerate() {
+            let source = Arc::clone(source);
+            let tx = tx.clone();
+            let q = query.clone();
+            thread::spawn(move || {
+                let items = source.search(&q);
+                let _ = tx.send((i, items));
+            });
+        }
+        drop(tx);
+        Query {
+            query,
+            names: sources.iter().map(|s| s.name()).collect(),
+            rx: Some(rx),
+            answers: (0..sources.len()).map(|_| None).collect(),
+            started: Instant::now(),
+            deadline,
+            closed: false,
         }
     }
-    let mut items: Vec<Item> = Vec::new();
-    let mut owner: Vec<usize> = Vec::new();
-    let mut missing = Vec::new();
-    for (i, slot) in got.into_iter().enumerate() {
-        match slot {
-            Some(list) => {
+
+    fn store(&mut self, i: usize, items: Vec<Item>) -> bool {
+        if self.answers[i].is_none() {
+            self.answers[i] = Some(items);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Takes the answers that have arrived, without waiting. True when at least one new answer came in.
+    pub fn poll(&mut self) -> bool {
+        let mut any = false;
+        loop {
+            let res = match &self.rx {
+                Some(rx) => rx.try_recv(),
+                None => break,
+            };
+            match res {
+                Ok((i, items)) => any |= self.store(i, items),
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.closed = true;
+                    break;
+                }
+            }
+        }
+        any
+    }
+
+    /// True when every source has answered, the deadline has passed, or the sources have ended.
+    pub fn finished(&self) -> bool {
+        self.closed || self.answers.iter().all(Option::is_some) || self.started.elapsed() >= self.deadline
+    }
+
+    /// True while answers may still come.
+    pub fn pending(&self) -> bool {
+        !self.finished()
+    }
+
+    /// Waits for the sources to finish, for at most `within` (and never past the deadline).
+    pub fn wait_for(&mut self, within: Duration) {
+        let until = self.started + within.min(self.deadline);
+        while !self.finished() {
+            let left = until.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            let res = match &self.rx {
+                Some(rx) => rx.recv_timeout(left),
+                None => break,
+            };
+            match res {
+                Ok((i, items)) => {
+                    self.store(i, items);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    self.closed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Waits until finished: every answer, or the deadline.
+    pub fn wait(&mut self) {
+        let deadline = self.deadline;
+        self.wait_for(deadline);
+    }
+
+    /// The sources that have not answered.
+    pub fn missing(&self) -> Vec<&'static str> {
+        self.names.iter().zip(&self.answers).filter(|(_, a)| a.is_none()).map(|(n, _)| *n).collect()
+    }
+
+    /// Merges the answers so far: every item is ranked together by [`rank`]; items the ranker does not score (a
+    /// source's own fuzzy matches, for example) follow in the order the source gave them. Each section keeps at most
+    /// `per_section` hits, in source order.
+    pub fn merge(&self, per_section: usize, usage: &Usage, now: u64, semantic: &dyn SemanticHook) -> Merged {
+        let mut items: Vec<Item> = Vec::new();
+        let mut owner: Vec<usize> = Vec::new();
+        for (i, slot) in self.answers.iter().enumerate() {
+            if let Some(list) = slot {
                 for item in list {
-                    items.push(item);
+                    items.push(item.clone());
                     owner.push(i);
                 }
             }
-            None => missing.push(sources[i].name()),
         }
-    }
-    let ranked = rank(query, &items, usage, now, semantic);
-    let top = ranked.first().map(|&(i, score)| Hit { source: sources[owner[i]].name(), item: items[i].clone(), score });
-    let mut sections = Vec::new();
-    for (si, source) in sources.iter().enumerate() {
-        let hits: Vec<Hit> = ranked
-            .iter()
-            .filter(|&&(i, _)| owner[i] == si)
-            .take(per_section)
-            .map(|&(i, score)| Hit { source: source.name(), item: items[i].clone(), score })
-            .collect();
-        if !hits.is_empty() {
-            sections.push(Section { source: source.name(), hits });
+        let ranked = rank(&self.query, &items, usage, now, semantic);
+        let mut score = vec![0.0f32; items.len()];
+        let mut seen = vec![false; items.len()];
+        let mut ordered: Vec<usize> = Vec::with_capacity(items.len());
+        for &(i, s) in &ranked {
+            score[i] = s;
+            seen[i] = true;
+            ordered.push(i);
         }
+        ordered.extend((0..items.len()).filter(|&i| !seen[i]));
+        let hit = |i: usize| Hit { source: self.names[owner[i]], item: items[i].clone(), score: score[i] };
+        let top = ordered.first().map(|&i| hit(i));
+        let mut sections = Vec::new();
+        for (si, &name) in self.names.iter().enumerate() {
+            let hits: Vec<Hit> = ordered.iter().filter(|&&i| owner[i] == si).take(per_section).map(|&i| hit(i)).collect();
+            if !hits.is_empty() {
+                sections.push(Section { source: name, hits });
+            }
+        }
+        Merged { top, sections, missing: self.missing() }
     }
-    Merged { top, sections, missing }
+}
+
+/// Queries every source at once and waits at most `deadline` for them; see [`Query`] for the streaming form.
+/// An empty query asks nobody.
+pub fn run(query: &str, sources: &[Arc<dyn Source>], deadline: Duration, per_section: usize, usage: &Usage, now: u64, semantic: &dyn SemanticHook) -> Merged {
+    let mut q = Query::start(query, sources, deadline);
+    q.wait();
+    q.merge(per_section, usage, now, semantic)
 }
 
 #[cfg(test)]
@@ -723,6 +822,21 @@ mod tests {
         assert_eq!(names, vec!["settings", "apps"]);
         assert_eq!(merged.sections[0].hits.len(), 2);
         assert_eq!(merged.top.as_ref().map(|h| h.source), Some("apps"));
+    }
+
+    #[test]
+    fn answers_stream_in_while_a_slow_source_is_still_pending() {
+        let sources = vec![fake("apps", 0, vec![Item::new("m", "Mail", Kind::App)]), fake("contacts", 400, vec![Item::new("c", "Mail Bob", Kind::Contact)])];
+        let mut q = Query::start("mail", &sources, Duration::from_secs(5));
+        q.wait_for(Duration::from_millis(120));
+        assert!(q.pending(), "the contacts source has not answered yet");
+        let early = q.merge(5, &Usage::default(), 0, &NoSemantic);
+        assert_eq!(early.sections.iter().map(|s| s.source).collect::<Vec<_>>(), vec!["apps"]);
+        q.wait();
+        assert!(!q.pending());
+        let late = q.merge(5, &Usage::default(), 0, &NoSemantic);
+        assert_eq!(late.sections.iter().map(|s| s.source).collect::<Vec<_>>(), vec!["apps", "contacts"]);
+        assert!(late.missing.is_empty());
     }
 
     #[test]
