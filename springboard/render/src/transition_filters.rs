@@ -207,6 +207,27 @@ pub fn page_curl(from: &Image, to: &Image, time: f32, angle: f32, curl: f32) -> 
     }))
 }
 
+/// `CIRippleTransition`: a ring spreads out from `center` (pixels) across the picture. The ring is at
+/// radius `time` times the far-corner distance, and its edge is wobbled by a sine of the distance, so
+/// it ripples. Inside the ring the picture is `to`, outside it is `from`. The wobble vanishes at time
+/// 0 and time 1, so the ends are exactly `from` and `to`. `None` when the sizes differ or `center` is
+/// not finite.
+pub fn ripple(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let wobble = 6.0 * (std::f32::consts::PI * t).sin();
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let d = ((x as f32 + 0.5 - center.0).powi(2) + (y as f32 + 0.5 - center.1).powi(2)).sqrt();
+        let front = t * reach + wobble * (d * 0.25).sin();
+        if d < front { b } else { a }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,6 +306,21 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn ripple_ends_on_the_pictures_and_spreads_from_the_centre() {
+        let (a, b) = (flat(9, 9, BLACK), flat(9, 9, GREY));
+        assert_eq!(ripple(&a, &b, 0.0, (4.0, 4.0)).unwrap(), a);
+        assert_eq!(ripple(&a, &b, 1.0, (4.0, 4.0)).unwrap(), b);
+        let mid = ripple(&a, &b, 0.5, (4.0, 4.0)).unwrap();
+        assert_eq!(mid.px[4 * 9 + 4], GREY, "the centre is inside the ring at mid time");
+    }
+
+    #[test]
+    fn ripple_rejects_a_non_finite_centre() {
+        let a = flat(4, 4, BLACK);
+        assert!(ripple(&a, &a, 0.5, (0.0, f32::INFINITY)).is_none());
     }
 
     #[test]
