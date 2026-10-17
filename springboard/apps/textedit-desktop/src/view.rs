@@ -116,6 +116,8 @@ pub enum Action {
     InsertPage,
     InsertLine,
     InsertParagraph,
+    /// Insert > Image...: an open panel for a PNG or JPEG file, which becomes an attachment
+    InsertImage,
     /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
     AddLink,
     OpenLink,
@@ -223,6 +225,7 @@ impl Action {
             Action::SelectLine => MENU_BASE + 0x77,
             Action::SpeakStart => MENU_BASE + 0xe9,
             Action::SpeakStop => MENU_BASE + 0xea,
+            Action::InsertImage => MENU_BASE + 0xeb,
             Action::Transform(Transform::Upper) => MENU_BASE + 0x78,
             Action::Transform(Transform::Lower) => MENU_BASE + 0x79,
             Action::Transform(Transform::Capitalize) => MENU_BASE + 0x7a,
@@ -336,6 +339,7 @@ impl Action {
             0x77 => Action::SelectLine,
             0xe9 => Action::SpeakStart,
             0xea => Action::SpeakStop,
+            0xeb => Action::InsertImage,
             0x78 => Action::Transform(Transform::Upper),
             0x79 => Action::Transform(Transform::Lower),
             0x7a => Action::Transform(Transform::Capitalize),

@@ -38,7 +38,8 @@ use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_
 use bifrost_app::proto::CHORD_FLAG;
 use bifrost_app::services::ServiceCall;
 use bifrost_core::json::Json;
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::dnd::{self, dragop, DragPhase};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use document::TextDocument;
 use encoding::Encoding;
 use layout::Layout;
@@ -92,6 +93,10 @@ struct TextEditApp {
     completion: Option<Completion>,
     /// File > Export as PDF: the save panel's request, until its file is written
     export_request: Option<u32>,
+    /// the open panel of Insert > Image, and the drag sessions this window accepted images from (kept after the drop,
+    /// so the files that arrive after `Perform` still land)
+    image_request: Option<u32>,
+    drop_sessions: Vec<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
     /// Edit > Add Link: the address being typed for a range of text, while the panel is open
@@ -237,6 +242,8 @@ impl TextEditApp {
             copied_style: None,
             completion: None,
             export_request: None,
+            image_request: None,
+            drop_sessions: Vec::new(),
             props: None,
             link: None,
             line: None,
@@ -397,6 +404,7 @@ impl TextEditApp {
                 };
                 return self.insert_raw(&s.to_string());
             }
+            Action::InsertImage => return self.open_image_panel(ctx),
             Action::AddLink => return self.open_link_sheet(),
             Action::LinkDone => return self.finish_link(true),
             Action::LinkRemove => return self.finish_link(false),
@@ -1381,6 +1389,77 @@ impl TextEditApp {
         }
     }
 
+    /// Insert > Image...: the open panel for PNG and JPEG files; the file it returns is inserted by `picture_event`.
+    fn open_image_panel(&mut self, ctx: &Ctx) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let options = OpenOptions { title: "Insert Image".into(), filters: vec!["public.png".into(), "public.jpeg".into()], ..Default::default() };
+        self.image_request = Some(ctx.open_panel(&options));
+        true
+    }
+
+    /// The answers for pictures: the Insert Image panel's file, and the files of an image drop (they arrive as documents
+    /// with the drag session's number). `Err` hands back an event that is not a picture's, for the document controller.
+    fn picture_event(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> Result<bool, DocumentEvent> {
+        match ev {
+            DocumentEvent::Opened(file) if Some(file.request) == self.image_request => {
+                self.image_request = None;
+                self.insert_picture_files(vec![file]);
+                Ok(true)
+            }
+            DocumentEvent::Opened(file) if self.drop_sessions.contains(&file.request) => {
+                self.insert_picture_files(vec![file]);
+                Ok(true)
+            }
+            DocumentEvent::OpenedMany { request, docs } if self.drop_sessions.contains(&request) => {
+                self.insert_picture_files(docs);
+                Ok(true)
+            }
+            DocumentEvent::Failed { request, .. } if Some(request) == self.image_request => {
+                self.image_request = None;
+                Ok(true)
+            }
+            other => Err(other),
+        }
+    }
+
+    /// Reads each picture file and inserts it as an attachment. A file that is not a picture is named in the note.
+    fn insert_picture_files(&mut self, files: Vec<bifrost_app::Document>) {
+        use std::io::Read;
+        for mut file in files {
+            let mut data = Vec::new();
+            let read = file.file.read_to_end(&mut data).map(|_| ()).map_err(|e| e.to_string());
+            match read {
+                Ok(()) => {
+                    let name = file.name.clone();
+                    self.insert_picture(&name, data);
+                }
+                Err(message) => self.note = Some(format!("{} could not be read: {message}", file.name)),
+            }
+        }
+    }
+
+    /// Inserts one picture at the caret, as an attachment in the active rich text document (one undo entry).
+    fn insert_picture(&mut self, name: &str, data: Vec<u8>) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let rich = active_doc(&self.docs).is_some_and(|d| d.rich);
+        if !rich {
+            self.note = Some("Pictures need rich text. Choose Format > Make Rich Text first.".into());
+            return true;
+        }
+        if bifrost_app::graphics_imageio::pixel_size(&data).is_none() {
+            self.note = Some(format!("{name} is not a picture this app can read."));
+            return true;
+        }
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        doc.text.insert_attachment(rtfd::attachment(name.to_string(), 0.0, 0.0, data), Kind::Inserting);
+        self.edited();
+        true
+    }
+
     /// Print: the document is laid out for the page setup and sent to the default printer through the print operation.
     /// The answer is the status row's note.
     fn print_document(&mut self, ctx: &Ctx) -> bool {
@@ -1741,6 +1820,7 @@ impl TextEditApp {
             menu_item(Action::InsertPage, "Page Break", "", enabled).depth(1),
             menu_item(Action::InsertLine, "Line Break", "", enabled).depth(1),
             menu_item(Action::InsertParagraph, "Paragraph Break", "", enabled).depth(1),
+            menu_item(Action::InsertImage, "Image...", "", enabled).depth(1),
             AppMenuItem::submenu("Speech"),
             menu_item(Action::SpeakStart, "Start Speaking", "", enabled).depth(1),
             menu_item(Action::SpeakStop, "Stop Speaking", "", true).depth(1),
@@ -1956,6 +2036,8 @@ impl App for TextEditApp {
         self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
         self.spelling.enabled = self.opts.spell_enabled;
         document::set_markup_as_code(self.opts.markup_as_code);
+        // pictures dropped from Files or another app land in this window (see `drag`)
+        dnd::register_types(ctx, &["public.image"]);
         // a window starts with an untitled document, as a new document would
         if self.docs.is_empty() {
             let id = self.docs.new_document();
@@ -2136,8 +2218,37 @@ impl App for TextEditApp {
         }
     }
 
+    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
+    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
+    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
+        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
+        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
+        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        match phase {
+            DragPhase::Entered | DragPhase::Updated => {
+                if takes && !self.drop_sessions.contains(&session) {
+                    if self.drop_sessions.len() >= 16 {
+                        self.drop_sessions.remove(0);
+                    }
+                    self.drop_sessions.push(session);
+                }
+                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
+            }
+            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
+            DragPhase::Perform => {
+                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
+                dnd::performed(ctx, session, takes);
+            }
+        }
+        true
+    }
+
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let ev = match self.export_event(ctx, ev) {
+            Ok(handled) => return handled,
+            Err(ev) => ev,
+        };
+        let ev = match self.picture_event(ctx, ev) {
             Ok(handled) => return handled,
             Err(ev) => ev,
         };

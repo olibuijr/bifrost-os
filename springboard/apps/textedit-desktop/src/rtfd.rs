@@ -55,7 +55,7 @@ pub fn attachment(file: String, width: f32, height: f32, data: Vec<u8>) -> Attac
     let (width, height) = if width > 0.0 && height > 0.0 {
         (width, height)
     } else {
-        match png_size(&data) {
+        match png_size(&data).or_else(|| bifrost_app::graphics_imageio::pixel_size(&data).map(|(w, h)| (w as f32, h as f32))) {
             Some(size) => fit(size),
             None => FALLBACK_POINTS,
         }

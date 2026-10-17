@@ -206,6 +206,7 @@ pub enum Kind {
     Pasting,
     Formatting,
     Replacing,
+    Inserting,
 }
 
 impl Kind {
@@ -217,6 +218,7 @@ impl Kind {
             Kind::Pasting => "Pasting",
             Kind::Formatting => "Formatting",
             Kind::Replacing => "Replacing",
+            Kind::Inserting => "Inserting",
         }
     }
 
