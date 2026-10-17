@@ -131,9 +131,9 @@ mod pick_tests {
 
     #[test]
     fn title_prefixes_come_before_other_matches_and_ids_match_too() {
-        let intents = vec![intent("open-notes", "Show Notes"), intent("new", "New Note"), intent("q", "Quit"), intent("zz", "Other")];
+        let intents = vec![intent("open-notes", "Show Notes"), intent("new", "New Note"), intent("note-list", "Notes List"), intent("q", "Quit"), intent("zz", "Other")];
         let ids: Vec<&str> = pick(&intents, "NOTE").iter().map(|i| i.id.as_str()).collect();
-        assert_eq!(ids, ["new", "open-notes"], "a title starting with the query comes first");
+        assert_eq!(ids, ["note-list", "open-notes", "new"], "a title starting with the query comes first");
         let by_id: Vec<&str> = pick(&intents, "zz").iter().map(|i| i.id.as_str()).collect();
         assert_eq!(by_id, ["zz"]);
         assert!(pick(&intents, "missing").is_empty());
