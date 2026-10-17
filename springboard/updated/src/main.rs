@@ -11,6 +11,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+mod install_log;
+
 const ID: &str = "is.olibuijr.update";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -25,6 +27,8 @@ struct Core {
     charging: bool,
     started: Instant,
     subscribers: Vec<UnixStream>,
+    /// the last failure written to the install log, so one failure is recorded once
+    last_failure: Option<String>,
 }
 
 fn offer(m: &update::Manifest) -> Offer {
@@ -83,6 +87,22 @@ impl Core {
         None
     }
 
+    /// Writes a system update failure to the install log once; a failure that clears re-arms the log.
+    fn record_failure(&mut self) {
+        match &self.ota.updater.state {
+            UpdState::Failed(e) => {
+                if self.last_failure.as_deref() != Some(e.as_str()) {
+                    let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+                    if let Err(err) = install_log::append(&self.dir, unix, "system update", e) {
+                        eprintln!("updated: install log: {err}");
+                    }
+                    self.last_failure = Some(e.clone());
+                }
+            }
+            _ => self.last_failure = None,
+        }
+    }
+
     /// Advances the checker and pushes what changed; once a second.
     fn tick(&mut self) {
         if self.version.is_empty() {
@@ -90,6 +110,7 @@ impl Core {
         }
         let now = self.started.elapsed().as_secs_f64();
         let changed = self.ota.tick(now, self.wifi, self.low_power, self.charging, self.auto_download, &self.version.clone(), &self.git.clone());
+        self.record_failure();
         let installed = self.ota.take_installed();
         if !installed.is_empty() {
             self.broadcast(&Evt::SystemInstalled(installed.iter().map(|a| a.id.clone()).collect()));
@@ -141,6 +162,7 @@ fn main() -> std::io::Result<()> {
         charging: false,
         started: Instant::now(),
         subscribers: Vec::new(),
+        last_failure: None,
     }));
     if let Some(parent) = std::path::Path::new(&sock).parent() {
         let _ = std::fs::create_dir_all(parent);

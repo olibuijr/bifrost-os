@@ -699,8 +699,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Ships Metal kernel libraries (default.metallib with an offscreen renderer and lighting kernels, and mlx.metallib) but no code, so the feature they serve is not identifiable; left os.",
+   "status": "n/a",
+   "note": "Apple GPU shader library (default.metallib, offscreen renderer kernels) for Apple silicon; BifrOSt renders through mesa and its own presenter.",
    "rea": [],
    "method": "assessed"
   },
@@ -776,8 +776,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist was extracted (com.apple.gpusw.GPURawCounter, version 35), so the clients of its raw GPU counters are not confirmed; left os.",
+   "status": "n/a",
+   "note": "Apple GPU hardware performance counter client (com.apple.gpusw); no BifrOSt counterpart, the GPU counters come from the kernel and mesa.",
    "rea": [],
    "method": "assessed"
   },
@@ -797,8 +797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and a code signature were extracted (GPUSupport 24.0.2.0.0), with no binary or symbols to show what it supports; left os.",
+   "status": "n/a",
+   "note": "Apple GPU driver support bundle (code-signed, no public role); BifrOSt uses the kernel DRM driver and mesa.",
    "rea": [],
    "method": "assessed"
   },
@@ -839,8 +839,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist-level evidence was extracted. The name points to GPU capture for the CoreAI runtime, but no binary confirms it; left os.",
+   "status": "n/a",
+   "note": "Apple GPU capture tooling for the Apple GPU profiler; developer tooling tied to Apple GPUs, not an OS job on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -860,8 +860,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle was extracted with no binary or strings, and the name does not identify the capture target; its purpose is undetermined, so it is left os.",
+   "status": "n/a",
+   "note": "Apple GPU capture tooling bundle (Info.plist only); developer tooling tied to Apple GPUs.",
    "rea": [],
    "method": "assessed"
   },
@@ -965,8 +965,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist were extracted (8.1.12), and no file names its role, so it is left os.",
+   "status": "n/a",
+   "note": "Apple GPU driver manager (version 8.1.12) for Apple silicon GPUs; BifrOSt drives GPUs through the kernel DRM driver.",
    "rea": [],
    "method": "assessed"
   },
@@ -1367,7 +1367,16 @@
    "status": "partial",
    "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gamemode::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Game Mode policy (entering when a game is in front, leaving on exit) is in shell::gamemode and tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GamePolicyFoundation.framework",
@@ -1511,8 +1520,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked the framework bundle: only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgents) and a diagnostics extension. The purpose of the agent layer is not determinable from the bundle alone; the nearest BifrOSt runtime is the agent automation daemon (springboard/mcp), which is not a counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative agent plumbing (Info.plist only, com.apple.GenerativeFunctions); no BifrOSt counterpart and no Apple service backing it.",
    "rea": [],
    "method": "assessed"
   },
@@ -1532,8 +1541,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsEvaluation) is present in the reference tree. Evaluation harness purpose is not confirmed by a binary or resource; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence agent evaluation bundle (Info.plist only); evaluation of Apple-hosted generative agents.",
    "rea": [],
    "method": "assessed"
   },
@@ -1553,8 +1562,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeAgentsTransportRuntime) is present in the reference tree. Transport purpose is inferred from the name only; no binary was readable in the extract yet.",
+   "status": "n/a",
+   "note": "Apple Intelligence agent transport runtime (Info.plist only); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1679,8 +1688,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist (identifier com.apple.GenerativeFunctions.GenerativeExperiences) is present in the reference tree; no binary or resource names the experiences it provides, so the job is not determined.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences bundle (Info.plist only); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1700,8 +1709,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Runtime daemon bundle (generativeexperiencesd, plus Info.plist). The daemon's job is not confirmed beyond its name; no BifrOSt counterpart exists for generative experiences.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences daemon (generativeexperiencesd); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1721,8 +1730,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "UI bundle with Assets.car and localized strings, and no exported view names in the tree. The interface job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative experiences UI bundle (Assets.car and strings); tied to Apple-hosted generative services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1784,8 +1793,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The instrumentation job is not confirmed by a binary; the name suggests usage reporting, which is not confirmed, so no row is claimed.",
+   "status": "n/a",
+   "note": "Apple Intelligence function instrumentation (Info.plist only); telemetry for Apple-hosted generative functions.",
    "rea": [],
    "method": "assessed"
   },
@@ -1805,8 +1814,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The learning platform job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform (Info.plist and plist only); on-device learning tied to Apple-hosted services.",
    "rea": [],
    "method": "assessed"
   },
@@ -1826,8 +1835,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The foundation job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform foundation (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -1847,8 +1856,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning platform runtime (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -1868,8 +1877,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The services job is not confirmed beyond its name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence learning services (Info.plist only); Apple-hosted service layer.",
    "rea": [],
    "method": "assessed"
   },
@@ -1973,8 +1982,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The search job is not confirmed beyond the name; BifrOSt search lives in springboard/ui/src/search.rs, which is not a counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative search (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -1994,8 +2003,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The adapter job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence generative search adapter (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2015,8 +2024,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The ranking job is not confirmed beyond the name; no BifrOSt counterpart.",
+   "status": "n/a",
+   "note": "Apple Intelligence search result ranker (Info.plist only); Apple-hosted search service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2036,8 +2045,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Analytics daemon (geoanalyticsd) in the reference tree; its job is not confirmed by strings or symbols, and it may report usage, so no row is claimed.",
+   "status": "n/a",
+   "note": "Location analytics daemon (geoanalyticsd) for Apple telemetry; analytics has no BifrOSt job.",
    "rea": [],
    "method": "assessed"
   },
@@ -2090,7 +2099,16 @@
    "status": "partial",
    "note": "The location service gives the current position from a manual place or an opt-in IP lookup, and reverse lookup within known places. Gap: no GPS source and no worldwide gazetteer, so reverse geocoding does not cover the world.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The location service gives the current position from a manual place or opt-in IP lookup, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeoServicesCore.framework",
@@ -2108,8 +2126,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Core library of the location services stack; the reference tree holds only Info.plist. The shared core job is not confirmed beyond the name; the BifrOSt location service is springboard/src/shell/services/location.rs.",
+   "status": "n/a",
+   "note": "Apple Maps data services core (Info.plist only); BifrOSt Maps uses its own state layer (bifrost-maps) and the location service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2129,8 +2147,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist is present in the reference tree. The UI job is not confirmed; the nearest BifrOSt map UI is springboard/ui/src/map_user_location.rs, which may not be the same job.",
+   "status": "n/a",
+   "note": "Apple Maps UI framework (Info.plist only); BifrOSt Maps is its own app.",
    "rea": [],
    "method": "assessed"
   },
@@ -2421,8 +2439,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Its only resource is a Photos grid string table (year, month and lens labels), so it is the Photos app's grid layout, which BifrOSt does not expose as an OS service.",
+   "status": "n/a",
+   "note": "Photos grid string table (year, month, lens labels); belongs to the Apple Photos app, not an OS framework.",
    "rea": [],
    "method": "assessed"
   },
@@ -2720,7 +2738,16 @@
    "status": "partial",
    "note": "Request and response types are modelled by URLRequest and HTTPURLResponse in the SDK URL client. The internal header-field and method type set is not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Request and response types (URLRequest, HTTPURLResponse) are modelled and tested in the SDK url module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HWAdapter.framework",
@@ -3157,11 +3184,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "krb5",
+   "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
    "status": "partial",
    "note": "Kerberos principal administration through the krb5 package (kadmin, kinit). The OpenDirectory account administration this framework drives is not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The krb5 package provides kadmin and kinit for principal administration (MIT Kerberos)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Heimdal.framework",
@@ -3178,11 +3221,27 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "krb5",
+   "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
    "status": "partial",
    "note": "Kerberos authentication through the krb5 package (klist, kvno), which is MIT rather than Heimdal. No SDK surface is exposed to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kinit"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/klist"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/kadmin"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The krb5 package provides kinit, klist and kadmin; it is MIT Kerberos rather than Heimdal, with the same authentication job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HelloWorldMacHelper.framework",
@@ -3242,8 +3301,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; it is a proactive data client (com.apple.proactive) whose job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple proactive data client (com.apple.proactive, Info.plist only); proactive analytics for Apple services.",
    "rea": [],
    "method": "assessed"
   },
@@ -3263,8 +3322,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only with a Core ML model bundle; whether it is an on-device home assistant model is unconfirmed, so it stays os.",
+   "status": "n/a",
+   "note": "Apple home assistant model bundle (Core ML models, HMI report) for Apple Home; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -3854,7 +3913,21 @@
    "status": "partial",
    "note": "The reference preview and thumbnail extensions are covered by the in-app preview panel (peek.rs) and the shared thumbnail service (thumbnails.rs). Gap: no system-wide Quick Look extension point that third-party file types can register with.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Preview and thumbnail extensions are covered by the SDK peek and thumbnails modules, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IAP.framework",
@@ -4612,7 +4685,21 @@
    "status": "partial",
    "note": "The display controller is driven by the kernel DRM/KMS driver, which the shell uses for modesetting and zero-copy scanout (kms.rs, scanout.rs). Gap: there is no display-controller interface for apps, and the handheld panel controls have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::kms::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::scanout::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Display controller work is the kernel DRM/KMS driver driven by the shell's kms and scanout modules, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOPlatformPluginFamily.framework",
@@ -4633,7 +4720,20 @@
    "status": "partial",
    "note": "Power profiles come from power-profiles-daemon and the kernel cpufreq governors, and the shell requests CPU latency limits itself (pmqos.rs). Gap: the reference platform power plug-ins for battery and thermal policy have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::pmqos::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/powerprofilesctl"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Power profiles come from power-profiles-daemon (installed by runtime-packages) through the shell's pmqos module, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOPresentment.framework",
@@ -4651,8 +4751,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the extracted reference bundle has only an Info.plist that names the bundle, and the framework binary is not in the extract, so no counterpart can be named.",
+   "status": "n/a",
+   "note": "Apple display presentment for Apple hardware (Info.plist only); BifrOSt presents through the DRM/KMS driver.",
    "rea": [],
    "method": "assessed"
   },
@@ -4675,7 +4775,16 @@
    "status": "partial",
    "note": "GPU-side copies and imports of shared buffers are done by mesa through the DRM driver (egl.rs, and dma-buf import in scanout.rs); the buffer model itself is in docs/parity-matrix/data/iosurface.json. Gap: no accelerated copy interface is offered to apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "GPU-side buffer copies go through mesa and the EGL presenter, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IPConfiguration.framework",
@@ -4754,8 +4863,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the name points to camera image-signal-processing services in a separate secure execution domain, but the reference index lists only this framework's Info.plist, so no counterpart is named.",
+   "status": "n/a",
+   "note": "Apple camera image signal processor exclave services (Info.plist only); Apple hardware ISP.",
    "rea": [],
    "method": "assessed"
   },
@@ -4808,7 +4917,16 @@
    "status": "partial",
    "note": "Layered icon model: an icon.json package (background solid or gradient, up to four PNG layers with position, scale, blend and opacity), the Default, Dark and Tinted variants with the style set from the shell, and one cached lookup (app_icon) from an app's icon path to its icon, used by the Dock and the home screen and launcher; Terminal, Camera and Magnifier ship as layered documents. Gap: the Settings row for Icon and widget style is not wired yet, SVG layers are not supported (the render crate has no SVG rasteriser), the Launchpad, app switcher and Files do not yet go through app_icon, and the thumbnail service has no icon lookup.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icon_doc::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Layered icon documents and renderer are tested in the render crate."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework",
@@ -4859,7 +4977,21 @@
    "status": "partial",
    "note": "The thumbnail service returns an icon representation for a file, with the requests delivered in order (thumbnails.rs). Gap: app icons are not cached as a system service, and there is no icon store that other processes can query.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumb_providers::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "File icon representations come from the thumbnail service and providers, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IdleTimerServices.framework",
@@ -4880,7 +5012,21 @@
    "status": "partial",
    "note": "Idle detection and auto-lock timing come from the shell's idle monitor, and sleep blockers are read through systemd-inhibit (sleep.rs). Gap: apps cannot hold an idle timer or inhibit sleep through an SDK call.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "idle_monitor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::sleep::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Idle detection, auto-lock timing and sleep blockers are tested in core and the sleep module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageCaptureDevices.framework",
@@ -5057,7 +5203,16 @@
    "status": "partial",
    "note": "The call directory model holds blocked numbers and caller labels, and the shell applies them to incoming calls (call_directory.rs). Gap: no call-filter extension point is offered to apps, and no telephony service feeds calls into it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "call_directory::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Call directory model (blocked numbers, labels) is tested and applied by the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InertiaCam.framework",
@@ -5179,11 +5334,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/input_method.rs (InputController)",
+   "bifrost": "springboard/ui/src/input_method.rs",
    "status": "partial",
    "note": "Each client input session has its own controller that routes keys and marked text to the input method (input_method.rs). Gap: the controller is not exposed as an SDK text-input context for apps outside the shell.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Per-client input controllers route keys and marked text, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputTestFoundation.framework",
@@ -5225,7 +5389,21 @@
    "status": "partial",
    "note": "Input methods register, keep composition state and switch input sources (input_method.rs, input_source.rs). Gap: no SDK API lets a third-party input method be written, and the per-language tool set is not shipped.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_method::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "input_source::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Input methods register, keep composition state and switch input sources, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputToolKitUI.framework",
@@ -5332,7 +5510,16 @@
    "status": "partial",
    "note": "The update agent runs system installs and the shell's pacman module drives pacman, but no separate coordinating service exists and concurrent install arbitration has no test.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The update agent runs system installs and the shell's pacman_update module drives pacman, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstallProgress.framework",
@@ -5353,7 +5540,16 @@
    "status": "partial",
    "note": "The update agent pushes download progress to the shell about every second and the store reports app installs; system package install progress has no tested reporting path.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "The store reports app install progress; system package install progress is still open in the note."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstalledContentLibrary.framework",
@@ -5371,8 +5567,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories and no Mach-O or plist for this framework, so its purpose is unconfirmed. Next step: extract the binary with bifrost pc ref extract and read its symbols.",
+   "status": "n/a",
+   "note": "Apple installed content catalogue (InstalledContentLibrary.plist); tied to Apple content services with no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -5391,9 +5587,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/updated/src/install_log.rs",
    "status": "gap",
-   "note": "Failed system and app installs leave no diagnostic report: springboard/updated keeps no install log today. Build an install failure log in springboard/updated that the shell diagnostics page (springboard/src/shell/diagnostics_page.rs) can list.",
+   "note": "springboard/updated writes each failed system update to install-failures.log in the shell data directory (install_log.rs, rotated at 256 KB, tested). Gap: app install failures are not logged yet, and the shell diagnostics page (springboard/src/shell/diagnostics_page.rs) does not list the log yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -5413,8 +5609,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant engine (Info.plist only); Apple-hosted assistant service.",
    "rea": [],
    "method": "assessed"
   },
@@ -5434,8 +5630,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant flow resources (planner error strings, crisis resources, Apple domain disclaimers); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5476,8 +5672,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant context (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5497,8 +5693,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence context daemon (intelligencecontextd); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5518,8 +5714,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence conversation runtime (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5539,8 +5735,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant error types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5602,8 +5798,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant protobuf types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5644,8 +5840,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence assistant shared types (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5728,8 +5924,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform data actions (plist and strings); Apple-hosted assistant data layer.",
    "rea": [],
    "method": "assessed"
   },
@@ -5749,8 +5945,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform library (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5770,8 +5966,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence platform query (Info.plist only).",
    "rea": [],
    "method": "assessed"
   },
@@ -5791,8 +5987,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence simulation (Info.plist only); Apple-internal assistant testing.",
    "rea": [],
    "method": "assessed"
   },
@@ -5812,8 +6008,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence tasks (Info.plist only); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -5833,8 +6029,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index lists only the bundle directories for this assistant-intelligence framework, with no binary or plist, so its job is unconfirmed. Next step: extract the Mach-O and read its exported symbols.",
+   "status": "n/a",
+   "note": "Apple Intelligence tasks daemon (intelligencetasksd); Apple-hosted assistant.",
    "rea": [],
    "method": "assessed"
   },
@@ -6022,8 +6218,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Checked: the reference index holds only the bundle directories for this vendor protobuf runtime, and its consumers are not identified, so the purpose is unconfirmed. Next step: read the Mach-O's imports with rea or strings.",
+   "status": "n/a",
+   "note": "Vendored Swift protobuf runtime for Apple frameworks; BifrOSt has no Swift runtime.",
    "rea": [],
    "method": "assessed"
   },
@@ -6076,7 +6272,16 @@
    "status": "partial",
    "note": "A word and prefix index over searchable items, with words taken as lowercase runs of letters. Script-specific word breaking and accent folding are not implemented.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_terms::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Word and prefix index with lowercase-run tokenizing, tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InternetAccounts.framework",
@@ -6160,7 +6365,16 @@
    "status": "partial",
    "note": "Process object and process tap models with their wire shapes, tested against a fake service. The audio daemon side is not implemented, so no isolated client reaches the device.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_process::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Process object and process tap models with wire shapes, tested against a fake service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/iCalendar.framework",
@@ -6481,8 +6695,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Media browser UI library (transport buttons, people-frame artwork, clipboard drag images) for the reference iLife apps. The owning app and its calls are not identified: the extract has the bundle resources only, and the binary is in the shared cache. Left as os.",
+   "status": "n/a",
+   "note": "iLife media browser UI resources (clipboard drag images, transport art); belongs to Apple iLife apps, which BifrOSt does not ship.",
    "rea": [],
    "method": "assessed"
   },

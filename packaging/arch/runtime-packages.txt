@@ -60,6 +60,7 @@ ipp-usb
 iproute2
 jdk-openjdk
 jq
+krb5
 ksh
 less
 libsecret
