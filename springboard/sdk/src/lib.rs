@@ -162,6 +162,7 @@ pub mod colorsync;
 pub mod decimal;
 pub mod random;
 pub mod gameplay_kit;
+pub mod linear_algebra;
 pub mod csv_writer;
 pub mod accounts;
 pub mod cloud_identity;
