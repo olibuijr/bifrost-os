@@ -265,11 +265,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/uniform-type-identifiers.json",
+   "bifrost": "springboard/ui/src/uttype.rs, springboard/ui/src/uttype_declarations.rs, springboard/sdk/src/document.rs, springboard/sdk/src/type_conversion.rs, springboard/sdk/src/share.rs",
    "status": "partial",
-   "note": "from SDK matrix uniform-type-identifiers.json Built 2026-10-17: writable types for documents (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types). Built 2026-10-17: conversion rules between the types (sdk type_conversion.rs: method, targets, loses_data; tests type_conversion::tests). Not yet used by the save or open flow.",
+   "note": "from SDK matrix uniform-type-identifiers.json Built 2026-10-17: writable types for documents (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types). Built 2026-10-17: conversion rules between the types (sdk type_conversion.rs: method, targets, loses_data; tests type_conversion::tests). Not yet used by the save or open flow. Refreshed 2026-10-17: the type identifiers, extension lookup, conformance and declared document and 3D types live in ui uttype (tests uttype::tests); the main job of the framework is covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "uttype::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "type_conversion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    }
+   ],
+   "ready_note": "Type identity, conformance, extension lookup, writable document types and conversion rules are tested headless. Not yet on Midget; the open and share flow does not use the conversion rules, and most system-declared identifiers (Apple-only, Shazam, bundle types) stay open."
   },
   {
    "id": "path:/System/Library/Frameworks/UserNotifications.framework",

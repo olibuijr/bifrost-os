@@ -96,13 +96,12 @@
       "apple": "ImageCaptureCore Constants, Data Types, Enumerations, Macros",
       "bifrost": "springboard/ui/src/device_browser.rs, springboard/ui/src/camera_device.rs, springboard/ui/src/scan_job.rs",
       "status": "partial",
-      "note": "The device kind, device mask, capability bits and media kinds are typed and tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: the transfer modes and scanner functional-unit types still need hardware to verify their values."
+      "note": "The device kind, device mask, capability bits and media kinds are typed and tested headless in springboard/ui/tests/parity_sdk-complete-14.rs. Gap: the transfer modes and scanner functional-unit types still need hardware to verify their values. Refreshed 2026-10-17: sdk scan_session::ScanSession wraps one SANE device (scanimage) and scans pages to files (tests scan_session::tests), so a scanner transport exists."
     }
   ],
   "gaps": [
-    "No device browser: no API or system service that enumerates PTP cameras and scanners and reports hotplug events (ICDeviceBrowser).",
+    "No PTP or USB camera enumeration reaches the device browser (ui device_browser). sdk device_registry::DeviceWatch polls sysfs devices by class and could feed it.",
     "No PTP or MTP transport, so no camera file listing, download, delete or tethered capture (ICCameraDevice, ICCameraFile).",
-    "No scanner transport (SANE or similar), so the scan session model (sdk scan_session.rs) has no device behind it (ICScannerDevice).",
     "No per-app USB device grant to match com.apple.security.device.usb in springboard/src/bare/app_policy.rs.",
     "Camera permission model: no usage-description string or prompt for camera access, unlike NSCameraUsageDescription.",
     "Photos import from a device is absent; springboard/apps/photocraft-desktop has no import code in this checkout."

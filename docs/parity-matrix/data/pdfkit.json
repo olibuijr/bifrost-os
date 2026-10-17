@@ -12,7 +12,7 @@
       "apple": "PDFView, PDFViewDelegate, currentPage, visiblePages, displayMode, scaling",
       "bifrost": "springboard/ui/src/pdfview.rs (PdfView, DisplayMode, page frames, scroll, navigation)",
       "status": "partial",
-      "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover continuous and two-up page frames, visible and current pages, scroll clamping, scale factor and limits, autoscaling, go_to_page and next and previous page. Tests: continuous_pages_stack_one_per_row_with_the_page_gap_between_rows, visible_pages_are_the_frames_that_meet_the_viewport, current_page_is_the_row_that_crosses_the_middle_of_the_viewport, go_to_page_scrolls_the_row_to_the_top_and_refuses_unknown_pages, a_fixed_scale_scales_the_frames_and_the_content, a_fixed_scale_is_clamped_into_the_scale_limits, an_empty_view_has_no_pages_and_no_current_page. Not wired into apps or the shell; Books reflows text into its own page model, so Apple page geometry is not used; verify on Midget for parity."
+      "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover continuous and two-up page frames, visible and current pages, scroll clamping, scale factor and limits, autoscaling, go_to_page and next and previous page. Tests: continuous_pages_stack_one_per_row_with_the_page_gap_between_rows, visible_pages_are_the_frames_that_meet_the_viewport, current_page_is_the_row_that_crosses_the_middle_of_the_viewport, go_to_page_scrolls_the_row_to_the_top_and_refuses_unknown_pages, a_fixed_scale_scales_the_frames_and_the_content, a_fixed_scale_is_clamped_into_the_scale_limits, an_empty_view_has_no_pages_and_no_current_page. Not wired into apps or the shell; Books reflows text into its own page model, so Apple page geometry is not used; verify on Midget for parity. Refreshed 2026-10-17: sdk peek_pdf::PdfPreview wraps bifrost_ui::pdfview::PdfView for the Peek app (tests peek_pdf::tests)."
     },
     {
       "feature": "PDFThumbnailView and page thumbnails",
@@ -107,11 +107,11 @@
     }
   ],
   "gaps": [
-    "No app-facing PDF page or view object in springboard/sdk/src (PDFPage, PDFView have no counterpart). graphics_pdf::Document has open, page count and size, render, outline and find; the PDF reader is otherwise private to the Books app.",
-    "No annotation, widget or form-field support (PDFAnnotation, AcroForm)",
-    "No page rendering into an app-provided context and no page thumbnails (PDFPage draw, PDFThumbnailView)",
+    "No general app-facing PDFPage or PDFView object: sdk peek_pdf::PdfPreview wraps the PDFView model for the Peek app only. graphics_pdf::Document has open, page count and size, render, outline, find and page text.",
+    "No annotation objects read from or written to PDF files: ui/src/annotation.rs is an in-memory model. No widget or AcroForm support.",
+    "No PDFThumbnailView and no page drawing into an app-provided context; ui pdfpage gives thumbnail_size and fit_transform only.",
     "No text selection in PDFs (PDFSelection); find returns page indexes, not ranges of text.",
-    "No write path: Save as PDF copies the original file, so page edits, rotation and password handling cannot be written",
+    "No write path for existing files: graphics_pdf's writer builds new files from drawn pages, but Save as PDF copies the original file, so page edits, rotation and password handling cannot be written.",
     "Printing sends the file to CUPS unchanged; page ranges are set in the shell's print sheet (ui print_ranges.rs), but there is no pagination of PDF content (see docs/bifrost-ui.md:1322-1333)"
   ]
 }
