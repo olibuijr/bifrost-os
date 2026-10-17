@@ -3801,9 +3801,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/mod.rs",
+   "bifrost": "springboard/src/media/mod.rs; springboard/src/media/hls.rs",
    "status": "partial",
-   "note": "File demux and playback in springboard/src/media exist. No HTTP live streaming segment support was found, so streamed network media is not covered.",
+   "note": "File demux and playback in springboard/src/media exist. HLS media playlists are now parsed and their segment addresses resolved (media/hls.rs). Not built: fetching the segments over HTTP, joining them into one stream for the demuxer, and master playlist variant selection, so streamed network media does not play yet.",
    "rea": [],
    "method": "assessed"
   },
