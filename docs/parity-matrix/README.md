@@ -92,6 +92,10 @@ Owner rule (2026-10-12): test on the host, then on Midget; a row is `parity` onl
 - `tools/parity/os_frameworks.py [--write]` syncs the `os/frameworks` rows from the SDK matrix: public frameworks take the status of
   the SDK rows, private ones inherit from their owner (`os_private_owner_map.json`) and are never better than `partial`.
 - `bifrost pc parity os-status` prints the OS layer per category.
+- The `cli` tools that BifrOSt builds itself (`springboard/cmd/src/bin/*.rs`, crate `bifrost-cmd`) are installed by the system
+  package: `/usr/bin/<tool>`, or `/usr/lib/bifrost/cmd/bin/<tool>` when an Arch package owns the name (`vis`, `units`, `lastcomm`),
+  with `/etc/profile.d/bifrost-cmd.sh` putting that directory after `/usr/bin` on PATH. Collision list and reasons:
+  `packaging/arch/package-files.sh`; see `docs/bifrost-pc-workflow.md`, "bifrost-cmd tools in the system package".
 
 ## OS layer: command-line tools (`verify os-cli`)
 
