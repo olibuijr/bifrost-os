@@ -674,11 +674,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/installer/keymaps_data.rs",
+   "bifrost": "springboard/src/installer/keymaps_data.rs, springboard/src/installer/keymaps.rs",
    "status": "partial",
    "note": "The layout table is generated from xkeyboard-config through libxkbcommon, with console keymaps for the installer. Gap: the layouts are not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::keymaps::tests"
+    }
+   ],
+   "ready_note": "The layout table is generated from xkeyboard-config through libxkbcommon and the installer's console keymaps are tested in installer::keymaps::tests (US typing and shift, Icelandic letters, German swaps, dead keys and compose, Caps Lock, a full alphabet per layout, the installed layout from the keyboard environment). Verifying the layouts on the lab machine is the remaining step."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/KeyboardServices.framework",

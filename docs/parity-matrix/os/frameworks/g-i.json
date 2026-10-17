@@ -3170,7 +3170,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Built 2026-10-17: USB accessory approval decisions (allow, deny, allow once, kernel authorized state, persisted approvals) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the approval prompt itself and the udev and sysfs authorized write-back in the shell.",
+   "note": "Built 2026-10-17: USB accessory approval decisions (allow, deny, allow once, kernel authorized state, persisted approvals) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the approval prompt itself and the udev and sysfs authorized write-back in the shell. Built 2026-10-17: validated write-back path for the kernel authorized attribute (authorized_path, /sys/bus/usb/devices/<port>/authorized, bus and port names only) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the shell does not call the write-back yet, and the approval prompt is not drawn.",
    "rea": [],
    "method": "assessed"
   },
@@ -5124,7 +5124,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/gpu_page.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: per-process GPU memory collector (drm-memory regions from fdinfo, one count per client, ranking by process) in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background collector that runs it and the per-process column in the Graphics page.",
+   "note": "Built 2026-10-17: per-process GPU memory collector (drm-memory regions from fdinfo, one count per client, ranking by process) in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background collector that runs it and the per-process column in the Graphics page. Built 2026-10-17: scan_proc reads every process fdinfo under a proc root and groups the DRM clients by process, in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background run of the collector and the per-process column in the Graphics page.",
    "rea": [],
    "method": "assessed"
   },
@@ -7133,7 +7133,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/locale.rs",
    "status": "partial",
-   "note": "Locale identifiers and formatting for en and is. Other languages fall back to en, and no per-user region preference store is wired.",
+   "note": "Locale identifiers and formatting for en and is. Other languages fall back to en, and no per-user region preference store is wired. Built 2026-10-17: a region's Localizable.strings table is read before the language table and en (lproj_candidates, Bundle::load), tests locale::tests. Still open: no per-user region preference store and no translations beyond en and is.",
    "rea": [],
    "method": "assessed"
   },
