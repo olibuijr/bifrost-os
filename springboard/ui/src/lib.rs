@@ -795,6 +795,7 @@ pub mod download;
 pub mod nav_policy;
 pub mod translation;
 pub mod translation_popover;
+pub mod tab_selection;
 pub mod timeline;
 pub mod relevance;
 pub mod guardrail;
