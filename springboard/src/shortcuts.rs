@@ -650,6 +650,8 @@ pub enum Automation {
     FocusChanges(bool),
     /// runs at a local time of day, every day or on weekdays only
     TimeOfDay { at: Daily, weekdays: bool },
+    /// runs for a file dropped on the shortcut's droplet icon
+    FileDropped,
 }
 
 impl Automation {
@@ -661,6 +663,7 @@ impl Automation {
             Automation::AppCloses(i) => format!("close:{i}"),
             Automation::BatteryBelow(p) => format!("battery:{p}"),
             Automation::AtLogin => "login".into(),
+            Automation::FileDropped => "dropped".into(),
             Automation::FocusChanges(on) => format!("focus:{}", if on { "on" } else { "off" }),
             Automation::TimeOfDay { at, weekdays } => format!("time:{}:{}", at.label(), if weekdays { "weekdays" } else { "every" }),
         }
@@ -670,6 +673,9 @@ impl Automation {
     fn decode(v: &str) -> Option<Automation> {
         if v == "login" {
             return Some(Automation::AtLogin);
+        }
+        if v == "dropped" {
+            return Some(Automation::FileDropped);
         }
         if let Some(rest) = v.strip_prefix("time:") {
             let (hm, days) = rest.rsplit_once(':')?;
@@ -714,6 +720,8 @@ pub enum Event<'a> {
     Focus(bool),
     /// a local time; `weekday` is 1 for Sunday to 7 for Saturday, the calendar convention of the shell's scheduler
     Time { hour: u8, minute: u8, weekday: u8 },
+    /// a file was dropped on the shortcut's droplet icon
+    FileDropped,
 }
 
 /// Whether a change in the charge crosses below `level`: the charge was at or above it and is now below it. The first
@@ -734,6 +742,7 @@ pub fn starts(a: Automation, event: Event) -> bool {
         (Automation::AppCloses(i), Event::AppClosed(app)) => APP_CHOICES.get(i) == Some(&app),
         (Automation::BatteryBelow(level), Event::BatteryLevel { before, now }) => battery_fell_below(before, now, level),
         (Automation::AtLogin, Event::Login) => true,
+        (Automation::FileDropped, Event::FileDropped) => true,
         (Automation::FocusChanges(on), Event::Focus(now)) => on == now,
         (Automation::TimeOfDay { at, weekdays }, Event::Time { hour, minute, weekday }) => {
             at.hour == hour && at.minute == minute && (!weekdays || (2..=6).contains(&weekday))
@@ -951,6 +960,7 @@ fn automation_order() -> Vec<Automation> {
     order.extend((0..APP_CHOICES.len()).map(Automation::AppOpens));
     order.extend((0..APP_CHOICES.len()).map(Automation::AppCloses));
     order.extend(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p)));
+    order.push(Automation::FileDropped);
     order
 }
 
@@ -968,6 +978,7 @@ pub fn automation_label(cur: Option<Automation>) -> String {
         Some(Automation::FocusChanges(false)) => "When Focus Turns Off".into(),
         Some(Automation::TimeOfDay { at, weekdays: false }) => format!("Daily at {}", at.label()),
         Some(Automation::TimeOfDay { at, weekdays: true }) => format!("Weekdays at {}", at.label()),
+        Some(Automation::FileDropped) => "When a File Is Dropped".into(),
     }
 }
 
@@ -1957,5 +1968,14 @@ mod tests {
             }
         }
         assert_eq!(steps, automation_order().len());
+    }
+
+    #[test]
+    fn a_dropped_file_starts_only_the_dropped_automation() {
+        assert_eq!(automation_label(Some(Automation::FileDropped)), "When a File Is Dropped");
+        assert_eq!(Automation::decode("dropped"), Some(Automation::FileDropped));
+        assert!(starts(Automation::FileDropped, Event::FileDropped));
+        assert!(!starts(Automation::FileDropped, Event::Login));
+        assert!(!starts(Automation::AtLogin, Event::FileDropped));
     }
 }
