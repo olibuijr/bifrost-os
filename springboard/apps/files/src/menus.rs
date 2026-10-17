@@ -60,6 +60,8 @@ pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
 pub(crate) const MENU_ALIAS: u32 = 29;
 pub(crate) const MENU_COPY_PATH: u32 = 30;
 pub(crate) const MENU_SAVE_SEARCH: u32 = 31;
+/// File > New Window (⌘N): a second Files window at the home folder.
+pub(crate) const MENU_NEW_WINDOW: u32 = 32;
 
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
@@ -103,6 +105,7 @@ impl Files {
             ]
         } else {
             let mut items = vec![
+                ContextItem { id: MENU_NEW_WINDOW, label: "New Window".into(), enabled: true },
                 ContextItem { id: MENU_NEW_FOLDER, label: "New Folder".into(), enabled: !self.in_bin() },
                 ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
                 ContextItem { id: MENU_HIDDEN, label: if self.show_hidden { "Hide Hidden Files".into() } else { "Show Hidden Files".into() }, enabled: true },

@@ -8,6 +8,7 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::controls::{Controls, Node, Role, Rect, TextField};
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
 use bifrost_app::{Command, Commands, App, Ctx, Input, ContextItem, KeyInput, TouchKind};
+use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::pack;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::pathbar::Segment;
@@ -67,6 +68,7 @@ mod toolbar;
 mod undo;
 mod views;
 mod window;
+mod windows;
 use go::*;
 use info::*;
 use openwith::*;
@@ -180,6 +182,8 @@ struct Files {
     dnd: dragout::DragOut,
     /// Service calls (preview panel, pasteboard, search index, Dock progress) and the replies they wait for.
     sys: SystemState,
+    /// The windows opened with New Window (⌘N), in the order they were opened. The main window is `self`.
+    windows: Vec<windows::ExtraWindow>,
 }
 fn home() -> PathBuf {
     let account = std::fs::read_to_string("/var/lib/springboard/account").unwrap_or_default();
@@ -269,6 +273,7 @@ impl Files {
             labels: new_labels(),
             row_text: Default::default(),
             sys: SystemState::default(),
+            windows: Vec::new(),
         };
         // a folder given on the command line opens there (Show in Files)
         let start = std::env::args().nth(1).map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| f.home.clone());
@@ -346,6 +351,29 @@ impl App for Files {
     }
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
         self.drag_out_document(ctx, ev)
+    }
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        // the keyboard, the menus and the clipboard belong to the main window; a New Window takes its touches
+        let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
+        match ev {
+            Input::Touch { .. } => e.files.event(ctx, ev),
+            _ => false,
+        }
+    }
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        match self.windows.iter_mut().find(|e| e.id == window) {
+            Some(e) => e.files.draw(ctx, s, t),
+            None => Damage::new(s.w, s.h),
+        }
+    }
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.close_extra(window)
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         self.request_thumbnails(ctx);
@@ -471,6 +499,8 @@ impl Files {
         }
         match input {
             Input::Context{x,y}=>self.context_menu_at(ctx,x,y),
+            // New Window (⌘N) and the empty-area menu's New Window need the ctx to open the window
+            Input::ContextAction(menus::MENU_NEW_WINDOW) => return self.new_window(ctx),
             Input::ContextAction(id) => {
                 if !self.context_action(id) {
                     return false;
@@ -623,6 +653,9 @@ impl Files {
                 if self.dragging && mods & CHORD_ALT != 0 {
                     self.fx.copy_drag = true; // Option during a drag: drop copies
                     self.revision += 1;
+                }
+                if key == 49 && mods & CHORD_META != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 && self.naming.is_none() && !self.searching {
+                    return self.new_window(ctx); // ⌘N: File > New Window
                 }
                 if !self.chord(key, mods) {
                     return false;
