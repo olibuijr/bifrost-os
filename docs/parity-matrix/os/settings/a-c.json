@@ -145,10 +145,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings_intents.rs",
+   "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
    "status": "partial",
    "note": "has: open-users pane intent for the local accounts page (users_page.rs:153); missing: intents for groups",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    }
+   ],
+   "ready_note": "covers: open-users-groups intent opens the Users & Groups pane (settings_intents.rs), which lists the accounts and groups (users_page.rs); tests shell::settings_intents::tests. The pane model has no separate group intent."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Appearance.appex",
