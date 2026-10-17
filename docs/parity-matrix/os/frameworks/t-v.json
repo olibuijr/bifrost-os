@@ -55,7 +55,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/tabular_summary.rs (summarize, ColumnSummary); springboard/core/src/csv.rs (parse_table, Table); springboard/sdk/src/csv_writer.rs (CsvWriter)",
    "status": "partial",
-   "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial.",
+   "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial. Built 2026-10-17: column-aware JSON (sdk tabular_json.rs) and typed columns (sdk tabular_columns.rs); tests tabular_json::tests, tabular_columns::tests. Still missing: a DataFrame and a spreadsheet reader or writer.",
    "rea": [],
    "method": "assessed"
   },
@@ -267,7 +267,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/uniform-type-identifiers.json",
    "status": "partial",
-   "note": "from SDK matrix uniform-type-identifiers.json",
+   "note": "from SDK matrix uniform-type-identifiers.json Built 2026-10-17: writable types for documents (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types). Still missing: type conversion rules.",
    "rea": [],
    "method": "assessed"
   },
@@ -431,7 +431,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/virtualization.json",
    "status": "partial",
-   "note": "from SDK matrix virtualization.json",
+   "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge.",
    "rea": [],
    "method": "assessed"
   },

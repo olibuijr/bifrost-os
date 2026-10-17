@@ -260,6 +260,19 @@ pub struct MemoryBalloon {
     pub free_page_reporting: bool,
 }
 
+/// Why a balloon target is refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BalloonError {
+    /// The guest configuration has no memory balloon.
+    NoBalloon,
+    /// The target is below `MIN_MEMORY_BYTES`.
+    TargetTooSmall,
+    /// The target is above the memory the guest was configured with.
+    TargetAboveMemory,
+    /// The target is not a whole number of MiB.
+    TargetNotWholeMiB,
+}
+
 /// One device in a guest configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Device {
@@ -330,6 +343,26 @@ fn share_tag_ok(tag: &str) -> bool {
 }
 
 impl GuestConfig {
+    /// The memory a balloon would hand back to the host for a guest that should use `target_bytes`: the configured
+    /// memory minus the target. Only a configuration with a balloon device accepts a target, and the target must be a
+    /// whole number of MiB between `MIN_MEMORY_BYTES` and the configured memory. The guest is not resized here; a
+    /// launcher applies the returned reclaim to the running guest.
+    pub fn balloon_reclaim(&self, target_bytes: u64) -> Result<u64, BalloonError> {
+        if !self.devices.iter().any(|d| matches!(d, Device::MemoryBalloon(_))) {
+            return Err(BalloonError::NoBalloon);
+        }
+        if target_bytes < MIN_MEMORY_BYTES {
+            return Err(BalloonError::TargetTooSmall);
+        }
+        if target_bytes > self.memory_bytes {
+            return Err(BalloonError::TargetAboveMemory);
+        }
+        if !target_bytes.is_multiple_of(MIB) {
+            return Err(BalloonError::TargetNotWholeMiB);
+        }
+        Ok(self.memory_bytes - target_bytes)
+    }
+
     /// The graphics device, if the configuration has one.
     pub fn graphics(&self) -> Option<&GraphicsDevice> {
         self.devices.iter().find_map(|d| match d {
@@ -536,6 +569,25 @@ mod tests {
         running.transition(State::Running).unwrap();
         assert_eq!(running.request_stop(), Ok(()));
         assert_eq!(running.state(), State::Running);
+    }
+
+    #[test]
+    fn a_balloon_target_reclaims_the_difference_from_the_configured_memory() {
+        let balloon = Device::MemoryBalloon(MemoryBalloon { free_page_reporting: true });
+        let guest = config(2, 2048 * MIB, vec![balloon]);
+        assert_eq!(guest.balloon_reclaim(1024 * MIB), Ok(1024 * MIB));
+        assert_eq!(guest.balloon_reclaim(2048 * MIB), Ok(0));
+    }
+
+    #[test]
+    fn a_balloon_target_is_refused_without_a_balloon_or_outside_the_memory_range() {
+        let balloon = Device::MemoryBalloon(MemoryBalloon { free_page_reporting: false });
+        let with = config(2, 2048 * MIB, vec![balloon]);
+        let without = config(2, 2048 * MIB, vec![]);
+        assert_eq!(without.balloon_reclaim(1024 * MIB), Err(BalloonError::NoBalloon));
+        assert_eq!(with.balloon_reclaim(32 * MIB), Err(BalloonError::TargetTooSmall));
+        assert_eq!(with.balloon_reclaim(4096 * MIB), Err(BalloonError::TargetAboveMemory));
+        assert_eq!(with.balloon_reclaim(1024 * MIB + 1), Err(BalloonError::TargetNotWholeMiB));
     }
 
     #[test]

@@ -47,6 +47,11 @@ pub trait Document: Sized {
     fn untitled() -> Self;
     /// `readableTypes`: the open panel's filters.
     fn readable_types() -> &'static [&'static str];
+    /// `writableTypes`: the types the save panel offers. Defaults to the readable types, since a document that reads a
+    /// type is taken to write it back; an app that reads more than it writes overrides it.
+    fn writable_types() -> &'static [&'static str] {
+        Self::readable_types()
+    }
     /// The type of a new document and the one Save As offers.
     fn default_type() -> &'static str;
     /// Reads a folder package of `uttype` from its files (name and bytes, as `document_package::read_package_dir` gives
@@ -503,7 +508,10 @@ impl<D: Document> DocumentController<D> {
         let ext = bifrost_ui::uttype::preferred_extension(&e.uttype).map(|x| format!(".{x}")).unwrap_or_default();
         let suggested = if e.untitled.is_some() || e.name.is_empty() { format!("{}{ext}", e.title()) } else { e.name.clone() };
         let uttype = e.uttype.clone();
-        let request = host.save_panel(&suggested, &[uttype.as_str()]);
+        // the document's own type leads the filters, then every other writable type once
+        let mut filters: Vec<&str> = vec![uttype.as_str()];
+        filters.extend(D::writable_types().iter().copied().filter(|t| *t != uttype));
+        let request = host.save_panel(&suggested, &filters);
         self.pending.insert(request, Pending::Save { doc: id, op, after, stamp });
     }
 
@@ -1055,12 +1063,38 @@ mod tests {
         }
     }
 
+    /// Reads plain text and rich text but writes only rich text.
+    #[derive(Debug, PartialEq)]
+    struct RichOnly(String);
+
+    impl Document for RichOnly {
+        fn read(bytes: &[u8], _t: &str) -> Result<Self, DocumentError> {
+            String::from_utf8(bytes.to_vec()).map(RichOnly).map_err(|_| DocumentError::new("not UTF-8"))
+        }
+        fn write(&self, _t: &str) -> Result<Vec<u8>, DocumentError> {
+            Ok(self.0.clone().into_bytes())
+        }
+        fn untitled() -> Self {
+            RichOnly(String::new())
+        }
+        fn readable_types() -> &'static [&'static str] {
+            &["public.plain-text", "public.rtf"]
+        }
+        fn writable_types() -> &'static [&'static str] {
+            &["public.rtf"]
+        }
+        fn default_type() -> &'static str {
+            "public.rtf"
+        }
+    }
+
     struct Mock {
         next: Cell<u32>,
         calls: RefCell<Vec<String>>,
         prefs: RefCell<HashMap<String, String>>,
         dir: PathBuf,
         state: RefCell<Option<(String, bool, String)>>,
+        filters: RefCell<Vec<Vec<String>>>,
     }
 
     impl Mock {
@@ -1068,7 +1102,7 @@ mod tests {
             let dir = std::env::temp_dir().join(format!("bifrost-doc-test-{tag}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
-            Mock { next: Cell::new(0), calls: RefCell::new(Vec::new()), prefs: RefCell::new(HashMap::new()), dir, state: RefCell::new(None) }
+            Mock { next: Cell::new(0), calls: RefCell::new(Vec::new()), prefs: RefCell::new(HashMap::new()), dir, state: RefCell::new(None), filters: RefCell::new(Vec::new()) }
         }
         fn req(&self, what: &str) -> u32 {
             self.next.set(self.next.get() + 1);
@@ -1091,7 +1125,8 @@ mod tests {
         fn open_panel(&self, _o: &OpenOptions) -> u32 {
             self.req("open")
         }
-        fn save_panel(&self, name: &str, _f: &[&str]) -> u32 {
+        fn save_panel(&self, name: &str, f: &[&str]) -> u32 {
+            self.filters.borrow_mut().push(f.iter().map(|t| t.to_string()).collect());
             self.req(&format!("panel:{name}"))
         }
         fn save_in_place(&self, g: GrantId) -> u32 {
@@ -1332,6 +1367,21 @@ mod tests {
         c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 1, ""))).unwrap();
         c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 1, ""))).unwrap();
         assert!(c.is_edited(id));
+    }
+
+    #[test]
+    fn the_save_panel_offers_only_the_writable_types() {
+        let m = Mock::new("writable");
+        let mut c = DocumentController::<RichOnly>::new();
+        let id = c.new_document();
+        c.save_as(&m, id);
+        assert_eq!(m.filters.borrow()[0], vec!["public.rtf".to_string()]);
+    }
+
+    #[test]
+    fn writable_types_default_to_the_readable_types() {
+        assert_eq!(Text::writable_types(), Text::readable_types());
+        assert_eq!(RichOnly::writable_types(), &["public.rtf"]);
     }
 
     #[test]

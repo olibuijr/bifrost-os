@@ -83,7 +83,7 @@
       "apple": "NSDocument readableTypes, writableTypes, data(ofType:)",
       "bifrost": "springboard/sdk/src/document.rs:40 (Document trait: read, write, readable_types, default_type)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 20 tests. type strings are UTIs; no writable types list or conversion rules"
+      "note": "verified on Midget 0.7.25 by 20 tests. type strings are UTIs; writable types are built (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types); no conversion rules"
     },
     {
       "feature": "Conformance check for tag matching in file kind",
@@ -96,6 +96,6 @@
   "gaps": [
     "Shell wiring: read the manifest type blocks at app launch and install the app type registry",
     "Most of the system-declared identifiers on the landing page, including 3D, Apple-only, Shazam and bundle types",
-    "Writable types and type conversion for documents"
+    "Type conversion between document types (writable types are built, see the document row; no conversion rules)"
   ]
 }

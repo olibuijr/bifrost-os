@@ -64,6 +64,20 @@ fn is_blank(record: &[String]) -> bool {
 }
 
 impl Table {
+    /// Builds a table from a header and data records. The header must have at least one name, and every record must
+    /// have as many fields as the header.
+    pub fn from_parts(header: Vec<String>, rows: Vec<Vec<String>>) -> Result<Table, CsvError> {
+        if header.is_empty() {
+            return Err(CsvError::NoHeader);
+        }
+        for (i, row) in rows.iter().enumerate() {
+            if row.len() != header.len() {
+                return Err(CsvError::RaggedRecord { record: i + 1, expected: header.len(), found: row.len() });
+            }
+        }
+        Ok(Table { header, rows })
+    }
+
     pub fn header(&self) -> &[String] {
         &self.header
     }
