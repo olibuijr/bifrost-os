@@ -5,11 +5,46 @@
 //! refused with a reason, which stops the shortcut and is shown in the result panel.
 
 use bifrost_app::Ctx;
+use bifrost_core::json::Json;
+use bifrost_core::script::dictionary::Dictionary;
+use bifrost_core::script::interp::{self as script, ScriptError};
 use springboard::shortcuts::flow::{Done, Host};
 use springboard::shortcuts::Action;
 
 /// The title notifications from a shortcut carry.
 const NOTIFICATION_TITLE: &str = "Shortcuts";
+
+/// The host a "Run Script" step runs its script on. Notifications are shown; anything that would reach another app, a
+/// dialog or the shell is refused with a reason, so a script cannot do more here than the other shortcut steps can.
+pub struct ScriptHost<'a> {
+    ctx: &'a Ctx,
+}
+
+impl script::Host for ScriptHost<'_> {
+    fn send_event(&mut self, app: &str, _class: &str, _id: &str, _params: &Json, _timeout_secs: u64) -> Result<Json, ScriptError> {
+        Err(ScriptError::general(format!("tell app \"{app}\" needs the shell's scripting service, which this app cannot reach yet")))
+    }
+    fn dictionary(&mut self, app: &str) -> Result<Dictionary, ScriptError> {
+        Err(ScriptError::general(format!("{app} has no scripting dictionary available here")))
+    }
+    fn display_dialog(&mut self, _text: &str, _title: Option<&str>) -> Result<String, ScriptError> {
+        Err(ScriptError::general("display dialog needs an answer from the person, which a shortcut cannot ask for yet"))
+    }
+    fn display_notification(&mut self, text: &str, title: Option<&str>) -> Result<(), ScriptError> {
+        self.ctx.notify(title.unwrap_or(NOTIFICATION_TITLE), text);
+        Ok(())
+    }
+    fn shell(&mut self, _command: &str) -> Result<String, ScriptError> {
+        Err(ScriptError::general("do shell script needs the person's confirmation, which is not built yet"))
+    }
+    /// Delays are skipped: a shortcut step must not hold the window's thread.
+    fn sleep(&mut self, _secs: f64) {}
+}
+
+/// The source a "Run Script" step runs: its one-line text, with `\n` standing for a line break.
+pub fn script_source(text: &str) -> String {
+    text.replace("\\n", "\n")
+}
 
 /// The steps the app can perform for itself, over the app's context.
 pub struct AppHost<'a> {
@@ -23,7 +58,7 @@ impl<'a> AppHost<'a> {
 }
 
 impl Host for AppHost<'_> {
-    fn perform(&mut self, action: &Action, _input: &str) -> Result<Done, String> {
+    fn perform(&mut self, action: &Action, input: &str) -> Result<Done, String> {
         match action {
             Action::CopyText(text) => {
                 self.ctx.set_pasteboard_string(text);
@@ -34,6 +69,16 @@ impl Host for AppHost<'_> {
                 Ok(Done::said("Notification shown"))
             }
             Action::ShowResult(text) => Ok(Done::said(text)),
+            Action::Script(source) => {
+                let mut host = ScriptHost { ctx: self.ctx };
+                match script::run_source(&script_source(source), &mut host, &[input.to_string()]) {
+                    Ok(value) => {
+                        let text = value.text();
+                        Ok(Done::with_output(&text, &text))
+                    }
+                    Err(e) => Err(e.message),
+                }
+            }
             other => Err(format!("{} needs the shell's services, which this app cannot reach yet", other.title())),
         }
     }
@@ -79,5 +124,28 @@ mod tests {
         assert!(steps[1].outcome.as_ref().unwrap_err().contains("Set Wi-Fi needs the shell's services"));
         assert!(steps[2].outcome.is_err(), "the result after it is not shown");
         assert!(ctx.take_sent().is_empty(), "nothing reached the shell");
+    }
+
+    #[test]
+    fn a_run_script_step_gets_the_previous_output_as_its_first_argument() {
+        let ctx = ctx();
+        let list = vec![Action::Text("Hello".into()), Action::Script(springboard::shortcuts::DEFAULT_SCRIPT.into())];
+        let steps = flow::run(&list, &mut AppHost::new(&ctx));
+        assert_eq!(steps[1].outcome, Ok("Hello".into()));
+    }
+
+    #[test]
+    fn a_run_script_step_can_notify_and_is_refused_a_shell_command() {
+        let ctx = ctx();
+        let notify = vec![Action::Script("display notification \"Built\" with title \"Scripts\"".into())];
+        let steps = flow::run(&notify, &mut AppHost::new(&ctx));
+        assert!(steps[0].outcome.is_ok());
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::Notify { title, body } if title == "Scripts" && body == "Built")));
+
+        let shell = vec![Action::Script("do shell script \"rm -rf ~\"".into()), Action::ShowResult("never".into())];
+        let steps = flow::run(&shell, &mut AppHost::new(&ctx));
+        assert!(steps[0].outcome.as_ref().unwrap_err().contains("confirmation"));
+        assert!(steps[1].outcome.is_err());
+        assert!(ctx.take_sent().is_empty());
     }
 }
