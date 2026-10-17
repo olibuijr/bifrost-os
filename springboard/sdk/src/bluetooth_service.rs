@@ -70,6 +70,13 @@ pub enum RadioState {
     On,
 }
 
+/// A pairing the shell is waiting for a code on: the device, and whether the code is a passkey (else a PIN).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PairingRequest {
+    pub address: BdAddr,
+    pub passkey: bool,
+}
+
 /// An app's copy of the Bluetooth radio: its state, its devices and the connect and disconnect events since it last
 /// asked. Created with `new`, which registers for every connection event.
 pub struct Bluetooth {
@@ -79,6 +86,8 @@ pub struct Bluetooth {
     pub busy: Option<BdAddr>,
     /// The last error the radio reported.
     pub error: Option<String>,
+    /// The code the shell is asking the user for, if a pairing is waiting on one.
+    pub pairing: Option<PairingRequest>,
     pub devices: DeviceList,
     events: DeviceEvents,
     reg: Registration,
@@ -88,7 +97,7 @@ impl Bluetooth {
     pub fn new() -> Self {
         let mut events = DeviceEvents::new();
         let reg = events.register(Filter::all());
-        Bluetooth { state: RadioState::Unavailable, scanning: false, busy: None, error: None, devices: DeviceList::new(), events, reg }
+        Bluetooth { state: RadioState::Unavailable, scanning: false, busy: None, error: None, pairing: None, devices: DeviceList::new(), events, reg }
     }
 
     /// Replaces the state and the device list with a `status` reply. A device whose address does not read is skipped.
@@ -117,6 +126,10 @@ impl Bluetooth {
         self.scanning = flag(body, "scanning");
         self.busy = body.get("busy").and_then(Json::as_str).and_then(|a| BdAddr::from_str(a).ok());
         self.error = body.get("error").and_then(Json::as_str).map(str::to_string);
+        self.pairing = body.get("prompt").and_then(|p| {
+            let address = p.get("addr").and_then(Json::as_str).and_then(|a| BdAddr::from_str(a).ok())?;
+            Some(PairingRequest { address, passkey: p.get("kind").and_then(Json::as_str) == Some("passkey") })
+        });
         self.devices = devices;
         Ok(())
     }
@@ -282,5 +295,25 @@ mod tests {
         assert!(services_from_reply(&no_list).is_err());
         let no_name = bifrost_core::json::parse(r#"{"device":"A","source":"none","note":"n","services":[{"uuid":"1101"}]}"#).unwrap();
         assert!(services_from_reply(&no_name).is_err());
+    }
+
+    #[test]
+    fn a_status_reply_names_the_pairing_that_waits_for_a_code() {
+        let mut bt = Bluetooth::new();
+        let body = bifrost_core::json::parse(r#"{"state":"on","scanning":false,"devices":[],"prompt":{"addr":"AA:BB:CC:DD:EE:FF","kind":"passkey"}}"#).unwrap();
+        bt.apply_status(&body).unwrap();
+        let addr = BdAddr([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+        assert_eq!(bt.pairing, Some(PairingRequest { address: addr, passkey: true }));
+        let none = bifrost_core::json::parse(r#"{"state":"on","scanning":false,"devices":[],"prompt":null}"#).unwrap();
+        bt.apply_status(&none).unwrap();
+        assert_eq!(bt.pairing, None);
+    }
+
+    #[test]
+    fn a_pin_prompt_is_not_a_passkey() {
+        let mut bt = Bluetooth::new();
+        let body = bifrost_core::json::parse(r#"{"state":"on","prompt":{"addr":"11:22:33:44:55:66","kind":"pin"}}"#).unwrap();
+        bt.apply_status(&body).unwrap();
+        assert_eq!(bt.pairing.map(|p| p.passkey), Some(false));
     }
 }

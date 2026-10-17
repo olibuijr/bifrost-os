@@ -40,7 +40,7 @@
       "apple": "IOBluetoothDevice (openConnection, closeConnection, remove)",
       "bifrost": "springboard/sdk/src/bluetooth_devices.rs (DeviceList: paired, connected, forget); springboard/sdk/src/bluetooth_events.rs (DeviceEvents); springboard/sdk/src/bluetooth_service.rs (connect, disconnect, forget)",
       "status": "partial",
-      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine."
+      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine. Built 2026-10-17: the status reply carries the pending pairing code (prompt: addr, kind pin or passkey), read by bluetooth_service::Bluetooth::pairing; tests springboard bare/services bluetooth_service::tests and sdk bluetooth_service::tests."
     },
     {
       "feature": "Audio output routing to a headset",
@@ -114,7 +114,7 @@
     }
   ],
   "gaps": [
-    "No app-facing Bluetooth SDK module: nothing under springboard/sdk/src/ covers Bluetooth.",
+    "App-facing Bluetooth SDK (springboard/sdk/src/bluetooth_service.rs) lists devices, scans, connects and reads a pending pairing code; apps cannot type the code (the shell asks the user) and cannot open RFCOMM or SDP.",
     "No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).",
     "No hands-free (call control) profile.",
     "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
