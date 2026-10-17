@@ -1,3 +1,11 @@
+## 1.30.0 — 2026-10-17
+
+- New Window (Cmd+N, and New Window in the empty-area menu) opens a second Files window at the home folder, with its own folder view.
+- Removable volumes mounted under /run/media or /media are listed in Locations after Trash; the Eject text unmounts the volume and powers its disk off.
+- Search terms: `kind:images`, `kind:folders` and the other kinds narrow the results, and `tag:red` keeps the items with that tag.
+- View > Group By Name (first letter) and Group By Size (folders, under 1 MB, up to 100 MB, up to 1 GB, over 1 GB).
+- Undo after Make Alias removes the link it made.
+
 ## 1.29.0 — 2026-10-17
 
 - Make Alias (Cmd+L and the context menu) links each selected item beside it as "name alias", a symbolic link.
