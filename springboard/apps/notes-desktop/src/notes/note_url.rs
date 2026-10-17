@@ -47,9 +47,32 @@ pub fn backlinks<'a>(notes: &[(&'a str, &str)], target: &str) -> Vec<&'a str> {
     notes.iter().filter(|(id, _)| linking.contains(id)).map(|(id, _)| *id).collect()
 }
 
+/// The line a linked-notes panel shows above its list: how many notes link to the open one.
+pub fn backlink_label(count: usize) -> String {
+    match count {
+        0 => "No linked notes".to_string(),
+        1 => "1 linked note".to_string(),
+        n => format!("{n} linked notes"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_linked_notes_label_counts_the_notes() {
+        assert_eq!(backlink_label(0), "No linked notes");
+        assert_eq!(backlink_label(1), "1 linked note");
+        assert_eq!(backlink_label(5), "5 linked notes");
+    }
+
+    #[test]
+    fn the_label_counts_the_backlinks_of_a_note() {
+        let notes = [("a", "notes://note/t"), ("b", "nothing"), ("c", "notes://note/t")];
+        assert_eq!(backlink_label(backlinks(&notes, "t").len()), "2 linked notes");
+        assert_eq!(backlink_label(backlinks(&notes, "b").len()), "No linked notes");
+    }
 
     #[test]
     fn a_built_link_reads_back_to_its_note_id() {
