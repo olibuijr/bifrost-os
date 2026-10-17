@@ -2874,9 +2874,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no BifrOSt or Linux equivalent",
+   "bifrost": "/usr/bin/mtree",
+   "status": "partial",
+   "note": "springboard/cmd/src/mtree.rs and bin/mtree.rs (-c, compare, -e, -d, -x, -U/-u, -f, -p, /set, /unset, .., escapes, continuation). Keywords type, mode, uid, gid, size, link, time, nlink, sha1/256/512digest only; flags, uname, gname and other BSD keywords are not implemented and are reported on stderr, not checked. -u is an alias of -U. Uncompiled and untested on Midget.",
    "rea": [],
    "method": "assessed"
   },
