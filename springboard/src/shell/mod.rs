@@ -207,6 +207,7 @@ pub mod night_shift;
 pub mod notify_page;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;
+pub mod wallpaper_types;
 pub mod widgets;
 pub mod widgetgallery;
 pub mod wifi_page;
