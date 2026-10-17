@@ -113,6 +113,15 @@ impl Client {
         bifrost_core::privd_wire::call(sock, token.as_deref(), method, fields, timeout).map_err(|e| ClientError { code: e.code, message: e.message })
     }
 
+    /// Opens a locked encrypted volume with its passphrase and mounts it (`disk.unlock_volume`). The reply names the
+    /// mapping and whether it mounted. The passphrase is sent to the helper only.
+    pub fn unlock_volume(&self, device: &str, password: &str) -> Result<Json, ClientError> {
+        self.call(
+            bifrost_core::volume_unlock::M_UNLOCK_VOLUME,
+            vec![("device", Json::Str(device.to_string())), ("password", Json::Str(password.to_string()))],
+        )
+    }
+
     /// Runs one privileged disk request (`disk.*`, see `bifrost_core::disk_request`) and returns the tools that
     /// completed, in order. The helper plans it against its own snapshot of the disks; a refusal comes back as
     /// `bad_params` with the reason as the message.

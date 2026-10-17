@@ -654,6 +654,11 @@ impl Shell {
             self.auth_type(out, t);
             return vec![];
         }
+        // the unlock sheet for an encrypted volume takes the typing too
+        if self.volume_showing() {
+            self.volume_type(out, t);
+            return vec![];
+        }
         // the account access sheet takes touches only: typing waits for the answer
         if self.access_showing() {
             return vec![];

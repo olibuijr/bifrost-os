@@ -13,7 +13,7 @@
 //! the shell's clipboard state does not keep item grouping, and general writes do not yet re-broadcast to other apps'
 //! mirrors.
 use super::{Event, Shell, SystemService};
-use crate::shell::{clipboard, pasteboard as shell_pasteboard};
+use crate::shell::{clipboard, pasteboard as shell_pasteboard, pasteboard_transfer as shell_pasteboard_transfer};
 use bifrost_core::json::Json;
 use bifrost_ui::uttype;
 use std::collections::BTreeMap;
@@ -157,7 +157,12 @@ impl Pasteboards {
             "write" => {
                 let name = board_name(params)?;
                 let items = parse_items(params.get("items"))?;
-                let n = self.write(&name, items)?;
+                // the byte count of the payload feeds the paste progress panel (`pasteboard_transfer`)
+                let total: u64 = items.iter().flat_map(|i| i.reps.iter()).map(|r| r.data.len() as u64).sum();
+                shell_pasteboard_transfer::report_begin(total, bifrost_proto::sys::now_ms());
+                let n = self.write(&name, items);
+                shell_pasteboard_transfer::report_done();
+                let n = n?;
                 Ok(obj(vec![("change_count", Json::Num(n as f64))]))
             }
             "clear" => {

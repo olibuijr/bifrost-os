@@ -423,7 +423,16 @@
    "status": "partial",
    "note": "rule: autofill model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "autofill::tests"
+    }
+   ],
+   "ready_note": "The autofill model (sdk autofill.rs) covers the autofill panel's suggestions, with 3 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.BTServerAgent.le.plist",
@@ -675,7 +684,21 @@
    "status": "partial",
    "note": "rule: search index model; Spotlight search in the shell",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_index_batch::tests"
+    }
+   ],
+   "ready_note": "The search index model and its batch writer (ui searchindex.rs, sdk search_index_batch.rs) cover the local data source's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.DeviceConfigurationAgent.plist",
@@ -901,7 +924,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the feature access decisions, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FileProvider.plist",
@@ -1055,7 +1092,16 @@
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    }
+   ],
+   "ready_note": "The font descriptor model (sdk font_descriptor.rs) is the font lookup the worker serves, with 6 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GameController.gamecontrolleragentd.plist",
@@ -1853,11 +1899,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/script-editor-desktop/src/main.rs",
+   "bifrost": "springboard/src/shell/scripts_menu.rs, springboard/src/shell/desktop_bar.rs, springboard/apps/script-editor-desktop/src/main.rs",
    "status": "partial",
-   "note": "Script menu exists only inside the Script Editor app; no system menu bar script menu; built on arm; not yet verified on Midget",
+   "note": "The Script menu is a menu bar extra (shell/desktop_bar.rs, Menu::Scripts) that lists the scripts in ~/.local/share/bifrost/scripts and runs the chosen one with sh (shell/scripts_menu.rs). It shows only while the folder holds a file. The Script Editor app still has its own Script menu.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::scripts_menu::tests"
+    }
+   ],
+   "ready_note": "The system Script menu: folder listing, title, name checks and the run (shell::scripts_menu::tests). Needs a Midget check of the menu bar extra."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SecureBackupDaemon.plist",
@@ -2596,7 +2651,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The privacy request model and the permission question centre (sdk privacy_permissions.rs, core permission_request.rs) cover the accessory access prompts, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessorysensormgrd.plist",
@@ -3368,7 +3437,16 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    }
+   ],
+   "ready_note": "The background transfer model (sdk url_background.rs) covers the background task work the agent schedules, with 7 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.betaenrollmentagent.plist",
@@ -3494,7 +3572,16 @@
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready_note": "The Bluetooth service model (sdk bluetooth_service.rs) covers the user-level Bluetooth daemon's job, with 8 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.bookassetd.plist",
@@ -4035,7 +4122,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "The camera device model and the device browser (ui camera_device.rs, device_browser.rs) cover the camera extension agent's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.colorsync.useragent.plist",
@@ -4361,9 +4462,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pasteboard.rs, springboard/src/shell/pasteboard_transfer.rs",
+   "bifrost": "springboard/src/shell/pasteboard.rs, springboard/src/shell/pasteboard_transfer.rs, springboard/src/shell/services/pasteboard_types.rs",
    "status": "partial",
-   "note": "Pasteboard contents and Wayland offers (shell/pasteboard.rs). The transfer model is built (shell/pasteboard_transfer.rs): byte progress, a 600 ms delay so quick pastes never show a panel, finish, and decimal size labels. Not built: the overlay that draws it, and the hook that feeds byte counts from the clipboard service's large transfers.",
+   "note": "Pasteboard contents and Wayland offers (shell/pasteboard.rs). The transfer model and the overlay are built (shell/pasteboard_transfer.rs): byte progress, a 600 ms delay before the panel, and a bar at the top of the screen. The clipboard service reports each write's size. Not built: a transfer that lasts long enough to show, because the service hands payloads over in one call; the panel needs chunked hand-over. The shared clipboard from another device is not built.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4526,11 +4627,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock, springboard/core/src/volume_unlock.rs",
+   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock, springboard/core/src/volume_unlock.rs, springboard/src/privd/disk.rs, springboard/src/privd_client.rs, springboard/src/shell/volume_sheet.rs",
    "status": "partial",
-   "note": "The initramfs hook unlocks the encrypted system volume at boot. After login, core volume_unlock.rs finds LUKS volumes with no open mapping and checks device names for the helper. Not built: the privileged disk.unlock_volume method that opens one with the password on stdin, the queue that shows the password sheet (auth_sheet.rs pattern, needs a forms Purpose for volumes), and the mount after a successful unlock.",
+   "note": "The initramfs hook unlocks the encrypted system volume at boot. After login, the shell lists the LUKS volumes with no open mapping (core volume_unlock.rs) and shows the password sheet for each (shell/volume_sheet.rs). The sheet sends the passphrase to privd's disk.unlock_volume (privd/disk.rs), which opens the volume with cryptsetup and mounts it with udisksctl. A failed unlock asks again; Cancel leaves the volume locked for the session.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "volume_unlock::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::disk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_sheet::tests"
+    }
+   ],
+   "ready_note": "Unlock after login: core model, privd disk.unlock_volume (refusals and command lines tested), and the shell sheet (prompt and queue tested). Needs a Midget check with a real LUKS volume."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ctkbind.plist",
