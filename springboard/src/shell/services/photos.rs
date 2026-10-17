@@ -730,7 +730,7 @@ mod tests {
     fn a_project_needs_the_permission_and_a_failing_apply_changes_nothing() {
         assert!(answer("is.example.photos-noperm", false, "project", &params(vec![("op", Json::Str("create".into())), ("id", Json::Str("b".into()))]), &[]).is_err());
         let app = "is.example.photos-atomic";
-        answer(app, true, "project", &params(vec![("op", Json::Str("create".into())), ("id", Json::Str("b".into()))]), &[]).unwrap();
+        answer(app, true, "project", &params(vec![("op", Json::Str("create".into())), ("id", Json::Str("b".into())), ("title", Json::Str("Book".into()))]), &[]).unwrap();
         let bad = params(vec![
             ("op", Json::Str("apply".into())),
             ("id", Json::Str("b".into())),
