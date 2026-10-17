@@ -40,6 +40,9 @@ impl WeatherApp {
 
     /// After any input or tick: the keyboard, and the widget timeline when the saved summary changed.
     fn sync(&mut self, ctx: &Ctx) {
+        if let Some(w) = &mut self.w {
+            w.locate(ctx);
+        }
         self.sync_keyboard(ctx);
         if self.w.as_mut().is_some_and(|w| w.take_summary_changed()) {
             self.push_timeline(ctx);
@@ -103,6 +106,9 @@ impl App for WeatherApp {
             // once at start: the saved forecast goes to the widget, and the path decides online or offline
             self.path_request = Some(network_path::request_path(ctx));
             self.push_timeline(ctx);
+            if let Some(w) = &mut self.w {
+                w.read_location_status(ctx);
+            }
         }
     }
 
@@ -154,12 +160,19 @@ impl App for WeatherApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        if let Some(c) = &mut self.w {
+            c.location_tick(ctx, t);
+        }
         let r = self.w.as_mut().is_some_and(|c| c.tick(&ctx.ui, t));
         self.sync(ctx);
         r
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.w.as_mut().is_some_and(|w| w.service_reply(ctx, request, result)) {
+            self.sync(ctx);
+            return true;
+        }
         if Some(request) == self.path_request {
             // an error (for example an older shell) keeps the app online, as it was before the service existed
             if let Ok(path) = network_path::decode_reply(result.clone()) {
@@ -177,6 +190,10 @@ impl App for WeatherApp {
     }
 
     fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if self.w.as_mut().is_some_and(|w| w.service_event(ctx, service, event, body)) {
+            self.sync(ctx);
+            return true;
+        }
         if let Some(widgets_timeline::Event::Reload { kind }) = widgets_timeline::parse_event(service, event, body) {
             if kind == services::TIMELINE_KIND {
                 self.push_timeline(ctx);

@@ -177,11 +177,11 @@ pub fn location_note(status: AuthorizationStatus, error: Option<LocationError>) 
         };
     }
     match status {
-        AuthorizationStatus::NotDetermined => "Location: not asked. Weather uses the places you add, not this PC's position.".into(),
+        AuthorizationStatus::NotDetermined => "Location: not asked. Weather asks only when you choose My Location.".into(),
         AuthorizationStatus::Restricted => "Location: not allowed for Weather on this PC. Weather uses the places you add.".into(),
         AuthorizationStatus::Denied => "Location: turned off for Weather. Weather uses the places you add.".into(),
         AuthorizationStatus::AuthorizedAlways | AuthorizationStatus::AuthorizedWhenInUse => {
-            "Location: on for Weather. Weather uses the places you add.".into()
+            "Location: on for Weather. My Location follows this PC's position, rounded.".into()
         }
     }
 }

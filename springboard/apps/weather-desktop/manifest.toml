@@ -12,6 +12,9 @@ permissions = ["storage", "network", "notifications"]
 schemes = ["weather"]
 window = "full-size"
 
+[privacy]
+location = "Weather shows the forecast for where you are when you choose My Location. Your position is rounded before it is used."
+
 [[intent]]
 id = "current"
 title = "Current Weather"
