@@ -2285,7 +2285,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeEnteredScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GazeLeftScene.aiff",
@@ -2306,7 +2315,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GazeLeftScene); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideProgress.aiff",
@@ -2327,7 +2345,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideProgress); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideSuccess.aiff",
@@ -2348,7 +2375,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (GuideSuccess); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Hit.aiff",
@@ -2369,7 +2405,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Hit); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Indentation.caf",
@@ -2390,7 +2435,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Indentation); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Interactable.aiff",
@@ -2411,7 +2465,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (Interactable); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/HopperScript.ttf",

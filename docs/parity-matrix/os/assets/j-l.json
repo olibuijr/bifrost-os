@@ -1465,7 +1465,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVONotSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/KBVOSynched.aiff",
@@ -1486,7 +1495,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (KBVOSynched); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LayoutChanged.aiff",
@@ -1507,7 +1525,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LayoutChanged); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LinkBegin.aiff",
@@ -1528,7 +1555,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkBegin); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/LinkEnd.aiff",
@@ -1549,7 +1585,16 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ui_sounds::tests"
+    }
+   ],
+   "ready_note": "shell::ui_sounds is the synthesised interface cue of this name (LinkEnd); the reference recording is not shipped, so timbre differs. Built 2026-10-17."
   }
  ]
 }

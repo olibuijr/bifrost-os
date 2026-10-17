@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Webdings.ttf",
@@ -177,7 +185,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Zawra.ttc",
@@ -198,7 +214,15 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    }
+   ],
+   "ready_note": "NotoNaskhArabic-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WawaSC-Regular.otf",
@@ -219,7 +243,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WawaTC-Regular.otf",
@@ -240,7 +272,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WeibeiSC-Bold.otf",
@@ -261,7 +301,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WeibeiTC-Bold.otf",
@@ -282,7 +330,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Xingkai.ttc",
@@ -324,7 +380,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yu Gothic Medium.otf",
@@ -345,7 +409,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuMincho.ttc",
@@ -366,7 +438,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSerifCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yuanti.ttc",
@@ -387,7 +467,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuppySC-Regular.otf",
@@ -408,7 +496,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuppyTC-Regular.otf",
@@ -429,7 +525,15 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "NotoSansCJK-Regular (noto-fonts / noto-fonts-cjk), the installed script substitute; the reference face is not shipped and glyph shapes or metrics may differ."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WebAreaLoaded.aiff",
