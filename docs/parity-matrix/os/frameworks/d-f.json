@@ -42,6 +42,15 @@
    "bifrost": "docs/parity-matrix/data/datadetection.json",
    "status": "partial",
    "note": "from SDK matrix datadetection.json",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "detect::tests"
+    }
+   ],
+   "ready_note": "Text is scanned for links, phone numbers, addresses and dates by the shared detector in bifrost-ui (detect::find). Notes, Calendar and the Check Spelling and Links flags use it. Email, flight, money and tracking detectors, the pasteboard API and transit data are not built (see the gaps in datadetection.json), so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -855,8 +864,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device-management (MDM enrollment) client. Inferred from the DMC prefix and the name. BifrOSt has no MDM enrollment service, so there is no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -876,8 +885,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device-management (MDM enrollment) library. Inferred from the DMC prefix and the name. BifrOSt has no MDM enrollment service, so there is no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -897,8 +906,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device-management (MDM enrollment) tooling. Inferred from the DMC prefix; the reference holds plists and a localization table. BifrOSt has no MDM enrollment service.",
    "rea": [],
    "method": "assessed"
   },
@@ -918,8 +927,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple device-management (MDM enrollment) utilities. Inferred from the DMC prefix and the name. BifrOSt has no MDM enrollment service, so there is no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -981,8 +990,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Xcode's device-instrumentation wire protocol (DTX) for profiling from the developer tools. The reference holds plists and a binary only. BifrOSt apps use their own control sockets (bifrost pc control), so this protocol has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -1149,8 +1158,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple diagnostic data collection (telemetry). Inferred from the name; the reference holds only Info.plist and version.plist. BifrOSt does not collect or upload device telemetry.",
    "rea": [],
    "method": "assessed"
   },
@@ -1170,8 +1179,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple diagnostic data collection library (telemetry). Inferred from the name; the reference holds only Info.plist and version.plist. BifrOSt does not collect or upload device telemetry.",
    "rea": [],
    "method": "assessed"
   },
@@ -1359,8 +1368,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple account sign-out and erase-content flow: sign-out sheets, iCloud and Time Machine warnings, and an erase helper. It depends on Apple accounts and iCloud, which BifrOSt does not have. BifrOSt's own sign-out belongs to the BifrOSt Account area.",
    "rea": [],
    "method": "assessed"
   },
@@ -1443,8 +1452,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple's on-device video ML: Espresso optical-flow, flow-adaptation and super-resolution networks with trained weights, plus Metal shaders for deghosting and frame-rate conversion. These are Apple model packs and are not reproduced. Frame-rate conversion in BifrOSt uses ffmpeg (see the FRC row).",
    "rea": [],
    "method": "assessed"
   },
@@ -1485,8 +1494,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Apple system design assets: an asset catalog, a Siri wave shader library and a default Metal library. These are Apple-only artwork and shaders. BifrOSt draws its own UI from springboard/render/src/ui.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1884,8 +1893,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Handled by the kernel device tree and sysfs (no SDK surface); no separate BifrOSt framework was found, and the framework's own API was not extracted.",
+   "status": "n/a",
+   "note": "Device-tree parsing is done by the Linux kernel and sysfs. BifrOSt has no separate device-tree framework, and the SDK exposes no device-tree API to apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -2745,8 +2754,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The dynamic linker framework (the dyld framework). The Linux dynamic loader does this job, but no BifrOSt file or runtime package is cited for it, so it stays os.",
+   "status": "n/a",
+   "note": "The Apple dynamic linker framework. On Arch, ld.so and glibc do the linking and apps are native ELF, so the framework is not an SDK surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -3113,6 +3122,15 @@
    "bifrost": "springboard/apps/mail-desktop/src/accounts.rs; springboard/apps/mail-desktop/src/state.rs (account_from_form)",
    "status": "partial",
    "note": "Mail account setup and storage are built in the Mail app: accounts are loaded, added and updated, and the setup form builds the IMAP and SMTP settings. System-wide account provisioning and the reference configuration plist are not mirrored.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "accounts::tests"
+    }
+   ],
+   "ready_note": "Mail account loading, adding and updating, and the setup form that builds the IMAP and SMTP settings are tested in accounts::tests. System-wide account provisioning is still missing, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -3134,6 +3152,15 @@
    "bifrost": "springboard/apps/mail-desktop/src/people.rs (person_from, has_address)",
    "status": "partial",
    "note": "Sender parsing and address matching are built and tested in the Mail app. Address completion for other apps is not built.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "people::tests"
+    }
+   ],
+   "ready_note": "Sender parsing (person_from), address matching (has_address) and the person record are built in the Mail app and tested in people::tests. Address completion for other apps is not built, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -3357,8 +3384,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The bundle identifier sits in the reference's Siri namespace; the binary was not extracted, so its job beyond that is unconfirmed.",
+   "status": "n/a",
+   "note": "Siri assistant XPC service (bundle identifier in the Siri namespace); the binary was not extracted. Apple assistant services are not part of BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3483,8 +3510,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The bundle identifier sits in the reference's intelligence-flow namespace; the binary was not extracted, so the entity job is unconfirmed.",
+   "status": "n/a",
+   "note": "Apple intelligence entity service (bundle identifier in the intelligence namespace); the binary was not extracted. Apple assistant services are not part of BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -4089,8 +4116,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds no binary or resource for this framework, and the name points to the location-sharing network transport, so the purpose is inferred and not confirmed.",
+   "status": "n/a",
+   "note": "Find My location-network transport. Inferred from the name; the reference holds only the binary's plists and a string table. BifrOSt has no Apple account or Find My network.",
    "rea": [],
    "method": "assessed"
   },
@@ -5130,8 +5157,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds no binary or resource for this framework; the name shows shared device location code, but its exact purpose is not confirmed.",
+   "status": "n/a",
+   "note": "Find My shared location code. Inferred from the name; the reference holds only plists. BifrOSt has no Apple account or Find My network.",
    "rea": [],
    "method": "assessed"
   },
@@ -5906,6 +5933,15 @@
    "bifrost": "springboard/wm/src/render_server/clock.rs; springboard/wm/src/sync.rs",
    "status": "partial",
    "note": "The compositor keeps a frame clock from vblank timestamps and schedules each compose ahead of the next vblank. Gap: not verified on the lab machine; the frame budget checks are host benchmarks in springboard/src/shell/frame_budget.rs.",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "render_server::clock::tests"
+    }
+   ],
+   "ready_note": "The compositor's frame clock (vblank timestamps, each compose scheduled ahead of the next vblank) is tested in render_server::clock::tests. Verification on Midget is still open, so the row stays partial.",
    "rea": [],
    "method": "assessed"
   },
@@ -6009,8 +6045,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle holds only an Espresso recognition model (recognition.espresso.net, weights and shape) and no code, so the recognizer it serves is not named; left os.",
+   "status": "n/a",
+   "note": "Apple recognition model pack: the reference holds only an Espresso recognition network and its weights, with no code naming the recognizer. Apple ML model packs are not reproduced.",
    "rea": [],
    "method": "assessed"
   }
