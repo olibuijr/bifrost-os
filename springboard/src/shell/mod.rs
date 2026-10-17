@@ -808,6 +808,8 @@ pub struct Shell {
     desktop_menu_row:Option<(desktop_bar::Menu,usize)>,
     /// Recent Items: the apps opened last, listed in the leading system menu (`recent_items`).
     recent_list:bifrost_ui::shared_list::SharedList,
+    /// The settings directory the recents are written to; None until `set_data_dir` names one.
+    recent_dir:Option<PathBuf>,
     /// Type-to-select state of the open bar menu (`NativeMenu` type-ahead): the kit model keeps the typed prefix.
     #[cfg(feature = "desktop-wayland")]
     desktop_menu_typed:Option<bifrost_ui::menu::Menu>,
@@ -1118,7 +1120,7 @@ impl Shell {
             dirty: true,
             perf_only: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,recent_list:recent_items::new(),desktop_context:None,
+            desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
@@ -1243,6 +1245,8 @@ impl Shell {
         self.today_stale = true;
         clipboard::attach(format!("{dir}/{}", clipboard::FILE));
         self.data_dir = PathBuf::from(dir);
+        self.recent_list = recent_items::load(Path::new(dir));
+        self.recent_dir = Some(PathBuf::from(dir));
         self.st_load();
         self.prefs = Prefs::load(format!("{dir}/settings.ini"));
         // the Setup Assistant's choices reach settings.ini once, before the look is read below

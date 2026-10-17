@@ -1,7 +1,10 @@
 //! Recent Items: the apps the user opened last, listed in the leading system menu (wire6).
 //!
 //! The list is the shared `bifrost_ui::shared_list::SharedList` model. Every launch through `desk_open` moves the app to
-//! the front; the system menu shows the newest ones and Clear Menu empties them. The list lives for the session only.
+//! the front; the system menu shows the newest ones and Clear Menu empties them. The list is kept in the settings
+//! directory (`FILE`), so the recents and favourites survive a restart.
+use std::path::Path;
+
 use super::apps::{apps, AppId};
 use bifrost_ui::shared_list::SharedList;
 
@@ -11,8 +14,25 @@ pub const CAPACITY: usize = 10;
 #[cfg(feature = "desktop-wayland")]
 pub const SHOWN: usize = 10;
 
+/// The file in the settings directory that keeps the list across sessions.
+pub const FILE: &str = "recent-items.txt";
+
 pub fn new() -> SharedList {
     SharedList::new(CAPACITY)
+}
+
+/// The list the last session left in `dir`. An empty list when the file is missing or unreadable.
+pub fn load(dir: &Path) -> SharedList {
+    let text = std::fs::read_to_string(dir.join(FILE)).unwrap_or_default();
+    bifrost_ui::shared_list_store::decode(&text, CAPACITY)
+}
+
+/// Writes the list to `dir` through a temporary file and a rename, so a crash never leaves half a list.
+pub fn save(dir: &Path, list: &SharedList) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let tmp = dir.join(format!("{FILE}.tmp"));
+    std::fs::write(&tmp, bifrost_ui::shared_list_store::encode(list))?;
+    std::fs::rename(&tmp, dir.join(FILE))
 }
 
 /// The key an app is stored under: the debug form of its `AppId`, unique per catalogue entry.
@@ -59,6 +79,16 @@ impl super::Shell {
     /// Records a launch. Called from `desk_open`, so every way of opening an app counts.
     pub(super) fn recent_note(&mut self, app: AppId) {
         note(&mut self.recent_list, app);
+        self.recent_persist();
+    }
+
+    /// Writes the list to the settings directory once `set_data_dir` has named one (tests never write to disk).
+    pub(super) fn recent_persist(&self) {
+        if let Some(dir) = &self.recent_dir {
+            if let Err(e) = save(dir, &self.recent_list) {
+                eprintln!("springboard: recent items: {e}");
+            }
+        }
     }
 
     /// The titles listed in the system menu, newest first, at most `SHOWN`.
@@ -77,6 +107,7 @@ impl super::Shell {
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn recent_clear(&mut self) {
         self.recent_list.clear_recents();
+        self.recent_persist();
     }
 }
 
@@ -138,6 +169,22 @@ mod tests {
         assert_eq!(favourite_apps(&list), vec![AppId::Terminal]);
         assert!(list.contains(&key(AppId::Terminal)));
         assert!(!list.contains(&key(AppId::External(0))), "the oldest recent is dropped");
+    }
+
+    #[test]
+    fn recents_and_favourites_survive_a_save_and_a_load() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(load(dir.path()).is_empty(), "no file yet");
+        let mut list = new();
+        set_favourite(&mut list, AppId::Terminal, true);
+        note(&mut list, AppId::Settings);
+        note(&mut list, AppId::External(2));
+        save(dir.path(), &list).unwrap();
+        let again = load(dir.path());
+        assert_eq!(again, list, "the same order, favourites and titles");
+        assert_eq!(favourite_apps(&again), vec![AppId::Terminal]);
+        let keys: Vec<&str> = again.entries().into_iter().map(|i| i.key.as_str()).collect();
+        assert_eq!(keys, vec!["Terminal", "External(2)", "Settings"], "favourites first, then recents newest first");
     }
 
     #[test]
