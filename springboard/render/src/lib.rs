@@ -81,6 +81,7 @@ pub mod clip;
 pub mod affine;
 pub mod transform_stack;
 pub mod block_motion;
+pub mod sprite_light;
 pub mod kernel;
 pub mod gaussian_filter;
 pub mod laplacian_pyramid;

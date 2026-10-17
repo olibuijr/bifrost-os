@@ -87,6 +87,62 @@ pub fn shade(light: &Light, material: &Material, point: Vector3, normal: Vector3
     out.clamped()
 }
 
+/// GGX (Trowbridge-Reitz) normal distribution at `n_dot_h`, the cosine between the surface normal and the half vector.
+/// `roughness` is the perceptual roughness in 0..=1; the microfacet alpha is its square.
+pub fn ggx_distribution(n_dot_h: f32, roughness: f32) -> f32 {
+    let alpha = roughness.clamp(0.0, 1.0).max(0.001).powi(2);
+    let a2 = alpha * alpha;
+    let d = n_dot_h.clamp(0.0, 1.0);
+    let denom = d * d * (a2 - 1.0) + 1.0;
+    a2 / (std::f32::consts::PI * denom * denom)
+}
+
+/// Smith geometry term for one direction (Schlick-GGX form) at cosine `n_dot_x`.
+fn smith_g1(n_dot_x: f32, roughness: f32) -> f32 {
+    let r = roughness.clamp(0.0, 1.0) + 1.0;
+    let k = r * r / 8.0;
+    n_dot_x / (n_dot_x * (1.0 - k) + k)
+}
+
+/// Physically based colour of a surface point lit by `light` (metallic-roughness Cook-Torrance). `albedo` is the base
+/// colour, `metallic` is 0 for dielectrics and 1 for metals, `roughness` is perceptual in 0..=1. The light's diffuse
+/// colour is its radiance and its ambient colour adds albedo-tinted ambient light. The light's specular colour is not
+/// used: the specular lobe is GGX coloured by the Schlick Fresnel reflectance. The normal need not be unit length.
+pub fn shade_pbr(light: &Light, albedo: Rgb, metallic: f32, roughness: f32, point: Vector3, normal: Vector3, eye: Vector3) -> Rgb {
+    let n = normal.normalized();
+    let to_light = match light.source {
+        LightSource::Point(p) => (p - point).normalized(),
+        LightSource::Directional(d) => (-d).normalized(),
+    };
+    let v = (eye - point).normalized();
+    let ambient = light.ambient.modulate(albedo);
+    let n_dot_l = n.dot(to_light).max(0.0);
+    if n_dot_l <= 0.0 {
+        return ambient.clamped();
+    }
+    let h = (to_light + v).normalized();
+    let n_dot_v = n.dot(v).max(1e-4);
+    let n_dot_h = n.dot(h).max(0.0);
+    let v_dot_h = v.dot(h).max(0.0);
+    let metallic = metallic.clamp(0.0, 1.0);
+    let d = ggx_distribution(n_dot_h, roughness);
+    let g = smith_g1(n_dot_v, roughness) * smith_g1(n_dot_l, roughness);
+    let spec_scale = d * g / (4.0 * n_dot_v * n_dot_l);
+    let falloff = (1.0 - v_dot_h).clamp(0.0, 1.0).powi(5);
+    let channel = |base: f32, radiance: f32| {
+        let f0 = 0.04 + (base - 0.04) * metallic;
+        let f = f0 + (1.0 - f0) * falloff;
+        let diffuse = base * (1.0 - metallic) * (1.0 - f) / std::f32::consts::PI;
+        radiance * (diffuse + f * spec_scale) * n_dot_l
+    };
+    let lit = Rgb::new(
+        channel(albedo.r, light.diffuse.r),
+        channel(albedo.g, light.diffuse.g),
+        channel(albedo.b, light.diffuse.b),
+    );
+    lit.added(ambient).clamped()
+}
+
 /// Distance fog (`NativeEffectPropertyFog`): the fraction of fog colour mixed into a point.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Fog {
@@ -211,5 +267,70 @@ mod tests {
         assert!(fog.amount(100.0) > 0.99);
         let half = Fog::Linear { start: 0.0, end: 2.0 }.apply(Rgb::BLACK, Rgb::WHITE, 1.0);
         assert_rgb(half, Rgb::new(0.5, 0.5, 0.5));
+    }
+}
+
+#[cfg(test)]
+mod pbr_tests {
+    use super::*;
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-3
+    }
+
+    fn sun_from_above() -> Light {
+        Light {
+            source: LightSource::Directional(Vector3::new(0.0, 0.0, -1.0)),
+            ambient: Rgb::BLACK,
+            diffuse: Rgb::WHITE,
+            specular: Rgb::BLACK,
+        }
+    }
+
+    #[test]
+    fn ggx_peaks_at_the_normal_and_is_narrower_when_smoother() {
+        assert!(ggx_distribution(1.0, 0.5) > ggx_distribution(0.5, 0.5));
+        assert!(ggx_distribution(1.0, 0.2) > ggx_distribution(1.0, 0.8));
+    }
+
+    #[test]
+    fn head_on_rough_white_dielectric_matches_hand_value() {
+        // Roughness 1, metallic 0, albedo 1, light and eye on the normal: diffuse (1 - 0.04) / pi plus the specular
+        // term 0.04 * (1 / pi) / 4, about 0.3086 per channel.
+        let c = shade_pbr(
+            &sun_from_above(),
+            Rgb::WHITE,
+            0.0,
+            1.0,
+            Vector3::ZERO,
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(0.0, 0.0, 5.0),
+        );
+        assert!((c.r - 0.3086).abs() < 2e-3, "{}", c.r);
+        assert!((c.g - c.r).abs() < 1e-6 && (c.b - c.r).abs() < 1e-6);
+    }
+
+    #[test]
+    fn light_behind_the_surface_leaves_only_ambient() {
+        let mut light = sun_from_above();
+        light.source = LightSource::Directional(Vector3::new(0.0, 0.0, 1.0));
+        light.ambient = Rgb::new(0.2, 0.2, 0.2);
+        let c = shade_pbr(&light, Rgb::new(0.5, 0.5, 0.5), 1.0, 0.3, Vector3::ZERO, Vector3::new(0.0, 0.0, 1.0), Vector3::new(0.0, 0.0, 5.0));
+        assert!(near(c.r, 0.1));
+    }
+
+    #[test]
+    fn metal_has_no_diffuse_so_its_colour_comes_from_the_highlight() {
+        // Metallic 1: the diffuse term is zero, and a viewer 80 degrees off the normal sees only a faint highlight.
+        let c = shade_pbr(
+            &sun_from_above(),
+            Rgb::new(0.5, 0.5, 0.5),
+            1.0,
+            0.2,
+            Vector3::ZERO,
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(0.985, 0.0, 0.174),
+        );
+        assert!(c.r < 0.01, "{}", c.r);
     }
 }
