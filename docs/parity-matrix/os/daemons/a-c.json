@@ -5216,8 +5216,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Help viewer data service that indexes help books and answers help searches for apps. Build a help-book bundle format and a help search provider in the SDK, then a Help app that reads them.",
+   "status": "partial",
+   "note": "Help book format and index built: an app ships a help/ directory (manifest help = \"help\", Markdown pages with title, keywords and {#anchor} headings) that the shell's help index (springboard/src/shell/helpbook.rs, the helpd counterpart) reads on start; it ranks searches, resolves help://app/anchor links and searches a frontmost app's menu items. Books ship for Files, TextEdit and Settings. Missing: the index is not yet rebuilt on install and update, the Help menu search field and the Help viewer window are not drawn yet, and the Help menu opens no viewer.",
    "rea": []
   },
   {
