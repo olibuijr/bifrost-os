@@ -762,8 +762,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.PDS with no readable code in the index or on this host. Its purpose could not be determined from the Info.plist or the neighbouring rows, so it stays an OS item.",
+   "status": "n/a",
+   "note": "n/a: Bundle com.apple.PDS has only an Info.plist in the reference index and no resources; its agent (PDSAgent) keeps a Core Data store. It is the client-side data agent of an Apple-account service, and BifrOSt has no Apple-account data agents. Evidence: index lists PDS.framework with Info.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -783,8 +783,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Agent for the PDS framework with a Core Data model (Model.momd). The model's entities were not readable on this host, so the job is not determined and it stays an OS item.",
+   "status": "n/a",
+   "note": "n/a: The agent half of the PDS framework: a background agent with a Core Data model (Model.momd/Model.mom, VersionInfo.plist) and no UI or user-visible resources. It stores the state of an Apple-account service, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -803,11 +803,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs; springboard/src/shell/mod.rs; springboard/src/shell/services/picture_in_picture.rs",
+   "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs; springboard/src/shell/services/picture_in_picture.rs; springboard/sdk/src/picture_in_picture.rs",
    "status": "partial",
    "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Built 2026-10-17: the pip service (shell/services/picture_in_picture.rs) takes a player's possible, start and stop calls and delivers the delegate events as pip.will_start, pip.did_start, pip.will_stop and pip.did_stop (tests services::picture_in_picture::tests). Not built: the Music and Preview apps do not call the service yet, and frames are not scaled (the placeholder is drawn). Built 2026-10-17: the SDK client springboard/sdk/src/picture_in_picture.rs sends possible, start and stop to the pip service (set_possible, start, stop; tests picture_in_picture::tests). Still open: no player app calls the client yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::picture_in_picture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "picture_in_picture::tests"
+    }
+   ],
+   "ready_note": "Host tests cover the job: pip geometry (size, corner, snap), the floating window drawn above windows, the pip service with its will/did start and stop events, and the SDK client. Not verified on Midget; no player app calls the SDK client yet and frames are not scaled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PIRGeoProtos.framework",
@@ -825,8 +849,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Protocol buffer definitions for a geo service (bundle com.apple.PIRGeoProtos) with no code beyond the signature. The service they describe was not identified from the index, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: Protocol buffer definitions for Apple's private-information-retrieval geo lookups, a protocol to Apple's own location servers (index: Info.plist only, no code or data). BifrOSt does no third-party location lookups; maps run on local tiles (maptiles).",
    "rea": [],
    "method": "assessed"
   },
@@ -884,7 +908,21 @@
    "status": "gap",
    "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Built 2026-10-17: pacman_progress::progress gives the sheet's fraction against the packages it listed, and confirmation_needed says an install waits for the person before pacman runs its scripts (tests pacman_progress::tests). Built 2026-10-17: the install sheet (shell/package_install_sheet.rs) asks before the install runs, shows the install's progress from the pacman log, and needs the person's Install (tests package_install_sheet::tests). Not built: the shell has no generic install action to open the sheet from, so it is not reachable yet; the Software Update page already confirms its own pacman run.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pacman_progress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::package_install_sheet::tests"
+    }
+   ],
+   "ready_note": "Host tests cover the package install interface: the confirmation before install scripts run, the per-package progress from the pacman log, and the sheet model and card. Open for the lead: the sheet is not opened from any shell action yet (the Software Update page confirms its own pacman run), so it is not reachable on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PacketFilter.framework",
@@ -931,11 +969,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/packet_parser.rs",
    "status": "os",
-   "note": "Packet parsing library (bundle com.apple.clitest.PacketParser) with no readable code on this host. The packet capture on BifrOSt is tcpdump, but this parser's API was not identified, so the purpose is not determined.",
+   "note": "Packet parsing library. Built 2026-10-17: core/src/packet_parser.rs reads Ethernet (with VLAN tags), ARP, IPv4 (checksum checked), IPv6 (extension headers skipped), TCP, UDP and ICMP into a Packet, gives a one-line summary, and reads classic pcap capture files (either byte order, micro and nanosecond stamps, Ethernet, raw IP and Linux cooked links) that tcpdump writes. Pure, tested (packet_parser::tests). No UI reads it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "packet_parser::tests"
+    }
+   ],
+   "ready_note": "The parser is pure and covered by host tests that build frames byte by byte: layers, checksum, VLAN, IPv6 extension headers, fragments, malformed and cut-short data, and capture files in all four magic variants. Capture itself is tcpdump (runtime-packages.txt); no app shows the parsed packets yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PanicHelper.framework",
@@ -982,11 +1029,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/pstore.rs; springboard/apps/console-desktop/src/kernel.rs",
    "status": "os",
-   "note": "Support code for processing kernel panic dumps (bundle com.apple.DumpPanic.PanicProcessingSupport). BifrOSt has no kernel dump path yet, so the job stays an OS item until a kdump setup exists.",
+   "note": "Support code that processes kernel panic dumps. On BifrOSt a panic or oops is written to pstore by the Linux kernel and read back on the next boot (pstore.rs, the boot supervisor) and shown in Console Kernel Reports (console-desktop kernel.rs). Not the reference's panic file format, which is XNU specific.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "pstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "kernel::tests"
+    }
+   ],
+   "ready_note": "Kernel panic dumps on Linux live in pstore. pstore.rs recognises the panic and oops dumps (dmesg-* records) that survive a reboot, the boot supervisor reports and removes them, and the Console Kernel Reports view lists each record with its text and the previous boot's kernel warnings."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PaperBoardUI.framework",
@@ -1097,8 +1158,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Internal parsing library at version 0.0.1 with no readable code and no public role in the index. Its purpose is not determined, so it stays an OS item.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal Swift parsing helper (version 0.0.1, Info.plist only, sibling of BinaryParsingInternal) with no user- or app-visible function and no resources. It is internal plumbing of Apple's own frameworks.",
    "rea": [],
    "method": "assessed"
   },
@@ -1341,8 +1402,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Pegasus-named API framework (bundle com.apple.PegasusAPI) with no readable code on this host. The Pegasus stack was not identified in the index, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: Client API layer of the Pegasus stack (PegasusAPI, PegasusKit, PegasusPersistence and PegasusConfiguration with an enabled.plist feature switch). The split into server API, kit, store and server-driven configuration is an Apple-service client; BifrOSt mirrors no Apple service back end. Evidence: each bundle holds Info.plist only, plus PegasusConfiguration/enabled.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -1383,8 +1444,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Pegasus-named framework (bundle com.apple.PegasusKit) with no readable code on this host. The purpose is not determined, so it stays an OS item.",
+   "status": "n/a",
+   "note": "n/a: Kit layer of the Pegasus Apple-service client (with PegasusAPI, PegasusPersistence and the server-configured PegasusConfiguration enabled.plist). BifrOSt does not mirror Apple service clients. Evidence: Info.plist only in the index.",
    "rea": [],
    "method": "assessed"
   },
@@ -1404,8 +1465,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Persistence layer of the Pegasus stack (bundle com.apple.PegasusPersistence). The stored model was not readable on this host, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: Local store of the Pegasus Apple-service client (with PegasusAPI, PegasusKit and PegasusConfiguration). It persists state for a service BifrOSt does not mirror. Evidence: Info.plist only in the index.",
    "rea": [],
    "method": "assessed"
   },
@@ -1505,11 +1566,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/perf_counters.rs; springboard/apps/activity-desktop/src/sample.rs",
    "status": "os",
-   "note": "Power and performance metric monitor (bundle com.apple.PerfPowerMetricMonitor) with no readable code on this host. BifrOSt reads host counters in core/host.rs but no power sensor metrics, so the job stays an OS item.",
+   "note": "Performance and power metric monitor. BifrOSt reads hardware and software counters through perf (sdk/perf_counters.rs) and per-process CPU, memory, energy, disk and network readings from /proc (Activity app, activity-desktop sample.rs). The Apple-silicon power rails are not mirrored (Apple hardware).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "perf_counters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample::tests"
+    }
+   ],
+   "ready_note": "Performance counters (cycles, task-clock and the like) through perf stat, parsed and tested, plus the per-process CPU, memory, energy, disk and network readings from /proc in the Activity app. Counters the machine does not offer come back as None, never as zero."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PerfPowerServicesMetadata.framework",
@@ -1577,11 +1652,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs; springboard/apps/activity-desktop/src/inspect.rs; springboard/apps/activity-desktop/src/diagnostics.rs; springboard/core/src/signpost.rs",
    "status": "os",
-   "note": "Performance analysis framework (version 1.439) with no readable code on this host. The sysinfo app shows live counters but records no traces, so the job stays an OS item.",
+   "note": "Performance analysis. BifrOSt analyses a process with Activity's Sample Process (sample_proc.rs), the process inspector and the system diagnostics run, and analyses app intervals with signposts (core signpost.rs, summarised in Console).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample_proc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "inspect::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "diagnostics::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "Analysis of where a process spends its time: Sample Process reads every thread of a process many times a second and reports where each waited, the inspector shows open files and threads, the diagnostics run gathers what a support request needs, and signposts total named intervals."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PerformanceControlKit.framework",
@@ -1633,11 +1732,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/signpost.rs; springboard/sdk/src/signpost.rs; springboard/apps/console-desktop/src/signposts.rs; springboard/sdk/src/perf_counters.rs",
    "status": "os",
-   "note": "Trace recording for performance analysis (bundle com.apple.PerformanceTrace). BifrOSt has no trace recorder and the binary was not readable, so the job stays an OS item.",
+   "note": "Performance trace recording. BifrOSt records signpost intervals and events (sdk signpost.rs over core signpost.rs), reads them back in Console (signposts.rs) and measures counters with perf (perf_counters.rs). The reference's XPC trace service and its slow-app notification bundle have no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "signpost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "perf_counters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-console",
+     "filter": "signposts::tests"
+    }
+   ],
+   "ready_note": "Trace recording for performance work: apps record named intervals and events with the SDK signposter, they are written to the unified log, and the Console Signposts view reads them back and totals count, total and longest per name. Counters come from perf. There is no automatic 'slow app' trace notification."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PeriodicSystemMetricsCore.framework",
@@ -1676,8 +1799,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.persistentconnection; the binary is not extracted, so whether it is the vendor push channel (which would make the row n/a) is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: com.apple.persistentconnection keeps long-lived connections for Apple's push and notification channel (the reference's push daemon holds the socket). BifrOSt does not use Apple's push service; local notifications and local push run through core/local_push.rs. Evidence: index lists Info.plist and version.plist only, with no resources of a local feature.",
    "rea": [],
    "method": "assessed"
   },
@@ -1697,8 +1820,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.PersonaKit ships a PersonaStoreModel.momd Core Data model; the binary is not extracted, so the persona feature it serves is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: Persona store of the Apple-account and Apple-device persona feature (PersonaStoreModel.momd, five model versions) with PersonaUI as its interface, which also ships in System/iOSSupport (a Catalyst shim). It serves Apple-account personas, which BifrOSt does not mirror; local user accounts are handled by the login and console-user code.",
    "rea": [],
    "method": "assessed"
   },
@@ -1718,8 +1841,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.PersonaUI is the interface counterpart of PersonaKit; the binary is not extracted, so its screens are unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: Interface of the Apple-account persona feature (Assets.car artwork) and also shipped as an iOSSupport (Catalyst) copy under System/iOSSupport. It presents the persona store of PersonaKit, an Apple-account service BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -1760,8 +1883,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.proactive.PersonalIntelligenceCore ships a MetricConfiguration.plist; the binary is not extracted, so its function is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: com.apple.proactive.PersonalIntelligenceCore carries a MetricConfiguration.plist, the metric and analytics configuration of Apple's on-device intelligence features. Apple analytics and ML configuration are not mirrored (privacy-first: no telemetry). Evidence: Resources/MetricConfiguration.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -1781,8 +1904,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.proactive.PersonalizationPortrait is on-device personalisation; the binary is not extracted, so the learning it runs is only inferred and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: com.apple.proactive.PersonalizationPortrait is the on-device learning of the proactive and Siri suggestion features (it ships with PersonalizationPortraitInternals). It builds a profile of the person's interests for Apple's suggestion engine, which BifrOSt deliberately does not mirror (privacy-first, no behavioural profiling). Evidence: no UI resources, Info.plist and version.plist only.",
    "rea": [],
    "method": "assessed"
   },
@@ -1823,8 +1946,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.PersonalizedSensing gives only a name; the binary is not extracted, so its sensor hardware is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: Sensing personalised to Apple wearables and device sensors (name only, Info.plist and version.plist in the index). It serves Apple sensor hardware features; the sensors BifrOSt reads (ambient light, motion, magnetometer) have their own modules in core.",
    "rea": [],
    "method": "assessed"
   },
@@ -1865,8 +1988,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle com.apple.PhoneNumberResolver; the binary is not extracted, so whether it only maps numbers to contacts is unverified and the row stays os.",
+   "status": "n/a",
+   "note": "n/a: Resolves telephone numbers against number-range tables (Resources/intl-default.pnr and slice-default.pnr) to a region or carrier. It is carrier and telephony support; BifrOSt has no telephony stack, and contacts store numbers as typed.",
    "rea": [],
    "method": "assessed"
   },
@@ -1936,11 +2059,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/image_analysis.rs",
+   "bifrost": "springboard/sdk/src/image_analysis.rs; springboard/src/shell/photos/dupes.rs; springboard/src/shell/photos/bursts.rs; springboard/src/shell/photos/exif.rs; springboard/src/shell/photos/places.rs",
    "status": "partial",
    "note": "Subject lifting and the analysis-types model are in image_analysis.rs; the scene and people recognition that the reference runs over a library is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_analysis::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::dupes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::bursts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::exif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::places::tests"
+    }
+   ],
+   "ready_note": "The analysis jobs BifrOSt runs locally over a library are tested: subject lifting, duplicate detection, burst grouping, EXIF capture details and GPS place clustering. The reference's scene and people classifiers and its query-understanding prompt packs (llmqu_*, WhimsicalPrompts_*) are Apple ML model and prompt packs that are not mirrored, so BifrOSt assigns no scene or people labels."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoFoundation.framework",
@@ -2017,11 +2169,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/image_effects.rs",
+   "bifrost": "springboard/sdk/src/image_effects.rs; springboard/sdk/src/image_filter.rs; springboard/sdk/src/image_blur.rs; springboard/src/shell/photos/edit.rs",
    "status": "partial",
    "note": "Vibrance, the tone curve and the photo looks are in image_effects.rs. The reference's full editing pipeline and its render graph are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    }
+   ],
+   "ready_note": "The imaging pipeline of the Photos edit is covered: vibrance, tone curve, filters and blur in the SDK, and the Photos edit mode's rotate, crop, filters, exposure, saturation, warmth and vignette applied from a saved recipe without touching the original."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoLibraryServices.framework",
@@ -2038,11 +2214,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_library.rs; springboard/ui/src/photo_library.rs; springboard/ui/src/photo_request.rs; springboard/ui/src/photo_access.rs; springboard/ui/src/photo_smart_albums.rs; springboard/src/shell/services/photos.rs; springboard/src/shell/photos/library.rs; springboard/src/shell/photos/albums.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_access::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_smart_albums::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::albums::tests"
+    }
+   ],
+   "ready_note": "The library service job is covered: the library on disk and its month grouping, albums and smart albums, change requests (create, favourite, trash) planned before anything is written, the access prompt and limited access, and the shell service that apps call. Asset creation from a picker and Live Photo support remain open items of the PhotoKit rows."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoLibraryServicesCore.framework",
@@ -2059,11 +2279,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/libraries.rs; springboard/src/shell/photos/library.rs; springboard/src/shell/photos/import.rs; springboard/ui/src/photo_changes.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::libraries::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::library::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::import::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_changes::tests"
+    }
+   ],
+   "ready_note": "Core of the library service: choosing and remembering a library folder, scanning it, copying originals in from a card or folder without moving them, and change details for observers. The reference's Core Data store migration and its private cloud compute service (PCCService, Apple cloud) have no counterpart; BifrOSt libraries are plain folders and need no migration."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoPrintProduct.framework",
@@ -2101,11 +2345,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/photo_editing.rs; springboard/ui/src/photo_adjustment.rs; springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs; springboard/src/shell/photos/undo.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_editing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_adjustment::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::undo::tests"
+    }
+   ],
+   "ready_note": "Photo editing is covered end to end: the editor session and adjustment record that keep the edit as data, the edit recipe stored beside the library, the pixel work, and Undo and Redo of edits. The Photos app hosts no third-party editing extension yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosFormats.framework",
@@ -2122,11 +2395,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/image_metadata.rs; springboard/sdk/src/image_source.rs; springboard/src/shell/photos/exif.rs; springboard/ui/src/photo_media.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_metadata::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::exif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_media::tests"
+    }
+   ],
+   "ready_note": "The format side is covered: reading a picture's type and size from its header, JPEG and PNG metadata and EXIF, and the media kind of an asset from its type. HEIC and RAW metadata are not read, and the reference's scene and content-classification taxonomies are Apple ML label tables that are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosGenerativeServices.framework",
@@ -2164,11 +2461,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/memories.rs; springboard/src/shell/photos/places.rs; springboard/src/shell/photos/bursts.rs; springboard/src/shell/photos/dupes.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::memories::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::places::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::bursts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::dupes::tests"
+    }
+   ],
+   "ready_note": "The job of the graph is to turn a library into Memories and related groupings: BifrOSt builds month Memories from capture dates (screenshots left out) that play as a slideshow, and groups by place, burst and duplicate. The reference's curated mood, holiday and music-election tables are Apple curation data and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosImagingFoundation.framework",
@@ -2185,11 +2506,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/sdk/src/image_object.rs; springboard/sdk/src/image_source.rs; springboard/sdk/src/image_render.rs; springboard/ui/src/photo_adjustment.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_object::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_render::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_adjustment::tests"
+    }
+   ],
+   "ready_note": "Foundation of the photo imaging code: image objects with representations, header-first decoding and thumbnails, render destinations, and adjustment records. These are the shared pieces the Photos editing and rendering use, kept in the SDK rather than a separate Photos module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosIntelligence.framework",
@@ -2248,11 +2593,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/meta.rs; springboard/src/shell/photos/places.rs; springboard/src/shell/photos/memories.rs; springboard/ui/src/photo_smart_albums.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::meta::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::places::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::memories::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_smart_albums::tests"
+    }
+   ],
+   "ready_note": "The knowledge a library keeps is covered: titles, captions, keywords and place names stored beside the photo (never in the file) with search over them and the Keyword Manager, GPS place clusters, month Memories and smart albums. People and scene knowledge need Apple ML model packs and are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosMediaFoundation.framework",
@@ -2269,11 +2638,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/ui/src/photo_media.rs; springboard/src/shell/photos/video.rs; springboard/sdk/src/image_animation.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_media::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_animation::tests"
+    }
+   ],
+   "ready_note": "Media handling of the library: the kind of each asset and the pairing of a still with its movie, video posters and playback through the shell's media player, and animated images. Also shipped in the reference as an iOSSupport copy; the macOS code path is what is covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosPlayer.framework",
@@ -2290,11 +2678,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/slideshow.rs; springboard/src/shell/photos/video.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/zoom.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::slideshow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::video::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::viewer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::zoom::tests"
+    }
+   ],
+   "ready_note": "Playback in Photos is covered: the slideshow with cross-fade and drift, video playback in the viewer, paging and tap handling, and pinch zoom with pan bounds."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosRendering.framework",
@@ -2311,11 +2723,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/thumbs.rs; springboard/src/shell/photos/grid.rs; springboard/ui/src/photo_caching.rs; springboard/sdk/src/image_render.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::thumbs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::grid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "photo_caching::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_render::tests"
+    }
+   ],
+   "ready_note": "Rendering of the library is covered: square thumbnails in a bounded disk and memory cache, the month-sectioned grid layout, thumbnail preparation ahead of need, and render destinations in the SDK."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosSpatialMedia.framework",
@@ -2395,11 +2831,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/entry.rs; springboard/src/shell/photos/stars.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::grid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::viewer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::entry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::stars::tests"
+    }
+   ],
+   "ready_note": "UI core of Photos (SwiftUI views, artwork and a Metal library, also shipped as an iOSSupport copy): BifrOSt draws the same views with the shell's UI kit instead, and the grid, viewer, text entry and star rating models are tested. No SwiftUI runtime exists or is needed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUIComponents.framework",
@@ -2416,11 +2876,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/stars.rs; springboard/sdk/src/photo_picker.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::grid::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::viewer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::stars::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "photo_picker::tests"
+    }
+   ],
+   "ready_note": "Reusable Photos components are covered: the grid, the paging viewer, the star rating control and the photo picker contract in the SDK. The picker call exists but the shell has no picker sheet yet, so apps fall back to their own picker."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUICore.framework",
@@ -2437,11 +2921,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "bifrost": "springboard/src/shell/photos/mod.rs; springboard/src/shell/photos/commands.rs; springboard/src/shell/photos/link.rs; springboard/src/shell/photos/export.rs; springboard/src/shell/photos/extras.rs",
    "status": "partial",
    "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::commands::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::link::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::export::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::extras::tests"
+    }
+   ],
+   "ready_note": "The Photos app itself is covered: albums, selection, favourites and sorting, the edit mode, commands, photos:// links, export with the saved edit applied, search and details, import, duplicates merge and Undo."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUIEdit.framework",
