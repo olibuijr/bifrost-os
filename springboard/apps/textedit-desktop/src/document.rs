@@ -4,7 +4,7 @@
 
 use crate::encoding::{self, Encoding};
 use crate::properties::Properties;
-use crate::text::Text;
+use crate::text::{Cell, Text, OBJECT};
 use crate::{docx, html, odt, rtf, rtfd, webarchive};
 use bifrost_app::document::{Document, DocumentError};
 use bifrost_app::document_package;
@@ -25,6 +25,11 @@ pub const HTML_TYPE: &str = "public.html";
 /// A folder package: rich text with its attachments (see `rtfd`). Read and written as a folder, not as bytes.
 #[cfg_attr(not(test), allow(dead_code))]
 pub const RTFD_TYPE: &str = "public.rtfd";
+
+/// The cells without their attachment characters (U+FFFC), for the formats that have no picture to write them as.
+fn without_pictures(cells: &[Cell]) -> Vec<Cell> {
+    cells.iter().filter(|c| c.ch != OBJECT).copied().collect()
+}
 
 #[derive(Clone, Debug)]
 pub struct TextDocument {
@@ -156,10 +161,11 @@ impl Document for TextDocument {
             // markup opened as code is saved as the text it shows
             RTF_TYPE | HTML_TYPE if self.code && !self.rich => self.write_plain(),
             RTF_TYPE => Ok(rtf::write_with_attachments(self.text.cells(), self.text.tab_width(), &self.properties, self.text.attachments())),
-            HTML_TYPE => Ok(html::write_with(self.text.cells(), self.text.tab_width(), &self.properties)),
-            docx::TYPE => Ok(docx::write_with(self.text.cells(), &self.properties)),
-            odt::TYPE => Ok(odt::write_with(self.text.cells(), &self.properties)),
-            webarchive::TYPE => Ok(webarchive::write(self.text.cells(), self.text.tab_width(), &self.properties)),
+            // these formats carry no pictures from the text: an attachment is left out of them (RTF and RTFD keep it)
+            HTML_TYPE => Ok(html::write_with(&without_pictures(self.text.cells()), self.text.tab_width(), &self.properties)),
+            docx::TYPE => Ok(docx::write_with(&without_pictures(self.text.cells()), &self.properties)),
+            odt::TYPE => Ok(odt::write_with(&without_pictures(self.text.cells()), &self.properties)),
+            webarchive::TYPE => Ok(webarchive::write(&without_pictures(self.text.cells()), self.text.tab_width(), &self.properties)),
             PLAIN_TYPE => self.write_plain(),
             "public.utf8-plain-text" => Ok(rtf::write_plain(self.text.cells())),
             other => Err(DocumentError::new(&format!("Text Editor cannot write {other}"))),
@@ -342,6 +348,17 @@ mod tests {
         assert_eq!(back.text.attachments()[0].width, 40.0);
         // plain text drops the attachment character
         assert_eq!(doc.write(PLAIN_TYPE).unwrap(), b"ab".to_vec());
+    }
+
+    #[test]
+    fn the_formats_without_pictures_leave_the_attachment_character_out() {
+        let doc = TextDocument::read(b"{\\rtf1 a{\\NeXTGraphic p.png \\width40\\height20}b}", RTF_TYPE).unwrap();
+        assert_eq!(doc.text.text().chars().count(), 3);
+        for kind in [docx::TYPE, odt::TYPE, HTML_TYPE, webarchive::TYPE] {
+            let bytes = doc.write(kind).unwrap();
+            let back = TextDocument::read(&bytes, kind).unwrap();
+            assert!(!back.text.text().contains('\u{fffc}'), "{kind}");
+        }
     }
 
     #[test]
