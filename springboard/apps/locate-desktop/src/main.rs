@@ -2,6 +2,7 @@
 //! through the SDK. The first run shows what is shared; the marker file in the app's data folder remembers that it
 //! was dismissed. Control methods (`locate.locate`, `locate.play_sound`, `locate.share`) are served from `window`.
 
+mod sync;
 mod window;
 
 use bifrost_app::control::RpcError;
@@ -28,6 +29,7 @@ impl App for LocateApp {
         let onboarded = ctx.data_dir.join(ONBOARDED_MARK).exists();
         self.w = window::LocateWindow::new(onboarded);
         self.w.keys.load(ctx);
+        self.w.start_session(ctx);
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -49,6 +51,22 @@ impl App for LocateApp {
 
     fn keychain(&mut self, _ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
         self.w.on_keychain(&reply)
+    }
+
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        self.w.service_reply(ctx, request, result)
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        self.w.tick(ctx, t)
+    }
+
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        self.w.next_wake(t)
+    }
+
+    fn wake_fd(&self) -> Option<i32> {
+        self.w.link.as_ref().map(|l| l.fd())
     }
 
     fn rpc_methods(&self) -> Vec<&'static str> {

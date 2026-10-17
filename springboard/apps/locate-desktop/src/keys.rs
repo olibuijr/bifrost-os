@@ -56,10 +56,16 @@ impl Keys {
     /// Creates the account key pair from 32 random bytes when none is held and no store is pending. Returns the public
     /// key to publish; the private key is kept only once the keychain confirms the store.
     pub fn create(&mut self, ctx: &Ctx, random: &[u8]) -> Option<[u8; 32]> {
+        let raw: [u8; 32] = random.try_into().ok()?;
+        self.adopt(ctx, raw)
+    }
+
+    /// Stores an account private key that this device already holds: a key received from an approving device, or one
+    /// created above. Returns its public key. Nothing is stored while a key is held or a store is pending.
+    pub fn adopt(&mut self, ctx: &Ctx, raw: [u8; 32]) -> Option<[u8; 32]> {
         if self.private.is_some() || self.busy() {
             return None;
         }
-        let raw: [u8; 32] = random.try_into().ok()?;
         let public = PrivateKey::from_raw(&raw).ok()?.public_key().raw();
         self.creating = Some(raw);
         self.add_request = Some(keychain::add(ctx, SERVICE, ACCOUNT_KEY, &raw));

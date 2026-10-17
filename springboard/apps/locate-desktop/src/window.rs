@@ -11,7 +11,11 @@ use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 use bifrost_core::json::Json;
 use bifrost_locate::control::{self, ParseError, Request};
+use bifrost_app::cloud_findmy::SharedLocation;
+use bifrost_locate::cloud::Link;
 use bifrost_locate::keys::{KeyEvent, Keys};
+use bifrost_locate::pairing::{Approvals, Enrollment};
+use bifrost_locate::reporting::Reporter;
 use bifrost_locate::panel::{Panel, Row, Section, LOCATION_UNAVAILABLE, ONBOARDING_LINES};
 
 /// The sidebar's width in points.
@@ -47,18 +51,34 @@ pub struct LocateWindow {
     pub outbox: Vec<Request>,
     /// The account key pair, read from and written to the keychain.
     pub keys: Keys,
+    /// The cloud worker, once the account session is read.
+    pub link: Option<Link>,
+    pub session_request: Option<u32>,
+    /// This device's join request, while it waits for approval, and the private key it polls with.
+    pub enrollment: Enrollment,
+    pub device_key: Option<[u8; 32]>,
+    /// The devices waiting for approval, and the positions other people share with the account.
+    pub approvals: Approvals,
+    pub shared: Vec<SharedLocation>,
+    pub reporter: Reporter,
+    pub locate_asked: bool,
+    pub notice_seq: u32,
     labels: TextCache,
 }
 
 impl LocateWindow {
     pub fn new(onboarded: bool) -> LocateWindow {
-        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), labels: TextCache::default() }
+        LocateWindow { panel: Panel::new(onboarded), outbox: Vec::new(), keys: Keys::default(), link: None, session_request: None, enrollment: Enrollment::Idle, device_key: None, approvals: Approvals::default(), shared: Vec::new(), reporter: Reporter::new(), locate_asked: false, notice_seq: 0, labels: TextCache::default() }
     }
 
     /// A keychain reply. A key that was just stored is the account key for this device. Returns whether a frame is needed.
     pub fn on_keychain(&mut self, reply: &bifrost_app::keychain::Reply) -> bool {
         match self.keys.on_reply(reply) {
-            Some(KeyEvent::Loaded) | Some(KeyEvent::Stored) | Some(KeyEvent::Missing) => true,
+            Some(KeyEvent::Stored) => {
+                self.publish_key();
+                true
+            }
+            Some(KeyEvent::Loaded) | Some(KeyEvent::Missing) => true,
             None => false,
         }
     }
