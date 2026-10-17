@@ -359,7 +359,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar CJK serif; no open kai brush face packaged."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yu Gothic Bold.otf",

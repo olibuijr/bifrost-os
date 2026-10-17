@@ -526,7 +526,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Bold (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Tahoma.ttf",
@@ -547,7 +560,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Tamil MN.ttc",
@@ -829,7 +855,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Serif (noto-fonts, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Trebuchet MS Bold Italic.ttf",
@@ -850,7 +889,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-BoldItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Bold Italic (ttf-lato, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Trebuchet MS Bold.ttf",
@@ -871,7 +923,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Bold.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Bold (ttf-lato, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Trebuchet MS Italic.ttf",
@@ -892,7 +957,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Italic (ttf-lato, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Trebuchet MS.ttf",
@@ -913,7 +991,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Regular (ttf-lato, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf",
@@ -934,7 +1025,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans-BoldOblique.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Bold Oblique (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
@@ -955,7 +1059,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Bold (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Verdana Italic.ttf",
@@ -976,7 +1093,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans-Oblique.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Oblique (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Verdana.ttf",
@@ -997,7 +1127,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/ThonburiUI.ttc",

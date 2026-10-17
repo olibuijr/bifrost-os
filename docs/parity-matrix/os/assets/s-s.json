@@ -2689,7 +2689,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Lato Regular (ttf-lato, OFL-1.1) for the same role; design-similar humanist sans."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Synchro LET Fonts.ttf",
@@ -2984,7 +2997,20 @@
    "status": "partial",
    "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar CJK song serif."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SpotMono.ttc",
@@ -3005,7 +3031,20 @@
    "status": "partial",
    "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready": true,
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar; glyph coverage not metric-identical."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Srisakdi.ttc",
