@@ -3,6 +3,7 @@
 //! URLs and bodies come from [`crate::protocol`]. Every method blocks, so the window calls them from job threads
 //! (see [`crate::sync`]).
 
+use crate::attachment;
 use crate::crypto::{self, Machine};
 use crate::protocol::{self, Body, Ciphertext, Login, Sync, ToDevice};
 use bifrost_core::json::{self, Json};
@@ -358,7 +359,9 @@ impl Api {
 
     /// Uploads an image and sends it to `room` as an image message.
     pub fn send_image(&self, room: &str, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
-        self.refuse_media(room)?;
+        if self.is_encrypted(room) {
+            return self.send_encrypted_media(room, true, name, mime, bytes);
+        }
         let mxc = self.upload(name, mime, bytes)?;
         let info = protocol::ImageInfo { name, mxc: &mxc, mime, size: bytes.len() as u64 };
         self.send_content(room, &protocol::image_content(&info))
@@ -366,7 +369,9 @@ impl Api {
 
     /// Uploads any file and sends it to `room` as a file message.
     pub fn send_file(&self, room: &str, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
-        self.refuse_media(room)?;
+        if self.is_encrypted(room) {
+            return self.send_encrypted_media(room, false, name, mime, bytes);
+        }
         let mxc = self.upload(name, mime, bytes)?;
         let info = protocol::ImageInfo { name, mxc: &mxc, mime, size: bytes.len() as u64 };
         self.send_content(room, &protocol::file_content(&info))
@@ -451,12 +456,15 @@ impl Api {
             .map(|_| ())
     }
 
-    /// Pictures and files are not sent in encrypted rooms yet: uploading one would leave the file readable on the server.
-    fn refuse_media(&self, room: &str) -> Result<(), String> {
-        if self.is_encrypted(room) {
-            return Err("Pictures and files are not sent in encrypted rooms yet".into());
-        }
-        Ok(())
+    /// Sends a picture or file to an encrypted room. The bytes are encrypted under a new key (see [`attachment`]); the
+    /// server gets only the ciphertext, under a neutral name, and the message with its `file` object goes out as a Megolm
+    /// event.
+    fn send_encrypted_media(&self, room: &str, image: bool, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
+        let sealed = attachment::encrypt(bytes)?;
+        let url = self.upload("attachment", "application/octet-stream", &sealed.cipher)?;
+        let file = attachment::file_object(&url, &sealed);
+        let content = protocol::encrypted_media_content(image, name, mime, bytes.len() as u64, &file);
+        self.send_content(room, &content)
     }
 
     fn send_content(&self, room: &str, content: &str) -> Result<(), String> {

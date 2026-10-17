@@ -768,9 +768,28 @@ fn message_body(content: Option<&Json>) -> Body {
         Some("m.text") => Body::Text(text("body")),
         Some("m.notice") => Body::Notice(text("body")),
         Some("m.emote") => Body::Emote(text("body")),
-        Some("m.image") => Body::Image { name: text("body"), mxc: text("url") },
+        Some("m.image") => Body::Image { name: text("body"), mxc: media_url(content) },
         Some(other) => Body::Other(other.to_string()),
     }
+}
+
+/// The `mxc://` address of a picture: its `url`, or the `url` of its `file` object when it is encrypted (see
+/// [`crate::attachment`]). Empty when neither is there.
+fn media_url(content: &Json) -> String {
+    content.str_field("url").or_else(|| content.get("file").and_then(|f| f.str_field("url"))).unwrap_or_default()
+}
+
+/// The content of a picture or file message in an encrypted room: the `file` object (see [`crate::attachment::file_object`])
+/// stands in for `url`. It is sent inside the Megolm event, so the server never sees the file name or the key.
+pub fn encrypted_media_content(image: bool, name: &str, mime: &str, size: u64, file: &Json) -> String {
+    obj(vec![
+        ("msgtype", text(if image { "m.image" } else { "m.file" })),
+        ("body", text(name)),
+        ("filename", text(name)),
+        ("file", file.clone()),
+        ("info", obj(vec![("mimetype", text(mime)), ("size", Json::Num(size as f64))])),
+    ])
+    .encode()
 }
 
 /// The read receipts of an ephemeral section: `content` maps each event id to `m.read`, then to the readers.
@@ -1210,5 +1229,21 @@ mod tests {
         assert_eq!(file_mime("a.png"), "image/png");
         assert_eq!(file_mime("a.weird"), "application/octet-stream");
         assert_eq!(file_mime("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn an_encrypted_picture_takes_its_address_from_the_file_object() {
+        let plain = parse(r#"{"type":"m.room.message","content":{"msgtype":"m.image","body":"cat.png","file":{"url":"mxc://example.org/enc","key":{}}}}"#);
+        let (body, _) = decrypted_body(&plain).expect("a message");
+        assert_eq!(body, Body::Image { name: "cat.png".into(), mxc: "mxc://example.org/enc".into() });
+    }
+
+    #[test]
+    fn an_encrypted_file_message_carries_the_file_object_and_no_url() {
+        let file = parse(r#"{"url":"mxc://example.org/enc","key":{"kty":"oct"},"iv":"AAAAAAAAAAAAAAAAAAAAAA","hashes":{"sha256":"x"},"v":"v2"}"#);
+        let content = parse(&encrypted_media_content(true, "cat.png", "image/png", 42, &file));
+        assert_eq!(content.str_field("msgtype").as_deref(), Some("m.image"));
+        assert!(content.get("url").is_none(), "no plain address next to the file object");
+        assert_eq!(content.get("file").and_then(|f| f.str_field("url")).as_deref(), Some("mxc://example.org/enc"));
     }
 }
