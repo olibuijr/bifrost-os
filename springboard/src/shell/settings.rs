@@ -146,6 +146,7 @@ impl Alert {
             ),
             Command::BackUpNow => ("Back Up Now?", "Notes, Contacts, Calendar, Reminders, settings and notifications are saved to one file.".to_string(), "Back Up", false),
             Command::RestoreBackup => ("Restore Latest Backup?", "Notes, Contacts, Calendar, Reminders and settings are replaced by the backup, and BifrOSt restarts.".to_string(), "Restore", true),
+            Command::DeleteBackups => ("Delete All Backups?", "Every backup file is removed. Your data is not changed, but a deleted backup cannot be restored.".to_string(), "Delete", true),
             Command::CheckUpdate => ("Check for Update?", "BifrOSt asks the update server whether a new version exists.".to_string(), "Check", false),
             Command::DownloadUpdate => ("Download Update?", "The new version is downloaded and checked; nothing is installed until you restart.".to_string(), "Download", false),
             Command::ShareDiagnostics => ("Share with Developer?", "The build, crash logs and heartbeat are sent to the developer's update server on your network.".to_string(), "Share", false),
@@ -3008,6 +3009,16 @@ impl Settings {
                     vec![]
                 }
             },
+            Command::DeleteBackups => {
+                self.backup_note = match backup::delete_backups(&self.data_dir) {
+                    Ok(n) => format!("Deleted {n} backups."),
+                    Err(e) => format!("Delete failed: {e}"),
+                };
+                let dir = self.data_dir.clone();
+                self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t));
+                self.rebuild(ui);
+                vec![]
+            }
             Command::CheckUpdate => {
                 self.updater.check();
                 self.rebuild(ui);
