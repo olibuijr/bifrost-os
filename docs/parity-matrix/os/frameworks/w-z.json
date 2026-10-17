@@ -1638,23 +1638,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/malware_scan.rs; springboard/core/src/pattern_rules.rs; springboard/core/src/quarantine.rs; springboard/src/shell/malware_gate.rs; springboard/src/shell/workspace.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found Wired 2026-10-17: the workspace open path (Open and Open With, which Files and the Dock drop use) scans each file or folder against the installed signature rules (/var/lib/bifrost/malware-rules, BIFROST_MALWARE_RULES in the lab) before handing it to an app. A clean file opens; a suspicious one shows an alert card with Cancel and Open Anyway and the open waits; a known threat, or a warning on a file that carries a download quarantine record (user.bifrost.quarantine), is refused with an OK-only card. A missing rule store opens the file; a damaged one is logged and opens it.",
+   "note": "private framework, no plausible owner found Wired 2026-10-17: the workspace open path (Open and Open With, which Files and the Dock drop use) scans each file or folder against the installed signature rules (/var/lib/bifrost/malware-rules, BIFROST_MALWARE_RULES in the lab) before handing it to an app. A clean file opens; a suspicious one shows an alert card with Cancel and Open Anyway and the open waits; a known threat, or a warning on a file that carries a download quarantine record (user.bifrost.quarantine), is refused with an OK-only card. A missing rule store opens the file; a damaged one is logged and opens it. Lead 2026-10-17: not ready: the open path is gated, but no rule set ships, so nothing is ever flagged.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::malware_gate::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "malware_scan::tests"
-    }
-   ],
-   "ready_note": "The shell scans before it opens a file for an app and puts up the warn or block card. Tests cover the verdicts, the quarantine escalation, the cards and the shell holding and resuming a held open; the workspace call itself needs the desktop-wayland document broker and is exercised on Midget."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ZeoliteFramework.framework",
