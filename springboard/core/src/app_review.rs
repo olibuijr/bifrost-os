@@ -27,6 +27,8 @@ pub enum Error {
     NicknameTooLong(usize),
     /// The written review is longer than [`MAX_BODY`] characters.
     BodyTooLong(usize),
+    /// The sheet's draft was already sent.
+    AlreadySubmitted,
 }
 
 /// Checks a review before it is sent. The text fields are trimmed first, so spaces alone do not count as text.
@@ -108,6 +110,123 @@ pub fn average_label(summary: &Summary) -> String {
     }
 }
 
+/// The rating sheet's editing state: what the person has chosen and typed so far, before the review is sent. The sheet
+/// draws it and feeds it touches and keys; this type holds the rules, so it needs no screen. Typing past a limit is
+/// refused rather than cut later, tapping the star already chosen clears the rating, and a review can only be submitted
+/// once it passes [`validate`] with at least one star.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ReviewDraft {
+    stars: u8,
+    nickname: String,
+    body: String,
+    submitted: bool,
+}
+
+impl ReviewDraft {
+    /// An empty draft: no stars, no text.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A draft that starts from an earlier review, so the person can edit it.
+    pub fn from_review(review: &Review) -> Self {
+        ReviewDraft { stars: review.stars, nickname: review.nickname.clone(), body: review.body.clone(), submitted: false }
+    }
+
+    /// The chosen rating, 0 while none is chosen.
+    pub fn stars(&self) -> u8 {
+        self.stars
+    }
+
+    pub fn nickname(&self) -> &str {
+        &self.nickname
+    }
+
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+
+    /// Whether [`ReviewDraft::submit`] has produced the request body. A submitted draft takes no more edits.
+    pub fn is_submitted(&self) -> bool {
+        self.submitted
+    }
+
+    /// A tap on star `n` (1 to 5). Tapping the star already chosen clears the rating; a number outside 1 to 5 changes
+    /// nothing. Returns whether the rating changed.
+    pub fn tap_star(&mut self, n: u8) -> bool {
+        if self.submitted || !(MIN_STARS..=MAX_STARS).contains(&n) {
+            return false;
+        }
+        self.stars = if self.stars == n { 0 } else { n };
+        true
+    }
+
+    /// Types `text` into the nickname. Characters past [`MAX_NICKNAME`] and line breaks are dropped. Returns how many
+    /// characters were taken.
+    pub fn type_nickname(&mut self, text: &str) -> usize {
+        if self.submitted {
+            return 0;
+        }
+        let mut taken = 0;
+        for c in text.chars().filter(|c| !c.is_control()) {
+            if self.nickname.chars().count() >= MAX_NICKNAME {
+                break;
+            }
+            self.nickname.push(c);
+            taken += 1;
+        }
+        taken
+    }
+
+    /// Types `text` into the written review. Characters past [`MAX_BODY`] are dropped; new lines and tabs are kept,
+    /// other control characters are not. Returns how many characters were taken.
+    pub fn type_body(&mut self, text: &str) -> usize {
+        if self.submitted {
+            return 0;
+        }
+        let mut taken = 0;
+        for c in text.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')) {
+            if self.body.chars().count() >= MAX_BODY {
+                break;
+            }
+            self.body.push(c);
+            taken += 1;
+        }
+        taken
+    }
+
+    /// Removes the last character of the nickname. Returns whether one was removed.
+    pub fn backspace_nickname(&mut self) -> bool {
+        !self.submitted && self.nickname.pop().is_some()
+    }
+
+    /// Removes the last character of the written review. Returns whether one was removed.
+    pub fn backspace_body(&mut self) -> bool {
+        !self.submitted && self.body.pop().is_some()
+    }
+
+    /// The review as it stands, whatever its state.
+    pub fn review(&self) -> Review {
+        Review { stars: self.stars, nickname: self.nickname.clone(), body: self.body.clone() }
+    }
+
+    /// Whether Send may be enabled: a star rating is chosen and the review is valid.
+    pub fn can_submit(&self) -> bool {
+        !self.submitted && validate(&self.review()).is_ok()
+    }
+
+    /// Produces the request body for the catalogue and locks the draft, so a double tap sends once. The error is the
+    /// reason a review that is not ready cannot be sent; the draft stays open then.
+    pub fn submit(&mut self) -> Result<String, Error> {
+        if self.submitted {
+            return Err(Error::AlreadySubmitted);
+        }
+        let body = to_json(&self.review())?;
+        self.submitted = true;
+        Ok(body)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,5 +292,82 @@ mod tests {
         let s = summarise(&[0, 9, 4]);
         assert_eq!(s.total, 1);
         assert_eq!(average_label(&s), "4.0");
+    }
+
+    #[test]
+    fn a_draft_needs_a_star_before_it_can_be_sent() {
+        let mut d = ReviewDraft::new();
+        assert!(!d.can_submit());
+        assert_eq!(d.submit(), Err(Error::Stars(0)));
+        assert!(!d.is_submitted(), "a refused draft stays open");
+        assert!(d.tap_star(4));
+        assert!(d.can_submit());
+    }
+
+    #[test]
+    fn tapping_the_chosen_star_clears_it_and_a_bad_star_changes_nothing() {
+        let mut d = ReviewDraft::new();
+        assert!(d.tap_star(3));
+        assert_eq!(d.stars(), 3);
+        assert!(d.tap_star(5));
+        assert_eq!(d.stars(), 5);
+        assert!(d.tap_star(5));
+        assert_eq!(d.stars(), 0);
+        assert!(!d.tap_star(0));
+        assert!(!d.tap_star(6));
+        assert_eq!(d.stars(), 0);
+    }
+
+    #[test]
+    fn typing_stops_at_the_limits_and_drops_control_characters() {
+        let mut d = ReviewDraft::new();
+        assert_eq!(d.type_nickname(&"n".repeat(MAX_NICKNAME + 5)), MAX_NICKNAME);
+        assert_eq!(d.nickname().chars().count(), MAX_NICKNAME);
+        assert_eq!(d.type_nickname("x"), 0, "a full nickname takes nothing more");
+        let mut d = ReviewDraft::new();
+        assert_eq!(d.type_nickname("a\nb\u{7}c"), 3, "line breaks and control characters are dropped from the nickname");
+        assert_eq!(d.nickname(), "abc");
+        assert_eq!(d.type_body("one\ntwo\tx\u{7}"), 9);
+        assert_eq!(d.body(), "one\ntwo\tx");
+        assert_eq!(d.type_body(&"b".repeat(MAX_BODY)), MAX_BODY - 9);
+        assert_eq!(d.body().chars().count(), MAX_BODY);
+    }
+
+    #[test]
+    fn backspace_removes_one_character_at_a_time() {
+        let mut d = ReviewDraft::new();
+        assert!(!d.backspace_nickname());
+        d.type_nickname("ab");
+        d.type_body("é!");
+        assert!(d.backspace_nickname());
+        assert_eq!(d.nickname(), "a");
+        assert!(d.backspace_body() && d.backspace_body());
+        assert!(!d.backspace_body());
+        assert_eq!(d.body(), "");
+    }
+
+    #[test]
+    fn submitting_locks_the_draft_so_a_double_tap_sends_once() {
+        let mut d = ReviewDraft::new();
+        d.tap_star(5);
+        d.type_nickname(" Ana ");
+        d.type_body("Great");
+        let body = d.submit().unwrap();
+        assert_eq!(body, r#"{"stars":5,"nickname":"Ana","body":"Great"}"#);
+        assert!(d.is_submitted());
+        assert_eq!(d.submit(), Err(Error::AlreadySubmitted));
+        assert!(!d.tap_star(1));
+        assert_eq!(d.type_body("more"), 0);
+        assert!(!d.backspace_body());
+        assert_eq!(d.stars(), 5);
+        assert!(!d.can_submit());
+    }
+
+    #[test]
+    fn a_draft_can_start_from_an_earlier_review() {
+        let d = ReviewDraft::from_review(&review(2, "Bo", "meh"));
+        assert_eq!((d.stars(), d.nickname(), d.body()), (2, "Bo", "meh"));
+        assert!(d.can_submit());
+        assert_eq!(d.review(), review(2, "Bo", "meh"));
     }
 }
