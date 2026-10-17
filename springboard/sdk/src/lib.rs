@@ -298,6 +298,8 @@ pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
 pub mod picture_in_picture;
 /// The AirPlay-style route picker: outputs and nearby receivers in sections, and taps that activate authorized routes.
 pub mod route_picker;
+/// Streaming receivers found on the local network: read their advertisements and publish one. No streaming yet.
+pub mod airplay;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;

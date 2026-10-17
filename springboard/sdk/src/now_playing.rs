@@ -143,6 +143,15 @@ pub fn publish_body(session: &MediaSession) -> Option<Json> {
     Some(Json::Obj(fields))
 }
 
+/// The metadata an accessory display shows for a session: the publish body without the transport command map and the
+/// content kind, which a display cannot act on. None without content. No accessory transport is connected yet, so the
+/// shell does not send this body anywhere.
+pub fn accessory_body(session: &MediaSession) -> Option<Json> {
+    let Json::Obj(fields) = publish_body(session)? else { return None };
+    let shown = fields.into_iter().filter(|(key, _)| key != "commands" && key != "kind").collect();
+    Some(Json::Obj(shown))
+}
+
 /// One entry of an app's Up Next queue. An entry the app cannot play now is listed by the shell but cannot be picked.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueueEntry {
@@ -235,6 +244,17 @@ mod tests {
         assert_eq!(commands.str_field("play").as_deref(), Some("enabled"));
         assert_eq!(commands.str_field("next").as_deref(), Some("disabled"));
         assert!(commands.get("pause").is_none(), "an unsupported command is not sent");
+    }
+
+    #[test]
+    fn an_accessory_body_shows_the_metadata_and_state_without_commands() {
+        let body = accessory_body(&session()).expect("a body");
+        assert_eq!(body.str_field("title").as_deref(), Some("Song"));
+        assert_eq!(body.str_field("state").as_deref(), Some("playing"));
+        assert_eq!(body.get("position_ms").and_then(Json::number), Some(5_000.0));
+        assert!(body.get("commands").is_none(), "a display cannot act on the command map");
+        assert!(body.get("kind").is_none());
+        assert!(accessory_body(&MediaSession::new("main").unwrap()).is_none(), "no content, nothing to show");
     }
 
     #[test]

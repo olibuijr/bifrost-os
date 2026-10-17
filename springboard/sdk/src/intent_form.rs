@@ -14,6 +14,8 @@ pub enum FormError {
     WrongType { name: String, expected: String },
     /// A required parameter has no value.
     Missing(String),
+    /// The saved arguments are not a JSON object of parameter values.
+    NotObject,
 }
 
 /// The editable state of one intent. Values are kept in declaration order.
@@ -33,6 +35,18 @@ impl IntentForm {
     /// The fields the editor shows, in declaration order.
     pub fn fields(&self) -> &[Param] {
         &self.intent.params
+    }
+
+    /// A form for `intent` filled from saved arguments, such as an action the person is editing again. Each key is set as
+    /// [`IntentForm::set`] would set it, so a key the intent does not declare, or a value of the wrong type, is refused.
+    /// `Json::Null` leaves the field empty.
+    pub fn from_arguments(intent: Intent, arguments: &Json) -> Result<IntentForm, FormError> {
+        let Json::Obj(fields) = arguments else { return Err(FormError::NotObject) };
+        let mut form = IntentForm::new(intent);
+        for (name, value) in fields {
+            form.set(name, value.clone())?;
+        }
+        Ok(form)
     }
 
     /// The value entered for a field, if any.
@@ -137,5 +151,52 @@ mod pick_tests {
         let by_id: Vec<&str> = pick(&intents, "zz").iter().map(|i| i.id.as_str()).collect();
         assert_eq!(by_id, ["zz"]);
         assert!(pick(&intents, "missing").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+    use crate::intents::ParamType;
+
+    fn note_intent() -> Intent {
+        Intent::new("add_note", "Add Note", "Adds a note.")
+            .param(Param::new("title", "Title", ParamType::String))
+            .param(Param::new("priority", "Priority", ParamType::Enum(vec!["low".into(), "high".into()])))
+            .param(Param::new("count", "Count", ParamType::Int).optional())
+    }
+
+    #[test]
+    fn a_saved_form_reads_back_to_the_same_arguments() {
+        let mut form = IntentForm::new(note_intent());
+        form.set("title", Json::Str("Milk".into())).unwrap();
+        form.set("priority", Json::Str("high".into())).unwrap();
+        let saved = form.arguments().unwrap();
+        let reopened = IntentForm::from_arguments(note_intent(), &saved).unwrap();
+        assert_eq!(reopened, form);
+        assert_eq!(reopened.arguments(), Ok(saved));
+    }
+
+    #[test]
+    fn saved_arguments_are_checked_like_typed_values() {
+        let unknown = Json::Obj(vec![("colour".into(), Json::Str("red".into()))]);
+        assert_eq!(
+            IntentForm::from_arguments(note_intent(), &unknown),
+            Err(FormError::UnknownParameter("colour".into()))
+        );
+        let wrong = Json::Obj(vec![("count".into(), Json::Str("two".into()))]);
+        assert_eq!(
+            IntentForm::from_arguments(note_intent(), &wrong),
+            Err(FormError::WrongType { name: "count".into(), expected: "int".into() })
+        );
+        assert_eq!(IntentForm::from_arguments(note_intent(), &Json::Str("x".into())), Err(FormError::NotObject));
+    }
+
+    #[test]
+    fn a_null_argument_leaves_its_field_empty() {
+        let saved = Json::Obj(vec![("title".into(), Json::Null), ("priority".into(), Json::Str("low".into()))]);
+        let form = IntentForm::from_arguments(note_intent(), &saved).unwrap();
+        assert_eq!(form.value("title"), None);
+        assert_eq!(form.missing(), ["title"]);
     }
 }
