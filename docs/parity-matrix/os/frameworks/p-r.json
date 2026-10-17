@@ -752,9 +752,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build a firewall status and settings view over the kernel packet filter (nftables). The host firewall is off by the user's choice, so the first step is a read-only view of the current rules.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs",
+   "status": "partial",
+   "note": "Partial: a read-only firewall view in the sysinfo app (Firewall category, firewall_rows) shows the nftables or iptables rules that are loaded and says when none are. Not built: any settings page or rule writes, so the user cannot change the packet filter from BifrOSt.",
    "rea": [],
    "method": "assessed"
   },

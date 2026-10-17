@@ -3569,7 +3569,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Downloads on-demand asset packs for apps and the system. Nothing drives the queue in springboard/ui/src/managed_download.rs; build a shell service that runs it, with the asset pack format.",
+   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format.",
    "rea": [],
    "method": "assessed"
   },
@@ -3590,7 +3590,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "The background daemon behind on-demand assets (see MobileAsset). Nothing runs it; build it inside the update agent's service set in springboard/updated.",
+   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated.",
    "rea": [],
    "method": "assessed"
   },
@@ -4974,9 +4974,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Build the on-device neural-network inference runtime under the machine-learning SDK row (data/core-ml.json): model loading, tensors and compute-unit selection, since BifrOSt has no inference API.",
+   "bifrost": "springboard/sdk/src/ndarray.rs; springboard/sdk/src/inference.rs; springboard/ui/src/nn.rs",
+   "status": "partial",
+   "note": "Partial: float32 tensors (sdk ndarray), typed inference signatures that check inputs before a call (sdk inference), and a CPU dense layer with softmax and argmax (ui nn.rs). Not built: model loading, compute-unit selection, training, and a runtime an app can call to run a model.",
    "rea": [],
    "method": "assessed"
   },
