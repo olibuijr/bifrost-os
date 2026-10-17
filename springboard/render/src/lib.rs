@@ -51,6 +51,7 @@ pub mod raw_params;
 pub mod upscale;
 pub mod temporal_upscale;
 pub mod frame_interp;
+pub mod svg_table;
 pub mod replicator;
 pub mod emitter;
 pub mod plane_stats;
