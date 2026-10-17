@@ -1016,6 +1016,8 @@ impl Shell {
             Shortcut::Back if self.look_up_escape() => vec![],
             // Escape hides the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.a11y_panel_escape() => vec![],
+            // Escape hides the Switch Control panel before it goes Back
+            Shortcut::Back if self.switch_panel_escape() => vec![],
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),

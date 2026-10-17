@@ -486,6 +486,8 @@ version = "0.1.0"
 dependencies = [
  "bifrost-audio-alsa",
  "bifrost-audio-driver",
+ "bifrost-audio-engine",
+ "bifrost-audio-policy",
  "bifrost-audio-shm",
  "bifrost-audio-toolbox",
  "bifrost-audio-types",

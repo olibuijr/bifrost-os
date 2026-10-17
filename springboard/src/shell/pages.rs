@@ -216,6 +216,8 @@ pub enum Toggle {
     MotionCues,
     /// Accessibility > Hearing > Live Captions: captions for the sound the computer plays (`a11y_live_captions`)
     LiveCaptions,
+    /// Accessibility > Switch Control: the switch keys scan a panel of controls (`a11y.switch_control`)
+    SwitchControl,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1471,6 +1473,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                     .header("TOUCH")
                     .footer("Use the floating button to reach Home, Control Centre, notifications and other controls. Switch Control highlights one item at a time: Ctrl+Alt+Right and Left move the highlight and Ctrl+Alt+Space selects it. Voice Control listens through the microphone on this computer, with the dictation model from Keyboard settings, and presses what you name: say \"press Save\"."),
+                    .footer("Use the floating button to reach Home, Control Centre, notifications and other controls."),
+                    Group::new(vec![Item::new("Switch Control").switch(a.switch_control, Action::Toggle(Toggle::SwitchControl))])
+                        .header("SWITCH CONTROL")
+                        .footer("Press Space to move through a panel of controls and Enter to choose the highlighted one. Escape closes the panel."),
                 ],
             )
         }

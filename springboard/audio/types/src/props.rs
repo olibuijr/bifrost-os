@@ -39,6 +39,28 @@ pub const OVERLOAD: FourCC = FourCC::new(b"olod");
 pub const VOLUME_SCALAR: FourCC = FourCC::new(b"volm");
 pub const MUTE: FourCC = FourCC::new(b"mute");
 
+/// The application processes the server tracks (System).
+pub const PROCESSES: FourCC = FourCC::new(b"prc#");
+/// Process: the application id the client said in its Hello, its pid, and whether it runs output or input streams.
+pub const APP_ID: FourCC = FourCC::new(b"appi");
+pub const PROCESS_PID: FourCC = FourCC::new(b"ppid");
+pub const RUNNING_OUTPUT: FourCC = FourCC::new(b"pout");
+pub const RUNNING_INPUT: FourCC = FourCC::new(b"pinp");
+/// Process: the audio session the application declared. The category is one of `ambient`, `solo-ambient`, `playback`,
+/// `record` and `play-and-record` (empty: no session); `session-active` starts it; `session-mixes` and `session-ducks`
+/// are its options (mix with others, duck others).
+pub const SESSION_CATEGORY: FourCC = FourCC::new(b"scat");
+pub const SESSION_ACTIVE: FourCC = FourCC::new(b"sact");
+pub const SESSION_MIXES: FourCC = FourCC::new(b"smix");
+pub const SESSION_DUCKS: FourCC = FourCC::new(b"sdck");
+/// Device, per scope: the newest level and spectrum measurement of what the device plays (Output) or captures (Input),
+/// in the text form of `bifrost_audio_engine::analysis::Measurement::encode`; empty until the device has run.
+pub const LEVEL: FourCC = FourCC::new(b"levl");
+/// Device, per scope: the processing stages that run for the device (one `kind id` per line) and the frames of
+/// latency they add.
+pub const DSP_PLAN: FourCC = FourCC::new(b"dsp ");
+pub const DSP_LATENCY: FourCC = FourCC::new(b"dspl");
+
 pub const VIRTUAL_FORMAT: FourCC = FourCC::new(b"sfmt");
 pub const PHYSICAL_FORMAT: FourCC = FourCC::new(b"pft ");
 
@@ -154,6 +176,18 @@ pub static PROPERTIES: &[PropDef] = &[
     p(OVERLOAD, "overload", ValueKind::Bool, S_GLOBAL, &[Device, AggregateDevice], false),
     p(VOLUME_SCALAR, "volume", ValueKind::F32, S_IO, &[Volume], true),
     p(MUTE, "mute", ValueKind::Bool, S_IO, &[Mute], true),
+    p(PROCESSES, "processes", ValueKind::Objects, S_GLOBAL, &[System], false),
+    p(APP_ID, "app-id", ValueKind::String, S_GLOBAL, &[Process], false),
+    p(PROCESS_PID, "process-pid", ValueKind::Pid, S_GLOBAL, &[Process], false),
+    p(RUNNING_OUTPUT, "running-output", ValueKind::Bool, S_GLOBAL, &[Process], false),
+    p(RUNNING_INPUT, "running-input", ValueKind::Bool, S_GLOBAL, &[Process], false),
+    p(SESSION_CATEGORY, "session-category", ValueKind::String, S_GLOBAL, &[Process], true),
+    p(SESSION_ACTIVE, "session-active", ValueKind::Bool, S_GLOBAL, &[Process], true),
+    p(SESSION_MIXES, "session-mixes", ValueKind::Bool, S_GLOBAL, &[Process], true),
+    p(SESSION_DUCKS, "session-ducks", ValueKind::Bool, S_GLOBAL, &[Process], true),
+    p(LEVEL, "level", ValueKind::String, S_IO, &[Device], false),
+    p(DSP_PLAN, "dsp-plan", ValueKind::String, S_IO, &[Device], false),
+    p(DSP_LATENCY, "dsp-latency", ValueKind::U32, S_IO, &[Device], false),
     p(VIRTUAL_FORMAT, "virtual-format", ValueKind::Format, S_GLOBAL, &[Stream], true),
     p(PHYSICAL_FORMAT, "physical-format", ValueKind::Format, S_GLOBAL, &[Stream], true),
 ];
@@ -184,7 +218,7 @@ mod tests {
             }
             assert_eq!(lookup(a.selector).unwrap().name, a.name);
         }
-        assert_eq!(PROPERTIES.len(), 32);
+        assert_eq!(PROPERTIES.len(), 44);
     }
 
     #[test]

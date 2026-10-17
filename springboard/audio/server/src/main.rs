@@ -3,14 +3,17 @@
 //!
 //! Drivers: `--drivers LIST` (or `BIFROST_AUDIO_DRIVERS`), a comma list of `alsa`, `loopback`, `plugin` and `null`,
 //! default `alsa,loopback` (`plugin` is opt-in until it is verified on hardware). Devices are objects `1000 + index` in that order (each driver's enumeration order), so the
-//! hardware comes first. `plugin` publishes the virtual devices described by the `*.vdev` files of
+//! hardware comes first (the drivers are the providers of one `CompositeDriver`, which sends each device to the provider
+//! that published its uid and refuses a uid two providers publish). `plugin` publishes the virtual devices described by the `*.vdev` files of
 //! `BIFROST_AUDIO_PLUGIN_DIR` (default `/etc/bifrost/audio/plugins`). `null` adds one stereo device on a clock that never moves, for tests.
 
 use bifrost_audio_alsa::AlsaDriver;
 use bifrost_audio_driver::loopback::LoopbackDriver;
 use bifrost_audio_driver::null::NullDriver;
 use bifrost_audio_driver::plugin::{PluginDriver, PLUGIN_DIR};
+use bifrost_audio_driver::transport::CompositeDriver;
 use bifrost_audio_driver::Driver;
+use bifrost_audio_policy::dsp::DspManager;
 use bifrost_audiod::control::{default_socket, listen, serve, CoreConfig, NoObjects, ServerCore};
 use bifrost_audiod::io::log;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -48,6 +51,40 @@ fn parse_drivers(list: &str) -> Result<Vec<DriverKind>, String> {
         return Err("no driver selected".into());
     }
     Ok(out)
+}
+
+impl DriverKind {
+    fn name(self) -> &'static str {
+        match self {
+            DriverKind::Alsa => "alsa",
+            DriverKind::Loopback => "loopback",
+            DriverKind::Plugin => "plugin",
+            DriverKind::Null => "null",
+        }
+    }
+}
+
+/// The selected drivers as the providers of one composite driver, in the order given.
+fn build_composite(kinds: &[DriverKind]) -> CompositeDriver {
+    let mut composite = CompositeDriver::new();
+    for k in kinds {
+        composite.add(k.name(), make_driver(*k));
+    }
+    composite
+}
+
+/// Where the DSP configuration (which stages run for each device) is read from: `--dsp`, `BIFROST_AUDIO_DSP`, or this.
+const DSP_FILE: &str = "/etc/bifrost/audio/dsp.conf";
+
+/// Reads a DSP configuration. A missing file is no configuration (`Ok(None)`); a file that does not parse refuses the
+/// whole configuration, so a half-read chain never runs.
+fn load_dsp(path: &str) -> Result<Option<DspManager>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{path}: {e}")),
+    };
+    DspManager::load(&text).map(Some).map_err(|e| format!("{path}: {e:?}"))
 }
 
 fn make_driver(k: DriverKind) -> Box<dyn Driver> {
@@ -161,13 +198,15 @@ fn spawn_stop_watchdog(sig_fd: std::os::fd::RawFd, socket: String, grace: std::t
 fn main() {
     let mut socket = default_socket().to_string();
     let mut driver_list = std::env::var("BIFROST_AUDIO_DRIVERS").unwrap_or_else(|_| DEFAULT_DRIVERS.into());
+    let mut dsp_file = std::env::var("BIFROST_AUDIO_DSP").unwrap_or_else(|_| DSP_FILE.into());
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--socket" => socket = args.next().unwrap_or(socket),
             "--drivers" => driver_list = args.next().unwrap_or(driver_list),
+            "--dsp" => dsp_file = args.next().unwrap_or(dsp_file),
             "-h" | "--help" => {
-                println!("bifrost-audiod [--socket PATH] [--drivers alsa,loopback,plugin,null]");
+                println!("bifrost-audiod [--socket PATH] [--drivers alsa,loopback,plugin,null] [--dsp FILE]");
                 return;
             }
             other => {
@@ -192,7 +231,13 @@ fn main() {
         }
     };
     log("driver", &format!("drivers: {kinds:?}"));
-    let drivers: Vec<Box<dyn Driver>> = kinds.into_iter().map(make_driver).collect();
+    let mut composite = build_composite(&kinds);
+    // A uid two providers publish belongs to the first; say so, so a second device is not silently missing.
+    composite.enumerate(&mut Vec::new());
+    for lost in composite.conflicts() {
+        log("driver", &format!("device published by two providers, the later one is not offered: {lost}"));
+    }
+    let drivers: Vec<Box<dyn Driver>> = vec![Box::new(composite)];
 
     let listener = match listen(&socket) {
         Ok(l) => l,
@@ -203,6 +248,14 @@ fn main() {
     };
     log("io", &format!("listening on {socket}"));
     let mut core = ServerCore::new(drivers, Box::new(NoObjects), CoreConfig::default());
+    match load_dsp(&dsp_file) {
+        Ok(Some(manager)) => {
+            log("driver", &format!("dsp configuration from {dsp_file}"));
+            core.set_dsp(manager);
+        }
+        Ok(None) => {}
+        Err(e) => log("driver", &format!("dsp configuration refused, no stages run: {e}")),
+    }
     // Lock memory after setup so everything setup allocated is resident too (MCL_CURRENT | MCL_FUTURE).
     bifrost_audiod::rt::lock_memory();
     let stop = AtomicBool::new(false);
@@ -233,6 +286,53 @@ mod tests {
     fn unknown_or_empty_driver_lists_are_refused() {
         assert!(parse_drivers("alsa,oss").unwrap_err().contains("oss"));
         assert_eq!(parse_drivers(" , "), Err("no driver selected".to_string()));
+    }
+
+    #[test]
+    fn the_selected_drivers_are_the_providers_of_one_composite_in_order() {
+        let mut c = build_composite(&[DriverKind::Null, DriverKind::Loopback]);
+        assert_eq!(c.provider_names(), vec!["null", "loopback"]);
+        let mut all = Vec::new();
+        c.enumerate(&mut all);
+        let uids: Vec<&str> = all.iter().map(|d| d.uid.as_str()).collect();
+        assert_eq!(uids, vec!["null:0", "loopback:out", "loopback:in"]);
+        assert_eq!(c.provider_of("loopback:in"), Some("loopback"));
+        assert_eq!(c.provider_of("null:0"), Some("null"));
+        assert!(c.conflicts().is_empty());
+    }
+
+    #[test]
+    fn the_server_core_starts_a_device_through_the_provider_that_owns_it() {
+        use bifrost_audiod::io::WaitPolicy;
+        use bifrost_audio_types::control::{IoProcRequest, Reply, Request, PROTOCOL_VERSION};
+        use bifrost_audio_types::ObjectId;
+        let cfg = CoreConfig { spawn_threads: false, wait: WaitPolicy::None, idle_stop: std::time::Duration::from_secs(2) };
+        let composite = build_composite(&[DriverKind::Null, DriverKind::Loopback]);
+        let mut core = ServerCore::new(vec![Box::new(composite)], Box::new(NoObjects), cfg);
+        assert_eq!(core.device_count(), 3, "every provider's devices are served by the one composite");
+        core.add_client(1, std::process::id() as i32, 0);
+        core.handle(1, Request::Hello { version: PROTOCOL_VERSION, client: "t".into(), policy: false });
+        // the loopback output is the second device; opening it goes to the loopback provider, not to the null one
+        let req = IoProcRequest { device: ObjectId(1001), input_channels: 0, output_channels: 2, buffer_frames: 256 };
+        let Reply::IoProcAdded { id, .. } = core.handle(1, Request::AddIoProc(req)).reply else { panic!("no io proc") };
+        assert_eq!(core.handle(1, Request::StartIoProc { id }).reply, Reply::Done);
+        assert!(core.device_running(1) && !core.device_running(0));
+        core.shutdown();
+    }
+
+    #[test]
+    fn a_dsp_file_is_read_whole_or_not_at_all() {
+        let dir = std::env::temp_dir().join(format!("bifrost-audiod-dsp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("good.conf");
+        std::fs::write(&good, "device null:0 out\nstage trim gain on db=-6\n").unwrap();
+        let m = load_dsp(good.to_str().unwrap()).unwrap().expect("a configuration");
+        assert_eq!(m.graph().len(), 1);
+        let bad = dir.join("bad.conf");
+        std::fs::write(&bad, "device null:0 out\nstage lim limiter on\nstage trim gain on\n").unwrap();
+        assert!(load_dsp(bad.to_str().unwrap()).unwrap_err().contains("LimiterNotLast"), "a limiter must come last");
+        assert!(load_dsp(dir.join("missing.conf").to_str().unwrap()).unwrap().is_none(), "no file is no configuration");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -14,4 +14,6 @@ bifrost-audio-shm = { path = "../shm" }
 bifrost-audio-driver = { path = "../driver" }
 bifrost-audio-alsa = { path = "../alsa" }
 bifrost-audio-toolbox = { path = "../toolbox" }
+bifrost-audio-policy = { path = "../policy" }
+bifrost-audio-engine = { path = "../engine" }
 libc = "0.2"

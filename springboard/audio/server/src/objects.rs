@@ -65,8 +65,27 @@ impl ObjectTree {
         if !self.objects.contains_key(&owner.0) {
             return Err(AudioError::UnknownObject);
         }
+        while self.objects.contains_key(&self.next_id) {
+            self.next_id += 1;
+        }
         let id = ObjectId(self.next_id);
         self.next_id += 1;
+        self.objects.insert(id.0, Object { class, owner: Some(owner), owned: Vec::new(), props: HashMap::new() });
+        if let Some(o) = self.objects.get_mut(&owner.0) {
+            o.owned.push(id);
+        }
+        Ok(id)
+    }
+
+    /// Adds an object of `class` owned by `owner` under an id the caller chose (device objects keep the ids the control
+    /// side gave them). Refused when the id is 0 or taken; `add` skips ids taken this way.
+    pub fn add_with_id(&mut self, class: Class, owner: ObjectId, id: ObjectId) -> Result<ObjectId, AudioError> {
+        if id.0 == 0 || self.objects.contains_key(&id.0) {
+            return Err(AudioError::BadValue);
+        }
+        if !self.objects.contains_key(&owner.0) {
+            return Err(AudioError::UnknownObject);
+        }
         self.objects.insert(id.0, Object { class, owner: Some(owner), owned: Vec::new(), props: HashMap::new() });
         if let Some(o) = self.objects.get_mut(&owner.0) {
             o.owned.push(id);
@@ -320,6 +339,18 @@ mod tests {
         assert_eq!(t.class(s), Err(AudioError::UnknownObject));
         assert_eq!(t.owned(SYSTEM_OBJECT), Ok(vec![]));
         assert_eq!(t.remove(SYSTEM_OBJECT), Err(AudioError::BadValue));
+    }
+
+    #[test]
+    fn chosen_ids_are_kept_and_never_handed_out_again() {
+        let mut t = ObjectTree::new();
+        assert_eq!(t.add_with_id(Class::Device, SYSTEM_OBJECT, ObjectId(2)), Ok(ObjectId(2)));
+        assert_eq!(t.add_with_id(Class::Device, SYSTEM_OBJECT, ObjectId(2)), Err(AudioError::BadValue), "taken");
+        assert_eq!(t.add_with_id(Class::Device, SYSTEM_OBJECT, ObjectId(0)), Err(AudioError::BadValue));
+        assert_eq!(t.add_with_id(Class::Device, ObjectId(77), ObjectId(9)), Err(AudioError::UnknownObject));
+        let next = t.add(Class::Device, SYSTEM_OBJECT).unwrap();
+        assert_eq!(next, ObjectId(3), "add skips the taken id");
+        assert_eq!(t.owned(SYSTEM_OBJECT), Ok(vec![ObjectId(2), ObjectId(3)]));
     }
 
     #[test]

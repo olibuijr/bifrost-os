@@ -26,7 +26,7 @@ policy library re-implements their logic against UIDs so the process does not de
 - The control-socket loop in `main.rs` (Hello with `policy: true`, Listen on `dev#`, `jack`, defaults; Set the
   defaults) needs the HAL client (task 06) and the server (05).
 - The audio service must fill `SoundView` and call `set_input_active`; the shell prompt for the microphone.
-- Per-app volume and ducking gains need the mixer hook (task 05/07).
+- Per-app volume gains need the mixer hook (task 05/07). Session pause and duck gains reach the mixer since 2026-10-17 (`ClientSlot::session_gain`, see `05-server-core.md`, "Applications, sessions, DSP and levels").
 - Live level meter row is a percentage label, not a bar.
 
 ## Midget verification (lead)

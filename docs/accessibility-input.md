@@ -1,6 +1,6 @@
 # Accessibility input: dwell, slow keys, mouse keys, switch scan, voice control, earcons
 
-Code: `springboard/src/shell/accessibility/` (`dwell.rs`, `switch_scan.rs`, `voice_control.rs`, `earcons.rs`),
+Code: `springboard/src/shell/accessibility/` (`dwell.rs`, `switch_scan.rs`, `switch_panels.rs`, `switch_control.rs`, `voice_control.rs`, `earcons.rs`),
 `springboard/src/shell/slow_keys.rs`, `springboard/src/shell/mouse_keys.rs`, `springboard/src/shell/earcon.rs`, and the
 input loop in `springboard/src/bin/shell.rs`. Settings pages are in `springboard/src/shell/pages.rs`.
 
@@ -21,6 +21,19 @@ input loop in `springboard/src/bin/shell.rs`. Settings pages are in `springboard
   page turn) from notes; the repository ships no recordings. The screen reader queues them and `Shell::take_reader_earcons`
   hands them to the sound player. Popup cues (`shell/earcon.rs`: a menu appearing or closing) play only while the screen
   reader is on, so a sighted user hears no beeps for menus.
+
+- **Switch Control** (Settings > Accessibility > Switch Control, `a11y.switch_control`, `accessibility/switch_control.rs`).
+  While it is on, the input loop in `bin/shell.rs` offers every key to `Shell::switch_control_key` before anything else.
+  The two switch keys (Space is "next", Enter is "select", rebindable through the `a11y_switch_keys` pref,
+  `switch_panels::SwitchKeys`) are used up, with their releases; any other key goes on as usual. The first "next" shows a
+  floating panel of labelled buttons (`switch_panels::PanelSet`: the built-in System and Media panels, or the template in
+  `/etc/bifrost/accessibility/switch-panels.txt` when it parses) and moves a highlight through it with
+  `switch_panels::PanelScanner`; after the last button the highlight goes on to the next panel. "Select" performs the action
+  of the highlighted button: `system.*` run the AssistiveTouch actions (Home, notifications, Control Centre, volume, lock),
+  `media.play-pause|next|previous` send the transport key to the Now Playing owner, `media.mute` mutes and restores the
+  volume. Escape hides the panel and starts scanning over. Nothing acts on the lock screen or with the screen off. Tests:
+  `shell::accessibility::switch_control`. Not built: auto-scanning (`ui/src/switch_scan.rs` models it), scanning the
+  elements of the front app (only the panels are scanned), and switches other than keys.
 
 ## Modelled, not wired
 
@@ -57,6 +70,10 @@ announcement banner.
   empty-scan rule. No code outside the module calls it, so no switch drives the desktop yet. The `Scanner` in
   `shell/storage.rs` is unrelated (storage page). A separate switch-scan model for the UI crate is in
   `springboard/ui/src/switch_scan.rs` (see `docs/parity/accessibility.md`).
+- **Voice Control** (`accessibility/voice_control.rs`). The parser accepts only final transcripts and reads "press", "click"
+  or "tap" followed by an element name. `Shell::voice_press` resolves the name in the element map, the same way `ax press`
+  does. Only tests call it: the recognizer session for Voice Control is not started, so nothing feeds the parser on a
+  device. Speech recognition itself is described in `docs/speech-dictation.md`.
 
 ## Gaps
 

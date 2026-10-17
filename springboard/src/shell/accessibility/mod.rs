@@ -24,6 +24,7 @@ pub mod shortcut;
 pub mod shortcut_panel;
 pub mod speech;
 pub mod spoken;
+pub mod switch_control;
 pub mod switch_panels;
 pub mod switch_scan;
 pub mod tree;
@@ -87,6 +88,8 @@ pub struct AccessibilitySettings {
     pub motion_cues: bool,
     /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
     pub live_captions: bool,
+    /// Switch Control: the switch keys step through a panel of controls on screen and choose one (`switch_control`).
+    pub switch_control: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -132,6 +135,7 @@ impl AccessibilitySettings {
             switch_control: flag("a11y_switch_control", d.switch_control),
             voice_control: flag("a11y_voice_control", d.voice_control),
             live_captions: flag("a11y_live_captions", d.live_captions),
+            switch_control: flag("a11y_switch_control", d.switch_control),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -164,6 +168,7 @@ impl AccessibilitySettings {
             ("a11y_switch_control", flag(self.switch_control)),
             ("a11y_voice_control", flag(self.voice_control)),
             ("a11y_live_captions", flag(self.live_captions)),
+            ("a11y_switch_control", flag(self.switch_control)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -341,6 +346,15 @@ mod tests {
         let a = AccessibilitySettings { mouse_keys: true, ..Default::default() };
         a.save(&mut p);
         assert!(AccessibilitySettings::load(&p).mouse_keys);
+    }
+
+    #[test]
+    fn switch_control_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).switch_control);
+        let a = AccessibilitySettings { switch_control: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).switch_control);
     }
 
     #[test]

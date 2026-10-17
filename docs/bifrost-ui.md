@@ -4007,7 +4007,7 @@ wiring.
 - `notify_bus`: Named notifications between apps, over the shell's `notify_bus` service (`springboard/src/shell/services/notify_bus.rs`).
 - `now_playing`: Now Playing for apps
 - `object_graph`: Object graph and persistent store
-- `observable_object`: `ObservableObject` parity (Combine)
+- `observable_object`: `ObservableObject` parity (Combine) `derived_state` adds the computed-property rule the macro lacks: a `DerivedState` mirrors the `Observable`s it reads (the fields of an `observable_model!` among them) as inputs of `bifrost_ui::attribute_graph::Graph`, and a `Derived` value recomputes only when something it read changed, so a field write costs one recompute of what depends on it. Not built: the macro does not declare derived fields itself (build them with `DerivedState::derive`); the shell's view bodies are not computed through the graph.
 - `passkey`: Passkey request inputs
 - `passkey_client_data`: Client data for a passkey ceremony
 - `password_gen`: Password generation rules (a generate-password request for a sign-up form)
