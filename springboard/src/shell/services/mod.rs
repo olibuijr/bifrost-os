@@ -60,6 +60,7 @@ pub mod bluetooth_service;
 pub mod login_items_approval;
 pub mod network_path;
 pub mod wifi;
+pub mod universal_access_control;
 pub mod dock_tile;
 pub mod quick_actions;
 pub mod now_playing;
@@ -162,6 +163,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(screens::Displays::default()),
         Box::new(cursor_service::CursorService),
         Box::new(accessibility_display::AccessibilityDisplay::default()),
+        Box::new(universal_access_control::UniversalAccessControl),
         Box::new(text_services::TextServices),
         Box::new(focus_filter::FocusFilterService::default()),
         Box::new(notify_bus::NotifyBus::default()),
