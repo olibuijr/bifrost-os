@@ -7,7 +7,7 @@
 //! Everything here is pure: requests are built and answers read with no socket, so the walk is tested with canned
 //! answers. Each call blocks; run it on a background thread. The service side of these routes lives in bifrost-cloud.
 
-use crate::cloud_account::{checked_token, endpoint, failure, CloudError, MAX_ANSWER_BYTES, SESSION_COOKIE};
+use crate::cloud_account::{checked_token, endpoint, failure, CloudError, MAX_ANSWER_BYTES};
 use crate::url::URLRequest;
 use bifrost_core::json::{self, Json};
 
@@ -62,9 +62,10 @@ fn malformed(what: &str) -> CloudError {
     CloudError::MalformedAnswer(what.to_string())
 }
 
+/// Sends the device's bearer token (`Authorization: Bearer`), the form a device session takes.
 fn with_session(mut req: URLRequest, session_token: &str) -> Result<URLRequest, CloudError> {
     let token = checked_token(session_token)?;
-    req.set_header("Cookie", &format!("{SESSION_COOKIE}={token}"));
+    req.set_header("Authorization", &format!("Bearer {token}"));
     req.set_header("Accept", "application/json");
     Ok(req)
 }
@@ -162,34 +163,113 @@ pub fn parse_command(status: u16, body: &str) -> Result<String, CloudError> {
         .ok_or_else(|| malformed("no command id"))
 }
 
-/// The `PUT {base}/findmy/devices/self/report` request: this device's battery and, when it has one, its position.
-pub fn report_request(base_url: &str, session_token: &str, battery_percent: Option<u8>, is_charging: Option<bool>, fix: Option<CloudFix>) -> Result<URLRequest, CloudError> {
-    let num = |n: f64| Json::Num(n);
-    let mut fields = vec![
-        ("battery_percent".to_string(), battery_percent.map_or(Json::Null, |p| num(p.min(100) as f64))),
-        ("is_charging".to_string(), is_charging.map_or(Json::Null, Json::Bool)),
-    ];
-    if let Some(f) = fix {
-        fields.push((
-            "location".to_string(),
-            Json::Obj(vec![
-                ("latitude".into(), num(f.latitude)),
-                ("longitude".into(), num(f.longitude)),
-                ("accuracy_m".into(), f.accuracy_m.map_or(Json::Null, num)),
-                ("recorded_at".into(), num(f.recorded_at as f64)),
-            ]),
-        ));
+/// The `PUT {base}/findmy/devices/self` request: registers this device, or updates its name and battery. Location is
+/// not sent: the cloud does not store it yet.
+pub fn report_request(base_url: &str, session_token: &str, name: Option<&str>, battery_percent: Option<u8>, is_charging: Option<bool>) -> Result<URLRequest, CloudError> {
+    let mut fields = Vec::new();
+    if let Some(n) = name {
+        fields.push(("name".to_string(), Json::Str(n.to_string())));
     }
-    let mut req = URLRequest::new(&endpoint(base_url, "findmy/devices/self/report")?);
+    fields.push(("battery_percent".to_string(), battery_percent.map_or(Json::Null, |p| Json::Num(p.min(100) as f64))));
+    fields.push(("is_charging".to_string(), is_charging.map_or(Json::Null, Json::Bool)));
+    let mut req = URLRequest::new(&endpoint(base_url, "findmy/devices/self")?);
     req.method = "PUT".into();
     req.body = Some(Json::Obj(fields).encode().into_bytes());
     req.set_header("Content-Type", "application/json");
     with_session(req, session_token)
 }
 
-/// Reads the answer to a report: `204` (or `200`) stores it, anything else is an error.
+/// Reads the answer to a report: `201` (registered now) or `200` (updated) carries the device, anything else is an error.
 pub fn parse_report(status: u16, body: &str) -> Result<(), CloudError> {
-    if status == 204 || status == 200 { Ok(()) } else { Err(failure(status, body)) }
+    if status == 200 || status == 201 {
+        json::parse(body).map(|_| ()).map_err(CloudError::MalformedAnswer)
+    } else {
+        Err(failure(status, body))
+    }
+}
+
+/// A command waiting for this device, as the device poll returns it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingCommand {
+    pub id: String,
+    /// `locate` or `play_sound`. The cloud sends nothing else to a device.
+    pub kind: String,
+}
+
+/// `GET {base}/findmy/devices/self/commands?wait=N`: the device's pending commands. The service holds the request up
+/// to `wait` seconds (at most 25) when nothing is pending.
+pub fn commands_request(base_url: &str, session_token: &str, wait_secs: u32) -> Result<URLRequest, CloudError> {
+    with_session(URLRequest::new(&endpoint(base_url, &format!("findmy/devices/self/commands?wait={}", wait_secs.min(25)))?), session_token)
+}
+
+/// Reads the device poll: `200` with `{"commands": [{"id", "kind", ...}]}`. A command without an id is malformed.
+pub fn parse_commands(status: u16, body: &str) -> Result<Vec<PendingCommand>, CloudError> {
+    if body.len() > MAX_ANSWER_BYTES {
+        return Err(malformed("the answer is too large"));
+    }
+    if status != 200 {
+        return Err(failure(status, body));
+    }
+    let parsed = json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    let items = parsed.get("commands").and_then(Json::as_array).ok_or_else(|| malformed("no commands"))?;
+    items
+        .iter()
+        .map(|c| -> Result<PendingCommand, CloudError> {
+            let id = c.str_field("id").filter(|s| !s.is_empty()).ok_or_else(|| malformed("command has no id"))?;
+            Ok(PendingCommand { id, kind: c.str_field("kind").unwrap_or_default() })
+        })
+        .collect()
+}
+
+/// `POST {base}/findmy/commands/{id}/ack`: this device's result for a command, `done` or `failed`.
+pub fn ack_request(base_url: &str, session_token: &str, command_id: &str, ok: bool) -> Result<URLRequest, CloudError> {
+    let id = checked_id(command_id)?;
+    let body = Json::Obj(vec![("status".into(), Json::Str(if ok { "done" } else { "failed" }.into()))]);
+    let mut req = URLRequest::post(&endpoint(base_url, &format!("findmy/commands/{id}/ack"))?, body.encode().into_bytes());
+    req.set_header("Content-Type", "application/json");
+    with_session(req, session_token)
+}
+
+/// One entry of the account's event feed: `command`, `command_done`, `share`, `share_received` or `share_ended`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FeedEvent {
+    pub seq: i64,
+    pub kind: String,
+    pub device_id: Option<String>,
+}
+
+/// A page of the feed and the sequence number to ask from next.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FeedPage {
+    pub events: Vec<FeedEvent>,
+    pub next: i64,
+}
+
+/// `GET {base}/findmy/events?after=N&wait=N`: the account's events after `after`, held up to `wait` seconds.
+pub fn events_request(base_url: &str, session_token: &str, after: i64, wait_secs: u32) -> Result<URLRequest, CloudError> {
+    let path = format!("findmy/events?after={}&wait={}", after.max(0), wait_secs.min(25));
+    with_session(URLRequest::new(&endpoint(base_url, &path)?), session_token)
+}
+
+/// Reads a feed page: `200` with `{"events": [...], "next": N}`.
+pub fn parse_events(status: u16, body: &str) -> Result<FeedPage, CloudError> {
+    if body.len() > MAX_ANSWER_BYTES {
+        return Err(malformed("the answer is too large"));
+    }
+    if status != 200 {
+        return Err(failure(status, body));
+    }
+    let parsed = json::parse(body).map_err(CloudError::MalformedAnswer)?;
+    let items = parsed.get("events").and_then(Json::as_array).ok_or_else(|| malformed("no events"))?;
+    let events = items
+        .iter()
+        .map(|e| -> Result<FeedEvent, CloudError> {
+            let seq = whole(e, "seq").ok_or_else(|| malformed("event has no seq"))?;
+            Ok(FeedEvent { seq, kind: e.str_field("kind").unwrap_or_default(), device_id: e.str_field("device_id") })
+        })
+        .collect::<Result<Vec<_>, CloudError>>()?;
+    let next = whole(&parsed, "next").unwrap_or(0);
+    Ok(FeedPage { events, next })
 }
 
 #[cfg(test)]
@@ -204,11 +284,12 @@ mod tests {
     }
 
     #[test]
-    fn devices_request_sends_the_session_cookie_to_the_list_route() {
+    fn devices_request_sends_the_bearer_token_to_the_list_route() {
         let req = devices_request(BASE, TOKEN).unwrap();
         assert_eq!(req.url, format!("{BASE}/findmy/devices"));
         assert_eq!(req.method, "GET");
-        assert_eq!(header(&req, "Cookie"), Some("bc_session=abc123"));
+        assert_eq!(header(&req, "Authorization"), Some("Bearer abc123"));
+        assert_eq!(header(&req, "Cookie"), None);
     }
 
     #[test]
@@ -282,21 +363,55 @@ mod tests {
     }
 
     #[test]
-    fn report_request_sends_battery_and_position_as_put() {
-        let fix = CloudFix { latitude: 64.1, longitude: -21.9, accuracy_m: None, recorded_at: 5 };
-        let req = report_request(BASE, TOKEN, Some(70), Some(false), Some(fix)).unwrap();
+    fn report_request_puts_name_and_battery_to_the_device_route_and_no_location() {
+        let req = report_request(BASE, TOKEN, Some("Midget"), Some(70), Some(false)).unwrap();
         assert_eq!(req.method, "PUT");
-        assert_eq!(req.url, format!("{BASE}/findmy/devices/self/report"));
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/self"));
         let body = String::from_utf8(req.body.unwrap()).unwrap();
+        assert!(body.contains("\"name\":\"Midget\""), "{body}");
         assert!(body.contains("\"battery_percent\":70"), "{body}");
-        assert!(body.contains("\"location\":{"), "{body}");
+        assert!(!body.contains("location"), "no position is sent: {body}");
         let bare = report_request(BASE, TOKEN, None, None, None).unwrap();
-        assert!(!String::from_utf8(bare.body.unwrap()).unwrap().contains("location"));
+        assert!(!String::from_utf8(bare.body.unwrap()).unwrap().contains("name"));
     }
 
     #[test]
-    fn parse_report_accepts_no_content() {
-        assert!(parse_report(204, "").is_ok());
+    fn parse_report_accepts_registered_and_updated_devices() {
+        assert!(parse_report(201, r#"{"device":{"id":"d1"}}"#).is_ok());
+        assert!(parse_report(200, r#"{"device":{"id":"d1"}}"#).is_ok());
         assert!(parse_report(403, r#"{"error":"not_a_device"}"#).is_err());
+    }
+
+    #[test]
+    fn the_device_poll_asks_with_a_wait_and_reads_the_commands() {
+        let req = commands_request(BASE, TOKEN, 99).unwrap();
+        assert_eq!(req.url, format!("{BASE}/findmy/devices/self/commands?wait=25"), "the wait is capped at 25 s");
+        assert_eq!(req.method, "GET");
+        let cmds = parse_commands(200, r#"{"commands":[{"id":"c1","kind":"play_sound"},{"id":"c2","kind":"locate"}]}"#).unwrap();
+        assert_eq!(cmds, vec![PendingCommand { id: "c1".into(), kind: "play_sound".into() }, PendingCommand { id: "c2".into(), kind: "locate".into() }]);
+        assert!(parse_commands(200, r#"{"commands":[]}"#).unwrap().is_empty());
+        assert!(parse_commands(200, r#"{"commands":[{"kind":"locate"}]}"#).is_err(), "a command needs an id");
+        assert!(parse_commands(403, r#"{"error":"not_a_device"}"#).is_err());
+    }
+
+    #[test]
+    fn an_ack_says_done_or_failed_for_a_clean_command_id() {
+        let req = ack_request(BASE, TOKEN, "c1", true).unwrap();
+        assert_eq!(req.url, format!("{BASE}/findmy/commands/c1/ack"));
+        assert!(String::from_utf8(req.body.unwrap()).unwrap().contains("\"status\":\"done\""));
+        let failed = ack_request(BASE, TOKEN, "c1", false).unwrap();
+        assert!(String::from_utf8(failed.body.unwrap()).unwrap().contains("\"status\":\"failed\""));
+        assert!(ack_request(BASE, TOKEN, "../x", true).is_err());
+    }
+
+    #[test]
+    fn the_event_feed_is_asked_from_a_sequence_number_and_read_back() {
+        let req = events_request(BASE, TOKEN, 7, 0).unwrap();
+        assert_eq!(req.url, format!("{BASE}/findmy/events?after=7&wait=0"));
+        let page = parse_events(200, r#"{"events":[{"seq":8,"kind":"command_done","device_id":"d1"},{"seq":9,"kind":"share_received","device_id":null}],"next":9}"#).unwrap();
+        assert_eq!(page.next, 9);
+        assert_eq!(page.events[0], FeedEvent { seq: 8, kind: "command_done".into(), device_id: Some("d1".into()) });
+        assert_eq!(page.events[1].device_id, None);
+        assert!(parse_events(200, r#"{"events":[{"kind":"x"}],"next":0}"#).is_err(), "an event needs a seq");
     }
 }
