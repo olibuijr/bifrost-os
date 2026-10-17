@@ -12,6 +12,7 @@
 //! Event to the app that owns the contexts: `changed` `{focus: string|null}` when the Focus that is on changes. The first
 //! tick only records the state, so nothing is sent at start-up.
 use super::{Event, Shell, SystemService};
+use crate::shell::apphost::unquote;
 use bifrost_core::json::Json;
 use bifrost_ui::focus_filter::{AppContext, FocusFilters};
 
@@ -132,10 +133,90 @@ impl SystemService for FocusFilterService {
     }
 }
 
+/// One `[[focus_filter]]` table of a manifest, already checked: an id, a title, and the value keys the app keeps for
+/// each Focus (its `set_context` values). A Settings page shows one row of fields per declaration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FilterDeclaration {
+    pub id: String,
+    pub title: String,
+    /// the value keys, in declaration order
+    pub params: Vec<String>,
+}
+
+/// A word the manifest may hold as an id or a value key: letters, digits, dashes and underscores, up to 40 characters.
+fn safe_word(text: &str) -> bool {
+    !text.is_empty() && text.len() <= 40 && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Reads the `[[focus_filter]]` tables of a manifest:
+///
+/// ```toml
+/// [[focus_filter]]
+/// id = "notebook"
+/// title = "Notebook"
+/// params = ["folder", "room"]
+/// ```
+///
+/// A table with an unsafe id or key, a blank title or no keys is dropped, so one bad table does not hide the others.
+pub fn parse_declarations(text: &str) -> Vec<FilterDeclaration> {
+    #[derive(Default)]
+    struct Draft {
+        id: String,
+        title: String,
+        params: String,
+    }
+    let mut drafts: Vec<Draft> = Vec::new();
+    let mut in_table = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && !line.contains('=') {
+            in_table = line == "[[focus_filter]]";
+            if in_table {
+                drafts.push(Draft::default());
+            }
+            continue;
+        }
+        if !in_table {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some(draft) = drafts.last_mut() else { continue };
+        match key.trim() {
+            "id" => draft.id = unquote(value),
+            "title" => draft.title = unquote(value),
+            "params" => draft.params = value.trim().to_string(),
+            _ => {}
+        }
+    }
+    drafts
+        .into_iter()
+        .filter_map(|d| {
+            let inner = d.params.trim().trim_start_matches('[').trim_end_matches(']');
+            let params: Vec<String> = inner.split(',').map(|p| unquote(p.trim())).filter(|p| !p.is_empty()).collect();
+            let checked = safe_word(&d.id) && !d.title.trim().is_empty() && !params.is_empty() && params.iter().all(|p| safe_word(p));
+            checked.then(|| FilterDeclaration { id: d.id, title: d.title.trim().to_string(), params })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::shell::tests::shell;
+
+    #[test]
+    fn filter_declarations_come_from_the_manifest_and_bad_tables_are_dropped() {
+        let text = "name = \"Notes\"\n[[focus_filter]]\nid = \"notebook\"\ntitle = \"Notebook\"\nparams = [\"folder\", \"room\"]\n\
+                    [[focus_filter]]\nid = \"bad id\"\ntitle = \"Spaces\"\nparams = [\"a\"]\n\
+                    [[focus_filter]]\nid = \"blank\"\ntitle = \" \"\nparams = [\"a\"]\n\
+                    [[focus_filter]]\nid = \"none\"\ntitle = \"No values\"\nparams = []\n\
+                    [[control]]\nkind = \"button\"\ntitle = \"Other\"\nintent = \"x\"\n";
+        let decls = parse_declarations(text);
+        assert_eq!(decls, vec![FilterDeclaration { id: "notebook".into(), title: "Notebook".into(), params: vec!["folder".into(), "room".into()] }]);
+    }
 
     fn body(text: &str) -> Json {
         bifrost_core::json::parse(text).expect("valid json")
