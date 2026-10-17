@@ -2675,7 +2675,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "Missing: live speech-to-text for live captions. No speech recognizer or transcript stream exists; ui captions.rs holds only the caption preferences.",
    "rea": [],
    "method": "rule"
   },
@@ -2696,7 +2696,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "Missing: head or eye motion tracking for pointer control from the camera. Not built.",
    "rea": [],
    "method": "rule"
   },
@@ -2717,7 +2717,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "Missing: the asset service that downloads and serves accessibility resources such as speech voices. ui ax.rs holds only the element map.",
    "rea": [],
    "method": "rule"
   },
@@ -2737,8 +2737,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
-   "status": "partial",
-   "note": "rule: accessibility models",
+   "status": "n/a",
+   "note": "Touch Bar HUD for Apple laptop hardware. BifrOSt has no Touch Bar, so the job has no counterpart.",
    "rea": [],
    "method": "rule"
   },
@@ -2759,7 +2759,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "Missing: the hearing accessibility service. Purpose not confirmed from the reference, so nothing is built yet.",
    "rea": [],
    "method": "rule"
   },
@@ -2913,7 +2913,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
    "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "note": "Missing: per-app incoming connection decisions for the application firewall. Firewall rules are a Linux unit; the per-app prompt is not built.",
    "rea": [],
    "method": "rule"
   },
@@ -3205,11 +3205,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/sdk/src/spellcheck.rs",
+   "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs",
    "status": "partial",
    "note": "rule: font and spelling models; Font Book app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "spellcheck::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "spellcheck::tests"
+    }
+   ],
+   "ready_note": "Spelling service: the shared checker model in bifrost-core with its tests, and the app-facing NativeSpellChecker that keeps learned words in defaults. Font matching is a separate row."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.appplaceholdersyncd.plist",
@@ -3247,11 +3261,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/power_service.rs, springboard/core/src/thermal.rs",
+   "bifrost": "springboard/src/shell/background.rs",
    "status": "partial",
    "note": "rule: power and thermal service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::background::tests"
+    }
+   ],
+   "ready_note": "Background app suspension: an unseen app is stopped after the grace period, resumed on focus, and every stopped app resumes when the switch is off. shell::background tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.appstoreagent.plist",
@@ -3473,7 +3496,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
    "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "note": "Missing: a registry of audio components (plug-in units) that hosts can discover and load. audio_engine nodes exist only in process.",
    "rea": [],
    "method": "rule"
   },
@@ -3514,8 +3537,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "n/a",
+   "note": "Video calling and conferencing service of Apple's calling stack. BifrOSt has no calling service. Camera capture devices are modelled in the UI camera_device model.",
    "rea": [],
    "method": "rule"
   },
@@ -3657,11 +3680,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs",
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "bt_service_browser::tests"
+    }
+   ],
+   "ready_note": "Pairing prompts and device choice: bluetooth_service tests (pairing code and PIN prompts, device list) and the service browser tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.bluetoothaudiod.plist",
@@ -3680,7 +3717,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
    "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "note": "Missing: verification of the Bluetooth audio transport (profile negotiation). springboard/src/bare/bluetooth.rs mentions A2DP but this pass did not confirm it.",
    "rea": [],
    "method": "rule"
   },
@@ -3771,11 +3808,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs",
    "status": "partial",
    "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "bluetooth_service::tests"
+    }
+   ],
+   "ready_note": "Pairing assistant flow: a status reply that names a pairing waiting for a code, and the PIN versus passkey distinction. bluetooth_service tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.businessservicesd.plist",
@@ -3879,8 +3925,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/calendar.rs, springboard/sdk/src/dav_sync.rs",
-   "status": "partial",
-   "note": "rule: calendar and sync models; Calendar and Reminders apps",
+   "status": "n/a",
+   "note": "Migrates sandbox bookmarks of the Apple calendar store. BifrOSt keeps its calendars in its own store and syncs CalDAV through dav_sync, so there are no bookmarks to migrate.",
    "rea": [],
    "method": "rule"
   },
@@ -4006,7 +4052,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
    "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "note": "Missing: test coverage for the authentication challenge answer in url_background.rs (answer_challenge has no test). Credential storage is partly covered by url_background.",
    "rea": [],
    "method": "rule"
   },
@@ -4062,7 +4108,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
    "status": "partial",
-   "note": "rule: notification, live activity and focus models",
+   "note": "Missing: widget timelines (a timeline service that schedules widget refreshes). Live activities and notifications exist; timelines do not.",
    "rea": [],
    "method": "rule"
   },
@@ -4449,11 +4495,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/container_layout.rs",
+   "bifrost": "springboard/core/src/container_layout.rs, springboard/src/shell/apphost.rs",
    "status": "partial",
-   "note": "Models the per-app Documents, Library, Caches and tmp folders, and refuses symbolic links when creating them. The shell does not create or use these folders yet, and no container manager process exists.",
+   "note": "Per-app container folders (Documents, Library, Library/Caches, tmp) are created at app launch by apphost, which calls ContainerLayout::ensure. The layout model refuses symbolic links and files in place of folders.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
+    }
+   ],
+   "ready_note": "Layout model and launch-time creation: container_layout tests (folder policy, root containment, symlink and file refusal); apphost.rs creates the folders when an app starts."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.controlcenter.plist",
@@ -4574,7 +4629,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs",
    "status": "partial",
-   "note": "The shell indexes files and apps for search in-process. There is no importer plug-in host, so importers do not run in separate worker processes.",
+   "note": "Missing: an importer plug-in host that runs importers in worker processes. The shell indexes files and apps in process (spotindex).",
    "rea": [],
    "method": "audit"
   },
@@ -4616,7 +4671,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/recent_items.rs",
    "status": "partial",
-   "note": "role filled by recent_items.rs; no separate process; only recent apps, no shared favorites list",
+   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites, and the recents are session only.",
    "rea": [],
    "method": "audit"
   },
@@ -4639,7 +4694,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Open With candidates and default apps (launch_services tests) and web site to app claims with longest path prefix (app_links tests)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.useractivityd.plist",
@@ -4658,7 +4727,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
    "status": "partial",
-   "note": "rule: launch services and app link models",
+   "note": "Missing: user activity handoff between apps (activity continuation). No user activity model exists.",
    "rea": [],
    "method": "rule"
   },
@@ -4800,7 +4869,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "note": "Missing: token binding for smart cards and other security tokens. Keychain, trust and local authentication are built; tokens are not.",
    "rea": [],
    "method": "rule"
   },
@@ -4821,7 +4890,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "note": "Missing: the token daemon for smart cards and security tokens. Keychain, trust and local authentication are built; tokens are not.",
    "rea": [],
    "method": "rule"
   },
@@ -5169,11 +5238,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
+   "bifrost": "springboard/bifrostd/src/purge.rs, springboard/core/src/low_space.rs",
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "purge::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "low_space::watch_tests"
+    }
+   ],
+   "ready_note": "Low-space warnings with escalation and reminder rules (low_space tests) and purgeable storage deletion order and thresholds (bifrostd purge tests)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.distnoted.xpc.agent.plist",
@@ -5241,11 +5324,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
+   "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/ui/src/focus_filter.rs, springboard/sdk/src/usernotif.rs",
    "status": "partial",
    "note": "rule: notification, live activity and focus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "focus_filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    }
+   ],
+   "ready_note": "Focus state and per-app Focus filter values (focus_filter tests in the SDK and the UI model) and interruption levels for notifications (usernotif tests)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.dprivacyd.plist",
