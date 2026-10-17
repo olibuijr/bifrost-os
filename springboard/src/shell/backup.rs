@@ -224,7 +224,11 @@ pub fn seal(key: &[u8; 32], body: &[u8]) -> io::Result<Vec<u8>> {
 /// by [`decode`]); a version 2 archive is opened with the key that `key` supplies, which is asked for only then.
 pub fn open(bytes: &[u8], key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<Vec<u8>> {
     if !bytes.starts_with(MAGIC_V2) {
-        return Ok(bytes.to_vec());
+        // Only the version 1 header is plain; any other header (a damaged version 2 one included) is refused here.
+        if bytes.starts_with(MAGIC) {
+            return Ok(bytes.to_vec());
+        }
+        return Err(bad("not a backup archive"));
     }
     let rest = &bytes[MAGIC_V2.len()..];
     if rest.len() < NONCE_LEN + TAG_LEN {
@@ -460,7 +464,8 @@ mod tests {
         let out = src.join("out.sbk");
         assert_eq!(create(&src, &out).unwrap(), 2);
         let dst = scratch("dst");
-        assert_eq!(restore(&dst, &out).unwrap(), 2);
+        // The archive key lives in the source data directory's keychain, so the restore is given that key.
+        assert_eq!(restore_with(&dst, &out, &|| backup_key(&src)).unwrap(), 2);
         assert_eq!(std::fs::read_to_string(dst.join("Notes/1.md")).unwrap(), "note");
         assert!(!dst.join("unrelated.bin").exists());
     }
@@ -479,7 +484,7 @@ mod tests {
         let out = src.join("out.sbk");
         assert_eq!(create(&src, &out).unwrap(), 2);
         let dst = scratch("excl-dst");
-        assert_eq!(restore(&dst, &out).unwrap(), 2);
+        assert_eq!(restore_with(&dst, &out, &|| backup_key(&src)).unwrap(), 2);
         assert!(dst.join("Notes/1.md").exists());
         assert!(!dst.join("Notes/private/2.md").exists());
     }
