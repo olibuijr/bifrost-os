@@ -49,6 +49,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-trackpad", title: "Open Trackpad", description: "Show the trackpad gesture and pointer settings", page: PageId::Trackpad },
     SettingsIntent { id: "open-game-controllers", title: "Open Game Controllers", description: "Show the connected game controllers", page: PageId::GameControllers },
     SettingsIntent { id: "open-backup", title: "Open Backup", description: "Show the backups of this computer's data", page: PageId::Backup },
+    SettingsIntent { id: "open-language-region", title: "Open Language & Region", description: "Show the preferred language and the region", page: PageId::Language },
 ];
 
 /// The intent with this id, if the catalogue has one.
@@ -114,6 +115,12 @@ mod tests {
     #[test]
     fn open_account_opens_the_account_page() {
         assert_eq!(page_for("open-account"), Some(PageId::Account));
+    }
+
+    #[test]
+    fn language_and_region_is_reachable_outside_setup() {
+        assert_eq!(page_for("open-language-region"), Some(PageId::Language));
+        assert_eq!(find("open-language-region").map(|i| i.title), Some("Open Language & Region"));
     }
 
     #[test]
