@@ -290,9 +290,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/vpn_configuration.rs",
+   "bifrost": "springboard/sdk/src/vpn_configuration.rs; springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "has: VPN configuration SDK; missing: shell VPN settings page (Network > VPN, pages.rs:752, shows only the desktop VPN rows) and the intents",
+   "note": "has: VPN configuration SDK; Settings intent open-vpn opens the VPN pane (settings_intents.rs). Built 2026-10-17: the open-vpn intent; tests settings_intents::tests. Missing: the shell VPN page only lists configurations (pages.rs, PageId::Vpn) and cannot add one yet, because the tunnel client is not built.",
    "rea": []
   },
   {
