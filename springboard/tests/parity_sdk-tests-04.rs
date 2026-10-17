@@ -134,6 +134,7 @@ fn timed(id: &str, delay_ms: u32, repeats: bool) -> NotifRequest {
 
 fn chat_categories() -> Vec<NotifCategory> {
     vec![NotifCategory {
+        options: 0,
         id: "reply".into(),
         actions: vec![
             NotifAction::button("ok", "OK"),

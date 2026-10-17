@@ -5,7 +5,7 @@
 //!
 //! Identity is always the app id of the connection, never anything in the message.
 
-use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
+use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND};
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 
@@ -211,8 +211,11 @@ impl Registry {
     }
 
     /// Forgets delivered requests whose store entry is gone (the user cleared it, or the store evicted it).
-    pub fn prune(&mut self, exists: impl Fn(u64) -> bool) {
-        self.delivered.retain(|d| exists(d.store_id));
+    /// Forgets the delivered requests whose store entry is gone, and returns them (oldest first).
+    pub fn prune(&mut self, exists: impl Fn(u64) -> bool) -> Vec<Delivered> {
+        let (gone, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.delivered).into_iter().partition(|d| !exists(d.store_id));
+        self.delivered = keep;
+        gone
     }
 
     pub fn store_ids(&self) -> Vec<u64> {
@@ -636,10 +639,41 @@ impl super::Shell {
     }
 
     /// Forgets delivered requests the user cleared from the notification UI.
-    fn usernotif_prune(&mut self) {
+    pub(super) fn usernotif_prune(&mut self) {
         let gone: Vec<u64> = self.usernotif.store_ids().into_iter().filter(|&id| !self.notify_exists(id)).collect();
         if !gone.is_empty() {
             self.usernotif.prune(|id| !gone.contains(&id));
+        }
+    }
+
+    /// The user cleared notifications from the notification UI (swipe, group or Clear All). Call `usernotif_prune` before
+    /// the change, so only entries this change removed are found here. An app whose category asked for a custom dismissal
+    /// hears `NOTIF_DISMISS_ACTION` for each of them, once it is running or when it next starts.
+    pub(super) fn usernotif_dismiss_gone(&mut self) {
+        let gone: Vec<u64> = self.usernotif.store_ids().into_iter().filter(|&id| !self.notify_exists(id)).collect();
+        if gone.is_empty() {
+            return;
+        }
+        for d in self.usernotif.prune(|id| !gone.contains(&id)) {
+            let asks = self.usernotif.category(&d.app, &d.req.category).is_some_and(|c| c.options & NOTIF_CATEGORY_CUSTOM_DISMISS != 0);
+            if !asks {
+                continue;
+            }
+            let msg = ToApp::NotificationAction {
+                id: d.req.id.clone(),
+                action: NOTIF_DISMISS_ACTION.to_string(),
+                text: String::new(),
+                thread: d.req.thread.clone(),
+                category: d.req.category.clone(),
+                user_info: d.req.user_info.clone(),
+            };
+            let Some(slot) = super::apphost::slot_of(&d.app) else { continue };
+            let running = self.ext.get(slot).and_then(Option::as_ref).is_some_and(|h| h.running());
+            if running {
+                self.ext_send(slot, &msg);
+            } else {
+                self.usernotif.queue(&d.app, msg);
+            }
         }
     }
 
@@ -779,6 +813,7 @@ mod tests {
         r.set_categories(
             APP,
             vec![NotifCategory {
+                options: 0,
                 id: "MSG".into(),
                 actions: vec![
                     NotifAction::button("archive", "Archive"),
@@ -875,6 +910,16 @@ mod tests {
         r.add(APP, NotifRequest { delay_ms: 100, ..req("p") }, 0.0);
         assert!(r.remove(APP, false, &["p".to_string()]).is_empty());
         assert!(r.list(APP, false).is_empty());
+    }
+
+    #[test]
+    fn prune_returns_what_it_forgot_with_its_request() {
+        let mut r = Registry::default();
+        r.record_delivery(APP, req("a"), 1);
+        r.record_delivery(APP, req("b"), 2);
+        let gone = r.prune(|id| id == 2);
+        assert_eq!(gone.iter().map(|d| (d.req.id.as_str(), d.store_id)).collect::<Vec<_>>(), [("a", 1)]);
+        assert_eq!(r.list(APP, true), ["b"]);
     }
 
     #[test]

@@ -51,6 +51,8 @@ impl NotifAction {
 pub struct NotifCategory {
     pub id: String,
     pub actions: Vec<NotifAction>,
+    /// `UNNotificationCategoryOptions` bits: `NOTIF_CATEGORY_CUSTOM_DISMISS` and the hidden-preview bits
+    pub options: u8,
 }
 
 /// `UNNotificationRequest` with its content (`UNMutableNotificationContent`) and a time-interval trigger.
@@ -134,6 +136,12 @@ pub const NOTIF_PRESENT_SOUND: u8 = 2;
 pub const NOTIF_PRESENT_LIST: u8 = 8;
 /// `UNNotificationPresentationOptions.banner`
 pub const NOTIF_PRESENT_BANNER: u8 = 16;
+
+/// `UNNotificationCategoryOptions.customDismissAction`: the app hears `NOTIF_DISMISS_ACTION` when the user clears one of
+/// its notifications of this category without opening it.
+pub const NOTIF_CATEGORY_CUSTOM_DISMISS: u8 = 1;
+/// Every category option bit the wire accepts.
+pub const NOTIF_CATEGORY_MASK: u8 = NOTIF_CATEGORY_CUSTOM_DISMISS;
 
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -359,6 +367,7 @@ fn put_categories(b: &mut Vec<u8>, list: &[NotifCategory]) {
     u32_(b, n as u32);
     for c in &list[..n] {
         put(b, &c.id, MAX_NOTIF_ID);
+        b.push(c.options);
         let m = c.actions.len().min(MAX_NOTIF_ACTIONS);
         u32_(b, m as u32);
         for a in &c.actions[..m] {
@@ -378,6 +387,10 @@ fn get_categories(r: &mut Reader) -> Result<Vec<NotifCategory>, DecodeError> {
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
         let id = get(r, MAX_NOTIF_ID)?;
+        let options = r.u8()?;
+        if options & !NOTIF_CATEGORY_MASK != 0 {
+            return Err(DecodeError::BadValue);
+        }
         let m = count(r, MAX_NOTIF_ACTIONS)?;
         let mut actions = Vec::with_capacity(m);
         for _ in 0..m {
@@ -390,7 +403,7 @@ fn get_categories(r: &mut Reader) -> Result<Vec<NotifCategory>, DecodeError> {
             let text_input = if f & 4 != 0 { Some(TextInput { button_title: get(r, MAX_NOTIF_TEXT)?, placeholder: get(r, MAX_NOTIF_TEXT)? }) } else { None };
             actions.push(NotifAction { id: aid, title, destructive: f & 1 != 0, foreground: f & 2 != 0, text_input });
         }
-        out.push(NotifCategory { id, actions });
+        out.push(NotifCategory { id, actions, options });
     }
     Ok(out)
 }
@@ -882,6 +895,7 @@ mod tests {
 
     fn category() -> NotifCategory {
         NotifCategory {
+            options: 0,
             id: "MESSAGE".into(),
             actions: vec![
                 NotifAction::button("open", "Open"),
@@ -893,7 +907,7 @@ mod tests {
 
     #[test]
     fn notification_messages_round_trip() {
-        shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { id: "EMPTY".into(), actions: vec![] }]));
+        shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { options: 0, id: "EMPTY".into(), actions: vec![] }]));
         shell_rt(ToShell::NotifyRequest {
             request: 4,
             req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750 },
@@ -950,6 +964,17 @@ mod tests {
     }
 
     #[test]
+    fn notification_category_options_round_trip_and_reject_unknown_bits() {
+        let custom = NotifCategory { options: NOTIF_CATEGORY_CUSTOM_DISMISS, ..category() };
+        shell_rt(ToShell::NotifyCategories(vec![custom]));
+        // tag 4, count 4, id length 4 and "c" 1 bytes come first, so the options byte is at index 13
+        let mut bytes = ToShell::NotifyCategories(vec![NotifCategory { id: "c".into(), actions: vec![], options: 0 }]).encode();
+        assert_eq!(bytes[13], 0);
+        bytes[13] = 0x80;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
     fn notification_will_present_rejects_unknown_option_bits() {
         let mut bytes = ToShell::NotifyPresentReply { token: 1, options: 0 }.encode();
         let last = bytes.len() - 1;
@@ -998,7 +1023,7 @@ mod tests {
         u32_(&mut p, 17);
         assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
         // unknown flag bits on an action
-        let mut ok = ToShell::NotifyCategories(vec![NotifCategory { id: "c".into(), actions: vec![NotifAction::button("a", "A")] }]).encode();
+        let mut ok = ToShell::NotifyCategories(vec![NotifCategory { options: 0, id: "c".into(), actions: vec![NotifAction::button("a", "A")] }]).encode();
         *ok.last_mut().unwrap() = 8;
         assert!(ToShell::decode(&ok).is_err());
         assert_eq!(ToApp::decode(&[51, 0, 0, 0, 1, 0, 0, 0, 9]), Err(DecodeError::BadValue));

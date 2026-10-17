@@ -115,6 +115,7 @@ fn headless_user_info_refuses_more_than_sixteen_entries_or_long_values() {
 fn headless_set_categories_sends_the_actions_in_their_order() {
     let ctx = testing_ctx();
     let categories = vec![NotifCategory {
+        options: 0,
         id: "reply".into(),
         actions: vec![
             NotifAction::button("ok", "OK"),
