@@ -124,12 +124,56 @@ pub fn newest_first(eps: &[Episode]) -> Vec<usize> {
     order
 }
 
+/// A smart filter on the New Episodes list: which episodes of all shows it keeps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NewFilter {
+    /// episodes not yet played (the default)
+    #[default]
+    Unplayed,
+    /// episodes saved to the device
+    Downloaded,
+    /// episodes already played
+    Played,
+    /// every episode
+    All,
+}
+
+impl NewFilter {
+    pub const ALL: [NewFilter; 4] = [NewFilter::Unplayed, NewFilter::Downloaded, NewFilter::Played, NewFilter::All];
+
+    /// The menu item's name for the filter.
+    pub fn label(self) -> &'static str {
+        match self {
+            NewFilter::Unplayed => "Show Unplayed",
+            NewFilter::Downloaded => "Show Downloaded",
+            NewFilter::Played => "Show Played",
+            NewFilter::All => "Show All Episodes",
+        }
+    }
+
+    /// Whether an episode with these flags is kept.
+    pub fn keeps(self, played: bool, downloaded: bool) -> bool {
+        match self {
+            NewFilter::Unplayed => !played,
+            NewFilter::Downloaded => downloaded,
+            NewFilter::Played => played,
+            NewFilter::All => true,
+        }
+    }
+}
+
 /// The unplayed episodes of all shows, newest first, at most `limit`: (show index, episode index).
 pub fn latest(shows: &[Show], library: &Library, limit: usize) -> Vec<(usize, usize)> {
+    latest_filtered(shows, library, NewFilter::Unplayed, |_| false, limit)
+}
+
+/// The episodes of all shows that `filter` keeps, newest first, at most `limit`: (show index, episode index).
+/// `downloaded` says whether an episode's address is saved to the device.
+pub fn latest_filtered(shows: &[Show], library: &Library, filter: NewFilter, downloaded: impl Fn(&str) -> bool, limit: usize) -> Vec<(usize, usize)> {
     let mut all: Vec<(i64, usize, usize)> = Vec::new();
     for (si, show) in shows.iter().enumerate() {
         for (ei, e) in show.episodes.iter().enumerate() {
-            if !library.is_played(&e.url) {
+            if filter.keeps(library.is_played(&e.url), downloaded(&e.url)) {
                 all.push((e.ts, si, ei));
             }
         }
@@ -289,6 +333,19 @@ mod tests {
         assert_eq!(all, [(1, 1), (0, 0), (1, 0), (0, 1)]);
         lib.set_played("b2", true);
         assert_eq!(latest(&shows, &lib, 2), [(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn the_smart_filters_pick_unplayed_downloaded_or_played_episodes() {
+        let shows = vec![show(vec![ep("a1", 300), ep("a2", 100)]), show(vec![ep("b1", 200)])];
+        let mut lib = Library::default();
+        lib.set_played("a1", true);
+        let downloaded = |u: &str| u == "b1" || u == "a2";
+        assert_eq!(latest_filtered(&shows, &lib, NewFilter::Unplayed, downloaded, 9), [(1, 0), (0, 1)]);
+        assert_eq!(latest_filtered(&shows, &lib, NewFilter::Downloaded, downloaded, 9), [(1, 0), (0, 1)]);
+        assert_eq!(latest_filtered(&shows, &lib, NewFilter::Played, downloaded, 9), [(0, 0)]);
+        assert_eq!(latest_filtered(&shows, &lib, NewFilter::All, downloaded, 9).len(), 3);
+        assert_eq!(NewFilter::default(), NewFilter::Unplayed);
     }
 
     #[test]
