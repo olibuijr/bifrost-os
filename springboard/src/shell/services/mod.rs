@@ -44,6 +44,7 @@ pub mod pasteboard_types;
 pub mod keychain_groups;
 pub mod search_ranking;
 pub mod local_auth;
+pub mod permission_kit;
 pub mod privacy_permissions;
 pub mod contacts;
 pub mod calendar;
@@ -127,6 +128,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(keychain_groups::KeychainGroups::default()),
         Box::new(search_ranking::SearchRanking::default()),
         Box::new(privacy_permissions::PrivacyPermissions),
+        Box::new(permission_kit::PermissionKit),
         Box::new(local_auth::LocalAuth::default()),
         Box::new(contacts::Contacts),
         Box::new(calendar::Calendar),
