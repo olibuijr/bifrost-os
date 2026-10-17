@@ -665,7 +665,8 @@ mod tests {
     fn a_long_answer_scrolls_and_the_scroll_stops_at_the_top() {
         let ui = ui();
         let mut p = shown(&ui);
-        let long = (0..120).map(|i| format!("line {i}")).collect::<Vec<_>>().join(" ");
+        // long enough to wrap past the answer area (about 14 lines at this card width)
+        let long = (0..400).map(|i| format!("line {i}")).collect::<Vec<_>>().join(" ");
         p.apply(Msg::Reply(Ok(Reply::Answer(long))));
         let top = p.layout(&ui, 1200).lines.first().cloned();
         p.scroll(3);
