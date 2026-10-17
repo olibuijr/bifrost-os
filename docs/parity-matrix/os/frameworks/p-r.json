@@ -1724,7 +1724,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
    "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
@@ -5274,7 +5274,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
    "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
    "method": "assessed"
   },
