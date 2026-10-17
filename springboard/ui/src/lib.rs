@@ -1145,6 +1145,7 @@ pub mod network_audio_browser;
 pub mod fourier;
 pub mod embedding;
 pub mod lexical_tags;
+pub mod search_rank;
 pub mod filebadge;
 pub mod itemattrs;
 pub mod match_pattern;

@@ -18,7 +18,7 @@ use super::textfield::TextField;
 use super::ui::{home_indicator, home_zone, Ui, Weight, CELL, LABEL, LABEL_2, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, MENU_SOLID, MENU_TINT, SECONDARY, SIDEBAR_PLATE, WHITE};
 use super::{fuzzy, glyphs, settings, AppId, Effect, Event, Screen, Shell, apps};
 use crate::gfx::{rgba, scale, Image, Surface};
-use bifrost_ui::uttype;
+use bifrost_ui::{search_rank, uttype};
 use std::path::{Path, PathBuf};
 
 const CARD_W_PT: f32 = 556.0;
@@ -58,6 +58,10 @@ const TAP_PT: f32 = 8.0;
 const RECENTS: usize = 6;
 const SEARCHES: usize = 4;
 const PER_GROUP: usize = 3;
+/// The file beside quicksearch.ini that keeps how often each indexed result was opened (local only).
+const USAGE_FILE: &str = "search-usage.txt";
+/// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
+static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
 /// How long a scan of the Files root is reused by later opens before the next opening scans again.
 const FILES_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(20);
 const QUERY_MAX: usize = 64;
@@ -335,24 +339,50 @@ fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], cont
     groups
 }
 
-/// "Documents" section: items apps indexed with `CSSearchableIndex`, up to `PER_GROUP` rows.
+/// The key an indexed result's opens are counted under.
+fn indexed_key(app_id: &str, unique_id: &str) -> String {
+    format!("{app_id}/{unique_id}")
+}
+
+/// "Documents" section: items apps indexed with `CSSearchableIndex`, up to `PER_GROUP` rows. The indexed matches are
+/// ordered by the hybrid ranker (`bifrost_ui::search_rank`): title and word match, recency of indexing, and local
+/// opens. Matches the ranker does not score keep their index order after the ranked ones.
 fn indexed_groups(query: &str) -> Vec<Group> {
-    let hits: Vec<Hit> = super::spotindex::search(query, PER_GROUP)
-        .into_iter()
-        .map(|f| Hit::Indexed {
-            kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
-            thumb: f.thumbnail,
-            app_id: f.app_id,
-            unique_id: f.unique_id,
-            domain: f.domain,
-            title: f.title,
+    let found = super::spotindex::search(query, PER_GROUP * 4);
+    if found.is_empty() {
+        return vec![];
+    }
+    let items: Vec<search_rank::Item> = found
+        .iter()
+        .map(|f| search_rank::Item {
+            id: indexed_key(&f.app_id, &f.unique_id),
+            title: f.title.clone(),
+            text: f.text.clone(),
+            kind: search_rank::Kind::Document,
+            modified: f.modified,
         })
         .collect();
-    if hits.is_empty() {
-        vec![]
-    } else {
-        vec![Group { title: "Documents", hits }]
-    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
+    let empty = search_rank::Usage::default();
+    let usage = guard.as_ref().unwrap_or(&empty);
+    let order = search_rank::order(query, &items, usage, now, &search_rank::NoSemantic);
+    let hits: Vec<Hit> = order
+        .into_iter()
+        .take(PER_GROUP)
+        .map(|i| {
+            let f = found[i].clone();
+            Hit::Indexed {
+                kind: f.kind.map_or(String::new(), |k| uttype::description(k).to_string()),
+                thumb: f.thumbnail,
+                app_id: f.app_id,
+                unique_id: f.unique_id,
+                domain: f.domain,
+                title: f.title,
+            }
+        })
+        .collect();
+    vec![Group { title: "Documents", hits }]
 }
 
 /// "Files" section (names containing the query, newest first), up to three rows, then a
@@ -533,6 +563,8 @@ pub struct QuickSearch {
     /// modification times the contacts and Deildu title caches were read at
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    /// where the indexed-result open counts are saved (beside quicksearch.ini); None until `load`
+    usage_path: Option<PathBuf>,
     suggestions: Image,
     chevron: Image,
     icon_colour: Vec<(&'static str, u32)>,
@@ -597,6 +629,7 @@ impl QuickSearch {
             files_at: None,
             contacts_stamp: None,
             deildu_stamp: None,
+            usage_path: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
             icon_colour: vec![
@@ -616,10 +649,34 @@ impl QuickSearch {
 
     /// Reads the recents from `path` (an ini file) and saves there from now on.
     pub fn load(&mut self, path: impl Into<PathBuf>) {
+        let path: PathBuf = path.into();
+        let usage_path = path.with_file_name(USAGE_FILE);
+        let opens = std::fs::read_to_string(&usage_path).map(|t| search_rank::Usage::from_text(&t)).unwrap_or_default();
+        if let Ok(mut g) = OPENS.lock() {
+            *g = Some(opens);
+        }
+        self.usage_path = Some(usage_path);
         self.prefs = Prefs::load(path);
         self.recents = self.prefs.get("recents").unwrap_or("").split(',').filter_map(app_named).take(RECENTS).collect();
         self.searches = self.prefs.get("searches").unwrap_or("").split(',').map(str::trim).filter(|q| !q.is_empty()).map(String::from).take(SEARCHES).collect();
         self.search_imgs.clear();
+    }
+
+    /// Counts an open of an indexed result (`indexed_key`) and saves the counts beside quicksearch.ini. Local only.
+    pub fn note_indexed_open(&mut self, key: &str) {
+        let text = match OPENS.lock() {
+            Ok(mut g) => {
+                let u = g.get_or_insert_with(Default::default);
+                u.bump(key);
+                u.to_text()
+            }
+            Err(_) => return,
+        };
+        if let Some(path) = &self.usage_path {
+            if let Err(e) = std::fs::write(path, text) {
+                eprintln!("springboard: {USAGE_FILE}: {e}");
+            }
+        }
     }
 
     /// Records a launch: `app` becomes the first suggestion.
@@ -1552,6 +1609,7 @@ impl Shell {
                 }
             }
             Hit::Indexed { app_id, unique_id, domain, .. } => {
+                self.quicksearch.note_indexed_open(&indexed_key(&app_id, &unique_id));
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
                     // the app may still be starting: the message waits in its socket until it reads it

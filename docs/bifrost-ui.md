@@ -2207,6 +2207,33 @@ matches them. The wire format is unchanged. Gap: the shell does not use `ranking
 - Gaps: the stores are in memory and not yet wired to the shell service or the on-disk files; the attribute query grammar,
   streamed found-items replies and metadata queries over app containers are not built; the assistant search tool stays a gap.
 
+### System search ranking (`bifrost_ui::search_rank`; OS rows HybridDatabaseTokenizer, HybridSearchAdapter, HybridSearchResultRanker, HybridSearchRuntime)
+
+Decision (2026-10-17): the Search panel ranks by one hybrid ranker instead of per-string fuzzy scores, and the runtime
+is written as plain threads with a deadline so a slow source never holds up the panel. Pure data, no I/O.
+
+- Tokenizer: `tokenize` splits words close to UAX #29 (letters and digits; an apostrophe between letters joins), folds
+  case and diacritics (`Café` is `cafe`, `Straße` is `strasse`), and cuts CJK runs into overlapping pairs (a lone
+  character stays itself). `index_terms` adds the single characters of CJK pairs and the prefixes of each Latin word from
+  two characters up, so `mai` finds `mail` while typing; queries use `tokenize` only.
+- Ranker: `Bm25` (k1 1.2, b 0.75) over weighted fields (title 3, keywords and description 1) with a coverage factor (a
+  document holding every query word beats one holding a single word). `rank` adds, with fixed weights: title match
+  (exact 1, prefix 0.6, word start 0.3), kind prior for one- or two-word queries (app 1, settings 0.8, contact 0.6,
+  document 0.5, file 0.4, other 0.2), recency of indexing (e^(-age/14 days)), local open count on a log scale, and the
+  semantic score. `order` puts every item in ranked order, keeping unmatched items after the ranked ones.
+- Semantic hook: `SemanticHook` returns an optional 0..=1 similarity. The shell passes `NoSemantic`: `bifrost_ui::embedding`
+  is a caller-fed vocabulary and no local text model is bundled, so nothing is called remotely and the term adds zero.
+- Usage: `Usage` counts opens per item (`app/unique id`), stored locally as `search-usage.txt` beside `quicksearch.ini`.
+  It is never sent anywhere.
+- Runtime: `run(query, sources, deadline, per_section, usage, now, semantic)` queries each `Source` on its own thread and
+  waits at most the deadline. Items from the sources that answered are ranked together; the result has the top hit, the
+  sections in source order (each capped), and the names of sources that were late or failed (`missing`).
+- Shell: the Documents section (`springboard/src/shell/quicksearch.rs`, `indexed_groups`) keeps the index's matching
+  and re-orders the top candidates with `order`; an open of a Documents result bumps its count.
+- Gaps: the runtime is not yet called by the Search panel (its apps, settings, contacts and files are built synchronously
+  in `results`), so the deadline is not used on the desktop yet; the per-source adapter is not built; the ranking is not
+  applied across sources; the semantic hook has no model; and apps and settings do not yet count opens.
+
 ## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
 
 Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifrost_app::controls::table`, `controls::panels`). Pure models with unit tests.
