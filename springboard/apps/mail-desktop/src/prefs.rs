@@ -60,6 +60,9 @@ pub struct Prefs {
     pub signature_above_quote: bool,
     /// The newest messages' subjects and senders are indexed for Core Search (never the bodies). Off removes them.
     pub show_in_search: bool,
+    /// The people in the messages that are read (sender and other recipients, never the person's own addresses) are
+    /// donated to Contacts, which offers the ones not in the book as suggested contacts. Off donates nobody.
+    pub donate_people: bool,
 }
 
 impl Default for Prefs {
@@ -82,6 +85,7 @@ impl Default for Prefs {
             remote_content: false,
             signature_above_quote: false,
             show_in_search: true,
+            donate_people: true,
         }
     }
 }
@@ -186,6 +190,7 @@ impl Prefs {
             ("remote_content".into(), Json::Bool(self.remote_content)),
             ("signature_above_quote".into(), Json::Bool(self.signature_above_quote)),
             ("show_in_search".into(), Json::Bool(self.show_in_search)),
+            ("donate_people".into(), Json::Bool(self.donate_people)),
         ])
     }
 
@@ -205,6 +210,7 @@ impl Prefs {
             remote_content: flag_of(json, "remote_content", defaults.remote_content),
             signature_above_quote: flag_of(json, "signature_above_quote", defaults.signature_above_quote),
             show_in_search: flag_of(json, "show_in_search", defaults.show_in_search),
+            donate_people: flag_of(json, "donate_people", defaults.donate_people),
             ..defaults
         };
         if let Some(Json::Obj(fields)) = json.get("signatures") {

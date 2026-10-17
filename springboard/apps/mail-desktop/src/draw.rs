@@ -112,6 +112,8 @@ pub enum Hit {
     Favorite(usize),
     /// Load Remote Content, under the privacy note of the open message.
     LoadRemote,
+    /// A link of the "Found in Mail" banner over the message text.
+    Found(crate::found::FoundHit),
     /// Don't Save on the question sheet: the message is discarded.
     Discard,
     /// A rule's name in the Rules pane: its editor opens.
@@ -645,6 +647,9 @@ impl MailWindow {
         if self.remote_rect.is_some_and(|r| inside(r, x, y)) {
             return Hit::LoadRemote;
         }
+        if let Some((_, link)) = self.found_rects.iter().find(|(r, _)| inside(*r, x, y)) {
+            return Hit::Found(*link);
+        }
         if let Some((_, index)) = self.attach_rects.iter().find(|(r, _)| inside(*r, x, y)) {
             return Hit::Attachment(*index);
         }
@@ -825,6 +830,7 @@ impl MailWindow {
         let text_w = (width - 2.0 * pad).max(0.0);
         self.attach_rects.clear();
         self.remote_rect = None;
+        self.found_rects.clear();
         self.find_hits = None;
         let Some(uid) = self.mail.open else {
             self.reader_scroll.set_max(0.0);
@@ -907,6 +913,8 @@ impl MailWindow {
             y += ui.pt(FOOT_LINE_PT) + ui.pt(SPACE_M);
         }
 
+        y = self.draw_found_banner(s, ui, x, y, text_w);
+
         if !loaded {
             put(s, &mut self.labels, ui, "Loading...", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, y);
             y += ui.pt(BODY_LINE_PT);
@@ -930,6 +938,60 @@ impl MailWindow {
         if bar_h > 0.0 {
             self.draw_find_bar(s, ui, x0, width, top, bar_h, matches.len(), current);
         }
+    }
+
+    /// The "Found in Mail" banner over the message text: where the first suggestion of the open message was found, its
+    /// title and detail, and the links that add it, turn it down or page to the next. Returns the y below the banner (`y`
+    /// again when the message has nothing to offer). The links are recorded for `hit`.
+    fn draw_found_banner(&mut self, s: &mut Surface, ui: &Ui, x: f32, y: f32, width: f32) -> f32 {
+        let Some(found) = self.mail.found_current().cloned() else { return y };
+        let label = self.mail.found_label();
+        let pad = ui.pt(SPACE_S);
+        let (small, body) = (ui.pt(FOOT_LINE_PT), ui.pt(BODY_LINE_PT));
+        let rows = small + body + if found.subtitle.is_empty() { 0.0 } else { small } + small;
+        let height = rows + 2.0 * pad;
+        s.fill_rrect(x, y, width, height, ui.pt(RADIUS_PT), FIELD_BG.now());
+        let (left, inner) = (x + pad, (width - 2.0 * pad).max(0.0));
+        let mut cy = y + pad;
+        let source = fit(ui, &found.found_in(), MAC_FOOTNOTE_PT, Weight::Regular, inner);
+        put(s, &mut self.labels, ui, &source, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left, cy);
+        if let Some(label) = &label {
+            let wide = ui.measure(label, MAC_FOOTNOTE_PT, Weight::Regular);
+            put(s, &mut self.labels, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left + inner - wide, cy);
+        }
+        cy += small;
+        let title = fit(ui, &found.title, MAC_BODY_PT, Weight::Semibold, inner);
+        put(s, &mut self.labels, ui, &title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), left, cy);
+        cy += body;
+        if !found.subtitle.is_empty() {
+            let detail = fit(ui, &found.subtitle, MAC_FOOTNOTE_PT, Weight::Regular, inner);
+            put(s, &mut self.labels, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), left, cy);
+            cy += small;
+        }
+        let gap = ui.pt(SPACE_M);
+        let mut lx = left;
+        let mut links: Vec<(&str, crate::found::FoundHit)> = Vec::new();
+        if let Some(add) = crate::found::add_label(found.kind) {
+            links.push((add, crate::found::FoundHit::Add));
+        }
+        links.push(("Dismiss", crate::found::FoundHit::Dismiss));
+        for (text, link) in links {
+            put(s, &mut self.labels, ui, text, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), lx, cy);
+            let wide = ui.measure(text, MAC_FOOTNOTE_PT, Weight::Regular);
+            self.found_rects.push(([lx, cy, wide, small], link));
+            lx += wide + gap;
+        }
+        if label.is_some() {
+            let mut rx = left + inner;
+            for (text, link) in [("Next", crate::found::FoundHit::Next), ("Previous", crate::found::FoundHit::Previous)] {
+                let wide = ui.measure(text, MAC_FOOTNOTE_PT, Weight::Regular);
+                rx -= wide;
+                put(s, &mut self.labels, ui, text, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), rx, cy);
+                self.found_rects.push(([rx, cy, wide, small], link));
+                rx -= gap;
+            }
+        }
+        y + height + ui.pt(SPACE_M)
     }
 
     /// The find bar over the top of the reader: the text typed, which match is shown, and the Previous, Next and Done buttons.

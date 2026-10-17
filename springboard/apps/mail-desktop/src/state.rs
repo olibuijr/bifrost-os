@@ -16,6 +16,7 @@ use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use bifrost_app::controls::contact_book::Contact;
+use bifrost_app::controls::found_in::{self, Action, Dismissed, Found, Pager};
 use bifrost_app::controls::recipient_autocomplete::{Key as RecipientKey, RecipientField, Suggestion};
 use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
@@ -684,6 +685,13 @@ pub struct Mail {
     pub address_book: Vec<Contact>,
     /// The suggestions the focused To, Cc or Bcc field offers, with the one highlighted by the arrow keys.
     pub recipient_field: RecipientField,
+    /// The messages whose people were donated to Contacts already (account, mailbox, UID): a message is donated once.
+    pub donated: HashSet<(String, String, u32)>,
+    /// The suggestions found in the open message (events, flights, contacts, addresses), paged one at a time, and the
+    /// message they belong to. Filled once the message text is here.
+    pub found_pager: Option<(u32, Pager)>,
+    /// The suggestions the person turned down or took, for this run: they are not offered again from the same message.
+    pub found_dismissed: Dismissed,
 }
 
 impl Mail {
@@ -729,6 +737,9 @@ impl Mail {
             recipients: RecipientRecents::new(MAX_RECIPIENT_RECENTS),
             address_book: Vec::new(),
             recipient_field: RecipientField::new(),
+            donated: HashSet::new(),
+            found_pager: None,
+            found_dismissed: Dismissed::default(),
         }
     }
 
@@ -1167,6 +1178,81 @@ impl Mail {
         true
     }
 
+    /// The people of the open message to donate to Contacts, once per message and only when its text is here: the
+    /// sender and the other recipients (see [`crate::people::seen_in`]). Nobody when Mail Settings turned donating off.
+    pub fn people_to_donate(&mut self) -> Vec<crate::people::Seen> {
+        if !self.prefs.donate_people {
+            return Vec::new();
+        }
+        let Some(uid) = self.open.filter(|uid| self.bodies.contains_key(uid)) else { return Vec::new() };
+        let Some(account) = self.current().map(|a| a.id.clone()) else { return Vec::new() };
+        if !self.donated.insert((account, self.mailbox.clone(), uid)) {
+            return Vec::new();
+        }
+        let Some(summary) = self.row(uid).map(|r| r.summary.clone()) else { return Vec::new() };
+        crate::people::seen_in(&summary.from, &summary.to, &summary.cc, crate::people::is_bulk(&summary), &self.from_choices())
+    }
+
+    /// Reads the open message for things to offer (an event, a flight, an email address or phone number, a street
+    /// address) once its text is here, minus the ones turned down. `region` is the region code whose phone rules turn a
+    /// number into international form. Another message, or none, clears the banner.
+    pub fn refresh_found_in(&mut self, region: &str) {
+        let Some(uid) = self.open else {
+            self.found_pager = None;
+            return;
+        };
+        if self.found_pager.as_ref().is_some_and(|(shown, _)| *shown == uid) {
+            return;
+        }
+        self.found_pager = None;
+        let Some(raw) = self.bodies.get(&uid) else { return };
+        let title = self.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
+        let source = found_in::Source { app: "Mail".into(), title };
+        let items = self.found_dismissed.filter(found_in::extract(&source, &crate::body::readable(raw), region));
+        self.found_pager = Some((uid, Pager::new(items)));
+    }
+
+    /// The suggestion the banner shows, when the open message has any left.
+    pub fn found_current(&self) -> Option<&Found> {
+        let (uid, pager) = self.found_pager.as_ref()?;
+        if Some(*uid) != self.open {
+            return None;
+        }
+        pager.current()
+    }
+
+    /// "1 of 3" when the banner has more than one suggestion.
+    pub fn found_label(&self) -> Option<String> {
+        self.found_current()?;
+        self.found_pager.as_ref()?.1.label()
+    }
+
+    /// Next and previous page of the banner. False at either end.
+    pub fn found_step(&mut self, forward: bool) -> bool {
+        match self.found_pager.as_mut() {
+            Some((_, pager)) if forward => pager.next_page(),
+            Some((_, pager)) => pager.previous_page(),
+            None => false,
+        }
+    }
+
+    /// Dismiss: the suggestion on show is turned down and not offered again from this message.
+    pub fn found_dismiss(&mut self) -> bool {
+        let Some(found) = self.found_pager.as_mut().and_then(|(_, pager)| pager.dismiss()) else { return false };
+        self.found_dismissed.add(&found);
+        true
+    }
+
+    /// Add: the suggestion on show leaves the banner (and is not offered again) and its action is returned for the
+    /// window to run.
+    pub fn found_accept(&mut self) -> Option<Action> {
+        let (_, pager) = self.found_pager.as_mut()?;
+        let found = pager.current().cloned()?;
+        let action = pager.accept()?;
+        self.found_dismissed.add(&found);
+        Some(action)
+    }
+
     /// The addresses the shown account sends from: its own first, then its other addresses.
     pub fn from_choices(&self) -> Vec<String> {
         let Some(account) = self.current() else { return Vec::new() };
@@ -1449,6 +1535,7 @@ impl Mail {
                 Field::yes_no("Load remote content", self.prefs.remote_content),
                 Field::yes_no("Signature above the quoted text", self.prefs.signature_above_quote),
                 Field::yes_no("Show in Search", self.prefs.show_in_search),
+                Field::yes_no("Suggest people to Contacts", self.prefs.donate_people),
             ],
         );
         Ok(())
@@ -1603,6 +1690,7 @@ impl Mail {
         }
         if form.fields.iter().any(|f| f.label == "Show in Search") {
             self.prefs.show_in_search = is_yes(form.value("Show in Search"));
+            self.prefs.donate_people = is_yes(form.value("Suggest people to Contacts"));
         }
         Ok(())
     }
@@ -2244,6 +2332,67 @@ mod tests {
         type_in_focus(&mut mail, "ada");
         assert!(mail.move_recipient_highlight(true) && mail.accept_recipient(None));
         assert_eq!(compose_of(&mail).form.value("To"), "ada@example.com, ", "the bare address, so the list still splits cleanly");
+    }
+
+    fn read_message(mail: &mut Mail, uid: u32, from: &str, to: &str, body: &str) {
+        let summary = Summary { subject: "Plans".into(), from: from.into(), to: to.into(), ..Summary::default() };
+        mail.rows.push(Row { uid, flags: Flags::default(), summary });
+        mail.open = Some(uid);
+        mail.bodies.insert(uid, format!("From: {from}\r\nSubject: Plans\r\n\r\n{body}\r\n"));
+    }
+
+    #[test]
+    fn a_read_message_donates_its_people_once_unless_the_setting_is_off() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 4, flags: Flags::default(), summary: Summary { from: "Bo <bo@example.com>".into(), to: "olibuijr@example.com, Cy <cy@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(4);
+        assert!(mail.people_to_donate().is_empty(), "the text has not arrived");
+        mail.bodies.insert(4, "Subject: x\r\n\r\nHi\r\n".into());
+        let seen = mail.people_to_donate();
+        let got: Vec<(&str, &str)> = seen.iter().map(|s| (s.name.as_str(), s.address.as_str())).collect();
+        assert_eq!(got, [("Bo", "bo@example.com"), ("Cy", "cy@example.com")], "the person's own address is left out");
+        assert!(mail.people_to_donate().is_empty(), "a message is donated once");
+        mail.prefs.donate_people = false;
+        mail.rows.push(Row { uid: 5, flags: Flags::default(), summary: Summary { from: "Di <di@example.com>".into(), ..Summary::default() } });
+        mail.open = Some(5);
+        mail.bodies.insert(5, "Subject: y\r\n\r\nHi\r\n".into());
+        assert!(mail.people_to_donate().is_empty(), "donating is off");
+    }
+
+    #[test]
+    fn the_open_message_offers_what_it_mentions_and_a_turned_down_one_stays_down() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.rows.push(Row { uid: 9, flags: Flags::default(), summary: Summary { subject: "Plans".into(), ..Summary::default() } });
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none(), "no text, no banner");
+        mail.bodies.insert(9, "Subject: Plans\r\n\r\nLunch tomorrow at 1pm\r\nWrite to ana@example.com\r\n".into());
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.kind), Some(found_in::SuggestionKind::Event));
+        assert_eq!(mail.found_current().map(|f| f.found_in()).as_deref(), Some("Found in Mail"));
+        assert_eq!(mail.found_label().as_deref(), Some("1 of 2"));
+        assert!(mail.found_step(true) && !mail.found_step(true), "the second page is the last");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.com"));
+        assert!(mail.found_step(false));
+        assert!(mail.found_dismiss(), "the event is turned down");
+        assert_eq!(mail.found_label(), None, "one left needs no pager");
+        match mail.found_accept() {
+            Some(Action::AddContact { email, phone }) => assert_eq!((email.as_deref(), phone), (Some("ana@example.com"), None)),
+            other => panic!("{other:?}"),
+        }
+        assert!(mail.found_current().is_none());
+        // the same message again: nothing that was answered comes back
+        mail.open = None;
+        mail.refresh_found_in("IS");
+        mail.open = Some(9);
+        mail.refresh_found_in("IS");
+        assert!(mail.found_current().is_none());
+        // another message clears the banner of the first
+        read_message(&mut mail, 10, "a@example.com", "", "Call me on ana@example.org");
+        mail.refresh_found_in("IS");
+        assert_eq!(mail.found_current().map(|f| f.title.as_str()), Some("ana@example.org"));
+        mail.open = Some(9);
+        assert!(mail.found_current().is_none(), "a banner belongs to its message");
     }
 
     fn compose_of(mail: &Mail) -> &Compose {
