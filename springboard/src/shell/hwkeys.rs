@@ -54,6 +54,10 @@ const KEY_RIGHTCTRL: u16 = 97;
 const KEY_RIGHTALT: u16 = 100;
 const KEY_LEFTMETA: u16 = 125;
 const KEY_RIGHTMETA: u16 = 126;
+const KEY_BRIGHTNESSDOWN: u16 = 224;
+const KEY_BRIGHTNESSUP: u16 = 225;
+const KEY_KBDILLUMDOWN: u16 = 229;
+const KEY_KBDILLUMUP: u16 = 230;
 
 /// Term key equivalents, taken only while Term is in front. Cmd chords (Meta)
 /// drive the chrome (tabs, find, zoom); plain Ctrl and Alt chords become the
@@ -611,6 +615,61 @@ impl Shell {
         used
     }
 
+    /// The keyboard backlight the machine has: its level 0..=1 and how many steps the hardware offers (`steps` 0 =
+    /// none). A sync at start; no HUD, no effect.
+    pub fn set_keyboard_backlight(&mut self, level: f32, steps: u32) {
+        self.kbd_backlight = (steps > 0).then(|| (level.clamp(0.0, 1.0), steps));
+    }
+
+    /// The keyboard backlight level 0..=1, None on a machine without one.
+    pub fn keyboard_backlight(&self) -> Option<f32> {
+        self.kbd_backlight.map(|(l, _)| l)
+    }
+
+    /// A brightness key (screen brightness down/up, keyboard backlight down/up): one step, the same HUD as the
+    /// volume keys when the screen shows something other than Control Center (whose slider moves instead), and the
+    /// effect for the device. Works on every screen and never wakes it (with the screen off the press is taken and ignored). None for any other key; a key release or a
+    /// keyboard backlight key on a machine without one is taken and does nothing.
+    pub fn hw_brightness_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
+        use bifrost_ui::osd::Level;
+        let (kind, up) = match code {
+            KEY_BRIGHTNESSDOWN => (Level::Brightness, false),
+            KEY_BRIGHTNESSUP => (Level::Brightness, true),
+            KEY_KBDILLUMDOWN => (Level::KeyboardBrightness, false),
+            KEY_KBDILLUMUP => (Level::KeyboardBrightness, true),
+            _ => return None,
+        };
+        // a dark screen keeps its backlight off: the press is taken and does nothing
+        if !down || !self.screen_on {
+            return Some(vec![]);
+        }
+        let (now, steps, floor) = match kind {
+            Level::KeyboardBrightness => {
+                let (level, steps) = self.kbd_backlight?;
+                (level, steps, 0)
+            }
+            // the panel never goes black from a key: the lowest step stays lit
+            _ => (self.info.brightness, 16, 1),
+        };
+        let at = (now * steps as f32).round() as i64;
+        let level = ((at + if up { 1 } else { -1 }).clamp(floor, steps as i64) as f32) / steps as f32;
+        let effect = match kind {
+            Level::KeyboardBrightness => {
+                self.kbd_backlight = Some((level, steps));
+                Effect::KeyboardBacklight(level)
+            }
+            _ => {
+                self.info.brightness = level;
+                Effect::Brightness(level)
+            }
+        };
+        if self.screen_on && !self.cc_active() {
+            self.hud.show_level(kind, level, t);
+        }
+        self.dirty = true;
+        Some(vec![effect])
+    }
+
     /// A key from a physical keyboard that the app on screen handles itself (Deildu, Files); true if taken.
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
@@ -671,6 +730,8 @@ impl Shell {
         }
         // the account access sheet takes touches only: typing waits for the answer
         if self.access_showing() || self.usb_showing() {
+        // the account access sheet and the firewall question take touches only: typing waits for the answer
+        if self.access_showing() || self.fw_showing() {
             return vec![];
         }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion

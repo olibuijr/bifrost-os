@@ -1474,7 +1474,7 @@ fn draw_camera(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
 }
 
 /// The brightness sun: a disc with eight rays.
-fn draw_sun(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
+pub(super) fn draw_sun(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
     let r = 5.0 * pt;
     s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
     for i in 0..8 {

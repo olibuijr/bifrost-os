@@ -53,6 +53,29 @@ impl Capture {
     }
 }
 
+/// What the pipeline listens to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    /// the default microphone: dictation and voice control
+    #[default]
+    Microphone,
+    /// the sound the computer itself plays, taken from the default output's monitor: Live Captions
+    SystemAudio,
+}
+
+impl Capture {
+    /// The source element and its properties for `source`, one argv entry each. The microphone is the element alone.
+    /// System audio is the monitor of the default output: PulseAudio names it `@DEFAULT_MONITOR@`; PipeWire's source
+    /// element takes the output's stream when it is asked to capture a sink (`stream.capture.sink`).
+    pub fn source_args(self, source: Source) -> Vec<&'static str> {
+        match (self, source) {
+            (c, Source::Microphone) => vec![c.element()],
+            (Capture::PulseAudio, Source::SystemAudio) => vec!["pulsesrc", "device=@DEFAULT_MONITOR@"],
+            (Capture::PipeWire, Source::SystemAudio) => vec!["pipewiresrc", "stream-properties=props,stream.capture.sink=true"],
+        }
+    }
+}
+
 /// Why a pipeline could not be built.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PipelineError {
@@ -75,31 +98,22 @@ impl std::error::Error for PipelineError {}
 /// whisper model=<path> ! fakesink`. `-m` prints the element messages that carry the transcript. The first element of
 /// the returned vector is the program name.
 pub fn pipeline_argv(capture: Capture, model: &Path) -> Result<Vec<String>, PipelineError> {
+    pipeline_argv_for(capture, Source::Microphone, model)
+}
+
+/// [`pipeline_argv`] for a chosen [`Source`]: the same chain with the capture element for the microphone or for the
+/// sound the computer plays.
+pub fn pipeline_argv_for(capture: Capture, source: Source, model: &Path) -> Result<Vec<String>, PipelineError> {
     let model_text = model.to_string_lossy().into_owned();
     if model_text.contains(['"', '!', '\n', '\r', '\0']) {
         return Err(PipelineError::UnsafeModelPath(model_text));
     }
     let caps = format!("audio/x-raw,format=F32LE,channels=1,rate={SAMPLE_RATE}");
     let model_arg = if model_text.contains(' ') { format!("model=\"{model_text}\"") } else { format!("model={model_text}") };
-    Ok([
-        GST_LAUNCH,
-        "-m",
-        capture.element(),
-        "!",
-        "audioconvert",
-        "!",
-        "audioresample",
-        "!",
-        caps.as_str(),
-        "!",
-        "whisper",
-        model_arg.as_str(),
-        "!",
-        "fakesink",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect())
+    let mut argv: Vec<&str> = vec![GST_LAUNCH, "-m"];
+    argv.extend(capture.source_args(source));
+    argv.extend(["!", "audioconvert", "!", "audioresample", "!", caps.as_str(), "!", "whisper", model_arg.as_str(), "!", "fakesink"]);
+    Ok(argv.iter().map(|s| s.to_string()).collect())
 }
 
 /// One transcript the whisper element reported. `is_final` is false for a hypothesis the element may still revise.
@@ -237,6 +251,22 @@ mod tests {
         assert_eq!(argv.last().map(String::as_str), Some("fakesink"));
         let bang_count = argv.iter().filter(|a| a.as_str() == "!").count();
         assert_eq!(bang_count, 5, "six elements are joined by five links");
+    }
+
+    #[test]
+    fn system_audio_is_the_monitor_of_the_default_output() {
+        let model = Path::new("/data/speech/ggml-base.en.bin");
+        let pulse = pipeline_argv_for(Capture::PulseAudio, Source::SystemAudio, model).unwrap();
+        assert!(pulse.contains(&"pulsesrc".to_string()) && pulse.contains(&"device=@DEFAULT_MONITOR@".to_string()));
+        let pipe = pipeline_argv_for(Capture::PipeWire, Source::SystemAudio, model).unwrap();
+        assert!(pipe.contains(&"pipewiresrc".to_string()) && pipe.contains(&"stream-properties=props,stream.capture.sink=true".to_string()));
+        for argv in [&pulse, &pipe] {
+            assert_eq!(argv.last().map(String::as_str), Some("fakesink"));
+            assert_eq!(argv.iter().filter(|a| a.as_str() == "!").count(), 5, "the same chain after the source");
+        }
+        let mic = pipeline_argv_for(Capture::PulseAudio, Source::Microphone, model).unwrap();
+        assert!(!mic.iter().any(|a| a.contains("MONITOR")), "the microphone has no monitor");
+        assert_eq!(mic, pipeline_argv(Capture::PulseAudio, model).unwrap());
     }
 
     #[test]

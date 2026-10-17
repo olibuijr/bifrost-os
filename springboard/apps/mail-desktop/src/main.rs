@@ -3,7 +3,10 @@
 
 use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::background_tasks::{self, TaskEvent};
+use bifrost_app::{passwords, usernotif};
 use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
+use bifrost_mail::background::{self, Check};
 use bifrost_mail::compose_windows::Composes;
 use bifrost_mail::index;
 use bifrost_mail::viewer::Viewer;
@@ -24,6 +27,12 @@ struct MailApp {
     indexed: std::collections::HashMap<String, String>,
     /// The time of the next comparison with the index.
     next_index: f64,
+    /// The mail check a background task started (see `background.rs`), while it runs.
+    check: Option<Check>,
+    /// The next refresh task has been asked for in this run.
+    scheduled: bool,
+    /// The connections the background check opens.
+    transport: std::sync::Arc<dyn springboard::deildu::http::Transport>,
 }
 
 impl MailApp {
@@ -82,6 +91,7 @@ impl App for MailApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        self.schedule(ctx);
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         self.composes.main_size = (w, h);
         if self.window.is_none() {
@@ -173,7 +183,24 @@ impl App for MailApp {
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        if self.check.as_mut().is_some_and(|c| c.password(request, result)) {
+            return false;
+        }
         self.with_window(ctx, |mail| mail.service_reply(ctx, request, result))
+    }
+
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
+        match background_tasks::task_event(service, event, body) {
+            Some(TaskEvent::Started { identifier, .. }) if identifier == background::TASK => {
+                self.start_check(ctx, &identifier, background::accounts_to_check());
+                false
+            }
+            Some(TaskEvent::Expiring { identifier }) if identifier == background::TASK => {
+                self.finish_check(ctx);
+                false
+            }
+            _ => false,
+        }
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
@@ -185,6 +212,7 @@ impl App for MailApp {
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        self.check_tick(ctx, t);
         let mut changed = self.open_viewers(ctx) | self.refresh_viewers();
         if let Some(mail) = &mut self.window {
             self.composes.autosave(mail, t);
@@ -252,7 +280,12 @@ impl App for MailApp {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.window.as_ref().and_then(|mail| mail.next_wake(t))
+        let window = self.window.as_ref().and_then(|mail| mail.next_wake(t));
+        let check = self.check.as_ref().map(|_| t + background::POLL_MS);
+        match (window, check) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     fn wake_fd(&self) -> Option<i32> {
@@ -260,7 +293,59 @@ impl App for MailApp {
     }
 }
 
+fn now_unix() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
 impl MailApp {
+    /// Asks the shell to start the app for a mail check when one is due, also when Mail is closed. Once per run.
+    fn schedule(&mut self, ctx: &Ctx) {
+        if !self.scheduled {
+            self.scheduled = true;
+            background_tasks::submit(ctx, &background::next_request(now_unix()));
+        }
+    }
+
+    /// A refresh task started: asks Passwords for the password of each of `accounts`; the listings follow the answers.
+    fn start_check(&mut self, ctx: &Ctx, identifier: &str, accounts: Vec<bifrost_app::controls::internet_accounts::Account>) {
+        if self.check.is_some() {
+            return;
+        }
+        let baseline = background::Baseline::load(&ctx.data_dir.join(background::FILE));
+        let muted = bifrost_mail::mute::load(&ctx.data_dir.join(bifrost_mail::mute::FILE));
+        let mut check = Check::new(identifier, accounts, baseline, muted, std::sync::Arc::clone(&self.transport));
+        for (index, site, username) in check.logins() {
+            let request = passwords::fill(ctx, &site, &username);
+            check.expect(request, index);
+        }
+        self.check = Some(check);
+    }
+
+    /// Posts the notifications for what finished listings found, and ends the check when it is done.
+    fn check_tick(&mut self, ctx: &Ctx, t: f64) {
+        let Some(check) = &mut self.check else { return };
+        for notice in check.poll() {
+            let b = background::notification(&notice);
+            let _ = usernotif::add(ctx, usernotif::Request::new(&b.id, &b.title).subtitle(&b.subtitle).body(&b.body).thread(&b.thread));
+        }
+        if check.finished(t) {
+            self.finish_check(ctx);
+        }
+    }
+
+    /// Saves the baseline, asks for the next refresh, and tells the shell the task is done (it then ends a hidden app).
+    fn finish_check(&mut self, ctx: &Ctx) {
+        let Some(check) = self.check.take() else { return };
+        if let Err(e) = check.baseline().save(&ctx.data_dir.join(background::FILE)) {
+            eprintln!("bifrost-mail: mail baseline: {e}");
+        }
+        for problem in &check.problems {
+            eprintln!("bifrost-mail: background check: {problem}");
+        }
+        background_tasks::submit(ctx, &background::next_request(now_unix()));
+        background_tasks::completed(ctx, check.identifier());
+    }
+
     /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
     fn route_focus(&mut self, ctx: &Ctx) {
         let focused = ctx.windows().focused();
@@ -294,6 +379,147 @@ impl MailApp {
     }
 }
 
+impl MailApp {
+    fn new(transport: std::sync::Arc<dyn springboard::deildu::http::Transport>) -> MailApp {
+        MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0, check: None, scheduled: false, transport }
+    }
+}
+
 fn main() {
-    bifrost_app::run(MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0 });
+    bifrost_app::run(MailApp::new(bifrost_mail::transport::shared()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::controls::internet_accounts::{Account, Kind, Security, Server};
+    use bifrost_app::kit::{Font, Ui};
+    use bifrost_app::proto::{Configure, ToShell};
+    use bifrost_core::json::Json;
+    use bifrost_mail::flags::{Flag, Flags};
+    use bifrost_mail::session::Listed;
+    use springboard::deildu::http::{Stream, Transport};
+    use std::io::{Cursor, Read, Write};
+
+    /// A mail server that greets, accepts the login, and lists an inbox with uid 3 (read) and uid 9 (unread).
+    struct Canned;
+    struct Wire(Cursor<Vec<u8>>);
+    impl Read for Wire {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+    impl Write for Wire {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl Transport for Canned {
+        fn connect(&self, _: &str, _: u16, _: bool) -> std::io::Result<Box<dyn Stream>> {
+            let (old, new) = ("Subject: Old\r\nFrom: A <a@x.is>\r\n\r\n", "Subject: Fundur\r\nFrom: Gunna <gunna@x.is>\r\n\r\n");
+            let script = format!(
+                "* OK ready\r\nA001 OK done\r\n* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\nA002 OK done\r\nA003 OK done\r\n* SEARCH 3 9\r\nA004 OK done\r\n\
+                 * 1 FETCH (UID 3 FLAGS (\\Seen) BODY[HEADER] {{{}}}\r\n{old})\r\n* 2 FETCH (UID 9 FLAGS () BODY[HEADER] {{{}}}\r\n{new})\r\nA005 OK done\r\nA006 OK done\r\n",
+                old.len(),
+                new.len()
+            );
+            Ok(Box::new(Wire(Cursor::new(script.into_bytes()))))
+        }
+    }
+
+    fn ctx(dir: &std::path::Path) -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 800, h: 600, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
+        let mut ctx = Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg);
+        ctx.data_dir = dir.to_path_buf();
+        ctx
+    }
+
+    fn work() -> Account {
+        Account {
+            email: "me@x.is".into(),
+            imap: Some(Server { host: "imap.x.is".into(), port: 993, security: Security::Tls }),
+            smtp: Some(Server { host: "smtp.x.is".into(), port: 587, security: Security::StartTls }),
+            ..Account::new(Kind::Mail, "work", "Work", "me")
+        }
+    }
+
+    fn calls(sent: &[ToShell]) -> Vec<(u32, String, String, String)> {
+        sent.iter()
+            .filter_map(|m| match m {
+                ToShell::ServiceCall { request, service, method, body } => Some((*request, service.clone(), method.clone(), body.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_refresh_task_checks_the_inbox_posts_new_mail_and_asks_for_the_next_check() {
+        let root = std::env::temp_dir().join(format!("bifrost-mail-bg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (data, accounts_home) = (root.join("data"), root.join("home"));
+        // the shared account list lives under XDG_DATA_HOME; this is the only test of this binary
+        std::env::set_var("XDG_DATA_HOME", &accounts_home);
+        bifrost_mail::accounts::add(work()).unwrap();
+        // the last check saw uid 3 in the inbox
+        let mut baseline = background::Baseline::default();
+        let seen = Listed { uid: 3, flags: Flags::empty().with(Flag::Seen, true), header: "Subject: Old\r\n\r\n".into() };
+        baseline.apply("work", &[seen], &Default::default());
+        baseline.save(&data.join(background::FILE)).unwrap();
+
+        let ctx = ctx(&data);
+        let mut app = MailApp::new(std::sync::Arc::new(Canned));
+        // starting up asks the shell for a check, once
+        app.schedule(&ctx);
+        app.schedule(&ctx);
+        let sent = calls(&ctx.take_sent());
+        assert_eq!(sent.len(), 1);
+        assert_eq!((sent[0].1.as_str(), sent[0].2.as_str()), ("background", "submit"));
+        assert!(sent[0].3.contains(background::TASK) && sent[0].3.contains("earliest"), "{}", sent[0].3);
+
+        // another task's start is not ours
+        let other = bifrost_core::json::parse(r#"{"identifier":"x.other","limit":30}"#).unwrap();
+        app.service_event(&ctx, "background", "taskStarted", &other);
+        assert!(app.check.is_none());
+        // the shell starts the refresh task: Passwords is asked for the account's password
+        let started = bifrost_core::json::parse(&format!(r#"{{"identifier":"{}","limit":30}}"#, background::TASK)).unwrap();
+        app.service_event(&ctx, "background", "taskStarted", &started);
+        assert!(app.check.is_some());
+        let asked = calls(&ctx.take_sent());
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        let request = asked[0].0;
+        // Passwords answers; the listing runs on a thread and the tick posts what it found
+        let hex: String = b"pw".iter().map(|b| format!("{b:02x}")).collect();
+        let answer: Result<Json, String> = Ok(Json::Obj(vec![("status".into(), Json::Num(0.0)), ("value".into(), Json::Str(hex))]));
+        app.service_reply(&ctx, request, &answer);
+        let mut t = 0.0;
+        let mut sent = Vec::new();
+        for _ in 0..400 {
+            t += 10.0;
+            app.tick(&ctx, t);
+            sent.extend(ctx.take_sent());
+            if app.check.is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(app.check.is_none(), "the check finished");
+        let notes: Vec<&ToShell> = sent.iter().filter(|m| matches!(m, ToShell::NotifyRequest { .. })).collect();
+        assert_eq!(notes.len(), 1, "one unread arrival: {sent:?}");
+        match notes[0] {
+            ToShell::NotifyRequest { req, .. } => {
+                assert_eq!((req.id.as_str(), req.title.as_str(), req.subtitle.as_str(), req.body.as_str(), req.thread.as_str()), ("mail-work-9", "New Mail", "Gunna", "Fundur", "work"));
+            }
+            _ => unreachable!(),
+        }
+        // the task is reported done and the next check asked for
+        let methods: Vec<String> = calls(&sent).into_iter().filter(|c| c.1 == "background").map(|c| c.2).collect();
+        assert_eq!(methods, vec!["submit", "completed"], "next check first, then done");
+        // the baseline moved, so the same mail is not announced again
+        assert_eq!(background::Baseline::load(&data.join(background::FILE)).get("work"), Some(9));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

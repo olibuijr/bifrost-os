@@ -328,6 +328,9 @@ pub struct Settings {
     defaults_out: Vec<(usize, String)>,
     /// the Login Items page's rows as the shell holds them, and the ids removed there
     login_items: Vec<(String, String)>,
+    /// the Firewall page's rows as the shell holds them, and the changes made there since the last call
+    firewall: Vec<super::firewall_sheet::FirewallView>,
+    firewall_out: Vec<(String, super::firewall_sheet::Edit)>,
     /// the Login Items page's requests waiting for approval, and the ids the user allowed there
     login_pending: Vec<(String, String)>,
     login_approve_out: Vec<String>,
@@ -558,6 +561,8 @@ impl Settings {
             defaults_out: Vec::new(),
             login_items: Vec::new(),
             login_pending: Vec::new(),
+            firewall: Vec::new(),
+            firewall_out: Vec::new(),
             login_approve_out: Vec::new(),
             login_moved: Vec::new(),
             login_ext: Default::default(),
@@ -653,7 +658,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, refresh: self.refresh, resolution: self.resolution, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value, account: &self.account_label }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, firewall: &self.firewall, ext: &self.login_ext, fonts: &self.loads.fonts.value, refresh: self.refresh, resolution: self.resolution, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value, account: &self.account_label }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -1061,6 +1066,16 @@ impl Settings {
 
     pub(super) fn set_defaults(&mut self, v: Vec<super::defaultapps::CategoryView>) {
         self.defaults = v;
+    }
+
+    /// The Firewall page's rows as the `app_firewall` service holds them.
+    pub(super) fn set_firewall(&mut self, v: Vec<super::firewall_sheet::FirewallView>) {
+        self.firewall = v;
+    }
+
+    /// The Firewall page changes made since the last call: (app id, change), in order.
+    pub(super) fn take_firewall_edits(&mut self) -> Vec<(String, super::firewall_sheet::Edit)> {
+        std::mem::take(&mut self.firewall_out)
     }
 
     pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>, pending: Vec<(String, String)>) {
@@ -2430,6 +2445,22 @@ impl Settings {
                 }
             }
             Action::Users(edit) => self.users_act(ui, edit, t),
+            Action::Firewall(id, edit) => {
+                // the row shows the new choice at once; the shell saves it and reads the page back
+                if let Some(v) = self.firewall.iter_mut().find(|v| v.app_id == id) {
+                    match edit {
+                        super::firewall_sheet::Edit::Allow => v.policy = bifrost_core::app_firewall::Policy::Allow,
+                        super::firewall_sheet::Edit::Block => v.policy = bifrost_core::app_firewall::Policy::Block,
+                        super::firewall_sheet::Edit::Forget => {}
+                    }
+                }
+                if edit == super::firewall_sheet::Edit::Forget {
+                    self.firewall.retain(|v| v.app_id != id);
+                }
+                self.firewall_out.push((id, edit));
+                self.rebuild_visible(ui);
+                vec![]
+            }
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
@@ -3047,6 +3078,7 @@ impl Settings {
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
+            Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"
@@ -3643,6 +3675,25 @@ mod tests {
         st.open_page(&ui, "Print & Scan", 0.0);
         assert_eq!(st.page(), PageId::PrintScan);
         assert!(st.open_page(&ui, "No Such Pane", 0.0).is_empty());
+    }
+
+    #[test]
+    fn the_firewall_page_hands_the_shell_each_change() {
+        use super::super::firewall_sheet::{Edit, FirewallView};
+        use bifrost_core::app_firewall::Policy;
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        st.set_firewall(vec![FirewallView { app_id: "is.example.chat".into(), name: "Chat".into(), policy: Policy::Block, ports: "tcp/8080".into() }]);
+        st.open_page_id(&ui, PageId::Firewall, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), PageId::Firewall);
+        tap_row(&mut st, &ui, &mut prefs, "Allow Incoming Connections");
+        assert_eq!(st.take_firewall_edits(), vec![("is.example.chat".to_string(), Edit::Allow)]);
+        assert_eq!(st.firewall[0].policy, Policy::Allow, "the row shows the choice at once");
+        assert!(st.take_firewall_edits().is_empty());
+        tap_row(&mut st, &ui, &mut prefs, "Forget This Choice");
+        assert_eq!(st.take_firewall_edits(), vec![("is.example.chat".to_string(), Edit::Forget)]);
+        assert!(st.firewall.is_empty(), "a forgotten choice leaves the page");
     }
 
     #[test]

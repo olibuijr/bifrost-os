@@ -44,6 +44,7 @@ pub const CATALOGUE: &[SettingsIntent] = &[
     SettingsIntent { id: "open-keyboard-shortcuts", title: "Open Keyboard Shortcuts", description: "Show the keyboard shortcuts the shell answers to", page: PageId::Shortcuts },
     SettingsIntent { id: "open-login-items", title: "Open Login Items", description: "Show the apps that start at login and the app extensions", page: PageId::LoginItems },
     SettingsIntent { id: "open-network", title: "Open Network", description: "Show the network interfaces and their settings", page: PageId::Network },
+    SettingsIntent { id: "open-firewall", title: "Open Firewall", description: "Show which apps may accept incoming connections", page: PageId::Firewall },
     SettingsIntent { id: "open-vpn", title: "Open VPN", description: "Show the VPN configurations", page: PageId::Vpn },
     SettingsIntent { id: "open-notifications",title: "Open Notifications", description: "Show the notification settings for each app", page: PageId::Notifications },
     SettingsIntent { id: "open-mouse", title: "Open Mouse", description: "Show the pointer and mouse settings", page: PageId::Mouse },

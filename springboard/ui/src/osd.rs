@@ -12,8 +12,9 @@ pub const FADE_MS: u64 = 300;
 pub const DEFAULT_SEGMENTS: u32 = 16;
 
 /// The level the display shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Level {
+    #[default]
     Volume,
     Brightness,
     KeyboardBrightness,

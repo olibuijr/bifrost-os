@@ -84,6 +84,11 @@ impl AppFirewall {
         Self::with(data_dir.join(FILE), Arc::new(Nft))
     }
 
+    /// The service with its choices in `store` and `applier` loading the rules.
+    pub(crate) fn with_applier(store: PathBuf, applier: Arc<dyn Applier>) -> Self {
+        Self::with(store, applier)
+    }
+
     fn with(store: PathBuf, applier: Arc<dyn Applier>) -> Self {
         let policies = std::fs::read_to_string(&store).ok().and_then(|t| app_firewall::parse_policies(&t).ok()).unwrap_or_default();
         AppFirewall { store, policies, applier, status: Arc::new(Mutex::new(Status::NotLoaded)), worker: None, loaded_at_start: false }

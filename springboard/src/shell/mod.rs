@@ -133,6 +133,8 @@ mod volume_sheet;
 mod account_access_sheet;
 mod usb_sheet;
 mod network_auth_sheet;
+mod firewall_sheet;
+mod live_captions;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -400,6 +402,8 @@ pub enum Effect {
     BluetoothOutput,
     /// media volume 0..=1 from the Control Center slider
     Volume(f32),
+    /// keyboard backlight level 0..=1 from the keyboard backlight keys; the binary writes it to the LED
+    KeyboardBacklight(f32),
     /// a timer or alarm went off: sound it
     Alarm,
     /// arm the RTC to wake the device at this Unix time (0 = disarm)
@@ -611,9 +615,14 @@ pub struct Shell {
     /// the volume-key HUD; `hud_drawn` says the last frame had it
     hud: VolumeHud,
     hud_drawn: bool,
+    /// the keyboard backlight: its level 0..=1 and how many steps the hardware has; None without one
+    kbd_backlight: Option<(f32, u32)>,
     /// the input source HUD; `input_hud_drawn` says the last frame had it
     input_hud: SourceHud,
     input_hud_drawn: bool,
+    /// Live Captions: the plate and the pipeline behind it (see `live_captions.rs`); `captions_drawn` says the last frame had it
+    captions: live_captions::Captions,
+    captions_drawn: bool,
     /// the source each app keeps (Settings > Keyboard > Keyboards, "Remember Input Source for Each App")
     input_memory: input_memory::InputMemory,
     /// Developer › Performance HUD; `perf_drawn` says the last frame had it
@@ -826,6 +835,8 @@ pub struct Shell {
     net_auth_sheet: Option<network_auth_sheet::NetAuthSheet>,
     /// the package install sheet and the install it runs (see `package_install_sheet.rs`)
     package_session: Option<package_install_sheet::Session>,
+    /// the app firewall's Allow / Deny question and the apps asked (see `firewall_sheet.rs`)
+    fw: firewall_sheet::Firewall,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
@@ -1041,8 +1052,11 @@ impl Shell {
             cc: ControlCenter::default(),
             hud: VolumeHud::default(),
             hud_drawn: false,
+            kbd_backlight: None,
             input_hud: SourceHud::default(),
             input_hud_drawn: false,
+            captions: live_captions::Captions::default(),
+            captions_drawn: false,
             input_memory: input_memory::InputMemory::default(),
             perf: diag::PerfHud::default(),
             perf_drawn: false,
@@ -1168,6 +1182,7 @@ impl Shell {
             usb_sheet: None,
             net_auth_sheet: None,
             package_session: None,
+            fw: firewall_sheet::Firewall::default(),
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
@@ -1654,6 +1669,11 @@ impl Shell {
             self.usb_touch(x, y, matches!(ev, Event::Up(..)));
             return Some(vec![]);
         }
+        if self.fw_showing() {
+            let t = self.auth_clock;
+            self.fw_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
         if let Some(fx) = self.share_modal(ev) {
             return Some(fx);
         }
@@ -2122,6 +2142,9 @@ impl Shell {
         if let Some(w) = self.input_hud.next_wake(t).filter(|_| self.screen_on) {
             due.add(Some(w));
         }
+        if let Some(w) = self.captions.next_wake(t).filter(|_| self.screen_on) {
+            due.add(Some(w));
+        }
         let app_wake = if self.screen_on {
             match self.screen {
                 // the app's socket is in the poll set (`ext_fds`): its frames wake the loop themselves
@@ -2255,6 +2278,10 @@ impl Shell {
         }
         if self.hud.visible(t) || self.hud_drawn {
             let (x, y, w, h) = VolumeHud::damage_rect(&self.ui, self.w);
+            damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
+        }
+        if self.captions.visible(t) || self.captions_drawn {
+            let (x, y, w, h) = self.captions.rect(&self.ui, self.w, self.h);
             damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
         }
         if self.input_hud.visible(t) || self.input_hud_drawn {
@@ -3387,11 +3414,13 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
+                let firewall = self.fw_views(t);
                 let mut ext = self.login_ext_cache.get();
                 ext.refresh_off = services::background::off_from_pref(self.prefs.get(services::background::PREF_OFF));
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 ext.extensions_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::EXTENSIONS_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
+                st.set_firewall(firewall);
                 st.set_login_items(logins, pending);
                 st.set_login_extensions(ext, background_off);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
@@ -3410,6 +3439,7 @@ impl Shell {
                 let login_removed = st.take_login_removed();
                 let login_moved = st.take_login_moved();
                 let login_approved = st.take_login_approved();
+                let firewall_edits = st.take_firewall_edits();
                 let preview = st.take_screensaver_preview();
                 for change in changes {
                     match change {
@@ -3435,6 +3465,7 @@ impl Shell {
                 self.apply_default_changes(default_changes);
                 self.login_items_remove(login_removed);
                 self.login_items_approve(login_approved);
+                self.fw_edits(firewall_edits, t);
                 self.login_items_move(login_moved);
                 if self.desk.is_some() {
                     for change in dock_changes {
@@ -3816,6 +3847,8 @@ impl Shell {
         self.usb_tick(t);
         self.net_auth_tick(t);
         self.package_tick(t);
+        self.fw_tick(t);
+        self.captions_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -4215,6 +4248,10 @@ impl Shell {
         if self.input_hud_drawn {
             self.input_hud.draw(s, &self.ui, self.w, t);
         }
+        self.captions_drawn = self.captions.visible(t);
+        if self.captions_drawn {
+            self.captions.draw(s, &self.ui, self.w, self.h, t);
+        }
         if let Some(o) = &self.shot {
             damage.all();
             o.draw(s, t);
@@ -4233,7 +4270,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.guardian_sheet.is_some() || self.malware_alert.is_some() || self.usb_showing() || self.net_auth_showing() || self.package_showing() || self.photo_pick_sheet.is_some() || self.trust_sheet.is_some() || self.fw_showing() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4279,6 +4316,9 @@ impl Shell {
             if self.package_showing() {
                 self.package_draw(s, t);
             }
+            if self.fw_showing() {
+                self.fw_draw(s);
+            }
             if let Some(a) = &self.crash_alert {
                 a.draw(s, &self.ui, self.w, self.h);
             }
@@ -4322,9 +4362,9 @@ impl Shell {
         let term = self.term.as_ref()?;
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
-            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
@@ -4343,9 +4383,9 @@ impl Shell {
     fn settings_key(&self, t: f64) -> Option<(u64, i32)> {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
-            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.overlay_visible() && self.drawn != Drawn::Nothing && !self.captions.visible(t) && !self.captions_drawn
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && self.malware_alert.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none() && !self.usb_showing() && !self.net_auth_showing() && !self.package_showing() && self.trust_sheet.is_none(); && !self.fw_showing() && self.malware_alert.is_none();
         if !quiet {
             return None;
         }
