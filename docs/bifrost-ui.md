@@ -3056,7 +3056,7 @@ arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
 
 Still missing: P256, P384, P521. Status is partial until checked on Midget.
 
-## Post-quantum KEM (`MLKEM768`, `MLKEM1024`, `bifrost_app::kem`)
+## Post-quantum KEM and signatures (`MLKEM768`, `MLKEM1024`, `MLDSA65`, `MLDSA87`)
 
 ML-KEM (FIPS 203) for ML-KEM-768 and ML-KEM-1024, pure Rust in `bifrost_core::mlkem`; the hash for the matrix is the
 SHAKE128 and SHAKE256 XOF added to `bifrost_core::sha3` (`Shake`). The SDK module `bifrost_app::kem` wraps it:
@@ -3072,9 +3072,32 @@ SHAKE128 and SHAKE256 XOF added to `bifrost_core::sha3` (`Shake`). The SDK modul
 Decisions: the seeds are the caller's or the pool's, so the core draws no randomness; `DecapsulationKey` `Debug`
 shows the variant only. Known gap: the official FIPS 203 known-answer vectors are not in the repo, so the tests check
 lengths, the NTT round trip, NTT multiplication against a schoolbook product, byte and compress codecs, round trips
-and implicit rejection, and not interoperability. Out of scope: X-Wing (`XWingMLKEM768X25519`), ML-DSA (`MLDSA65`,
-`MLDSA87`), and the `KEM`/`KEMPublicKey` type shapes. Parity: `Post-quantum KEM and signatures` row in
+and implicit rejection, and not interoperability. Out of scope: X-Wing (`XWingMLKEM768X25519`) and the
+`KEM`/`KEMPublicKey` type shapes. Parity: `Post-quantum KEM and signatures` row in
 `docs/parity-matrix/data/apple-cryptokit.json` (partial until the vectors pass and it runs on Midget).
+
+### ML-DSA signatures (`MLDSA65`, `MLDSA87`, `bifrost_app::signature_pq`)
+
+ML-DSA (FIPS 204) for ML-DSA-65 and ML-DSA-87, pure Rust in `bifrost_core::mldsa`, on the same `Shake` XOF and the
+NTT over Z_q with q = 8380417 (zeta 1753). The SDK module `bifrost_app::signature_pq` wraps it:
+
+- `PrivateKey::generate(variant)` (the seed `xi` from the kernel pool), `from_seed`, `from_bytes` (recomputes the public
+  half from the secret bytes), `bytes`, `public_key()`, `sign(message, context)` (hedged: fresh signing randomness),
+  `sign_deterministic(message, context)` (zero randomness, reproducible).
+- `PublicKey::from_bytes` (length check), `bytes`, `is_valid_signature(signature, message, context) -> bool`. A bad
+  signature, a wrong message or context, and a context over 255 bytes all give `false`.
+- `Variant` is `Params`: `MlDsa65` (pk 1952, sk 4032, sig 3309) and `MlDsa87` (pk 2592, sk 4896, sig 4627).
+- `SignatureError`: `IncorrectKeySize`, `ContextTooLong`, `Unavailable`.
+
+Core: `keygen`, `sign`, `verify` (the pure interface with the context prefix `0 || |ctx| || ctx || M`),
+`public_key_from_secret_key`, and the internal algorithms with the rejection loop checks (`||z||inf`, `||r0||inf`,
+`||ct0||inf` and the hint count). The FIPS 204 bit packings and HintBitPack are in the same module.
+
+Decisions: the signing randomness is the caller's, so the core stays deterministic for a given input; the SDK fills it
+from the pool for `sign`. `PrivateKey` `Debug` shows the variant only. Known gap: the official FIPS 204 known-answer
+vectors are not in the repo, so the tests check sizes, the NTT round trip and multiplication, the sampling and
+packing round trips, sign and verify for both sets, the failure cases and reproducible deterministic signing; they do
+not check interoperability. Not done: ML-DSA-44 and the X-Wing hybrid KEM.
 
 ## Preference panes: pane links (`bifrost_ui::pane_link`, `NSPreferencePane` deep links)
 
