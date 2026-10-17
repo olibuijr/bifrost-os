@@ -4,12 +4,15 @@
 //! digit, space or mark is not a composing key: it ends the composition and passes through to the client.
 //! A consonant before a vowel makes an open syllable (`ka` gives カ). A consonant before another consonant, or at the
 //! end of the word, is a closed syllable and takes the small final kana (`kam` gives カㇺ). `sh` and `ch` are digraphs,
-//! and `tu` and `pu` use the Ainu forms ト゚ and ㇷ゚. A `y` or `w` directly after a vowel and before a consonant or the
+//! and `tu` uses the Ainu form ト゚. A `y` or `w` directly after a vowel and before a consonant or the
 //! end is the vowel i or u, so `kamuy` gives カムイ and `aynu` gives アイヌ.
 //!
+//! Finals follow the common modern katakana orthography: k ㇰ, s and sh ㇱ, t ㇳ, p ㇷ゚, m ㇺ and n ン; r and h take
+//! the small kana of the vowel before them (`kor` gives コㇿ, `ah` gives アㇵ). After another consonant or at the
+//! start, r and h use u (ㇽ, ㇷ).
+//!
 //! The marked text is rebuilt from the typed keys on every change, so backspace removes the last key. A consonant with
-//! no small kana (c, w and y as finals) stays as Latin letters. The small kana for h and the use of ㇵ, and the
-//! handling of the other small kana (ㇶ ㇸ ㇹ ㇼ ㇽ ㇾ ㇿ), need a check by a native Ainu speaker.
+//! no final form (c, w and y as finals) stays as Latin letters.
 
 use super::Composer;
 
@@ -25,7 +28,6 @@ enum Tok {
 const AINU_FORMS: &[(&str, &str)] = &[
     ("ti", "ティ"),
     ("tu", "\u{30C8}\u{309A}"),
-    ("pu", "\u{31F7}\u{309A}"),
     ("wu", "ウ"),
     ("wi", "ウィ"),
     ("we", "ウェ"),
@@ -53,18 +55,25 @@ fn syllable_of(key: &str, v: char) -> String {
     syllable(&format!("{base}{v}"))
 }
 
-/// The small kana a closed syllable takes when the key ends the word or comes before a consonant.
-fn final_kana(key: &str) -> Option<&'static str> {
+/// The kana a closed syllable takes when the key ends the word or comes before a consonant. `vowel` is the vowel of
+/// the syllable it closes, which picks the small kana for r and h.
+fn final_kana(key: &str, vowel: Option<char>) -> Option<&'static str> {
+    let by_vowel = |a, i, u, e, o| match vowel {
+        Some('a') => a,
+        Some('i') => i,
+        Some('e') => e,
+        Some('o') => o,
+        _ => u,
+    };
     Some(match key {
         "k" => "\u{31F0}",
-        "sh" => "\u{31F1}",
-        "s" => "\u{31F2}",
+        "s" | "sh" => "\u{31F1}",
         "t" => "\u{31F3}",
-        "n" => "\u{31F4}",
-        "h" => "\u{31F5}",
-        "p" => "\u{31F7}",
+        "p" => "\u{31F7}\u{309A}",
         "m" => "\u{31FA}",
-        "r" => "\u{31FB}",
+        "n" => "ン",
+        "r" => by_vowel("\u{31FB}", "\u{31FC}", "\u{31FD}", "\u{31FE}", "\u{31FF}"),
+        "h" => by_vowel("\u{31F5}", "\u{31F6}", "\u{31F7}", "\u{31F8}", "\u{31F9}"),
         _ => return None,
     })
 }
@@ -83,11 +92,14 @@ pub fn render(keys: &[char]) -> String {
         }
     }
     let mut out = String::new();
+    // the vowel of the syllable just written, which a following r or h final takes its kana from
+    let mut last_vowel = None;
     let mut i = 0;
     while i < toks.len() {
         match toks[i] {
             Tok::V(v) => {
                 out.push_str(&syllable(&v.to_string()));
+                last_vowel = Some(v);
                 i += 1;
             }
             Tok::C(c) => {
@@ -96,13 +108,15 @@ pub fn render(keys: &[char]) -> String {
                 match toks.get(next) {
                     Some(&Tok::V(v)) => {
                         out.push_str(&syllable_of(&key, v));
+                        last_vowel = Some(v);
                         i = next + 1;
                     }
                     _ => {
-                        match final_kana(&key) {
+                        match final_kana(&key, last_vowel) {
                             Some(f) => out.push_str(f),
                             None => out.push_str(&key),
                         }
+                        last_vowel = None;
                         i = next;
                     }
                 }
@@ -167,13 +181,19 @@ mod tests {
         assert_eq!(typed("chi"), "チ");
         assert_eq!(typed("ca"), "チャ");
         assert_eq!(typed("tu"), "\u{30C8}\u{309A}");
-        assert_eq!(typed("pu"), "\u{31F7}\u{309A}");
+        assert_eq!(typed("pu"), "プ");
     }
 
     #[test]
     fn closed_syllables_take_small_kana() {
         assert_eq!(typed("kam"), "カ\u{31FA}");
-        assert_eq!(typed("ask"), "ア\u{31F2}\u{31F0}");
+        assert_eq!(typed("ask"), "ア\u{31F1}\u{31F0}");
+        assert_eq!(typed("kor"), "コ\u{31FF}");
+        assert_eq!(typed("pirka"), "ピ\u{31FC}カ");
+        assert_eq!(typed("ah"), "ア\u{31F5}");
+        assert_eq!(typed("kap"), "カ\u{31F7}\u{309A}");
+        assert_eq!(typed("sisam"), "シサ\u{31FA}");
+        assert_eq!(typed("pon"), "ポン");
         assert_eq!(typed("ash"), "ア\u{31F1}");
         assert_eq!(typed("kamuy"), "カムイ");
         assert_eq!(typed("aynu"), "アイヌ");
