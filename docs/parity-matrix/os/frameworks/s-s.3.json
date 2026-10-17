@@ -1225,11 +1225,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightDaemon.framework",
@@ -1246,11 +1285,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightDiagnostics.framework",
@@ -1267,11 +1345,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightEmbedding.framework",
@@ -1288,11 +1405,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightEmbeddingCore.framework",
@@ -1309,11 +1465,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightFoundation.framework",
@@ -1330,11 +1525,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightIndex.framework",
@@ -1351,11 +1585,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightKnowledge.framework",
@@ -1372,11 +1645,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightKnowledgeDaemon.framework",
@@ -1393,11 +1705,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightLinguistics.framework",
@@ -1414,11 +1765,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightReceiver.framework",
@@ -1435,11 +1825,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightResources.framework",
@@ -1456,11 +1885,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightServerKit.framework",
@@ -1477,11 +1945,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightServices.framework",
@@ -1498,11 +2005,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightUICLI.framework",
@@ -1519,11 +2065,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightUIInternal.framework",
@@ -1540,11 +2125,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightUIServices.framework",
@@ -1561,11 +2185,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpotlightUIShared.framework",
@@ -1582,11 +2245,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
    "status": "partial",
    "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchstore::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "searchindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::search_ranking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-proto",
+     "filter": "quicksearch::tests"
+    }
+   ],
+   "ready_note": "Core Search in the shell: the default and named indexes per app (with protection classes, saved and reloaded), item expiry, deletes by identifier, domain or all, the app-side query (CSSearchQuery) and named-index queries, acknowledged index batches, and reindex requests to index extensions (Notes answers them). Host tests only; verify on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/StatusKit.framework",
