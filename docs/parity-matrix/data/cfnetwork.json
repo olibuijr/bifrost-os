@@ -12,7 +12,7 @@
       "apple": "CFHTTPMessage, CFHTTPMessageCreateRequest, CFHTTPMessageCopyHeaderFieldValue, CFHTTPMessageSetBody (https://developer.apple.com/documentation/cfnetwork/http-messages)",
       "bifrost": "springboard/sdk/src/url.rs (URLRequest::new, set_header, value; URLSession::data_task, bytes)",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 13 tests. URLRequest carries URL, method, body and headers. There is no raw serialized HTTP message, no response status line access and no CFHTTPMessageAppendBytes equivalent."
+      "note": "verified on Midget 0.7.25 by 13 tests. URLRequest carries URL, method, body and headers. There is no raw serialized HTTP message, no response status line access and no CFHTTPMessageAppendBytes equivalent. Built 2026-10-17: raw HTTP/1.1 message model for CFHTTPMessage (build, serialize, parse, header lookup) as bifrost_app::http_message; tests http_message::tests."
     },
     {
       "feature": "HTTP read streams and redirects",
@@ -107,6 +107,6 @@
     "No app-facing reachability or connectivity API; springboard/src/net/ntp.rs and springboard/src/net/wifi.rs use it internally only",
     "No network diagnostics window or API (CFNetDiagnostic)",
     "No FTP client (CFReadStreamCreateWithFTPURL)",
-    "No raw HTTP message API (CFHTTPMessage) and no HTTP/2"
+    "No raw HTTP message API (CFHTTPMessage) and no HTTP/2 Built 2026-10-17: sdk http_message.rs (CFHTTPMessage parity, headless)."
   ]
 }

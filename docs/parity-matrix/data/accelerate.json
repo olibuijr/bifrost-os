@@ -19,7 +19,7 @@
       "apple": "vDSP Fourier transforms, Discrete Cosine transforms, fast Fourier transforms",
       "bifrost": "springboard/ui/src/fourier.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT. Built 2026-10-17: orthonormal DCT-II and inverse as bifrost_app::dct; tests dct::tests."
     },
     {
       "feature": "Convolution and morphology",
@@ -89,7 +89,7 @@
       "apple": "Biquadratic IIR filters, audio spectrogram sample (vDSP plus vImage)",
       "bifrost": "springboard/sdk/src/biquad.rs (Design, Coefficients, Biquad); springboard/audiod (playback service), springboard/src/media/audioplayer.rs, biquad filter chain in springboard/apps/daw/src/devices/inst/zones/mod.rs",
       "status": "partial",
-      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps."
+      "note": "Low-pass, high-pass and peaking sections with cookbook coefficients, their magnitude response and block processing are tested headless in tests/parity_sdk-os-02.rs. Gap: no spectrogram, and the playback service does not run these filters for apps. Built 2026-10-17: spectrogram (Hann-windowed FFT frames, dB conversion) as bifrost_app::spectrogram; tests spectrogram::tests."
     },
     {
       "feature": "Core Video pixel buffer interop",
@@ -108,7 +108,7 @@
   ],
   "gaps": [
     "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
-    "No app-facing DCT API. The FFT is now public as bifrost_app::fft (radix-2 complex forward and inverse, springboard/sdk/src/fft.rs, tests fft::tests); the DAW convolver still has its own copy.",
+    "No app-facing DCT API. The FFT is now public as bifrost_app::fft (radix-2 complex forward and inverse, springboard/sdk/src/fft.rs, tests fft::tests); the DAW convolver still has its own copy. Built 2026-10-17: DCT and spectrogram now in the SDK (dct, spectrogram).",
     "No LZFSE or Brotli codec. The SDK compression module covers DEFLATE, zlib, LZ4 and LZMA (xz), and the PNG writer stores uncompressed blocks.",
     "No general image convolution, morphology, or histogram API for apps (the arbitrary-angle turn is now PixelTransfer::rotated_by in springboard/sdk/src/pixel_transfer.rs, tests pixel_transfer::tests; no shear).",
     "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",

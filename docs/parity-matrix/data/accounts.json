@@ -72,7 +72,7 @@
     }
   ],
   "gaps": [
-    "No SDK API for the local OS account (bare/account.rs). The BifrOSt cloud account has an SDK module (sdk cloud_account.rs).",
+    "No SDK API for the local OS account (bare/account.rs). The BifrOSt cloud account has an SDK module (sdk cloud_account.rs). Built 2026-10-17: sdk local_account.rs (LocalAccount: name, uid, gid, full name, home, shell, shell policy); tests local_account::tests.",
     "The framework itself is deprecated by Apple; new apps should use the service provider's SDK, so parity here is low priority."
   ]
 }

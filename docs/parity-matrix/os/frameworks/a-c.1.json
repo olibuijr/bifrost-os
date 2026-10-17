@@ -179,7 +179,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/accelerate.json",
    "status": "partial",
-   "note": "from SDK matrix accelerate.json",
+   "note": "from SDK matrix accelerate.json Built 2026-10-17: DCT (dct::tests) and spectrogram (spectrogram::tests) in the SDK; convolution, geometry, colour and neural-network gaps remain.",
    "rea": [],
    "method": "assessed"
   },
@@ -291,7 +291,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/oauth_credential.rs (OAuthCredential: access and refresh tokens, expiry, renewal, opaque keychain encoding); springboard/sdk/src/keychain.rs",
    "status": "partial",
-   "note": "Wave 2 added the typed OAuth credential (oauth_credential.rs: expiry, renewal window, refresh token kept on renewal, keychain encoding, headless tests). Still missing: a shared account list, an account type registry and the access-grant prompt (SDK matrix accounts.json).",
+   "note": "Wave 2 added the typed OAuth credential (oauth_credential.rs: expiry, renewal window, refresh token kept on renewal, keychain encoding, headless tests). Still missing: a shared account list, an account type registry and the access-grant prompt (SDK matrix accounts.json). Built 2026-10-17: installed local account model (local_account::tests). Still open: the sign-in and account creation sheet.",
    "rea": [],
    "method": "assessed"
   },
@@ -890,7 +890,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/proxy_settings.rs (ProxySettings, ProxyServer); springboard/sdk/src/http_cookies.rs (HTTPCookie, HTTPCookieStorage, parse_http_date); springboard/sdk/src/reachability.rs; springboard/sdk/src/url.rs",
    "status": "partial",
-   "note": "System proxy model (proxy_settings.rs) and cookie storage (http_cookies.rs). Built 2026-10-17: Set-Cookie Expires is read in IMF-fixdate form when there is no Max-Age (tests http_cookies::tests). Still missing: cookie storage is not wired into URLSession, URL credentials, host lookup, Bonjour browse and register, network diagnostics, FTP and raw HTTP messages (SDK matrix cfnetwork.json).",
+   "note": "System proxy model (proxy_settings.rs) and cookie storage (http_cookies.rs). Built 2026-10-17: Set-Cookie Expires is read in IMF-fixdate form when there is no Max-Age (tests http_cookies::tests). Still missing: cookie storage is not wired into URLSession, URL credentials, host lookup, Bonjour browse and register, network diagnostics, FTP and raw HTTP messages (SDK matrix cfnetwork.json). Built 2026-10-17: raw HTTP message model (http_message::tests). Still open: cookie storage is not wired into URLSession, host lookup, Bonjour and network diagnostics as listed in the data file.",
    "rea": [],
    "method": "assessed"
   },
