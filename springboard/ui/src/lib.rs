@@ -1030,6 +1030,7 @@ pub mod docscan;
 pub mod device_browser;
 pub mod scan_job;
 pub mod camera_device;
+pub mod camera_properties;
 pub mod video_device;
 pub mod video_property;
 pub mod camera_region;

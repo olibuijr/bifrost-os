@@ -89,6 +89,106 @@ impl MotionCues {
     }
 }
 
+/// Standard gravity in m/s², the factor that turns the accelerometer's readings in g into m/s².
+pub const STANDARD_GRAVITY: f32 = 9.80665;
+
+/// Takes gravity out of the accelerometer, so the cues see only the motion of the vehicle. The constant part of the
+/// reading is a slow low-pass of the readings (gravity), and each sample's motion is its difference from that estimate.
+/// The estimate follows a long push too, after about `time_constant` seconds, so a sustained turn fades from the cues
+/// the way the eye stops noticing a steady ride.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GravityEstimate {
+    time_constant: f32,
+    value: Option<[f32; 3]>,
+}
+
+impl GravityEstimate {
+    /// An estimate with the given time constant in seconds. `None` unless it is finite and above zero.
+    pub fn new(time_constant: f32) -> Option<Self> {
+        if time_constant.is_finite() && time_constant > 0.0 {
+            Some(GravityEstimate { time_constant, value: None })
+        } else {
+            None
+        }
+    }
+
+    /// Adds one reading in g (x, y, z), taken `dt` seconds after the last. Returns the motion on x and y in m/s², with
+    /// the gravity estimate from before this reading removed. The first reading only sets the estimate, so it returns
+    /// zero. A reading that is not finite, or a `dt` that is not positive, returns `None` and changes nothing.
+    pub fn linear(&mut self, sample_g: [f32; 3], dt: f32) -> Option<(f32, f32)> {
+        if !dt.is_finite() || dt <= 0.0 || sample_g.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        let (residual, next) = match self.value {
+            None => ([0.0; 3], sample_g),
+            Some(prev) => {
+                let alpha = dt / (self.time_constant + dt);
+                let residual = [sample_g[0] - prev[0], sample_g[1] - prev[1], sample_g[2] - prev[2]];
+                let next = [prev[0] + alpha * residual[0], prev[1] + alpha * residual[1], prev[2] + alpha * residual[2]];
+                (residual, next)
+            }
+        };
+        self.value = Some(next);
+        Some((residual[0] * STANDARD_GRAVITY, residual[1] * STANDARD_GRAVITY))
+    }
+}
+
+#[cfg(test)]
+mod gravity_tests {
+    use super::*;
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-3
+    }
+
+    #[test]
+    fn the_first_reading_is_taken_as_gravity() {
+        let mut g = GravityEstimate::new(2.0).unwrap();
+        assert_eq!(g.linear([0.0, 0.0, 1.0], 0.1), Some((0.0, 0.0)));
+    }
+
+    #[test]
+    fn a_jolt_shows_as_motion_and_a_still_device_shows_none() {
+        let mut g = GravityEstimate::new(2.0).unwrap();
+        g.linear([0.0, 0.0, 1.0], 0.1);
+        let (x, y) = g.linear([0.5, 0.0, 1.0], 0.1).unwrap();
+        assert!(near(x, 0.5 * STANDARD_GRAVITY));
+        assert!(near(y, 0.0));
+        let (x, _) = g.linear([0.5, 0.0, 1.0], 0.1).unwrap();
+        assert!(x.abs() < 0.5 * STANDARD_GRAVITY, "the estimate starts to absorb a steady push");
+    }
+
+    #[test]
+    fn a_sustained_push_is_absorbed_into_gravity() {
+        let mut g = GravityEstimate::new(1.0).unwrap();
+        g.linear([0.0, 0.0, 1.0], 0.1);
+        let mut last = (f32::MAX, f32::MAX);
+        for _ in 0..200 {
+            last = g.linear([0.2, 0.0, 1.0], 0.1).unwrap();
+        }
+        assert!(last.0.abs() < 0.01, "after many seconds the steady push has faded: {last:?}");
+    }
+
+    #[test]
+    fn a_bad_reading_or_time_step_changes_nothing() {
+        let mut g = GravityEstimate::new(2.0).unwrap();
+        g.linear([0.0, 0.0, 1.0], 0.1);
+        let before = g;
+        assert_eq!(g.linear([f32::NAN, 0.0, 1.0], 0.1), None);
+        assert_eq!(g.linear([0.0, 0.0, 1.0], 0.0), None);
+        assert_eq!(g.linear([0.0, 0.0, 1.0], f32::INFINITY), None);
+        assert_eq!(g, before);
+    }
+
+    #[test]
+    fn a_time_constant_must_be_positive_and_finite() {
+        assert!(GravityEstimate::new(0.0).is_none());
+        assert!(GravityEstimate::new(-1.0).is_none());
+        assert!(GravityEstimate::new(f32::NAN).is_none());
+        assert!(GravityEstimate::new(2.0).is_some());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

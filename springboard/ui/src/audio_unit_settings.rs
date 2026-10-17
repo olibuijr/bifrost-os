@@ -3,7 +3,8 @@
 //! resources; the host allocates the enabled processors from `chain` in the order it gives. A processor starts disabled,
 //! so nothing runs until the user turns it on.
 
-use crate::audio_extension::ExtensionRegistry;
+use crate::audio_extension::{ExtensionError, ExtensionRegistry, Session};
+use crate::audio_render::ComponentFactory;
 
 /// Failures of the settings model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,10 +103,70 @@ impl AudioUnitSettings {
     }
 }
 
+/// Allocates the enabled processors in run order. Each one is built by `factory(index)`, the factory for its registry
+/// index, at the host's sample rate and frame limit. If one fails, the ones already allocated are released and the
+/// error is returned, so the host never keeps a half-built chain.
+pub fn allocate_chain(
+    settings: &AudioUnitSettings,
+    registry: &ExtensionRegistry,
+    factory: impl Fn(usize) -> ComponentFactory,
+    sample_rate: f64,
+    max_frames: usize,
+) -> Result<Vec<Session>, ExtensionError> {
+    let mut sessions: Vec<Session> = Vec::new();
+    for index in settings.chain() {
+        match registry.allocate(index, factory(index), sample_rate, max_frames) {
+            Ok(session) => sessions.push(session),
+            Err(error) => {
+                for mut session in sessions {
+                    let _ = session.deallocate();
+                }
+                return Err(error);
+            }
+        }
+    }
+    Ok(sessions)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::audio_extension::Manifest;
+    use crate::audio_render::RenderUnit;
+
+    fn mono_unit() -> RenderUnit {
+        RenderUnit::new(1).unwrap()
+    }
+
+    #[test]
+    fn allocate_chain_builds_only_the_enabled_processors_in_run_order() {
+        let registry = registry(&["Alpha", "Beta", "Gamma"]);
+        let mut settings = AudioUnitSettings::new(3);
+        settings.set_enabled(0, true).unwrap();
+        settings.set_enabled(2, true).unwrap();
+        settings.move_unit(2, 0).unwrap();
+        let sessions = allocate_chain(&settings, &registry, |_| mono_unit, 48_000.0, 512).unwrap();
+        let names: Vec<&str> = sessions.iter().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["Gamma", "Alpha"]);
+        assert!(sessions.iter().all(|s| s.is_allocated()));
+    }
+
+    #[test]
+    fn allocate_chain_with_nothing_enabled_is_empty() {
+        let registry = registry(&["Alpha"]);
+        let settings = AudioUnitSettings::new(1);
+        let sessions = allocate_chain(&settings, &registry, |_| mono_unit, 48_000.0, 512).unwrap();
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn allocate_chain_refuses_a_processor_the_registry_does_not_have() {
+        let registry = registry(&["Alpha"]);
+        let mut settings = AudioUnitSettings::new(2);
+        settings.set_enabled(1, true).unwrap();
+        let result = allocate_chain(&settings, &registry, |_| mono_unit, 48_000.0, 512);
+        assert!(matches!(result, Err(ExtensionError::UnknownExtension)));
+    }
 
     fn registry(names: &[&str]) -> ExtensionRegistry {
         let mut registry = ExtensionRegistry::new();
