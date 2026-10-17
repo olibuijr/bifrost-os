@@ -301,11 +301,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/bin/route.rs, springboard/cmd/src/route.rs",
    "status": "partial",
-   "note": "net-tools route is not installed; ip route covers routing tables but not route's options",
+   "note": "net-tools route is not installed; ip route covers routing tables but not route's options Built 2026-10-17: route and route -n print the IPv4 table from /proc/net/route (route::tests); get, add, delete, change and flush are refused with a reason (ip route does them).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "route::tests"
+    }
+   ],
+   "ready_note": "The table listing (route and route -n) is built and unit tested; the table is read from /proc/net/route. Changing the table is not built."
   },
   {
    "id": "path:/usr/bin/package-stash-conflicts",
@@ -2127,7 +2136,16 @@
    "status": "partial",
    "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; Built 2026-10-17: with no -c, commands are read from standard input (plistbuddy::interactive, tests plistbuddy::tests); writes XML only",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "plistbuddy::tests"
+    }
+   ],
+   "ready_note": "Print, Set, Add, Delete, Clear and Save, plus the interactive mode that reads commands from standard input (plistbuddy::tests). Output is XML only."
   },
   {
    "id": "path:/usr/libexec/PowerUIAgent",

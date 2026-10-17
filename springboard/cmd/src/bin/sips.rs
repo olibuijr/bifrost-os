@@ -18,9 +18,9 @@ fn main() {
                 print!("{}", sips::render(file, &info, &keys));
             }
         }
-        Action::Convert { to, out, file } => {
+        Action::Convert { to, out, file, quality } => {
             let data = std::fs::read(&file).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
-            let bytes = sips::convert(&data, to).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
+            let bytes = sips::convert_with(&data, to, quality).unwrap_or_else(|e| die("sips", &format!("{file}: {e}"), 1));
             std::fs::write(&out, bytes).unwrap_or_else(|e| die("sips", &format!("{out}: {e}"), 1));
         }
         Action::Resample { target, out, files } => {
