@@ -164,6 +164,12 @@ impl Client {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Turns the Storage policy "empty the Trash after 30 days" on or off (`storage.policy_set`), which bifrostd's
+    /// purge reads from `/etc/bifrost/storage.conf`.
+    pub fn set_storage_empty_trash(&self, on: bool) -> Result<(), ClientError> {
+        self.call("storage.policy_set", vec![("empty_trash_after_30_days", Json::Bool(on))]).map(|_| ())
+    }
+
     /// Sets the system language (`lang`, LANG) and formats (`region`, LC_TIME and the other format categories)
     /// through `localectl`; both are locale identifiers such as "is_IS".
     pub fn set_locale(&self, lang: &str, region: &str) -> Result<(), ClientError> {

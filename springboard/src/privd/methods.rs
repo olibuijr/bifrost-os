@@ -44,6 +44,10 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Json::Bool(on)) => run("timedatectl", &["set-ntp", if *on { "true" } else { "false" }]).map(|_| obj(vec![])),
             _ => Err(PErr::bad("on must be a boolean")),
         },
+        "storage.policy_set" => match p.get("empty_trash_after_30_days") {
+            Some(Json::Bool(on)) => storage_policy_set(*on),
+            _ => Err(PErr::bad("empty_trash_after_30_days must be a boolean")),
+        },
         "locale.set" => set_locale(str_param(p, "lang")?, str_param(p, "region")?),
         "update.check" => update_check(),
         "update.apply" => {
@@ -182,6 +186,22 @@ const O_NOFOLLOW: i32 = 0o400000;
 const O_NOFOLLOW: i32 = 0o100000;
 
 /// Writes `text` to `file` without following a symlink at the final component (root writes here).
+/// The Storage policy file that bifrostd's purge reads (`purge::POLICY_PATH`, in the bifrostd crate).
+pub const STORAGE_POLICY_FILE: &str = "/etc/bifrost/storage.conf";
+
+/// The text of the Storage policy file: whether the Trash empties itself after 30 days.
+pub fn storage_policy_text(empty_trash: bool) -> String {
+    format!("empty_trash_after_30_days = {empty_trash}\n")
+}
+
+/// Writes the Storage policy (`storage.policy_set`) as root, no-follow, so a link planted in `/etc/bifrost` is refused.
+fn storage_policy_set(empty_trash: bool) -> Result<Json, PErr> {
+    let dir = Path::new(STORAGE_POLICY_FILE).parent().unwrap_or(Path::new("/etc/bifrost"));
+    std::fs::create_dir_all(dir).map_err(|e| PErr::internal(e.to_string()))?;
+    write_nofollow(STORAGE_POLICY_FILE, &storage_policy_text(empty_trash)).map_err(|e| PErr::internal(e.to_string()))?;
+    Ok(obj(vec![("empty_trash_after_30_days", Json::Bool(empty_trash))]))
+}
+
 pub fn write_nofollow(file: &str, text: &str) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
@@ -230,6 +250,19 @@ mod tests {
         for bad in ["", "i", "is_is", "IS", "is-IS", "is_IS.UTF-8", "../etc", "is_IS;reboot", "is_I"] {
             assert!(!locale_shape(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn storage_policy_text_is_the_key_bifrostd_reads() {
+        assert_eq!(storage_policy_text(true), "empty_trash_after_30_days = true\n");
+        assert_eq!(storage_policy_text(false), "empty_trash_after_30_days = false\n");
+        assert_eq!(STORAGE_POLICY_FILE, "/etc/bifrost/storage.conf");
+    }
+
+    #[test]
+    fn storage_policy_set_refuses_a_missing_or_non_boolean_flag() {
+        assert_eq!(call("storage.policy_set", &obj(vec![])).unwrap_err().code, "bad_params");
+        assert_eq!(call("storage.policy_set", &obj(vec![("empty_trash_after_30_days", s("yes"))])).unwrap_err().code, "bad_params");
     }
 
     #[test]
