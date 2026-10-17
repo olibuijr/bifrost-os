@@ -195,6 +195,8 @@ pub enum Toggle {
     ScreenReader,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
+    /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
+    MouseKeys,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -689,6 +691,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("assistivetouch", "accessibility touch pointer hold"),
     ("dwellcontrol", "accessibility dwell click pointer rest hover"),
     ("slowkeys", "accessibility keyboard acceptance hold delay"),
+    ("mousekeys", "accessibility keypad numbers pointer move click"),
     ("battery", "power charge energy low power"),
     ("energy", "power battery sleep display"),
     ("about", "name version serial model build computer"),
@@ -1367,6 +1370,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("Screen Reader speaks the element under the keyboard cursor. Ctrl+Alt+Right and Ctrl+Alt+Left move it."),
                     Group::new(vec![
                         Item::new("Sticky Keys").switch(a.sticky_keys, Action::Toggle(Toggle::StickyKeys)),
+                        Item::new("Mouse Keys").switch(a.mouse_keys, Action::Toggle(Toggle::MouseKeys)),
                         Item::new("Slow Keys").value(SLOW_MS[a.slow.min(SLOW_MS.len() - 1)].0).link(PageId::SlowKeys),
                     ])
                         .header("KEYBOARD")

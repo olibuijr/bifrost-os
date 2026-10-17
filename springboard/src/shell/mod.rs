@@ -2,6 +2,7 @@
 //! built-in apps, driven by plain touch/key events and drawn into a Surface.
 
 pub mod pasteboard;
+pub mod pasteboard_transfer;
 pub mod battery;
 pub mod browser;
 pub mod accessibility;
@@ -102,9 +103,9 @@ pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
-pub mod dwell;
 pub mod sticky_keys;
 pub mod slow_keys;
+pub mod mouse_keys;
 pub mod game_controllers_page;
 mod now_playing_menu;
 pub mod dnd;

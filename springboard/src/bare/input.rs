@@ -603,6 +603,8 @@ pub struct InputSet {
     pointer: Pointer,
     /// shift keys held on any keyboard, for the wheel
     shift: u8,
+    /// Mouse Keys drives the pointer from the keypad, so a cursor is drawn even with no pointing device
+    pointer_keys: bool,
     /// the hardware keyboard state last handed out by `keyboard_change`; None before the first report
     reported_keyboard: Option<bool>,
 }
@@ -639,7 +641,7 @@ impl InputSet {
 
     /// A desktop set for a panel of `w` x `h`; `exclusive` grabs keyboards, pointers and touchscreens.
     pub fn desktop(w: f32, h: f32, exclusive: bool) -> Self {
-        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, reported_keyboard: None }
+        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, pointer_keys: false, reported_keyboard: None }
     }
 
     /// A hardware keyboard is attached (any device passing `Caps::is_hardware_keyboard`).
@@ -658,14 +660,24 @@ impl InputSet {
         Some(now)
     }
 
+    /// Moves the shell's pointer by a keyboard step (Mouse Keys), clamped to the panel.
+    pub fn nudge(&mut self, dx: f32, dy: f32) {
+        self.pointer.move_by(dx, dy);
+    }
+
     /// Where the pointer is on the panel, for a cursor to be drawn there.
     pub fn pointer(&self) -> (f32, f32) {
         (self.pointer.x, self.pointer.y)
     }
 
-    /// A pointing device is present, so a cursor is worth drawing.
+    /// A pointing device is present, so a cursor is worth drawing. Mouse Keys counts as one while it is on.
     pub fn has_pointer(&self) -> bool {
-        self.slots.iter().any(|s| matches!(s.source, Source::Pointer(_)))
+        self.pointer_keys || self.slots.iter().any(|s| matches!(s.source, Source::Pointer(_)))
+    }
+
+    /// Mouse Keys is driving the pointer from the keypad (`set_pointer_keys`).
+    pub fn set_pointer_keys(&mut self, on: bool) {
+        self.pointer_keys = on;
     }
 
     /// A pointer's left button is held.
@@ -906,6 +918,26 @@ mod tests {
         let without = Caps { props: bits(4, &[INPUT_PROP_DIRECT]), abs, ..Default::default() };
         assert!(with.roles().touchscreen);
         assert!(!without.roles().touchscreen);
+    }
+
+    #[test]
+    fn mouse_keys_makes_the_pointer_visible_without_a_mouse() {
+        let mut s = InputSet::desktop(800.0, 600.0, false);
+        assert!(!s.has_pointer());
+        s.set_pointer_keys(true);
+        assert!(s.has_pointer());
+        s.nudge(5.0, 0.0);
+        assert_eq!(s.pointer(), (405.0, 300.0));
+    }
+
+    #[test]
+    fn nudge_moves_the_pointer_and_stops_at_the_panel_edge() {
+        let mut p = Pointer::new(800.0, 600.0);
+        assert_eq!((p.x, p.y), (400.0, 300.0));
+        p.move_by(10.0, -20.0);
+        assert_eq!((p.x, p.y), (410.0, 280.0));
+        p.move_by(-10_000.0, 10_000.0);
+        assert_eq!((p.x, p.y), (0.0, 599.0));
     }
 
     #[test]

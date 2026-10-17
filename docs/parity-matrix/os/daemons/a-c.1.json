@@ -801,7 +801,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs. shell/dwell.rs is an older, unused copy of the model. Needs a Midget check before it counts as parity.",
+   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs (the old duplicate shell/dwell.rs was removed). Needs a Midget check before it counts as parity.",
    "rea": [],
    "method": "heuristic",
    "ready": true,
@@ -1174,11 +1174,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs, springboard/src/shell/slow_keys.rs",
+   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs, springboard/src/shell/slow_keys.rs, springboard/src/shell/mouse_keys.rs, springboard/src/bare/input.rs",
    "status": "partial",
-   "note": "Sticky Keys is on and off from Settings > Accessibility > Keyboard (a11y_sticky_keys). HwKeys taps the latches on modifier presses and holds them for the next text key (hwkeys.rs). Slow Keys is built (shell/slow_keys.rs, Settings > Accessibility > Keyboard > Slow Keys): the input loop holds a key press until the delay has passed and drops presses released before it. Repeat Keys is the key auto-repeat in hwkeys.rs (Settings > Keyboard > Key Repeat). Mouse Keys is not built: the numeric keypad does not move the pointer yet.",
+   "note": "Sticky Keys, Slow Keys, Repeat Keys and Mouse Keys are built. Sticky Keys is a switch in Settings > Accessibility > Keyboard (hwkeys.rs latches the modifiers). Slow Keys is Settings > Keyboard > Slow Keys (shell/slow_keys.rs). Repeat Keys is the key auto-repeat in hwkeys.rs (Settings > Keyboard > Key Repeat). Mouse Keys is a switch (shell/mouse_keys.rs): the keypad moves the pointer with acceleration and the 5 key clicks; 0 and the decimal point are not used for hold and release yet.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sticky_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::slow_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::hwkeys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    }
+   ],
+   "ready_note": "Keyboard access: Sticky Keys (shell/sticky_keys.rs, hwkeys tests), Slow Keys (shell/slow_keys.rs), Repeat Keys (hwkeys.rs KeyRepeat) and Mouse Keys (shell/mouse_keys.rs), with the settings round trips in accessibility::tests. Needs a Midget check of the keypad and the switches."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.LinkedNotesUIService.plist",
@@ -4332,9 +4361,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pasteboard.rs",
+   "bifrost": "springboard/src/shell/pasteboard.rs, springboard/src/shell/pasteboard_transfer.rs",
    "status": "partial",
-   "note": "Pasteboard contents and Wayland offers only (shell/pasteboard.rs). Not built: the transfer progress panel for a shared clipboard item that is still arriving.",
+   "note": "Pasteboard contents and Wayland offers (shell/pasteboard.rs). The transfer model is built (shell/pasteboard_transfer.rs): byte progress, a 600 ms delay so quick pastes never show a panel, finish, and decimal size labels. Not built: the overlay that draws it, and the hook that feeds byte counts from the clipboard service's large transfers.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4497,9 +4526,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock",
+   "bifrost": "packaging/arch/initcpio/hooks/bifrost-unlock, springboard/core/src/volume_unlock.rs",
    "status": "partial",
-   "note": "The initramfs hook unlocks the encrypted system volume at boot. There is no prompt in the user session to unlock other encrypted volumes after login.",
+   "note": "The initramfs hook unlocks the encrypted system volume at boot. After login, core volume_unlock.rs finds LUKS volumes with no open mapping and checks device names for the helper. Not built: the privileged disk.unlock_volume method that opens one with the password on stdin, the queue that shows the password sheet (auth_sheet.rs pattern, needs a forms Purpose for volumes), and the mount after a successful unlock.",
    "rea": [],
    "method": "audit"
   },
