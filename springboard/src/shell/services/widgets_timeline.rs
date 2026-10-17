@@ -17,6 +17,10 @@
 //! - `start_activity {title,text,stale_at?,start_at?}` returns the activity id.
 //! - `update_activity {id,title,text,stale_at?}`, `end_activity {id,title?,text?,dismissal:"default"|"immediate"|"after",after?}`.
 //! - `activities {}` lists the app's activities on screen: `[{id,state,title,text}]`.
+//! - `widgets {}` lists the app's own widgets as the person has arranged them: `[{kind,on_screen,large,configurable,
+//!   title?}]` (`on_screen` is true while the widget is in the column and has an entry for now).
+//! - `observe {kind, on}` starts or stops observing one widget; while observing, the shell sends the `visibility` event
+//!   `{kind, on_screen, large}` each time the person adds, removes or resizes it in Edit Widgets (WidgetObservation).
 //!
 //! The store is process-wide because Notification Centre draws from it outside a service call; the logic lives in
 //! [`Store`], which the tests drive directly.
@@ -137,11 +141,13 @@ pub struct Store {
     activities: Registry<Text>,
     /// the app that started each activity, by id
     owners: Vec<(u32, String)>,
+    /// widgets an app observes, with the `(on_screen, large)` pair last reported to it
+    observing: Vec<(String, String, (bool, bool))>,
 }
 
 impl Default for Store {
     fn default() -> Self {
-        Store { widgets: Vec::new(), searches: Vec::new(), activities: Registry::new(true), owners: Vec::new() }
+        Store { widgets: Vec::new(), searches: Vec::new(), activities: Registry::new(true), owners: Vec::new(), observing: Vec::new() }
     }
 }
 
@@ -363,6 +369,39 @@ impl Store {
         out
     }
 
+    /// What an app may observe of one of its widgets: `(on_screen, large)`. On screen means the person has it in the
+    /// column and it has an entry for `now`. None when the app has not reloaded that kind.
+    fn appearance(&self, app: &str, kind: &str, now: i64) -> Option<(bool, bool)> {
+        let w = self.widgets.iter().find(|w| w.app == app && w.kind == kind)?;
+        Some((w.placed && w.timeline.entry_at(now as f64).is_some(), w.large))
+    }
+
+    /// Starts (`on`) or stops observing the widget `kind` of `app`. A new observation reports nothing until the
+    /// widget changes; the first change is measured against what is true now.
+    pub fn observe(&mut self, app: &str, kind: &str, on: bool, now: i64) -> Result<(), String> {
+        check_kind(kind)?;
+        self.observing.retain(|(a, k, _)| !(a == app && k == kind));
+        if on {
+            let state = self.appearance(app, kind, now).unwrap_or((false, false));
+            self.observing.push((app.into(), kind.into(), state));
+        }
+        Ok(())
+    }
+
+    /// The observed widgets whose appearance changed since they were last reported, once each.
+    pub fn visibility_changes(&mut self, now: i64) -> Vec<(String, String, bool, bool)> {
+        let mut out = Vec::new();
+        let seen: Vec<(String, String, (bool, bool))> = std::mem::take(&mut self.observing);
+        for (app, kind, last) in seen {
+            let now_state = self.appearance(&app, &kind, now).unwrap_or((false, false));
+            if now_state != last {
+                out.push((app.clone(), kind.clone(), now_state.0, now_state.1));
+            }
+            self.observing.push((app, kind, now_state));
+        }
+        out
+    }
+
     pub fn rows(&self, now: i64) -> Vec<Row> {
         let now_f = now as f64;
         // each widget's entry on screen, paired with its rank item; widgets without a hint rank last, in their order
@@ -525,6 +564,33 @@ impl Store {
                 self.activities.end(id, final_content, dismissal, unix(now)).map_err(error_text)?;
                 Ok(Json::Bool(true))
             }
+            "widgets" => {
+                let list = self
+                    .widgets
+                    .iter()
+                    .filter(|w| w.app == app)
+                    .map(|w| {
+                        let entry = w.timeline.entry_at(now as f64);
+                        let mut o = vec![
+                            ("kind".to_string(), Json::Str(w.kind.clone())),
+                            ("on_screen".to_string(), Json::Bool(w.placed && entry.is_some())),
+                            ("large".to_string(), Json::Bool(w.large)),
+                            ("configurable".to_string(), Json::Bool(w.config.is_some())),
+                        ];
+                        if let Some(e) = entry {
+                            o.push(("title".to_string(), Json::Str(e.value.title.clone())));
+                        }
+                        Json::Obj(o)
+                    })
+                    .collect();
+                Ok(Json::Arr(list))
+            }
+            "observe" => {
+                let kind = p.str_field("kind").ok_or("observe needs a kind")?;
+                let on = p.get("on").and_then(bool_of).unwrap_or(true);
+                self.observe(app, &kind, on, now)?;
+                Ok(Json::Bool(on))
+            }
             "activities" => {
                 let mut list = Vec::new();
                 for (id, a) in &self.owners {
@@ -600,6 +666,14 @@ fn value_of(param: &Parameter, j: &Json) -> Result<Value, String> {
     }
 }
 
+/// A JSON boolean, or None for any other value.
+fn bool_of(j: &Json) -> Option<bool> {
+    match j {
+        Json::Bool(b) => Some(*b),
+        _ => None,
+    }
+}
+
 fn id_of(p: &Json) -> Result<u32, String> {
     let id = p.get("id").and_then(Json::as_u64).ok_or("needs an activity id")?;
     u32::try_from(id).map_err(|_| "no such activity".to_string())
@@ -672,14 +746,20 @@ impl SystemService for WidgetsTimeline {
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
         let now = shell.notify.now();
-        with(|s| s.due(now))
+        let mut events: Vec<Event> = with(|s| s.due(now))
             .into_iter()
             .map(|(app, kind)| Event {
                 app: Some(app),
                 event: "reload".into(),
                 body: Json::Obj(vec![("kind".into(), Json::Str(kind))]),
             })
-            .collect()
+            .collect();
+        events.extend(with(|s| s.visibility_changes(now)).into_iter().map(|(app, kind, on_screen, large)| Event {
+            app: Some(app),
+            event: "visibility".into(),
+            body: Json::Obj(vec![("kind".into(), Json::Str(kind)), ("on_screen".into(), Json::Bool(on_screen)), ("large".into(), Json::Bool(large))]),
+        }));
+        events
     }
 }
 
@@ -984,5 +1064,49 @@ mod tests {
         // defining the same options again keeps the values; a changed list starts over
         assert_eq!(s.configure("is.a", "next", vec![Parameter::Flag { key: "metric".into(), default: true }]), Ok(1));
         assert_eq!(s.configuration("is.a", "next").and_then(|c| c.value("days")), None, "a new list has only its own options");
+    }
+    #[test]
+    fn an_app_lists_its_own_widgets_with_what_the_person_arranged() {
+        let mut s = Store::default();
+        s.reload("is.a", "one", vec![entry(100.0, "One", "a")], ReloadPolicy::Never).unwrap();
+        s.reload("is.a", "two", vec![entry(900.0, "Two", "b")], ReloadPolicy::Never).unwrap();
+        s.reload("is.b", "other", vec![entry(100.0, "Other", "c")], ReloadPolicy::Never).unwrap();
+        s.set_large("is.a", "one", true);
+        let list = s.call("is.a", "widgets", &Json::Null, 150).unwrap();
+        let rows = list.as_array().unwrap();
+        assert_eq!(rows.len(), 2, "another app's widget is not listed");
+        assert_eq!(rows[0].get("kind").and_then(Json::as_str), Some("one"));
+        assert_eq!(rows[0].get("on_screen").and_then(bool_of), Some(true));
+        assert_eq!(rows[0].get("large").and_then(bool_of), Some(true));
+        assert_eq!(rows[0].get("title").and_then(Json::as_str), Some("One"));
+        assert_eq!(rows[1].get("on_screen").and_then(bool_of), Some(false), "no entry for now yet");
+        assert!(rows[1].get("title").is_none());
+    }
+
+    #[test]
+    fn an_observed_widget_reports_each_change_once_and_only_to_its_owner() {
+        let mut s = Store::default();
+        s.reload("is.a", "one", vec![entry(100.0, "One", "a")], ReloadPolicy::Never).unwrap();
+        s.call("is.a", "observe", &obj(&[("kind", Json::Str("one".into()))]), 150).unwrap();
+        assert!(s.visibility_changes(150).is_empty(), "nothing changed since the observation began");
+        s.set_placed("is.a", "one", false);
+        assert_eq!(s.visibility_changes(150), vec![("is.a".to_string(), "one".to_string(), false, false)]);
+        assert!(s.visibility_changes(150).is_empty(), "a change is reported once");
+        s.set_placed("is.a", "one", true);
+        s.set_large("is.a", "one", true);
+        assert_eq!(s.visibility_changes(150), vec![("is.a".to_string(), "one".to_string(), true, true)]);
+        s.call("is.a", "observe", &obj(&[("kind", Json::Str("one".into())), ("on", Json::Bool(false))]), 150).unwrap();
+        s.set_large("is.a", "one", false);
+        assert!(s.visibility_changes(150).is_empty(), "a stopped observation reports nothing");
+    }
+
+    #[test]
+    fn a_removed_widget_reads_as_gone_to_its_observer() {
+        let mut s = Store::default();
+        s.reload("is.a", "one", vec![entry(100.0, "One", "a")], ReloadPolicy::Never).unwrap();
+        s.observe("is.a", "one", true, 150).unwrap();
+        s.remove("is.a", "one");
+        assert_eq!(s.visibility_changes(150), vec![("is.a".to_string(), "one".to_string(), false, false)]);
+        assert!(s.observe("is.a", "", true, 150).is_err(), "the kind is checked like a reload's");
     }
 }
