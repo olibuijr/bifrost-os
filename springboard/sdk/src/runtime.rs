@@ -527,6 +527,8 @@ pub(crate) fn direct_fallback_reason(requested: bool, vulkan: bool, layer_manage
 
 /// Runs `app` on the socket the shell passed in `BIFROST_SOCK` until it quits.
 pub fn run<A: App>(app: A) {
+    // the same theme definition file as the shell's: an app's colours follow it
+    bifrost_render::theme::load_at_startup();
     let fd: i32 = std::env::var("BIFROST_SOCK").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| {
         eprintln!("bifrost-app: BIFROST_SOCK is not set; apps are started by SpringBoard");
         std::process::exit(2)

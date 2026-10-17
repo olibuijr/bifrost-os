@@ -350,8 +350,19 @@ impl Pair {
     }
     /// The colour at the current scheme position.
     pub fn now(self) -> u32 {
+        self.resolve(crate::theme::swapped(self.dark, self.light))
+    }
+    /// As `now`, with the colours of `theme` instead of the one read at startup.
+    pub fn now_in(self, theme: &crate::theme::Theme) -> u32 {
+        self.resolve(theme.swap(self.dark, self.light))
+    }
+    fn resolve(self, swapped: Option<(u32, u32)>) -> u32 {
         if self.follows_accent {
             return accent_now();
+        }
+        // a theme file (`theme.rs`) may give this pair other colours; they win over the accent rule below
+        if let Some((dark, light)) = swapped {
+            return mix(dark, light, scheme());
         }
         // SELECTION is the accent a step deeper in Dark
         if self.dark == SELECTION_DARK && self.light == SELECTION_LIGHT && !matches!(accent(), Accent::Blue | Accent::Multicolour) {
