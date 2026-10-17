@@ -512,7 +512,8 @@ impl fmt::Debug for AccountStore {
 }
 
 /// Asks the person for access to accounts of one type (`requestAccessToAccounts`). The shell draws the Allow / Don't
-/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up.
+/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up. The app's manifest
+/// must list the `accounts` permission (`permissions = ["accounts"]`), or the shell answers `permission_denied`.
 pub fn request_access(ctx: &Ctx, account_type: &str) -> u32 {
     let params = Json::Obj(vec![("type".into(), Json::Str(account_type.into()))]);
     crate::service::call(ctx, "accounts", "request_access", &params)
@@ -683,6 +684,8 @@ mod tests {
         assert_eq!(access_answer(&granted), Some(Ok(true)));
         let refused = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(false))]);
         assert_eq!(access_answer(&refused), Some(Ok(false)));
+        let denied = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("permission_denied".into()))]);
+        assert_eq!(access_answer(&denied), Some(Ok(false)), "a denial reads as a refusal, never as access");
         let invalid = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))]);
         assert_eq!(access_answer(&invalid), Some(Err(AccountError::AccountTypeInvalid)));
     }

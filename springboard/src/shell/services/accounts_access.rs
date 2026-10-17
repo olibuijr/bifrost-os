@@ -2,6 +2,9 @@
 //! answers Allow or Don't Allow on a sheet the shell draws (`shell/account_access_sheet.rs`). The answer is written to
 //! the accounts store file (`bifrost_ui::account_store::set_access`), where the SDK's `AccountStore` reads it.
 //!
+//! An app may ask only when its manifest lists the `accounts` permission (`permissions = ["accounts"]`). Without it the
+//! answer is `permission_denied` and no sheet is shown.
+//!
 //! Methods (params are a JSON object):
 //! - `request_access {type}` answers `{ok: true, granted}` when the person already allowed the type, or the answer
 //!   the sheet recorded (once). While the sheet is up it answers `{ok: false, error: "pending", pending: true}`: the app
@@ -127,7 +130,19 @@ pub fn gate(contents: &account_store::Contents, app: &str, account_type: &str) -
     }
 }
 
+/// The denial for an app whose manifest does not list the `accounts` permission, or `None` when it does.
+pub fn permission_denial(has_permission: bool) -> Option<Json> {
+    if has_permission {
+        None
+    } else {
+        Some(Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("permission_denied".into()))]))
+    }
+}
+
 fn request_access(app_id: &str, params: &Json) -> Result<Json, String> {
+    if let Some(denial) = permission_denial(super::app_has_permission(app_id, "accounts")) {
+        return Ok(denial);
+    }
     let account_type = params.get("type").and_then(Json::as_str).ok_or("accounts: request_access needs a type")?.to_string();
     if let Some(granted) = take_answer(app_id, &account_type) {
         return Ok(granted_reply(granted));
@@ -236,6 +251,14 @@ mod tests {
         c.refusals.push(RefusalEntry { app: "app.notes".into(), account_type: "bifrost.mail".into() });
         assert_eq!(gate(&c, "app.notes", "bifrost.mail"), Gate::Refused, "a refusal stands for that app");
         assert_eq!(gate(&c, "app.other", "bifrost.mail"), Gate::Ask, "another app is asked");
+    }
+
+    #[test]
+    fn a_request_needs_the_accounts_permission_in_the_manifest() {
+        assert_eq!(permission_denial(true), None);
+        let denied = permission_denial(false).expect("a denial");
+        assert_eq!(denied.get("error").and_then(Json::as_str), Some("permission_denied"));
+        assert_eq!(denied.get("ok"), Some(&Json::Bool(false)));
     }
 
     #[test]
