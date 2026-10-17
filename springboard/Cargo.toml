@@ -27,6 +27,8 @@ bifrost-core = { path = "core" }
 bootweave-frame = { path = "bootweave/frame" }
 bifrost-render = { path = "render" }
 bifrost-ui = { path = "ui" }
+# the Anthropic Messages client: the shell's intent calls (src/shell/assistant.rs) and the Assistant app share it
+assistant-client = { package = "bifrost-assistant-client", path = "assistant-client" }
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"], optional = true }
 wayland-client = { version = "0.31", optional = true }
 wayland-scanner = { version = "0.31", optional = true }
