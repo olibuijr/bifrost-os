@@ -16,6 +16,7 @@ pub mod folders;
 pub mod note_url;
 pub mod settings;
 mod chrome;
+mod settings_pane;
 pub mod icon;
 pub mod rpc;
 pub mod sketch;
@@ -26,6 +27,7 @@ pub mod outline;
 pub mod table;
 pub mod fold;
 pub mod gallery;
+pub mod note_windows;
 
 mod parity;
 mod pdf;
@@ -109,6 +111,21 @@ const SKETCH_ZONE_PT: f32 = 90.0;
 /// The Notes tint (systemYellow in dark mode).
 pub const YELLOW: u32 = springboard::shell::ui::SYSTEM_YELLOW;
 const RED: u32 = springboard::shell::ui::SYSTEM_RED;
+
+/// The ink of the note text: white on the dark note background, the appearance's label colour otherwise.
+pub fn ink(dark_background: bool) -> u32 {
+    if dark_background { LABEL.dark } else { LABEL.now() }
+}
+
+/// An editor for the note text at `w` px, with the Settings text size and ink (Markdown, links detected).
+fn new_editor(ui: &Ui, w: f32, settings: &settings::Settings) -> TextArea {
+    let mut e = TextArea::new(ui, w, settings.text_size.body_pt(), TITLE_PT, ink(settings.dark_background), YELLOW);
+    e.set_detect_links(true);
+    e.set_markdown(ui, true);
+    e
+}
+/// Two taps on one row within this many ms open the note in a window of its own.
+const DOUBLE_TAP_MS: f64 = 400.0;
 /// How long the Undo bar stays after a delete.
 const UNDO_TOAST_MS: f64 = 5000.0;
 
@@ -147,7 +164,6 @@ const GALLERY_CARD_PT: f32 = 196.0;
 const GALLERY_THUMB_PT: f32 = 110.0;
 const DATE_TOP_PT: f32 = 12.0;
 const TEXT_TOP_PT: f32 = 36.0;
-const BODY_PT: f32 = MAC_BODY_PT;
 const TITLE_PT: f32 = MAC_LARGE_TITLE_PT;
 const MENU_W_PT: f32 = 240.0;
 /// How many tags the list menu lists (the sidebar lists them all).
@@ -416,6 +432,10 @@ pub struct Notes {
     appearance: u32,
     view: View,
     prefs: store::Prefs,
+    /// the Notes settings pane's values (text size, new note start, dark background)
+    note_settings: settings::Settings,
+    /// Notes > Settings is open over the window
+    settings_open: bool,
     /// the collapsed headings of every note (Format > Collapse Section)
     folds: fold::Folds,
     /// gallery thumbnails by note id: the picture's name and the decoded picture (None when it did not decode)
@@ -473,6 +493,12 @@ pub struct Notes {
     share_req: Option<springboard::shell::share::Item>,
     /// a link the user tapped in the note, for the app to open
     link_req: Option<String>,
+    /// the last row tapped and when (ms), for a double-click that opens a note in its own window
+    row_tap: Option<(String, f64)>,
+    /// a note the user asked to open in a window of its own (set by a double-click or the Note menu)
+    window_req: Option<String>,
+    /// the note windows open now (Note > Open in Separate Window)
+    pub windows: note_windows::NoteWindows,
     row_touch: Option<RowTouch>,
     /// (row, reveal px <= 0) of the row sliding or resting open
     reveal: Option<(usize, f32)>,
@@ -522,9 +548,12 @@ impl Notes {
         let pinned = store::load_pins(&dir, &notes);
         let prefs = store::load_prefs(&dir);
         let folds = fold::load(&dir);
+        let note_settings = settings::load(&dir);
         let mut n = Notes {
             w,
             h,
+            note_settings,
+            settings_open: false,
             notes,
             pinned,
             pin_error: None,
@@ -566,7 +595,7 @@ impl Notes {
             search: TextField::new(ui, "Search", MAC_BODY_PT, false, 100),
             searching: false,
             editor: {
-                let mut e = TextArea::new(ui, w as f32 - 2.0 * ui.pt(TEXT_INSET_PT), BODY_PT, TITLE_PT, LABEL.now(), YELLOW);
+                let mut e = TextArea::new(ui, w as f32 - 2.0 * ui.pt(TEXT_INSET_PT), note_settings.text_size.body_pt(), TITLE_PT, ink(note_settings.dark_background), YELLOW);
                 e.set_detect_links(true);
                 e
             },
@@ -580,6 +609,9 @@ impl Notes {
             pressed: None,
             share_req: None,
             link_req: None,
+            row_tap: None,
+            window_req: None,
+            windows: note_windows::NoteWindows::new(),
             row_touch: None,
             reveal: None,
             list_selected: None,
@@ -957,6 +989,28 @@ impl Notes {
         self.link_req.take()
     }
 
+    /// The note the user asked to open in a window of its own, if any (`note_windows`).
+    pub fn take_window_request(&mut self) -> Option<String> {
+        self.window_req.take()
+    }
+
+    /// Note > Open in Separate Window: asks for the open note in a window of its own.
+    pub fn request_window(&mut self) {
+        self.window_req = self.editing().map(|n| n.id.clone());
+    }
+
+    /// The title of a note, for the title of its window.
+    pub fn note_title(&self, id: &str) -> Option<String> {
+        self.notes.iter().find(|n| n.id == id).map(|n| n.title().to_string())
+    }
+
+    /// Draws one of the note windows (`note_windows::draw`). The main window is drawn by `draw`.
+    pub fn draw_window(&mut self, s: &mut Surface, ui: &Ui, window: bifrost_app::app_windows::WindowId) {
+        let text = self.windows.note_of(window).map(str::to_owned);
+        let text = text.as_deref().and_then(|id| self.notes.iter().find(|n| n.id == id)).map(|n| n.text.as_str());
+        note_windows::draw(window, &mut self.windows, s, ui, text, self.note_settings);
+    }
+
     /// The shortcut row above the keyboard while it is shown.
     fn shortcut_top(&self, ui: &Ui) -> Option<f32> {
         self.keyboard.shown().then(|| self.kb_top(ui) - ui.pt(SHORTCUT_PT))
@@ -1278,7 +1332,8 @@ impl Notes {
             self.close_note(ui, t);
         }
         let id = self.fresh_id(t);
-        self.notes.insert(0, Note { id: id.clone(), text: String::new(), modified: self.wall.now(t) });
+        let text = self.note_settings.new_note_start.prefix().to_string();
+        self.notes.insert(0, Note { id: id.clone(), text, modified: self.wall.now(t) });
         if let View::Folder(f) = &self.view {
             self.loc.insert(id.clone(), f.clone());
         }
@@ -1710,7 +1765,11 @@ impl Notes {
 
     /// Ticks or unticks every checklist item of the open note, as one undo step.
     fn set_checks(&mut self, ui: &Ui, done: bool, t: f64) {
-        let new = md::set_all_checks(self.editor.text(), done);
+        let mut new = md::set_all_checks(self.editor.text(), done);
+        // Move Checked to Bottom applies to Mark All too, as it does to a single tick
+        if self.prefs.checked_to_bottom {
+            new = md::checked_to_bottom(&new);
+        }
         let caret = self.editor.caret().min(new.chars().count());
         self.rewrite(ui, &new, caret, t);
     }
@@ -2949,7 +3008,14 @@ impl Notes {
             Target::Row(i) => {
                 if self.reveal.take().is_none() {
                     self.search.focused = false;
+                    let id = self.notes[self.shown[i]].id.clone();
+                    // a second tap on the same row within DOUBLE_TAP_MS opens the note in a window of its own
+                    let double = matches!(self.row_tap.take(), Some((ref prev, t0)) if *prev == id && t - t0 < DOUBLE_TAP_MS);
+                    self.row_tap = (!double).then(|| (id.clone(), t));
                     self.open_note(ui, self.shown[i], false, t);
+                    if double {
+                        self.window_req = Some(id);
+                    }
                 }
             }
             Target::Delete(i) => self.delete_row(ui, i, t),
@@ -3039,6 +3105,13 @@ impl Notes {
         }
         if self.picker.is_some() {
             self.picker_touch(ui, ev, t);
+            return;
+        }
+        if self.settings_open {
+            // the Settings pane takes the taps: a Done or an outside tap closes it, a row changes its value
+            if let Event::Up(..) = ev {
+                self.settings_tap(ui, x, y, t);
+            }
             return;
         }
         if self.menu.is_some() {
@@ -3230,10 +3303,14 @@ impl Notes {
         if LABEL.now() == self.appearance || bifrost_app::kit::appearance::fading() {
             return;
         }
+        self.remake_editor(ui, t);
+    }
+
+    /// The editor laid out again with the current text size and ink (Settings changes and Light/Dark switches). The
+    /// text, caret, focus and highlights are kept.
+    fn remake_editor(&mut self, ui: &Ui, t: f64) {
         let (text, caret, focused) = (self.editor.text().to_string(), self.editor.caret(), self.editor.focused);
-        let mut e = TextArea::new(ui, self.editor_w.max(1.0), BODY_PT, TITLE_PT, LABEL.now(), YELLOW);
-        e.set_detect_links(true);
-        e.set_markdown(ui, true);
+        let mut e = new_editor(ui, self.editor_w.max(1.0), &self.note_settings);
         e.set_text(ui, &text);
         e.set_caret(caret);
         e.focused = focused;
@@ -3416,6 +3493,9 @@ impl Notes {
             centred(s, img, (ex + ew / 2.0) as i32, ((top + bottom) / 2.0) as i32);
             return;
         }
+        if self.note_settings.dark_background {
+            s.fill_rect(ex as usize, top as usize, ew as usize, (bottom - top).max(0.0) as usize, CONTENT_BG.dark);
+        }
         {
             let mut content = s.rows(top as usize, bottom as usize);
             let (ox, oy) = self.text_origin(ui);
@@ -3521,6 +3601,7 @@ impl Notes {
         self.draw_chrome(s, ui);
         self.draw_naming(s, ui);
         self.draw_replacing(s, ui);
+        self.draw_settings(s, ui);
         self.draw_menu(s, ui);
         self.draw_picker(s, ui);
         self.draw_sketch(s, ui);

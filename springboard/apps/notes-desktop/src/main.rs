@@ -6,6 +6,9 @@ use notes::notes;
 use ::notes::notes::system;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::app_windows::WindowId;
+use bifrost_app::windows::{self, Level};
+use notes::notes::note_windows;
 use bifrost_app::widgets_timeline;
 use bifrost_app::KeyInput;
 use bifrost_app::proto::{DocErrorCode, DocMode};
@@ -141,6 +144,12 @@ const MENU_SPEAK_STOP: u32 = 11;
 /// View > as List / as Gallery.
 const MENU_LAYOUT_LIST: u32 = 12;
 const MENU_LAYOUT_GALLERY: u32 = 13;
+/// Note > Open in Separate Window.
+const MENU_OPEN_WINDOW: u32 = 14;
+/// Window > Float on Top, for the focused note window.
+const MENU_FLOAT_ON_TOP: u32 = 15;
+/// Notes > Settings: the pane over the window (text size, new note start, dark background, sort and grouping).
+const MENU_SETTINGS: u32 = 16;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
 const MENU_RECENT: u32 = 100;
 /// The Format menu: `FORMAT_BASE + n` is the n-th row of `format_table`, `TABLE_BASE + n` the n-th table command.
@@ -381,7 +390,15 @@ impl App for NotesApp {
         note.push(AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1));
         note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
-        vec![AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n)]
+        note.push(AppMenuItem::separator());
+        note.push(AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(editing));
+        note.push(AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,"));
+        let focused = n.windows.focused();
+        let float = AppMenu {
+            title: "Window".into(),
+            items: vec![AppMenuItem::new(MENU_FLOAT_ON_TOP, "Float on Top").enabled(focused.is_some()).checked(focused.is_some_and(|w| n.windows.is_floating(w)))],
+        };
+        vec![AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n), float]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
@@ -479,7 +496,41 @@ impl App for NotesApp {
                 n.find(&ctx.ui, now);
                 true
             }
+            MENU_OPEN_WINDOW => {
+                n.request_window();
+                true
+            }
+            MENU_SETTINGS => {
+                n.open_settings();
+                true
+            }
+            MENU_FLOAT_ON_TOP => {
+                let Some(n) = &mut self.notes else { return false };
+                let Some(window) = n.windows.focused() else { return false };
+                let Some(on) = n.windows.toggle_floating(window) else { return false };
+                windows::set_window_level(ctx, window, if on { Level::Floating } else { Level::Normal });
+                true
+            }
             _ => false,
+        }
+    }
+
+    /// Opens a note in a window of its own (`Ctx::open_window`). A note that is already open is focused, not opened
+    /// twice; a window the shell refuses leaves the note where it was.
+    fn open_note_window(&mut self, ctx: &Ctx, id: &str) -> bool {
+        let Some(n) = &mut self.notes else { return false };
+        if let Some(window) = n.windows.window_of(id) {
+            n.windows.focus(window);
+            return true;
+        }
+        let Some(title) = n.note_title(id) else { return false };
+        match ctx.open_window(note_windows::window_spec(&title)) {
+            Ok(window) => {
+                n.windows.bind(window, id);
+                n.windows.focus(window);
+                true
+            }
+            Err(_) => false,
         }
     }
 
@@ -730,12 +781,40 @@ impl App for NotesApp {
             n.set_wall(Wall::sample(t));
         }
         let redraw = n.tick(&ctx.ui, t);
+        let requested = n.take_window_request();
         self.track_restorable(ctx);
-        redraw
+        let opened = requested.is_some_and(|id| self.open_note_window(ctx, &id));
+        redraw || opened
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.notes.as_ref().and_then(|n| n.next_wake(t))
+    }
+
+    /// A note window draws its note (`Notes::draw_window`); any other extra window draws nothing.
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+        if let Some(n) = &mut self.notes {
+            n.draw_window(s, &ctx.ui, window);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+
+    /// A touch in a note window focuses it (the Window menu's Float on Top acts on it). The window takes no typing yet.
+    fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        if let (Input::Touch { kind: TouchKind::Down, .. }, Some(n)) = (&ev, &mut self.notes) {
+            n.windows.focus(window);
+        }
+        false
+    }
+
+    /// The shell or the app closed a note window: it is no longer bound to its note.
+    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+        self.notes.as_mut().is_some_and(|n| n.windows.unbind(window).is_some())
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {

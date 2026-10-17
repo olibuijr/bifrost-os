@@ -132,8 +132,8 @@
    "apple": "MainMenu: Format > Checklist More; Settings: Automatically sort ticked items",
    "status": "partial",
    "bifrost": "springboard/apps/notes-desktop/src/notes/lists.rs:44",
-   "note": "Mark All Checked / Unmark All in the editor More menu and the Format menu. Remaining: automatic sorting setting.",
-   "wire": "Mark All does not honour Move Checked to Bottom; automatic sorting stays a list menu setting."
+   "note": "Mark All and Unmark All now apply Move Checked to Bottom when it is on (a no-op when every item ends ticked or unticked).",
+   "wire": "Automatic sorting stays a list menu setting. Verify on Midget that Move Checked to Bottom sorts a mixed list after a single tick."
   },
   {
    "feature": "Indentation: increase, decrease, move list item up/down",
@@ -302,18 +302,18 @@
    "area": "settings",
    "apple": "Settings.loctable General pane",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/settings.rs (TextSize, NewNoteStart, AttachmentSize, load, save)",
-   "note": "The settings model holds text size, dark background, new note start and attachment size, saved beside the notes and tested headless in tests/parity_app-notes.rs. Gap: there is no Settings pane yet and the values do not change the editor or new notes; sort and checked-to-bottom live in menus only.",
-   "wire": "Add a Settings pane (app settings hook) with text size, start style (Title/Heading/Body), dark background toggle, sort and group options, writing Prefs."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/settings_pane.rs; springboard/apps/notes-desktop/src/notes/settings.rs; springboard/apps/notes-desktop/src/main.rs (MENU_SETTINGS)",
+   "note": "Note > Settings... opens a pane over the window: Text Size, New Notes Start With, Sort Notes By, Oldest First, Group by Date, Dark Note Background. Each tap saves at once.",
+   "wire": "The pane is an overlay on the main window, not a separate Settings window, and it has no Attachment size row (the attachment browser has its own tile size). Verify on Midget that the pane rows change the editor, the list and new notes."
   },
   {
    "feature": "Open note in separate window, float on top",
    "area": "menu",
    "apple": "Window > Float on Top; SingleNoteWindow",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Double-click a note opens a second window bound to that note id; Window menu Float on Top."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_windows.rs; springboard/apps/notes-desktop/src/main.rs (open_note_window, draw_window, window_event, MENU_FLOAT_ON_TOP); springboard/apps/notes-desktop/src/notes/mod.rs (activate, request_window, draw_window)",
+   "note": "Double-click a note row, or Note > Open in Separate Window, opens the note in its own window; Window > Float on Top stacks the focused note window (windows::set_window_level).",
+   "wire": "The note window is read-only: keyboard input is not routed to extra windows yet, so it cannot be edited there, and its title does not follow a rename. Verify on Midget that the window opens at the note and Float on Top keeps it above the main window. Editing in the window follows the keyboard routing change."
   },
   {
    "feature": "Note count in sidebar",
@@ -391,9 +391,9 @@
  "summary": {
   "features": 42,
   "parity": 11,
-  "partial": 26,
-  "gap": 3,
+  "partial": 29,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 60.0
+  "coverage_pct": 63.7
  }
 }
