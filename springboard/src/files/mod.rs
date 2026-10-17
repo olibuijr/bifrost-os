@@ -23,6 +23,7 @@ pub mod preview;
 pub mod text;
 pub mod tags;
 pub mod trash;
+pub mod volumes;
 pub mod viewprefs;
 pub mod zip;
 

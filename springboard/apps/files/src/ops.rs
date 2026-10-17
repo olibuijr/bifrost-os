@@ -520,8 +520,9 @@ impl Files {
         }
         let mut failed = None;
         for path in self.selected_paths() {
-            if let Err(e) = springboard::files::fs::make_alias(&path) {
-                failed = Some(e.to_string());
+            match springboard::files::fs::make_alias(&path) {
+                Ok(link) => self.push_undo(Undo::Alias(link)),
+                Err(e) => failed = Some(e.to_string()),
             }
         }
         let dir = self.path.clone();

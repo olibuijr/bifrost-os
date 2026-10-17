@@ -26,21 +26,26 @@ pub(crate) struct ThumbSlot {
 /// Slots kept; past this the view forgets them all and asks again as it paints.
 const MAX_THUMB_SLOTS: usize = 4096;
 
-/// Group By choices (Files: None, Kind, Date Modified).
+/// Group By choices (Files: None, Kind, Date Modified; the menu also has Name and Size).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Group {
     None,
     Kind,
     Date,
+    Name,
+    Size,
 }
 
 impl Group {
+    /// The choices the View Options panel offers (Name and Size are menu items only).
     pub(crate) const ALL: [Group; 3] = [Group::None, Group::Kind, Group::Date];
     pub(crate) fn label(self) -> &'static str {
         match self {
             Group::None => "None",
             Group::Kind => "Kind",
             Group::Date => "Date",
+            Group::Name => "Name",
+            Group::Size => "Size",
         }
     }
     /// Sort key (and caption) of the group an entry belongs to.
@@ -51,6 +56,25 @@ impl Group {
             Group::Date => {
                 let (n, label) = date_bucket(e.mtime);
                 (n, label.to_string())
+            }
+            // one section per first letter; names that do not start with a letter share "#", which sorts first
+            Group::Name => {
+                let letter = e.name.chars().next().map(|c| c.to_uppercase().next().unwrap_or(c)).filter(|c| c.is_ascii_alphabetic());
+                (0, letter.map_or("#".to_string(), |c| c.to_string()))
+            }
+            Group::Size => {
+                const MB: u64 = 1 << 20;
+                if e.is_dir {
+                    (0, "Folders".to_string())
+                } else if e.size < MB {
+                    (1, "Under 1 MB".to_string())
+                } else if e.size < 100 * MB {
+                    (2, "1 MB to 100 MB".to_string())
+                } else if e.size < 1024 * MB {
+                    (3, "100 MB to 1 GB".to_string())
+                } else {
+                    (4, "Over 1 GB".to_string())
+                }
             }
         }
     }
@@ -550,5 +574,33 @@ impl Files {
             let wpt = ui.measure(name, MAC_CALLOUT_PT, Weight::Regular) / ui.pt(1.);
             text(s, ui, name, MAC_CALLOUT_PT, ink(on), r.x + (r.w - wpt) / 2., r.y + 4., r.w);
         }
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+    use springboard::files::fs::Kind;
+
+    fn entry(name: &str, is_dir: bool, size: u64) -> Entry {
+        Entry { kind: Kind::Other, name: name.into(), path: PathBuf::from(name), is_dir, size, mtime: 0, items: None }
+    }
+
+    #[test]
+    fn names_group_by_first_letter_and_other_starts_share_one_section() {
+        assert_eq!(Group::Name.key(&entry("beta", false, 1)), (0, "B".to_string()));
+        assert_eq!(Group::Name.key(&entry("Alpha", false, 1)), (0, "A".to_string()));
+        assert_eq!(Group::Name.key(&entry("2026 notes", false, 1)), (0, "#".to_string()));
+        assert!(Group::Name.key(&entry("#tags", false, 1)) < Group::Name.key(&entry("apple", false, 1)));
+    }
+
+    #[test]
+    fn sizes_group_into_four_bands_with_folders_first() {
+        const MB: u64 = 1 << 20;
+        assert_eq!(Group::Size.key(&entry("dir", true, 0)).1, "Folders");
+        assert_eq!(Group::Size.key(&entry("a", false, 10)).1, "Under 1 MB");
+        assert_eq!(Group::Size.key(&entry("b", false, 5 * MB)).1, "1 MB to 100 MB");
+        assert_eq!(Group::Size.key(&entry("c", false, 500 * MB)).1, "100 MB to 1 GB");
+        assert_eq!(Group::Size.key(&entry("d", false, 2048 * MB)).1, "Over 1 GB");
     }
 }

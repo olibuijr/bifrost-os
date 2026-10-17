@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.29.0"
+version = "1.30.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
