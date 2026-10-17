@@ -115,6 +115,9 @@ pub struct Manifest {
     /// `"full-size"`: a full-size-content window (`NativeWindowStyleMaskFullSizeContentView`). The shell draws no
     /// title row; the traffic lights sit over the app at the top left and the app's toolbar band drags the window.
     pub window: String,
+    /// Relative directory of the app's help book (`help = "help"`): Markdown pages with front matter, read by the
+    /// shell's help index (`shell::helpbook`). Empty when the app ships no help.
+    pub help: String,
 }
 
 impl Manifest {
@@ -171,7 +174,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             continue;
         }
         if (k == "sdk_protocol" || v.parse::<u64>().is_ok() || v == "true" || v == "false")
-            && !matches!(k, "id" | "name" | "version" | "exec" | "icon" | "min_shell" | "summary" | "category" | "kind" | "window") {
+            && !matches!(k, "id" | "name" | "version" | "exec" | "icon" | "min_shell" | "summary" | "category" | "kind" | "window" | "help") {
             continue;
         }
         let Some(s) = toml_string(v) else {
@@ -188,6 +191,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, String> {
             "category" => m.category = s,
             "kind" => m.kind = s,
             "window" => m.window = s,
+            "help" => m.help = s,
             _ => {}
         }
     }
