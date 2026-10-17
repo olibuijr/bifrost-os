@@ -4537,27 +4537,9 @@
    "doc": "",
    "bifrost": "springboard/core/src/startup_disk.rs, springboard/src/privd/methods.rs, springboard/src/privd_client.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "Built: startup disk selection (core startup_disk, privd startup_disk.list and startup_disk.set over efibootmgr).",
+   "note": "Built: startup disk selection (core startup_disk, privd startup_disk.list and startup_disk.set over efibootmgr). Lead 2026-10-17: not ready: no Settings row lists or sets the startup disk yet.",
    "rea": [],
-   "method": "built",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-core",
-     "filter": "startup_disk::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "privd::methods::tests"
-    },
-    {
-     "kind": "file",
-     "path": "/usr/bin/efibootmgr"
-    }
-   ],
-   "ready_note": "Built 2026-10-17: startup disk selection over the firmware boot table. bifrost_core::startup_disk parses efibootmgr output, orders the entries by BootOrder and builds the argv that makes a listed active entry the default or the next start only; privd startup_disk.list and startup_disk.set run it, and privd_client has startup_disks and set_startup_disk. A Settings page row is not drawn yet."
+   "method": "built"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.statd.notify.plist",
