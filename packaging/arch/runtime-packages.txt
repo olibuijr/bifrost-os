@@ -152,3 +152,6 @@ ttf-jetbrains-mono
 ttf-carlito
 ttf-roboto
 ttf-montserrat
+tesseract
+tesseract-data-eng
+tesseract-data-isl
