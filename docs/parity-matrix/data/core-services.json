@@ -82,7 +82,7 @@
       "apple": "SKIndexCreateWithURL, SKIndexAddDocument, SKSearchCreate, SKSearchFindMatches, SKSummaryCreateWithString",
       "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex: per-app content index for the Search panel)",
       "status": "partial",
-      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files."
+      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files. Built 2026-10-17: Built 2026-10-17: term-level document index in the SDK (springboard/sdk/src/search_kit.rs: SearchIndex add_document, remove_document, find_matches with prefix words and AND, summary of the matching sentence, to_text/from_text for an app-owned file); tests search_kit::tests. Not run: lead runs the tests."
     },
     {
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
@@ -117,14 +117,14 @@
       "apple": "IOPM and NSProcessInfo activity APIs; sleep and wake notifications through NSWorkspace",
       "bifrost": "springboard/src/bare/sleep.rs (note_app_activity, forget_app, app_sleep_blockers; suspend after screen off, logind); springboard/src/shell/apphost.rs (ToShell::Activity, Drop); springboard/sdk/src/process_info.rs (beginActivity, endActivity, thermal state, low power mode); springboard/sdk/src/workspace.rs (sleep and wake events)",
       "status": "partial",
-      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine."
+      "note": "An app's beginActivity with idleSystemSleepDisabled blocks the shell's system sleep, and the activity union is tested headless in sdk/tests/parity_sdk-rest-11.rs and springboard/tests/parity_sdk-rest-11.rs. Gap: the block is a shell-side registry, not a logind inhibitor, so other programs do not see it, and a real refused suspend needs the lab machine. Built 2026-10-17: the shell holds a logind sleep inhibitor (systemd-inhibit --what=sleep, held by cat until released) for each app that sets idleSystemSleepDisabled, released when the app clears it or goes away (springboard/src/bare/sleep.rs, app_inhibitor_args; test an_app_sleep_block_is_a_sleep_inhibitor_named_for_the_app). Not run: lead runs the tests."
     },
     {
       "feature": "Icons for files and content types",
       "apple": "NSWorkspace.icon(forFile:), Icon Storage article",
       "bifrost": "springboard/sdk/src/workspace.rs (icon_for_content_type, icon_for_file); springboard/sdk/src/widgets.rs (folder_icon)",
       "status": "partial",
-      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons."
+      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons. Built 2026-10-17: Built 2026-10-17: bitmap icon sets per content type with nearest-ancestor lookup, a custom folder icon, and the best representation for a target and scale (springboard/sdk/src/icon_images.rs, IconImages, on ImageObject); tests icon_images::tests. Gap left: the shell does not draw these sets in Finder-style views yet. Not run: lead runs the tests."
     },
     {
       "feature": "Carbon Core (legacy managers)",

@@ -12,14 +12,14 @@
       "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame",
       "bifrost": "springboard/core/src/device_motion.rs (DeviceMotionManager), springboard/core/src/motion.rs (MotionEstimator), springboard/core/src/sensor_log.rs, springboard/sdk/src/sensors.rs",
       "status": "partial",
-      "note": "built on parity/team-j-core-motion; not yet verified on Midget. DeviceMotionManager starts and stops updates, sets the interval and delivers attitude, gravity, user acceleration and rotation rate, fed by the accelerometer and gyroscope readings through SensorSource. The attitude frame is arbitrary (no magnetometer). The shell does not read it yet."
+      "note": "built on parity/team-j-core-motion; not yet verified on Midget. DeviceMotionManager starts and stops updates, sets the interval and delivers attitude, gravity, user acceleration and rotation rate, fed by the accelerometer and gyroscope readings through SensorSource. The attitude frame is arbitrary (no magnetometer). The shell does not read it yet. Built 2026-10-17: Built 2026-10-17: the shell is now a device-motion caller: SensorFeed (springboard/src/shell/rotate.rs) runs DeviceMotionManager on the kernel sensors every shell tick and reads the gravity from it for the orientation. Apps still have no device-motion call (the SDK wrapper is not wired to a shell service)."
     },
     {
       "feature": "Device orientation (four-way)",
       "apple": "Derived from CMAccelerometerData or CMDeviceMotion by the app",
       "bifrost": "springboard/src/shell/rotate.rs (set_orientation, Rotation Lock), springboard/render/src/gfx/rotate.rs (Orientation)",
       "status": "partial",
-      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity (springboard/render/src/gfx/rotate.rs) classifies a gravity reading, but no in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests and an example), so the sensor reader is missing."
+      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity (springboard/render/src/gfx/rotate.rs) classifies a gravity reading, but no in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests and an example), so the sensor reader is missing. Built 2026-10-17: Built 2026-10-17: the shell reads the gravity direction from its own device-motion client (SensorFeed in springboard/src/shell/rotate.rs, on the kernel sensor tree) every 200 ms and adopts the orientation it gives unless Rotation Lock holds it (sensor_tick, called from the shell tick); tests sensor_feed_tests and feed_step. On hardware without an accelerometer or gyroscope the feed stays idle, and the lab machine has none, so it is not checked on Midget."
     },
     {
       "feature": "Raw accelerometer events",

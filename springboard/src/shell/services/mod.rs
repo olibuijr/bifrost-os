@@ -84,6 +84,7 @@ pub mod disks;
 pub mod photos;
 pub mod background;
 pub mod scripting;
+pub mod metric_reports;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -162,6 +163,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(photos::Photos::default()),
         Box::new(background::BackgroundService::at(super::apphost::root().join(background::STORE_FILE))),
         Box::new(scripting::Scripting),
+        Box::new(metric_reports::MetricReports),
     ]
 }
 

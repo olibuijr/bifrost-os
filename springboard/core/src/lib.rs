@@ -110,6 +110,7 @@ pub mod dns_record_set;
 pub mod dns_proxy;
 pub mod local_push;
 pub mod app_metrics;
+pub mod daily_metric_report;
 pub mod mediaext;
 pub mod smf;
 pub mod midi_synth;

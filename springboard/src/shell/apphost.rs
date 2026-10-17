@@ -560,6 +560,8 @@ impl AppHost {
         let child = cmd.spawn()?;
         drop(theirs);
         let mut h = AppHost::with_channel(id, mine, Some(child), cfg);
+        crate::shell::services::metric_reports::note_launch(id);
+        crate::shell::services::metric_reports::note_foreground(id);
         h.exec = exec.to_path_buf();
         h.route = route;
         h.send(&ToApp::Configure(cfg));
@@ -1454,6 +1456,7 @@ impl Drop for AppHost {
     fn drop(&mut self) {
         self.kill();
         crate::bare::sleep::forget_app(&self.id);
+        crate::shell::services::metric_reports::note_close(&self.id);
     }
 }
 
