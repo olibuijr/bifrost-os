@@ -82,7 +82,7 @@
       "apple": "SKIndexCreateWithURL, SKIndexAddDocument, SKSearchCreate, SKSearchFindMatches, SKSummaryCreateWithString",
       "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex: per-app content index for the Search panel)",
       "status": "partial",
-      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files. Built 2026-10-17: Built 2026-10-17: term-level document index in the SDK (springboard/sdk/src/search_kit.rs: SearchIndex add_document, remove_document, find_matches with prefix words and AND, summary of the matching sentence, to_text/from_text for an app-owned file); tests search_kit::tests. Not run: lead runs the tests."
+      "note": "Covers indexing app content for Search. No term-level index API, no summaries, no app-owned index files. Built 2026-10-17: term-level document index in the SDK (springboard/sdk/src/search_kit.rs: SearchIndex add_document, remove_document, find_matches with prefix words and AND, summary of the matching sentence, to_text/from_text for an app-owned file); tests search_kit::tests. Not run: lead runs the tests."
     },
     {
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
@@ -96,7 +96,7 @@
       "apple": "DCSCopyTextDefinition, DCSGetTermRangeInString, DCSDictionary",
       "bifrost": "springboard/sdk/src/definitions.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API."
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API. Refreshed 2026-10-17: covered by springboard/sdk/src/definitions.rs (term store and lookup at a text position); tests definitions::tests. Gap removed."
     },
     {
       "feature": "Backup exclusion",
@@ -137,12 +137,10 @@
   "gaps": [
     "Apple Events: typed inter-app messages with replies exist (app_events, dictionaries, osascript) but use JSON parameters rather than Apple event descriptors, and the scripting path is not yet verified on Midget.",
     "File metadata: no attribute store or MDQuery-style query API for apps.",
-    "Dictionary Services: no definition lookup (spellcheck.rs covers spelling only).",
     "Backup Core: no per-item backup exclusion.",
-    "Identity Services: no user or group API for apps.",
-    "File system events: no persistent event IDs, so a change stream cannot replay events after a restart.",
+    "Identity Services: no user or group lookup for apps. springboard/sdk/src/identity_events.rs models ID-change events only, and no shell path calls it.",
+    "File system events: springboard/sdk/src/fswatch.rs EventJournal keeps event IDs, replays since an ID and round-trips through text, but no shell path persists it, so replay after a restart is not wired.",
     "Launch Services: no role handlers, shared file lists or quarantine properties.",
-    "Search Kit: the per-app content index has no term-level or summarization API.",
     "Docs mismatch: docs/bifrost-ui.md names the FSEvents module fsevents; the code module is springboard/sdk/src/fswatch.rs."
   ]
 }

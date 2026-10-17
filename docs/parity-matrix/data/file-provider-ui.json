@@ -61,13 +61,13 @@
       "apple": "File Provider domain (NSFileProviderDomainIdentifier, domainIdentifier) from the File Provider framework, not in this framework",
       "bifrost": "springboard/src/bare/docbroker.rs (broker opens files for apps as the account); docs/file-portal-design.md (grants, no paths to apps)",
       "status": "partial",
-      "note": "the broker gives apps granted descriptors, not a provider domain that the system browser lists; the file-portal design has no provider extension point"
+      "note": "the broker gives apps granted descriptors, not a provider domain that the system browser lists; the file-portal design has no provider extension point Refreshed 2026-10-17: the domain model is springboard/sdk/src/file_provider.rs (Domain, DomainRegistry, tests file_provider::tests)."
     }
   ],
   "gaps": [
     "No extension point through which a third-party app adds actions to the Files browser's item context menu (the core of this framework).",
     "No hosted extension process that shows a custom action UI over the Files browser and completes or cancels a selected action.",
-    "No provider domain model: the system browser cannot list an app's own files as a browsable location.",
+    "The system browser does not list an app's own files as a browsable location. The domain model exists (springboard/sdk/src/file_provider.rs, Domain and DomainRegistry, tests file_provider::tests), but Files does not use it.",
     "No typed system action identifiers that apps can register or receive for file actions.",
     "No authentication-error hand-off for file actions against remote or cloud providers."
   ]

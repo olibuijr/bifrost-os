@@ -19,7 +19,7 @@
       "apple": "SCDynamicStore, SCDynamicStoreSetNotificationKeys, SCDynamicStoreCreateRunLoopSource",
       "bifrost": "springboard/sdk/src/network_path.rs (PathMonitor::update, PATH_EVENT, path_event); springboard/netd/src/main.rs (Status event on every change); springboard/proto/src/svc.rs",
       "status": "partial",
-      "note": "Apps receive path changes from the shell's network service, and the monitor reports only real changes, with tests. netd polls every 250 ms and pushes a Status event on change; apps cannot subscribe to individual link or address keys."
+      "note": "Apps receive path changes from the shell's network service, and the monitor reports only real changes, with tests. netd polls every 250 ms and pushes a Status event on change; apps cannot subscribe to individual link or address keys. Refreshed 2026-10-17: Wi-Fi changes come from springboard/sdk/src/wlan_events.rs (snapshot diff, tests wlan_events::tests). Gap removed."
     },
     {
       "feature": "Network interface enumeration",
@@ -121,7 +121,6 @@
     }
   ],
   "gaps": [
-    "No SDK client for the network service (svc::net). Apps cannot read Wi-Fi or link state, which the Apple reachability and dynamic-store APIs would give them. springboard/docs/services.md lists the client as planned.",
     "No system-wide preferences store for apps (SCPreferences), and no way to read or set the computer or host name.",
     "Proxy settings are read from the environment the shell publishes (sdk proxy_settings.rs); no VPN or PPP connection control (SCNetworkConnection).",
     "No network services, sets or locations, so service order and per-location settings do not exist.",

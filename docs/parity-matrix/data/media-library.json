@@ -65,10 +65,10 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK module for read-only media collections (nothing under springboard/sdk/src covers sources, groups or objects).",
+    "No source enumeration for apps: springboard/sdk/src/media_library.rs runs queries over records the app supplies (groups and sections), but nothing lists Music or Photos sources or scans a library for an app.",
     "No source abstraction: Music and Photos each scan their own folders with their own code (springboard/src/shell/photos/library.rs and springboard/apps/music-desktop/src/music/library.rs).",
     "Photo scanning is in the shell (springboard/src/shell/photos/library.rs), not in the SDK, so other apps cannot reuse it.",
-    "No generic media-object attribute dictionary; metadata is fixed structs per app.",
+    "The typed attribute dictionary (springboard/ui/src/media_attributes.rs) exists, but neither Music nor Photos uses it yet; metadata is still per-app structs.",
     "No change notification for other apps when the photo or music collection changes.",
     "Apple's source-specific identifiers (iTunes, iPhoto, Aperture, Final Cut and similar) have no counterpart and are deprecated in the docs."
   ]

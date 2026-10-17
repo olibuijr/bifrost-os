@@ -89,7 +89,7 @@
       "apple": "IOBluetoothIgnoreHIDDevice, IOBluetoothRemoveIgnoredHIDDevice, IOBluetoothNumberOf*HIDDevices",
       "bifrost": "springboard/sdk/src/bluetooth_hid.rs (IgnoreList, counts, is_hid); tests in springboard/sdk/tests/parity_sdk-complete-42.rs",
       "status": "partial",
-      "note": "The ignore list and the connected and paired HID counts are tested headless in sdk/tests/parity_sdk-complete-42.rs, and an ignored device stays in the device list. Not yet wired into the shell or apps, the radio layer does not act on the ignore list, and it is not tested on Midget."
+      "note": "The ignore list and the connected and paired HID counts are tested headless in sdk/tests/parity_sdk-complete-42.rs, and an ignored device stays in the device list. Not yet wired into the shell or apps, the radio layer does not act on the ignore list, and it is not tested on Midget. Refreshed 2026-10-17: bluetooth_hid is a pub module of the SDK (springboard/sdk/src/lib.rs), so the ignore list and counts are reachable by apps; tests bluetooth_hid::tests. Gap removed."
     },
     {
       "feature": "User notifications on device events",
@@ -124,7 +124,6 @@
     "App-facing Bluetooth SDK (springboard/sdk/src/bluetooth_service.rs) lists devices, scans, connects and reads a pending pairing code; apps cannot type the code (the shell asks the user) and cannot open RFCOMM or SDP.",
     "No RFCOMM app API: the kernel stream is in springboard/src/bare/rfcomm.rs (channels must be known, since SDP is not queried), and no RFCOMM server side. No OBEX or SDP.",
     "No hands-free (call control) profile.",
-    "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
-    "No HID device counts or ignore controls exposed to apps."
+    "No app API to open L2CAP channels to arbitrary PSMs. Device events are modelled in springboard/sdk/src/bluetooth_events.rs (DeviceEvents), but the shell does not deliver them to apps yet."
   ]
 }
