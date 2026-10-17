@@ -3085,9 +3085,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/matter.rs, springboard/core/src/matter_interaction.rs",
+   "bifrost": "springboard/core/src/matter.rs, springboard/core/src/matter_interaction.rs, springboard/core/src/matter_hub.rs",
    "status": "partial",
-   "note": "Home accessory hub service that routes accessory events and voice requests. Matter setup codes, discovery and interaction are in matter.rs and matter_interaction.rs. Not built: the hub service that keeps accessories and routes voice commands.",
+   "note": "Home accessory hub service that routes accessory events and voice requests. Matter setup codes, discovery and interaction are in matter.rs and matter_interaction.rs. Not built: the hub service that keeps accessories and routes voice commands. Built 2026-10-17: the hub model (springboard/core/src/matter_hub.rs) keeps accessories with their room and clusters, tracks the On/Off state applied to each, and routes on/off requests by name and room; tests matter_hub::tests. Still missing: the hub service that runs on the network and sends the routed commands.",
    "rea": []
   },
   {
@@ -3957,8 +3957,22 @@
    "doc": "",
    "bifrost": "springboard/src/shell/recent_items.rs, springboard/sdk/src/document.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: document recents re-read the shared store on every use, so a controller sees recents another process wrote (springboard/sdk/src/document.rs; tests document::tests::recents_written_by_another_controller_are_seen_on_the_next_read). Open: the shell recent-apps list is still in-process, so the row stays partial.",
-   "rea": []
+   "note": "Document recents re-read the shared store on every use, so a controller sees recents another process wrote (springboard/sdk/src/document.rs; tests document::tests::recents_written_by_another_controller_are_seen_on_the_next_read). Built 2026-10-17: the shell's recent-apps list is kept in recent-apps.txt across restarts (encode, decode, save and load in springboard/src/shell/recent_items.rs; tests shell::recent_items::tests).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::recent_items::tests"
+    }
+   ],
+   "ready_note": "Shared document recents are read on every use (document::tests) and the shell's recent apps survive a restart (shell::recent_items::tests)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.remindd.plist",
@@ -5134,9 +5148,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotindex.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
    "status": "partial",
-   "note": "Shell search index; no importer plug-ins",
+   "note": "Shell search index; no importer plug-ins Built 2026-10-17: importer plug-ins (springboard/ui/src/mdimport.rs: a text importer and a file-name fallback, chosen by content type) and the file-to-item conversion (spotindex::file_item); tests mdimport::tests and spotindex::tests::a_file_becomes_an_item_with_its_imported_metadata. Still missing: the folder scan that feeds files to the index, and importers for binary formats (PDF, image, office).",
    "rea": [],
    "method": "heuristic"
   },
