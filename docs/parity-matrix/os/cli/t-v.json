@@ -639,7 +639,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/tmutil.rs",
    "status": "partial",
-   "note": "covers the snapshot backup store (status, startbackup, listbackups, restore, exclusions); Time Machine's other modes are not replicated",
+   "note": "Built 2026-10-17: latestbackup and isexcluded (springboard/cmd/src/tmutil.rs; tests tmutil::tests). Other modes still not replicated.",
    "rea": [],
    "method": "assessed"
   },
