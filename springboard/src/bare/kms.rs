@@ -548,7 +548,7 @@ pub fn wlr_randr_sizes(text: &str) -> Vec<(u32, u32)> {
         .filter_map(|l| {
             let (size, _) = l.trim().split_once(" px, ")?;
             let (w, h) = size.split_once('x')?;
-            Some((w.parse().ok()?, h.parse().ok()?))
+            Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?))
         })
         .collect();
     sizes.sort_by(|a, b| (b.0 * b.1).cmp(&(a.0 * a.1)).then(b.0.cmp(&a.0)));

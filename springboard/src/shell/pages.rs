@@ -1663,8 +1663,7 @@ pub fn shortcuts_page(o: &Options) -> Spec {
 pub fn desktop_display(m: &Model<'_>) -> Spec {
     let page = |title: &str, large, groups| Spec { id: PageId::Display, title: title.into(), large, groups };
     let mut display = vec![];
-    if let Some((w, h, _)) = m.info.display_mode {
-        display.push(Item::new("Resolution").value(format!("{w} × {h}")));
+    if m.info.display_mode.is_some() {
         display.push(Item::new("Resolution").value(resolution_label(m.resolution)).link(PageId::Resolution));
         display.push(Item::new("Refresh Rate").value(m.refresh.label()).link(PageId::RefreshRate));
     }
@@ -1672,7 +1671,7 @@ pub fn desktop_display(m: &Model<'_>) -> Spec {
     display.push(Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale));
     display.push(Item::new("Graphics").link(PageId::Graphics));
     let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
-        .footer("The native resolution is selected automatically. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
+        .footer("Native is the panel's own resolution unless another is chosen. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
     if m.info.brightness_supported {
         groups.push(Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"));
     }
