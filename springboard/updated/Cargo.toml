@@ -6,6 +6,7 @@ description = "BifrOSt update agent (is.olibuijr.update): background OS and app 
 
 [dependencies]
 bifrost-proto = { path = "../proto" }
+bifrost-ui = { path = "../ui" }
 springboard = { path = ".." }
 
 [[bin]]

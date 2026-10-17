@@ -488,6 +488,39 @@ pub fn share_login(store: &Store, host: &str, share: &str) -> Result<(String, St
     Ok((user, password))
 }
 
+/// What a mount of an SMB share needs from the network-authentication agent: the saved login, or a prompt for one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShareAccess {
+    /// A login is stored for the share and can be used to mount it.
+    Saved { user: String, password: String },
+    /// No login is stored, so the user has to be asked for one.
+    Prompt,
+}
+
+/// The access a mount of `host/share` starts from: the stored login, or `Prompt` when none is stored.
+pub fn share_access(store: &Store, host: &str, share: &str) -> Result<ShareAccess, Error> {
+    match share_login(store, host, share) {
+        Ok((user, password)) => Ok(ShareAccess::Saved { user, password }),
+        Err(Error::ItemNotFound) => Ok(ShareAccess::Prompt),
+        Err(e) => Err(e),
+    }
+}
+
+/// Stores the login the user typed at the prompt, so the next mount finds it, and returns it as the access to use now.
+pub fn answer_share_prompt(store: &Store, host: &str, share: &str, user: &str, password: &str) -> Result<ShareAccess, Error> {
+    save_share_login(store, host, share, user, password)?;
+    Ok(ShareAccess::Saved { user: user.to_string(), password: password.to_string() })
+}
+
+/// Forgets a share's stored login, for instance after the server refused it: the next access is a `Prompt`. Forgetting
+/// a share that has no login is not an error.
+pub fn forget_share_login(store: &Store, host: &str, share: &str) -> Result<(), Error> {
+    match store.delete(SHARE_LOGIN_SERVICE, &share_login_account(host, share)) {
+        Err(Error::ItemNotFound) => Ok(()),
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -514,6 +547,20 @@ mod tests {
         assert_eq!(share_login(&s, "nas.local", "MUSIC"), Ok(("ola".to_string(), "pw2".to_string())));
         assert_eq!(share_login(&s, "nas.local", "photos"), Err(Error::ItemNotFound), "another share has no login");
         assert_eq!(save_share_login(&s, "nas.local", "music", "o\0la", "x"), Err(Error::Param));
+    }
+
+    #[test]
+    fn a_share_without_a_login_prompts_and_the_answer_is_remembered() {
+        let d = dir("share-access");
+        let s = enc(&d, "files");
+        assert_eq!(share_access(&s, "NAS.local", "Music"), Ok(ShareAccess::Prompt));
+        let used = answer_share_prompt(&s, "NAS.local", "Music", "ola", "pw1").unwrap();
+        assert_eq!(used, ShareAccess::Saved { user: "ola".into(), password: "pw1".into() });
+        assert_eq!(share_access(&s, "nas.local", "music"), Ok(ShareAccess::Saved { user: "ola".into(), password: "pw1".into() }));
+        forget_share_login(&s, "nas.local", "MUSIC").unwrap();
+        assert_eq!(share_access(&s, "nas.local", "music"), Ok(ShareAccess::Prompt), "a refused login is asked for again");
+        forget_share_login(&s, "nas.local", "music").unwrap();
+        assert_eq!(answer_share_prompt(&s, "NAS.local", "Music", "o\0la", "x"), Err(Error::Param));
     }
 
     #[test]
