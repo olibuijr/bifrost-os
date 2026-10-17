@@ -28,6 +28,26 @@ use std::sync::{Arc, Mutex};
 pub const SERVICE: &str = "speech";
 /// Longest text one utterance may carry, in bytes.
 pub const MAX_TEXT: usize = 16 * 1024;
+/// The key the shell speaks under (the assistant's answers). It is not an app, so the app-quit check spares it.
+pub const SHELL_SPEAKER: &str = "shell.assistant";
+
+/// Whether an utterance's owner still counts as running: the shell's own speaker always does, any other app when
+/// `app_running` says so.
+fn still_speaking(app: &str, app_running: impl Fn(&str) -> bool) -> bool {
+    app == SHELL_SPEAKER || app_running(app)
+}
+
+/// The text clipped to what one utterance may carry: at most [`MAX_TEXT`] bytes, cut on a character boundary.
+pub fn clip(text: &str) -> &str {
+    if text.len() <= MAX_TEXT {
+        return text;
+    }
+    let mut end = MAX_TEXT;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
 
 unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
@@ -301,7 +321,7 @@ impl SystemService for Speech {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
-        let running = |app: &str| crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
+        let running = |app: &str| still_speaking(app, |a| crate::shell::apphost::slot_of(a).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some())));
         self.prune(running);
         self.reap();
         Vec::new()
@@ -497,5 +517,24 @@ mod tests {
     fn an_unknown_method_is_an_error() {
         let (mut s, _) = service(false);
         assert!(s.handle("app.a", "sing", &Json::Null).unwrap_err().contains("no method sing"));
+    }
+
+    #[test]
+    fn clip_keeps_short_text_and_cuts_long_text_on_a_character_boundary() {
+        assert_eq!(clip("hello"), "hello");
+        let long = format!("{}é", "a".repeat(MAX_TEXT - 1));
+        let cut = clip(&long);
+        assert_eq!(cut.len(), MAX_TEXT - 1, "the two-byte letter that would pass the limit is dropped whole");
+        assert!(cut.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn the_shell_speaker_is_not_ended_as_an_app_that_quit() {
+        let (mut s, _) = service(false);
+        s.handle(SHELL_SPEAKER, "speak", &params(r#"{"text":"The answer."}"#)).unwrap();
+        s.handle("app.a", "speak", &params(r#"{"text":"Hi."}"#)).unwrap();
+        s.prune(|app| still_speaking(app, |_| false));
+        assert!(flag(&s.handle(SHELL_SPEAKER, "is_speaking", &Json::Null), "speaking"), "the shell's answer goes on");
+        assert!(!flag(&s.handle("app.a", "is_speaking", &Json::Null), "speaking"), "a quit app's speech ends");
     }
 }
