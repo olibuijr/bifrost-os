@@ -335,6 +335,9 @@ pub mod document_package;
 pub mod markup;
 pub mod log;
 pub mod signpost;
+/// App state reporting (`StateReporter`: named domains, one active state at a time, volatile and stable metadata).
+/// The model is `bifrost_ui::state_report`, with its tests there; this path is the app-facing name.
+pub use bifrost_ui::state_report as state_reporting;
 pub mod dispatch;
 pub mod operation_queue;
 pub mod actor;
