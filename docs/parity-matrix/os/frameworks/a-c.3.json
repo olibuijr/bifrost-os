@@ -19,8 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index lists only its metadata and a shader precompile file, and extracting the bundle wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Interface resources of the vendor's AI assistant (Campo), whose service is n/a; no BifrOSt counterpart.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "CampoRemoteService: remote service of the vendor's AI assistant (Campo); same classification as the CampoServices row.",
    "rea": [],
    "method": "assessed"
   },
@@ -64,7 +64,16 @@
    "status": "partial",
    "note": "The captive network assistant probes each joined network once and offers Sign In when a portal answers. The portal's own sign-in page and the per-network trust store of the reference framework are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::captive"
+    }
+   ],
+   "ready_note": "Captive network assistant (net/captive.rs) is tested; the portal's trust store is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CardKit.framework",
@@ -187,8 +196,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "SetStoreUpdateService: update service of the vendor's app store; BifrOSt's store updates come from its own catalogue (springboard/src/shell/store).",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +238,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "CategoriesService: category service of the vendor's app store; BifrOSt's store lists categories from its own catalogue.",
    "rea": [],
    "method": "assessed"
   },
@@ -2068,7 +2077,16 @@
    "status": "partial",
    "note": "Per-app container folders (Documents, Library, Library/Caches, tmp) with backup and purge classes and refusal of symbolic links exist. The reference container class database (the Container.Class and Containers property lists and the daemon and system policies) is not modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "container_layout"
+    }
+   ],
+   "ready_note": "Per-app container folders with backup and purge classes and symlink refusal (sdk/src/container_layout.rs) are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContainerManagerSystem.framework",
@@ -2110,7 +2128,16 @@
    "status": "partial",
    "note": "The per-user app container folders are laid out, backed up and purged by class. The reference per-user container classes (perUserApp, pluginData) and the container property list database are not modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "container_layout"
+    }
+   ],
+   "ready_note": "Per-user app container folders are laid out, backed up and purged by class (sdk/src/container_layout.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContentKit.framework",
@@ -3628,7 +3655,16 @@
    "status": "partial",
    "note": "The layer material model exists, including the glass material with blur, tint and saturation. The reference system's named material recipes for system surfaces are not reproduced.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-layers",
+     "filter": "layer"
+    }
+   ],
+   "ready_note": "Layer material model including the glass material with blur, tint and saturation (layers/src/layer.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreMaterial3D.framework",
@@ -4510,7 +4546,26 @@
    "status": "partial",
    "note": "Backs the Core Spotlight row for suggestions. Per-app searchable items and the Search panel's Documents list exist, but the suggestion and query models are host-tested only, and on-device extraction of events, flights and time zones is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch"
+    }
+   ],
+   "ready_note": "Per-app searchable items, the Search panel's Documents list and suggestion models are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsInternals.framework",
@@ -4615,7 +4670,21 @@
    "status": "partial",
    "note": "Addresses are symbolicated from the image list an app supplies, with inline frames expanded, and core dumps are kept by systemd. Gap: no system-wide symbolication service turns crash logs into named frames, and live processes are not symbolicated.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report"
+    },
+    {
+     "kind": "cmd",
+     "run": "gdb --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Address symbolication from an app-supplied image list (sdk/src/crash_report.rs), tested; gdb ships in the runtime packages for core files."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreThemeDefinition.framework",
@@ -4944,7 +5013,26 @@
    "status": "partial",
    "note": "Interface state, scan results with channel and security, saved profiles and join or forget reach the shell through the wpa_supplicant control socket and apps through typed values. Gap: no app call joins or selects a network, and access-point modes are missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_status"
+    }
+   ],
+   "ready_note": "Interface state, scans, saved profiles and join or forget through the supplicant, exposed to apps (net/wifi.rs, sdk/src/wlan.rs, sdk/src/wifi_status.rs), tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreWiFi.framework",
