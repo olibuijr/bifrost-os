@@ -311,6 +311,16 @@ impl App for ContactsApp {
         true
     }
 
+    /// Cmd+W closes the card window it is typed in; every other key, command and menu item takes the default route.
+    fn window_input(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        if let bifrost_app::proto::WindowInput::Key(k) = &input {
+            if !window.is_main() && bifrost_app::app_windows::is_close_window_key(k) {
+                return ctx.close_window(window).is_ok() && self.window_closed(ctx, window);
+            }
+        }
+        bifrost_app::app_windows::default_window_input(self, ctx, window, input)
+    }
+
     /// The shell closed a card window (or the app did): its contact is no longer shown in a window.
     fn window_closed(&mut self, _ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
         self.cards.unbind(window).is_some()

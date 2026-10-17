@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0 — 2026-10-17
+
+- Cmd+W in a CPU Usage or CPU History window closes it, as its traffic light does (`window_input`). The main window's keys and menu items are unchanged.
+
 ## 0.8.0
 
 - Window > CPU Usage opens a small floating window with the total and one bar per core, and closes again from the same menu item.

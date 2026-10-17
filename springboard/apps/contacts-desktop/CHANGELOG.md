@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0 — 2026-10-17
+
+- Cmd+W closes the card window it is typed in. Keys and menu items follow the key window: the shell tells the app which window is key (`WindowFocus`) and sends it the input (`WindowInput`), and the app's `window_input` closes the card (`ctx.close_window`).
+
 ## 1.13.0 — 2026-10-17
 
 - Card windows take touches: the card scrolls on its own scroller, a tap on a value copies it, and Edit shows the contact in the main window and opens its editor (`touch_card`, `edit_from_card`, `window_event`). Touches do not change the main window's screen.
