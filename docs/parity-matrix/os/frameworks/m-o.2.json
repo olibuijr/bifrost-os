@@ -3182,7 +3182,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/svg_table.rs",
    "status": "partial",
-   "note": "OpenType-SVG index is read: springboard/render/src/svg_table.rs parses the SVG table document list and returns the document for a glyph id (tests svg_table::tests). Gap: the documents are not gunzipped and no SVG renderer draws them into the font engine, so colour glyphs still render as outlines.",
+   "note": "OpenType-SVG index is read and each gzip document is inflated: svg_table.rs parses the document list (document_for, document_text_for, gunzip; tests svg_table::tests). Gap: svg.rs rasterises the static SVG subset but is not wired to the font engine, so colour glyphs still render as outlines.",
    "rea": [],
    "method": "assessed"
   },
