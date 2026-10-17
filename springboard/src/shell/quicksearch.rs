@@ -181,6 +181,8 @@ pub enum Hit {
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
     /// a Settings intent (`settings_intents`, "Open Keyboard"): opens the pane it names in Settings
     SettingsIntent { id: &'static str, title: &'static str },
+    /// a shell action intent (`settings_actions`) with its parameters already set: runs the same effect the Settings pane does
+    SettingsAction { intent: super::settings_actions::SettingsIntent, title: &'static str },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
     /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
     Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
@@ -238,6 +240,20 @@ fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
     super::settings_intents::CATALOGUE
         .iter()
         .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
+        .collect()
+}
+
+/// The shell action intents (`settings_actions`) that take no parameter from Search: the Wi-Fi scan and the two Wi-Fi
+/// switch states. Wallpaper needs a picture id, so it is not offered here.
+fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+    use super::settings_actions::SettingsIntent;
+    let rows: [(&'static str, &'static str, &str, SettingsIntent); 3] = [
+        ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
+        ("wifi-on", "Turn Wi-Fi On", "Switch the Wi-Fi radio on", SettingsIntent::WifiPower(true)),
+        ("wifi-off", "Turn Wi-Fi Off", "Switch the Wi-Fi radio off", SettingsIntent::WifiPower(false)),
+    ];
+    rows.into_iter()
+        .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title }, fuzzy::fold(title)))
         .collect()
 }
 
@@ -409,6 +425,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         .collect();
     let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
     shortcut_rows.extend(settings_intent_rows(&mut hits));
+    shortcut_rows.extend(settings_action_rows(&mut hits));
     let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
     let event_rows = c
         .events
@@ -1328,6 +1345,7 @@ impl QuickSearch {
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
+                    Hit::SettingsAction { title, .. } => title.to_string(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
                 let max_w = ui.pt(m.card_w - m.row_text_x - m.inset);
@@ -1695,7 +1713,7 @@ impl QuickSearch {
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
-                        Hit::Settings(_) | Hit::SettingsIntent { .. } => None,
+                        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
                     let thumb_img = match hit {
@@ -1900,6 +1918,10 @@ impl Shell {
                     f.show_folder(&self.ui, &folder, t);
                 }
             }
+            Hit::SettingsAction { intent, .. } => {
+                // the same effect the Settings pane and the agent socket apply; no window opens
+                return vec![intent.into_effect()];
+            }
             Hit::SettingsIntent { id, .. } => {
                 self.quicksearch.note_open(&format!("settings-intent:{id}"));
                 if let Some(page) = super::settings_intents::page_for(id) {
@@ -2064,6 +2086,16 @@ mod tests {
         assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
         assert!(super::super::settings_intents::page_for("open-keyboard").is_some());
         assert!(super::super::settings_intents::page_for("no-such-intent").is_none());
+    }
+
+    #[test]
+    fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
+        use super::super::settings_actions::SettingsIntent;
+        let groups = results("turn wi-fi off", &[]);
+        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off" };
+        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
+        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks" };
+        assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
     }
 
     /// A one-piece torrent named `name`.
