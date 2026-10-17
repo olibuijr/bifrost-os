@@ -197,6 +197,10 @@ impl super::Shell {
     }
 
     pub(super) fn workspace_open_url(&mut self, url: &str, t: f64) -> Reply {
+        // a store link to packages asks the person on the install sheet before anything is installed
+        if let Some(names) = super::pacman_update::package_link(url) {
+            return if self.package_install_open(super::pacman_update::Source::Repo(names)) { (WorkspaceStatus::Ok, Vec::new()) } else { denied() };
+        }
         self.ensure_defaults();
         let route = match &self.defaults {
             Some((_, r, _)) => route_url(r, url),
@@ -267,6 +271,11 @@ impl super::Shell {
                 }
             }
             WorkspaceOp::OpenFile | WorkspaceOp::OpenWith => {
+                // a package archive (.pkg.tar.zst) is installed, not opened: the install sheet asks first
+                if op == WorkspaceOp::OpenFile && files.iter().any(|(p, _)| p.file_name().and_then(|n| n.to_str()).is_some_and(super::pacman_update::is_package_file)) {
+                    let paths: Vec<PathBuf> = files.iter().map(|(p, _)| p.clone()).collect();
+                    return if self.package_open_files(&paths) { (WorkspaceStatus::Ok, Vec::new()) } else { (WorkspaceStatus::Failed, Vec::new()) };
+                }
                 // (target app key, grant) for each file
                 let mut plan: Vec<(String, GrantId)> = Vec::new();
                 if op == WorkspaceOp::OpenWith {

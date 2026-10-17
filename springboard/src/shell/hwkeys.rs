@@ -659,6 +659,11 @@ impl Shell {
             self.volume_type(out, t);
             return vec![];
         }
+        // the package install sheet takes the typing (Escape closes it) and never installs on Return
+        if self.package_showing() {
+            self.package_type(out);
+            return vec![];
+        }
         // the network login sheet takes the typing for its fields
         if self.net_auth_showing() {
             self.net_auth_type(out, t);
