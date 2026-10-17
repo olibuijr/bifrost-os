@@ -15,7 +15,7 @@ const IMAGE_LIMIT: usize = 4_000_000;
 pub fn load(fetcher: &dyn Fetch, image: &str, link: &str, w: usize, h: usize, r: usize, bg: u32) -> Option<Image> {
     let url = if image.is_empty() {
         let page = fetcher.get(link, PAGE_LIMIT).ok()?;
-        og_image(&String::from_utf8_lossy(&page))?
+        og_image(&String::from_utf8_lossy(&page), link)?
     } else {
         image.to_string()
     };
@@ -27,22 +27,10 @@ pub fn load(fetcher: &dyn Fetch, image: &str, link: &str, w: usize, h: usize, r:
     Some(out)
 }
 
-/// `<meta property="og:image" content="...">`, attributes in either order.
-pub fn og_image(html: &str) -> Option<String> {
-    let mut from = 0;
-    while let Some(i) = html[from..].find("<meta") {
-        let at = from + i;
-        let end = html[at..].find('>').map_or(html.len(), |e| at + e);
-        let tag = &html[at..end];
-        if tag.contains("og:image\"") || tag.contains("og:image'") {
-            let c = tag.find("content=")? + 8;
-            let q = tag[c..].chars().next()?;
-            let rest = &tag[c + 1..];
-            return rest.find(q).map(|e| crate::feed::decode(&rest[..e])).filter(|u| u.starts_with("http"));
-        }
-        from = end;
-    }
-    None
+/// The picture a page declares (its og:image, else its twitter:image), read by the SDK's link metadata parser. A
+/// relative address is resolved against `page`, the address the HTML came from.
+pub fn og_image(html: &str, page: &str) -> Option<String> {
+    bifrost_app::link_metadata::parse(html, page).image.filter(|u| u.starts_with("http"))
 }
 
 /// RUV's image server takes a base64 JSON recipe; asks it for a JPEG at the size drawn
@@ -128,29 +116,37 @@ mod tests {
         assert_eq!(b64_encode(b"Man"), "TWFu");
     }
 
+    const PAGE: &str = "https://www.visir.is/frettir/1";
+
     #[test]
     fn og_image_reads_the_meta_tag() {
         let html = r#"<head><meta name="x" content="y"><meta property="og:image" content="https://www.visir.is/i/A_1600x900.jpg" /></head>"#;
-        assert_eq!(og_image(html).as_deref(), Some("https://www.visir.is/i/A_1600x900.jpg"));
-        assert_eq!(og_image("<meta property=\"og:title\" content=\"t\">"), None);
+        assert_eq!(og_image(html, PAGE).as_deref(), Some("https://www.visir.is/i/A_1600x900.jpg"));
+        assert_eq!(og_image("<meta property=\"og:title\" content=\"t\">", PAGE), None);
     }
 
     #[test]
     fn og_image_accepts_single_quotes_and_content_before_the_property() {
         let html = "<meta content='https://www.mbl.is/a/b.jpg' property='og:image'>";
-        assert_eq!(og_image(html).as_deref(), Some("https://www.mbl.is/a/b.jpg"));
+        assert_eq!(og_image(html, PAGE).as_deref(), Some("https://www.mbl.is/a/b.jpg"));
     }
 
     #[test]
-    fn og_image_ignores_a_relative_picture_address() {
-        assert_eq!(og_image("<meta property=\"og:image\" content=\"/img/a.jpg\">"), None);
-        assert_eq!(og_image("<meta property=\"og:image\">"), None);
+    fn og_image_resolves_a_relative_picture_address_against_the_page() {
+        assert_eq!(og_image("<meta property=\"og:image\" content=\"/img/a.jpg\">", PAGE).as_deref(), Some("https://www.visir.is/img/a.jpg"));
+        assert_eq!(og_image("<meta property=\"og:image\">", PAGE), None);
+    }
+
+    #[test]
+    fn og_image_falls_back_to_the_twitter_card_picture() {
+        let html = "<meta name=\"twitter:image\" content=\"https://cdn.visir.is/t.jpg\">";
+        assert_eq!(og_image(html, PAGE).as_deref(), Some("https://cdn.visir.is/t.jpg"));
     }
 
     #[test]
     fn og_image_of_a_page_without_head_tags_is_none() {
-        assert_eq!(og_image("<html><body><p>No picture</p></body></html>"), None);
-        assert_eq!(og_image(""), None);
+        assert_eq!(og_image("<html><body><p>No picture</p></body></html>", PAGE), None);
+        assert_eq!(og_image("", PAGE), None);
     }
 
     #[test]
