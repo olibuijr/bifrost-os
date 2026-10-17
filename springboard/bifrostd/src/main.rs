@@ -43,6 +43,11 @@ fn main() {
         signal(2, on_term);
     }
     eprintln!("bifrostd {} supervising {} (services start on demand)", env!("CARGO_PKG_VERSION"), root.display());
+    // the priority socket (Game Mode) is served on its own thread, so the supervisor loop never waits for a peer
+    let run = bifrostd::run_dir(&root);
+    let _ = std::fs::create_dir_all(&run);
+    let (socket, apps) = (run.join(bifrostd::PRIORITY_SOCKET), root.join("apps"));
+    std::thread::spawn(move || bifrostd::priority::serve(socket, apps));
     let mut sup = bifrostd::Supervisor::new(root);
     let mut pager = bifrostd::pager::Pager::new();
     let mut purger = bifrostd::purge::Purger::default();

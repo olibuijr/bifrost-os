@@ -332,6 +332,12 @@ impl Ctx {
     pub fn set_badge(&self, label: &str) {
         self.send(ToShell::SetBadge { label: label.into() });
     }
+    /// Takes the app's window full screen (`on`) or back to its size: the window gets its own space, with the menu bar
+    /// hidden until the pointer reaches the top edge, as the green button does (`ToShell::SetFullScreen`). A window with
+    /// a fixed size does not go full screen. The shell answers with `ToApp::FullScreen`.
+    pub fn set_full_screen(&self, on: bool) {
+        self.send(ToShell::SetFullScreen { on });
+    }
     /// The app's windows: the main window and the ones it opened (`app_windows`). Do not hold the borrow across a call
     /// back into the app.
     pub fn windows(&self) -> std::cell::Ref<'_, crate::app_windows::AppWindows> {
@@ -704,6 +710,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::Touches(_) => {}
+                // the shell's full-screen state; the app's layout follows the window size it is configured with
+                ToApp::FullScreen { .. } => {}
                 ToApp::GuidedAccessState { active } => {
                     if let Some(c) = &ctx {
                         need_frame |= app.guided_access(c, crate::guided_access::GuidedAccessChange::Session(active));
@@ -1420,6 +1428,17 @@ mod badge_tests {
         ctx.set_badge("3");
         ctx.set_badge("");
         assert_eq!(ctx.out.borrow().as_slice(), [ToShell::SetBadge { label: "3".into() }, ToShell::SetBadge { label: String::new() }]);
+    }
+
+    #[test]
+    fn full_screen_requests_go_to_the_shell() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(Font::parse(data).unwrap(), 1.0);
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        let ctx = Ctx::testing(ui, cfg);
+        ctx.set_full_screen(true);
+        ctx.set_full_screen(false);
+        assert_eq!(ctx.out.borrow().as_slice(), [ToShell::SetFullScreen { on: true }, ToShell::SetFullScreen { on: false }]);
     }
 
     #[test]

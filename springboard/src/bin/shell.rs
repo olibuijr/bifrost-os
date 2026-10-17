@@ -430,6 +430,7 @@ fn run() -> std::io::Result<()> {
     let mut last_profile_check = f64::NEG_INFINITY;
     // Game Mode is checked four times a second: entering must feel immediate (see `shell::gamemode`)
     let mut last_game_check = f64::NEG_INFINITY;
+    let mut profile_game = false;
     boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, power::battery().0, power::battery().1, low_power));
     let chord_key = |code: u16| match code {
         input::KEY_POWER => Some(springboard::shell::chord::Key::Power),
@@ -1066,15 +1067,24 @@ fn run() -> std::io::Result<()> {
             last_game_check = t;
             if let Some(change) = shell.game_mode_update(t as u64) {
                 eprintln!("springboard: game mode {}", if change == springboard::shell::gamemode::Change::Enter { "on" } else { "off" });
-                // the effects of a change are the CPU profile, which is recomputed below at once
-                last_profile_check = f64::NEG_INFINITY;
-                if change == springboard::shell::gamemode::Change::Enter && shell.game_mode_first_notice() {
-                    eprintln!("springboard: game mode notice (not built yet)");
+                for effect in springboard::shell::gamemode::plan(change) {
+                    match effect {
+                        // the CPU profile is recomputed below at once
+                        springboard::shell::gamemode::Effect::CpuPerformance | springboard::shell::gamemode::Effect::CpuFollowPowerMode => {
+                            last_profile_check = f64::NEG_INFINITY;
+                        }
+                        springboard::shell::gamemode::Effect::RaisePriority => shell.game_mode_raise_priority(),
+                        springboard::shell::gamemode::Effect::RestorePriority => shell.game_mode_restore_priority(),
+                    }
+                }
+                if change == springboard::shell::gamemode::Change::Enter {
+                    shell.game_mode_notice();
                 }
             }
         }
         // every 10 s, and at once when Power Mode, Low Power Mode or Game Mode changed
-        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power {
+        if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power || shell.game_mode_on() != profile_game {
+            profile_game = shell.game_mode_on();
             last_profile_check = t;
             profile_pref = shell.power_pref();
             profile_low_power = low_power;

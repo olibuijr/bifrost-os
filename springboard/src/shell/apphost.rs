@@ -1797,6 +1797,7 @@ impl Shell {
         let mut context=None;
         let mut open_url=None;
         let mut badge_changed=false;
+        let mut full_screen: Vec<(usize, bool)> = Vec::new();
         let mut notifications = Vec::new();
         let mut rich_msgs = Vec::new();
         #[cfg(feature = "desktop-wayland")]
@@ -1864,6 +1865,7 @@ impl Shell {
                             badge_changed = true;
                         }
                     }
+                    ToShell::SetFullScreen { on } => full_screen.push((slot, on)),
                     ToShell::SetBadge { label } => {
                         let permitted = installed().get(slot).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == "notifications"));
                         let label = clean_badge(&label);
@@ -1921,6 +1923,7 @@ impl Shell {
         // the extra windows follow each app's table: opened ones get a desk window, closed ones leave the desk
         self.desk_sync_extra_windows();
         if badge_changed { self.dirty = true; }
+        for (slot, on) in full_screen { self.desk_set_full_screen(super::AppId::External(slot as u8), on); }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
         self.services_tick(t);
