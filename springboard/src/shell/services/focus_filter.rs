@@ -123,11 +123,21 @@ impl SystemService for FocusFilterService {
         }
         let before = self.last.replace(active.clone());
         match before {
-            Some(prev) if prev != active => self
-                .apps
-                .iter()
-                .map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active.as_deref()) })
-                .collect(),
+            Some(prev) if prev != active => {
+                // the apps' declared intents run on a worker thread, off the frame
+                let installed = crate::shell::apphost::installed();
+                let declared: Vec<(String, String)> = installed.iter().flat_map(|i| i.manifest.focus_intents.iter().map(|intent| (i.manifest.id.clone(), intent.clone()))).collect();
+                let focus = active.clone().unwrap_or_default();
+                for (app, intent) in focus_calls(&declared, |id| crate::shell::apphost::slot_of(id).is_some()) {
+                    let focus = focus.clone();
+                    let _ = crate::bare::sys::spawn_named("focus-intent", move || {
+                        if let Err(e) = crate::shell::intents::run_with(&app, &intent, &[("focus", focus.as_str())], std::time::Duration::from_secs(2)) {
+                            eprintln!("focus_filter: intent {intent} of {app}: {e}");
+                        }
+                    });
+                }
+                self.apps.iter().map(|(app, _)| Event { app: Some(app.clone()), event: EVENT_CHANGED.to_string(), body: changed_body(active.as_deref()) }).collect()
+            }
             _ => Vec::new(),
         }
     }
@@ -141,6 +151,15 @@ pub struct FilterDeclaration {
     pub title: String,
     /// the value keys, in declaration order
     pub params: Vec<String>,
+    /// an `[[intent]]` id of the app the shell runs when the Focus changes (`focus` = the Focus name, "" when none is
+    /// on). Only a running app gets the call; an unsafe id is dropped and the declaration kept.
+    pub intent: Option<String>,
+}
+
+/// The intent calls a Focus change makes: each declared `(app id, intent id)` whose app is running. The caller passes
+/// the Focus name (`""` when none is on). An app that is not running is not started for a change of Focus.
+pub fn focus_calls(declared: &[(String, String)], is_running: impl Fn(&str) -> bool) -> Vec<(String, String)> {
+    declared.iter().filter(|(app, _)| is_running(app.as_str())).cloned().collect()
 }
 
 /// A word the manifest may hold as an id or a value key: letters, digits, dashes and underscores, up to 40 characters.
@@ -164,6 +183,7 @@ pub fn parse_declarations(text: &str) -> Vec<FilterDeclaration> {
         id: String,
         title: String,
         params: String,
+        intent: String,
     }
     let mut drafts: Vec<Draft> = Vec::new();
     let mut in_table = false;
@@ -188,6 +208,7 @@ pub fn parse_declarations(text: &str) -> Vec<FilterDeclaration> {
             "id" => draft.id = unquote(value),
             "title" => draft.title = unquote(value),
             "params" => draft.params = value.trim().to_string(),
+            "intent" => draft.intent = unquote(value),
             _ => {}
         }
     }
@@ -197,7 +218,8 @@ pub fn parse_declarations(text: &str) -> Vec<FilterDeclaration> {
             let inner = d.params.trim().trim_start_matches('[').trim_end_matches(']');
             let params: Vec<String> = inner.split(',').map(|p| unquote(p.trim())).filter(|p| !p.is_empty()).collect();
             let checked = safe_word(&d.id) && !d.title.trim().is_empty() && !params.is_empty() && params.iter().all(|p| safe_word(p));
-            checked.then(|| FilterDeclaration { id: d.id, title: d.title.trim().to_string(), params })
+            let intent = Some(d.intent).filter(|i| safe_word(i));
+            checked.then(|| FilterDeclaration { id: d.id, title: d.title.trim().to_string(), params, intent })
         })
         .collect()
 }
@@ -208,6 +230,29 @@ mod tests {
     use crate::shell::tests::shell;
 
     #[test]
+    fn a_declared_intent_is_read_and_an_unsafe_one_is_dropped_with_its_table() {
+        let text = "[[focus_filter]]\nid = \"notebook\"\ntitle = \"Notebook\"\nparams = [\"folder\"]\nintent = \"apply-focus\"\n\
+                    [[focus_filter]]\nid = \"mail\"\ntitle = \"Mail\"\nparams = [\"account\"]\nintent = \"bad intent\"\n";
+        let decls = parse_declarations(text);
+        assert_eq!(decls.len(), 2, "an unsafe intent does not drop the declaration");
+        assert_eq!(decls[0].intent.as_deref(), Some("apply-focus"));
+        assert_eq!(decls[1].intent, None);
+    }
+
+    #[test]
+    fn a_focus_change_calls_only_the_running_apps_intents() {
+        let declared = vec![("is.olibuijr.notes".to_string(), "apply-focus".to_string()), ("is.olibuijr.mail".to_string(), "apply-focus".to_string())];
+        assert_eq!(focus_calls(&declared, |id| id == "is.olibuijr.notes"), vec![("is.olibuijr.notes".to_string(), "apply-focus".to_string())]);
+        assert!(focus_calls(&declared, |_| false).is_empty(), "no running app is started for a Focus change");
+    }
+
+    #[test]
+    fn a_manifest_carries_its_focus_intents() {
+        let m = crate::shell::apphost::Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n[[focus_filter]]\nid = \"n\"\ntitle = \"N\"\nparams = [\"f\"]\nintent = \"apply-focus\"\n").unwrap();
+        assert_eq!(m.focus_intents, vec!["apply-focus".to_string()]);
+    }
+
+    #[test]
     fn filter_declarations_come_from_the_manifest_and_bad_tables_are_dropped() {
         let text = "name = \"Notes\"\n[[focus_filter]]\nid = \"notebook\"\ntitle = \"Notebook\"\nparams = [\"folder\", \"room\"]\n\
                     [[focus_filter]]\nid = \"bad id\"\ntitle = \"Spaces\"\nparams = [\"a\"]\n\
@@ -215,7 +260,7 @@ mod tests {
                     [[focus_filter]]\nid = \"none\"\ntitle = \"No values\"\nparams = []\n\
                     [[control]]\nkind = \"button\"\ntitle = \"Other\"\nintent = \"x\"\n";
         let decls = parse_declarations(text);
-        assert_eq!(decls, vec![FilterDeclaration { id: "notebook".into(), title: "Notebook".into(), params: vec!["folder".into(), "room".into()] }]);
+        assert_eq!(decls, vec![FilterDeclaration { id: "notebook".into(), title: "Notebook".into(), params: vec!["folder".into(), "room".into()], intent: None }]);
     }
 
     fn body(text: &str) -> Json {

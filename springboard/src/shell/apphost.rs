@@ -68,6 +68,8 @@ pub struct Manifest {
     pub entity_types: Vec<String>,
     /// `[[control]]` tables: buttons and toggles the app adds to Control Center (`shell::app_controls`).
     pub controls: Vec<super::app_controls::ManifestControl>,
+    /// the `[[focus_filter]] intent` ids: run when the Focus changes (`services::focus_filter::focus_calls`)
+    pub focus_intents: Vec<String>,
     /// `[[service]]` tables: Services menu entries this app provides for a selection (`bifrost_ui::app_services`).
     pub services: Vec<bifrost_ui::app_services::ServiceDecl>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
@@ -192,6 +194,7 @@ impl Manifest {
             }
         }
         m.controls = super::app_controls::parse_controls(text);
+        m.focus_intents = super::services::focus_filter::parse_declarations(text).into_iter().filter_map(|d| d.intent).collect();
         m.quick_actions = super::quick_actions::parse_static(text);
         m.background_tasks = super::services::background::parse_tasks(text);
         // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here
