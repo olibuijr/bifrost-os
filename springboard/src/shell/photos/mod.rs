@@ -134,6 +134,8 @@ pub enum Target {
     NewAlbum,
     /// a pin on the Places map: its index in the clusters (see `place_clusters`)
     Place(usize),
+    /// the Places cluster's photos: back to the map
+    PlacesBack,
     /// the viewer's Album button: add to (or remove from) a user album
     AddToAlbum,
     AlbumCancel,
@@ -485,6 +487,8 @@ enum Done {
     ThumbSkipped { key: String },
     Full { key: String, image: Option<Image> },
     Wallpaper { id: String, ok: bool },
+    /// GPS positions read off the UI thread for the photos of a batch (None: the file has none)
+    Gps { results: Vec<(PathBuf, Option<(f64, f64)>)> },
 }
 
 pub struct Photos {
@@ -542,6 +546,8 @@ pub struct Photos {
     place_gps: std::collections::HashMap<PathBuf, Option<(f64, f64)>>,
     /// the photos of the pin the user tapped; None shows the map
     place_pick: Option<Vec<PathBuf>>,
+    /// a worker is reading GPS positions; its result refreshes the map
+    place_busy: bool,
     /// what Undo and Redo step through
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
@@ -693,6 +699,7 @@ impl Photos {
             place_points: vec![],
             place_gps: std::collections::HashMap::new(),
             place_pick: None,
+            place_busy: false,
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
@@ -1481,6 +1488,16 @@ impl Photos {
                         self.follow_link(ui, l);
                     }
                 }
+                Done::Gps { results } => {
+                    self.place_busy = false;
+                    for (path, gps) in results {
+                        self.place_gps.insert(path, gps);
+                    }
+                    self.refresh_places();
+                    if self.album == Album::Places {
+                        self.rebuild(ui);
+                    }
+                }
                 Done::Thumb { key, image } => {
                     self.thumb_pending.remove(&key);
                     match image {
@@ -1590,7 +1607,7 @@ impl Photos {
         if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
             let m = ui.pt(MARGIN_PT);
             if x < m + ui.pt(150.0) {
-                return Some(Target::Album);
+                return Some(if self.showing_pick() { Target::PlacesBack } else { Target::Album });
             }
             if self.blank_library() {
                 return None;
@@ -2053,6 +2070,11 @@ impl Photos {
             Target::Slide(_) => {}
             Target::Album => {
                 self.album_menu = true;
+            }
+            Target::PlacesBack => {
+                self.place_pick = None;
+                self.rebuild(ui);
+                self.scroll.jump_to(0.0);
             }
             Target::More => {
                 self.album_menu = false;
@@ -2582,19 +2604,36 @@ impl Photos {
         }
     }
 
-    /// Reads the GPS position of each visible photo once (cached by path) and keeps the photos that have one.
+    /// Keeps the visible photos whose GPS position is known (cached by path). Photos not read yet are sent to a
+    /// worker; its result comes back through `pump` and refreshes the map. Nothing is read on the UI thread.
     fn refresh_places(&mut self) {
         let mut places = Vec::new();
         let mut points = Vec::new();
+        let mut missing = Vec::new();
         for p in &self.visible {
-            let gps = *self.place_gps.entry(p.path.clone()).or_insert_with(|| places::gps_of(&p.path));
-            if let Some(g) = gps {
-                places.push(p.clone());
-                points.push(g);
+            match self.place_gps.get(&p.path) {
+                Some(Some(g)) => {
+                    places.push(p.clone());
+                    points.push(*g);
+                }
+                Some(None) => {}
+                None => missing.push(p.path.clone()),
             }
         }
         self.places = places;
         self.place_points = points;
+        if !missing.is_empty() && !self.place_busy {
+            self.place_busy = true;
+            self.pool.spawn(move || Done::Gps { results: missing.into_iter().map(|path| {
+                let gps = places::gps_of(&path);
+                (path, gps)
+            }).collect() });
+        }
+    }
+
+    /// True while the grid shows the photos of one Places pin (the nav bar then offers the way back to the map).
+    fn showing_pick(&self) -> bool {
+        self.album == Album::Places && self.place_pick.is_some()
     }
 
     /// The pins of the Places map for the current window: clusters of photos that would overlap on screen.
@@ -2767,7 +2806,11 @@ impl Photos {
         let select = if self.selection.active { "Cancel" } else { "Select" };
         self.label(s, ui, select, 17.0, Weight::Regular, if pressed == Some(Target::Select) { rgba(10, 132, 255, 140) } else { BLUE }, self.w as f32 - ui.pt(MARGIN_PT + 96.0 + 38.0), mid);
         let dim = |p: Option<Target>, t: Target| if p == Some(t) { rgba(10, 132, 255, 140) } else { BLUE };
-        self.label_left(s, ui, "Albums", 17.0, Weight::Regular, dim(pressed, Target::Album), m, mid);
+        if self.showing_pick() {
+            self.label_left(s, ui, "< Places", 17.0, Weight::Regular, dim(pressed, Target::PlacesBack), m, mid);
+        } else {
+            self.label_left(s, ui, "Albums", 17.0, Weight::Regular, dim(pressed, Target::Album), m, mid);
+        }
         let cx = m + ui.pt(66.0);
         let cy = mid;
         for (a, b) in [((cx - ui.pt(4.0), cy - ui.pt(2.0)), (cx, cy + ui.pt(2.0))), ((cx, cy + ui.pt(2.0)), (cx + ui.pt(4.0), cy - ui.pt(2.0)))] {
