@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.12.2"
+version = "0.13.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
