@@ -32,6 +32,7 @@ pub mod usb_claim;
 pub mod virtio;
 pub mod accessory_manager;
 pub mod script_io;
+pub mod script;
 pub mod app_links;
 pub mod matter;
 pub mod matter_interaction;
