@@ -756,10 +756,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_sync.rs (Sync, poll)",
-   "status": "partial",
-   "note": "Account sync polling exists for DAV services. Gap: there is no device-to-device sync API like the one the reference framework offers.",
+   "status": "n/a",
+   "note": "Legacy framework for syncing data with Apple's own handheld and music devices. BifrOSt has no such devices; account sync to DAV services is in springboard/sdk/src/dav_sync.rs.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/System.framework",
@@ -2281,7 +2281,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs",
    "status": "partial",
-   "note": "Only the shell draws search result rows (quicksearch.rs), so the reference's separate card provider layer is not mirrored. Gap: apps cannot supply their own search result cards.",
+   "note": "Only the shell draws search result rows (quicksearch.rs), so the reference's separate card provider layer is not mirrored. Gap: apps cannot supply their own search result cards. Built 2026-10-17: card registry in springboard/sdk/src/search_card_provider.rs (apps publish and replace their cards per app id; tests search_card_provider::tests). Not wired yet: quicksearch.rs does not read the registry, so app cards do not reach the shell search.",
    "rea": [],
    "method": "assessed"
   },
