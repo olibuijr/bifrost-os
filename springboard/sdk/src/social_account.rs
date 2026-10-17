@@ -367,7 +367,7 @@ fn decode(s: &str) -> String {
 }
 
 /// HMAC-SHA1 (RFC 2104) with the 64-byte SHA-1 block size. Used only for OAuth 1.0a, which requires it.
-fn hmac_sha1(key: &[u8], message: &[u8]) -> [u8; 20] {
+pub(crate) fn hmac_sha1(key: &[u8], message: &[u8]) -> [u8; 20] {
     const BLOCK: usize = 64;
     let mut block = [0u8; BLOCK];
     if key.len() > BLOCK {
