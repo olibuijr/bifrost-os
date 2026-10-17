@@ -9,10 +9,11 @@
 //! ```
 //!
 //! The store checks them against the package when it installs the app (`store::install::validate`), so a
-//! provided wallpaper always names a picture inside the package. `listed` is the list Settings reads for the
-//! installed apps' wallpapers, and `find` maps a listed id back to its wallpaper; the Settings page and the
-//! shell that draws the chosen wallpaper are still separate work.
+//! provided wallpaper always names a picture inside the package. `installed` reads the provided wallpapers of the
+//! installed packages, `listed` is the list Settings reads for them, and `find` maps a listed id back to its
+//! wallpaper. The shell caches each one as a packed still (`wallpapers/app_<id>.raw`) so Settings can show it.
 
+use super::store::install::{parse_manifest, InstalledApp};
 use super::wallpaper_schedule;
 
 /// The most pictures one day wallpaper may hold.
@@ -108,6 +109,18 @@ pub fn listed(provided: &[Provided]) -> Vec<Listed> {
         .collect()
 }
 
+/// The wallpapers the installed packages provide, read from each package's `manifest.toml` under its root. An app
+/// whose manifest does not parse, or that declares no wallpaper, provides none.
+pub fn installed(apps: &[InstalledApp]) -> Vec<Provided> {
+    apps.iter()
+        .filter_map(|app| {
+            let text = std::fs::read_to_string(app.dir.join("manifest.toml")).ok()?;
+            let m = parse_manifest(&text).ok()?;
+            from_manifest(&app.id, &m.wallpaper_kind, &m.wallpapers).ok().flatten()
+        })
+        .collect()
+}
+
 /// The provided wallpaper a listed id names, if an installed app still provides it.
 pub fn find<'a>(provided: &'a [Provided], id: &str) -> Option<&'a Provided> {
     provided.iter().find(|p| format!("app:{}", p.app) == id)
@@ -167,6 +180,29 @@ mod tests {
             assert!(!picture_path_ok(bad), "{bad:?}");
         }
         assert!(from_manifest("is.x.app", "still", &pics(&["../a.png"])).is_err());
+    }
+
+    #[test]
+    fn installed_reads_each_packages_manifest() {
+        let root = std::env::temp_dir().join(format!("wallpaper-types-{}-installed", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let app = |id: &str, extra: &str| {
+            let dir = root.join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("manifest.toml"), format!("id = \"{id}\"\nname = \"N\"\nversion = \"1.0.0\"\n{extra}")).unwrap();
+            InstalledApp { id: id.to_string(), dir, ..Default::default() }
+        };
+        let apps = [
+            app("is.x.dawn", "wallpaper_kind = \"day\"\nwallpapers = [\"wallpapers/a.png\", \"wallpapers/b.png\"]\n"),
+            app("is.x.plain", ""),
+            app("is.x.bad", "wallpaper_kind = \"movie\"\nwallpapers = [\"a.mov\"]\n"),
+        ];
+        let got = installed(&apps);
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(got[0].app, "is.x.dawn");
+        assert_eq!(got[0].kind, Kind::Day);
+        assert_eq!(listed(&got)[0].picture, "wallpapers/a.png");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

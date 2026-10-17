@@ -2048,6 +2048,54 @@ fn wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
             Some(springboard::shell::wallpaper_page::Wallpaper { id: id.to_string(), name: name.to_string(), thumb })
         })
         .chain(photo_wallpapers(dir))
+        .chain(app_wallpapers(dir))
+        .collect()
+}
+
+/// Decodes the picture at `src` once, cover-fits it to the `tw` x `th` wallpaper size and caches it as
+/// `wallpapers/<id>.raw` with its 320 x 180 thumbnail as `wallpapers/<id>.thumb.raw`. Returns the thumbnail.
+#[cfg(target_os = "linux")]
+fn cache_still(dir: &str, id: &str, src: &std::path::Path, tw: usize, th: usize) -> Option<springboard::gfx::Image> {
+    use springboard::gfx::Image;
+    use std::fs;
+    let (raw, thumb_path) = (format!("{dir}/wallpapers/{id}.raw"), format!("{dir}/wallpapers/{id}.thumb.raw"));
+    if !std::path::Path::new(&raw).exists() || !std::path::Path::new(&thumb_path).exists() {
+        let img = springboard::cg::imageio::decode(&fs::read(src).ok()?)?;
+        let scale = (tw as f32 / img.w as f32).max(th as f32 / img.h as f32);
+        let (cw, ch) = (((tw as f32 / scale) as usize).clamp(1, img.w), ((th as f32 / scale) as usize).clamp(1, img.h));
+        let full = img.crop((img.w - cw) / 2, (img.h - ch) / 2, cw, ch).resized(tw, th);
+        fs::create_dir_all(format!("{dir}/wallpapers")).ok()?;
+        let rimg = |i: &Image| {
+            let mut b = b"RIMG".to_vec();
+            b.extend((i.w as u32).to_le_bytes());
+            b.extend((i.h as u32).to_le_bytes());
+            b.extend(i.px.iter().flat_map(|p| p.to_le_bytes()));
+            b
+        };
+        fs::write(&raw, rimg(&full)).ok()?;
+        fs::write(&thumb_path, rimg(&springboard::shell::wallpaper_page::cover_fit(&full, 320, 180))).ok()?;
+    }
+    Image::from_raw(&fs::read(&thumb_path).ok()?)
+}
+
+/// The wallpapers the installed apps provide (`shell::wallpaper_types`): the first picture of each, cached as a
+/// still like a photo (`wallpapers/app_<app id>.raw`), so Settings lists them beside the packed stills.
+#[cfg(target_os = "linux")]
+fn app_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
+    use springboard::gfx::Image;
+    use springboard::shell::{store::install::installed_apps, wallpaper_types};
+    let Some(base) = std::fs::read(format!("{dir}/wallpaper.raw")).ok().and_then(|b| Image::from_raw(&b)) else { return vec![] };
+    let apps = installed_apps();
+    wallpaper_types::installed(&apps)
+        .into_iter()
+        .filter_map(|p| {
+            let app = apps.iter().find(|a| a.id == p.app)?;
+            let picture = app.dir.join(p.images.first()?);
+            let stem: String = p.app.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+            let id = format!("app_{stem}");
+            let thumb = cache_still(dir, &id, &picture, base.w, base.h)?;
+            Some(springboard::shell::wallpaper_page::Wallpaper { id, name: app.name.clone(), thumb })
+        })
         .collect()
 }
 
@@ -2066,24 +2114,7 @@ fn photo_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpa
         .filter_map(|path| {
             let stem: String = path.file_stem()?.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
             let id = format!("photo_{stem}");
-            let (raw, thumb_path) = (format!("{dir}/wallpapers/{id}.raw"), format!("{dir}/wallpapers/{id}.thumb.raw"));
-            if !std::path::Path::new(&raw).exists() || !std::path::Path::new(&thumb_path).exists() {
-                let img = springboard::cg::imageio::decode(&fs::read(&path).ok()?)?;
-                let scale = (tw as f32 / img.w as f32).max(th as f32 / img.h as f32);
-                let (cw, ch) = (((tw as f32 / scale) as usize).clamp(1, img.w), ((th as f32 / scale) as usize).clamp(1, img.h));
-                let full = img.crop((img.w - cw) / 2, (img.h - ch) / 2, cw, ch).resized(tw, th);
-                fs::create_dir_all(format!("{dir}/wallpapers")).ok()?;
-                let rimg = |i: &Image| {
-                    let mut b = b"RIMG".to_vec();
-                    b.extend((i.w as u32).to_le_bytes());
-                    b.extend((i.h as u32).to_le_bytes());
-                    b.extend(i.px.iter().flat_map(|p| p.to_le_bytes()));
-                    b
-                };
-                fs::write(&raw, rimg(&full)).ok()?;
-                fs::write(&thumb_path, rimg(&springboard::shell::wallpaper_page::cover_fit(&full, 320, 180))).ok()?;
-            }
-            let thumb = Image::from_raw(&fs::read(&thumb_path).ok()?)?;
+            let thumb = cache_still(dir, &id, &path, tw, th)?;
             Some(springboard::shell::wallpaper_page::Wallpaper { id, name: path.file_stem()?.to_string_lossy().into_owned(), thumb })
         })
         .take(6)
