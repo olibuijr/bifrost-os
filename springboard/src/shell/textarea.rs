@@ -162,6 +162,8 @@ pub struct TextArea {
     /// find links in the text (opt-in: `set_detect_links`); char ranges, kept current by `layout`
     detect_links: bool,
     links: Vec<Range<usize>>,
+    /// paragraphs (by index) drawn with no height: folded sections; empty for every other user
+    hidden: Vec<Range<usize>>,
 }
 
 /// What a finger down on the text is doing.
@@ -239,7 +241,7 @@ impl TextArea {
     /// Wraps at `w` px; the first paragraph is set at `title_pt` bold, the
     /// rest at `body_pt` regular. `tint` colours the caret and selection.
     pub fn new(ui: &Ui, w: f32, body_pt: f32, title_pt: f32, color: u32, tint: u32) -> Self {
-        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![] };
+        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![] };
         ta.layout(ui);
         ta
     }
@@ -296,6 +298,20 @@ impl TextArea {
             self.w = w;
             self.layout(ui);
         }
+    }
+
+    /// Hides whole paragraphs (by paragraph index, end exclusive): they keep their place in the text and the undo
+    /// history but take no height, so the lines below move up. Relayout only happens when the ranges change.
+    pub fn set_hidden(&mut self, ui: &Ui, ranges: Vec<Range<usize>>) {
+        if self.hidden != ranges {
+            self.hidden = ranges;
+            self.layout(ui);
+        }
+    }
+
+    /// The y and height in px of the wrapped line holding char `c` (height 0 when its paragraph is hidden).
+    pub fn line_span(&self, c: usize) -> (f32, f32) {
+        self.lines.get(self.line_of(c)).map_or((0.0, 0.0), |l| (l.y, l.h))
     }
 
     /// Height of the laid-out text in px.
@@ -437,9 +453,10 @@ impl TextArea {
         let last = paragraphs.len() - 1;
         for (pi, para) in paragraphs.into_iter().enumerate() {
             let chars: Vec<char> = para.chars().collect();
+            let folded = self.hidden.iter().any(|r| r.contains(&pi));
             if self.markdown && pi > 0 {
                 if let Some(name) = md::image_ref(para).filter(|n| self.images.contains_key(*n)) {
-                    let h = self.images[name].h as f32 + ui.pt(12.0);
+                    let h = if folded { 0.0 } else { self.images[name].h as f32 + ui.pt(12.0) };
                     let range = start..start + chars.len() + (pi != last) as usize;
                     lines.push(Line { range, text: para.to_string(), adv: vec![0.0; chars.len()], y, h, pt: self.body_pt, weight: Weight::Regular, img: None, segs: vec![], simgs: vec![], block: Block::Body, prefix: 0, indent: 0, first: true, para_start: start, image: Some(name.to_string()) });
                     y += h;
@@ -461,7 +478,7 @@ impl TextArea {
                 _ if pi == 0 => (self.title_pt, Weight::Bold, Block::Body, 0, 0),
                 _ => (self.body_pt, Weight::Regular, Block::Body, 0, 0),
             };
-            let h = self.line_h(ui, pt);
+            let h = if folded { 0.0 } else { self.line_h(ui, pt) };
             let styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
             let adv: Vec<f32> = if self.markdown {
                 let mut buf = [0u8; 4];
@@ -860,7 +877,7 @@ impl TextArea {
         let sel = self.selection();
         for l in &mut self.lines {
             let ly = y + l.y;
-            if ly + l.h <= top || ly >= bottom {
+            if l.h <= 0.0 || ly + l.h <= top || ly >= bottom {
                 continue;
             }
             let shown = l.range.start + l.text.chars().count();

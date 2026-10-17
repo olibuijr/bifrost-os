@@ -24,6 +24,8 @@ pub mod import;
 pub mod math;
 pub mod outline;
 pub mod table;
+pub mod fold;
+pub mod gallery;
 
 mod parity;
 mod pdf;
@@ -75,6 +77,26 @@ use std::sync::{Arc, Mutex};
 
 /// A background result waiting for the main queue: `None` until the worker has finished.
 type ImageSlot = Arc<Mutex<Option<HashMap<String, Image>>>>;
+/// Gallery thumbnails decoded off the UI thread: (note id, picture name, picture or None when it did not decode).
+type ThumbSlot = Arc<Mutex<Vec<(String, String, Option<Image>)>>>;
+
+/// A disclosure triangle in a box `size` wide at (`x`, `y`): pointing right when `folded`, down when open. The kit
+/// has no disclosure control, so it is drawn as stripes the way the Mail app draws its triangles.
+fn disclosure(s: &mut Surface, x: f32, y: f32, size: f32, folded: bool, color: u32) {
+    let n = size.max(2.0) as usize;
+    let (x, y) = (x.max(0.0) as usize, y.max(0.0) as usize);
+    for i in 0..n / 2 + 1 {
+        let len = n.saturating_sub(2 * i);
+        if len == 0 {
+            break;
+        }
+        if folded {
+            s.fill_rect(x + i, y + i, 1, len, color);
+        } else {
+            s.fill_rect(x + i, y + i, len, 1, color);
+        }
+    }
+}
 use bifrost_app::kit::ui::{SPACE_XS};
 
 /// Picker sheet header height and thumbnail decode size (pt).
@@ -117,6 +139,12 @@ const TAG_MIN_PT: f32 = 120.0;
 const PIN_W_PT: f32 = 72.0;
 const SECTION_PT: f32 = 32.0;
 const SECTION_GAP_PT: f32 = 12.0;
+/// The disclosure chevron beside a heading, and the gap to the text.
+const CHEVRON_PT: f32 = 10.0;
+const CHEVRON_GAP_PT: f32 = 6.0;
+/// A gallery card's height, and the part of it the picture takes.
+const GALLERY_CARD_PT: f32 = 196.0;
+const GALLERY_THUMB_PT: f32 = 110.0;
 const DATE_TOP_PT: f32 = 12.0;
 const TEXT_TOP_PT: f32 = 36.0;
 const BODY_PT: f32 = MAC_BODY_PT;
@@ -194,6 +222,12 @@ pub enum Format {
     AddLink,
     /// Answer every line that ends with `=` after a calculation.
     CalculateMath,
+    /// Fold or unfold the section under the caret (Format > Collapse / Expand Section).
+    CollapseSection,
+    ExpandSection,
+    /// Fold or unfold every section of the note.
+    CollapseAll,
+    ExpandAll,
 }
 
 /// A formatting button: inline emphasis or a list style for the paragraphs.
@@ -327,6 +361,8 @@ pub enum Target {
     /// cycles the paragraph style marker
     Format,
     Text,
+    /// the disclosure chevron of the heading on this paragraph (folds or unfolds its section)
+    Fold(usize),
     Keyboard,
 }
 
@@ -380,6 +416,12 @@ pub struct Notes {
     appearance: u32,
     view: View,
     prefs: store::Prefs,
+    /// the collapsed headings of every note (Format > Collapse Section)
+    folds: fold::Folds,
+    /// gallery thumbnails by note id: the picture's name and the decoded picture (None when it did not decode)
+    thumbs: HashMap<String, (String, Option<Image>)>,
+    thumb_pending: HashSet<String>,
+    thumb_slot: ThumbSlot,
     menu: Option<Menu>,
     /// the Photos picker sheet
     picker: Option<picker::Picker>,
@@ -479,6 +521,7 @@ impl Notes {
         let (notes, loc, folders) = load_everything(&dir, wall.now(0.0));
         let pinned = store::load_pins(&dir, &notes);
         let prefs = store::load_prefs(&dir);
+        let folds = fold::load(&dir);
         let mut n = Notes {
             w,
             h,
@@ -492,6 +535,10 @@ impl Notes {
             appearance: LABEL.now(),
             view: View::All,
             prefs,
+            folds,
+            thumbs: HashMap::new(),
+            thumb_pending: HashSet::new(),
+            thumb_slot: ThumbSlot::default(),
             menu: None,
             picker: None,
             sketch: None,
@@ -841,6 +888,11 @@ impl Notes {
 
     /// Screen rect of shown row `i` at the current scroll.
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        if self.prefs.layout == gallery::Layout::Gallery {
+            let (cells, _, _) = self.gallery_grid(ui);
+            let (x, y, w, h) = cells.get(i).copied().unwrap_or((0.0, 0.0, 0.0, 0.0));
+            return (x, y - self.list_scroll.offset(), w, h);
+        }
         let (lx, lw) = self.list_px(ui);
         let m = ui.pt(SPACE_S);
         let section = self.section_offset(i);
@@ -861,6 +913,11 @@ impl Notes {
         let bottom = self.content_bottom(ui);
         if y < ui.pt(nav_bottom_pt()) || y >= bottom {
             return None;
+        }
+        if self.prefs.layout == gallery::Layout::Gallery {
+            let (cells, _, _) = self.gallery_grid(ui);
+            let off = self.list_scroll.offset();
+            return Some(cells.iter().position(|&(rx, ry, rw, rh)| within(x, y, (rx, ry - off, rw, rh))).map_or(Target::List, Target::Row));
         }
         for i in 0..self.shown.len() {
             let (rx, ry, rw, rh) = self.row_rect(ui, i);
@@ -940,7 +997,13 @@ impl Notes {
         if self.keyboard.shown() && within(x, y, self.done_rect(ui)) {
             return Some(Target::Done);
         }
-        (y >= ui.pt(nav_bottom_pt()) && y < self.content_bottom(ui)).then_some(Target::Text)
+        if y < ui.pt(nav_bottom_pt()) || y >= self.content_bottom(ui) {
+            return None;
+        }
+        if let Some((line, _, _)) = self.fold_chevrons(ui).into_iter().find(|(_, r, _)| within(x, y, *r)) {
+            return Some(Target::Fold(line));
+        }
+        Some(Target::Text)
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
@@ -987,7 +1050,12 @@ impl Notes {
     fn fit_scroll(&mut self, ui: &Ui) {
         let bottom = self.content_bottom(ui);
         let section = self.sections_total();
-        let (list_h, text_h) = (ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
+        let list_h = if self.prefs.layout == gallery::Layout::Gallery {
+            self.gallery_grid(ui).2 + ui.pt(SPACE_L)
+        } else {
+            ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L)
+        };
+        let text_h = ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0);
         self.list_scroll.set_max(list_h - bottom);
         self.scroll.set_max(text_h - bottom);
     }
@@ -1634,6 +1702,8 @@ impl Notes {
             Format::UncheckAll => self.set_checks(ui, false, t),
             Format::Table(op) => self.edit_table(ui, op, t),
             Format::CalculateMath => self.calculate(ui, t),
+            Format::CollapseSection | Format::ExpandSection => self.fold_section(ui, matches!(f, Format::CollapseSection)),
+            Format::CollapseAll | Format::ExpandAll => self.fold_all(ui, matches!(f, Format::CollapseAll)),
             Format::AddLink => self.start_link(ui, t),
         }
     }
@@ -2253,6 +2323,211 @@ impl Notes {
         }
     }
 
+    /// Folds (`collapse`) or unfolds the heading the caret is under. Only the sidecar of folds changes, never the text.
+    fn fold_section(&mut self, ui: &Ui, collapse: bool) {
+        let Some(id) = self.editing().map(|note| note.id.clone()) else { return };
+        let text = self.editor.text().to_string();
+        let line = self.caret_para();
+        let keys = self.folds.entry(id).or_default();
+        let changed = if collapse { fold::collapse(keys, &text, line) } else { fold::expand(keys, &text, line) };
+        if changed {
+            self.save_folds();
+            self.apply_folds(ui);
+        }
+    }
+
+    /// Folds every heading of the open note, or unfolds them all.
+    fn fold_all(&mut self, ui: &Ui, collapse: bool) {
+        let Some(id) = self.editing().map(|note| note.id.clone()) else { return };
+        let text = self.editor.text().to_string();
+        let keys = self.folds.entry(id).or_default();
+        let changed = if collapse { fold::collapse_all(keys, &text) } else { fold::expand_all(keys) };
+        if changed {
+            self.save_folds();
+            self.apply_folds(ui);
+        }
+    }
+
+    /// The logical (paragraph) line the caret is on; the editor's own line numbers count wrapped lines.
+    fn caret_para(&self) -> usize {
+        self.editor.text().chars().take(self.editor.caret()).filter(|&c| c == '\n').count()
+    }
+
+    /// Hands the open note's folded sections to the editor, which hides their paragraphs.
+    fn apply_folds(&mut self, ui: &Ui) {
+        let ranges = self.editing().and_then(|note| self.folds.get(&note.id)).map_or_else(Vec::new, |keys| fold::hidden(self.editor.text(), keys));
+        self.editor.set_hidden(ui, ranges);
+    }
+
+    /// The disclosure chevron of each heading in the open note: its paragraph, its hit box on screen and whether its
+    /// section is folded. A hidden heading has no height and gets no chevron.
+    fn fold_chevrons(&self, ui: &Ui) -> Vec<(usize, (f32, f32, f32, f32), bool)> {
+        let (ox, oy) = self.text_origin(ui);
+        let size = ui.pt(CHEVRON_PT);
+        let gap = ui.pt(CHEVRON_GAP_PT);
+        let keys = self.editing().and_then(|note| self.folds.get(&note.id));
+        let mut out = vec![];
+        let mut start = 0;
+        for (line, para) in self.editor.text().split('\n').enumerate() {
+            if fold::level_of(md::classify(para).block).is_some() {
+                let (ly, lh) = self.editor.line_span(start);
+                if lh > 0.0 {
+                    let x = ox - size - gap;
+                    let folded = keys.is_some_and(|k| k.contains(para.trim_end()));
+                    out.push((line, (x - gap, oy + ly, size + 2.0 * gap, lh), folded));
+                }
+            }
+            start += para.chars().count() + 1;
+        }
+        out
+    }
+
+    /// Folds or unfolds the section of the heading on paragraph `line` (a tap on its chevron). A caret inside a section
+    /// that folds moves up to its heading, so it is never left on a hidden line.
+    fn toggle_fold(&mut self, ui: &Ui, line: usize) {
+        let Some(id) = self.editing().map(|note| note.id.clone()) else { return };
+        let text = self.editor.text().to_string();
+        let Some(head) = fold::heading_above(&text, line) else { return };
+        let caret = self.caret_para();
+        let keys = self.folds.entry(id).or_default();
+        let collapsed = if keys.remove(&head.key) {
+            false
+        } else {
+            keys.insert(head.key.clone());
+            true
+        };
+        self.save_folds();
+        if collapsed {
+            let heads = fold::headings(&text);
+            if let Some(i) = heads.iter().position(|h| h.line == head.line) {
+                if fold::section(&heads, i, text.lines().count()).contains(&caret) {
+                    let start: usize = text.split('\n').take(head.line).map(|p| p.chars().count() + 1).sum();
+                    self.editor.set_caret(start);
+                }
+            }
+        }
+        self.apply_folds(ui);
+    }
+
+
+    fn save_folds(&mut self) {
+        // only notes still on disk keep their folds (a deleted note's entry is dropped when the sidecar is saved)
+        let live: HashSet<&str> = self.notes.iter().map(|n| n.id.as_str()).collect();
+        fold::prune(&mut self.folds, &live);
+        if let Err(error) = fold::save(&self.dir, &self.folds) {
+            self.notice = Some(format!("Unable to save sections: {error}"));
+        }
+    }
+
+    /// View > as List / as Gallery: the choice is saved in Prefs and the list starts again from its top.
+    pub fn set_layout(&mut self, ui: &Ui, layout: gallery::Layout) {
+        if self.prefs.layout != layout {
+            self.prefs.layout = layout;
+            self.save_prefs();
+            self.list_scroll.jump_top();
+            self.fit_scroll(ui);
+            self.dirty = true;
+        }
+    }
+
+    /// The list toolbar's toggle: the same choice as View > as List / as Gallery.
+    fn toggle_layout(&mut self, ui: &Ui, _t: f64) {
+        let next = if self.prefs.layout == gallery::Layout::Gallery { gallery::Layout::List } else { gallery::Layout::Gallery };
+        self.set_layout(ui, next);
+    }
+
+    /// The gallery's columns as `(count, card width, gap)` in px, from the width of the list column.
+    fn gallery_cols(&self, ui: &Ui) -> (usize, f32, f32) {
+        let (_, lw) = self.list_px(ui);
+        let width = lw - 2.0 * ui.pt(SPACE_S);
+        let gap = ui.pt(gallery::CARD_GAP_PT);
+        let cols = gallery::columns(width, ui.pt(gallery::CARD_MIN_PT), gap);
+        (cols, gallery::card_width(width, cols, gap), gap)
+    }
+
+    /// The gallery's cards as `(x, y, w, h)` in list space (scroll not applied), the section headers as
+    /// `(index into sections, y)`, and the height of the whole grid. A section starts on a new row.
+    fn gallery_grid(&self, ui: &Ui) -> (Vec<(f32, f32, f32, f32)>, Vec<(usize, f32)>, f32) {
+        let (cols, cw, gap) = self.gallery_cols(ui);
+        let (lx, _) = self.list_px(ui);
+        let m = ui.pt(SPACE_S);
+        let pitch = ui.pt(GALLERY_CARD_PT) + gap;
+        let ch = ui.pt(GALLERY_CARD_PT);
+        let mut y = ui.pt(list_top_pt());
+        let (mut col, mut cells, mut heads) = (0usize, Vec::with_capacity(self.shown.len()), vec![]);
+        for i in 0..self.shown.len() {
+            if let Some(k) = self.sections.iter().position(|(_, start)| *start == i) {
+                if col != 0 {
+                    y += pitch;
+                    col = 0;
+                }
+                heads.push((k, y));
+                y += ui.pt(Self::header_pt(k));
+            }
+            cells.push((lx + m + col as f32 * (cw + gap), y, cw, ch));
+            col += 1;
+            if col == cols {
+                col = 0;
+                y += pitch;
+            }
+        }
+        if col != 0 {
+            y += pitch;
+        }
+        (cells, heads, y)
+    }
+
+    /// The first picture a note shows, by file name.
+    fn first_picture(text: &str) -> Option<&str> {
+        text.lines().find_map(md::image_ref)
+    }
+
+    /// Asks for the first picture of each shown note that the gallery does not have yet; the decode runs off the UI
+    /// thread and `poll_thumbs` takes the result.
+    fn request_thumbs(&mut self, ui: &Ui) {
+        let (_, cw, _) = self.gallery_cols(ui);
+        let max_w = cw.max(1.0) as usize;
+        let mut jobs = vec![];
+        for &i in &self.shown {
+            let note = &self.notes[i];
+            let Some(name) = Self::first_picture(&note.text) else { continue };
+            let have = self.thumbs.get(&note.id).is_some_and(|(kept, _)| kept == name);
+            if have || self.thumb_pending.contains(&note.id) {
+                continue;
+            }
+            jobs.push((note.id.clone(), name.to_string(), self.note_dir(&note.id)));
+        }
+        if jobs.is_empty() {
+            return;
+        }
+        for (id, _, _) in &jobs {
+            self.thumb_pending.insert(id.clone());
+        }
+        let sink = self.thumb_slot.clone();
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let done: Vec<(String, String, Option<Image>)> = jobs
+                .into_iter()
+                .map(|(id, name, dir)| {
+                    let img = std::fs::read(dir.join(&name)).ok().and_then(|bytes| attach::decode_fitted(&bytes, max_w));
+                    (id, name, img)
+                })
+                .collect();
+            DispatchQueue::main().async_(move || sink.lock().unwrap_or_else(|e| e.into_inner()).extend(done));
+        });
+    }
+
+    /// Takes finished thumbnail decodes; true when there were any.
+    fn poll_thumbs(&mut self) -> bool {
+        let done: Vec<(String, String, Option<Image>)> = std::mem::take(&mut *self.thumb_slot.lock().unwrap_or_else(|e| e.into_inner()));
+        let any = !done.is_empty();
+        for (id, name, img) in done {
+            self.thumb_pending.remove(&id);
+            self.thumbs.insert(id, (name, img));
+        }
+        any
+    }
+
+
     fn save_prefs(&mut self) {
         if let Err(error) = store::save_prefs(&self.dir, self.prefs) {
             self.notice = Some(format!("Unable to save settings: {error}"));
@@ -2705,6 +2980,8 @@ impl Notes {
                 }
             }
             Target::Bar(chrome::B_PHOTO) => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
+            Target::Bar(chrome::B_LAYOUT) => self.toggle_layout(ui, t),
+            Target::Fold(line) => self.toggle_fold(ui, line),
             Target::Bar(_) => {}
             Target::EditorMore => self.open_editor_menu(ui),
             Target::FindPrev => self.step_match(ui, -1),
@@ -2826,7 +3103,8 @@ impl Notes {
                 } else if let Some(mut rt) = self.row_touch {
                     let (dx, dy) = (x - rt.x0, y - rt.y0);
                     if rt.horizontal.is_none() && dx.hypot(dy) > ui.pt(SLOP_PT) {
-                        rt.horizontal = Some(dx.abs() > dy.abs());
+                        // cards have no swipe actions: a drag in the gallery scrolls
+                        rt.horizontal = Some(dx.abs() > dy.abs() && self.prefs.layout != gallery::Layout::Gallery);
                         if rt.horizontal == Some(true) {
                             self.pressed = None;
                         } else {
@@ -2910,6 +3188,9 @@ impl Notes {
         if self.poll_images(ui) {
             self.dirty = true;
         }
+        if self.poll_thumbs() {
+            self.dirty = true;
+        }
         if let Some(p) = &mut self.picker {
             self.dirty |= p.poll() | p.loading();
         }
@@ -2964,6 +3245,9 @@ impl Notes {
     }
 
     fn draw_list(&mut self, s: &mut Surface, ui: &Ui) {
+        if self.prefs.layout == gallery::Layout::Gallery {
+            return self.draw_gallery(s, ui);
+        }
         let (lx, lw) = self.list_px(ui);
         let bottom = self.content_bottom(ui);
         let rh = ui.pt(ROW_PT);
@@ -3053,6 +3337,75 @@ impl Notes {
         }
     }
 
+    /// The gallery: a grid of cards (the first picture, or a text preview, then title and date) in the list column.
+    /// Selecting and opening a card works as a list row does.
+    fn draw_gallery(&mut self, s: &mut Surface, ui: &Ui) {
+        self.request_thumbs(ui);
+        let (lx, _) = self.list_px(ui);
+        let bottom = self.content_bottom(ui);
+        let (cells, heads, _) = self.gallery_grid(ui);
+        let off = self.list_scroll.offset();
+        let top = ui.pt(nav_bottom_pt());
+        let mut content = s.rows(top as usize, bottom as usize);
+        for (k, y) in heads {
+            let band_bottom = y - off + ui.pt(Self::header_pt(k));
+            if band_bottom < top || y - off > bottom {
+                continue;
+            }
+            let label = self.sections[k].0.clone();
+            let img = self.labels.get(ui, &label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now()).clone();
+            content.blit(&img, (lx + ui.pt(SPACE_S)) as i32, (band_bottom - img.h as f32 - ui.pt(SPACE_XS)) as i32, 255, 255);
+        }
+        let open = self.editing().map(|note| note.id.clone());
+        let selected = self.selected_index();
+        let pad = ui.pt(SPACE_S);
+        let radius = ui.pt(m::CARD_RADIUS);
+        for (i, &(x, y, w, h)) in cells.iter().enumerate() {
+            let ry = y - off;
+            if ry + h < top || ry > bottom {
+                continue;
+            }
+            let note = &self.notes[self.shown[i]];
+            let is_open = open.as_deref() == Some(note.id.as_str());
+            if is_open || selected == Some(i) {
+                content.fill_rrect(x, ry, w, h, radius, YELLOW);
+                content.fill_rrect(x + ui.pt(2.0), ry + ui.pt(2.0), w - ui.pt(4.0), h - ui.pt(4.0), radius, CARD_BG.now());
+            } else {
+                content.fill_rrect(x, ry, w, h, radius, CARD_BG.now());
+            }
+            let picture = Self::first_picture(&note.text);
+            let mut text_top = ry + pad;
+            if picture.is_some() {
+                let thumb_h = ui.pt(GALLERY_THUMB_PT);
+                if let (Some(name), Some((kept, Some(img)))) = (picture, self.thumbs.get(&note.id)) {
+                    if kept == name {
+                        let shown = img.crop(0, 0, img.w.min(w as usize), img.h.min(thumb_h as usize));
+                        content.blit(&shown, x as i32, ry as i32, 255, 255);
+                    }
+                }
+                text_top = ry + thumb_h + pad;
+            }
+            let inner = w - 2.0 * pad;
+            let title_text = ui.fit(note.title(), MAC_BODY_PT, inner);
+            let title = self.labels.get(ui, &title_text, MAC_BODY_PT, Weight::Bold, LABEL.now()).clone();
+            content.blit(&title, (x + pad) as i32, text_top as i32, 255, 255);
+            let date_text = self.rows[self.shown[i]].date_text.clone();
+            let date = self.labels.get(ui, &date_text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now()).clone();
+            let date_y = text_top + title.h as f32 + pad / 2.0;
+            content.blit(&date, (x + pad) as i32, date_y as i32, 255, 255);
+            if picture.is_none() {
+                let preview_text = ui.fit(&note.row_snippet(), MAC_FOOTNOTE_PT, inner);
+                let preview = self.labels.get(ui, &preview_text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now()).clone();
+                content.blit(&preview, (x + pad) as i32, (date_y + date.h as f32 + pad / 2.0) as i32, 255, 255);
+            }
+        }
+        if cells.is_empty() {
+            let msg = if !self.search.is_empty() { "No Results" } else if self.view == View::Trash { "No Deleted Notes" } else { "No Notes" };
+            let img = self.labels.get(ui, msg, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now()).clone();
+            centred(&mut content, &img, (lx + ui.pt(SPACE_S)) as i32, (ui.pt(list_top_pt()) + ui.pt(SPACE_HUGE * 2.0)) as i32);
+        }
+    }
+
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         let (ex, ew) = self.ed_px(ui);
         let bottom = self.content_bottom(ui);
@@ -3069,7 +3422,13 @@ impl Notes {
             if let Some(d) = &self.date {
                 centred(&mut content, d, (ex + ew / 2.0) as i32, (oy - ui.pt(TEXT_TOP_PT - DATE_TOP_PT)) as i32);
             }
+            self.apply_folds(ui);
             self.editor.draw(&mut content, ui, ox, oy, t);
+            let size = ui.pt(CHEVRON_PT);
+            for (_, (hx, hy, _, hh), folded) in self.fold_chevrons(ui) {
+                let (cx, cy) = (hx + ui.pt(CHEVRON_GAP_PT), hy + (hh - size) / 2.0);
+                disclosure(&mut content, cx, cy, size, folded, LABEL_2.now());
+            }
         }
         if self.find_strip() {
             let ftop = self.find_top(ui);
@@ -4685,6 +5044,74 @@ mod tests {
         n.run(&ui, Act::Do(Format::AddLink), 2400.0);
         assert!(n.escape(&ui, 2500.0));
         assert!(n.naming.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collapse_commands_fold_the_section_under_the_caret_and_survive_a_restart() {
+        let ui = ui();
+        let dir = scratch("fold-section");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "# Plan\nintro\n## Steps\none\ntwo\n## Notes\nlast");
+        let text = n.editor.text().to_string();
+        let id = n.editing().unwrap().id.clone();
+        caret_after(&mut n, "one");
+        n.run(&ui, Act::Do(Format::CollapseSection), 3000.0);
+        assert!(n.folds[&id].contains("## Steps"));
+        assert_eq!(n.editor.text(), text, "folding never changes the note text");
+        n.run(&ui, Act::Do(Format::CollapseAll), 3100.0);
+        assert_eq!(n.folds[&id].len(), 3, "Plan, Steps and Notes are folded");
+        n.run(&ui, Act::Do(Format::ExpandSection), 3200.0);
+        assert!(!n.folds[&id].contains("## Steps"), "Expand Section unfolds the heading above the caret");
+        let reopened = app(&ui, &dir);
+        assert_eq!(reopened.folds[&id].len(), 2, "the folds are saved with the note");
+        n.run(&ui, Act::Do(Format::ExpandAll), 3300.0);
+        assert!(n.folds.get(&id).is_none_or(|keys| keys.is_empty()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn view_menu_layout_choice_is_saved_with_the_prefs() {
+        let ui = ui();
+        let dir = scratch("layout");
+        let mut n = seeded(&ui, &dir);
+        assert_eq!(n.prefs().layout, gallery::Layout::List);
+        n.set_layout(&ui, gallery::Layout::Gallery);
+        assert_eq!(n.prefs().layout, gallery::Layout::Gallery);
+        assert_eq!(app(&ui, &dir).prefs().layout, gallery::Layout::Gallery);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folded_section_hides_its_lines_and_its_chevron_unfolds_it() {
+        let ui = ui();
+        let dir = scratch("fold-hide");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "# Plan\nintro\n## Steps\none\ntwo");
+        caret_after(&mut n, "one");
+        n.run(&ui, Act::Do(Format::CollapseSection), 3000.0);
+        let one = n.editor.text().find("one").unwrap();
+        assert_eq!(n.editor.line_span(one).1, 0.0, "the folded line takes no height");
+        assert!(n.fold_chevrons(&ui).iter().any(|(line, _, folded)| *line == 2 && *folded), "the heading shows a folded chevron");
+        draw(&mut n, &ui, 3100.0);
+        n.activate(&ui, Target::Fold(2), 0.0, 0.0, 3200.0);
+        assert!(n.editor.line_span(one).1 > 0.0, "tapping the chevron unfolds the section");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_gallery_puts_cards_in_rows_and_the_toolbar_toggles_it() {
+        let ui = ui();
+        let dir = scratch("gallery-grid");
+        let mut n = seeded(&ui, &dir);
+        n.set_layout(&ui, gallery::Layout::Gallery);
+        let (cells, _, total) = n.gallery_grid(&ui);
+        assert_eq!(cells.len(), n.shown.len());
+        assert!(cells.len() >= 2 && cells[0].1 == cells[1].1 && cells[1].0 > cells[0].0, "the first cards share a row");
+        assert!(total > cells[0].1, "the grid reports its height for the scroll range");
+        draw(&mut n, &ui, 0.0);
+        n.toggle_layout(&ui, 0.0);
+        assert_eq!(n.prefs().layout, gallery::Layout::List, "the toolbar toggle switches back to rows");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

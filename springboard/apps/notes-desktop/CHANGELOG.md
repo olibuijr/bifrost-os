@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.0 — 2026-10-17
+
+- Collapsible sections: a Title, Heading or Subheading line shows a disclosure chevron. Tapping it folds or unfolds the lines up to the next heading of the same or a higher level; the editor takes no height for hidden lines (textarea.rs `set_hidden`). Format > Collapse Section, Expand Section, Collapse All Sections and Expand All Sections do the same from the keyboard. Folds are saved per note in `.springboard-notes-folds`, and entries of deleted notes are dropped when it is saved. The note text never changes.
+- Gallery: View > as List / as Gallery and the list toolbar toggle draw the note list as a grid of cards (first picture or a text preview, title and date). Columns follow the list width (`notes/gallery.rs`). Pictures decode off the UI thread. Tap a card to open it.
+
 ## 1.19.0 — 2026-10-17
 
 - Edit > Speech: Start Speaking speaks the selection of the open note (else the whole note) through the shell speech service; Stop Speaking ends it.
