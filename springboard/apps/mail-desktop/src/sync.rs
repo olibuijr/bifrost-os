@@ -61,6 +61,9 @@ pub enum Change {
 pub enum Event {
     Listed { account: String, mailbox: String, result: Result<Listing, String> },
     Body { account: String, mailbox: String, uid: u32, result: Result<String, String> },
+    /// A draft was saved to Drafts (`raw` is its text, kept on this computer when the save fails) or removed from it
+    /// (`raw` is None). `key` is the draft's Message-ID.
+    DraftSaved { account: String, key: String, raw: Option<String>, result: Result<(), String> },
     /// A message was sent. `id` is its place in the outbox, 0 for one sent at once.
     Sent { account: String, id: u64, result: Result<(), String> },
     /// What Check Connection found, one line for each server.
@@ -186,6 +189,29 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
     }
     session.logout();
     Ok(())
+}
+
+/// The mailbox the drafts are kept in.
+pub const DRAFTS: &str = "Drafts";
+
+/// Saves a draft to Drafts (`raw` given): the copy with the same Message-ID is replaced. Without `raw` the saved copy is
+/// removed. The mailbox is created when it is missing.
+pub fn draft_job(transport: &dyn Transport, account: &Account, password: &str, key: &str, raw: Option<&str>) -> Event {
+    let result = (|| -> Result<(), String> {
+        let mut session = session::connect(transport, accounts::incoming(account)?)?;
+        session.login(&account.username, password)?;
+        let _ = session.create_mailbox(DRAFTS);
+        session.select(DRAFTS)?;
+        for found in session.search(&format!("HEADER Message-ID {}", crate::imap::quote(key)))? {
+            session.remove(found)?;
+        }
+        if let Some(raw) = raw {
+            session.append(DRAFTS, Flags::empty().with(Flag::Seen, true), raw)?;
+        }
+        session.logout();
+        Ok(())
+    })();
+    Event::DraftSaved { account: account.id.clone(), key: key.to_string(), raw: raw.map(str::to_string), result }
 }
 
 /// Sends a rendered message (`text`, from `Draft::render`) from `from` to every address of `recipients`. `id` is the

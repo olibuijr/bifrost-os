@@ -173,6 +173,9 @@ impl App for MailApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let mut changed = self.open_viewers(ctx) | self.refresh_viewers();
+        if let Some(mail) = &mut self.window {
+            self.composes.autosave(mail, t);
+        }
         changed |= self.with_window(ctx, |mail| mail.tick(ctx, t));
         changed
     }
@@ -195,7 +198,10 @@ impl App for MailApp {
         } else if let Some(mail) = &mut self.window {
             if let Some(compose) = self.composes.compose_of(window) {
                 self.composes.resized(window, s.w as f32, s.h as f32);
-                mail.draw_compose(s, &ctx.ui, &bifrost_mail::state::Sheet::Compose(compose));
+                // the window that asks the question shows it; the others show the message
+                let asking = self.composes.active == Some(window) && matches!(mail.mail.sheet, Some(bifrost_mail::state::Sheet::Question(_)));
+                let sheet = if asking { bifrost_mail::state::Sheet::Question(compose) } else { bifrost_mail::state::Sheet::Compose(compose) };
+                mail.draw_compose(s, &ctx.ui, &sheet);
             }
         }
         let mut d = Damage::new(s.w, s.h);
@@ -203,12 +209,12 @@ impl App for MailApp {
         d
     }
 
-    fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
+    fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
         let mut changed = before != self.viewers.len();
         if let Some(mail) = &mut self.window {
-            changed |= self.composes.closed(mail, window);
+            changed |= self.composes.closed(ctx, mail, window);
         }
         changed
     }

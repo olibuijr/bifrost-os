@@ -212,6 +212,8 @@ pub struct Compose {
     /// The misspelled words the last spelling check found, as ranges of characters of the message, and the one in view.
     pub misspelled: Vec<Range<usize>>,
     pub misspelled_at: usize,
+    /// The Message-ID of this message's draft in Drafts; empty until the first save.
+    pub draft_id: String,
 }
 
 impl Compose {
@@ -228,6 +230,7 @@ impl Compose {
             typing: Style::default(),
             misspelled: Vec::new(),
             misspelled_at: 0,
+            draft_id: String::new(),
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
         compose
@@ -464,6 +467,8 @@ pub enum Sheet {
     /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
     Quickly(Form),
     Prompt(Prompt),
+    /// Closing a message that has text: Save This Message, Don't Save, or Cancel (back to the message).
+    Question(Compose),
 }
 
 impl Sheet {
@@ -471,7 +476,7 @@ impl Sheet {
     pub fn form(&self) -> &Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &compose.form,
             Sheet::Mailbox(sheet) => &sheet.form,
             Sheet::Prompt(prompt) => &prompt.form,
         }
@@ -480,7 +485,7 @@ impl Sheet {
     pub fn form_mut(&mut self) -> &mut Form {
         match self {
             Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-            Sheet::Compose(compose) => &mut compose.form,
+            Sheet::Compose(compose) | Sheet::Question(compose) => &mut compose.form,
             Sheet::Mailbox(sheet) => &mut sheet.form,
             Sheet::Prompt(prompt) => &mut prompt.form,
         }
@@ -494,6 +499,7 @@ impl Sheet {
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(compose) if compose.in_reply_to.is_some() => "Reply",
             Sheet::Compose(_) => "New Message",
+            Sheet::Question(_) => "Save This Message?",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename Mailbox",
             Sheet::Mailbox(_) => "New Mailbox",
             Sheet::Prompt(prompt) => match prompt.kind {
@@ -516,6 +522,7 @@ impl Sheet {
             Sheet::Quickly(_) => "Go",
             Sheet::Setup(_) => "Add Account",
             Sheet::Compose(_) => "Send",
+            Sheet::Question(_) => "Save",
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename",
             Sheet::Mailbox(_) => "Create",
             Sheet::Prompt(prompt) => match prompt.kind {
@@ -582,6 +589,8 @@ pub struct Mail {
     pub fresh_compose: bool,
     /// Messages whose remote content the person allowed with Load Remote Content, by UID. Not kept between runs.
     pub remote_loaded: HashSet<u32>,
+    /// The sheet slot was closed on purpose (sent, saved or discarded), so its compose window closes without a question.
+    pub sheet_done: bool,
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
@@ -642,6 +651,7 @@ impl Mail {
             sheet: None,
             fresh_compose: false,
             remote_loaded: HashSet::new(),
+            sheet_done: false,
             status: String::new(),
             search: String::new(),
             threaded: false,
@@ -1494,7 +1504,18 @@ impl Mail {
         if to.is_empty() {
             return Err("Add at least one recipient".into());
         }
-        Ok(Draft {
+        Ok(self.draft_fields(compose, from, to))
+    }
+
+    /// The draft of `compose` as it is kept in Drafts: the recipients may be empty.
+    pub fn draft_for_save(&self, compose: &Compose) -> Draft {
+        let from = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        let to = message::split_addresses(compose.form.value("To"));
+        self.draft_fields(compose, from, to)
+    }
+
+    fn draft_fields(&self, compose: &Compose, from: String, to: Vec<String>) -> Draft {
+        Draft {
             from,
             to,
             cc: message::split_addresses(compose.form.value("Cc")),
@@ -1511,7 +1532,7 @@ impl Mail {
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
             html: if self.prefs.plain_text { None } else { richtext::html_body(compose.message(), &compose.styles, &compose.signature) },
-        })
+        }
     }
 
     /// Adds an account the user set up, once it is in the shared list and its password is saved. It becomes the shown

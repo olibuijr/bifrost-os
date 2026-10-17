@@ -808,7 +808,7 @@ impl MailWindow {
                     self.edit_form(|form| form.backspace());
                 }
             }
-            KeyInput::Code(KEY_ESCAPE) => self.mail.close_sheet(),
+            KeyInput::Code(KEY_ESCAPE) => self.cancel_sheet(),
             KeyInput::Code(_) => return false,
         }
         self.dirty = true;
@@ -1021,6 +1021,103 @@ impl MailWindow {
             ..crate::message::Draft::default()
         });
         self.dirty = true;
+    }
+
+    /// Cancel on a sheet: a question goes back to the message it asked about; any other sheet closes.
+    fn cancel_sheet(&mut self) {
+        match self.mail.sheet.take() {
+            Some(Sheet::Question(compose)) => self.mail.sheet = Some(Sheet::Compose(compose)),
+            _ => self.mail.close_sheet(),
+        }
+    }
+
+    /// Save This Message: the message is saved to Drafts and its window closes.
+    fn save_question(&mut self, compose: &Compose) {
+        self.save_draft(compose);
+        self.mail.sheet_done = true;
+        self.mail.close_sheet();
+    }
+
+    /// Don't Save: the message and its saved copy in Drafts are dropped, and the window closes.
+    fn discard_question(&mut self) {
+        if let Some(Sheet::Question(compose)) = self.mail.sheet.clone() {
+            self.discard_draft(&compose);
+        }
+        self.mail.sheet_done = true;
+        self.mail.close_sheet();
+    }
+
+    /// A Message-ID for a new draft.
+    pub fn new_draft_id(&mut self) -> String {
+        self.seq += 1;
+        let domain = self.mail.current().map_or("localhost", |a| a.email.rsplit_once('@').map_or("localhost", |(_, d)| d)).to_string();
+        message::new_message_id(&domain, now_unix(), self.seq)
+    }
+
+    /// Saves `compose` to Drafts under its draft id: IMAP (the Drafts mailbox, replacing the older copy) when the account
+    /// signs in, else a file in the data directory.
+    pub fn save_draft(&mut self, compose: &Compose) {
+        let key = compose.draft_id.clone();
+        let raw = match self.mail.draft_for_save(compose).render(&key, now_unix()) {
+            Ok(raw) => raw,
+            Err(e) => {
+                self.mail.status = e;
+                return;
+            }
+        };
+        let Some(account) = self.mail.current().cloned() else {
+            self.save_draft_locally(&key, &raw);
+            return;
+        };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.save_draft_locally(&key, &raw);
+            return;
+        };
+        self.jobs += 1;
+        let transport = self.transport.clone();
+        let (job_key, job_raw) = (key.clone(), raw.clone());
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::draft_job(transport.as_ref(), &account, &password, &job_key, Some(&job_raw)));
+    }
+
+    /// Removes the saved copy of `compose` from Drafts (and the file kept here), when it has one.
+    pub fn discard_draft(&mut self, compose: &Compose) {
+        let key = compose.draft_id.clone();
+        if key.is_empty() {
+            return;
+        }
+        let _ = std::fs::remove_file(self.draft_file(&key));
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else { return };
+        self.jobs += 1;
+        let transport = self.transport.clone();
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::draft_job(transport.as_ref(), &account, &password, &key, None));
+    }
+
+    /// The answer of a draft job: a saved copy is no longer needed here; a failed save keeps the text on this computer.
+    fn draft_saved(&mut self, key: String, raw: Option<String>, result: Result<(), String>) {
+        match (result, raw) {
+            (Ok(()), _) => {
+                let _ = std::fs::remove_file(self.draft_file(&key));
+            }
+            (Err(e), Some(raw)) => {
+                self.note(format!("The draft could not be saved to Drafts ({e}); it is kept on this computer"));
+                self.save_draft_locally(&key, &raw);
+            }
+            (Err(e), None) => self.note(format!("The draft could not be removed from Drafts: {e}")),
+        }
+    }
+
+    fn save_draft_locally(&mut self, key: &str, raw: &str) {
+        let dir = self.data_dir.join("drafts");
+        match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(self.draft_file(key), raw)) {
+            Ok(()) => self.note("A draft was saved on this computer".to_string()),
+            Err(e) => self.mail.status = format!("The draft could not be saved: {e}"),
+        }
+    }
+
+    fn draft_file(&self, key: &str) -> std::path::PathBuf {
+        let name: String = key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '.' { c } else { '_' }).collect();
+        self.data_dir.join("drafts").join(format!("{name}.eml"))
     }
 
     /// Load Remote Content: the open message's remote content may load.
@@ -1361,6 +1458,7 @@ impl MailWindow {
                 }
                 self.mail.status = "Connection checked. Mailbox > Show Activity has the details".into();
             }
+            Event::DraftSaved { key, raw, result, .. } => self.draft_saved(key, raw, result),
             Event::Sent { id, result, .. } => self.sent(id, result),
             Event::Exported { mailbox, result, .. } => match result {
                 Ok(messages) => {
@@ -1386,6 +1484,7 @@ impl MailWindow {
             Ok(()) => {
                 if id == 0 {
                     if matches!(self.mail.sheet, Some(Sheet::Compose(_))) {
+                        self.mail.sheet_done = true;
                         self.mail.close_sheet();
                     }
                 } else {
@@ -2084,6 +2183,7 @@ impl MailWindow {
                 self.search_server();
             }
             Some(Sheet::Prompt(prompt)) => self.submit_prompt(ctx, prompt),
+            Some(Sheet::Question(compose)) => self.save_question(&compose),
             None => {}
         }
     }
@@ -2291,6 +2391,8 @@ impl MailWindow {
                 return;
             }
         };
+        // a message on its way is done with its draft: the saved copy leaves Drafts
+        self.discard_draft(compose);
         let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
         if let Some((seconds, undoable)) = wait {
             let queued_id = self.mail.queue.new_id();
@@ -2303,6 +2405,7 @@ impl MailWindow {
             } else {
                 self.mail.status = format!("The message will be sent in {}", wait_text(seconds));
             }
+            self.mail.sheet_done = true;
             self.mail.close_sheet();
             return;
         }
@@ -2678,7 +2781,8 @@ impl MailWindow {
                     }
                 }
             }
-            crate::draw::Hit::Cancel => self.mail.close_sheet(),
+            crate::draw::Hit::Cancel => self.cancel_sheet(),
+            crate::draw::Hit::Discard => self.discard_question(),
             crate::draw::Hit::Primary => self.submit(ctx),
             crate::draw::Hit::None => return false,
         }
