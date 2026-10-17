@@ -27,6 +27,16 @@ impl ExtensionKind {
     /// Every kind, in the order the page lists them.
     pub const ALL: [ExtensionKind; 4] = [ExtensionKind::Share, ExtensionKind::Preview, ExtensionKind::FileProvider, ExtensionKind::Widget];
 
+    /// The manifest spelling of the kind, which the extension key uses.
+    pub fn key(self) -> &'static str {
+        match self {
+            ExtensionKind::Share => "share",
+            ExtensionKind::Preview => "quick-look",
+            ExtensionKind::FileProvider => "file-provider",
+            ExtensionKind::Widget => "widget",
+        }
+    }
+
     /// The manifest spelling of the kind (`kind = "..."`).
     pub fn parse(text: &str) -> Option<ExtensionKind> {
         match text.trim() {
@@ -79,11 +89,28 @@ pub struct LoginExtensions {
     pub refresh_off: Vec<String>,
     /// sorted by app name, then by kind (install order is kept within an app)
     pub extensions: Vec<Extension>,
+    /// the keys (`extension_key`) of the extensions the user turned off (`login.extensions.off`)
+    pub extensions_off: Vec<String>,
+}
+
+/// The pref that holds the keys of the extensions turned off, comma separated.
+pub const EXTENSIONS_OFF_KEY: &str = "login.extensions.off";
+
+/// The key one extension is saved under: its app, its kind and its name. A comma or percent sign in the name is
+/// escaped, so the pref list stays comma separated.
+pub fn extension_key(e: &Extension) -> String {
+    let name = e.name.replace('%', "%25").replace(',', "%2C");
+    format!("{}/{}/{}", e.app_id, e.kind.key(), name)
+}
+
+/// Whether an extension is on: it is not in the turned-off keys.
+pub fn extension_enabled(off: &[String], e: &Extension) -> bool {
+    !off.contains(&extension_key(e))
 }
 
 /// The empty list, for pages that show no extensions (a `const` so a page model can borrow it).
 #[cfg_attr(not(test), allow(dead_code))] // the empty set for tests and previews (a static: a const with Vecs cannot be borrowed for 'static)
-pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), refresh: Vec::new(), refresh_off: Vec::new(), extensions: Vec::new() };
+pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), refresh: Vec::new(), refresh_off: Vec::new(), extensions: Vec::new(), extensions_off: Vec::new() };
 
 /// The tables of one manifest that this page reads.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -234,8 +261,8 @@ pub fn refresh_group(ext: &LoginExtensions) -> Option<Group> {
     Some(Group::new(rows).header("APPS").footer("Apps with background tasks may refresh their content while no window is open. Turn one off to stop its refresh."))
 }
 
-/// The EXTENSIONS groups: one group per kind that some app declares, each row the extension's name and its app.
-/// With no extensions at all, a single group says so.
+/// The EXTENSIONS groups: one group per kind that some app declares. Each row is the extension's name and its app, with
+/// a switch that turns the extension off. With no extensions at all, a single group says so.
 pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
     if ext.extensions.is_empty() {
         return vec![Group::new(vec![Item::new("No extensions")]).header("EXTENSIONS").footer("Apps add extensions to the share menu, Preview, file providers and widgets in their manifest.")];
@@ -243,7 +270,12 @@ pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
     ExtensionKind::ALL
         .into_iter()
         .filter_map(|kind| {
-            let rows: Vec<Item> = ext.extensions.iter().filter(|e| e.kind == kind).map(|e| Item::new(e.name.as_str()).value(e.app_name.as_str())).collect();
+            let rows: Vec<Item> = ext
+                .extensions
+                .iter()
+                .filter(|e| e.kind == kind)
+                .map(|e| Item::new(e.name.as_str()).value(e.app_name.as_str()).switch(extension_enabled(&ext.extensions_off, e), Action::ExtensionToggle(extension_key(e))))
+                .collect();
             if rows.is_empty() {
                 None
             } else {
@@ -256,6 +288,21 @@ pub fn extension_groups(ext: &LoginExtensions) -> Vec<Group> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_turned_off_extension_is_keyed_by_app_kind_and_name_with_commas_escaped() {
+        let e = Extension { app_id: "is.notes".into(), app_name: "Notes".into(), kind: ExtensionKind::Share, name: "Save, then send".into() };
+        assert_eq!(extension_key(&e), "is.notes/share/Save%2C then send");
+        assert!(extension_enabled(&[], &e));
+        let off = vec![extension_key(&e)];
+        assert!(!extension_enabled(&off, &e));
+        // the pref list is comma separated, so a key with a comma must survive the round trip
+        let saved = background_off_to_pref(&off);
+        assert_eq!(background_off_from_pref(Some(&saved)), off);
+        let groups = extension_groups(&LoginExtensions { extensions: vec![e], extensions_off: off, ..Default::default() });
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].items.len(), 1);
+    }
 
     fn item(id: &str, name: &str) -> (String, String) {
         (id.to_string(), name.to_string())

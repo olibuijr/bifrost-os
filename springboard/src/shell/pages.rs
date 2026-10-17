@@ -450,6 +450,8 @@ pub enum Action {
     LoginItemMove(String),
     /// Login Items & Extensions: turn an app's background agent on or off (the switch in ALLOW IN THE BACKGROUND)
     BackgroundAgentToggle(String),
+    /// Login Items > Extensions: turn the extension with this key (`login_items_page::extension_key`) on or off
+    ExtensionToggle(String),
     /// Background App Refresh: turn one app's refresh on or off (the APPS switches under General > Background App Refresh)
     RefreshToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)

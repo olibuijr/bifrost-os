@@ -2357,6 +2357,18 @@ impl Settings {
                 self.rebuild_visible(ui);
                 vec![]
             }
+            Action::ExtensionToggle(key) => {
+                let off = &mut self.login_ext.extensions_off;
+                match off.iter().position(|k| *k == key) {
+                    Some(i) => {
+                        off.remove(i);
+                    }
+                    None => off.push(key),
+                }
+                let _ = prefs.set(super::login_items_page::EXTENSIONS_OFF_KEY, &off.join(","));
+                self.rebuild_visible(ui);
+                vec![]
+            }
             Action::RefreshToggle(id) => {
                 let off = &mut self.login_ext.refresh_off;
                 match off.iter().position(|a| *a == id) {
