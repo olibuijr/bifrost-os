@@ -408,9 +408,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/video-toolbox.json",
+   "bifrost": "springboard/sdk/src/pixel_transfer.rs (PixelTransfer); springboard/render/src/video_transfer.rs; springboard/sdk/src/video_decompression.rs",
    "status": "os",
-   "note": "from SDK matrix video-toolbox.json",
+   "note": "Built 2026-10-17: PixelTransfer session in the SDK for NV12 to RGBA conversion, RGBA scaling and quarter-turn rotation with mirrors, tests pixel_transfer::tests. Still missing: encoding, a shared app buffer type, HDR and RAW input, and frame processing (super resolution, interpolation, motion), so the row stays os.",
    "rea": [],
    "method": "assessed"
   },

@@ -237,6 +237,7 @@ pub mod search_terms;
 pub mod search_kit;
 pub mod embedding;
 pub mod tabular_summary;
+pub mod pixel_transfer;
 pub mod icon_images;
 pub mod search_index_batch;
 pub mod visual_search;
