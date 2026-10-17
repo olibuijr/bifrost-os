@@ -107,6 +107,7 @@
    "note": "open equivalent Libertinus Keyboard (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -818,6 +819,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1117,6 +1119,7 @@
    "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1179,6 +1182,7 @@
    "note": "open equivalent Noto Sans Ethiopic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1212,6 +1216,7 @@
    "note": "open equivalent Noto Sans Arabic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1564,6 +1569,7 @@
    "note": "open equivalent Noto Serif CJK SC (noto-fonts-cjk), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",

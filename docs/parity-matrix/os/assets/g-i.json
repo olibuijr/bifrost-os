@@ -1249,6 +1249,7 @@
    "note": "open equivalent Noto Sans Gujarati (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1631,6 +1632,7 @@
    "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1727,6 +1729,7 @@
    "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2186,6 +2189,7 @@
    "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2437,6 +2441,7 @@
    "note": "open equivalent Noto Sans CJK SC (noto-fonts-cjk), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2773,6 +2778,7 @@
    "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2806,6 +2812,7 @@
    "note": "open equivalent DejaVu Sans (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",

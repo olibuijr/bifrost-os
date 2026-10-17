@@ -1633,6 +1633,7 @@
    "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1724,6 +1725,7 @@
    "note": "open equivalent Noto Sans Thai Looped (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1970,6 +1972,7 @@
    "note": "open equivalent Noto Sans CJK KR (noto-fonts-cjk), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2124,6 +2127,7 @@
    "note": "open equivalent Noto Sans (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2766,6 +2770,7 @@
    "note": "open equivalent Noto Sans (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",

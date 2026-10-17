@@ -695,6 +695,7 @@
    "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1181,6 +1182,7 @@
    "note": "open equivalent Libertinus Serif Display (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2041,6 +2043,7 @@
    "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2074,6 +2077,7 @@
    "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2107,6 +2111,7 @@
    "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2140,6 +2145,7 @@
    "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2173,6 +2179,7 @@
    "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2206,6 +2213,7 @@
    "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2239,6 +2247,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2272,6 +2281,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2305,6 +2315,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2408,6 +2419,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2441,6 +2453,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2474,6 +2487,7 @@
    "note": "open equivalent Montserrat (ttf-montserrat), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2507,6 +2521,7 @@
    "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2896,6 +2911,7 @@
    "note": "open equivalent Libertinus Serif (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3074,6 +3090,7 @@
    "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3107,6 +3124,7 @@
    "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3237,6 +3255,7 @@
    "note": "open equivalent Junicode (ttf-junicode), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3270,6 +3289,7 @@
    "note": "open equivalent Libertinus Sans (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3303,6 +3323,7 @@
    "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3564,6 +3585,7 @@
    "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4792,6 +4814,7 @@
    "note": "open equivalent Noto Sans Thai Looped (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -5678,6 +5701,7 @@
    "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",

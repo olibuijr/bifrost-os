@@ -517,6 +517,7 @@
    "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
    "method": "assessed",
+   "ready": true,
    "checks": [
     {
      "kind": "file",
