@@ -144,6 +144,8 @@ davfs2
 ttf-nunito
 ttf-libertinus
 ttf-charis
+adobe-source-serif-fonts
+adobe-source-sans-fonts
 ttf-ibm-plex
 ttf-jetbrains-mono
 ttf-carlito

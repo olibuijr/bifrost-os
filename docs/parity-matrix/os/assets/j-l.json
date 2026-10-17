@@ -485,7 +485,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (Tibetan has no free face in the installed noto-fonts); the UI face draws it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifTibetan-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Tibetan (noto-fonts, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Krungthep.ttf",
@@ -622,7 +635,20 @@
    "status": "partial",
    "note": "Luminari resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/Lato-Light.ttf",
@@ -643,7 +669,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Light.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Lato Light (ttf-lato, OFL) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/Lato-LightItalic.ttf",
@@ -664,7 +703,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-LightItalic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Lato Light Italic (ttf-lato, OFL) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/Lato-Regular.ttf",
@@ -685,7 +737,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Lato (ttf-lato, OFL) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/Lato-RegularItalic.ttf",
@@ -706,7 +771,20 @@
    "status": "partial",
    "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Lato-Italic.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Lato Italic (ttf-lato, OFL) for the same role; metric-compatible."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Jazz LET Fonts.ttf",
@@ -748,7 +826,20 @@
    "status": "partial",
    "note": "JournalSansInline resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Sans 3 (adobe-source-sans-fonts, OFL) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/KoufiAbjadi.ttc",
