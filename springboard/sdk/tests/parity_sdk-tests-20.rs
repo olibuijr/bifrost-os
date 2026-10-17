@@ -15,7 +15,7 @@ const ZLIB_HELLO: [u8; 13] = [0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x
 
 const LEVELS: [Level; 3] = [Level::Fast, Level::Default, Level::Best];
 const CODECS: [Algorithm; 2] = [Algorithm::Zlib, Algorithm::Deflate];
-const UNSUPPORTED: [Algorithm; 5] = [Algorithm::Brotli, Algorithm::Lz4, Algorithm::LzBitmap, Algorithm::Lzfse, Algorithm::Lzma];
+const UNSUPPORTED: [Algorithm; 4] = [Algorithm::Brotli, Algorithm::LzBitmap, Algorithm::Lzfse, Algorithm::Lzma];
 
 fn pseudo_random(len: usize, seed: u32) -> Vec<u8> {
     let mut s = seed;
@@ -186,9 +186,10 @@ fn decode_buffer_passes_the_limit_to_the_decoder() {
 // ------------------------------------------------------------------ algorithm selection
 
 #[test]
-fn only_zlib_and_raw_deflate_are_supported() {
+fn zlib_raw_deflate_and_lz4_are_supported() {
     assert!(Algorithm::Zlib.is_supported());
     assert!(Algorithm::Deflate.is_supported());
+    assert!(Algorithm::Lz4.is_supported());
     for algorithm in UNSUPPORTED {
         assert!(!algorithm.is_supported(), "{:?} has no codec in this build", algorithm);
     }
