@@ -202,7 +202,8 @@ mod tests {
         key.extend_from_slice(CONTENT_ID_KEY.as_bytes());
         // version and flags, then the entry count (one key), then the key entry itself
         let mut keys_body = vec![0, 0, 0, 0, 0, 0, 0, 1];
-        keys_body.extend_from_slice(&((key.len() + 8) as u32).to_be_bytes());
+        // the entry size counts its own four bytes, then the namespace and the name (key is the namespace and the name)
+        keys_body.extend_from_slice(&((key.len() + 4) as u32).to_be_bytes());
         keys_body.extend_from_slice(&key);
         let mut data_body = vec![0, 0, 0, 1, 0, 0, 0, 0];
         data_body.extend_from_slice(id.as_bytes());

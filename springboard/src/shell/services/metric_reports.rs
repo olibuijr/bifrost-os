@@ -58,7 +58,9 @@ pub fn note_first_draw(app: &str) {
 /// The app ended normally: its open phase closes and the run counts as a normal ending.
 pub fn note_close(app: &str) {
     let now = millis(now_unix());
-    METRICS.with(|m| {
+    // Called from `AppHost::drop`, which runs when a thread's keyboard service is torn down; `METRICS` may already
+    // be destroyed by then, so a plain `with` would panic inside a thread-local destructor and abort the process.
+    let _ = METRICS.try_with(|m| {
         let mut m = m.borrow_mut();
         m.close(app, now);
         m.record_ending(app, Ending::Normal);

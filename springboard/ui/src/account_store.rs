@@ -237,7 +237,7 @@ fn field_of(fields: &[(String, String)], key: &str) -> String {
 pub fn decode(text: &str) -> io::Result<Contents> {
     let mut data = Contents::default();
     let mut stored_next = 0u64;
-    let mut highest = 0u64;
+    let mut highest: Option<u64> = None;
     for (name, fields) in records(text)? {
         match name.as_str() {
             "store" => stored_next = field_of(&fields, "next-id").parse().map_err(|_| invalid_data())?,
@@ -255,7 +255,7 @@ pub fn decode(text: &str) -> io::Result<Contents> {
                     return Err(invalid_data());
                 }
                 if let Some(n) = identifier.strip_prefix("account-").and_then(|n| n.parse::<u64>().ok()) {
-                    highest = highest.max(n);
+                    highest = Some(highest.map_or(n, |h| h.max(n)));
                 }
                 data.accounts.push(AccountEntry {
                     identifier,
@@ -276,7 +276,7 @@ pub fn decode(text: &str) -> io::Result<Contents> {
             _ => {}
         }
     }
-    data.next_id = stored_next.max(highest);
+    data.next_id = stored_next.max(highest.map_or(0, |h| h + 1));
     Ok(data)
 }
 

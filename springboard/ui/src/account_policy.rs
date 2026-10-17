@@ -248,6 +248,9 @@ mod tests {
         table.set("kid", kid).unwrap();
         table.set("guest", Policy::unrestricted()).unwrap();
         let text = table.to_text();
+        // An unrestricted account writes no rule, so it reads back as absent: the table compares equal without it.
+        assert!(!text.contains("guest"));
+        table.remove("guest");
         assert_eq!(PolicyTable::parse(&text).unwrap(), table);
         assert_eq!(PolicyTable::parse(&text).unwrap().to_text(), text);
     }
