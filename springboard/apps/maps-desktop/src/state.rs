@@ -741,7 +741,7 @@ impl Maps {
             Act::MeasureClear => self.measure.clear(),
             Act::Download => {
                 self.panel = Panel::Download;
-                self.offline_area = Some(OfflineArea::of_view(&self.view, DOWNLOAD_LEVELS));
+                self.offline_area = Some(crate::cache::of_view(&self.view, DOWNLOAD_LEVELS));
             }
             Act::StartDownload => {
                 let tiles = self.offline_area.map(|a| a.tiles()).unwrap_or_default();
