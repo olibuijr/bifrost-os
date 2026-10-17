@@ -19,8 +19,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -40,8 +40,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,8 +82,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -103,8 +103,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -124,8 +124,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -145,8 +145,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -166,8 +166,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -187,8 +187,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -208,8 +208,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +229,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -250,8 +250,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -271,8 +271,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -292,8 +292,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -313,8 +313,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -334,8 +334,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -355,8 +355,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -376,8 +376,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -397,8 +397,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -418,8 +418,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -439,8 +439,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -460,8 +460,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -481,8 +481,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -502,8 +502,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -523,8 +523,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -544,8 +544,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -565,8 +565,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -586,8 +586,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -607,8 +607,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -628,8 +628,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -649,8 +649,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -670,8 +670,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -691,8 +691,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -712,8 +712,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -733,8 +733,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -754,8 +754,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -775,8 +775,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -796,8 +796,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -817,8 +817,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -838,8 +838,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -859,8 +859,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -880,8 +880,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -901,8 +901,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -922,8 +922,8 @@
    "role": "Thumbnail cache of a wallpaper picker",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "status": "n/a",
+   "note": "Apple wallpaper-picker thumbnail cache (one HEIC per Apple desktop picture). BifrOSt draws its own picker thumbnails from wallpapers/*.thumb.raw; no per-file equivalent is meaningful.",
    "rea": [],
    "method": "assessed"
   },
@@ -1177,7 +1177,15 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "noto-fonts-cjk (runtime-packages.txt) covers the CJK glyphs through the font fallback chain; the Apple family and weights are not matched."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Galvji.ttc",
@@ -1576,7 +1584,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/hand-top.pdf",
@@ -1597,7 +1614,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/handClosed-bottom.pdf",
@@ -1618,7 +1644,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/handClosed-top.pdf",
@@ -1639,7 +1674,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/handOpened-bottom.pdf",
@@ -1660,7 +1704,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/handOpened-top.pdf",
@@ -1681,7 +1734,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/iBeam-bottom.pdf",
@@ -1702,7 +1764,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/iBeam-top.pdf",
@@ -1723,7 +1794,16 @@
    "status": "partial",
    "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/iBeamVertical-bottom.pdf",
@@ -1744,7 +1824,16 @@
    "status": "partial",
    "note": "One layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/iBeamVertical-top.pdf",
@@ -1765,7 +1854,16 @@
    "status": "partial",
    "note": "The other layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cursor_art"
+    }
+   ],
+   "ready_note": "The cursor shape is drawn in code (ui/src/cursor_art.rs, layered art with its own tests); the layers are not the original PDF."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeviceRegulatoryInfo.framework/Versions/A/Resources/HYCuSong-CAICT.ttf",
@@ -2017,7 +2115,15 @@
    "status": "partial",
    "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    }
+   ],
+   "ready_note": "noto-fonts-cjk (runtime-packages.txt) covers the CJK glyphs through the font fallback chain; the Apple family and weights are not matched."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Hubballi.otf",
@@ -2248,7 +2354,21 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_sound"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "The SDK system sound layer lists this alert name and plays a BifrOSt synthesised tone (not the original recording) when no reference file is installed."
   },
   {
    "id": "path:/System/Library/Sounds/Hero.aiff",
@@ -2269,7 +2389,21 @@
    "status": "partial",
    "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_sound"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::alert_sound"
+    }
+   ],
+   "ready_note": "The SDK system sound layer lists this alert name and plays a BifrOSt synthesised tone (not the original recording) when no reference file is installed."
   }
  ]
 }
