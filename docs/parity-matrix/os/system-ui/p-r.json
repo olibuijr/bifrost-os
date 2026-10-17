@@ -623,7 +623,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
-   "note": "Scanners group lists devices via bifrost_ui::scanner; no App Intents for scanning. built on arm; not yet verified on Midget",
+   "note": "Scanners group lists devices via bifrost_ui::scanner; no App Intents for scanning. built on arm; not yet verified on Midget Built 2026-10-17: scanner App Intents (scan_document, scan_to_folder) in springboard/sdk/src/scanner_intents.rs; tests scanner_intents::tests. Calls are not served yet (they must go through bifrost_ui::scanner::scan_to).",
    "rea": []
   },
   {
