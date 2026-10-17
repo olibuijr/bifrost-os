@@ -222,6 +222,19 @@ pub fn preview(choice: Choice) -> Result<Status, Error> {
     Access::new().request(choice)
 }
 
+/// Groups of contacts (CNGroup): nested groups and membership, with a recursive member listing. The model lives in the
+/// app's own process; the shell's contact store keeps no groups yet.
+pub mod groups {
+    pub use bifrost_ui::contact_groups::{Error, Group, Groups};
+}
+
+/// Batched saves and change history for contacts (CNChangeHistoryFetchRequest). `Store::save` applies a batch of adds,
+/// updates and deletes all or nothing and numbers each change; `changes_since` returns the events after a token. Apps
+/// keep the store in process; the shell posts `system.contacts.change` when the contact file changes.
+pub mod history {
+    pub use bifrost_ui::contact_changes::{Change, Error, Event, Observers, Op, Store};
+}
+
 /// vCard 3.0 and 4.0 for the full contact model (`bifrost_ui::contact_vcard`, the same code the Contacts app uses for
 /// its import and export). `vcard::serialize` writes contacts as CRLF-terminated cards, and `vcard::contacts` reads
 /// every card back, skipping properties the model has no field for. Text over `vcard::MAX_BYTES` is refused, and
@@ -251,6 +264,29 @@ mod tests {
             assert!(text.starts_with("BEGIN:VCARD\r\n"), "{version:?}");
             assert_eq!(vcard::contacts(&text).unwrap(), vec![ada.clone()], "{version:?}");
         }
+    }
+
+    #[test]
+    fn groups_nest_and_list_members_recursively() {
+        let mut groups = groups::Groups::new();
+        let family = groups.add("Family", None).unwrap();
+        let kin = groups.add("Kin", Some(family)).unwrap();
+        assert!(groups.add_member(kin, 7).unwrap());
+        assert!(groups.members(family, true).unwrap().contains(&7));
+        assert!(!groups.members(family, false).unwrap().contains(&7));
+        assert_eq!(groups.move_to(family, Some(kin)), Err(groups::Error::WouldCycle));
+    }
+
+    #[test]
+    fn a_batch_of_contact_changes_is_recorded_and_fetched_by_token() {
+        let mut store: history::Store<String> = history::Store::new(16);
+        let ids = store.save(vec![history::Op::Add("ada".into())], |name| !name.is_empty()).unwrap();
+        assert_eq!(ids.len(), 1);
+        let token = store.token();
+        assert_eq!(store.changes_since(0).unwrap().len(), 1);
+        store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
+        assert_eq!(store.changes_since(token).unwrap().len(), 1);
+        assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
     }
 
     #[test]
