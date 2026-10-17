@@ -186,11 +186,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/bare/app_policy.rs",
+   "bifrost": "springboard/sdk/src/authorization.rs; springboard/src/bare/app_policy.rs",
    "status": "partial",
-   "note": "The shell enforces per-app manifest permissions in Policy::from_permissions, but apps cannot check or request an authorization right through the SDK, which is the missing part.",
+   "note": "Apps obtain named authorization rights through the SDK Authorization object (bifrost_ui RightStore: user presence, refusal grants nothing, invalidate). The shell still enforces only the manifest permission at launch.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "authorization::tests"
+    }
+   ],
+   "ready_note": "SDK Authorization.obtain and invalidate_credentials are tested; rights are held in the app object and not yet enforced by the shell (see authorization.rs)."
   },
   {
    "id": "path:/System/Library/Frameworks/SecurityInterface.framework",
@@ -1321,8 +1330,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "Vendor safety feature (check-in and urgent alerts, LOMO check-in model and urgent alert sounds in the bundle). It depends on the vendor phone safety service, which BifrOSt does not run.",
    "rea": [],
    "method": "assessed"
   },
@@ -1342,8 +1351,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "User interface of the vendor safety check-in feature (see SafetyMonitor). It depends on the vendor phone safety service, which BifrOSt does not run.",
    "rea": [],
    "method": "assessed"
   },
@@ -2286,11 +2295,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/sensors.rs",
+   "bifrost": "springboard/sdk/src/sensors.rs; springboard/src/bare/app_policy.rs",
    "status": "partial",
-   "note": "The pure models for the magnetometer, altimeter, motion activity, pedometer and attitude are tested. Gap: no permission-gated sensor access for apps, and desktop hardware rarely exposes these sensors.",
+   "note": "The sensor models (magnetometer, altimeter, motion activity, pedometer, attitude) are tested. The sensors manifest permission is recognised by the shell policy and the SDK SensorAccess gate fails closed without it.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "sensors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_policy::tests::sensors_permission"
+    }
+   ],
+   "ready_note": "SensorAccess: sensors permission in app_policy (Policy.sensors, holds, ENTITLEMENT_NAMES) and sdk sensors::SensorAccess with SensorKind; tests in both crates."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SentencePieceInternal.framework",
@@ -2370,11 +2393,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/service_discovery.rs; packaging/arch/runtime-packages.txt (avahi)",
+   "bifrost": "springboard/sdk/src/service_discovery.rs; springboard/sdk/src/net_service.rs; springboard/apps/printers-desktop/src/discover.rs; packaging/arch/runtime-packages.txt (avahi)",
    "status": "partial",
-   "note": "DNS-SD browse and advertise over multicast DNS is live: the printer discovery (springboard/apps/printers-desktop/src/discover.rs) and nearby remote (springboard/apps/remote/src/nearby.rs) use it, with the avahi daemon in the runtime packages. Gap: the reference's system-wide service registry is not mirrored.",
+   "note": "DNS-SD browse and advertise over multicast DNS, plus a system-wide ServiceRegistry that keeps each app's publications, renames conflicting labels (\"Den (2)\") and removes one owner's services when it leaves.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "service_discovery::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "avahi-browse --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Browse and advertise (ServiceBrowser, ServiceAdvertiser) and the session registry (ServiceRegistry) with conflict renaming and per-owner removal; tests in service_discovery::tests. avahi is installed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ServicesAnalyticsCore.framework",
@@ -2475,11 +2512,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/caffeinate.rs",
+   "bifrost": "springboard/cmd/src/caffeinate.rs; springboard/sdk/src/session_assertion.rs",
    "status": "partial",
-   "note": "Idle and system-sleep inhibitors are taken through systemd-inhibit (logind), as caffeinate and the lid inhibitor do. Gap: the SDK does not expose power assertions to apps.",
+   "note": "Idle and system-sleep inhibitors are taken through systemd-inhibit (logind), as caffeinate and the lid inhibitor do. The SDK PowerAssertion builds the same block inhibitor for apps (hold kind, reason, app name, command or sleep).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "session_assertion::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "systemd-inhibit --help",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "PowerAssertion (sdk session_assertion) builds the systemd-inhibit argv for idle, sleep or both, with the reason and app name, and wraps a command or sleep infinity; tests in session_assertion::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SessionCore.framework",
