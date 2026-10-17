@@ -119,20 +119,31 @@ pub fn apply(edit: &Edit, view: &View) -> Result<Option<Prompt>, String> {
     }
 }
 
-/// Finishes a prompt: the next prompt of its flow, or the change itself.
+/// Finishes a prompt: the next prompt of its flow, or the change itself. A new password is typed twice (the confirm
+/// prompt), and it reaches privd only when both entries are the same.
 pub fn finish(purpose: &Purpose, text: &str) -> Result<Option<Prompt>, String> {
+    if let Purpose::ConfirmPassword { first, then } = purpose {
+        if text != first.as_str() {
+            return Err("The passwords do not match. Type the password again.".into());
+        }
+        return submit(then, first).map(|_| None);
+    }
     if let Some(next) = Prompt::next(purpose, text) {
         return Ok(Some(next));
     }
+    submit(purpose, text).map(|_| None)
+}
+
+/// Sends the change that `purpose` asks for, with the password `text`, to privd.
+fn submit(purpose: &Purpose, text: &str) -> Result<(), String> {
     let c = crate::privd_client::connect();
     match purpose {
         Purpose::NewUserPassword { admin, full, name } => c.user_add(name, full, *admin, text),
         Purpose::ChangePassword { name, old: None } => c.user_set_password(name, text),
         Purpose::ChangePassword { old: Some(old), .. } => c.account_set_password(old, text),
         Purpose::NewGroup => c.group_add(text),
-        _ => return Ok(None),
+        _ => return Ok(()),
     }
-    .map(|_| None)
     .map_err(client_err)
 }
 
@@ -285,6 +296,12 @@ mod tests {
     fn an_error_note_shows_under_the_list() {
         let s = spec(PageId::Groups, &view(), "", "That name is taken", &Options::default());
         assert_eq!(s.groups.last().and_then(|g| g.footer.as_deref()), Some("That name is taken"));
+    }
+
+    #[test]
+    fn a_password_that_does_not_match_its_confirmation_is_refused_before_privd() {
+        let typed_again = Purpose::ConfirmPassword { first: "s3cret-one".into(), then: Box::new(Purpose::NewGroup) };
+        assert!(finish(&typed_again, "s3cret-two").unwrap_err().contains("do not match"));
     }
 
     #[test]

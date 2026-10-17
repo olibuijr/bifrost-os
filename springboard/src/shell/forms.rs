@@ -19,6 +19,9 @@ pub enum Purpose {
     CurrentPassword { name: String },
     /// `old` is the current password when the account is the installed one
     ChangePassword { name: String, old: Option<String> },
+    /// the new password typed again: `then` (the account or password change that asked for it) runs only when the
+    /// text equals `first`, the password typed before
+    ConfirmPassword { first: String, then: Box<Purpose> },
     NewGroup,
     /// Print & Scan: the device address of a printer to add (`ipp://`, `socket://`, `usb://`)
     PrinterAddress,
@@ -190,6 +193,14 @@ impl Prompt {
                 max: 128,
                 ..Prompt::new(Purpose::ChangePassword { name: name.clone(), old: Some(text.to_string()) }, "New Password", &format!("Enter a new password for “{name}”."), "Password", "Change")
             }),
+            Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } => {
+                let ok = if matches!(purpose, Purpose::NewUserPassword { .. }) { "Create" } else { "Change" };
+                Some(Prompt {
+                    secure: true,
+                    max: 128,
+                    ..Prompt::new(Purpose::ConfirmPassword { first: text.to_string(), then: Box::new(purpose.clone()) }, "Confirm Password", "Type the password again to confirm it.", "Password", ok)
+                })
+            }
             _ => None,
         }
     }
@@ -203,7 +214,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewUserFull { .. } => accounts::valid_full_name(text),
         Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
         Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
-        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } => accounts::valid_password(text),
+        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } | Purpose::ConfirmPassword { .. } => accounts::valid_password(text),
         Purpose::NewAccountAddress { kind: Kind::Mail } => shared::valid_address(text.trim()),
         Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
         Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
@@ -221,6 +232,15 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_password_is_typed_again_before_it_is_used() {
+        let purpose = Purpose::NewUserPassword { admin: false, full: "Kid".into(), name: "kid".into() };
+        let confirm = Prompt::next(&purpose, "s3cret-one").expect("confirm step");
+        assert_eq!(confirm.purpose, Purpose::ConfirmPassword { first: "s3cret-one".into(), then: Box::new(purpose) });
+        assert_eq!(confirm.ok, "Create");
+        assert!(Prompt::next(&confirm.purpose, "s3cret-one").is_none());
+    }
 
     #[test]
     fn each_purpose_checks_its_text() {

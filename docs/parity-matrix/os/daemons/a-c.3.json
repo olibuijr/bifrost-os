@@ -208,9 +208,38 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs, springboard/src/shell/services/directory.rs, springboard/src/shell/services/console_seat.rs",
+   "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs, springboard/src/shell/services/directory.rs, springboard/src/shell/services/console_seat.rs, springboard/src/shell/users_page.rs, springboard/src/shell/forms.rs, springboard/src/privd/accounts.rs",
+   "ready_note": "Accounts are created and their passwords changed through privd (privd/accounts.rs runs useradd and chpasswd as fixed argv). The sheets in shell/forms.rs ask for the name, the full name and the password, and a new or changed password is typed twice before privd receives it (shell/users_page.rs). The directory and console services answer the account list read-only.",
    "status": "partial",
-   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords are not built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::forms::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::directory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::console_seat::tests"
+    }
+   ],
+   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords go through privd (shell/users_page.rs, passwords typed twice in shell/forms.rs)",
    "rea": [],
    "method": "rule"
   },
