@@ -138,6 +138,13 @@ pub fn parse_policies(text: &str) -> Result<Vec<AppPolicy>, String> {
     Ok(out)
 }
 
+/// The boot step as pure logic: reads a policy file and returns the ruleset text to feed to `nft -f -`. Any error,
+/// including a conflict, comes back as text so the service can log it and leave the current rules in place.
+pub fn plan_from_file(text: &str) -> Result<String, String> {
+    let policies = parse_policies(text)?;
+    ruleset(&policies).map_err(|e| format!("{e:?}"))
+}
+
 /// One port from `tcp/<n>` or `udp/<n>`.
 fn parse_port(text: &str) -> Result<Port, String> {
     let (proto, number) = text.split_once('/').ok_or_else(|| format!("port {text} needs a protocol, tcp/ or udp/"))?;
@@ -238,6 +245,20 @@ mod tests {
         let text = format_policies(&policies);
         assert_eq!(text, "is.chat block udp/5353,tcp/8080\nis.none allow -\n");
         assert_eq!(parse_policies(&text).unwrap(), policies);
+    }
+
+    #[test]
+    fn the_boot_plan_is_the_ruleset_for_the_file() {
+        let text = plan_from_file("is.chat block tcp/8080\n").unwrap();
+        assert!(text.contains("tcp dport 8080 drop comment \"is.chat\""));
+        assert_eq!(plan_from_file("").unwrap(), ruleset(&[]).unwrap());
+    }
+
+    #[test]
+    fn a_bad_file_or_a_conflict_gives_no_plan() {
+        assert!(plan_from_file("is.a block tcp/x\n").unwrap_err().starts_with("line 1:"));
+        let conflict = plan_from_file("is.a allow tcp/22\nis.b block tcp/22\n").unwrap_err();
+        assert!(conflict.starts_with("Conflict"), "{conflict}");
     }
 
     #[test]
