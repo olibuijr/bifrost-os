@@ -52,6 +52,36 @@ pub fn step(ctx: &Ctx, delta: i32) -> u32 {
     service::call(ctx, SERVICE, "step", &Json::Obj(vec![("delta".into(), Json::Num(delta as f64))]))
 }
 
+/// The panel items for local files: each absolute path becomes a `file://` item titled with its file name. Relative
+/// paths and paths with control characters are left out. `index` follows the kept items: it moves down past each
+/// dropped path before it, and is clamped to the list.
+pub fn file_items(paths: &[&str], index: usize) -> (Vec<PreviewItem>, usize) {
+    let mut items = Vec::new();
+    let mut kept_index = 0;
+    for (i, p) in paths.iter().enumerate() {
+        if !p.starts_with('/') || p.chars().any(|c| c.is_control()) {
+            continue;
+        }
+        if i < index {
+            kept_index += 1;
+        }
+        let title = p.rsplit('/').next().unwrap_or("").to_string();
+        items.push(PreviewItem::new(format!("file://{p}"), title));
+    }
+    let last = items.len().saturating_sub(1);
+    (items, kept_index.min(last))
+}
+
+/// Shows the panel for local files, starting at `index` (see [`file_items`]). Returns the request id, or None when no
+/// path is usable (the panel is not opened). The reply is the new [`State`].
+pub fn preview(ctx: &Ctx, paths: &[&str], index: usize) -> Option<u32> {
+    let (items, index) = file_items(paths, index);
+    if items.is_empty() {
+        return None;
+    }
+    Some(show(ctx, &items, index))
+}
+
 /// The panel state, as the shell answers it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct State {
@@ -140,6 +170,38 @@ mod tests {
             }
             _ => panic!("service call expected"),
         }
+    }
+
+    #[test]
+    fn file_paths_become_file_items_titled_by_name() {
+        let (items, index) = file_items(&["/home/u/a.txt", "/home/u/pics/b.png"], 1);
+        assert_eq!(items, vec![item("file:///home/u/a.txt", "a.txt"), item("file:///home/u/pics/b.png", "b.png")]);
+        assert_eq!(index, 1);
+    }
+
+    #[test]
+    fn relative_and_control_character_paths_are_dropped_and_the_index_follows() {
+        let (items, index) = file_items(&["rel.txt", "/x/keep.txt", "/x/bad\nname", "/x/last.txt"], 3);
+        assert_eq!(items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["keep.txt", "last.txt"]);
+        assert_eq!(index, 1, "the index stays on last.txt, which is now the second kept item");
+        let (_, index) = file_items(&["rel", "/x/only"], 0);
+        assert_eq!(index, 0);
+    }
+
+    #[test]
+    fn an_index_past_the_end_is_clamped_to_the_last_item() {
+        let (items, index) = file_items(&["/x/a", "/x/b"], 9);
+        assert_eq!(items.len(), 2);
+        assert_eq!(index, 1);
+    }
+
+    #[test]
+    fn preview_sends_nothing_when_no_path_is_usable() {
+        let ctx = crate::runtime::test_ctx();
+        assert_eq!(preview(&ctx, &["relative"], 0), None);
+        assert!(ctx.take_sent().is_empty());
+        assert!(preview(&ctx, &["/x/a.png"], 0).is_some());
+        assert_eq!(ctx.take_sent().len(), 1);
     }
 
     #[test]
