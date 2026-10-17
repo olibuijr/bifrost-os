@@ -158,5 +158,13 @@
    "note": "Vendor share services",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 17,
+  "parity": 7,
+  "partial": 9,
+  "gap": 0,
+  "n/a": 1,
+  "coverage_pct": 71.9
+ }
 }

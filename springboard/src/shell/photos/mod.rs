@@ -25,6 +25,7 @@ pub mod link;
 pub mod memories;
 pub mod meta;
 pub mod models;
+pub mod places;
 pub mod recipe;
 pub mod slideshow;
 pub mod stars;
@@ -131,6 +132,8 @@ pub enum Target {
     ChooseAlbum(Album),
     /// the menu's New Album row
     NewAlbum,
+    /// a pin on the Places map: its index in the clusters (see `place_clusters`)
+    Place(usize),
     /// the viewer's Album button: add to (or remove from) a user album
     AddToAlbum,
     AlbumCancel,
@@ -390,6 +393,8 @@ pub enum Album {
     Hidden,
     /// pictures whose files are the same bytes; listed in the picker once there are any
     Duplicates,
+    /// the photos with an EXIF GPS position, on a map (or, after a tap on a pin, the photos of that pin)
+    Places,
     /// a user album: index into the album list
     User(u8),
     /// a smart album: the slot of its saved rules
@@ -402,6 +407,8 @@ pub enum Album {
 const MAX_USER_ALBUMS: usize = 8;
 /// At most this many smart albums.
 const MAX_SMART_ALBUMS: usize = 8;
+/// The Places map's pin cell: pins closer than this on screen are one cluster.
+const PIN_CELL_PT: f32 = 56.0;
 
 /// A smart album: a name, the rules it was saved with (a search, see `meta::Query`) and the photos that match them.
 struct SmartEntry {
@@ -422,6 +429,7 @@ impl Album {
             Self::Trash => "Recently Deleted",
             Self::Hidden => "Hidden",
             Self::Duplicates => "Duplicates",
+            Self::Places => "Places",
             Self::User(_) => "Album",
             Self::Smart(_) => "Smart Album",
             Self::Memory(_) => "Memory",
@@ -528,6 +536,12 @@ pub struct Photos {
     /// groups of identical files from the last scan, and the visible photos that have a twin
     dupe_groups: Vec<Vec<PathBuf>>,
     duplicates: Vec<Photo>,
+    /// the photos with a GPS position (Places), their positions in the same order, the GPS read so far
+    places: Vec<Photo>,
+    place_points: Vec<(f64, f64)>,
+    place_gps: std::collections::HashMap<PathBuf, Option<(f64, f64)>>,
+    /// the photos of the pin the user tapped; None shows the map
+    place_pick: Option<Vec<PathBuf>>,
     /// what Undo and Redo step through
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
@@ -675,6 +689,10 @@ impl Photos {
             now: 0.0,
             dupe_groups: vec![],
             duplicates: vec![],
+            places: vec![],
+            place_points: vec![],
+            place_gps: std::collections::HashMap::new(),
+            place_pick: None,
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
@@ -786,6 +804,7 @@ impl Photos {
             Album::All => &self.visible,
             Album::Hidden => &self.hidden,
             Album::Duplicates => &self.duplicates,
+            Album::Places => &self.places,
             Album::Recents => &self.recents,
             Album::Favorites => &self.favorites,
             Album::Screenshots => &self.screenshots,
@@ -804,6 +823,9 @@ impl Photos {
         }
         if !self.duplicates.is_empty() {
             v.push(Album::Duplicates);
+        }
+        if !self.places.is_empty() {
+            v.push(Album::Places);
         }
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
         v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
@@ -932,6 +954,7 @@ impl Photos {
     /// Switches albums and returns to that album's grid.
     pub fn select_album(&mut self, ui: &Ui, album: Album) {
         self.album = album;
+        self.place_pick = None;
         self.album_menu = false;
         self.more_menu = false;
         self.keywords_open = false;
@@ -1092,6 +1115,7 @@ impl Photos {
             })
             .map(|(i, name)| (name, self.visible.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
             .collect();
+        self.refresh_places();
         self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
         self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
         self.smart_albums = (0..MAX_SMART_ALBUMS)
@@ -1117,10 +1141,13 @@ impl Photos {
             }
         }
         let view = {
-            let base = self.album_list(self.album);
+            let base: Vec<Photo> = match &self.place_pick {
+                Some(paths) if self.album == Album::Places => self.places.iter().filter(|p| paths.contains(&p.path)).cloned().collect(),
+                _ => self.album_list(self.album).to_vec(),
+            };
             let filtered = match &self.filter {
-                Some((_, range)) => albums::in_range(base, *range),
-                None => base.to_vec(),
+                Some((_, range)) => albums::in_range(&base, *range),
+                None => base,
             };
             let searched = if self.query.is_empty() { filtered } else { self.search_filter(filtered, &self.query) };
             models::by_date(&searched, self.newest_first)
@@ -1685,6 +1712,11 @@ impl Photos {
             if y < content_top(ui) || y >= self.content_bottom(ui) {
                 return None;
             }
+            if self.album == Album::Places && self.place_pick.is_none() {
+                let (local_x, local_y) = (f64::from(x), f64::from(y - content_top(ui)));
+                let radius = f64::from(ui.pt(18.0));
+                return Some(places::cluster_at(&self.place_clusters(ui), local_x, local_y, radius).map_or(Target::Content, Target::Place));
+            }
             return Some(self.grid.hit(x, y - content_top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
         };
         if let Some(sheet) = self.sheet {
@@ -1845,6 +1877,15 @@ impl Photos {
                 }
             }
             Target::OpenCamera => self.camera_req = true,
+            Target::Place(i) => {
+                let clusters = self.place_clusters(ui);
+                if let Some(c) = clusters.get(i) {
+                    let paths: Vec<PathBuf> = c.members.iter().filter_map(|&m| self.places.get(m)).map(|p| p.path.clone()).collect();
+                    self.place_pick = Some(paths);
+                    self.rebuild(ui);
+                    self.scroll.jump_to(0.0);
+                }
+            }
             Target::Filter if !self.search.is_empty() => {
                 let text = self.search.clone();
                 self.open_entry(ui, Purpose::Search, &text, None, t);
@@ -2530,12 +2571,64 @@ impl Photos {
             self.draw_editor(s, ui);
         } else if self.viewer.is_some() {
             self.draw_viewer(s, ui);
+        } else if self.album == Album::Places && self.place_pick.is_none() && !self.places.is_empty() {
+            self.draw_places(s, ui);
         } else {
             self.draw_grid(s, ui);
         }
         self.draw_note(s, ui);
         if self.entry.is_some() {
             self.draw_entry(s, ui, t);
+        }
+    }
+
+    /// Reads the GPS position of each visible photo once (cached by path) and keeps the photos that have one.
+    fn refresh_places(&mut self) {
+        let mut places = Vec::new();
+        let mut points = Vec::new();
+        for p in &self.visible {
+            let gps = *self.place_gps.entry(p.path.clone()).or_insert_with(|| places::gps_of(&p.path));
+            if let Some(g) = gps {
+                places.push(p.clone());
+                points.push(g);
+            }
+        }
+        self.places = places;
+        self.place_points = points;
+    }
+
+    /// The pins of the Places map for the current window: clusters of photos that would overlap on screen.
+    fn place_clusters(&self, ui: &Ui) -> Vec<places::Cluster> {
+        let h = (self.content_bottom(ui) - content_top(ui)).max(0.0) as u32;
+        places::layout(&self.place_points, self.w as u32, h, f64::from(ui.pt(PIN_CELL_PT)))
+    }
+
+    /// The Places map: a graticule over the content area with one pin per cluster, and a count on pins that stand
+    /// for several photos. Map tiles are not drawn yet; see `docs/parity-matrix/apps/photos.json`.
+    fn draw_places(&mut self, s: &mut Surface, ui: &Ui) {
+        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let step = ui.pt(48.0) as usize;
+        let (w, top_u, h) = (self.w as usize, top as usize, (bottom - top).max(0.0) as usize);
+        let mut x = 0;
+        while x < w {
+            s.fill_rect(x, top_u, 1, h, SEPARATOR);
+            x += step;
+        }
+        let mut y = top_u;
+        while y < top_u + h {
+            s.fill_rect(0, y, w, 1, SEPARATOR);
+            y += step;
+        }
+        for c in self.place_clusters(ui) {
+            let (cx, cy) = (c.x as f32, top + c.y as f32);
+            let many = c.members.len() > 1;
+            let ring = ui.pt(if many { 18.0 } else { 14.0 });
+            let line = ui.pt(2.0);
+            s.fill_rrect(cx - ring, cy - ring, ring * 2.0, ring * 2.0, ring, WHITE);
+            s.fill_rrect(cx - ring + line, cy - ring + line, ring * 2.0 - line * 2.0, ring * 2.0 - line * 2.0, ring - line, BLUE);
+            if many {
+                self.label(s, ui, &c.members.len().to_string(), 14.0, Weight::Bold, WHITE, cx, cy);
+            }
         }
     }
 
@@ -2631,6 +2724,7 @@ impl Photos {
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
+                    (Album::Places, _) => ("No Places", "Photos with a location in their file appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
