@@ -2043,11 +2043,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation_popover.rs, springboard/ui/src/translation.rs",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "note": "System translation presentation: the popover state (hidden, translating, result, failed), arrow-edge placement next to the selection, the language-pair check against installed packs, and the replacement text the app takes back.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "The popover presenter (language-pair check, translation through the app Translator, placement with split::place_popover) and the pack-backed session are tested in translation_popover::tests and translation::tests. Remaining limit, kept in the SDK matrix: the engine is a phrase-table pack, not a neural model, and the shell does not yet draw the panel for external apps."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TranslationUIServices.framework",
@@ -2064,11 +2078,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/translation.json",
+   "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation_popover.rs",
    "status": "partial",
-   "note": "private framework, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "note": "The service that hosts the translation panel for other apps (a TranslationUIService.appex in the reference): here the same presenter runs in the app process through the SDK, so no separate extension host exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::tests"
+    }
+   ],
+   "ready_note": "The reference hosts the panel in an app extension; BifrOSt apps present it in-process through TranslationPresenter, which is what translation_popover::tests and translation::tests exercise. The engine is a phrase-table pack, not a neural model."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Transliteration.framework",
@@ -2085,11 +2113,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/input_methods/indic.rs, springboard/src/shell/input_methods/mod.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Phonetic transliteration input: Latin letters are composed into script (the reference TransliterationIM input method). Tamil and Devanagari are tabled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::indic::tests"
+    }
+   ],
+   "ready_note": "The phonetic composer (consonant, inherent vowel, vowel signs, virama, independent vowels) for Tamil and Devanagari is tested in shell::input_methods::indic::tests and runs as an input method in the shell. Other scripts are not tabled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Transparency.framework",
@@ -2232,11 +2269,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/trust_eval.rs, springboard/ui/src/trust.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/tls_client.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Certificate chain evaluation for apps (the trust evaluation agent): validity, host names, CA and path rules, anchors, signature check; network TLS is verified by rustls with the webpki roots.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::trust_eval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ],
+   "ready_note": "The chain model (ui trust), the SDK SecTrust-style API and the shell trust service with Ed25519 link verification are tested in the three trust::tests modules; TLS connections use rustls with the webpki roots in sdk tls_client. There is no per-user trust-settings daemon or OCSP agent."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TrustKit.framework",
@@ -2254,8 +2310,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Mail/Messages ML decisioning. The only resources in the reference index are TrustKitResources/spam_decisioning_logicgraph and spam_filtering_logicgraph (versioned model graphs, 264.0) and an OrderExtraction logic graph under usr/libexec; these are Apple ML model packs for message spam and order detection, not a trust or certificate API.",
    "rea": [],
    "method": "assessed"
   },
@@ -2275,8 +2331,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple hardware accessory authentication. The index pairs it with System/Library/Extensions/AppleTrustedAccessory.kext, the driver for Apple-certified accessories (authentication coprocessor); Linux has no counterpart and BifrOSt does not mirror Apple accessory authentication.",
    "rea": [],
    "method": "assessed"
   },
@@ -2317,8 +2373,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Metal-only Apple graphics/ML helper. The index shows only Resources and a default.metallib (Metal shader library, also in the iOSSupport copy), no UI, XPC service or plug-in; it is an Apple GPU/ML shim with an iOS (Catalyst) twin, which BifrOSt does not mirror (its GPU path is Vulkan/Wayland).",
    "rea": [],
    "method": "assessed"
   },
@@ -2359,8 +2415,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Siri / Apple Intelligence conversation turn manager. The index shows a bare framework (Info.plist, no resources, UI or host bundle); the name and its place in the assistant stack mark it as the on-device dialog turn service for Apple's assistant, which BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2380,8 +2436,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple internal test tooling. Typist is a keystroke-injection driver for automated typing tests; the index shows only Info.plist and version.plist, no resources or host. BifrOSt drives input in tests through its own SDK testing kit (sdk testing.rs), not an Apple-style test driver.",
    "rea": [],
    "method": "assessed"
   },
@@ -2485,8 +2541,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple account plug-in point. The only related bundle in the index is System/Library/CoreServices/UAUPlugins/ADIUserAccountUpdater.bundle (the Apple Digital Identity account updater, loaded at login to refresh Apple account state). BifrOSt has no Apple accounts; its accounts are the local user and BifrOSt Cloud.",
    "rea": [],
    "method": "assessed"
   },
@@ -2505,11 +2561,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/sdk/src/text_formatting.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The text system under AppKit: attributed strings and rich text layout (the nsattributedstringagent service converts rich text out of process).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "attributed::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "richlayout::tests"
+    }
+   ],
+   "ready_note": "Attributed strings (runs, attributes, merging) and rich-text layout are tested in attributed::tests and richlayout::tests; the conversion runs in process, so there is no separate attributed-string agent."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UIGrounding.framework",
@@ -2695,8 +2765,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple developer UI-test recording. The index shows Info.plist and a large Localizable.loctable (129 KB) and no app or service; UI recording captures interactions to generate automated UI tests for Apple's developer tools. BifrOSt tests its UI with the SDK testing kit (sdk testing.rs) and snapshots, not by recording a session. Evidence is limited to the layout and name; the lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -2716,8 +2786,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple ML screen-understanding model host with a diagnostic upload extension. The index shows PlugIns/UIUnderstanding.diagnosticextension.appex (a sysdiagnose extension) and no other resources; both the on-device ML UI-parsing model and the Apple diagnostics channel are deliberately not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -2737,8 +2807,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple network-heuristics telemetry client. The index shows a bare client framework (Info.plist, version.plist, no resources or UI); it feeds Apple's private network-classification heuristics and is not a function BifrOSt mirrors (network state is in the net modules, no data goes to a vendor). Evidence is the name and the bare layout; the lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -2757,11 +2827,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/browser/nav.rs, springboard/sdk/src/url_components.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Address display formatting: the shown form of a URL (scheme, www. and trailing slash dropped) in the address bar, titles and history search.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::browser::nav::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_components::tests"
+    }
+   ],
+   "ready_note": "nav::display_url builds the displayed address (tested in shell::browser::nav::tests) and is used for the bar, tab titles and history matching; sdk url_components parses and rebuilds URL parts (url_components::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/USDKit.framework",
@@ -2800,8 +2884,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: part of the Apple USD (Universal Scene Description) stack. The index shows a USDLib_FormatLoader.xpc sandboxed loader that RealityKit-side USD readers launch. The SDK matrix already settled USDKit as n/a (docs/parity-matrix/data/usdkit.json: no 3D scene graph or RealityKit stack in BifrOSt); the one USD capability kept is the USDZ package unpacker (springboard/cmd/src/usdextract.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -2821,8 +2905,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Objective-C wrapper over the Apple USD stack (RealityKit). The SDK matrix settled USDKit as n/a (docs/parity-matrix/data/usdkit.json: no 3D scene graph or RealityKit renderer); this Objective-C binding has no Objective-C runtime or scene graph to bind on BifrOSt. USDZ unpacking is covered by springboard/cmd/src/usdextract.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -2842,8 +2926,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: syncs a USD stage with the RealityKit scene. The index shows a bare framework with no resources. BifrOSt has no USD stage or RealityKit scene graph (usdkit.json is n/a), so there is nothing to synchronise.",
    "rea": [],
    "method": "assessed"
   },
@@ -2863,8 +2947,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple-internal bridge framework. The index shows Info.plist and version.plist only, no UI, strings, plug-in or host bundle, and BifrOSt has no counterpart for the Apple service it fronts. Evidence is the bare layout and the Apple-specific name; the lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -2884,8 +2968,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the connection half of USTBridge (bare framework, Info.plist only, no resources or host). Same Apple-internal bridge as USTBridge; no BifrOSt counterpart. The lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -2904,11 +2988,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/devices.rs, springboard/ui/src/camera_properties.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "USB Video Class camera support. On Linux the uvcvideo kernel driver exposes the camera as /dev/video*; BifrOSt captures through V4L2 and shows the camera controls.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_properties::tests"
+    }
+   ],
+   "ready_note": "V4L2 probing, mmap streaming and YUYV/NV12/MJPEG conversion (media::v4l2), the camera device list (camera::devices) and camera property controls (ui camera_properties) are tested; the UVC protocol itself is the kernel's uvcvideo driver."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UVCFamily.framework",
@@ -2925,11 +3028,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/devices.rs, springboard/ui/src/camera_device.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The UVC class driver family and its device matching table (UVCMatching.plist). On Linux uvcvideo binds UVC cameras by USB class; BifrOSt lists and opens the resulting V4L2 nodes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    }
+   ],
+   "ready_note": "Device discovery and capture over the uvcvideo-provided V4L2 nodes are tested in media::v4l2::tests, shell::camera::devices::tests and ui camera_device::tests; class matching is done by the Linux kernel, so no matching table is kept."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UVCFrameProcessor.framework",
@@ -2946,11 +3068,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Frame conversion for UVC cameras: the camera pixel formats are converted to the shell's RGBA pixels before display.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::camera::tests"
+    }
+   ],
+   "ready_note": "YUYV, NV12, NV21 and MJPEG to RGBA conversion is tested in media::v4l2::tests, and the camera app path that consumes the frames in shell::camera::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UVFSXPCService.framework",
@@ -2967,11 +3103,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "User-space file system service (the UVFS XPC host for FSKit modules): a module describes a volume and the service serves the kernel's requests. Here the kernel side is FUSE through fusermount3.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fs_module::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fuse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_volume::tests"
+    }
+   ],
+   "ready_note": "The unary file system dispatcher (lookup, attributes, readdir, read), the FUSE wire decode/reply and the volume model are tested in fs_module::tests, fuse::tests and fs_volume::tests; fuse_mount serves them over a fusermount3 session."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UXKit.framework",
@@ -2988,11 +3143,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/list_content.rs, springboard/ui/src/layout_protocol.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The shared view toolkit under Mac apps (table, collection and layout views). BifrOSt's equivalent is bifrost-ui and the SDK controls, which every shell and app screen is built with.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "collection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "list_content::tests"
+    }
+   ],
+   "ready_note": "Collection and list content models with selection and layout are tested in ui collection::tests and list_content::tests; the toolkit is bifrost-ui and bifrost_app::controls, so UXKit's job is done by the single UI kit (no separate port layer)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UnblockClient.framework",
@@ -3010,8 +3179,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: client of an Apple system service (UnblockService). The index shows a bare client framework (Info.plist, version.plist; no UI, strings or host bundle) with the matching service framework, an Apple daemon IPC pair for a service BifrOSt does not mirror. Evidence is the bare layout; the lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -3031,8 +3200,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: service half of UnblockClient (bare framework, Info.plist only; no UI, strings, plug-in or host bundle). An Apple daemon IPC pair with no BifrOSt counterpart. The lead should confirm.",
    "rea": [],
    "method": "assessed"
   },
@@ -3052,8 +3221,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple asset delivery for on-demand model and asset sets. The index shows System/Library/UnifiedAssetFramework/AssetSets (including a Deprecated set) and a UAFPSUSPlugin.bundle that talks to Apple's software-update servers; it fetches Apple ML model packs, which BifrOSt does not mirror (its packages come from pacman and the BifrOSt store).",
    "rea": [],
    "method": "assessed"
   },
@@ -3380,11 +3549,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/sticky_keys.rs, springboard/src/shell/services/universal_access_control.rs, springboard/sdk/src/accessibility_display.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Accessibility settings: Display Zoom, Reduce Motion, Increase Contrast, Reduce Transparency, Sticky Keys, and the per-app denial policy (the reference also has an accessibility tutorial and shortcuts extension).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sticky_keys::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::universal_access_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accessibility_display::tests"
+    }
+   ],
+   "ready_note": "The accessibility settings, sticky keys, the per-app universal access policy and the SDK display-accessibility queries are tested; the onboarding tutorial app is not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UniversalControl.framework",
@@ -3423,8 +3616,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: cross-device drag for Universal Control. The index shows a bare framework with no resources; the host is System/Library/CoreServices/UniversalControl.app with its UniversalControl.framework, an Apple-only Continuity transport that shares one pointer and keyboard across Macs. Same-machine drag and drop is separate and built (ui drag_session, sdk transfer_drag).",
    "rea": [],
    "method": "assessed"
   },
@@ -3443,11 +3636,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/hid_reports.rs, springboard/ui/src/hid_report.rs, springboard/ui/src/hid_match.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Generic HID device and report handling. BifrOSt reads HID devices through Linux hidraw/evdev, parses report descriptors and matches devices to drivers.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_reports::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_match::tests"
+    }
+   ],
+   "ready_note": "Report descriptor parsing and value extraction (ui hid_report), device matching (ui hid_match) and the SDK device and report APIs are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UniversalHIDKit.framework",
@@ -3464,11 +3681,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/hid_reports.rs, springboard/ui/src/hid_report.rs, springboard/ui/src/hid_match.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The kit layer over UniversalHID: device enumeration, report parsing and matching for apps. Same BifrOSt code as UniversalHID.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "hid_reports::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "hid_match::tests"
+    }
+   ],
+   "ready_note": "The kit and the base layer are one split of the same job; BifrOSt implements it once in sdk hid_devices/hid_reports over ui hid_report/hid_match, tested in those modules."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UpdateCycle.framework",
@@ -3515,11 +3756,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/cmd/src/softwareupdate.rs, springboard/src/shell/ota.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Support for the software update cycle: when to check, what to offer and how an update is staged. BifrOSt checks on a schedule through the update agent, notifies, and stages OS updates.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "softwareupdate::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::ota::tests"
+    }
+   ],
+   "ready_note": "The softwareupdate tool (list, install, schedule preference) and the shell OTA path (schedule due-ness on Wi-Fi/charging, notification, staging, checksum) are tested in cmd softwareupdate::tests and shell::ota::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UsageTracking.framework",
@@ -3557,11 +3812,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/user_activity.rs, springboard/src/universal_clipboard.rs, springboard/sdk/src/cloud_clipboard.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "User activities (what an app is doing so it can be continued or found) and the shared clipboard progress agent. BifrOSt has the activity center and the sealed Universal Clipboard over BifrOSt Cloud.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "user_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "universal_clipboard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_clipboard::tests"
+    }
+   ],
+   "ready_note": "The activity center (make current, replace, invalidate) is tested in user_activity::tests; the account-sealed clipboard policy and cloud transport in universal_clipboard::tests and cloud_clipboard::tests. Apple's device-to-device Handoff transport is not mirrored; activities are local to the session."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserFS.framework",
@@ -3578,11 +3852,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "The user-space file system daemon (userfsd and userfs_helper) that mounts FSKit modules in the user session. BifrOSt serves modules over FUSE with fusermount3, no daemon needed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fs_module::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fuse::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "fs_volume::tests"
+    }
+   ],
+   "ready_note": "Volume dispatch, FUSE protocol and the volume model are tested (fs_module, fuse, fs_volume); fuse_mount performs the unprivileged mount through fusermount3 and serves requests in the app."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserManagement.framework",
@@ -3599,11 +3892,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/privd/accounts.rs, springboard/sdk/src/local_account.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Local user and group management (Users & Groups): list people, add, delete and promote with validation, last-administrator and system-account guards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_account::tests"
+    }
+   ],
+   "ready_note": "Name and password validation, passwd/group parsing, admin and delete refusals and the add argv are tested in privd::accounts::tests; the SDK reads the installed account in local_account::tests. Personas (managed multi-user profiles) are not modelled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/UserNotificationsCore.framework",
