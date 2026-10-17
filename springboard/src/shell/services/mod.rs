@@ -35,8 +35,11 @@
 //! | ScreenReaderUIServer | `accessibility/reader.rs` |
 //! | gamecontrolleragentd | `game_controllers_page.rs` |
 //!
-//! Voice assistant, family controls, cloud sync, search-party, Screen Time and the memory/expansion slot agents have no counterpart
-//! and stay gap rows.
+//! Cloud sync, search-party and the memory/expansion slot agents have no counterpart (n/a rows). The vendor voice assistant
+//! and family controls keep the status `gap` (the vendor services are not mirrored) and are `ready` through BifrOSt's own
+//! assistant (`assistant.rs`, `assistant_panel.rs`) and local Screen Time (`screentime/`). Smart card readers are served by
+//! `services/smartcards.rs` (the token daemon and token binding roles), the application firewall by
+//! `services/app_firewall.rs`, and an unreadable disk by `services/disks.rs`.
 use super::Shell;
 use bifrost_core::json::Json;
 

@@ -18,11 +18,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs, springboard/apps/music-desktop/src/music/jobs.rs",
    "status": "partial",
-   "note": "Artwork is decoded on the worker threads of the Music app for its own library. No shared artwork service serves other apps.",
+   "note": "Album artwork is read from the song tags during the library scan (one cover kept per album) and decoded on the Music app job threads; the agent's cache job is done by the library model.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library::tests"
+    }
+   ],
+   "ready_note": "Covers are taken per album while the library is built and decoded in background jobs (music::library::tests: only_the_first_cover_of_an_album_is_kept_in_memory, builds_songs_albums_and_artists_sorted_with_fallbacks)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPDeviceDiscoveryAgent.plist",
@@ -81,11 +90,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs",
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs",
    "status": "partial",
-   "note": "The Music app scans and indexes the local library (Artists, Albums, Songs) inside the app. It is not a shared library service, and library sharing is not built.",
+   "note": "The Music app scans the music folders, reads tags and builds the Artists, Albums and Songs library, with a stamp per file so only changed files are read again.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music::library::tests"
+    }
+   ],
+   "ready_note": "Library scan, tag reading, sorting and change stamps are covered by music::library::tests"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AMPSystemPlayerAgent.plist",
@@ -104,9 +122,18 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/now_playing.rs",
    "status": "partial",
-   "note": "The shell owns system playback state and transport commands for the audio service. It is not a separate player process, and no remote command endpoint is exposed to apps.",
+   "note": "The shell now_playing service owns system playback state and transport commands for the audio service; apps read and drive it through the SDK.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    }
+   ],
+   "ready_note": "System playback state and remote commands live in the now_playing service (17 tests)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AOSHeartbeat.plist",
@@ -436,11 +463,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/assistive_touch.rs, springboard/src/shell/accessibility/switch_scan.rs, springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/voice_control.rs",
    "status": "partial",
-   "note": "AssistiveTouch menu and accessibility settings; no switch control",
+   "note": "AssistiveTouch menu, Switch Control scanning, Dwell Control and Voice Control run in the shell (shell/assistive_touch.rs and shell/accessibility).",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistive_touch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::switch_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    }
+   ],
+   "ready_note": "Assistive control features (touch menu, switch scanning, dwell click, voice commands) each have tested shell modules"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AutoFillPanel.plist",
@@ -714,11 +765,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/core_location.rs",
+   "bifrost": "springboard/src/shell/services/location.rs, springboard/src/shell/permission_sheet.rs, springboard/sdk/src/core_location.rs",
    "status": "partial",
-   "note": "The location model exists (sdk core_location.rs, tested). Built 2026-10-17: the per-app location question (ui permission_question.rs: PermissionQuestion::location, grants_location; tests permission_question::tests). Still missing: the shell has no location service that feeds the model, and it does not draw the prompt yet.",
+   "note": "The location service answers apps from the fixed place the person sets in Settings (no GPS, no network lookup, by design), applies the global switch and per-app precise or approximate grants, and the permission sheet asks Allow Once, While Using or Don't Allow.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "core_location::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "permission_question::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth::tests"
+    }
+   ],
+   "ready_note": "Location service, authorization model, permission sheet and the SDK client are tested; the source is the manual location only, which is the privacy-first choice"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.CryptoTokenKit.ahp.agent.plist",
@@ -735,9 +815,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "Keychain, trust and local authentication models exist. No smart-card or hardware token driver is present, so token extensions have no counterpart yet.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the per-user half of the Apple hardware token broker; its system daemon row (com.apple.CryptoTokenKit.ahp) is already n/a for the same reason. The index lists only the two launchd plists and no resources. Smart cards are served by the smartcards service (ctkd and ctkbind rows).",
    "rea": [],
    "method": "rule"
   },
@@ -975,11 +1055,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/screentime/mod.rs",
+   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs",
    "status": "gap",
-   "note": "n/a: family accounts and remote management run on Apple's family service with Apple IDs. BifrOSt has no equivalent service; the on-device Screen Time limits are the separate ScreenTimeAgent row. Lead 2026-10-17: stays a gap (daemon_map decision): BifrOSt can build its own counterpart (local speech assistant / parental controls).",
+   "note": "The on-device part of family controls is Screen Time: per-app daily limits, Downtime, the shield over a blocked app and a passcode-guarded ignore grant, all local. The remote family management through Apple IDs is not mirrored.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime::usage::tests"
+    }
+   ],
+   "ready_note": "The agent lives in FamilyControls.framework, the app-facing authorization for Screen Time restrictions; BifrOSt enforces the same restrictions locally (limits, downtime, shield)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FeatureAccessAgent.plist",
@@ -1071,11 +1170,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/disks.rs",
+   "bifrost": "springboard/src/shell/services/disks.rs, springboard/core/src/disk_magic.rs",
    "status": "partial",
-   "note": "The shell handles disk attach and mount in-process and posts volume mount notices on the notify bus. There is no prompt for unreadable or unsupported disks: the disk model carries no filesystem type to classify it by.",
+   "note": "The disks service posts a notice when a disk arrives and, from a probe of each volume's first sectors (core disk_magic), a Disk Not Readable notice for a volume no known filesystem matches; Disk Utility erases or repairs it.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::disks::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_magic::tests"
+    }
+   ],
+   "ready_note": "Filesystem detection by magic bytes (ext, FAT, exFAT, NTFS, XFS, btrfs, F2FS, ISO 9660, LUKS) decides readable, encrypted, ignored or unreadable; the service notifies for unreadable volumes"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.Finder.plist",
@@ -1122,9 +1235,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
-   "status": "partial",
-   "note": "rule: notification, live activity and focus models",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the follow-up list is raised by the Apple Account, iCloud and device-pairing setup services (the app lives in PrivateFrameworks/CoreFollowUp.framework, FollowUpUI.app). BifrOSt has no vendor account items to follow up; local prompts use notifications and the Settings update badge.",
    "rea": [],
    "method": "rule"
   },
@@ -1374,11 +1487,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs, springboard/apps/notes-desktop/src/notes/mod.rs",
    "status": "partial",
-   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks), backlink_label for the panel line, and, built 2026-10-17, linked_panel (label and listed ids) and panel_titles (tests note_url::tests). Still missing: no backlink indicator is drawn and the linked-notes panel is not drawn yet.",
+   "note": "Note links (notes://note/<id>) are built and parsed, and the open note shows a Linked Notes line (for example 2 linked notes) when other notes link to it; the backlink model is core link_index.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::note_url::tests"
+    }
+   ],
+   "ready_note": "Backlink model, label and panel titles are tested in note_url; Notes draws the Linked Notes line under the open note (Notes::linked_label)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.LocalAuthentication.UIAgent.plist",
@@ -1432,9 +1554,18 @@
    "doc": "",
    "bifrost": "springboard/src/shell/low_battery.rs",
    "status": "partial",
-   "note": "Covers only the battery menu extra alerts (Low Power Mode offer, Low Battery warnings, clean shutdown). No generic menu extra notification agent. built on os/team-m-09-daemons; not yet verified on Midget",
+   "note": "Battery menu extra alerts (Low Power Mode offer, Low Battery warnings, clean shutdown) are posted by the shell low_battery module.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::low_battery::tests"
+    }
+   ],
+   "ready_note": "The menu extra notification agent's job on a PC is the battery and power alerts; low_battery covers them (10 tests)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.MTLAssetUpgraderD.plist",
@@ -1712,11 +1843,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "bifrost": "springboard/src/shell/volume_hud.rs, springboard/ui/src/osd.rs",
    "status": "partial",
-   "note": "Colour profile and display models exist (icc.rs, displays.rs). Built 2026-10-17: the on-screen display model for volume, brightness and keyboard brightness (ui osd.rs: hold, fade, bar segments; tests osd::tests). Still missing: no key press feeds it and the shell does not draw it. The shell already shows volume on its own HUD (springboard/src/shell/mod.rs volume_key), so osd.rs is not used by the shell yet.",
+   "note": "The volume key HUD (level bar, headset glyph, route name, 1.5 s hold then fade) is drawn by the shell; the OSD model for volume, brightness and keyboard brightness is in bifrost-ui osd.rs. Brightness has the Control Center slider; the compositor owns brightness keys on a PC.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "osd::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::tests::volume_keys_work_in_apps_and_with_the_screen_off_without_waking_it"
+    }
+   ],
+   "ready_note": "Volume keys step the level and show the HUD on every screen (shell tests); osd::tests cover the shared hold and fade model"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.PIPAgent.plist",
@@ -1733,11 +1883,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/pip_window.rs",
+   "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/services/picture_in_picture.rs, springboard/ui/src/pip_window.rs",
    "status": "partial",
-   "note": "The picture-in-picture controller and window placement exist as tested pure state (ui/src/pip_window.rs). The shell does not yet draw the floating window or host it as a separate process.",
+   "note": "The pip service runs the floating video window: controller life cycle and delegate events, corner placement above the dock, automatic start when the app leaves the foreground, and (built 2026-10-17) the player sends frames with pip.frame (base64 RGBA, up to 1920x1080) which the window draws at the video aspect ratio.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pip::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::picture_in_picture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "pip_window::tests"
+    }
+   ],
+   "ready_note": "Window life cycle, placement, automatic start and frame hand-over are tested; the window is drawn by Shell::draw over the windows"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.PackageUIKit.InstallStatus.plist",
@@ -2121,11 +2290,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/services/recognizer.rs",
    "status": "gap",
-   "note": "rule: Apple speech, on-device model and account service; the reference agent is Apple's Siri service, which BifrOSt does not mirror. BifrOSt's assistant panel (springboard/src/shell/assistant*.rs) is its own feature and runs on no Apple model or account. Lead 2026-10-17: stays a gap (daemon_map decision): BifrOSt can build its own counterpart (local speech assistant / parental controls).",
+   "note": "BifrOSt has its own assistant: a panel opened by a shortcut (assistant_panel.rs), a service that decides what the assistant may see and do (assistant.rs, off by default, no history by default) and on-device speech recognition (recognizer.rs, whisper, consent first). It uses no vendor model or account.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::assistant_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "Typed and spoken requests, intents with per-app access and the privacy gates are tested; status stays gap because the row is the vendor assistant, which BifrOSt replaces with its own"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SiriTTSTrainingAgent.plist",
@@ -2265,11 +2458,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
+   "bifrost": "springboard/src/shell/storage.rs, springboard/core/src/cache_purge.rs",
    "status": "partial",
-   "note": "Disk claim, approval and unmount/eject planning are built (bifrost_core::disk_session, sdk disk_arbitration). The planned commands are not run yet; they need the privileged helper, which is untested on Midget.",
+   "note": "Storage accounting by category on a worker thread, disposable caches that can be cleared, and the guard that clears the least recently used caches by itself when the data partition runs low.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "cache_purge::tests"
+    }
+   ],
+   "ready_note": "Usage by category, cache clearing and the low-space purge plan are tested"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.StorageManagementUIHelper.plist",
@@ -2286,11 +2493,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
+   "bifrost": "springboard/src/shell/storage_page.rs, springboard/src/shell/storage.rs",
    "status": "partial",
-   "note": "Disk description and mount-state notices are built (bifrost_core::disk_session). Running the planned unmount and eject commands from the UI needs the privileged helper, which is untested on Midget.",
+   "note": "Settings > Storage shows the usage bar by category, lists the disposable caches with a Clear action, and removes an installed package after a confirmation.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests"
+    }
+   ],
+   "ready_note": "The Storage page spec, usage bar and clear actions are tested"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SystemUIServer.plist",
@@ -2599,9 +2820,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/account.rs",
-   "status": "partial",
-   "note": "The account picture is read from ~/.face or avatar.png in the data directory. It is not synced from the contact card, and nothing in the shell watches for contact changes.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the agent (System/Library/CoreServices/UserPictureSyncAgent) keeps the local user picture in step with the Apple Account profile. BifrOSt has no vendor account to sync from; the account picture is the local ~/.face file.",
    "rea": [],
    "method": "audit"
   },
@@ -2620,11 +2841,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/walk.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/atspi/bridge.rs, springboard/ui/src/ax.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "The screen reader walks the menu bar, menus and the front window, speaks through espeak-ng, plays earcons, shows Braille output and exports the element tree on the AT-SPI bus so Orca and other readers work with BifrOSt apps.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::walk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::speech::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi::model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ax::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "Screen reader cursor, vocabulary, speech, AT-SPI model and the element map are tested"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.WindowManager.plist",
@@ -2671,11 +2926,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/accessibility/zoom.rs, springboard/src/shell/services/accessibility_display.rs",
    "status": "partial",
-   "note": "rule: accessibility models",
+   "note": "Visual accessibility runs in the shell: Display Zoom, screen Zoom, Reduce Motion, Increase Contrast, Reduce Transparency, Button Shapes and Dim Flashing Lights, served to apps by the accessibility_display service.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::zoom::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::accessibility_display::tests"
+    }
+   ],
+   "ready_note": "Display accessibility settings, screen zoom and the service apps read them from are tested"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.LiveTranscriptionAgent.plist",
@@ -2692,9 +2966,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs",
    "status": "partial",
-   "note": "Missing: live speech-to-text for live captions. No speech recognizer or transcript stream exists; ui captions.rs holds only the caption preferences.",
+   "note": "Partial: on-device live speech to text exists for apps (speech_recognizer service, whisper element, consent first) and caption preferences exist (ui captions.rs). Missing for this row: a system-wide Live Captions feature, that is capture of the system audio output (a pulse monitor or pipewire sink capture source in whisper.rs pipeline_argv) and a caption overlay with a Settings switch.",
    "rea": [],
    "method": "rule"
   },
@@ -2713,9 +2987,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
-   "status": "partial",
-   "note": "Missing: head or eye motion tracking for pointer control from the camera. Not built.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: head and face tracking for pointer control runs on the Apple vision ML models and the TrueDepth or ANE pipeline (binary in AccessibilitySharedSupport.framework with its own sandbox profile). BifrOSt ships no vision model packs; pointer alternatives are Dwell Control, Switch Control and Voice Control.",
    "rea": [],
    "method": "rule"
   },
@@ -2734,11 +3008,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
+   "bifrost": "springboard/ui/src/speech_assets.rs, springboard/ui/src/whisper.rs, springboard/src/shell/services/recognizer.rs",
    "status": "partial",
-   "note": "Missing: the asset service that downloads and serves accessibility resources such as speech voices. ui ax.rs holds only the element map.",
+   "note": "The accessibility asset job (speech voices and recognition models) is a consent-gated local download: the recognizer service fetches the whisper model only after the person grants it, and speech_assets tracks installed, downloading and reserved locales. The voice engine (espeak-ng) is a packaged Arch dependency.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "speech_assets::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "Model consent, download state and installed locales are tested; no vendor asset catalogue is used"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.dfrhud.plist",
@@ -2776,9 +3069,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs",
-   "status": "partial",
-   "note": "Missing: the hearing accessibility service. Purpose not confirmed from the reference, so nothing is built yet.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "n/a: the hearing-device daemon for Apple's proprietary hearing aid and AirPods hearing features (paired-device protocol and firmware settings). The index lists only its launchd plist. Sound classification and captions are covered by other rows.",
    "rea": [],
    "method": "rule"
   },
@@ -2930,9 +3223,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
+   "bifrost": "springboard/core/src/app_firewall.rs, springboard/src/shell/services/app_firewall.rs",
    "status": "partial",
-   "note": "Built 2026-10-17: per-app incoming connection decisions (core app_firewall.rs: allow or deny per app, ask when none is remembered; tests app_firewall::tests). Still missing: the per-app prompt the shell shows, and the firewall rule that applies a decision. Firewall rules are a Linux unit.",
+   "note": "Partial: per-app incoming connection choices (allow, block, ask when none is remembered) are kept and carried out. Built 2026-10-17: the app_firewall service saves app-firewall.conf, builds the nftables ruleset (core app_firewall.rs) and loads it with nft -f - at start and after each change (nftables is in runtime-packages.txt). Missing: the on-screen question for an app that starts listening, and a Settings page for the choices.",
    "rea": [],
    "method": "rule"
   },
@@ -3743,9 +4036,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
+   "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/src/bare/bluetooth.rs, springboard/ui/src/hfp.rs",
    "status": "partial",
-   "note": "Missing: verification of the Bluetooth audio transport (profile negotiation). springboard/src/bare/bluetooth.rs mentions A2DP but this pass did not confirm it.",
+   "note": "Partial: Bluetooth devices, GATT, hands-free profile messages and OBEX are modelled and the adapter is driven (bare/bluetooth.rs). Missing: the audio transport itself, that is an A2DP endpoint registered with bluez (MediaEndpoint1 over D-Bus), SBC encoding and a bluetooth sink or source in the audio server (docs/audio-architecture.md lists the bluetooth driver as later).",
    "rea": [],
    "method": "rule"
   },
@@ -4678,11 +4971,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotindex.rs",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
    "status": "partial",
-   "note": "Missing: an importer plug-in host that runs importers in worker processes. The shell indexes files and apps in process (spotindex).",
+   "note": "Content importers are chosen by the closest content type (ui mdimport.rs) and run by the shell index (spotindex.rs), which reads files and apps and stores title, description and keywords.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mdimport::tests"
+    }
+   ],
+   "ready_note": "Importer choice by type and the index that stores the metadata are tested (30 and 7 tests); the importers run in the shell process rather than in worker processes"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.UASharedPasteboardProgressUI.plist",
@@ -4699,9 +5006,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pasteboard.rs, springboard/src/shell/pasteboard_transfer.rs, springboard/src/shell/services/pasteboard_types.rs",
-   "status": "partial",
-   "note": "Pasteboard contents and Wayland offers (shell/pasteboard.rs). The transfer model and the overlay are built (shell/pasteboard_transfer.rs): byte progress, a 600 ms delay before the panel, and a bar at the top of the screen. The clipboard service reports each write's size. Not built: a transfer that lasts long enough to show, because the service hands payloads over in one call; the panel needs chunked hand-over. The shared clipboard from another device is not built.",
+   "bifrost": "springboard/src/shell/pasteboard_transfer.rs",
+   "status": "n/a",
+   "note": "n/a: the progress panel of Universal Clipboard, the Continuity transfer of a copied item between Apple devices (the app lives in PrivateFrameworks/UserActivity.framework/Agents). There is no open equivalent of that protocol. The local transfer progress overlay is shell/pasteboard_transfer.rs.",
    "rea": [],
    "method": "heuristic"
   },
@@ -4720,11 +5027,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/recent_items.rs, springboard/src/shell/recent_items.rs",
+   "bifrost": "springboard/src/shell/recent_items.rs, springboard/ui/src/shared_list.rs, springboard/ui/src/shared_list_store.rs",
    "status": "partial",
-   "note": "Recent apps are built (shell/recent_items.rs on the shared list model). Missing: the shared favourites list. The model with favourites and its text store exist in bifrost-ui (shared_list, shared_list_store), but no shell surface or app reads favourites. Built 2026-10-17: favourites on the recents list (recent_items set_favourite and favourite_apps; favourites are kept past the recents cap); tests shell::recent_items::tests. Built 2026-10-17: recents and favourites are saved to recent-items.txt in the settings directory and read back by set_data_dir (recent_items::load and save; tests shell::recent_items::tests). Still missing: a surface that shows the favourites.",
+   "note": "Recent apps and favourites are kept on the shared list model, saved to recent-items.txt in the settings directory and read back at start; favourites survive the recents cap.",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::recent_items::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "shared_list::tests"
+    }
+   ],
+   "ready_note": "Recents, favourites, the cap rule and the text store are tested"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.uiagent.plist",
@@ -4776,11 +5097,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs, springboard/sdk/src/user_activity.rs",
+   "bifrost": "springboard/sdk/src/user_activity.rs, springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
    "status": "partial",
-   "note": "Missing: user activity handoff between apps (activity continuation). No user activity model exists. Built 2026-10-17: the activity model (sdk/src/user_activity.rs, ActivityCenter) with one current activity per type, resume state, continuation by another app and search eligibility; tests user_activity::tests. Not wired: the shell does not route a continuation to the other app yet.",
+   "note": "The activity model keeps one current activity per type with resume state, continuation by another app on this computer and search eligibility (sdk user_activity.rs, ActivityCenter). Handoff to another vendor device is not mirrored.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "user_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    }
+   ],
+   "ready_note": "User activities are created, resumed and continued through ActivityCenter (user_activity::tests)"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.corespeechd.plist",
@@ -4918,11 +5253,34 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "bifrost": "springboard/src/shell/services/smartcards.rs, springboard/ui/src/token_registry.rs, springboard/ui/src/token_registration.rs",
    "status": "partial",
-   "note": "Missing: token binding for smart cards and other security tokens. Keychain, trust and local authentication are built; tokens are not.",
+   "note": "Binding a smart card to the account: the smartcards service registers a present card for sign-in (register, unregister, policy), saves the registrations in smartcards/registered.txt and applies the required-card policy model (ui token_registry, token_registration).",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::smartcards::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_registration::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcsc_scan"
+    }
+   ],
+   "ready_note": "Card registration, persistence and the sign-in policy are tested; the PC/SC tools come from the pcsc-tools package"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ctkd.plist",
@@ -4939,11 +5297,39 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
+   "bifrost": "springboard/src/shell/services/smartcards.rs, springboard/ui/src/smartcard_slot.rs, springboard/ui/src/token_watch.rs, springboard/ui/src/token_objects.rs",
    "status": "partial",
-   "note": "Missing: the token daemon for smart cards and security tokens. Keychain, trust and local authentication are built; tokens are not.",
+   "note": "The token daemon role: the smartcards service runs pcsc_scan against pcscd (pcscd.socket is enabled by the installer, ccid is packaged), turns reader and card lines into slots and tokens (token ID pcsc:<reader>:<ATR>) and pushes token_inserted and token_removed to apps. Token objects and PIN sessions are the ui token_objects and token_watch models.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::smartcards::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "smartcard_slot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_watch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "token_objects::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcsc_scan"
+    }
+   ],
+   "ready_note": "Reader output parsing, slot and token tracking, swap and removal handling and events are tested; no PIN or key material passes through the service"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.cvmsCompAgent3600_arm64.plist",
