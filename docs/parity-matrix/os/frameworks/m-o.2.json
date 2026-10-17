@@ -1010,7 +1010,16 @@
    "status": "partial",
    "note": "Memories group the library by capture month into slideshow albums, with screenshots left out. Gap: the on-device analysis that picks highlights and key frames in photos and videos is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::memories::tests"
+    }
+   ],
+   "ready_note": "Memories albums by capture month, newest first, screenshots left out (shell::photos::memories::tests). n/a: the on-device highlight and key-frame analysis needs Apple's photo and video model packs, which BifrOSt cannot ship."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mondrian.framework",
@@ -2117,9 +2126,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs",
+   "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs; springboard/apps/news-desktop/src/feed_refresh.rs",
    "status": "partial",
-   "note": "Feeds are cached and revalidated inside the News app over HTTP; no background refresh of feeds is built in this code.",
+   "note": "Feeds are cached and revalidated inside the News app over HTTP. The refresh schedule is built in apps/news-desktop/src/feed_refresh.rs (which feeds are due, how long to sleep; feed_refresh::tests); the News loop that runs it is not wired yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -2172,7 +2181,26 @@
    "status": "partial",
    "note": "The feed source list, offline reading and the top-stories widget timeline are built; the vendor's curated Today feed and its editorial sections are not.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed::tests"
+    }
+   ],
+   "ready_note": "News source list, offline reading list and the top-stories widget timeline (services::tests, wire::tests, feed::tests). n/a: the curated Today editorial feed is served by Apple's news service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsTransport.framework",
@@ -2454,9 +2482,18 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs",
    "status": "partial",
-   "note": "Notes are stored as one Markdown file per note with atomic writes, sorting, search and snippets; the reference's shared account model and sync are not built.",
+   "note": "Notes are stored as one Markdown file per note with atomic writes, sorting, search and snippets; tests in notes::store::tests. n/a: the reference's shared account model and sync run on Apple's account and cloud services.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::store::tests"
+    }
+   ],
+   "ready_note": "Notes store (notes::store::tests): one Markdown file per note with atomic writes, sorting, search and snippets. The reference's shared account model and sync are Apple account services, n/a for BifrOSt."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesSiriUI.framework",
@@ -2579,7 +2616,16 @@
    "status": "partial",
    "note": "The links to the pasteboard, widget timeline and search index are in system.rs; other service hooks of the reference's Notes UI are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::system::tests"
+    }
+   ],
+   "ready_note": "Notes system hooks (notes::system::tests): pasteboard copy as Markdown and rich text, the recent-notes widget timeline and the search index reload. Other reference service hooks are not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotificationCenterUI.framework",
@@ -2733,9 +2779,23 @@
    "doc": "",
    "bifrost": "springboard/updated/src/main.rs; springboard/src/shell/pacman_update.rs",
    "status": "partial",
-   "note": "The update agent in updated/src/main.rs runs background OS and app update checks, and pacman_update.rs runs system package upgrades. Not built: the reference software catalog (oneProduct.sucatalog) and the Rosetta translation update service, which has no use on Linux.",
+   "note": "The update agent in updated/src/main.rs runs background OS and app update checks, and pacman_update.rs runs system package upgrades. n/a: the reference software catalog (oneProduct.sucatalog) and the Rosetta translation update are Apple services with no Linux counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    }
+   ],
+   "ready_note": "Background OS and app update checks in the update agent (updated tests) and system package upgrades (shell::pacman_update::tests). n/a: the Apple software catalog and the Rosetta translation update, which has no use on Linux."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OAuth.framework",
@@ -2752,9 +2812,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/accounts.rs",
+   "bifrost": "springboard/sdk/src/accounts.rs; springboard/sdk/src/accounts.rs (oauth2_refresh_body, renewal_from_token_response)",
    "status": "partial",
-   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones.",
+   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing.",
    "rea": [],
    "method": "assessed"
   },
