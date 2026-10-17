@@ -540,7 +540,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/appkit-app-structure.json, docs/parity-matrix/data/appkit-graphics-printing.json, docs/parity-matrix/data/appkit-text.json, docs/parity-matrix/data/appkit-user-interactions.json, docs/parity-matrix/data/appkit-user-interface.json",
    "status": "partial",
-   "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json",
+   "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json Refreshed 2026-10-17 (graphics and printing area): Bezier paths, PDF access and the shell print sheet are covered. Still open: the page layout panel, NSImage drawing in the kit, the colour picker, the user accent colour, and the symbol catalogue.",
    "rea": [],
    "method": "assessed"
   },
@@ -1173,7 +1173,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/appkit-app-structure.json, docs/parity-matrix/data/appkit-graphics-printing.json, docs/parity-matrix/data/appkit-text.json, docs/parity-matrix/data/appkit-user-interactions.json, docs/parity-matrix/data/appkit-user-interface.json, docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
    "status": "partial",
-   "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json, foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests).",
+   "note": "from SDK matrix appkit-app-structure.json, appkit-graphics-printing.json, appkit-text.json, appkit-user-interactions.json, appkit-user-interface.json, foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (graphics and printing area): Bezier paths, PDF access and the shell print sheet are covered. Still open: the page layout panel, NSImage drawing in the kit, the colour picker, the user accent colour, and the symbol catalogue.",
    "rea": [],
    "method": "assessed"
   },
@@ -1215,7 +1215,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/colorsync.json",
    "status": "partial",
-   "note": "from SDK matrix colorsync.json Built 2026-10-17: ROMM RGB built-in profile (render icc_builtin::tests).",
+   "note": "from SDK matrix colorsync.json Built 2026-10-17: ROMM RGB built-in profile (render icc_builtin::tests). Refreshed 2026-10-17: profile-to-profile transform in springboard/sdk/src/colorsync.rs (tests colorsync::tests). Still open: profile creation and embedding, CMYK profiles, the hardware gamma ramp, and the PDF ICCBased path.",
    "rea": [],
    "method": "assessed"
   },
@@ -1990,7 +1990,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-motion.json",
    "status": "partial",
-   "note": "from SDK matrix core-motion.json",
+   "note": "from SDK matrix core-motion.json Refreshed 2026-10-17: the shell orientation feed is built (SensorFeed in springboard/src/shell/rotate.rs, not checked on hardware). Still open: an app-facing device-motion service, and the magnetometer, barometer, activity and pedometer readers.",
    "rea": [],
    "method": "assessed"
   },

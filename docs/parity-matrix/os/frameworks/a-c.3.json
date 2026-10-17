@@ -3942,7 +3942,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-motion.json",
    "status": "partial",
-   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer.",
+   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer. Refreshed 2026-10-17: the orientation feed is built (springboard/src/shell/rotate.rs). Still open: the app caller for device motion, and the magnetometer, barometer, activity recognition and pedometer readers.",
    "rea": [],
    "method": "assessed"
   },
@@ -3963,7 +3963,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-motion.json",
    "status": "partial",
-   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer.",
+   "note": "private framework, owner CoreMotion; from SDK matrix core-motion.json. Not ready: 9 of 14 owner features are partial: the app caller for device motion, the orientation feed, the magnetometer and barometer readers, activity recognition and the pedometer. Refreshed 2026-10-17: the orientation feed is built (springboard/src/shell/rotate.rs). Still open: the app caller for device motion, and the magnetometer, barometer, activity recognition and pedometer readers.",
    "rea": [],
    "method": "assessed"
   },

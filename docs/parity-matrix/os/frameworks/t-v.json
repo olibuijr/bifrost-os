@@ -450,7 +450,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/virtualization.json",
    "status": "partial",
-   "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge.",
+   "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge. Refreshed 2026-10-17 (virtualization area): the stale doc reference to docs/arch-vm.md is dropped from the data file (the doc is docs/arch-x86-vm.md). Still open: the guest SDK module with a launcher, a guest display view in a window, shared folders and clipboard, and guest audio and USB passthrough.",
    "rea": [],
    "method": "assessed"
   },

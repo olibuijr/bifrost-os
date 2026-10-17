@@ -574,7 +574,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/finder-sync.json",
    "status": "partial",
-   "note": "from SDK matrix finder-sync.json",
+   "note": "from SDK matrix finder-sync.json Refreshed 2026-10-17: no change in code. Still open: the file-manager extension point, the selection API for other apps, tag and attribute sharing, and the extension host.",
    "rea": [],
    "method": "assessed"
   },
@@ -616,7 +616,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
    "status": "partial",
-   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests).",
+   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing (springboard/sdk/src/notification_queue.rs) and the item provider (springboard/sdk/src/item_provider.rs) exist. Still open: progress publishing across processes, the recovery attempter, the extension host, Handoff, and scripting.",
    "rea": [],
    "method": "assessed"
   },
@@ -5629,7 +5629,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/finder-sync.json",
    "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Refreshed 2026-10-17: no change in code. Still open: the file-manager extension point, the selection API for other apps, tag and attribute sharing, and the extension host.",
    "rea": [],
    "method": "assessed"
   },
@@ -6004,7 +6004,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
    "status": "partial",
-   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests).",
+   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing and the item provider exist. Still open: progress publishing, the recovery attempter, the extension host, Handoff, and scripting.",
    "rea": [],
    "method": "assessed"
   },

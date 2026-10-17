@@ -4,7 +4,7 @@
   "macos_since": "10.15",
   "status": "partial",
   "bifrost": "springboard/core/src/device_motion.rs, springboard/core/src/motion_manager.rs, springboard/sdk/src/sensors.rs, springboard/src/shell/rotate.rs (orientation consumer), springboard/render/src/gfx/rotate.rs (Orientation enum)",
-  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt has a shared model for raw accelerometer and gyroscope updates and for device motion (attitude, gravity, rotation rate), exposed to apps through the SDK. The sensor feed that drives screen orientation and the magnetometer, altitude, activity and pedometer readers are not wired yet.",
+  "summary": "Core Motion reports accelerometer, gyroscope, magnetometer, pedometer, altitude and activity data from device sensors. BifrOSt has a shared model for raw accelerometer and gyroscope updates and for device motion (attitude, gravity, rotation rate), exposed to apps through the SDK. The shell's sensor feed now drives screen orientation from device motion (built 2026-10-17, not yet checked on hardware). The magnetometer, altitude, activity and pedometer readers are not built; their models are re-exported by the SDK only.",
   "rea_evidence": "ev_51a71831ac23446ada95e1b098049a910caee7a9704e07103908e3b63269cfe2",
   "features": [
     {
@@ -12,14 +12,14 @@
       "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame",
       "bifrost": "springboard/core/src/device_motion.rs (DeviceMotionManager), springboard/core/src/motion.rs (MotionEstimator), springboard/core/src/sensor_log.rs, springboard/sdk/src/sensors.rs",
       "status": "partial",
-      "note": "built on parity/team-j-core-motion; not yet verified on Midget. DeviceMotionManager starts and stops updates, sets the interval and delivers attitude, gravity, user acceleration and rotation rate, fed by the accelerometer and gyroscope readings through SensorSource. The attitude frame is arbitrary (no magnetometer). The shell does not read it yet. Built 2026-10-17: Built 2026-10-17: the shell is now a device-motion caller: SensorFeed (springboard/src/shell/rotate.rs) runs DeviceMotionManager on the kernel sensors every shell tick and reads the gravity from it for the orientation. Apps still have no device-motion call (the SDK wrapper is not wired to a shell service)."
+      "note": "built on parity/team-j-core-motion; not yet verified on Midget. DeviceMotionManager starts and stops updates, sets the interval and delivers attitude, gravity, user acceleration and rotation rate, fed by the accelerometer and gyroscope readings through SensorSource. The attitude frame is arbitrary (no magnetometer). The shell does not read it yet. Built 2026-10-17: the shell is now a device-motion caller: SensorFeed (springboard/src/shell/rotate.rs) runs DeviceMotionManager on the kernel sensors every shell tick and reads the gravity from it for the orientation. Apps still have no device-motion call (the SDK wrapper is not wired to a shell service)."
     },
     {
       "feature": "Device orientation (four-way)",
       "apple": "Derived from CMAccelerometerData or CMDeviceMotion by the app",
       "bifrost": "springboard/src/shell/rotate.rs (set_orientation, Rotation Lock), springboard/render/src/gfx/rotate.rs (Orientation)",
       "status": "partial",
-      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity (springboard/render/src/gfx/rotate.rs) classifies a gravity reading, but no in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests and an example), so the sensor reader is missing. Built 2026-10-17: Built 2026-10-17: the shell reads the gravity direction from its own device-motion client (SensorFeed in springboard/src/shell/rotate.rs, on the kernel sensor tree) every 200 ms and adopts the orientation it gives unless Rotation Lock holds it (sensor_tick, called from the shell tick); tests sensor_feed_tests and feed_step. On hardware without an accelerometer or gyroscope the feed stays idle, and the lab machine has none, so it is not checked on Midget."
+      "note": "The shell consumes Portrait, LandscapeLeft, LandscapeRight and PortraitUpsideDown with Rotation Lock. orientation_from_gravity (springboard/render/src/gfx/rotate.rs) classifies a gravity reading, but no in-repo code feeds set_orientation from a sensor (set_orientation has callers only in rotate.rs tests and an example), so the sensor reader is missing. Built 2026-10-17: the shell reads the gravity direction from its own device-motion client (SensorFeed in springboard/src/shell/rotate.rs, on the kernel sensor tree) every 200 ms and adopts the orientation it gives unless Rotation Lock holds it (sensor_tick, called from the shell tick); tests sensor_feed_tests and feed_step. On hardware without an accelerometer or gyroscope the feed stays idle, and the lab machine has none, so it is not checked on Midget."
     },
     {
       "feature": "Raw accelerometer events",
@@ -40,14 +40,14 @@
       "apple": "CMMagnetometerData",
       "bifrost": "springboard/core/src/magnetometer.rs; springboard/sdk/src/sensors.rs over springboard/core/src/magnetometer.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No magnetometer reader or SDK API found. round 75, host only: SDK path; no reader."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Refreshed 2026-10-17: the SDK re-exports the model (sdk/src/sensors.rs, tests sensors::tests); no magnetometer reader exists. round 75, host only: SDK path; no reader."
     },
     {
       "feature": "Altitude and ambient pressure",
       "apple": "CMAltimeter, CMAltitudeData, CMAbsoluteAltitudeData, CMAmbientPressureData, CMRecordedPressureData",
       "bifrost": "springboard/core/src/altitude.rs; springboard/sdk/src/sensors.rs over springboard/core/src/altitude.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No barometer or altitude API. Desktop hardware rarely has these sensors. round 75, host only: SDK path; no barometer reader."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Refreshed 2026-10-17: the SDK re-exports the model (sdk/src/sensors.rs, tests sensors::tests); no barometer reader exists. Desktop hardware rarely has these sensors. round 75, host only: SDK path; no barometer reader."
     },
     {
       "feature": "Recorded sensor data and batched history",
@@ -61,14 +61,14 @@
       "apple": "CMMotionActivityManager, CMMotionActivity, CMHeadphoneActivityManager",
       "bifrost": "springboard/core/src/motion_activity.rs; springboard/sdk/src/sensors.rs over springboard/core/src/motion_activity.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No activity recognition API. round 75, host only: SDK path; no sensor feed."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Refreshed 2026-10-17: the SDK re-exports the model (sdk/src/sensors.rs, tests sensors::tests); no sensor feed exists. round 75, host only: SDK path; no sensor feed."
     },
     {
       "feature": "Pedometer, step counter and odometer",
       "apple": "CMPedometer, CMPedometerData, CMPedometerEvent, CMStepCounter, CMOdometerData",
       "bifrost": "springboard/core/src/pedometer.rs; springboard/sdk/src/sensors.rs over springboard/core/src/pedometer.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No step or pedometer data. Desktop PCs are not carried by users, so this is low priority. round 75, host only: SDK path; no sensor feed."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Refreshed 2026-10-17: the SDK re-exports the model (sdk/src/sensors.rs, tests sensors::tests); no step data source exists. Desktop PCs are not carried by users, so this is low priority. round 75, host only: SDK path; no sensor feed."
     },
     {
       "feature": "Heart rate data (1 Hz)",
@@ -107,8 +107,7 @@
     }
   ],
   "gaps": [
-    "No app-facing API for device motion on the shell side: DeviceMotionManager is in springboard/core/src/device_motion.rs and the SDK re-exports it, but no app or shell caller uses it yet.",
-    "The orientation feed is missing from this repo: springboard/src/shell/rotate.rs documents set_orientation as fed by the accelerometer every 200 ms, but no non-test caller exists here.",
+    "No app-facing service for device motion: the SDK re-exports DeviceMotionManager and the shell's SensorFeed (springboard/src/shell/rotate.rs) uses it, but no app reads device motion through a shell service.",
     "No magnetometer, barometer or altitude readers.",
     "No motion-activity recognition, pedometer or sensor recording or history."
   ]
