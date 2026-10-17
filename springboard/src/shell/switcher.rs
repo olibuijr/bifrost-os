@@ -262,6 +262,12 @@ impl Shell {
             AppId::Deildu => self.deildu = None,
             AppId::Files => self.files = None,
             AppId::External(n) => self.ext_close(n as usize),
+            // an extra window closes through its app's table, the app keeps running (WindowClosed)
+            AppId::ExternalWindow(n, id) => {
+                if let Some(Some(h)) = self.ext.get_mut(n as usize) {
+                    h.close_window_from_shell(u32::from(id));
+                }
+            }
             AppId::AppStore => self.store = None,
             AppId::Browser => {
                 if let Some(mut b) = self.browser.take() {

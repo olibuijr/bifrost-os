@@ -5,7 +5,8 @@
 //! The table keeps each app's windows front to back, so focusing one raises it to the front of that app. Window ids
 //! are the app's own: the shell checks that an id is not already open for the app, and it never invents one.
 //!
-//! Not drawn yet: the desk does not read this table. The module is the model the desk will use.
+//! The desk follows the table: `desk_changes` says which windows to open or close on the desk, and `menu_items` is
+//! what the Window menu and the Dock's app menu list for the frontmost app.
 #![cfg_attr(not(test), allow(dead_code))]
 
 /// The most extra windows one app may have open in the shell.
@@ -116,6 +117,21 @@ impl WindowTable {
         self.windows.iter().filter(|x| x.app == app).collect()
     }
 
+    /// The Window menu and the Dock's app menu list one app's extra windows: their ids and titles, front to back.
+    pub fn menu_items(&self, app: &str) -> Vec<(u32, String)> {
+        self.of_app(app).iter().map(|w| (w.id, w.title.clone())).collect()
+    }
+
+    /// What the desk must change so its windows of `app` match the table: the ids to open (in the table, not yet on
+    /// the desk, front to back) and the ids to close (on the desk, gone from the table). `shown` is the ids the desk
+    /// draws for the app now.
+    pub fn desk_changes(&self, app: &str, shown: &[u32]) -> (Vec<u32>, Vec<u32>) {
+        let wanted: Vec<u32> = self.of_app(app).iter().map(|w| w.id).collect();
+        let open = wanted.iter().copied().filter(|id| !shown.contains(id)).collect();
+        let close = shown.iter().copied().filter(|id| !wanted.contains(id)).collect();
+        (open, close)
+    }
+
     fn index_of(&self, app: &str, id: u32) -> Option<usize> {
         self.windows.iter().position(|x| x.app == app && x.id == id)
     }
@@ -203,5 +219,35 @@ mod tests {
         assert!(t.focus("a", 1));
         assert_eq!(ids(&t, "a"), vec![1, 2]);
         assert!(!t.focus("a", 9));
+    }
+
+    #[test]
+    fn the_window_menu_lists_the_apps_windows_front_to_back() {
+        let mut t = WindowTable::new();
+        t.open("a", 1, "Ada", 10.0, 10.0).unwrap();
+        t.open("a", 2, "Grace", 10.0, 10.0).unwrap();
+        t.open("b", 5, "other", 10.0, 10.0).unwrap();
+        assert_eq!(t.menu_items("a"), vec![(2, "Grace".to_string()), (1, "Ada".to_string())]);
+        assert!(t.menu_items("c").is_empty());
+        assert!(t.focus("a", 1));
+        assert_eq!(t.menu_items("a")[0], (1, "Ada".to_string()), "focusing one moves it to the top of the menu");
+    }
+
+    #[test]
+    fn the_desk_opens_and_closes_windows_to_follow_the_table() {
+        let mut t = WindowTable::new();
+        t.open("a", 1, "Ada", 10.0, 10.0).unwrap();
+        t.open("a", 2, "Grace", 10.0, 10.0).unwrap();
+        // nothing on the desk yet: both windows open, the newest first
+        assert_eq!(t.desk_changes("a", &[]), (vec![2, 1], vec![]));
+        // the desk already shows window 1: only 2 opens
+        assert_eq!(t.desk_changes("a", &[1]), (vec![2], vec![]));
+        // the app closed window 2 and the desk still shows it: it is closed on the desk
+        t.close("a", 2);
+        assert_eq!(t.desk_changes("a", &[1, 2]), (vec![], vec![2]));
+        // in sync: nothing to do
+        assert_eq!(t.desk_changes("a", &[1]), (vec![], vec![]));
+        // another app's windows are not the desk's concern
+        assert_eq!(t.desk_changes("b", &[1]), (vec![], vec![1]));
     }
 }

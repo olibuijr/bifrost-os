@@ -297,6 +297,8 @@ pub fn full_size(app: AppId) -> bool {
     match app {
         AppId::Settings => true,
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
+        // an extra window keeps its title bar: the app's full-size content is for its main window
+        AppId::ExternalWindow(..) => false,
         _ => false,
     }
 }

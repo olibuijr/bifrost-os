@@ -3988,7 +3988,7 @@ impl Shell {
                 }
                 None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),
             },
-            AppId::External(n) => self.ext_draw(s, n as usize, t),
+            AppId::External(n) | AppId::ExternalWindow(n, _) => self.ext_draw(s, n as usize, t),
             AppId::AppStore => match &mut self.store {
                 Some(c) => c.draw(s, &self.ui, t),
                 None => s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, BLACK),

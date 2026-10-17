@@ -15,6 +15,45 @@ pub enum AppId {
     AppStore,
     /// an installed app (see `apphost`): the index into `apphost::installed()`
     External(u8),
+    /// an extra window of an installed app: the app's slot, then the window id the app chose (see `app_window_table`).
+    /// The desk treats it as a window of its own; the parent app's semantics apply everywhere else.
+    ExternalWindow(u8, u16),
+}
+
+impl AppId {
+    /// The app this window belongs to: an extra window's parent is `External(slot)`; every other id is its own parent.
+    pub fn parent(self) -> AppId {
+        match self {
+            AppId::ExternalWindow(slot, _) => AppId::External(slot),
+            other => other,
+        }
+    }
+
+    /// True for an extra window (`ExternalWindow`), false for an app's main window or a built-in app.
+    pub fn is_extra_window(self) -> bool {
+        matches!(self, AppId::ExternalWindow(..))
+    }
+
+    /// The slot of the installed app an extra window belongs to.
+    pub fn window_slot(self) -> Option<u8> {
+        match self {
+            AppId::ExternalWindow(slot, _) => Some(slot),
+            _ => None,
+        }
+    }
+
+    /// The app's own id of an extra window (`WindowOpen { id }`), as the desk keys it.
+    pub fn window_id(self) -> Option<u16> {
+        match self {
+            AppId::ExternalWindow(_, id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// The extra window `id` of the installed app in `slot`.
+    pub fn extra_window(slot: u8, id: u16) -> AppId {
+        AppId::ExternalWindow(slot, id)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -137,6 +176,22 @@ mod tests {
             assert_eq!((img.w, img.h, img.px.len()), (size, size, size * size));
         }
         assert!(APPS.iter().any(|a| a.id == AppId::Terminal && a.icon_image.is_some()));
+    }
+
+    #[test]
+    fn an_extra_window_belongs_to_its_app_and_is_its_own_desk_key() {
+        let w = AppId::ExternalWindow(2, 7);
+        assert_eq!(w.parent(), AppId::External(2));
+        assert_eq!(AppId::External(2).parent(), AppId::External(2));
+        assert_eq!(AppId::Files.parent(), AppId::Files);
+        assert!(w.is_extra_window() && !AppId::External(2).is_extra_window());
+        assert_eq!((w.window_slot(), w.window_id()), (Some(2), Some(7)));
+        assert_eq!((AppId::External(2).window_slot(), AppId::External(2).window_id()), (None, None));
+        assert_eq!(AppId::extra_window(2, 7), w);
+        // two windows of one app are two desk keys; the same id in another app is another key
+        assert_ne!(AppId::extra_window(2, 7), AppId::extra_window(2, 8));
+        assert_ne!(AppId::extra_window(2, 7), AppId::extra_window(3, 7));
+        assert_ne!(w, AppId::External(2), "a window is not the main window of its app");
     }
 
     #[test]
