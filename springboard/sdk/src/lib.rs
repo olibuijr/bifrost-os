@@ -71,6 +71,8 @@ pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
 pub mod accessibility_rotor;
+pub mod accessibility_audit;
+pub mod av_capture_session;
 pub mod guided_access;
 pub mod defaults;
 pub mod font_descriptor;
@@ -516,6 +518,7 @@ pub mod file_wrapper;
 pub mod bookmark;
 pub mod metadata_query;
 pub mod file_stat;
+pub mod core_media_time;
 pub mod file_descriptor;
 /// The system error numbers an app can match on (`Errno::NOENT`, `Errno::from_io`), shared with the shell.
 pub mod errno {
