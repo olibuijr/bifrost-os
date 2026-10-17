@@ -101,7 +101,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (sdk/src/krb5_client.rs, tests krb5_client::tests), using the credential cache from gss_krb5. Not covered: the GSS context export and ticket cache copy.",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (krb5_client::tests), and FILE cache copy (krb5_client::tests). Gap: the GSS context export (gss_export_sec_context, lucid form) is not built.",
    "rea": [],
    "ready": true,
    "checks": [
@@ -116,7 +116,7 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "kinit and klist are run through the SDK and their output is parsed (krb5_client::tests). The GSS context export and cache copy are not covered."
+   "ready_note": "kinit, klist and FILE credential cache copy run through the SDK (krb5_client::tests). The GSS context export is still open."
   },
   {
    "id": "path:/System/Library/Frameworks/Kernel.framework",
@@ -177,7 +177,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/directory_query.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: directory nodes filled from ldapsearch (sdk/src/ldap_directory.rs, tests ldap_directory::tests). Simple anonymous binds only; base64 LDIF attributes are skipped.",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: simple binds with a password file that is never an argument (ldap_directory::tests), and base64 LDIF attributes and DNs are decoded.",
    "rea": [],
    "ready": true,
    "checks": [
@@ -192,7 +192,7 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "ldapsearch LDIF is parsed into directory records and loaded into a directory node (ldap_directory::tests). Authenticated binds and base64 attributes are not covered."
+   "ready_note": "ldapsearch LDIF is parsed into directory records, loaded into a directory node, and searched with simple binds or anonymously (ldap_directory::tests). SASL and TLS options are the tool's own configuration."
   },
   {
    "id": "path:/System/Library/Frameworks/LatentSemanticMapping.framework",
@@ -2068,9 +2068,23 @@
    "doc": "",
    "bifrost": "perf (Arch package, tools/parity/os_cli_packages.txt)",
    "status": "partial",
-   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget.",
+   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget. Built 2026-10-17: perf stat runs through the SDK with CSV counter parsing and unset counters as None (sdk perf_counters::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "perf_counters::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v perf",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "perf stat is run and its counter lines parsed through the SDK (perf_counters::tests). The perf probe on Midget is not verified."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ktrace.framework",
