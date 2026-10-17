@@ -648,11 +648,85 @@ pub fn renewal_from_token_response(body: &str, previous: &Credential, now: Syste
         return RenewOutcome::Failed;
     };
     let refresh_token = json.get("refresh_token").and_then(Json::as_str).filter(|t| !t.is_empty()).unwrap_or(old_refresh);
-    let lifetime = match json.get("expires_in") {
+    RenewOutcome::Renewed(Credential::oauth2(token, refresh_token, now + token_lifetime(&json)))
+}
+
+/// The `expires_in` seconds of a token answer as a lifetime; a missing or negative value is zero (due at once).
+fn token_lifetime(json: &Json) -> Duration {
+    match json.get("expires_in") {
         Some(Json::Num(secs)) if *secs >= 0.0 => Duration::from_secs(*secs as u64),
         _ => Duration::ZERO,
-    };
-    RenewOutcome::Renewed(Credential::oauth2(token, refresh_token, now + lifetime))
+    }
+}
+
+/// Reads a token endpoint's answer to [`oauth2_code_body`] into the first OAuth 2 credential of a sign-in. The
+/// `access_token` is required; a `refresh_token` the provider omits is stored empty, and `expires_in` counts from `now`.
+/// `None` when the body is not JSON or carries no access token.
+pub fn credential_from_token_response(body: &str, now: SystemTime) -> Option<Credential> {
+    let json = bifrost_core::json::parse(body).ok()?;
+    let token = json.get("access_token").and_then(Json::as_str).filter(|t| !t.is_empty())?;
+    let refresh_token = json.get("refresh_token").and_then(Json::as_str).unwrap_or("");
+    Some(Credential::oauth2(token, refresh_token, now + token_lifetime(&json)))
+}
+
+/// The outcome of the browser redirect that carries the authorization code back to the app.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RedirectOutcome {
+    /// The code to pass to [`oauth2_code_body`].
+    Code(String),
+    /// The provider refused the sign-in; the value is its `error` (for example `access_denied`).
+    Denied(String),
+    /// The `state` on the redirect is not the one the app sent, so the redirect is not for this sign-in.
+    StateMismatch,
+    /// The redirect has neither a code nor an error.
+    Missing,
+}
+
+/// Reads the redirect URL the browser returned to `redirect_uri` (RFC 6749, section 4.1.2). The `state` is checked
+/// before anything else is trusted, so a redirect from another sign-in never yields a code. Values are form-decoded.
+pub fn oauth2_redirect(url: &str, expected_state: &str) -> RedirectOutcome {
+    let query = url.split('#').next().unwrap_or("").split_once('?').map(|(_, q)| q).unwrap_or("");
+    let (mut code, mut state, mut error) = (None, None, None);
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let slot = match key {
+            "code" => &mut code,
+            "state" => &mut state,
+            "error" => &mut error,
+            _ => continue,
+        };
+        *slot = form_decode(value);
+    }
+    if state.as_deref() != Some(expected_state) {
+        return RedirectOutcome::StateMismatch;
+    }
+    if let Some(error) = error.filter(|e| !e.is_empty()) {
+        return RedirectOutcome::Denied(error);
+    }
+    match code.filter(|c| !c.is_empty()) {
+        Some(code) => RedirectOutcome::Code(code),
+        None => RedirectOutcome::Missing,
+    }
+}
+
+/// Decodes one form value: `+` is a space and `%XX` is a byte. `None` for a malformed escape or non-UTF-8 bytes.
+fn form_decode(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => out.push(b' '),
+            b'%' => {
+                let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
+                out.push(u8::from_str_radix(hex, 16).ok()?);
+                i += 2;
+            }
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8(out).ok()
 }
 
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
@@ -1261,5 +1335,31 @@ mod tests {
         assert_eq!(store.renew_credentials(&bare, RenewOutcome::Failed), Err(AccountError::CredentialNotFound));
         store.set_access("mail.example", false).unwrap();
         assert_eq!(store.renew_credentials(&id, RenewOutcome::Failed), Err(AccountError::PermissionDenied));
+    }
+
+    #[test]
+    fn the_first_tokens_come_from_the_code_exchange_answer() {
+        let full = r#"{"access_token":"acc","refresh_token":"ref","expires_in":3600}"#;
+        assert_eq!(credential_from_token_response(full, at(1_000)), Some(Credential::oauth2("acc", "ref", at(4_600))));
+        let no_refresh = r#"{"access_token":"acc"}"#;
+        assert_eq!(credential_from_token_response(no_refresh, at(1_000)), Some(Credential::oauth2("acc", "", at(1_000))));
+        assert_eq!(credential_from_token_response(r#"{"error":"invalid_grant"}"#, at(0)), None);
+        assert_eq!(credential_from_token_response(r#"{"access_token":""}"#, at(0)), None);
+        assert_eq!(credential_from_token_response("<html>", at(0)), None);
+    }
+
+    #[test]
+    fn the_redirect_gives_the_code_only_for_the_state_that_was_sent() {
+        let ok = "https://app.example/cb?state=s1&code=a%2Bb+c";
+        assert_eq!(oauth2_redirect(ok, "s1"), RedirectOutcome::Code("a+b c".into()));
+        assert_eq!(oauth2_redirect(ok, "s2"), RedirectOutcome::StateMismatch);
+        let forged = "https://app.example/cb?code=x";
+        assert_eq!(oauth2_redirect(forged, "s1"), RedirectOutcome::StateMismatch);
+        let denied = "https://app.example/cb?state=s1&error=access_denied";
+        assert_eq!(oauth2_redirect(denied, "s1"), RedirectOutcome::Denied("access_denied".into()));
+        let empty = "https://app.example/cb?state=s1";
+        assert_eq!(oauth2_redirect(empty, "s1"), RedirectOutcome::Missing);
+        let bad_escape = "https://app.example/cb?state=s1&code=%zz";
+        assert_eq!(oauth2_redirect(bad_escape, "s1"), RedirectOutcome::Missing);
     }
 }
