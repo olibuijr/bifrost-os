@@ -1,8 +1,9 @@
 //! OpenType `SVG ` table index: which SVG document draws which glyph ids.
 //!
 //! The table holds a list of records. Each record covers a glyph id range (`start..=end`) and points at one SVG
-//! document, which may be gzip-compressed. This module only reads that index and hands back the document bytes. It
-//! does not decompress or rasterise them, so colour glyphs are not drawn yet.
+//! document, which may be gzip-compressed. This module reads that index, gunzips the document
+//! ([`SvgTable::document_text_for`]), cuts out one glyph's markup ([`glyph_markup`]) and draws it with the SVG reader
+//! ([`SvgTable::rasterize_glyph`]). The text engine does not call `rasterize_glyph` yet.
 
 /// One record of the SVG document list: a glyph id range and the byte range of its document in the table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
