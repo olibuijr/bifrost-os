@@ -5,8 +5,12 @@
 //! directory (`FILE`), so the recents and favourites survive a restart.
 use std::path::Path;
 
+//! the front; the system menu shows the newest ones and Clear Menu empties them. The list is kept across restarts in
+//! `<root>/recent-apps.txt` (see [`encode`] and [`save`]): each launch and each Clear Menu rewrites the file.
 use super::apps::{apps, AppId};
-use bifrost_ui::shared_list::SharedList;
+use bifrost_ui::shared_list::{Item, SharedList};
+use std::io;
+use std::path::{Path, PathBuf};
 
 /// Recents kept in the list.
 pub const CAPACITY: usize = 10;
@@ -33,6 +37,79 @@ pub fn save(dir: &Path, list: &SharedList) -> std::io::Result<()> {
     let tmp = dir.join(format!("{FILE}.tmp"));
     std::fs::write(&tmp, bifrost_ui::shared_list_store::encode(list))?;
     std::fs::rename(&tmp, dir.join(FILE))
+}
+
+/// The file the recent apps are kept in.
+pub fn path() -> PathBuf {
+    super::apphost::root().join("recent-apps.txt")
+}
+
+/// The list the shell starts with: the saved one, or an empty list when nothing is saved or the file cannot be read.
+/// Tests start empty and keep no file, so they never depend on the machine's saved list.
+pub fn initial() -> SharedList {
+    if cfg!(test) {
+        new()
+    } else {
+        load(&path())
+    }
+}
+
+/// Writes the list to the shell's file. Tests write nothing.
+fn persist(list: &SharedList) {
+    if !cfg!(test) {
+        let _ = save(&path(), list);
+    }
+}
+
+/// Encodes a list, one line per entry in recency order: `F` for a favourite or `R` for a recent, a tab, the key, a tab
+/// and the title. Tabs and line breaks inside a key or title become spaces.
+pub fn encode(list: &SharedList) -> String {
+    let mut out = String::new();
+    for item in list.in_recency_order() {
+        let mark = if item.favourite { 'F' } else { 'R' };
+        out.push_str(&format!("{mark}\t{}\t{}\n", clean(&item.key), clean(&item.title)));
+    }
+    out
+}
+
+/// Decodes a list written by [`encode`]. A line that does not parse is skipped, a repeated key is dropped, and recents
+/// over `CAPACITY` are trimmed.
+pub fn decode(text: &str) -> SharedList {
+    let items: Vec<Item> = text
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '\t');
+            let favourite = match parts.next()? {
+                "F" => true,
+                "R" => false,
+                _ => return None,
+            };
+            let key = parts.next()?;
+            let title = parts.next()?;
+            Some(Item { key: key.to_string(), title: title.to_string(), favourite })
+        })
+        .collect();
+    SharedList::from_recency_order(CAPACITY, items)
+}
+
+fn clean(text: &str) -> String {
+    text.chars().map(|c| if matches!(c, '\t' | '\n' | '\r') { ' ' } else { c }).collect()
+}
+
+/// Writes the list to `path` atomically, creating the folder when it is missing.
+pub fn save(path: &Path, list: &SharedList) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    bifrost_core::fsutil::write_atomic(path, encode(list))
+}
+
+/// Reads the list at `path`. A missing or unreadable file gives an empty list.
+pub fn load(path: &Path) -> SharedList {
+    match std::fs::read_to_string(path) {
+        Ok(text) => decode(&text),
+        Err(_) => new(),
+    }
 }
 
 /// The key an app is stored under: the debug form of its `AppId`, unique per catalogue entry.
@@ -89,6 +166,7 @@ impl super::Shell {
                 eprintln!("springboard: recent items: {e}");
             }
         }
+        persist(&self.recent_list);
     }
 
     /// The titles listed in the system menu, newest first, at most `SHOWN`.
@@ -108,6 +186,7 @@ impl super::Shell {
     pub(super) fn recent_clear(&mut self) {
         self.recent_list.clear_recents();
         self.recent_persist();
+        persist(&self.recent_list);
     }
 }
 
@@ -214,5 +293,50 @@ mod tests {
         let rows = sh.menu_row_texts(Menu::System);
         assert_eq!(rows[at..at + 2].to_vec(), vec!["Recent Items", "Clear Menu"]);
         assert!(sh.recent_app_at(0).is_none());
+    }
+
+    #[test]
+    fn the_list_round_trips_through_its_file_format_in_recency_order() {
+        let mut list = new();
+        note(&mut list, AppId::Settings);
+        note(&mut list, AppId::Terminal);
+        set_favourite(&mut list, AppId::Settings, true);
+        let text = encode(&list);
+        assert_eq!(text.lines().count(), 2);
+        assert!(text.starts_with("R\t"), "the newest recent comes first");
+        let back = decode(&text);
+        assert_eq!(back.in_recency_order(), list.in_recency_order());
+        assert_eq!(favourite_apps(&back), vec![AppId::Settings]);
+        assert_eq!(app_at(&back, 1), Some(AppId::Terminal), "favourites are listed before recents");
+    }
+
+    #[test]
+    fn a_damaged_line_is_skipped_and_a_repeated_key_is_dropped() {
+        let text = "R\tSettings\tSettings\nX\tbroken\tline\nR\tSettings\tAgain\nF\tTerminal\tTerm\nR\tcut\n";
+        let list = decode(text);
+        let keys: Vec<&str> = list.in_recency_order().iter().map(|i| i.key.as_str()).collect();
+        assert_eq!(keys, vec!["Settings", "Terminal"]);
+        assert!(list.in_recency_order()[1].favourite);
+    }
+
+    #[test]
+    fn tabs_and_line_breaks_in_a_title_cannot_split_a_record() {
+        let mut list = new();
+        list.add("Notes", "Two\tline\ntitle");
+        let text = encode(&list);
+        assert_eq!(text.lines().count(), 1);
+        assert_eq!(decode(&text).in_recency_order()[0].title, "Two line title");
+    }
+
+    #[test]
+    fn save_writes_the_file_and_load_reads_it_back_or_starts_empty() {
+        let dir = std::env::temp_dir().join(format!("bifrost-recent-apps-{}", std::process::id()));
+        let path = dir.join("recent-apps.txt");
+        assert!(load(&path).is_empty(), "a missing file starts empty");
+        let mut list = new();
+        note(&mut list, AppId::Settings);
+        save(&path, &list).unwrap();
+        assert_eq!(load(&path).in_recency_order(), list.in_recency_order());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
