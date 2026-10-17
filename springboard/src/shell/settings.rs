@@ -683,6 +683,13 @@ impl Settings {
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
+            PageId::AppPanes(slot) => super::settings_panes::spec(slot),
+            PageId::Root => {
+                // the root lists the apps that declare settings panes after the built-in groups
+                let mut s = spec(id, &self.model());
+                s.groups.extend(super::settings_panes::root_groups());
+                s
+            }
             PageId::LocationServices => super::location_page::spec(&self.location, super::services::location::now_unix()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value }),
             _ => spec(id, &self.model()),
@@ -2340,6 +2347,13 @@ impl Settings {
             Action::Assistant(edit) => {
                 let _ = super::assistant_page::apply(prefs, &edit);
                 self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::AppPane(slot, pane) => {
+                // the app opens the pane in its own window; a refusal is logged and leaves Settings as it is
+                if let Err(e) = super::settings_panes::open(slot, &pane) {
+                    eprintln!("springboard: settings pane {pane}: {e}");
+                }
                 vec![]
             }
             Action::BackgroundAgentToggle(id) => {

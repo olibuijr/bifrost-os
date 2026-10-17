@@ -3032,11 +3032,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_panes.rs",
+   "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs",
    "status": "partial",
-   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Still open: the Settings list does not yet draw these panes under the app, and the pane is not opened in the app.",
+   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Built 2026-10-17: Settings root lists each app that declares panes, its page lists the panes, and picking one sends ae.settings.openPane over the control socket (shell/settings_panes.rs, tests settings_panes::tests; the SDK handler is sdk/src/settings_panes.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_panes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "settings_panes::tests"
+    }
+   ],
+   "ready_note": "Settings pane registration: the manifest tables, the Settings rows and page, and the SDK open handler are tested. The Settings page is not yet drawn on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SettingsHostUI.framework",
