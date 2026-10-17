@@ -8,6 +8,7 @@
 //! Differences from the reference: the bars swipe alternates the direction of each bar instead of
 //! using the reference bar timing, and the copy machine's light band is linear in distance.
 use crate::colorfx::{self, Rgb};
+use crate::distortion_filters::sample;
 use crate::gfx::Image;
 
 /// The sweep frame of a `w` by `h` image turned by `angle`: the direction (dx, dy), the centre, and
@@ -175,6 +176,37 @@ pub fn mod_reveal(from: &Image, to: &Image, time: f32, center: (f32, f32), lobes
     }))
 }
 
+/// `CIPageCurlTransition`: a page turns over a fold line across the image, perpendicular to `angle`.
+/// Behind the fold the page has turned, so the picture is `to`; ahead of it the picture is still
+/// `from`. While the page is mid-turn (0 < `time` < 1), the `curl` pixels just ahead of the fold are
+/// lifted, and that band shows `from` reflected across the fold, with transparent black where the
+/// reflection falls off the picture. `None` when the sizes differ, `angle` is not finite, or `curl`
+/// is negative or not finite.
+pub fn page_curl(from: &Image, to: &Image, time: f32, angle: f32, curl: f32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !angle.is_finite() || !curl.is_finite() || curl < 0.0 {
+        return None;
+    }
+    let sw = Sweep::new(from.w, from.h, angle);
+    let t = time_of(time);
+    let front = t * sw.along_len;
+    let lifting = t > 0.0 && t < 1.0;
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let s = sw.along(x, y);
+        if s < front {
+            return b;
+        }
+        let lift = s - front;
+        if lifting && lift < curl {
+            let (px, py) = (x as f32 + 0.5 - 2.0 * lift * sw.dx, y as f32 + 0.5 - 2.0 * lift * sw.dy);
+            sample(from, px, py)
+        } else {
+            a
+        }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +285,24 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn page_curl_without_curl_is_a_plain_swipe_and_ends_on_to() {
+        let (a, b) = (flat(8, 1, BLACK), flat(8, 1, GREY));
+        assert_eq!(page_curl(&a, &b, 0.5, 0.0, 0.0), swipe(&a, &b, 0.5, 0.0));
+        assert_eq!(page_curl(&a, &b, 0.0, 0.0, 3.0).unwrap(), a);
+        assert_eq!(page_curl(&a, &b, 1.0, 0.0, 3.0).unwrap(), b);
+    }
+
+    #[test]
+    fn the_lifted_page_shows_the_source_reflected_across_the_fold() {
+        let from = Image { w: 8, h: 1, px: (0..8u32).map(|i| (i * 16) | 0xff00_0000).collect() };
+        let to = flat(8, 1, GREY);
+        let out = page_curl(&from, &to, 0.5, 0.0, 3.0).unwrap();
+        // The fold is at x = 4. Pixel 4 is 0.5 ahead of it, so it shows from's pixel 3, its mirror image.
+        assert_eq!(out.px[4], from.px[3]);
+        assert_eq!(out.px[0], GREY, "behind the fold shows to");
     }
 
     #[test]
