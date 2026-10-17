@@ -125,6 +125,7 @@ mod auth_sheet;
 mod volume_sheet;
 mod account_access_sheet;
 mod usb_sheet;
+mod network_auth_sheet;
 pub mod options;
 pub mod gamemode;
 pub mod game_priority;
@@ -788,6 +789,8 @@ pub struct Shell {
     /// the USB accessory approval: the bus watcher with its saved answers, and the sheet that asks (see `usb_sheet.rs`)
     usb_watch: usb_sheet::Watch,
     usb_sheet: Option<usb_sheet::UsbSheet>,
+    /// the login sheet for a share or an 802.1X network an app asked the `network_auth` service about (see `network_auth_sheet.rs`)
+    net_auth_sheet: Option<network_auth_sheet::NetAuthSheet>,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
     crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
@@ -1119,6 +1122,7 @@ impl Shell {
             access_sheet: None,
             usb_watch: usb_sheet::Watch::default(),
             usb_sheet: None,
+            net_auth_sheet: None,
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
@@ -1557,6 +1561,12 @@ impl Shell {
         if self.access_showing() {
             let t = self.auth_clock;
             self.access_touch(x, y, matches!(ev, Event::Up(..)), t);
+            return Some(vec![]);
+        }
+        // the network login sheet takes every touch while it is up
+        if self.net_auth_showing() {
+            let t = self.auth_clock;
+            self.net_auth_touch(x, y, matches!(ev, Event::Up(..)), t);
             return Some(vec![]);
         }
         // the USB accessory sheet takes every touch while it is up
@@ -3582,6 +3592,7 @@ impl Shell {
         self.volume_tick(t);
         self.access_tick();
         self.usb_tick(t);
+        self.net_auth_tick(t);
         self.usernotif_ask_tick(t);
         // app requests for the Bluetooth radio (services/bluetooth_service.rs)
         effects.extend(services::bluetooth_service::take_commands().into_iter().map(Effect::Bluetooth));
@@ -3985,7 +3996,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.usb_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.auth_showing() || self.volume_showing() || self.access_showing() || self.usb_showing() || self.net_auth_showing() || self.guardian_sheet.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -4015,6 +4026,9 @@ impl Shell {
             }
             if self.usb_showing() {
                 self.usb_draw(s);
+            }
+            if self.net_auth_showing() {
+                self.net_auth_draw(s, t);
             }
             if let Some(a) = &self.crash_alert {
                 a.draw(s, &self.ui, self.w, self.h);
@@ -4061,7 +4075,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.usb_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.usb_showing() && !self.net_auth_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }
@@ -4082,7 +4096,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.usb_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && !self.auth_showing() && !self.volume_showing() && !self.access_showing() && !self.usb_showing() && !self.net_auth_showing() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage() && self.guardian_sheet.is_none();
         if !quiet {
             return None;
         }

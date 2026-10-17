@@ -659,6 +659,11 @@ impl Shell {
             self.volume_type(out, t);
             return vec![];
         }
+        // the network login sheet takes the typing for its fields
+        if self.net_auth_showing() {
+            self.net_auth_type(out, t);
+            return vec![];
+        }
         // the account access sheet takes touches only: typing waits for the answer
         if self.access_showing() || self.usb_showing() {
             return vec![];

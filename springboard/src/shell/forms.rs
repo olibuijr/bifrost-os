@@ -47,6 +47,9 @@ pub enum Purpose {
     AppAuthentication { app: String },
     /// the passphrase of a locked encrypted volume (the sheet is `volume_sheet.rs`); it goes to privd's unlock and is never kept
     VolumeUnlock { device: String },
+    /// the user name (`password` false) or the password (true) a share or an 802.1X network asked for through the
+    /// `network_auth` service (the sheet is `network_auth_sheet.rs`); the answer goes to the service and is saved only if asked
+    NetworkLogin { password: bool },
 }
 
 /// What the sheet shows.
@@ -229,6 +232,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::AccountEmail => crate::cloud_account::normalize_email(text).is_ok(),
         Purpose::AccountPassword { .. } => !text.is_empty(),
         Purpose::AppAuthentication { .. } | Purpose::VolumeUnlock { .. } => !text.is_empty(),
+        Purpose::NetworkLogin { .. } => crate::net_auth::valid_field(text),
         Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
         Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
         Purpose::BluetoothPairing { passkey: true, .. } => bifrost_core::bt_pairing::validate_passkey(text).is_ok(),
