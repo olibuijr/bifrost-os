@@ -207,11 +207,13 @@ fn unsupported_algorithms_are_named_in_every_buffer_and_stream_entry_point() {
 // ------------------------------------------------------------------ multiple-step streams
 
 #[test]
-fn a_compress_stream_returns_nothing_until_it_is_finalized() {
+fn a_compress_stream_returns_full_blocks_before_it_is_finalized() {
+    let data = pseudo_random(150_000, 17);
     let mut stream = Stream::init(FilterOperation::Compress, Algorithm::Zlib).unwrap();
-    assert!(stream.process(b"hello ", false).unwrap().is_empty());
-    let packed = stream.process(b"world", true).unwrap();
-    assert_eq!(compression::decode_buffer(Algorithm::Zlib, &packed).unwrap(), b"hello world".to_vec());
+    let mut packed = stream.process(&data, false).unwrap();
+    assert!(packed.len() > 100_000, "two full blocks come back without finalize, got {} bytes", packed.len());
+    packed.extend(stream.process(&[], true).unwrap());
+    assert_eq!(compression::decode_buffer(Algorithm::Zlib, &packed).unwrap(), data);
 }
 
 #[test]
@@ -219,10 +221,13 @@ fn a_decompress_stream_accepts_the_input_in_pieces() {
     let data = b"stream piece ".repeat(50);
     let packed = compression::encode_buffer(Algorithm::Zlib, &data).unwrap();
     let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Zlib).unwrap();
+    let mut out = Vec::new();
     for piece in packed[..packed.len() - 1].chunks(7) {
-        assert!(stream.process(piece, false).unwrap().is_empty());
+        out.extend(stream.process(piece, false).unwrap());
     }
-    let out = stream.process(&packed[packed.len() - 1..], true).unwrap();
+    // only the last byte of the Adler-32 trailer is missing, so all the data is already out
+    assert_eq!(out, data);
+    out.extend(stream.process(&packed[packed.len() - 1..], true).unwrap());
     assert_eq!(out, data);
 }
 
@@ -235,10 +240,9 @@ fn a_finalized_stream_refuses_more_input() {
 }
 
 #[test]
-fn a_decompress_stream_reports_bad_input_when_finalized() {
+fn a_decompress_stream_reports_bad_input_as_soon_as_it_arrives() {
     let mut stream = Stream::init(FilterOperation::Decompress, Algorithm::Zlib).unwrap();
-    assert!(stream.process(&[0x79, 0x9c], false).unwrap().is_empty());
-    assert_eq!(stream.process(&[], true), Err(Error::InvalidData));
+    assert_eq!(stream.process(&[0x79, 0x9c], false), Err(Error::InvalidData));
 }
 
 // ------------------------------------------------------------------ input and output filters
@@ -305,8 +309,9 @@ fn an_output_filter_delivers_the_result_in_chunks_of_the_capacity() {
         }
         filter.finalize().unwrap();
     }
+    // output is sent as it is decoded, so a write may send a short chunk; no chunk is longer than 7
     assert!(chunks.iter().all(|c| !c.is_empty() && c.len() <= 7));
-    assert_eq!(chunks.len(), (data.len() + 6) / 7);
+    assert!(chunks.len() >= (data.len() + 6) / 7);
     assert_eq!(chunks.concat(), data);
 }
 
@@ -337,7 +342,7 @@ fn an_output_filter_leaves_the_sink_untouched_when_the_data_is_invalid() {
     let mut calls = 0;
     {
         let mut filter = OutputFilter::new(FilterOperation::Decompress, Algorithm::Zlib, 8, |_: &[u8]| calls += 1).unwrap();
-        filter.write(&[0x79, 0x9c, 0x00]).unwrap();
+        assert_eq!(filter.write(&[0x79, 0x9c, 0x00]), Err(FilterError::InvalidData));
         assert_eq!(filter.finalize(), Err(FilterError::InvalidData));
     }
     assert_eq!(calls, 0);

@@ -3998,3 +3998,13 @@ double-click are not wired; the Dictionary, Mail, Calendar and Maps rows stay ga
 
 Apple parity: the reference toolkit gives each window a scene and a per-window delegate. Ours is one registry per app with the scene
 lifecycle left to `scene_session`, and no tabs yet (the Dictionary row asks for tabs too).
+
+## Compression streams and filters (`bifrost_app::compression`)
+
+- Encoder: `springboard/sdk/src/compression/dynamic.rs`. Lazy LZ77 at `Default` and `Best` (one byte of lookahead), greedy at `Fast`, over a 32 KiB window. Each block is dynamic Huffman, or stored when that is smaller. `Encoder` is the incremental form: it emits a block every 65535 bytes of input, and its output does not depend on how the input was split into writes. Still missing: no optimal parsing and no per-block tables shared across blocks.
+- Decoder: `springboard/sdk/src/compression/inflate_stream.rs`, a resumable state machine. It returns output as each symbol completes and rolls back a unit that needs more input. The Books engine keeps the whole-buffer `bifrost_render::cg::pdf::inflate`, which is unchanged.
+- `Stream::process` returns output before `finalize`. `InputFilter` asks its source for capacity-sized pieces only as far as the reader needs. `OutputFilter` sends output as each write completes it.
+- Errors: decode failures are reported by the call that sees them. The encode side fails only with `Unsupported` at init; writes after finalize report `Finished` or `InvalidState`.
+- LZ4 has no incremental codec here: its streams and filters buffer the input and run the one-shot `lz4` codec when they end.
+- Parity: the four `compression` rows (multiple-step streams, input and output filters, DEFLATE encoding, error reporting) stay `partial` until the tests run on Midget. Not yet: a flush call, and dynamic-table reuse across blocks.
+- Tests: `springboard/sdk/tests/parity_sdk-tests-20.rs` (compression section), plus inline tests in `compression.rs`, `compression/dynamic.rs` and `compression/inflate_stream.rs`. Not yet compiled or run in this round.
