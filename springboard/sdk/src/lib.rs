@@ -253,6 +253,8 @@ pub mod media_library;
 pub mod media_picker_view;
 /// Like, dislike, bookmark and rating for the Lock Screen and Control Center (`now_playing` service events).
 pub mod now_playing_feedback;
+/// Routes menu bar, Control Center and media key transport requests to the app's remote command handlers.
+pub mod remote_routing;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
