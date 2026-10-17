@@ -197,7 +197,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
    "status": "partial",
-   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Gap: installed app wallpapers are not listed on Settings > Wallpaper, which shows only the packed stills (springboard/src/shell/wallpaper_page.rs), and no extension runs to draw a wallpaper.",
+   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built since: wallpaper_types::listed and find give the installed apps' wallpapers as a list that Settings can read (tests wallpaper_types::tests). Gap: Settings > Wallpaper (springboard/src/shell/wallpaper_page.rs) still shows only the packed stills, and no extension runs to draw a wallpaper.",
    "rea": [],
    "method": "assessed"
   },
@@ -687,9 +687,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "partial",
-   "note": "First-run setup in springboard/src/setup.rs covers the BifrOSt setup steps; Apple's onboarding screens and their flows are not mirrored.",
+   "bifrost": "springboard/src/setup.rs",
+   "status": "n/a",
+   "note": "Apple account, iCloud and Apple service onboarding screens. BifrOSt's own first-run setup steps are in springboard/src/setup.rs.",
    "rea": [],
    "method": "assessed"
   },

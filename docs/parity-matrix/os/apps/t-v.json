@@ -43,7 +43,51 @@
    "status": "partial",
    "note": "no plain text editor app round 75, host only: rich text editing, spelling, print; was gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "rtf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "docx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "odt::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "html::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "encoding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "spell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-textedit",
+     "filter": "print::tests"
+    }
+   ],
+   "ready_note": "Text Editor: rich text (RTF, RTFD, HTML, DOCX, ODT, web archive) editing and saving, plain text encodings, spelling, links and print; model tests per format."
   },
   {
    "id": "path:/System/Applications/Time Machine.app",
@@ -85,7 +129,26 @@
    "status": "partial",
    "note": "new app (Team H, 0.1.0); not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "catalogue::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-tips",
+     "filter": "store::tests"
+    }
+   ],
+   "ready_note": "Tips app: how-to cards with the catalogue, search and what-is-new store; model, catalogue and store tests."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app",
@@ -148,7 +211,31 @@
    "status": "partial",
    "note": "Voice Memos app",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "voicememos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "enhance::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-voicememos",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "Voice Memos app: recording library store, peak view, enhancement and services; store, voicememos, enhance and services tests."
   }
  ]
 }
