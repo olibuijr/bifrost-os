@@ -3797,8 +3797,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-ml.json",
-   "status": "partial",
-   "note": "private framework, owner CoreML; from SDK matrix core-ml.json The framework holds three XPC services: E5MLCompiler, CoreMLSegmenter and CostModelSegmenter, which compile and partition Core ML models for Apple hardware. BifrOSt has no model compiler, so this stays open.",
+   "status": "n/a",
+   "note": "Model compiler and partitioner for Apple's neural hardware (E5MLCompiler, CoreMLSegmenter and CostModelSegmenter XPC services). BifrOSt has no such hardware target, so this is n/a. Reclassified 2026-10-17.",
    "rea": [],
    "method": "assessed"
   },
@@ -4525,11 +4525,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/render/src/svg.rs",
    "status": "gap",
-   "note": "SVG parsing and rasterizing for images and icons. Build an SVG reader in the render crate; BifrOSt reads only the SVG size (svg_size in springboard/src/shell/browser/resources.rs) and drops SVG from mail HTML.",
+   "note": "SVG parsing and rasterizing for images and icons. Build an SVG reader in the render crate; BifrOSt reads only the SVG size (svg_size in springboard/src/shell/browser/resources.rs) and drops SVG from mail HTML. Built 2026-10-17: SVG reader for the static icon subset (root size and viewBox; rect, circle, ellipse, polygon, polyline and path with M, L, H, V, C, Q, Z; fills and fill-opacity); tests svg::tests. Still open: image drawing and mail HTML do not call it yet, and arcs, smooth curves, strokes, gradients and transforms are not drawn.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "svg::tests"
+    }
+   ],
+   "ready_note": "The SVG reader (parse and rasterise the static subset) is covered by svg::tests; the image pipeline does not use it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSceneUnderstanding.framework",
