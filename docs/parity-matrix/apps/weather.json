@@ -57,7 +57,7 @@
    "apple": "First entry follows the device location and asks for permission (NSLocationUsageDescription)",
    "status": "gap",
    "bifrost": "springboard/apps/weather-desktop/src/weather.rs:142",
-   "note": "The shell gives apps no location service yet; the authorization is fixed at NotDetermined and the Locations note says so.",
+   "note": "The shell has a location service now (springboard/src/shell/services/location.rs), but the Weather app does not talk to the shell through an SDK Ctx, so LOCATION (weather.rs:146) is still NotDetermined and there is no My Location entry. The purpose string for Weather would come from its manifest [privacy] location key, which is parsed by the shell.",
    "wire": "When the shell exposes a location service, replace the LOCATION constant (weather.rs:142) by a request through bifrost_app::controls::location, insert a My Location place first and refresh it on movement; insights::location_note (insights.rs:167) already words the states."
   },
   {

@@ -46,6 +46,8 @@ pub const PREFS_PRECISE_PREFIX: &str = "location.precise.";
 pub const MANUAL_ACCURACY: f64 = 100.0;
 /// Farthest a reverse lookup reaches, in metres.
 const REVERSE_RADIUS: f64 = 50_000.0;
+/// How long after a fix an app still counts as using location for the menu bar indicator, in seconds.
+pub const ACTIVE_WINDOW: f64 = 5.0;
 
 /// One position fix.
 #[derive(Clone, Debug, PartialEq)]
@@ -195,6 +197,16 @@ impl Location {
     /// When `app_id` last received a fix this run, in Unix seconds. `None` when it never has.
     pub fn last_use(&self, app_id: &str) -> Option<f64> {
         self.last_use.get(app_id).copied()
+    }
+
+    /// The apps using location now, sorted by id: each one with a live watch, or with a fix within `window` seconds of
+    /// `t`. Drives the menu bar location indicator, which shows while this list is not empty. Nothing is recorded here.
+    pub fn in_use(&self, t: f64, window: f64) -> Vec<String> {
+        let recent = self.last_use.iter().filter(|&(_, &u)| t >= u && t - u <= window).map(|(a, _)| a.clone());
+        let mut apps: Vec<String> = self.watching.keys().cloned().chain(recent).collect();
+        apps.sort();
+        apps.dedup();
+        apps
     }
 
     /// Answers one call. `fix` is the best fix now, already shaped for this app; `places` the known places for
@@ -481,6 +493,21 @@ mod tests {
     fn distance_is_about_right() {
         let d = distance((64.14, -21.94), (65.68, -18.10));
         assert!((d - 250_000.0).abs() < 15_000.0, "{d}");
+    }
+
+    #[test]
+    fn the_indicator_lists_watching_apps_and_recent_fixes_only() {
+        let mut s = Location::default();
+        let f = here();
+        assert!(s.in_use(10.0, ACTIVE_WINDOW).is_empty(), "no app, no indicator");
+        s.answer(WHEN, "b", "current", &Json::Null, Some(&f), &[], 8.0).unwrap();
+        assert_eq!(s.in_use(10.0, ACTIVE_WINDOW), ["b"], "a fix 2 s ago is in use");
+        assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "an old fix is not in use");
+        call(&mut s, WHEN, "start", &Json::Null, None).unwrap();
+        assert_eq!(s.in_use(20.0, ACTIVE_WINDOW), ["a"], "a live watch is in use, sorted");
+        s.answer(WHEN, "a", "stop", &Json::Null, None, &[], 20.0).unwrap();
+        assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "stop ends the indicator");
+        assert!(s.in_use(5.0, ACTIVE_WINDOW).is_empty(), "a fix in the future is not counted");
     }
 
     #[test]

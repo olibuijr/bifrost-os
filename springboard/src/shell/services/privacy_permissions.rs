@@ -23,7 +23,7 @@
 use super::{Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_ui::capture_access::{CaptureAccess, Error, Media, Status};
-use bifrost_ui::location_auth::{AuthorizationStatus, RequestOutcome};
+use bifrost_ui::location_auth::{AuthorizationStatus, Level, RequestOutcome, UsageDescriptions};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -238,12 +238,30 @@ pub fn rows() -> Vec<Row> {
 
 pub struct PrivacyPermissions;
 
+/// The purpose string an app's manifest gives for location (`[privacy] location`), empty when it has none.
+pub fn manifest_location_purpose(app_id: &str) -> String {
+    super::super::apphost::installed().iter().find(|a| a.manifest.id == app_id).map_or_else(String::new, |a| a.manifest.location_purpose.clone())
+}
+
+/// Refuses a location request whose manifest has no purpose string. The prompt is the only place the person learns
+/// why the app wants location, so an empty text must not reach the sheet.
+pub fn location_purpose_gate(purpose: &str) -> Result<(), String> {
+    let texts = UsageDescriptions::new(purpose, "");
+    texts
+        .for_level(Level::WhenInUse)
+        .map(|_| ())
+        .map_err(|_| "location needs a purpose string: add [privacy] location = \"...\" to manifest.toml".to_string())
+}
+
 impl SystemService for PrivacyPermissions {
     fn name(&self) -> &'static str {
         "privacy"
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        if method == "location_request" {
+            location_purpose_gate(&manifest_location_purpose(app_id))?;
+        }
         let reply = answer(app_id, method, params)?;
         if let Some(kind) = wants_prompt(method, params, &reply) {
             let name = super::super::apphost::installed()
@@ -300,6 +318,14 @@ pub fn answer(app_id: &str, method: &str, params: &Json) -> Result<Json, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_location_request_needs_a_purpose_string() {
+        assert_eq!(location_purpose_gate("  Finna næstu stöð  "), Ok(()));
+        assert!(location_purpose_gate("").is_err());
+        assert!(location_purpose_gate(" \t ").is_err());
+        assert!(location_purpose_gate("x").unwrap_err().contains("[privacy] location"));
+    }
 
     fn obj(media: &str) -> Json {
         Json::Obj(vec![("media".into(), Json::Str(media.into()))])
