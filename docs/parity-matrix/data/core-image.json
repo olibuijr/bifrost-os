@@ -136,9 +136,9 @@
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
       "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
-      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine)",
+      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model); springboard/render/src/transition_filters.rs (swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold, disintegrate)",
       "status": "partial",
-      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: swipe, bars swipe and copy machine are CPU models with host tests (transition_filters.rs), not yet wired into an app or verified on Midget. Gap: flash, mod, page curl, ripple, accordion fold and disintegrate are missing. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md)."
+      "note": "Cross-dissolve is verified on Midget 0.7.25 by 6 tests. Built 2026-10-17: all ten reference transitions have CPU models in transition_filters.rs with host tests. The nine new ones are not yet wired into an app or verified on Midget. Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (docs/macos-os-inventory.md)."
     },
     {
       "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
@@ -157,16 +157,16 @@
     {
       "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
       "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
-      "bifrost": "springboard/render/src/depth_blur.rs (depth blur from a depth map, disparity and depth conversion) over springboard/render/src/blur_filters.rs (masked variable blur); springboard/sdk/src/image_effects.rs (app API, depth blur)",
+      "bifrost": "springboard/render/src/depth_blur.rs (depth blur from a depth map, disparity and depth conversion) over springboard/render/src/blur_filters.rs (masked variable blur); springboard/sdk/src/image_effects.rs (app API, depth blur); springboard/render/src/portrait_lighting.rs (relight from a depth map)",
       "status": "partial",
-      "note": "Blur weights, falloff, disparity conversions and the masked variable blur are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: the app API in image_effects is untested, depth is not estimated from a stereo pair or a single image, the blur has no lens shape, and nothing is verified on Midget yet."
+      "note": "Blur weights, falloff, disparity conversions and the masked variable blur are tested headless in springboard/render/tests/parity_sdk-tests-01.rs. Gap: the app API in image_effects is untested, depth is not estimated from a stereo pair or a single image, the blur has no lens shape, and nothing is verified on Midget yet. Built 2026-10-17: relighting from a depth map, a Lambert model with host tests; its curves are not the reference ones."
     },
     {
       "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
       "bifrost": "springboard/render/src/filter_catalogue.rs; springboard/render/src/filter_input.rs (check_input, resolve_inputs)",
       "status": "partial",
-      "note": "Registry of the 47 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs."
+      "note": "Registry of the 56 built filters by reference name with category and input keys, filter_names(category) and attributes. Added 2026-10-17: the colour adjustment (exposure, gamma, vibrance, white point), colour effect (sepia, monochrome, posterize, false colour, invert), stylize (edges, highlight and shadow), generator (random, checkerboard, stripes), gradient (linear, radial) and transition (swipe, bars swipe, copy machine) entries. Input values are checked against their ranges by tests in filter_catalogue.rs. Gap: the catalogue is metadata; apps reach the named filter chain only for the eleven effects in effect_chain.rs. Added 2026-10-17: tile entries (triangle, parallelogram, perspective) and six transitions (flash, mod, page curl, ripple, accordion fold, disintegrate)."
     }
   ],
   "gaps": [
