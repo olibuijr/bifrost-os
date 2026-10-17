@@ -3114,11 +3114,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/neighbors.rs, springboard/cmd/src/bin/ndp.rs",
    "status": "partial",
    "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "neighbors::tests"
+    }
+   ],
+   "ready_note": "ndp -a and ndp host read ip -6 neigh show and print the IPv6 neighbour columns."
   },
   {
    "id": "path:/usr/sbin/netbiosd",
