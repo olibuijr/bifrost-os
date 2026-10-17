@@ -201,7 +201,7 @@ mod tests {
     }
 
     fn core_in(dir: PathBuf) -> Core {
-        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new() }
+        Core { ota: Ota::new(dir.clone(), None), dir, version: String::new(), git: String::new(), auto_download: false, wifi: false, low_power: false, charging: false, started: Instant::now(), subscribers: Vec::new(), last_failure: None }
     }
 
     fn core(name: &str) -> Core {

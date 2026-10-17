@@ -4,7 +4,6 @@
 //! plays them with `SoundPlayer::earcon`.
 
 use super::alert_sound::{render, Note};
-use super::kb_clicks::RATE;
 
 const fn note(hz: f32, at_ms: f32, len_ms: f32, peak: f32) -> Note {
     Note { hz, at_ms, len_ms, peak }
