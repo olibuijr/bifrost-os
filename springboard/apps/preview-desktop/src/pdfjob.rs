@@ -44,6 +44,8 @@ pub struct Opened {
     pub info: Vec<(&'static str, String)>,
     /// Whether the file is encrypted.
     pub encrypted: bool,
+    /// The fillable fields of the form, if the file has one.
+    pub form: crate::forms::Form,
 }
 
 /// A result from the worker.
@@ -125,7 +127,8 @@ impl Pdf {
                 page: self.pages.iter().position(|p| p.num == Some(item.dest.page)),
             })
             .collect();
-        Ok(Opened { sizes, outline, info: self.info(), encrypted: self.doc.is_encrypted() })
+        let form = crate::forms::detect(&self.doc, &self.pages);
+        Ok(Opened { sizes, outline, info: self.info(), encrypted: self.doc.is_encrypted(), form })
     }
 
     /// The title, author, subject and keywords the document information dictionary holds, when they are text.

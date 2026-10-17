@@ -374,10 +374,10 @@
    "feature": "Insert page from file / blank page",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Insert > Page from File, Blank Page",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Needs merging the pages of another PDF into the writer (document order and the object tree); not started",
-   "wire": "Add an Insert submenu that merges pages of another PDF into the order in document.rs and pdfmarks::write_edited"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/pdfmarks.rs:81 (Insertion), :91 (insertion_for); springboard/render/src/cg/pdf/writer.rs:446 (import), :466 (blank)",
+   "note": "Pages > Insert > Page from File and Blank Page. The chosen PDF's pages, or one blank page the size of the shown page, go after the shown page in a copy under the app's data folder, which is then opened. The other file's objects are renumbered and the page tree rewritten. Not yet: inserting into the open document in place (its markup is written into the copy, and Undo does not reach back past an insert), page ranges, and dragging thumbnails between windows.",
+   "wire": "Insert in place, keeping Undo and the markup sidecar: merge into the document's order instead of writing a copy; add page ranges to the file picker."
   },
   {
    "feature": "Drag pages between documents",
@@ -393,9 +393,9 @@
    "area": "integration",
    "apple": "PVFormFillingCoachingBanner.nib",
    "status": "partial",
-   "bifrost": "springboard/ui/src/acroform.rs, springboard/ui/src/pdfform.rs",
-   "note": "Audit 2026-10-13: kit models (ui/src/acroform.rs, pdfform.rs, host tests) hold form fields and values; Preview does not use them yet.",
-   "wire": "Detect fields in pdfjob.rs into an acroform::FieldSet, draw editable widgets, write values on save."
+   "bifrost": "springboard/apps/preview-desktop/src/forms.rs:49 (detect); springboard/apps/preview-desktop/src/document.rs:134 (field_edits); springboard/apps/preview-desktop/src/canvas.rs:1205 (draw_widget); springboard/render/src/cg/pdf/writer.rs:549 (set_need_appearances); kit model springboard/ui/src/acroform.rs (FieldSet)",
+   "note": "Text fields and check boxes are read on open into the kit's acroform::FieldSet, drawn over the page, typed into or toggled by a click, and saved by Save, Export PDF and Print as /V, /AS and NeedAppearances. Not yet: radio groups, choice lists, push buttons and signature fields (left in the file untouched); widget appearance streams are not regenerated, so readers redraw from NeedAppearances.",
+   "wire": "Fill radio groups (acroform select_radio), choice lists and signatures; regenerate widget appearance streams so readers that ignore NeedAppearances show the values."
   },
   {
    "feature": "Speech: start/stop speaking",
