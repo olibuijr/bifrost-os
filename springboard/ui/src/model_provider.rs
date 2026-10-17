@@ -125,7 +125,7 @@ pub fn run_turn(
 }
 
 /// The request with the tool descriptions appended to its instructions. The request is unchanged when there are no tools.
-fn with_descriptions(transcript: Transcript, description: &str) -> Transcript {
+pub fn with_descriptions(transcript: Transcript, description: &str) -> Transcript {
     if description.is_empty() {
         return transcript;
     }
