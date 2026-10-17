@@ -3591,6 +3591,16 @@ impl Shell {
         self.pip.controller.set_possible(on).into_iter().collect()
     }
 
+    /// The player's latest video frame for the Picture in Picture window. True when the window is showing it.
+    pub(super) fn pip_frame(&mut self, frame: crate::gfx::Image) -> bool {
+        if !self.pip.showing() {
+            return false;
+        }
+        self.pip.set_frame(frame);
+        self.dirty = true;
+        true
+    }
+
     /// Takes the Picture in Picture window down.
     pub(super) fn pip_stop(&mut self) -> Vec<bifrost_ui::pip_window::Event> {
         self.dirty = true;
@@ -3930,7 +3940,7 @@ impl Shell {
             damage.all();
             let m = self.desk_metrics();
             let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
-            pip::draw_window(s, &self.ui, self.pip.rect(usable), None);
+            pip::draw_window(s, &self.ui, self.pip.rect(usable), self.pip.frame.as_ref());
         }
         self.draw_announce(s);
         self.draw_paste_progress(s, t);
