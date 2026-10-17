@@ -863,6 +863,40 @@ pub fn expire_due() -> usize {
     with(|ix| ix.prune(now))
 }
 
+/// Items of the default index from the `search-index` service's `index` objects: `id`, `domain`, `title`, `desc`,
+/// `keywords` (strings), `thumb`, `url` and `expires` (Unix seconds). An object without an `id` is skipped. Returns each
+/// item with its expiry, if it has one.
+pub fn parse_items(list: &[Json]) -> Vec<(SearchableItem, Option<u64>)> {
+    list.iter()
+        .filter_map(|o| {
+            let unique_id = o.str_field("id").filter(|s| !s.is_empty())?;
+            let keywords = o.get("keywords").and_then(Json::array).map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let item = SearchableItem {
+                unique_id,
+                domain: o.str_field("domain").unwrap_or_default(),
+                title: o.str_field("title").unwrap_or_default(),
+                description: o.str_field("desc").unwrap_or_default(),
+                keywords,
+                thumbnail: o.str_field("thumb").unwrap_or_default(),
+                content_url: o.str_field("url").unwrap_or_default(),
+            };
+            Some((item, o.get("expires").and_then(Json::as_u64)))
+        })
+        .take(MAX_PER_APP)
+        .collect()
+}
+
+/// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
+pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
+    with(|ix| {
+        let expiries: Vec<(String, u64)> = items.iter().filter_map(|(i, at)| at.map(|t| (i.unique_id.clone(), t))).collect();
+        ix.index(app_id, items.into_iter().map(|(i, _)| i).collect());
+        for (id, at) in expiries {
+            ix.set_expiry(app_id, &id, Some(at));
+        }
+    })
+}
+
 /// Sets (or clears, with `None`) the expiry of an item of `app_id`; false when there is no such item.
 pub fn set_expiry(app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
     with(|ix| ix.set_expiry(app_id, unique_id, at))
@@ -898,6 +932,11 @@ pub fn search_named(app_id: &str, index: &str, query: &str, limit: usize) -> Res
 /// Drops the items of apps that are no longer installed (an uninstalled app's items go with it); returns how many apps.
 pub fn forget_missing(installed: &[&str]) -> usize {
     with(|ix| ix.forget_missing(installed))
+}
+
+/// True when the default index holds items of `app_id`.
+pub fn has_items(app_id: &str) -> bool {
+    with(|ix| ix.apps.get(app_id).is_some_and(|list| !list.is_empty()))
 }
 
 /// Items of `app_id` matching `query`, at most `limit`. Expired items are not returned.
@@ -1320,6 +1359,20 @@ mod tests {
         ix.forget_app("notes");
         assert_eq!(ix.named_dirty, ["notes@archive"]);
         assert!(ix.search_named("notes", "notes", "archive", "tea", 5, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parsed_items_keep_their_expiry_and_the_index_call_sets_it() {
+        let list = bifrost_core::json::parse(r#"[{"id":"a","domain":"notes","title":"Milk","keywords":["shop"],"url":"file:///a.pdf","expires":500},{"title":"no id"}]"#).unwrap();
+        let parsed = parse_items(list.as_array().unwrap());
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].0.title, "Milk");
+        assert_eq!(parsed[0].0.content_url, "file:///a.pdf");
+        assert_eq!(parsed[0].1, Some(500));
+        let mut ix = Index::default();
+        ix.index_at("notes", vec![parsed[0].0.clone()], 1);
+        assert!(ix.set_expiry("notes", "a", parsed[0].1));
+        assert_eq!(ix.prune(500), 1);
     }
 
     #[test]

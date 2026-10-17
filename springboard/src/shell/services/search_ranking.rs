@@ -8,6 +8,8 @@
 //! * `expire {id, at}` sets the Unix time (seconds) after which the item is dropped; `at: null` clears it. Answers
 //!   true when the app has an item with that identifier.
 //! * `language {text}` answers the BCP 47 code of the text's dominant language, or null when none is recognisable.
+//! * `index {items}` indexes items into the default index, `items` as `{id, domain, title, desc, keywords, thumb, url,
+//!   expires}`; answers `{stored: n}`. The SDK waits for this answer to acknowledge a batch.
 //! * `index_named {index, protection, items}` indexes items into the named index `index` of the app (its protection
 //!   class is `protection`, or null); answers the count sent. `items` are `{id, domain, title, desc, keywords, public,
 //!   expires}`.
@@ -66,6 +68,15 @@ impl SystemService for SearchRanking {
             "language" => {
                 let text = params.get("text").and_then(Json::as_str).ok_or("language needs a text string")?;
                 Ok(dominant_language(text).map_or(Json::Null, |l| Json::Str(l.code().into())))
+            }
+            "index" => {
+                // the acknowledged form of indexSearchableItems: the reply is the count stored, or an error the SDK
+                // reports as remoteConnectionError
+                let list = params.get("items").and_then(Json::as_array).ok_or("index needs an items list")?;
+                let items = spotindex::parse_items(list);
+                let stored = items.len();
+                spotindex::index_items(app_id, items);
+                Ok(Json::Obj(vec![("stored".into(), Json::Num(stored as f64))]))
             }
             "index_named" => {
                 let index = params.get("index").and_then(Json::as_str).ok_or("index_named needs an index name")?;

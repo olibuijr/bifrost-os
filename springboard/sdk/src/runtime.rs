@@ -937,6 +937,16 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     // the shell sends it right after starting the app, possibly before the first Configure
                     pending_activity.push(crate::quicksearch::UserActivity { activity_type, unique_identifier: unique_id, domain_identifier: domain });
                 }
+                ToApp::ReindexAll => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.index_request(c, crate::quicksearch::IndexRequest::ReindexAll);
+                    }
+                }
+                ToApp::ReindexIdentifiers { identifiers } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.index_request(c, crate::quicksearch::IndexRequest::ReindexIdentifiers(identifiers));
+                    }
+                }
                 ToApp::KeychainReply { request, status, value } => {
                     if let Some(c) = &ctx {
                         need_frame |= app.keychain(c, crate::keychain::Reply::from_wire(request, status, value));

@@ -558,6 +558,66 @@ pub fn found_items(reply: &bifrost_core::json::Json) -> Vec<FoundItem> {
         .collect()
 }
 
+/// A reindex request from the shell (`CSIndexExtensionRequestHandler`): all the app's content, or the items of some
+/// identifiers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IndexRequest {
+    ReindexAll,
+    ReindexIdentifiers(Vec<String>),
+}
+
+/// The shell's answer to an acknowledged index batch (see [`CSSearchableIndex::index_searchable_items_acked`]).
+#[derive(Debug)]
+pub struct IndexAck {
+    request: u32,
+}
+
+impl IndexAck {
+    /// The outcome once the shell has answered, `None` while it has not. The answer is taken once. A stored batch gives
+    /// the count the shell kept; an error answer from the shell gives `RemoteConnectionError`.
+    pub fn outcome(&self) -> Option<Result<usize, crate::search_index_batch::CSIndexError>> {
+        use crate::search_index_batch::{CSIndexError, CSIndexErrorCode};
+        let reply = crate::service::take_reply(self.request)?;
+        Some(match reply {
+            Ok(json) => Ok(json.get("stored").and_then(Json::as_u64).unwrap_or(0) as usize),
+            Err(_) => Err(CSIndexError { code: CSIndexErrorCode::RemoteConnectionError, item_position: None }),
+        })
+    }
+}
+
+impl CSSearchableIndex {
+    /// `indexSearchableItems(_:completionHandler:)` with the shell's acknowledgement. The items that pass
+    /// [`IndexError::check`] go to the shell in one `index` call; the refused ones are returned with their reasons. The
+    /// [`IndexAck`] carries the shell's answer once it has come back.
+    pub fn index_searchable_items_acked(&self, ctx: &Ctx, items: &[CSSearchableItem]) -> (IndexAck, Vec<(usize, IndexError)>) {
+        let locale = Locale::current();
+        let mut refused = Vec::new();
+        let mut wire: Vec<Json> = Vec::new();
+        for (pos, i) in items.iter().enumerate() {
+            if let Err(e) = IndexError::check(i) {
+                refused.push((pos, e));
+                continue;
+            }
+            let (title, keywords) = i.attribute_set.wire_text(&locale);
+            let mut obj = vec![
+                ("id".to_string(), Json::Str(i.unique_identifier.clone())),
+                ("domain".to_string(), Json::Str(i.domain_identifier.clone())),
+                ("title".to_string(), Json::Str(title)),
+                ("desc".to_string(), Json::Str(i.attribute_set.content_description.clone())),
+                ("keywords".to_string(), Json::Arr(keywords.into_iter().map(Json::Str).collect())),
+                ("thumb".to_string(), Json::Str(i.attribute_set.thumbnail_path.clone())),
+                ("url".to_string(), Json::Str(i.attribute_set.content_url.clone())),
+            ];
+            if let Some(at) = i.expiration_date {
+                obj.push(("expires".to_string(), Json::Num(at.max(0) as f64)));
+            }
+            wire.push(Json::Obj(obj));
+        }
+        let request = crate::service::call(ctx, crate::search_ranking::SERVICE, "index", &Json::Obj(vec![("items".into(), Json::Arr(wire))]));
+        (IndexAck { request }, refused)
+    }
+}
+
 /// `CSSearchableIndexDescription` and the protection class of a named index (`bifrost_ui::searchindex`).
 pub use bifrost_ui::searchindex::{IndexDescription, NameError as IndexNameError, ProtectionClass};
 
@@ -960,5 +1020,24 @@ mod tests {
         assert!(methods[0].starts_with("delete_named ") && methods[0].contains("\"kind\":\"ids\""));
         assert!(methods[1].contains("\"kind\":\"all\""));
         assert!(methods[2].starts_with("delete_named_index "));
+    }
+
+    #[test]
+    fn an_acknowledged_batch_sends_one_index_call_and_has_no_outcome_until_the_shell_answers() {
+        let c = ctx();
+        let timed = item("t1").expiration_date(1_800_000_000);
+        let (ack, refused) = CSSearchableIndex::default_index().index_searchable_items_acked(&c, &[timed, item("")]);
+        assert_eq!(refused, vec![(1, IndexError::EmptyIdentifier)]);
+        let sent = c.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { service, method, body, .. } = &sent[0] else { panic!("no index call") };
+        assert_eq!(service.as_str(), crate::search_ranking::SERVICE);
+        assert_eq!(method.as_str(), "index");
+        let body = bifrost_core::json::parse(body).unwrap();
+        let items = body.get("items").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].get("id").and_then(|v| v.as_str()), Some("t1"));
+        assert_eq!(items[0].get("expires").and_then(|v| v.as_u64()), Some(1_800_000_000));
+        assert!(ack.outcome().is_none(), "no reply yet");
     }
 }
