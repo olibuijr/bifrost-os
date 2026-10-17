@@ -894,7 +894,7 @@
    "doc": "",
    "bifrost": "springboard/audiod/src/main.rs (playback and capture service)",
    "status": "partial",
-   "note": "The audio service plays and captures PCM streams. Gap: there is no positional 3D source API like the one OpenAL offers.",
+   "note": "The audio service plays and captures PCM streams. Built 2026-10-17: a positional source model in the SDK (sdk positional_audio::tests) with inverse-distance gain and equal-power pan. Gap: the model is not wired to audiod playback, and there are no per-source streams.",
    "rea": [],
    "method": "heuristic"
   },

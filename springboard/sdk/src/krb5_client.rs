@@ -7,8 +7,11 @@
 //! `krb5` package installed (`kinit`, `klist`).
 
 use std::fmt;
-use std::io::Write;
-use std::process::{Command, Stdio};
+use std::fs;
+use std::io::{self, Write};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{self, Command, Stdio};
 
 use crate::gss_krb5::{CacheKind, CacheName};
 
@@ -23,6 +26,8 @@ pub enum Krb5ClientError {
     Failed(String),
     /// The tool's output did not have the shape `klist` prints.
     Malformed,
+    /// A credential cache could not be read or written.
+    Io(String),
 }
 
 impl fmt::Display for Krb5ClientError {
@@ -32,6 +37,7 @@ impl fmt::Display for Krb5ClientError {
             Krb5ClientError::Spawn(reason) => write!(f, "could not run the Kerberos tool: {reason}"),
             Krb5ClientError::Failed(text) => f.write_str(text),
             Krb5ClientError::Malformed => f.write_str("unexpected klist output"),
+            Krb5ClientError::Io(reason) => write!(f, "credential cache: {reason}"),
         }
     }
 }
@@ -157,6 +163,30 @@ pub fn kinit(principal: &str, password: &str, cache: Option<&CacheName>) -> Resu
     }
 }
 
+/// Copies one FILE credential cache to another, the file form of `gss_krb5_copy_ccache`. The copy is written beside
+/// the target with mode 0600 and renamed into place, so a failed copy leaves the target as it was. Returns the number of
+/// bytes copied. Only FILE caches can be copied; the other types live in the kernel or a service.
+pub fn copy_ccache(src: &CacheName, dst: &CacheName) -> Result<u64, Krb5ClientError> {
+    if src.kind() != CacheKind::File || dst.kind() != CacheKind::File {
+        return Err(Krb5ClientError::InvalidInput("cache type: only FILE caches can be copied"));
+    }
+    let data = fs::read(src.residual()).map_err(|e| Krb5ClientError::Io(e.to_string()))?;
+    let target = Path::new(dst.residual());
+    let tmp = PathBuf::from(format!("{}.copy-{}", dst.residual(), process::id()));
+    let _ = fs::remove_file(&tmp);
+    let written = (|| -> io::Result<()> {
+        let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+        file.write_all(&data)?;
+        file.sync_all()?;
+        fs::rename(&tmp, target)
+    })();
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(Krb5ClientError::Io(e.to_string()));
+    }
+    Ok(data.len() as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +268,41 @@ Valid starting       Expires              Service principal\n\
         let cmd = klist_command(None);
         assert_eq!(cmd.get_program(), "klist");
         assert_eq!(cmd.get_envs().count(), 0);
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bifrost-krb5-{tag}-{}", process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn copy_ccache_copies_the_bytes_with_a_private_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("copy");
+        let src = dir.join("src-cc");
+        let dst = dir.join("dst-cc");
+        fs::write(&src, b"ticket-bytes").unwrap();
+        let n = copy_ccache(&cache(&format!("FILE:{}", src.display())), &cache(&format!("FILE:{}", dst.display()))).unwrap();
+        assert_eq!(n, 12);
+        assert_eq!(fs::read(&dst).unwrap(), b"ticket-bytes");
+        assert_eq!(fs::metadata(&dst).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(!dir.join("dst-cc.copy-".to_string() + &process::id().to_string()).exists(), "no temporary file is left");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_ccache_refuses_non_file_caches_and_reports_a_missing_source() {
+        let dir = scratch("refuse");
+        let dst = cache(&format!("FILE:{}", dir.join("dst").display()));
+        assert_eq!(
+            copy_ccache(&cache("KCM:1000"), &dst),
+            Err(Krb5ClientError::InvalidInput("cache type: only FILE caches can be copied"))
+        );
+        let missing = cache(&format!("FILE:{}", dir.join("nope").display()));
+        assert!(matches!(copy_ccache(&missing, &dst), Err(Krb5ClientError::Io(_))));
+        assert!(!dir.join("dst").exists(), "a failed copy writes nothing");
+        let _ = fs::remove_dir_all(&dir);
     }
 }
