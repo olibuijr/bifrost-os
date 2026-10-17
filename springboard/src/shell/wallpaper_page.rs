@@ -75,8 +75,19 @@ pub fn cell_size(ui: &Ui, w: i32, aspect: f32) -> (f32, f32) {
     (cw, (cw * aspect).floor())
 }
 
-pub fn grid_top(ui: &Ui) -> f32 {
+/// Top of the Dynamic Wallpaper switch row, under the nav bar.
+fn dynamic_row_top(ui: &Ui) -> f32 {
     nav_bottom(ui) + ui.pt(GROUP_GAP_PT)
+}
+
+/// The grid starts under the Dynamic Wallpaper switch row.
+pub fn grid_top(ui: &Ui) -> f32 {
+    dynamic_row_top(ui) + ui.pt(ROW_PT) + ui.pt(GROUP_GAP_PT)
+}
+
+/// The Dynamic Wallpaper switch row (x, y, w, h): a day of stills follows the time of day.
+pub fn dynamic_row(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
+    (ui.pt(MARGIN_PT), dynamic_row_top(ui), w as f32 - 2.0 * ui.pt(MARGIN_PT), ui.pt(ROW_PT))
 }
 
 /// Thumbnail rect (x, y, w, h) in px of item `i`.
@@ -107,6 +118,8 @@ pub enum Tap {
     Cancel,
     /// the dim switch
     Dim,
+    /// the Dynamic Wallpaper switch above the grid
+    Dynamic,
 }
 
 const ROW_PT: f32 = 44.0;
@@ -126,8 +139,11 @@ pub struct WallpaperPage {
     items: Vec<(String, Image, Image)>,
     current: Option<usize>,
     empty: Image,
+    dynamic_label: Image,
     preview: Option<Preview>,
     dim: bool,
+    /// Dynamic Wallpaper: the shell changes the still with the time of day
+    dynamic: bool,
     /// screen height / width: the cells and the preview are this shape
     aspect: f32,
     /// unmasked thumbnails, enlarged for the preview
@@ -147,7 +163,7 @@ impl WallpaperPage {
                 (wp.id.clone(), thumb, label)
             })
             .collect();
-        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), preview: None, dim, aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect() }
+        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect() }
     }
 
     pub fn len(&self) -> usize {
@@ -181,6 +197,14 @@ impl WallpaperPage {
 
     pub fn set_dim(&mut self, on: bool) {
         self.dim = on;
+    }
+
+    pub fn dynamic(&self) -> bool {
+        self.dynamic
+    }
+
+    pub fn set_dynamic(&mut self, on: bool) {
+        self.dynamic = on;
     }
 
     pub fn previewing(&self) -> bool {
@@ -225,7 +249,12 @@ impl WallpaperPage {
     /// What a touch at (x, y) taps: grid thumbnails, or the preview's controls.
     pub fn tap(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> Option<Tap> {
         let inside = |(rx, ry, rw, rh): (f32, f32, f32, f32)| x >= rx && x < rx + rw && y >= ry && y < ry + rh;
-        let Some(p) = &self.preview else { return self.hit(ui, w, h, x, y).map(Tap::Thumb) };
+        let Some(p) = &self.preview else {
+            if inside(dynamic_row(ui, w)) {
+                return Some(Tap::Dynamic);
+            }
+            return self.hit(ui, w, h, x, y).map(Tap::Thumb);
+        };
         if inside(self.dim_row(ui, w, h)) {
             return Some(Tap::Dim);
         }
@@ -265,6 +294,10 @@ impl WallpaperPage {
             }
             return;
         }
+        let (x, y, rw, rh) = dynamic_row(ui, w);
+        s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
+        s.blit(&self.dynamic_label, (x + ui.pt(16.0)) as i32, (y + (rh - self.dynamic_label.h as f32) / 2.0) as i32, 255, 255);
+        draw_switch(s, ui, x + rw - ui.pt(16.0) - ui.pt(SWITCH_W_PT), y + (rh - ui.pt(SWITCH_H_PT)) / 2.0, if self.dynamic { 1.0 } else { 0.0 });
         if self.items.is_empty() {
             s.blit(&self.empty, (m + ui.pt(16.0)) as i32, grid_top(ui) as i32, 255, 255);
             return;
@@ -347,7 +380,23 @@ mod tests {
         assert!(x5 + cw <= 1200.0 - ui.pt(MARGIN_PT) + 1.0);
         assert_eq!((x6, y0), (x0, y5));
         assert!(y6 > y0 + ch);
-        assert_eq!(y0, nav_bottom(&ui) + ui.pt(GROUP_GAP_PT));
+        assert_eq!(y0, grid_top(&ui));
+        assert!(y0 > dynamic_row(&ui, 1200).1 + dynamic_row(&ui, 1200).3, "the grid sits under the Dynamic Wallpaper row");
+    }
+
+    #[test]
+    fn the_dynamic_switch_row_taps_toggle_only_outside_the_preview() {
+        let ui = ui();
+        let mut page = WallpaperPage::new(&ui, 1200, 9.0 / 16.0, &wallpapers(3), "wp0", true);
+        assert!(!page.dynamic());
+        let (x, y, w, h) = dynamic_row(&ui, 1200);
+        assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), Some(Tap::Dynamic));
+        page.set_dynamic(true);
+        assert!(page.dynamic());
+        let (cx, cy, cw, ch) = cell(&ui, 1200, 9.0 / 16.0, 1);
+        assert_eq!(page.tap(&ui, 1200, 1920, cx + cw / 2.0, cy + ch / 2.0), Some(Tap::Thumb(1)), "the grid is below the row");
+        page.open_preview(&ui, 1200, 1920, 0);
+        assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), None, "the preview hides the row");
     }
 
     #[test]
