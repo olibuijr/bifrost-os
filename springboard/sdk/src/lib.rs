@@ -486,6 +486,7 @@ pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
 pub mod hotspot_helper;
+pub mod system_intents;
 pub mod vpn_configuration;
 pub mod vpn_intents;
 pub mod wifi_accessory_browser;

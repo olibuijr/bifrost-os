@@ -152,8 +152,17 @@
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/dwell.rs",
    "status": "partial",
-   "note": "dwell click model and delay options; pointer input and Settings wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget",
-   "rea": []
+   "note": "dwell click model and delay options; pointer input (shell input loop) and Settings wiring (Accessibility > Touch > Dwell Control) are built; not yet verified on Midget",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell"
+    }
+   ],
+   "ready_note": "covers: dwell click model (shell/accessibility/dwell.rs) fed by the shell input loop with the Settings delay"
   },
   {
    "id": "path:/System/Library/CoreServices/Enhanced Logging.app",
@@ -359,7 +368,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs",
    "status": "partial",
-   "note": "data detector matching; no context menu extension host",
+   "note": "data detector matching and the context menu actions per detected kind (springboard/ui/src/detect.rs menu_actions); no context menu host yet",
    "rea": []
   },
   {
@@ -399,7 +408,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_devices.rs",
    "status": "partial",
-   "note": "remote device name, class and signal model; no device properties sheet",
+   "note": "remote device name, class and signal model, and the properties rows (RemoteDevice::properties, sdk bluetooth_devices); no device properties sheet in the shell yet",
    "rea": []
   },
   {
@@ -417,10 +426,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/src/shell/focus.rs",
+   "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/src/shell/focus.rs, springboard/sdk/src/system_intents.rs",
    "status": "partial",
-   "note": "Focus state and filter values; no Do Not Disturb App Intent yet",
-   "rea": []
+   "note": "Focus state and filter values; the Do Not Disturb App Intent is declared (sdk system_intents, set_do_not_disturb); the shell does not serve it yet",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "system_intents::tests"
+    }
+   ],
+   "ready_note": "covers: the Do Not Disturb App Intent declaration (sdk system_intents::setting_intents)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Drift.appex",
