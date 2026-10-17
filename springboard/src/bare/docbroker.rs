@@ -247,7 +247,15 @@ impl PendingSave {
         let rename = |from: &str, to: &str| -> io::Result<()> {
             let (from, to) = (CString::new(from).unwrap(), CString::new(to).unwrap());
             // SAFETY: both names are NUL-terminated single components inside the folder d.
-            opener.as_account(|| if unsafe { renameat(d, from.as_ptr(), d, to.as_ptr()) } < 0 { Err(io::Error::last_os_error()) } else { Ok(()) })
+            opener.as_account(|| {
+                // SAFETY: as above; errno is read before the account's credentials are restored.
+                let r = unsafe { renameat(d, from.as_ptr(), d, to.as_ptr()) };
+                if r < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            })
         };
         if rename(&self.tmp, &self.name).is_err() {
             // the package is there already (a folder cannot replace a non-empty one): move it aside first
