@@ -94,6 +94,24 @@ pub fn check_launch_at(path: &Path, account: &str, app_id: &str) -> io::Result<(
     decide(&load(path)?, account, app_id)
 }
 
+/// Whether `feature` is switched off for `account` in a table read as `table`. A table that could not be read counts as
+/// switched off, so a damaged restriction never grants the feature.
+pub fn feature_off_in(table: io::Result<PolicyTable>, account: &str, feature: Feature) -> bool {
+    match table {
+        Ok(table) => table.check_feature(account, feature).is_err(),
+        Err(_) => true,
+    }
+}
+
+/// Whether the installed account's policy switches `feature` off, for the privacy gates and the purchase sheet. With
+/// no installed account there is no policy to apply.
+pub fn feature_switched_off(feature: Feature) -> bool {
+    match Account::installed() {
+        Ok(account) => feature_off_in(load(Path::new(POLICY_FILE)), &account.name, feature),
+        Err(_) => false,
+    }
+}
+
 /// Called by the launcher before it starts an app. Checks the installed account against `POLICY_FILE`.
 pub fn check_launch(app_id: &str) -> io::Result<()> {
     let account = Account::installed()?;
@@ -178,6 +196,14 @@ mod tests {
         assert!(table.check_feature("kid", Feature::Camera).is_err());
         assert!(!path.with_extension("tmp").exists());
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_switched_off_feature_is_read_from_the_table_and_fails_closed() {
+        let table = PolicyTable::parse("kid disable camera\n").unwrap();
+        assert!(feature_off_in(Ok(table.clone()), "kid", Feature::Camera));
+        assert!(!feature_off_in(Ok(table), "kid", Feature::Microphone));
+        assert!(feature_off_in(Err(io::Error::other("damaged")), "kid", Feature::Location));
     }
 
     #[test]
