@@ -33,7 +33,7 @@
       "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate",
       "bifrost": "springboard/ui/src/media_query.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library Built 2026-10-17: SDK bifrost_app::media_library::run over bifrost_ui::media_query (filters, groupings, sections); tests springboard/sdk/src/media_library.rs::tests."
     },
     {
       "feature": "Media items, collections and playlists",

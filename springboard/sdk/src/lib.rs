@@ -247,6 +247,8 @@ pub mod media_extension;
 pub mod audio_application;
 pub mod audio_player_control;
 pub mod now_playing;
+/// Media library queries over the records an app supplies (`bifrost_ui::media_query`).
+pub mod media_library;
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
