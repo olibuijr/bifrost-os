@@ -555,6 +555,8 @@ pub fn changes(before: &[Note], now: &[Note]) -> Changes {
 
 /// How often the first Exchange account with Notes switched on is read while the app runs, in the app's clock (ms).
 pub const EVERY_MS: f64 = 5.0 * 60.0 * 1000.0;
+/// How long to wait before looking for an account again when there is none (ms).
+pub const NO_ACCOUNT_MS: f64 = 10_000.0;
 
 /// One local change that waits to reach the mailbox. `local` is the app's own name for the note and `stamp` is
 /// whatever the app needs to remember about the text that was sent; both come back in [`Written`].
@@ -719,6 +721,8 @@ impl Sync {
     }
 
     fn start(&mut self, ctx: &Ctx, t: f64, plan: &mut dyn FnMut(&Account) -> Vec<Op>) {
+        // without an account the list is looked at again in ten seconds, not on every tick
+        self.last = Some(t - EVERY_MS + NO_ACCOUNT_MS);
         let Some(path) = shared::store_path() else { return };
         let Ok(all) = shared::load(&path) else { return };
         let Some(account) = first_account(&all) else { return };

@@ -12,6 +12,7 @@
 
 pub mod attach;
 pub mod attachments;
+pub mod exchange;
 pub mod folders;
 pub mod note_url;
 pub mod settings;
@@ -790,6 +791,24 @@ impl Notes {
 
     pub fn prefs(&self) -> store::Prefs {
         self.prefs
+    }
+
+    /// Exchange notes: writes any unsaved edit, then lists the local changes to send to `account` (see [`exchange`]).
+    pub fn exchange_plan(&mut self, account: &bifrost_app::controls::internet_accounts::Account) -> Vec<bifrost_app::exchange_notes::Op> {
+        self.flush();
+        exchange::plan(&self.dir, account)
+    }
+
+    /// Exchange notes: takes in what a round got from the server. The open note and an unsaved one are left alone, and
+    /// the list is read again when the files changed.
+    pub fn exchange_apply(&mut self, ui: &Ui, t: f64, account: &bifrost_app::controls::internet_accounts::Account, report: &bifrost_app::exchange_notes::Report) -> exchange::Applied {
+        let mut busy: Vec<String> = self.editing().map(|n| n.id.clone()).into_iter().collect();
+        busy.extend(self.unsaved.clone());
+        let applied = exchange::apply(&self.dir, account, report, &busy, self.wall.now(t));
+        if applied.changed() {
+            self.reload(ui, t);
+        }
+        applied
     }
 
     /// The folder (or bin) a note is in; None for the root.
@@ -4570,6 +4589,54 @@ mod tests {
         n.run(&ui, Act::View(View::Trash), 3100.0);
         assert_eq!(n.listed().len(), 2);
         draw(&mut n, &ui, 3200.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exchange_notes_appear_in_their_folder_and_local_edits_go_back_as_changes() {
+        use bifrost_app::controls::internet_accounts::{Account, Kind};
+        use bifrost_app::exchange_notes::{ItemId, Note as Remote, Op, Report};
+        let ui = ui();
+        let dir = scratch("exchange");
+        let account = Account { url: "https://mail.example.com/EWS/Exchange.asmx".into(), ..Account::new(Kind::Exchange, "exchange-1", "Work", "ann") };
+        let remote = |id: &str, key: &str, subject: &str, body: &str| Remote {
+            item: ItemId { id: id.into(), change_key: key.into() },
+            subject: subject.into(),
+            body: body.into(),
+            modified: "2026-10-01T08:00:00Z".into(),
+        };
+        let mut n = app(&ui, &dir);
+        assert!(n.exchange_plan(&account).is_empty(), "nothing to send before the first round");
+        let first = Report { written: vec![], notes: Ok(vec![remote("A1", "k1", "Budget", "Budget\nQ4"), remote("A2", "k1", "Trip", "Trip\nParis")]) };
+        let applied = n.exchange_apply(&ui, 1000.0, &account, &first);
+        assert_eq!(applied.added, 2);
+        // the account's notes are a folder in the sidebar, and the list shows them
+        assert!(n.folders.contains(&"Work".to_string()));
+        n.run(&ui, Act::View(View::Folder("Work".into())), 1100.0);
+        let mut titles: Vec<&str> = n.listed().iter().map(|(_, t)| *t).collect();
+        titles.sort();
+        assert_eq!(titles, vec!["Budget", "Trip"]);
+        assert!(n.exchange_plan(&account).is_empty(), "what was just read is not sent back");
+        // edit Budget in the editor; the server meanwhile changed both notes
+        let budget = exchange::local_id("A1");
+        let i = n.notes.iter().position(|x| x.id == budget).unwrap();
+        n.open_note(&ui, i, true, 1200.0);
+        type_text(&mut n, &ui, "\nmine", 1300.0);
+        let second = Report { written: vec![], notes: Ok(vec![remote("A1", "k2", "Budget", "Budget\nserver"), remote("A2", "k2", "Trip", "Trip\nRome")]) };
+        let applied = n.exchange_apply(&ui, 2000.0, &account, &second);
+        assert_eq!(applied.updated, 1, "the open note waits, the other one is replaced");
+        assert!(n.notes.iter().any(|x| x.text == "Trip\nRome"));
+        assert!(n.editing().is_some_and(|x| x.id == budget && x.text.contains("mine")));
+        // the edit goes to the server as an update of that mailbox item
+        let ops = n.exchange_plan(&account);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(&ops[0], Op::Update { local, id, body, .. } if *local == budget && id.id == "A1" && body.contains("mine")));
+        // deleting a note in the folder is a delete on the server
+        n.close_note(&ui, 3000.0);
+        let trip = exchange::local_id("A2");
+        let row = n.shown.iter().position(|&s| n.notes[s].id == trip).unwrap();
+        n.delete_row(&ui, row, 3100.0);
+        assert!(n.exchange_plan(&account).iter().any(|op| matches!(op, Op::Delete { local, id } if *local == trip && id.id == "A2")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
