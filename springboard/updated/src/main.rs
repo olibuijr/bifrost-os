@@ -111,13 +111,17 @@ impl Core {
         if self.version.is_empty() {
             return;
         }
-        // the asset daemon runs the apps' queued packs on an unmetered link; no pack source is configured yet,
-        // so a pack that reaches the transfer fails and its attempts are counted
+        // the asset daemon runs the apps' queued packs on an unmetered link; packs come from the local pack folder
+        // (BIFROST_ASSET_PACKS, default /usr/share/bifrost/asset-packs), never from a third party
         if let Some(conditions) = assets::background_conditions(self.wifi, self.low_power) {
             let day = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / 86_400).unwrap_or(0);
+            let source = assets::LocalPackSource::new(std::env::var("BIFROST_ASSET_PACKS").unwrap_or_else(|_| assets::DEFAULT_SOURCE.to_string()), &self.dir);
             self.assets.pass(day, conditions, |app, pack| {
-                eprintln!("updated: asset pack {app}/{pack}: no pack source is configured");
-                false
+                let ok = source.transfer(app, pack);
+                if !ok {
+                    eprintln!("updated: asset pack {app}/{pack}: not available in the local pack folder");
+                }
+                ok
             });
         }
         let now = self.started.elapsed().as_secs_f64();
