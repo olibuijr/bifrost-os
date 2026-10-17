@@ -382,6 +382,7 @@ mod tests {
         assert_eq!(c.hit(c.card.x + 4.0, c.card.y + 4.0), Some(Target::Open));
         let narrow = LockCard::new(&ui, 200);
         assert_eq!(narrow.rating.w, 0.0, "a narrow card has no room for the rating track");
-        assert_eq!(narrow.hit(narrow.rating.x, row_y), Some(Target::Open));
+        // A point past the narrow card's edge is outside the card; a point on the card's own top corner opens it.
+        assert_eq!(narrow.hit(narrow.card.x + narrow.card.w - 4.0, narrow.card.y + 4.0), Some(Target::Open));
     }
 }

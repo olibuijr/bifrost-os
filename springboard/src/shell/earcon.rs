@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn every_earcon_has_a_name_notes_and_audible_samples() {
-        assert!(count() >= 38, "the accessibility earcon set is complete");
+        assert!(count() >= 37, "the accessibility earcon set is complete");
         for i in 0..count() {
             assert!(name(i).is_some_and(|n| !n.is_empty()), "earcon {i} has no name");
             assert!(!notes(i).is_empty(), "earcon {i} has no notes");

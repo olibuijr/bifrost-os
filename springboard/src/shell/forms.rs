@@ -269,7 +269,10 @@ mod tests {
         let third = Prompt::next(&second.purpose, "asa").expect("a password follows");
         assert!(third.secure);
         assert_eq!(third.purpose, Purpose::NewUserPassword { admin: true, full: "Ása Jónsdóttir".into(), name: "asa".into() });
-        assert!(Prompt::next(&third.purpose, "pw").is_none(), "the flow ends with the password");
+        // The password is typed twice: a confirmation step follows, and the flow ends with it.
+        let fourth = Prompt::next(&third.purpose, "pw").expect("a confirmation follows");
+        assert_eq!(fourth.title, "Confirm Password");
+        assert!(Prompt::next(&fourth.purpose, "pw").is_none(), "the flow ends with the confirmation");
     }
 
     #[test]
