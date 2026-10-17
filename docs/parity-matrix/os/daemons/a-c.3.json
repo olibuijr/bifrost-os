@@ -3264,7 +3264,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
    "status": "partial",
-   "note": "rule: defaults and preference domain models; the `domains` service shares text values per app and per first-party suite, synchronised on write; numbers, flags and data are not served yet",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are not served yet",
    "rea": [],
    "method": "rule"
   },
