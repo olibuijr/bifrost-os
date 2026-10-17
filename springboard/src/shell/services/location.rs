@@ -49,6 +49,21 @@ const REVERSE_RADIUS: f64 = 50_000.0;
 /// How long after a fix an app still counts as using location for the menu bar indicator, in seconds.
 pub const ACTIVE_WINDOW: f64 = 5.0;
 
+thread_local! {
+    /// The apps using location as of the last service call or tick. The menu bar reads it through `in_use_now`.
+    static IN_USE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Records the apps using location now, for the menu bar.
+pub fn publish_in_use(apps: Vec<String>) {
+    IN_USE.with(|s| *s.borrow_mut() = apps);
+}
+
+/// The apps using location as the service last published them (sorted by id). Empty means the indicator is hidden.
+pub fn in_use_now() -> Vec<String> {
+    IN_USE.with(|s| s.borrow().clone())
+}
+
 /// One position fix.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Fix {
@@ -311,10 +326,13 @@ impl SystemService for Location {
         let status = effective_status(location_status(app_id), services_on(&shell.prefs));
         let accuracy = accuracy_for(precise_for(&shell.prefs, app_id));
         let shaped = places.first().map(|f| fix_for(f, accuracy));
-        self.answer(status, app_id, method, params, shaped.as_ref(), &places, t)
+        let reply = self.answer(status, app_id, method, params, shaped.as_ref(), &places, t);
+        publish_in_use(self.in_use(t, ACTIVE_WINDOW));
+        reply
     }
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
+        publish_in_use(self.in_use(t, ACTIVE_WINDOW));
         if self.watching.is_empty() {
             return Vec::new();
         }
@@ -508,6 +526,14 @@ mod tests {
         s.answer(WHEN, "a", "stop", &Json::Null, None, &[], 20.0).unwrap();
         assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "stop ends the indicator");
         assert!(s.in_use(5.0, ACTIVE_WINDOW).is_empty(), "a fix in the future is not counted");
+    }
+
+    #[test]
+    fn the_published_in_use_list_is_what_the_menu_bar_reads() {
+        publish_in_use(vec!["a".into()]);
+        assert_eq!(in_use_now(), ["a"]);
+        publish_in_use(Vec::new());
+        assert!(in_use_now().is_empty(), "an empty list hides the indicator");
     }
 
     #[test]

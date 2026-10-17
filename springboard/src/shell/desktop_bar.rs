@@ -30,6 +30,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Bluetooth,
     /// the recording stop item, shown while a screen recording runs: a red dot whose menu has Stop Recording
     Recording,
+    /// the location arrow: shown while an app uses location (`services::location::in_use_now`); its menu lists the apps
+    Location,
     /// Control Center menu extra: a press opens the Control Center sheet, it has no rows
     ControlCenter,
     /// CPU and RAM details; no longer placed on the bar (Golden Gate shows no readouts), kept for their rows
@@ -205,6 +207,8 @@ impl Shell {
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
         // the recording stop item sits left of Control Center while a screen recording runs
         if self.recording_active() {extras.insert(1,(Menu::Recording,self.ui.pt(STATUS_ICON_PT),String::from("stop")));}
+        // the location arrow sits left of the other system extras while an app uses location
+        if !super::services::location::in_use_now().is_empty() {extras.insert(1,(Menu::Location,self.ui.pt(STATUS_ICON_PT),String::from("location")));}
         // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
         if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
@@ -236,6 +240,8 @@ impl Shell {
         let y=y-p*if matches!(menu,Menu::System|Menu::ControlCenter){0.}else{status_icon_lift(menu==Menu::Power&&self.info.battery_present,label=="ethernet")};let rect=|s:&mut Surface,dx:f32,dy:f32,w:f32,h:f32|s.fill_rrect(x+dx*p,y+dy*p,w*p,h*p,p,ink);
         // the recording stop item: a red dot, as the recording indicator
         if menu==Menu::Recording {s.fill_rrect(x-4.*p,y-4.*p,8.*p,8.*p,4.*p,super::ui::SYSTEM_RED);return;}
+        // the location arrow: a north-pointing triangle, drawn as ten rows that widen from the tip
+        if menu==Menu::Location {for i in 0..10 {let w=1.+i as f32*0.9;rect(s,4.5-w/2.,i as f32,w,1.);}return;}
         if menu==Menu::System {
             // the BifrOSt mark: a ring (the sky) over the bridge deck
             s.stroke_rrect(x-6.*p,y-7.*p,12.*p,12.*p,6.*p,1.5*p,ink);rect(s,-8.,6.,16.,2.);return;
@@ -277,6 +283,8 @@ impl Shell {
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock)]);rows},
             Menu::ControlCenter=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
+            // the apps using location now, by name: a label, not a choice (nothing here changes the grant)
+            Menu::Location=>super::services::location::in_use_now().into_iter().map(|id|{let name=super::apphost::installed().iter().find(|a|a.manifest.id==id).map_or_else(|| id.clone(),|a|a.manifest.name.clone());Row::label(name)}).collect(),
             // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
             Menu::Bluetooth=>{let bt=&self.info.bt;let mut rows=vec![Row::action(if bt.on(){"Turn Bluetooth Off"}else{"Turn Bluetooth On"},Action::Bluetooth(crate::bare::bluetooth::Cmd::Enable(!bt.on())))];if bt.on(){rows.push(Row::separator());for d in bt.devices.iter().filter(|d|d.paired||d.connected).take(8) {if bt.busy.as_deref()==Some(d.addr.as_str()){rows.push(Row::label(format!("{}…",d.label())));}else{let cmd=if d.connected{crate::bare::bluetooth::Cmd::Disconnect(d.addr.clone())}else{crate::bare::bluetooth::Cmd::Connect(d.addr.clone())};rows.push(Row::action(format!("{} {}",if d.connected{"✓"}else{" "},d.label()),Action::Bluetooth(cmd)));}}}rows.push(Row::separator());rows.push(Row::action("Bluetooth Settings…",Action::Settings("Bluetooth")));rows},
             // title and position as labels, then the transport: an enabled row sends its remote command to the owner
@@ -360,7 +368,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
         let text=self.clock_text();
         self.bar_label(s,&text,12.,Weight::Medium,|im|(self.w-im.w as i32-self.ui.pt(16.) as i32,(height as i32-im.h as i32)/2));
     }
