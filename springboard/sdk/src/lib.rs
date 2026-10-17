@@ -215,6 +215,8 @@ pub mod oauth_credential;
 pub mod workflow;
 pub use bifrost_ui::print;
 pub use bifrost_ui::print_pages;
+/// Plural categories, noun plurals and `^[2 apple](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
+pub use bifrost_ui::inflection;
 pub use bifrost_ui::print_presets;
 pub use bifrost_ui::print_ranges;
 pub use bifrost_ui::{cups, ipp};
