@@ -5148,7 +5148,21 @@
    "status": "partial",
    "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure. Built 2026-10-17: core::cache_purge::execute removes the planned folders under the cache root and never reaches outside it (tests execute_tests). Still open: nothing calls the plan under disk pressure yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "cache_purge::execute_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage::tests::low_space_clears_only_the_planned_idle_app_caches"
+    }
+   ],
+   "ready_note": "The purge plan is executed: the low-space trim removes the planned apps' Library/Caches folders (least recently used first, running apps kept, links not followed), via core cache_purge::execute and shell storage purge_app_caches. Tested by the execute tests and the storage test. The trigger is the existing low-space guard (is_low), not a separate disk-pressure policy."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CacheExpert.framework",
@@ -5814,7 +5828,7 @@
    "doc": "",
    "bifrost": "springboard/src/media/convert.rs",
    "status": "partial",
-   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced.",
+   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced. Built 2026-10-17: the live preview is white-balanced with gains smoothed across frames (convert::Smoothed, test the_preview_gains_move_gradually_toward_the_scene), and photos are balanced (save_capture). Still open: sensor colour tuning, which needs per-sensor data no BifrOSt driver reads.",
    "rea": [],
    "method": "assessed"
   },
