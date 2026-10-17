@@ -5,8 +5,29 @@
 
 pub use bifrost_ui::pip_window::{Corner, Event, State};
 
+use bifrost_core::json::Json;
 use bifrost_ui::pip_window::{nearest_corner, place, window_size, Controller};
 use bifrost_ui::Rect;
+
+/// The service the shell's Picture in Picture channel registers (`springboard/src/shell/services/picture_in_picture.rs`).
+pub const SERVICE: &str = "pip";
+
+/// Tells the shell whether this player can show a Picture in Picture window. A player that is not possible gets no
+/// window when it asks to start.
+pub fn set_possible(ctx: &crate::runtime::Ctx, on: bool) -> u32 {
+    crate::service::call(ctx, SERVICE, "possible", &Json::Obj(vec![("on".into(), Json::Bool(on))]))
+}
+
+/// Asks the shell for the Picture in Picture window. The shell answers with the delegate events on the next tick:
+/// `pip.will_start`, then `pip.did_start`.
+pub fn start(ctx: &crate::runtime::Ctx) -> u32 {
+    crate::service::call(ctx, SERVICE, "start", &Json::Obj(vec![]))
+}
+
+/// Takes the Picture in Picture window down. The delegate events are `pip.will_stop` and then `pip.did_stop`.
+pub fn stop(ctx: &crate::runtime::Ctx) -> u32 {
+    crate::service::call(ctx, SERVICE, "stop", &Json::Obj(vec![]))
+}
 
 /// The Picture in Picture state of one player and where its window sits.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,6 +107,11 @@ mod tests {
         let bad = Pip::new(f32::NAN).window(screen());
         let good = Pip::new(16.0 / 9.0).window(screen());
         assert_eq!(bad, good);
+    }
+
+    #[test]
+    fn the_service_is_the_name_the_shell_registers() {
+        assert_eq!(SERVICE, "pip");
     }
 
     #[test]
