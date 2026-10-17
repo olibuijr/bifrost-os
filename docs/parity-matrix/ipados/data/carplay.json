@@ -1,0 +1,56 @@
+{
+  "framework": "CarPlay",
+  "doc": "https://developer.apple.com/documentation/carplay",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "springboard/sdk/src/now_playing.rs, springboard/src/shell/now_playing_menu.rs",
+  "summary": "CarPlay puts app templates on a vehicle's built-in screen through Apple's CarPlay host, with instrument cluster and dashboard scenes. The vehicle head unit and the CarPlay host are outside the tablet port, so the templates have no target. The media session in the shell (now_playing.rs) is a separate counterpart that a CarPlay app would also use. iPadOS 12.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "CarPlay scene and delegate",
+      "apple": "CPTemplateApplicationScene",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Needs a vehicle head unit and CarPlay host."
+    },
+    {
+      "feature": "List, grid and tab templates",
+      "apple": "CPListTemplate, CPGridTemplate, CPTabBarTemplate",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Templates are drawn on the vehicle's screen."
+    },
+    {
+      "feature": "Now Playing template",
+      "apple": "CPNowPlayingTemplate",
+      "bifrost": "springboard/sdk/src/now_playing.rs",
+      "status": "partial",
+      "note": "The media session model is shared; the CarPlay template itself is not."
+    },
+    {
+      "feature": "Maps and navigation templates",
+      "apple": "CPMapTemplate, CPNavigationWaypoint, CPManeuver",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Navigation overlays for a head unit."
+    },
+    {
+      "feature": "Instrument cluster",
+      "apple": "CPInstrumentClusterController",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Cluster display is in the vehicle."
+    },
+    {
+      "feature": "Alerts and action sheets",
+      "apple": "CPAlertTemplate, CPActionSheetTemplate",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Templates for the vehicle screen only."
+    }
+  ],
+  "gaps": [
+    "Not planned: needs a vehicle head unit and the CarPlay host."
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "framework": "CarKey",
+  "doc": "https://developer.apple.com/documentation/carkey",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Remote keyless entry for vehicles configured in Wallet. It needs the vehicle manufacturer's servers, Apple's Wallet key service and vehicle keys, which the tablet cannot have. iPadOS 16.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Remote control session",
+      "apple": "CarKeyRemoteControl, CarKeyRemoteControlSession",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Needs the manufacturer's vehicle service."
+    },
+    {
+      "feature": "Vehicle report",
+      "apple": "VehicleReport",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Vehicle data comes from Wallet's keys."
+    },
+    {
+      "feature": "Vehicle actions",
+      "apple": "RemoteKeylessEntryAction, RemoteKeylessEntryEnduringAction",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Actions are sent to a vehicle the tablet does not control."
+    },
+    {
+      "feature": "Execution status and errors",
+      "apple": "ExecutionStatus, CarKeyErrorCode",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Status codes come from the vehicle."
+    }
+  ],
+  "gaps": [
+    "Not planned: depends on vehicle manufacturers and Wallet car keys."
+  ]
+}

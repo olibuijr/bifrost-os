@@ -1,0 +1,42 @@
+{
+  "framework": "ClockKit",
+  "doc": "https://developer.apple.com/documentation/clockkit",
+  "macos_since": "",
+  "status": "n/a",
+  "bifrost": "none",
+  "summary": "Complications for Apple Watch faces. The framework is for watch faces; Apple has moved the complications to WidgetKit. The tablet has no watch faces, so there is no target. The widget timeline (widgets_timeline.rs) is the counterpart that BifrOSt has for app-supplied data on the home surface. iPadOS 14.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Complication data source",
+      "apple": "CLKComplicationDataSource",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Watch face data; no watch on the tablet."
+    },
+    {
+      "feature": "Complication descriptors and families",
+      "apple": "CLKComplicationDescriptor, CLKDefaultComplicationIdentifier",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Watch face families."
+    },
+    {
+      "feature": "Watch face sharing",
+      "apple": "CLKWatchFaceLibrary",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Watch face libraries."
+    },
+    {
+      "feature": "Migration to WidgetKit",
+      "apple": "Migrating ClockKit complications to WidgetKit",
+      "bifrost": "springboard/sdk/src/widgets_timeline.rs",
+      "status": "partial",
+      "note": "The widget timeline is the app-facing data path; ClockKit's watch surface is not."
+    }
+  ],
+  "gaps": [
+    "Not planned: complications are for Apple Watch faces."
+  ]
+}

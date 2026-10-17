@@ -1,0 +1,50 @@
+{
+  "framework": "ContactProvider",
+  "doc": "https://developer.apple.com/documentation/contactprovider",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/contactstore.rs, springboard/sdk/src/dav_sync.rs, springboard/sdk/src/contacts.rs",
+  "summary": "The shell owns a bounded local contact store and syncs contacts from CardDAV accounts. Apps can fetch and save contacts they may access. There is no contact provider extension through which an app supplies its own contacts to the system Contacts store. iPadOS 18.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Provider extension",
+      "apple": "ContactProviderExtension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No extension point for an app to supply contacts."
+    },
+    {
+      "feature": "Provider domains",
+      "apple": "ContactProviderDomain, DefaultContactProviderDomain",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No domain model for provider contacts."
+    },
+    {
+      "feature": "Contact items and enumeration",
+      "apple": "ContactItem, ContactItemEnumerator",
+      "bifrost": "springboard/src/shell/contactstore.rs",
+      "status": "partial",
+      "note": "The shell store holds contacts; no provider enumeration."
+    },
+    {
+      "feature": "Change observers",
+      "apple": "ContactItemChangeObserver",
+      "bifrost": "springboard/sdk/src/dav_sync.rs",
+      "status": "partial",
+      "note": "CardDAV sync reports changes for its accounts; no observer for provider items."
+    },
+    {
+      "feature": "App control of its provider",
+      "apple": "ContactProviderManager",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No manager for an app's provider."
+    }
+  ],
+  "gaps": [
+    "No contact provider extension for apps to supply contacts to the system store.",
+    "Contacts from apps are not merged into the shell's contact store."
+  ]
+}

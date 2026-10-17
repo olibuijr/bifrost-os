@@ -1,0 +1,57 @@
+{
+  "framework": "ManagedApp",
+  "doc": "https://developer.apple.com/documentation/managedapp",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/passwords.rs, springboard/sdk/src/vpn_configuration.rs",
+  "summary": "Managed deployments need an MDM server to provision configurations, certificates, identities and passwords to an app. BifrOSt keeps app secrets in its keychain and passwords store and has a personal VPN model, but it has no administrator provisioning path, so an app cannot receive managed values. iPadOS 18.4 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Managed configuration provider",
+      "apple": "ManagedAppConfigurationProvider",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No provisioned configuration reaches an app."
+    },
+    {
+      "feature": "Configuration specification and decoding",
+      "apple": "Specifying and decoding a configuration, ManagedAppConfigurationDecodingError",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No decoder or validation path for administrator values."
+    },
+    {
+      "feature": "Provisioned certificates",
+      "apple": "ManagedAppCertificatesProvider",
+      "bifrost": "springboard/sdk/src/trust.rs",
+      "status": "gap",
+      "note": "trust.rs evaluates certificate chains; it does not receive provisioned certificates."
+    },
+    {
+      "feature": "Provisioned identities",
+      "apple": "ManagedAppIdentitiesProvider",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No provisioned identity store."
+    },
+    {
+      "feature": "Provisioned passwords",
+      "apple": "ManagedAppPasswordsProvider",
+      "bifrost": "springboard/sdk/src/passwords.rs",
+      "status": "gap",
+      "note": "The passwords group is the user's own; nothing is pushed by an administrator."
+    },
+    {
+      "feature": "Errors",
+      "apple": "ManagedAppError",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No managed-app error set."
+    }
+  ],
+  "gaps": [
+    "No administrator provisioning path (MDM) for configurations, certificates, identities or passwords.",
+    "The keychain and passwords store keep the user's secrets only; they are not managed."
+  ]
+}

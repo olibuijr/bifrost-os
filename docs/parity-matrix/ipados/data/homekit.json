@@ -1,0 +1,57 @@
+{
+  "framework": "HomeKit",
+  "doc": "https://developer.apple.com/documentation/homekit",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/src/shell/homeconf.rs, springboard/src/shell/homeedit.rs",
+  "summary": "Configures, controls and reads home automation accessories through a home manager, services, characteristics, action sets and triggers. BifrOSt has no HomeKit or Matter layer; homeconf.rs and homeedit.rs are the home screen layout, not a home. iPadOS 8.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Home manager and homes",
+      "apple": "HMHomeManager",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No home model; the home screen layout is unrelated."
+    },
+    {
+      "feature": "Accessory setup",
+      "apple": "HMAccessorySetupManager, HMAccessorySetupRequest",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No accessory pairing or setup flow."
+    },
+    {
+      "feature": "Accessories, services and characteristics",
+      "apple": "HMAccessory, HMService, HMCharacteristic",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No accessory model or characteristic read and write."
+    },
+    {
+      "feature": "Action sets and triggers",
+      "apple": "HMActionSet, HMTimerTrigger, HMEventTrigger",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No automation of accessories."
+    },
+    {
+      "feature": "Media source display order",
+      "apple": "HMMediaSourceDisplayOrderProfile",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No media source profile."
+    },
+    {
+      "feature": "Setup payload",
+      "apple": "HMAccessorySetupPayload",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No setup code parsing for accessories."
+    }
+  ],
+  "gaps": [
+    "No home automation layer (HomeKit or Matter) and no accessory pairing.",
+    "The home screen layout in homeconf.rs is not a home model."
+  ]
+}

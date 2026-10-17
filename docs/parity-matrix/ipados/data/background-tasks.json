@@ -1,0 +1,65 @@
+{
+  "framework": "Background Tasks",
+  "doc": "https://developer.apple.com/documentation/backgroundtasks",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/background_tasks.rs, springboard/sdk/src/activity_schedule.rs, springboard/sdk/src/background_download.rs",
+  "summary": "The SDK has a pure model of deferred background tasks (requests, a pending queue and the rule for which may run now) and a background activity schedule with an interval and tolerance. Nothing in the shell or the SDK calls the scheduler on this branch, so no app task runs in the background. Continuous and continued tasks are missing. iPadOS 13.0 and later per the index; not tested on a tablet.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Scheduling and task requests",
+      "apple": "BGTaskScheduler, BGTaskRequest",
+      "bifrost": "springboard/sdk/src/background_tasks.rs",
+      "status": "partial",
+      "note": "Requests and a pending queue are modelled; no caller submits them to the shell."
+    },
+    {
+      "feature": "Refresh and processing task types",
+      "apple": "BGAppRefreshTask, BGProcessingTask",
+      "bifrost": "springboard/sdk/src/background_tasks.rs",
+      "status": "partial",
+      "note": "The rule for which request may run now is modelled; the task types are not wired to a run loop."
+    },
+    {
+      "feature": "Repeating or one-shot schedule",
+      "apple": "Choosing background strategies",
+      "bifrost": "springboard/sdk/src/activity_schedule.rs",
+      "status": "partial",
+      "note": "An activity runs no sooner than its interval and at latest within a tolerance; not connected to the shell scheduler."
+    },
+    {
+      "feature": "Background URL sessions",
+      "apple": "Background transfers",
+      "bifrost": "springboard/sdk/src/background_download.rs",
+      "status": "partial",
+      "note": "A download model exists; background transfer across launches is not verified."
+    },
+    {
+      "feature": "Continued processing (foreground start, background finish)",
+      "apple": "BGContinuedProcessingTask",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No task that continues after the app is backgrounded."
+    },
+    {
+      "feature": "Background GPU access",
+      "apple": "Background GPU Access entitlement",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No GPU budget for background work."
+    },
+    {
+      "feature": "Development start and terminate",
+      "apple": "Starting and terminating tasks during development",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No debugger hook to run or stop a task."
+    }
+  ],
+  "gaps": [
+    "No caller for the scheduler: the shell does not run app tasks in the background on this branch.",
+    "No continued processing task and no background GPU budget.",
+    "No development hook to start or stop tasks."
+  ]
+}

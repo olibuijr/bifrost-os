@@ -1,0 +1,65 @@
+{
+  "framework": "App Clips",
+  "doc": "https://developer.apple.com/documentation/appclip",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/app_links.rs, springboard/sdk/src/defaults.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/usernotif.rs",
+  "summary": "App Clips are a lightweight part of an app that Apple installs on demand from invocation URLs, App Clip Codes and the App Store. BifrOSt has no on-demand install and no App Clip card, so those rows are n/a. Web link routing to an app (app_links.rs) is a partial counterpart for the invocation URL step; shared defaults and keychain cover the data sharing with a full app. iPadOS 14.0 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Invocation URLs",
+      "apple": "Responding to invocations, APActivationPayload",
+      "bifrost": "springboard/sdk/src/app_links.rs",
+      "status": "partial",
+      "note": "A site path opens the app with the longest matching prefix; there is no activation payload or invocation context."
+    },
+    {
+      "feature": "On-demand install of the App Clip",
+      "apple": "App Clip card, on-demand install entitlement",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Depends on Apple's App Store on-demand install service."
+    },
+    {
+      "feature": "App Clip Codes (NFC and scan-only)",
+      "apple": "Creating App Clip Codes",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Apple's code format and NFC registration; no counterpart."
+    },
+    {
+      "feature": "Data sharing with the full app",
+      "apple": "Shared user defaults, keychain, containers",
+      "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/keychain.rs",
+      "status": "partial",
+      "note": "Both are per-app stores; no shared container between an app and its clip."
+    },
+    {
+      "feature": "Recommend the full app from the clip",
+      "apple": "App Clip overlay",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No overlay or transition from a small app to a full one."
+    },
+    {
+      "feature": "Notifications from an App Clip",
+      "apple": "Enabling notifications in App Clips",
+      "bifrost": "springboard/sdk/src/usernotif.rs",
+      "status": "partial",
+      "note": "Notifications exist for apps; the time-limited clip permission does not."
+    },
+    {
+      "feature": "Parent application identifiers",
+      "apple": "NSAppClip, parent app identifiers entitlement",
+      "bifrost": "none",
+      "status": "n/a",
+      "note": "Entitlement and bundle linking are Apple's signing model."
+    }
+  ],
+  "gaps": [
+    "No App Clip card, on-demand install or App Clip Codes; these depend on Apple services.",
+    "No overlay that recommends the full app from inside a small app.",
+    "No time-limited notification permission for small apps."
+  ]
+}

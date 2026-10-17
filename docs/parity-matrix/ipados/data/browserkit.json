@@ -1,0 +1,64 @@
+{
+  "framework": "BrowserKit",
+  "doc": "https://developer.apple.com/documentation/browserkit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/bookmark_import.rs, springboard/sdk/src/reading_list.rs, springboard/sdk/src/credential_exchange.rs, springboard/sdk/src/webview.rs, springboard/apps/browser",
+  "summary": "Bookmark import from an HTML export, a reading list model and a credential exchange format exist, and BifrOSt's own browser runs on a web engine. There is no export manager for history, bookmarks, reading list or extensions to another browser, and no eligibility check for an alternative engine. iPadOS 18.4 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Export browsing data to another browser",
+      "apple": "BEBrowserDataExportManager, BEExportOptions",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No export manager; the import side is the only data exchange."
+    },
+    {
+      "feature": "Import bookmarks",
+      "apple": "BEBrowserDataImportManager, BEBrowserDataBookmark",
+      "bifrost": "springboard/sdk/src/bookmark_import.rs",
+      "status": "partial",
+      "note": "Reads an HTML bookmark export; no direct import from another browser's store."
+    },
+    {
+      "feature": "Reading list transfer",
+      "apple": "BEBrowserDataReadingListItem",
+      "bifrost": "springboard/sdk/src/reading_list.rs",
+      "status": "partial",
+      "note": "A reading list model exists; it is not transferred between browsers."
+    },
+    {
+      "feature": "Browsing history transfer",
+      "apple": "BEBrowserDataHistoryVisit",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No history export or import."
+    },
+    {
+      "feature": "Extension transfer",
+      "apple": "BEBrowserDataExtension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No browser extension export."
+    },
+    {
+      "feature": "Credential transfer",
+      "apple": "Credential exchange (not in BrowserKit)",
+      "bifrost": "springboard/sdk/src/credential_exchange.rs",
+      "status": "partial",
+      "note": "A credential exchange format; it sits beside BrowserKit, not in it."
+    },
+    {
+      "feature": "Alternative engine eligibility",
+      "apple": "BEAvailability",
+      "bifrost": "springboard/sdk/src/webview.rs",
+      "status": "partial",
+      "note": "BifrOSt's own browser runs its web engine; there is no eligibility check for a third-party engine."
+    }
+  ],
+  "gaps": [
+    "No export of history, bookmarks, reading list or extensions to another browser.",
+    "No eligibility check for an alternative browser engine."
+  ]
+}

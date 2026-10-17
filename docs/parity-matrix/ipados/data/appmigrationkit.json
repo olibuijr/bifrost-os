@@ -1,0 +1,56 @@
+{
+  "framework": "AppMigrationKit",
+  "doc": "https://developer.apple.com/documentation/appmigrationkit",
+  "macos_since": "",
+  "status": "gap",
+  "bifrost": "springboard/sdk/src/transfer.rs, springboard/sdk/src/archive.rs, springboard/sdk/src/credential_exchange.rs",
+  "summary": "A one-time transfer of an app's on-device data to or from a device on another platform, through a migration extension. BifrOSt has archive and credential exchange models, but no migration extension, no export or import protocol and no migration status. iPadOS 26.1 and later per the index.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Migration app extension",
+      "apple": "AppMigrationExtension",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No extension point for a one-time transfer."
+    },
+    {
+      "feature": "Export of transportable resources",
+      "apple": "ResourcesExporting, ResourcesExportingWithOptions",
+      "bifrost": "springboard/sdk/src/archive.rs",
+      "status": "gap",
+      "note": "The archive model is not an export protocol for migration."
+    },
+    {
+      "feature": "Import of transportable resources",
+      "apple": "ResourcesImporting",
+      "bifrost": "springboard/sdk/src/credential_exchange.rs",
+      "status": "gap",
+      "note": "Credential exchange moves passwords between managers; it is not a migration import."
+    },
+    {
+      "feature": "Migration status",
+      "apple": "MigrationStatus",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No status type for a completed import."
+    },
+    {
+      "feature": "Data container access entitlement",
+      "apple": "com.apple.developer.app-migration.data-container-access",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No entitlement model for this transfer."
+    },
+    {
+      "feature": "Migration tests",
+      "apple": "AppMigrationTester",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No test type for migration code."
+    }
+  ],
+  "gaps": [
+    "No migration extension, export or import protocol, or migration status type."
+  ]
+}

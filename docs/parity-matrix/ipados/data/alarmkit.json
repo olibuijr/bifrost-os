@@ -1,0 +1,65 @@
+{
+  "framework": "AlarmKit",
+  "doc": "https://developer.apple.com/documentation/alarmkit",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/clock/alarm.rs, springboard/src/shell/clock/timer.rs, springboard/src/shell/clock/mod.rs, springboard/apps/clock-desktop/src/clock/mod.rs, docs/parity/connect-clock.md",
+  "summary": "The shell's headless Clock service owns alarms and timers: it fires them with sound and an RTC wake whether or not the Clock app is open, and the Clock app edits the same files. Apps have no alarm API, so they cannot schedule, snooze or cancel an alarm, and there is no alarm presentation or countdown Live Activity. iPadOS 26.0 and later per the index; the Clock service is not verified on a tablet.",
+  "rea_evidence": "not captured: REA capture pending (tools/parity/rea-page.sh not run this round; owner rule); facts are from tools/parity/docc.py",
+  "features": [
+    {
+      "feature": "Scheduling, snoozing and cancelling alarms",
+      "apple": "AlarmManager",
+      "bifrost": "springboard/src/shell/clock/alarm.rs, springboard/src/shell/clock/mod.rs",
+      "status": "partial",
+      "note": "The shell schedules and fires alarms itself; no SDK call lets an app do it."
+    },
+    {
+      "feature": "Repeating alarm schedule",
+      "apple": "Alarm (repeating schedule)",
+      "bifrost": "springboard/src/shell/clock/alarm.rs, springboard/apps/clock-desktop/src/clock/mod.rs",
+      "status": "partial",
+      "note": "Repeat days are set in the Clock app; the model is not exposed to other apps."
+    },
+    {
+      "feature": "Countdown timers",
+      "apple": "Alarm countdown",
+      "bifrost": "springboard/src/shell/clock/timer.rs",
+      "status": "partial",
+      "note": "Several timers run in the shell; apps cannot create one through an API."
+    },
+    {
+      "feature": "Alarm buttons",
+      "apple": "AlarmButton",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No API for the buttons on an alarm alert."
+    },
+    {
+      "feature": "Alarm presentation and Live Activity",
+      "apple": "AlarmPresentation, AlarmPresentationState, AlarmAttributes",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "The alert is the shell's own full-screen alert; no app content or Live Activity is shown for an alarm."
+    },
+    {
+      "feature": "Alarm metadata",
+      "apple": "AlarmMetadata",
+      "bifrost": "none",
+      "status": "gap",
+      "note": "No metadata object is passed between the app and the shell."
+    },
+    {
+      "feature": "Wake from sleep for an alarm",
+      "apple": "System alarm with RTC wake",
+      "bifrost": "springboard/src/shell/clock/mod.rs",
+      "status": "os",
+      "note": "The shell arms the RTC wake for the next due alarm or timer."
+    }
+  ],
+  "gaps": [
+    "No SDK alarm API: apps cannot schedule, snooze or cancel an alarm.",
+    "No alarm presentation or countdown Live Activity for apps.",
+    "The Clock service's wake and alert paths are not tested on the Samsung Tab A8."
+  ]
+}
