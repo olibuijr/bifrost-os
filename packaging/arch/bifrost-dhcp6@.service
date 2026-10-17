@@ -1,0 +1,18 @@
+[Unit]
+Description=BifrOSt DHCPv6 server on %i
+Documentation=file:///usr/share/doc/bifrost/privd-protocol.md
+# bifrost-privd (dhcp6.serve) writes the configuration; without it this unit does not start.
+ConditionPathExists=/run/bifrost/dhcp6/%i.conf
+After=network.target sys-subsystem-net-devices-%i.device
+BindsTo=sys-subsystem-net-devices-%i.device
+
+[Service]
+Type=simple
+# dnsmasq in the foreground: address assignment only (port=0 turns its DNS off); it drops to its own user after binding.
+ExecStart=/usr/bin/dnsmasq --keep-in-foreground --conf-file=/run/bifrost/dhcp6/%i.conf --pid-file=
+Restart=on-failure
+RestartSec=2
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/bifrost/dhcp6

@@ -18,11 +18,23 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "tftp-hpa is listed in packaging/arch/runtime-packages.txt, but its daemon and unit were not verified on a built image and no BifrOSt code uses TFTP. Left as an OS-layer item.",
+   "note": "TFTP is the packaged tftp-hpa daemon and client (runtime-packages.txt), off by default like the reference.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/in.tftpd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tftp"
+    }
+   ],
+   "ready_note": "TFTP is the packaged tftp-hpa (server in.tftpd and the tftp client, listed in runtime-packages.txt); the reference keeps it off by default as BifrOSt does (no unit is enabled). The paths are those the Arch package installs and are not yet verified on a built image."
   }
  ]
 }

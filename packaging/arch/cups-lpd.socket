@@ -1,0 +1,13 @@
+[Unit]
+Description=BifrOSt Printer Sharing: LPD listener (hands each connection to cups-lpd)
+Documentation=man:cups-lpd(8)
+# Off until the person turns Printer Sharing on (Settings > Sharing, privd service id printer_sharing).
+
+[Socket]
+ListenStream=515
+Accept=yes
+MaxConnections=16
+MaxConnectionsPerSource=4
+
+[Install]
+WantedBy=sockets.target

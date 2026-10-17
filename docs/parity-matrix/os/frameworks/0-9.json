@@ -74,11 +74,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
    "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_form::form_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "onscreen_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "The overlay's job, running intents from a window and tying views to entities, is the SDK intent layer (intents.rs run and dispatch, intent_form for a parameter editor) with the view-side models: onscreen_entity annotates views with the entity they show and intent_resolve resolves and confirms parameters before a run. All tested."
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_HealthKit.framework",
@@ -116,11 +140,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
    "status": "partial",
-   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intent_form::form_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "onscreen_entity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "intent_resolve::tests"
+    }
+   ],
+   "ready_note": "Same job as the AppKit overlay for declarative views: running an intent from a control, annotating a view with its entity, resolving parameters before a run. Covered by the SDK intents layer and the ui onscreen_entity and intent_resolve models, all tested."
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework",
@@ -158,11 +206,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/sdk/src/contacts_intents.rs, springboard/sdk/src/contacts.rs",
    "status": "partial",
-   "note": "overlay module, owner Contacts; from SDK matrix contacts.json",
+   "note": "overlay module, owner Contacts: contact entities and the Find Contacts intent (sdk contacts_intents.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: contacts as App Intents values. sdk contacts_intents turns a contact record into an Entity (id, display name, first email or phone or organization as subtitle), answers suggested, id and string entity queries over the records the app may see, and declares the Find Contacts intent. Access still follows the person's contacts choice because the records come from contacts::fetch."
   },
   {
    "id": "path:/System/Library/Frameworks/_CoreData_CloudKit.framework",
@@ -260,11 +322,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "bifrost": "springboard/sdk/src/device_activity.rs, springboard/sdk/src/screen_usage.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
-   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet.",
+   "note": "overlay module, owner DeviceActivity: usage report model over the per-day usage files, own-app scope private (sdk device_activity.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "device_activity::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: the report a device activity report view draws. sdk device_activity builds total time, ranked apps, pickups, notifications, the hourly split and per-day totals from the per-day usage files, with an own-app scope that hides everything about other apps, pickups and hours (privacy), and row text for a list view. A drawn report view in the kit is not built."
   },
   {
    "id": "path:/System/Library/Frameworks/_FinanceKit_AppIntents.framework",
@@ -302,11 +378,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: what a window needs to show a model session. sdk language_model_stream adds streamed turns (run_turn_streamed with a stop that records nothing, a StreamedResponse view state) and the availability sentence for a view; the session, profile and availability types are in language_model and ui model_session. Still no on-device model runtime, generation options or constrained decoding: those belong to the FoundationModels row, not the overlay."
   },
   {
    "id": "path:/System/Library/Frameworks/_FoundationModels_SwiftUI.framework",
@@ -323,11 +418,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
    "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model_stream::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_session::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: what a declarative view binds to for a model session: streamed text so far with a progress flag (StreamedResponse), a way to stop a turn without a half answer in the history, and the availability sentence. Model runtime gaps stay on the FoundationModels row."
   },
   {
    "id": "path:/System/Library/Frameworks/_GeoToolbox_AppIntents.framework",
@@ -446,11 +560,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "bifrost": "springboard/sdk/src/link_intents.rs, springboard/sdk/src/link_metadata.rs",
    "status": "partial",
-   "note": "overlay module, owner LinkPresentation; from SDK matrix link-presentation.json",
+   "note": "overlay module, owner LinkPresentation: link entity, value and snippet for intents (sdk link_intents.rs).",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "link_metadata::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: links as App Intents values. sdk link_intents turns link metadata into an Entity (checked web address as id, page title or host as title), a JSON value an intent returns, a result snippet, and reads a link value back with the address and picture addresses checked as web addresses; the fetch and parse are link_metadata."
   },
   {
    "id": "path:/System/Library/Frameworks/_LocalAuthentication_SwiftUI.framework",

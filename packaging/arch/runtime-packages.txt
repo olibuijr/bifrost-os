@@ -57,6 +57,7 @@ cups-filters
 dash
 db
 diffstat
+dnsmasq
 ed
 efibootmgr
 expect

@@ -74,11 +74,37 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
+   "bifrost": "packaging/arch/cups-lpd.socket, packaging/arch/cups-lpd@.service, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "partial",
-   "note": "The cups-lpd binary ships in the cups package (/usr/lib/cups/daemon/cups-lpd), but no BifrOSt code enables or uses the LPD listener. The BifrOSt CUPS client (cups.rs, ipp.rs) talks to cupsd, not to LPD. Left partial.",
+   "note": "Built: Printer Sharing switch (Settings > Sharing) enabling cups-lpd.socket, which hands each LPD connection to the packaged cups-lpd.",
    "rea": [],
-   "method": "assessed"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/cups/daemon/cups-lpd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups-lpd.socket"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/cups-lpd@.service"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: Printer Sharing. cups-lpd.socket listens on port 515 and starts cups-lpd@.service per connection, which runs the cups package's cups-lpd (queues the job through cupsd); Settings > Sharing gets a Printer Sharing switch that privd service.set maps to cups-lpd.socket (accounts::service_units). Off until the person turns it on."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",

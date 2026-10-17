@@ -1,0 +1,17 @@
+[Unit]
+Description=BifrOSt Printer Sharing: one LPD connection
+Documentation=man:cups-lpd(8)
+Requires=cups.service
+After=cups.service
+
+[Service]
+# cups-lpd reads the LPD request on stdin and answers on stdout; it queues the job through cupsd, so only printers
+# that exist on this computer can receive jobs.
+ExecStart=/usr/lib/cups/daemon/cups-lpd
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true

@@ -170,6 +170,30 @@ impl Client {
         self.call("storage.policy_set", vec![("empty_trash_after_30_days", Json::Bool(on))]).map(|_| ())
     }
 
+    /// The firmware boot entries in boot order (`startup_disk.list`): `(id, label, active, current, next, default)`.
+    pub fn startup_disks(&self) -> Result<Vec<(String, String, bool, bool, bool, bool)>, ClientError> {
+        let r = self.call("startup_disk.list", vec![])?;
+        let flag = |e: &Json, k: &str| matches!(e.get(k), Some(Json::Bool(true)));
+        Ok(r.get("entries")
+            .and_then(Json::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|e| {
+                        let id = e.get("id")?.as_str()?.to_string();
+                        let label = e.get("label")?.as_str()?.to_string();
+                        Some((id, label, flag(e, "active"), flag(e, "current"), flag(e, "next"), flag(e, "default")))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Makes boot entry `id` (four hex digits from `startup_disks`) the default start, or the next start only with
+    /// `once` (`startup_disk.set`).
+    pub fn set_startup_disk(&self, id: &str, once: bool) -> Result<(), ClientError> {
+        self.call("startup_disk.set", vec![("id", privd::s(id)), ("once", Json::Bool(once))]).map(|_| ())
+    }
+
     /// Sets the DNS servers the user chose (`network.dns_set`, at most four IPv4 or IPv6 addresses, in order); an empty
     /// list goes back to the servers the network provides. privd writes them as a systemd-resolved drop-in.
     pub fn set_dns_servers(&self, servers: &[String]) -> Result<(), ClientError> {

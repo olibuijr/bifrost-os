@@ -526,10 +526,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree (no LaunchDaemons directory), the label does not say which inbox it updates, and no BifrOSt counterpart was found by name search.",
+   "status": "n/a",
+   "note": "n/a: Apple content delivery. The reference index lists usr/libexec/inboxupdaterd (3.3 MB) with the log subsystem com.apple.mobileinboxupdater, the MobileAsset inbox that stages Apple-hosted update content. BifrOSt updates come from its own signed pacman repository (springboard/updated, privd update.*) and never from an Apple asset service.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.installandsetup.systemmigrationd.plist",
@@ -546,11 +546,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/src/shell/migration.rs, springboard/src/shell/backup.rs",
    "status": "partial",
-   "note": "Open. System migration is not built; springboard/updated handles OS update offers only.",
+   "note": "System migration is the migration helper: it lists the categories in a source disk or archive, stages the picked ones and applies them at the next start (shell/migration.rs, backup.rs).",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::migration::tests"
+    }
+   ],
+   "ready_note": "The migration helper (shell/migration.rs) brings a user's data from another disk or a backup archive into this machine, one category at a time, staged through the backup restore and applied at next start; covered by shell::migration::tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.installcoordination_proxy.plist",
@@ -725,10 +734,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label alone does not identify the I/O registry node cache it serves; no counterpart chosen.",
+   "status": "n/a",
+   "note": "n/a: IOKit registry cache. System/Library/CoreServices/ionodecache (172 KB, with a man8 page) caches I/O Registry device-node data for XNU's IOKit. Linux has no IOKit registry: devices are in sysfs and udev (springboard/sdk/src/udev.rs).",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ioupsd.plist",
@@ -1358,10 +1367,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what the daemon serves; no counterpart chosen.",
+   "status": "n/a",
+   "note": "n/a: Apple-private on-device daemon from CoreLSKD.framework (31.7 MB daemon, 25 MB framework, its own sandbox profile com.apple.lskdd.sb and a rule list usr/share/kdrl.bundle/lskd.rl in the reference index). No public API, setting or app uses it, and the size points to Apple ML model data (Apple ML model packs). The exact purpose is unconfirmed because the binary is not extracted.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.mDNSResponder.plist",
@@ -2165,11 +2174,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Served by Samba's smbd (smb.service, runtime-packages.txt), switched by Settings > Sharing > File Sharing through privd service.set.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/smb.service"
+    }
+   ],
+   "ready_note": "The MSRPC echo endpoint is served by Samba's smbd inside the File Sharing service: the smb.service unit (samba is in runtime-packages.txt) is switched by Settings > Sharing through privd service.set (accounts::service_units, sharing_page)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.msrpc.lsarpc.plist",
@@ -2249,11 +2280,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Served by Samba's smbd (smb.service); share sections are managed by sharing_page (with_share, without_share).",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/smb.service"
+    }
+   ],
+   "ready_note": "The srvsvc RPC (share enumeration for SMB clients) is served by Samba's smbd inside the File Sharing service; the shares themselves are the smb.conf sections that sharing_page adds and removes (share_section, with_share, without_share)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.msrpc.wkssvc.plist",
@@ -2270,11 +2323,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Served by Samba's smbd (smb.service), switched by Settings > Sharing > File Sharing.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/smb.service"
+    }
+   ],
+   "ready_note": "The wkssvc RPC (workstation information for SMB clients) is served by Samba's smbd inside the File Sharing service (smb.service), switched by Settings > Sharing through privd service.set."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.multiversed.plist",
@@ -2292,10 +2367,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree; the label suggests delivery of system asset variants, but that cannot be confirmed; no counterpart chosen.",
+   "status": "n/a",
+   "note": "n/a: Apple system-asset delivery daemon: usr/libexec/multiversed (225 KB) has only its launchd plist in the reference index, with no resources and no sandbox profile, and chooses among Apple-served variants of system assets. BifrOSt delivers its assets through its own pacman repository. The exact purpose is unconfirmed because the binary is not extracted.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.musicd.plist",
@@ -2549,10 +2624,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "Samba's nmbd provides the NetBIOS name service on the LAN; nothing in BifrOSt configures or starts it yet.",
-   "rea": []
+   "note": "Samba's nmbd (nmb.service) is switched on and off together with smb.service by Settings > Sharing > File Sharing (privd accounts::service_units).",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/nmbd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/nmb.service"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: File Sharing now switches smb.service and nmb.service together (accounts::service_units, privd service.set), so Samba's nmbd answers the NetBIOS name service whenever File Sharing is on; covered by privd::accounts::tests.",
+   "method": "built"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.newsyslog.plist",
@@ -3502,10 +3600,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/rfb",
-   "status": "partial",
-   "note": "rule: remote framebuffer service; Remote app",
+   "status": "n/a",
+   "note": "n/a: the Remote Service Discovery / RemoteXPC daemon: usr/libexec/remoted (994 KB) has only its plist in the reference index, and the index shows RemoteServiceDiscovery used as a time source (CoreTime RemoteServiceDiscoveryTimeSync.bundle). It bridges a Mac to paired Apple devices (iPhone, Watch, HomePod), a transport BifrOSt does not have. The remote desktop viewer and server are the Screen Sharing and Remote app rows.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.remotemanagementd.plist",
@@ -3749,11 +3847,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sharing_page.rs",
+   "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/accounts.rs, springboard/rfb, springboard/apps/remote",
    "status": "partial",
-   "note": "role filled by sharing_page.rs (toggle only); only the Settings toggle; no screen-sharing server of its own",
+   "note": "Settings > Sharing > Screen Sharing switches wayvnc.service (privd service.set), the Screen Sharing viewer and the RFB protocol crate (springboard/rfb) exist, and the Remote app runs WayVNC on a private socket. Open, so the row stays partial: wayvnc.service has no unit in the repo and a raw VNC endpoint needs an authentication decision (WayVNC with enable_auth=false would expose the desktop). Needs owner decision: password plus TLS (WayVNC enable_auth, a generated key) set from Settings, then a unit that reads /run/bifrost/user/session.json like apps/remote/assets/server.py does.",
    "rea": [],
-   "method": "audit"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.scsid.plist",
@@ -3771,10 +3869,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show the service's purpose; no counterpart chosen.",
+   "status": "n/a",
+   "note": "n/a: XNU SCSI Architecture Model helper: usr/libexec/scsid (135 KB, a 540-byte man8 page, plist only) sits beside the IOSCSIArchitectureModelFamily kexts and the SCSI DriverKit frameworks in the reference index. Linux handles SCSI in the kernel midlayer (sd, sg) and needs no user-space daemon. The exact purpose is inferred from those neighbours because the binary is not extracted.",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.secinitd.plist",
@@ -4229,11 +4327,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "packaging/arch/runtime-packages.txt, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "SMB preferences are the Sharing page's smb.conf share editing and File Sharing switch (sharing_page.rs, privd accounts.rs).",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbd"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/smb.service"
+    }
+   ],
+   "ready_note": "SMB preferences (which folders are shared, read only or writable, and whether the server runs) are Settings > Sharing: sharing_page reads and edits the smb.conf share sections (shares_in_conf, with_share, without_share, share_section) and privd service.set switches smb.service; covered by shell::sharing_page::tests and privd::accounts::tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.smbd.plist",
@@ -4415,11 +4535,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/core/src/startup_disk.rs, springboard/src/privd/methods.rs, springboard/src/privd_client.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "Open. Startup disk selection is not built; springboard/updated handles OS update offers only.",
+   "note": "Built: startup disk selection (core startup_disk, privd startup_disk.list and startup_disk.set over efibootmgr).",
    "rea": [],
-   "method": "rule"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "startup_disk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/efibootmgr"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: startup disk selection over the firmware boot table. bifrost_core::startup_disk parses efibootmgr output, orders the entries by BootOrder and builds the argv that makes a listed active entry the default or the next start only; privd startup_disk.list and startup_disk.set run it, and privd_client has startup_disks and set_startup_disk. A Settings page row is not drawn yet."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.statd.notify.plist",
@@ -4500,11 +4638,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/bifrostd/src/purge.rs, springboard/src/privd/methods.rs",
    "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show which storage service it helps; no counterpart chosen.",
+   "note": "Matched by name to the storage management helper: bifrostd purge frees space on request or when space is low (purge.rs).",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrostd",
+     "filter": "purge::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    }
+   ],
+   "ready_note": "The storage management helper that frees space on request is bifrostd's purge (app and thumbnail caches, expired Recently Deleted items, old packages) with the Storage policy written by privd; covered by purge::tests. The label is the only evidence of the reference daemon's job (plist only in the index, siblings storagekitd and spinandd), so the match is by name."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.storagekitd.plist",
@@ -5087,11 +5239,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/menu_extras.rs, springboard/sdk/src/status_item.rs, springboard/ui/src/mic_consent.rs, springboard/src/shell/desktop_bar.rs",
    "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what status it reports; no counterpart chosen.",
+   "note": "Menu bar status area: menu extras and app status items (menu_extras.rs, status_item.rs) with the recording and input indicators (desktop_bar.rs, mic_consent.rs).",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "menu_extras::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "status_item::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mic_consent::tests"
+    }
+   ],
+   "ready_note": "The system status server's job, holding what the menu bar's status area shows, is the menu extras model (ui menu_extras, sdk status_item for apps) plus the recording and input indicators the bar draws from the audio policy and microphone consent (desktop_bar.rs, mic_consent). Matched by name and neighbours (SystemStatusServer); the binary is not extracted."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.tailspind.plist",
@@ -5883,10 +6054,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "n/a: legacy Unix-to-Unix dial-up copy (usr/bin/uucp, the uucp spool and etc templates in the reference index), off by default and not used by any current feature; BifrOSt has no dial-up transport.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.vsdbutil.plist",
@@ -5938,11 +6109,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/desk.rs",
+   "bifrost": "springboard/src/first_frame_cache.rs, springboard/src/shell/wallpaper_page.rs, springboard/src/shell/login.rs",
    "status": "partial",
-   "note": "Wallpaper drawing; no export service",
+   "note": "The pre-login wallpaper export is first_frame_cache.rs (cover-fitted copy written at install and update, used by the login screen and first frame).",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "first_frame_cache::tests"
+    }
+   ],
+   "ready_note": "The export of the wallpaper for the screens drawn before a user session is first_frame_cache: the wallpaper cover-fitted to the panel is written atomically at install and update and read by the login screen and first desktop frame; covered by first_frame_cache::tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.warmd.plist",
@@ -5959,11 +6139,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/launch_prefetch.rs, springboard/src/bin/shell.rs",
    "status": "os",
-   "note": "Not determined: the plist is absent from the extracted reference tree and the label does not show what it warms; no counterpart chosen.",
+   "note": "Launch-time cache warming (core launch_prefetch, called from the shell at start).",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "launch_prefetch::tests"
+    }
+   ],
+   "ready_note": "Cache warming is bifrost_core::launch_prefetch: it remembers app launches, predicts the next ones and reads their executables into the page cache; the shell calls warm_default at start. Covered by launch_prefetch::tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.watchdogd.plist",

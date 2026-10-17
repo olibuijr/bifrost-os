@@ -113,14 +113,22 @@ pub fn hostname_for(computer_name: &str) -> String {
     out.chars().take(63).collect::<String>().trim_end_matches('-').to_string()
 }
 
-/// The sharing switches Settings may flip, and the unit behind each. Nothing else can be enabled through privd.
-pub fn service_unit(id: &str) -> Option<&'static str> {
+/// The sharing switches Settings may flip, and the units behind each. Nothing else can be enabled through privd.
+/// File Sharing is the SMB server and the NetBIOS name service beside it; Printer Sharing is the LPD listener that hands
+/// each connection to the `cups-lpd` the cups package ships.
+pub fn service_units(id: &str) -> Option<&'static [&'static str]> {
     match id {
-        "remote_login" => Some("sshd.service"),
-        "file_sharing" => Some("smb.service"),
-        "screen_sharing" => Some("wayvnc.service"),
+        "remote_login" => Some(&["sshd.service"]),
+        "file_sharing" => Some(&["smb.service", "nmb.service"]),
+        "screen_sharing" => Some(&["wayvnc.service"]),
+        "printer_sharing" => Some(&["cups-lpd.socket"]),
         _ => None,
     }
+}
+
+/// The unit whose state a sharing switch shows: the first of its units.
+pub fn service_unit(id: &str) -> Option<&'static str> {
+    service_units(id).and_then(|u| u.first().copied())
 }
 
 /// Why `name` may not be deleted (None: it may).
@@ -397,9 +405,11 @@ fn set_names(p: &Json) -> Result<Json, PErr> {
 
 fn service_set(p: &Json) -> Result<Json, PErr> {
     let id = text(p, "id")?;
-    let unit = service_unit(id).ok_or_else(|| PErr::bad("unknown service"))?;
+    let units = service_units(id).ok_or_else(|| PErr::bad("unknown service"))?;
     let on = flag(p, "on")?;
-    run(&strs(&["systemctl", if on { "enable" } else { "disable" }, "--now", unit]), None).map(|_| obj(vec![]))
+    let mut argv = vec!["systemctl", if on { "enable" } else { "disable" }, "--now"];
+    argv.extend_from_slice(units);
+    run(&strs(&argv), None).map(|_| obj(vec![]))
 }
 
 #[cfg(test)]
@@ -461,6 +471,17 @@ mod tests {
         assert_eq!(service_unit("remote_login"), Some("sshd.service"));
         assert_eq!(service_unit("sshd.service"), None);
         assert_eq!(service_unit("../x"), None);
+    }
+
+    #[test]
+    fn file_sharing_brings_the_netbios_name_service_with_it() {
+        assert_eq!(service_units("file_sharing"), Some(&["smb.service", "nmb.service"][..]));
+        assert_eq!(service_unit("file_sharing"), Some("smb.service"));
+        assert_eq!(service_units("printer_sharing"), Some(&["cups-lpd.socket"][..]));
+        assert_eq!(service_units("nmb.service"), None);
+        for id in ["remote_login", "file_sharing", "screen_sharing", "printer_sharing"] {
+            assert!(service_units(id).unwrap().iter().all(|u| u.ends_with(".service") || u.ends_with(".socket")));
+        }
     }
 
     #[test]
