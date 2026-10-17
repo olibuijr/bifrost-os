@@ -40,6 +40,7 @@ pub mod script;
 pub mod app_links;
 pub mod matter;
 pub mod matter_interaction;
+pub mod matter_hub;
 pub mod matter_cluster;
 pub mod matter_fabric;
 pub mod extension_process;
