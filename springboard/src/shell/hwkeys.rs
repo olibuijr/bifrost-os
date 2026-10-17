@@ -660,7 +660,7 @@ impl Shell {
             return vec![];
         }
         // the account access sheet takes touches only: typing waits for the answer
-        if self.access_showing() {
+        if self.access_showing() || self.usb_showing() {
             return vec![];
         }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion

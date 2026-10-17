@@ -479,6 +479,8 @@ pub struct AlertCard {
     buttons: Vec<Image>,
     /// `showsSuppressionButton`-style checkbox above the buttons: its label and whether it is checked
     check: Option<(Image, bool)>,
+    /// The card's width in pt: `ALERT_W_PT`, or what `new_wide` was given for an alert whose buttons need more room.
+    width_pt: f32,
 }
 
 /// Inner margin, gap between buttons and button height of an alert, in pt (measured from the reference).
@@ -494,11 +496,19 @@ const ALERT_CHECK_BOX_PT: f32 = 14.0;
 impl AlertCard {
     /// `buttons` are the rendered labels, left to right. Title and message are white images drawn in the label colour.
     pub fn new(ui: &Ui, title: &str, message: &str, buttons: Vec<Image>) -> Self {
+        Self::new_wide(ui, title, message, buttons, ALERT_W_PT)
+    }
+
+    /// An alert card `width_pt` wide (never narrower than the standard card), for three buttons in a row whose labels
+    /// do not fit the standard width.
+    pub fn new_wide(ui: &Ui, title: &str, message: &str, buttons: Vec<Image>, width_pt: f32) -> Self {
+        let width_pt = width_pt.max(ALERT_W_PT);
         AlertCard {
             title: ui.text(title, MAC_TITLE3_PT, Weight::Semibold, WHITE),
-            message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(ALERT_W_PT - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
+            message: ui.wrap(message, MAC_BODY_PT, Weight::Regular, ui.pt(width_pt - 2.0 * ALERT_PAD_PT)).iter().map(|l| ui.text(l, MAC_BODY_PT, Weight::Regular, WHITE)).collect(),
             buttons,
             check: None,
+            width_pt,
         }
     }
 
@@ -539,7 +549,7 @@ impl AlertCard {
 
     /// The card (x, y, w, h), centred on screen.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
-        let cw = ui.pt(ALERT_W_PT);
+        let cw = ui.pt(self.width_pt);
         let ch = ui.pt(ALERT_PAD_PT + 2.0) + self.title.h as f32 + ui.pt(8.0) + ui.pt(17.0) * self.message.len() as f32 + ui.pt(ALERT_PAD_PT) + ui.pt(ALERT_BTN_H_PT) + ui.pt(ALERT_PAD_PT)
             + if self.check.is_some() { ui.pt(ALERT_CHECK_H_PT + ALERT_CHECK_GAP_PT) } else { 0.0 };
         (((w as f32 - cw) / 2.0).round(), ((h as f32 - ch) / 2.0).round(), cw, ch)
