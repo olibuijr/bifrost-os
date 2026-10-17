@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.10.0
+
+- Books > Settings (File menu, Cmd+,) opens a Settings window. General lists the library folders: the built-in ones,
+  and the folders added with Add Folder (the folder panel; the folder's path comes from its file descriptor on Linux),
+  which Remove takes off the shelf again. Open Books In chooses single page or continuous scroll for a book's first
+  opening. Reading edits the text size, theme and Justify Text, the same preferences as the Display panel.
+  Hyphenation is not offered: the reflow engine does not hyphenate yet. Preferences are kept in the state file.
+- Display panel: a font row steps through the families of BifrOSt's font library (the System Font first). EPUB body
+  text is laid out and drawn in the chosen face, so pages break to fit it. The row is off for a PDF, whose pages keep
+  the font the document sets, and says so. Chrome stays in the system face.
+- Tests: the preferences round trip (`books::store_prefs_tests`), the family step and the PDF rule, the per-face
+  pagination (`books::layout`), and the Settings wiring (`books::settings_wiring_tests`). Not yet built or run on Midget.
+- Parity: Settings window and Font family choice are partial. Audiobooks stay a gap: the shell decodes m4b and mp3 with
+  seek, but there is no Audiobooks collection, player bar or chapter list yet.
 ## 1.9.0
 
 - The rule that opens a book after an import now lives in `books::share`: a lone PDF shared to Books opens at once,
