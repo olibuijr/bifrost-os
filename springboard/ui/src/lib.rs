@@ -866,6 +866,8 @@ pub mod media_selection;
 pub mod media_sources;
 pub mod playback_rate;
 pub mod extension;
+pub mod extension_manifest;
+pub mod file_provider_wire;
 pub mod extensions;
 pub mod clip_buffer;
 pub mod recording;
