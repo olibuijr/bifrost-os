@@ -180,6 +180,7 @@ pub mod diag;
 pub mod diagnostics_page;
 pub mod passwords_page;
 pub mod internet_accounts_page;
+pub mod account_page;
 pub mod timeset_page;
 pub mod night_shift;
 pub mod notify_page;

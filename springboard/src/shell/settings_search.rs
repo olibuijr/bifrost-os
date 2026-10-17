@@ -212,6 +212,7 @@ fn walked(id: PageId) -> bool {
         PageId::Wallpaper
             | PageId::Passwords
             | PageId::InternetAccounts
+            | PageId::Account
             | PageId::Diagnostics
             | PageId::Storage
             | PageId::Passcode

@@ -32,6 +32,10 @@ pub enum Purpose {
     SetLatitude,
     /// step 2: the longitude; `latitude` is the text typed in step 1
     SetLongitude { latitude: String },
+    /// Settings > BifrOSt Account step 1 of 2: the email address of the account (see `account_page`)
+    AccountEmail,
+    /// step 2 of 2: the password for `email`. It goes to the cloud's sign-in route and is not kept.
+    AccountPassword { email: String },
 }
 
 /// What the sheet shows.
@@ -91,6 +95,20 @@ impl Prompt {
         Prompt {
             max: 16,
             ..Prompt::new(Purpose::SetLongitude { latitude: latitude.into() }, "Set Location", "Enter the longitude in degrees, from -180 (west) to 180 (east).", "Longitude", "Set")
+        }
+    }
+
+    /// BifrOSt Account step 1: the email address. `message` is the hint, or the cloud's reason after a refusal.
+    pub fn account_email(message: &str) -> Prompt {
+        Prompt { max: crate::cloud_account::MAX_EMAIL_BYTES, ..Prompt::new(Purpose::AccountEmail, "BifrOSt Account", message, "Email", "Next") }
+    }
+
+    /// BifrOSt Account step 2: the password of `email`. Never stored.
+    pub fn account_password(email: &str, message: &str) -> Prompt {
+        Prompt {
+            secure: true,
+            max: 256,
+            ..Prompt::new(Purpose::AccountPassword { email: email.to_string() }, "Sign In", message, "Password", "Sign In")
         }
     }
 
@@ -174,6 +192,8 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
         Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
+        Purpose::AccountEmail => crate::cloud_account::normalize_email(text).is_ok(),
+        Purpose::AccountPassword { .. } => !text.is_empty(),
         Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
         Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
     }
