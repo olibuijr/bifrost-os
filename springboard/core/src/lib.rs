@@ -69,6 +69,7 @@ pub mod haptic_sequence;
 pub mod password_verify;
 pub mod migrate;
 pub mod occlusion;
+pub mod process_assertion;
 pub mod memory_pressure;
 pub mod pacman_progress;
 pub mod packet_parser;

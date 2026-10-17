@@ -869,7 +869,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name only suggests SAML single sign-on; left os.",
+   "note": "Left open, needs an XML-DSig engine. The job is to read and validate SAML 2.0 assertions and responses (the bundle carries the OASIS assertion, protocol, metadata and xmldsig schemas). A safe version needs a strict XML reader, exclusive canonicalization, reference and digest checks, RSA signature verification against the identity provider's certificate (rustls-graviola exposes the verifier) and signature-wrapping defences. That cannot be written and trusted without being compiled and run against real provider output, which this wave forbids; the BifrOSt accounts code has no SAML path and no XML parser. Next step: a bifrost-saml crate with the reader, c14n and verifier, tested against published SAML conformance vectors.",
    "rea": [],
    "method": "assessed"
   },
@@ -889,8 +889,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the name suggests the assistant's request objects, which are not mapped to any BifrOSt interface; left os.",
+   "status": "n/a",
+   "note": "n/a: the Siri assistant request and response object model exchanged with Apple's assistant servers (serialized assistant commands such as speech, UI and domain objects). Evidence: no user-facing resources in the reference index; BifrOSt's assistant (springboard/apps/assistant-desktop, assistant-client) uses its own local protocol and sends nothing to Apple.",
    "rea": [],
    "method": "assessed"
   },
@@ -931,8 +931,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the abbreviation alone does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
    "rea": [],
    "method": "assessed"
   },
@@ -973,8 +973,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Secure Element service shared types (secure element and secure transaction plumbing used by Apple Pay and credentials in hardware). Evidence: bundle holds only Info.plist and version.plist; no equivalent hardware exists on the PC or the Samsung tablet.",
    "rea": [],
    "method": "assessed"
   },
@@ -1056,11 +1056,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/glyphs.rs, springboard/ui/src/symbol_effect.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "System symbol catalog and rendering: clean-room glyph set drawn from primitives (sdk glyphs.rs) with symbol effects (ui symbol_effect).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "glyphs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "symbol_effect::tests"
+    }
+   ],
+   "ready_note": "The reference framework is the system symbol catalog (CoreGlyphs bundles, the semantic-to-descriptive name table) and its drawing. BifrOSt names its glyphs after the same set and draws them from lines, arcs and discs (sdk glyphs.rs) so they scale to any size with no symbol font; symbol effects are bifrost_ui::symbol_effect. No Apple artwork is used."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SILManager.framework",
@@ -1078,8 +1092,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple hardware policy for the camera and microphone indicator lights (the sensor indicator light manager). Evidence: the sibling SILManagerAssets bundle holds only cam_mic_mac.plist, cam_mic_mac_constraints.plist and cam_mic_mac.bin, the per-model indicator constraints; it drives Apple silicon indicator LEDs that PC and tablet hardware do not have.",
    "rea": [],
    "method": "assessed"
   },
@@ -1099,8 +1113,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: per-model constraint tables for Apple's camera and microphone indicator light hardware. Evidence: the reference index lists exactly cam_mic_mac.plist, cam_mic_mac_constraints.plist and cam_mic_mac.bin and nothing else.",
    "rea": [],
    "method": "assessed"
   },
@@ -1119,11 +1133,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/smb.rs, springboard/src/keychain.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "smb::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "SMB client for apps: bifrost_app::smb parses smb:// addresses (a password in the address is refused), builds smbclient command lines with the password in the environment and never in arguments, holds the session to SMB 2.02 or newer with encryption when offered, lists shares and folders, downloads files, validates names against command injection and maps NT_STATUS replies to errors. The wire engine is Samba's smbclient (packaging/arch/runtime-packages.txt: smbclient, samba, cifs-utils); share logins are stored in the keychain (keychain::share_login). Not wired yet: the Files Connect to Server sheet still lists ftp:// only, and shares are not mounted into the file tree."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMBClientEngine.framework",
@@ -1140,11 +1168,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/smb.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "smb::tests"
+    }
+   ],
+   "ready_note": "The engine under the SMB client is Samba's smbclient (packaged), driven by bifrost_app::smb: protocol floor SMB 2.02, encryption when offered, timeouts, listing parsers and status mapping, all tested without a server. Not wired yet: the Files Connect to Server sheet still lists ftp:// only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMCT.framework",
@@ -1183,8 +1220,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the finder side of Apple's Find My network (this device relaying Bluetooth beacons of other people's lost devices and items to Apple). Evidence: SPOwner's plug-in is SearchPartyDiagnosticExtension (SearchParty is the Find My network); it needs Apple accounts, Apple's cloud and Apple accessory radios, and BifrOSt sends no crowdsourced location data to anyone.",
    "rea": [],
    "method": "assessed"
   },
@@ -1224,11 +1261,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Owner side of Find My for own devices through BifrOSt Cloud (sdk cloud_findmy); no crowdsourced network.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "The owner side of Find My for the user's own devices: list the account's devices, queue locate, play sound or erase commands and report this device's battery and position, over the BifrOSt Cloud API (sdk cloud_findmy.rs). Items and the crowdsourced network (AirTag style accessories) are not mirrored, which is the SPFinder row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SPShared.framework",
@@ -1245,11 +1291,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Shared Find My types (device, command, report) in sdk cloud_findmy for the account's own devices.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "The shared types between owner and finder roles: device record, command, report. In BifrOSt these are the request and answer types of sdk cloud_findmy.rs. The crowdsourced finder role is n/a (SPFinder)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SPSupport.framework",
@@ -1266,11 +1321,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/cloud_findmy.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Find My support helpers: request building and answer reading in sdk cloud_findmy and cloud_account.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "cloud_findmy::tests"
+    }
+   ],
+   "ready_note": "Support types for the owner and finder roles (checked tokens, answer reading, failure mapping). In BifrOSt these are cloud_findmy's checked_token, endpoint and failure helpers shared with the other cloud modules (cloud_account)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/STSXPCHelperClient.framework",
@@ -1288,8 +1352,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: client of the Secure Transaction Services helper (NFC and secure-element transactions such as payments and passes in hardware). Evidence: bundle holds only Info.plist and version.plist; neither the PC nor the tablet has the secure element or NFC stack it fronts.",
    "rea": [],
    "method": "assessed"
   },
@@ -1308,11 +1372,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Update documentation: release notes and changelog parsed from the update manifest and package updates.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::api::tests"
+    }
+   ],
+   "ready_note": "SUDoc assets are the documentation shown with a software update: release notes and the per-release changelog. BifrOSt reads them from the update manifest (notes and changelog fields, update.rs) and from the package database (pacman_update.rs), with the store's release parser (store/api.rs); they are shown on the Software Update page."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SUDocAssetsUI.framework",
@@ -1329,11 +1412,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Update documentation UI: Software Update page content from update.rs and pacman_update.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pacman_update::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::api::tests"
+    }
+   ],
+   "ready_note": "The UI half of the update documentation: the Software Update page shows the notes and changelog parsed by update.rs and pacman_update.rs. The tests cover the parsing that feeds it."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SafariSafeBrowsing.framework",
@@ -1477,8 +1579,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
    "rea": [],
    "method": "assessed"
   },
@@ -1497,11 +1599,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Sample Process engine in Activity Monitor (activity-desktop sample_proc).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample_proc::tests"
+    }
+   ],
+   "ready_note": "SampleAnalysis is the engine behind Activity Monitor's Sample Process: sample every thread many times a second and report where each spent its time. BifrOSt does the same in activity-desktop sample_proc.rs from /proc/<pid>/task/<tid>/stack, wchan and state, with pure counting and report text tested on the host."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SceneHosting.framework",
@@ -1518,11 +1629,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/remote_view.rs, springboard/src/shell/services/scene_services.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Host side of a view another process draws (ui remote_view) plus per-app scene windows (scene_services).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "remote_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::scene_services::tests"
+    }
+   ],
+   "ready_note": "SceneHosting shows a scene that another process draws inside a host window. BifrOSt has the host side as bifrost_ui::remote_view (connect, keep within bounds, placeholder, lost and retry) and gives each app its scene windows through the scenes service (scene_services.rs); external apps render as their own toplevels composed by the window server."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SchemaTypesCore.framework",
@@ -1540,8 +1665,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple's analytics and instrumentation message schema types (the typed events that Siri and system components report back for analytics). Evidence: bundle holds only Info.plist and version.plist; BifrOSt does no telemetry upload by design (privacy-first).",
    "rea": [],
    "method": "assessed"
   },
@@ -1561,8 +1686,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
    "rea": [],
    "method": "assessed"
   },
@@ -1602,11 +1727,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Screen reader (shell accessibility reader, rotors, speech) with Braille output and translation.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "ScreenReader is the screen reader and its Braille output. BifrOSt has a keyboard-cursor reader over the menu bar, open menus and the front window (rotors for controls, fields, lists, menu items, text and progress; press the element under the cursor), speech through the announcement queue and the AT-SPI bridge, a Braille display output and the Braille translation (bifrost_ui::braille, the braille_text service)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReaderCore.framework",
@@ -1623,11 +1777,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Screen reader core model: Reader, rotors, speech and Braille translation, all pure and tested.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::braille_out::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::braille_text::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "braille::tests"
+    }
+   ],
+   "ready_note": "The core of the screen reader: the element walk, rotors, speech strings and Braille translation are the pure, host-tested model in reader.rs (Reader, speech, page_elements), braille_out.rs and bifrost_ui::braille."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenSharing.framework",
@@ -1644,11 +1827,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "VNC screen sharing viewer: Screen Sharing app over the bifrost-rfb client.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "framebuffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "pixel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "keysym::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "ScreenSharing is the viewer app's engine and UI (connect to another computer's screen over VNC and send keys and pointer). BifrOSt has the Screen Sharing app (apps/screen-sharing) over the bifrost-rfb protocol client: RFB 3.3 to 3.8, true-colour formats, Raw and CopyRect rectangles, DesktopSize, key and pointer input. Not built: password (VNC) authentication and compressed encodings, so a server must allow no authentication and send Raw."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenSharingKit.framework",
@@ -1665,11 +1887,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Screen sharing session kit: bifrost-rfb client plus the Screen Sharing app; Messages and FaceTime transport not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "framebuffer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "pixel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "keysym::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "The kit behind screen sharing sessions: connection, framebuffer view and input forwarding, which BifrOSt has in bifrost-rfb and the Screen Sharing app. The Messages and FaceTime share-sheet transport that the reference kit also serves is Apple-only and is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenSharingServer.framework",
@@ -1686,11 +1947,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/accounts.rs, packaging/arch/runtime-packages.txt",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Screen sharing server: wayvnc.service switched from the Sharing page via privd.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    }
+   ],
+   "ready_note": "The server side that lets other computers view this screen. BifrOSt runs wayvnc (packaged in runtime-packages.txt) as wayvnc.service; Settings > General > Sharing flips the Screen Sharing switch through privd, which maps screen_sharing to that unit and nothing else. The tests cover the page model and the privd service map."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeCore.framework",
@@ -2224,8 +2499,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: downloadable Apple-served asset packs for search (ranking and understanding data fetched from Apple's asset service). Evidence: the reference index lists only Info.plist and version.plist; BifrOSt ranks locally (ui search_rank) and downloads nothing for search.",
    "rea": [],
    "method": "assessed"
   },
@@ -2244,11 +2519,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs, springboard/ui/src/search_rank.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Spotlight search layer: query, results, ranking and local index (quicksearch, spotindex, search_rank).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "search_rank::tests"
+    }
+   ],
+   "ready_note": "SearchFoundation is the shared Spotlight search layer: query, results and ranking. BifrOSt has the search panel (quicksearch.rs), the on-device index (spotindex.rs), the app-side indexing API (sdk quicksearch.rs) and ranking (bifrost_ui::search_rank), all local."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SearchIntrospectionKit.framework",
@@ -2266,8 +2565,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple internal debugging tooling that introspects Spotlight queries and the search index. Evidence: the bundle holds only Info.plist, version.plist and code signature; no user-facing resources. BifrOSt exposes no equivalent debug surface.",
    "rea": [],
    "method": "assessed"
   },

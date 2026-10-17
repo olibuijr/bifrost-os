@@ -7391,8 +7391,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Apple developer test-result publishing (the performance and test result bundle uploader that Xcode tooling consumes). Evidence: the reference index holds only the bundle folders, Info.plist and version.plist, no UI or user-facing resources; BifrOSt has no counterpart tooling by design.",
    "rea": [],
    "method": "assessed"
   },
@@ -7411,11 +7411,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/look_up_popover.rs, springboard/ui/src/look_up.rs, springboard/ui/src/stardict.rs",
    "status": "os",
-   "note": "Investigated 2026-10-14: the reference index lists resource files and no binary, and the name alone does not show its job; left os.",
+   "note": "Look Up popover: dictionary definition and quick search hits for the selected word (shell look_up_popover, bifrost_ui::look_up). The reference index lists only localized resources for this bundle.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::look_up_popover::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "look_up::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stardict::tests"
+    }
+   ],
+   "ready_note": "Reveal is the Look Up presenter (the definition popover for selected text). BifrOSt shows it from the Services menu and Ctrl+Cmd+D: the content model and its rows are bifrost_ui::look_up over the local dictionary reader (stardict), and look_up_popover.rs measures, draws and hit tests it. The tests cover the content, the rows, the actions and the popover layout."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RevealCore.framework",
@@ -7432,11 +7451,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/look_up.rs, springboard/ui/src/stardict.rs, springboard/ui/src/visual_lookup.rs",
    "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "note": "Look Up engine: term to dictionary entry and rows, offline (bifrost_ui look_up, stardict, visual_lookup).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "look_up::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "stardict::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_lookup::tests"
+    }
+   ],
+   "ready_note": "RevealCore is the engine under Look Up: finding what a selected range is and the entry for it. BifrOSt does this locally in bifrost_ui::look_up (term to rows), stardict (offline dictionary lookup) and visual_lookup (image subject requests). No lookup leaves the machine."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RoomScanCore.framework",
@@ -7475,8 +7513,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: identity not determinable and no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature for this bundle (no localized UI strings, no plug-in, no XPC service, no hosting bundle that links it), so it is treated as Apple-internal plumbing with nothing for BifrOSt to mirror. Revisit if the binary is ever decoded with REA.",
    "rea": [],
    "method": "assessed"
   },
@@ -7530,11 +7568,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/occlusion.rs",
+   "bifrost": "springboard/core/src/process_assertion.rs, springboard/core/src/occlusion.rs, springboard/src/shell/background.rs, springboard/src/shell/services/running_board.rs, springboard/sdk/src/running_board.rs, springboard/src/shell/services/background.rs",
    "status": "partial",
-   "note": "The same occlusion model supplies the app run state that this service reports. Process assertions and the service's launch-time limits are not provided, and the reference index holds only the sandbox profile (framework.sb) for it. Built 2026-10-17: process assertions in the occlusion model (Event::Assertion, is_asserted; tests occlusion::tests). Still missing: no app can take an assertion over the protocol yet, and the launch-time limits are not provided.",
+   "note": "Built 2026-10-17: app run state (bifrost_core::occlusion) and, new this wave, process assertions an app takes over the runningboard system service (core process_assertion, shell services running_board, SDK running_board), fed to the Suspender. Launch-time limits live in the background service (30 s refresh, 10 min processing).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "process_assertion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "occlusion::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::running_board::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "running_board::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background::tests"
+    }
+   ],
+   "ready_note": "RunningBoard keeps app run state and process assertions. The run state (focus, on screen, covered, suspended) is bifrost_core::occlusion driven by shell::background::Suspender. Assertions are bifrost_core::process_assertion (reason, lapse limit of 60 s by default and 1 h at most, 8 per app), taken by apps over the runningboard service (bifrost_app::running_board) and read by the Suspender on every tick, so an app that holds one is not stopped and a quit app loses them. Time limits for background launches are the background service's refresh and processing limits. Not mirrored: assertion domains and per-process memory or CPU limits."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RuntimeInternal.framework",
@@ -7552,8 +7624,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "n/a",
+   "note": "n/a: Swift runtime support library for Apple's own components (it is linked by OpenAPIRuntimeInternal and other Swift frameworks), with no user- or app-visible function. BifrOSt is Rust and has no Swift runtime to support. Evidence: the reference index holds only the bundle folders, Info.plist and version.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -7573,8 +7645,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted, and the name suggests performance data collection, but the reference's capture tooling is not reproduced here; the process table in springboard/apps/activity-desktop is the nearest counterpart. Left os.",
+   "status": "n/a",
+   "note": "n/a: Apple internal performance-data capture format and tooling (the data layer under Instruments and the kernel profiling tools). Evidence: the reference index holds only the bundle folders, Info.plist and version.plist, no UI. BifrOSt's user-visible counterparts are Activity Monitor (springboard/apps/activity-desktop) and tools/bench.py, which do not use this format.",
    "rea": [],
    "method": "assessed"
   }
