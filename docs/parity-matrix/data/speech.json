@@ -68,7 +68,7 @@
       "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)",
       "bifrost": "springboard/sdk/src/speech_recognizer.rs (SFSpeechRecognizer, SFSpeechAudioBufferRecognitionRequest, SFSpeechURLRecognitionRequest, SFSpeechRecognitionTask, SFSpeechRecognitionResult, SFTranscription, SFTranscriptionSegment)",
       "status": "partial",
-      "note": "Host unit tests with a fake backend: authorization, availability, partial then final results, segment timing, cancel. No real recognition engine yet (backend trait only); not tested on Midget. Built 2026-10-17: WhisperBackend implements RecognitionBackend over the shell transcripts, so SFSpeechRecognizer tasks get whisper results (bifrost_app speech_whisper::tests). The on-device engine is now the whisper element; the model download is required."
+      "note": "Host unit tests with a fake backend: authorization, availability, partial then final results, segment timing, cancel. No real recognition engine yet (backend trait only); not tested on Midget. Built 2026-10-17: WhisperBackend implements RecognitionBackend over the shell transcripts, so SFSpeechRecognizer tasks get whisper results (bifrost_app speech_whisper::tests). The on-device engine is now the whisper element; the model download is required. Built 2026-10-17: supportedLocales from the backend (RecognitionBackend::supported_locales, empty by default; sorted and unique); tests speech_recognizer::tests."
     }
   ],
   "gaps": [
