@@ -661,6 +661,12 @@ impl Shell {
             }
             return vec![];
         }
+        // the compose sheet takes the typing: it edits the post text
+        #[cfg(feature = "desktop-wayland")]
+        if self.compose.is_some() {
+            self.compose_type(out);
+            return vec![];
+        }
         // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
         if self.screen == Screen::Lock {
             self.login_ensure(t);

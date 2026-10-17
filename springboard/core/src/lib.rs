@@ -97,6 +97,7 @@ pub mod rfcomm_frame;
 pub mod sdp_element;
 pub mod bt_address;
 pub mod bt_service_browser;
+pub mod bt_pairing;
 pub mod obex_packet;
 pub mod backup_exclude;
 pub mod snapshot_backup;

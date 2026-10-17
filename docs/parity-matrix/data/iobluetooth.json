@@ -33,14 +33,14 @@
       "apple": "IOBluetoothDevicePair, IOBluetoothDevicePairDelegate",
       "bifrost": "springboard/sdk/src/bluetooth_service.rs (pair, Bluetooth::busy); springboard/sdk/src/bluetooth_picker.rs (BluetoothPicker)",
       "status": "partial",
-      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps. Built 2026-10-17: the input the pairing step needs is checked and shaped as a PIN (1 to 16 letters or digits), a six-digit passkey, a numeric comparison code, or a confirmation (bluetooth_pairing.rs: validate_pin, validate_passkey, numeric_code, answer_for); tests bluetooth_pairing::tests. The shell does not ask the user yet."
+      "note": "The pairing in progress and the device the user picks are modelled; the shell still pairs with Just Works and a fixed legacy PIN. Gap: no PIN or passkey entry and no confirmation prompt reach apps. Built 2026-10-17: the input the pairing step needs is checked and shaped as a PIN (1 to 16 letters or digits), a six-digit passkey, a numeric comparison code, or a confirmation (bluetooth_pairing.rs: validate_pin, validate_passkey, numeric_code, answer_for); tests bt_pairing::tests. Built 2026-10-17: the shell asks the user for a PIN or passkey while pairing (Status::prompt, Cmd::AnswerPairing, a Settings sheet from the Bluetooth page); tests bifrost-core bt_pairing and springboard bare::bluetooth::tests."
     },
     {
       "feature": "Connect, disconnect and forget a device",
       "apple": "IOBluetoothDevice (openConnection, closeConnection, remove)",
       "bifrost": "springboard/sdk/src/bluetooth_devices.rs (DeviceList: paired, connected, forget); springboard/sdk/src/bluetooth_events.rs (DeviceEvents); springboard/sdk/src/bluetooth_service.rs (connect, disconnect, forget)",
       "status": "partial",
-      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine."
+      "note": "The device order, forgetting, and the connect and disconnect events are tested headless in springboard/sdk/tests/parity_sdk-os-04.rs. Gap: the connect and disconnect requests are answered by the shell, and that round trip is not yet verified on the lab machine. Built 2026-10-17: the status reply carries the pending pairing code (prompt: addr, kind pin or passkey), read by bluetooth_service::Bluetooth::pairing; tests springboard bare/services bluetooth_service::tests and sdk bluetooth_service::tests."
     },
     {
       "feature": "Audio output routing to a headset",
@@ -111,14 +111,20 @@
       "bifrost": "springboard/src/bare/bluetooth.rs:1-24 (module header: uses the mgmt API instead of raw HCI, by design)",
       "status": "partial",
       "note": "The shell uses mgmt commands, not the HCI structure set. Apps get none of the HCI or LE types."
+    },
+    {
+      "feature": "RFCOMM streams",
+      "apple": "IOBluetoothRFCOMMChannel, IOBluetoothRFCOMMChannelDelegate, IOBluetoothDevice openRFCOMMChannel",
+      "bifrost": "springboard/src/bare/rfcomm.rs (sockaddr, connect, Stream)",
+      "status": "partial",
+      "note": "Built 2026-10-17: AF_BLUETOOTH BTPROTO_RFCOMM socket connect to a channel 1 to 30 with the sockaddr_rc layout, read and write_all on the stream; tests bare::rfcomm::tests (pure address rules). Not reachable from apps, and the connection needs the lab machine."
     }
   ],
   "gaps": [
-    "No app-facing Bluetooth SDK module: nothing under springboard/sdk/src/ covers Bluetooth.",
-    "No RFCOMM, OBEX or SDP support (no code anywhere in springboard/).",
+    "App-facing Bluetooth SDK (springboard/sdk/src/bluetooth_service.rs) lists devices, scans, connects and reads a pending pairing code; apps cannot type the code (the shell asks the user) and cannot open RFCOMM or SDP.",
+    "No RFCOMM app API: the kernel stream is in springboard/src/bare/rfcomm.rs (channels must be known, since SDP is not queried), and no RFCOMM server side. No OBEX or SDP.",
     "No hands-free (call control) profile.",
     "No app API to open L2CAP channels to arbitrary PSMs or receive device events.",
-    "Pairing: the shell does not ask the user for a PIN or passkey, so the input checks in bluetooth_pairing are not yet used by the radio path.",
     "No HID device counts or ignore controls exposed to apps."
   ]
 }

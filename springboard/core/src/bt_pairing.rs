@@ -3,7 +3,7 @@
 //! The radio asks for one of four things while a device pairs: nothing (Just Works), a six-digit number to compare
 //! with the device's screen (numeric comparison), a legacy PIN the user types, or a six-digit passkey the user types.
 //! This module checks what the user typed and turns it into the answer the pairing step needs. It is pure: it does not
-//! reach the radio, and the shell still pairs with Just Works and the fixed legacy PIN until the shell asks the user.
+//! reach the radio. The shell asks the user through `Status::prompt` (`springboard/src/bare/bluetooth.rs`).
 
 use std::fmt;
 

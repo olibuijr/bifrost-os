@@ -12,7 +12,7 @@
    "apple": "SLComposeViewController, SLComposeServiceViewController",
    "bifrost": "springboard/ui/src/compose.rs (ComposeSheet, ComposeSheet::with_draft), springboard/sdk/src/social.rs (draft_request); tests: springboard/ui/tests/parity_sdk-complete-20.rs; wired: springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs (Compose Post target)",
    "status": "partial",
-   "note": "A sheet starts from a draft (such as the items shared into it) and refuses changes once presented, tested headless in ui/tests/parity_sdk-complete-20.rs; draft_request turns a sent draft into a form POST (host unit tests in social.rs). Gap: no editor lets the user type or attach items, which needs shell text input and a Midget check."
+   "note": "A sheet starts from a draft (such as the items shared into it) and refuses changes once presented, tested headless in ui/tests/parity_sdk-complete-20.rs; draft_request turns a sent draft into a form POST (host unit tests in social.rs). Gap: no editor lets the user type or attach items, which needs shell text input and a Midget check. Built 2026-10-17: typing edits the post text while the sheet is open (Shell::compose_type, ComposeOverlay::set_text, with_text); tests compose_sheet::tests::typing_replaces_the_text_and_keeps_the_attachments_and_links."
   },
   {
    "feature": "Service availability check",
@@ -79,7 +79,7 @@
   }
  ],
  "gaps": [
-  "No compose sheet in the shell that edits a draft and posts it through draft_request (SLComposeViewController equivalent).",
+  "The compose sheet is edited by typing (springboard/src/shell/compose_sheet.rs, with_text) but Post copies the draft to the clipboard and does not post it through social::draft_request, because no social account is signed in.",
   "No sign-in flow or account provider: accounts can be modelled and signed, but the user cannot add one from the shell (SLRequest.account equivalent).",
   "OAuth 2 tokens are read, refreshed and used for bearer signing (social_oauth2); the sign-in flow that obtains the first token is not in the shell.",
   "The share services have no image property and perform(withItems:) reaches only Copy; an app or Compose Post is performed through the menu, because the shell has no message for one named target (see docs/bifrost-ui.md, 'Share sheet' gaps)."

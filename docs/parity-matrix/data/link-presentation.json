@@ -26,7 +26,7 @@
       "apple": "LPLinkMetadata.title, iconProvider, imageProvider",
       "bifrost": "springboard/apps/news-desktop/src/pictures.rs (og_image, load)",
       "status": "partial",
-      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup. Built 2026-10-17: SDK metadata parsing (title from og:title or the title element, og:image or twitter:image, icon links, relative addresses resolved against the page) and a fetch state with timeout and cancel in springboard/sdk/src/link_metadata.rs (checked_url, resolve, parse, LinkFetch, LinkError); tests link_metadata::tests. The app still sends the request and reports the reply."
+      "note": "News reads the og:image meta tag for its article pictures; og_image, the RUV recipe rewrite, base64 and the corner rounding are tested headless in pictures::tests. Gap: the logic is app-local, not an SDK API, and there is no title or icon lookup. Built 2026-10-17: SDK metadata parsing (title from og:title or the title element, og:image or twitter:image, icon links, relative addresses resolved against the page) and a fetch state with timeout and cancel in springboard/sdk/src/link_metadata.rs (checked_url, resolve, parse, LinkFetch, LinkError); tests link_metadata::tests. The app still sends the request and reports the reply. Built 2026-10-17: News reads its picture through bifrost_app::link_metadata::parse (apps/news-desktop/src/pictures.rs og_image, which resolves relative addresses); tests pictures::tests."
     },
     {
       "feature": "Video of a link",
@@ -62,12 +62,18 @@
       "bifrost": "springboard/ui/src/linkmeta.rs (LinkError)",
       "status": "parity",
       "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-24, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the fetch API, which does not exist; the browser error page in springboard/src/shell/browser/fetch.rs is HTML, not a typed error"
+    },
+    {
+      "feature": "Rich link view (title, site name, icon tile, video mark)",
+      "apple": "LPLinkView",
+      "bifrost": "springboard/ui/src/link_card.rs (draw, subtitle_for, initial_for); model springboard/ui/src/linkmeta.rs (LinkView::card)",
+      "status": "partial",
+      "note": "Built 2026-10-17: a link row drawn from the Card, with the loaded icon or an initial tile, the title and the site name with a Video mark; tests ui link_card::tests (text decisions). No app places it yet; verify the draw on the host preview and Midget."
     }
   ],
   "gaps": [
     "No SDK function sends the request for a URL's metadata: link_metadata::LinkFetch holds the timeout and cancel state and parses the reply, but the app does the HTTP request. No video metadata.",
-    "No rich link view widget (LPLinkView equivalent) in the shared kit, with placeholder and metadata modes",
-    "The News app's og:image scrape (springboard/apps/news-desktop/src/pictures.rs) is app-local and not reusable by other apps",
+    "The rich link row is drawn by the shared kit (springboard/ui/src/link_card.rs, from linkmeta::Card); no app shows it yet, and the share sheet has no rich preview.",
     "The share sheet sends URLs as plain items and does not show a rich link preview"
   ]
 }

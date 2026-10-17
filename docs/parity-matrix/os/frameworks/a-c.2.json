@@ -4044,7 +4044,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/iobluetooth.json",
    "status": "partial",
-   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Built 2026-10-17: Pairing answers (PIN, passkey, comparison) are modelled in springboard/sdk/src/bluetooth_pairing.rs (bluetooth_pairing::tests); not yet asked of the user.",
+   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Built 2026-10-17: Pairing answers (PIN, passkey, comparison) are modelled in springboard/core/src/bt_pairing.rs (bt_pairing::tests); the shell asks the user while pairing (Settings sheet).",
    "rea": [],
    "method": "assessed"
   },
