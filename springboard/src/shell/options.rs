@@ -194,11 +194,13 @@ pub struct Options {
     pub game_mode: GamePref,
     /// the one-time Game Mode notice has been posted (it is posted again only after settings.ini is reset)
     pub game_notice_shown: bool,
+    /// Settings > Spotlight: the categories Search lists and the folders it leaves out (its own keys, `spotlight_scope`)
+    pub spotlight: super::spotlight_scope::Scope,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, universal_clipboard: false, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic, game_notice_shown: false, spotlight: Default::default() }
     }
 }
 
@@ -268,6 +270,12 @@ impl Options {
             shortcuts_off: p.get_parsed::<u32>("shortcuts_off").unwrap_or(d.shortcuts_off),
             game_mode: p.get("game_mode").and_then(GamePref::parse).unwrap_or(d.game_mode),
             game_notice_shown: flag("game_mode_notice_shown", d.game_notice_shown),
+            spotlight: {
+                // Search reads the scope from memory, so it is installed as the settings are read
+                let scope = super::spotlight_scope::Scope::load(p);
+                super::spotlight_scope::install(scope.clone());
+                scope
+            },
             lock_grace_s: p.get_parsed("lock_grace_seconds").filter(|s: &u32| REQUIRE_AFTER.iter().any(|(_, v)| v == s)).unwrap_or(d.lock_grace_s),
         }
     }
@@ -337,6 +345,9 @@ impl Options {
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
+            eprintln!("springboard: settings.ini: {e}");
+        }
+        if let Err(e) = self.spotlight.save(p) {
             eprintln!("springboard: settings.ini: {e}");
         }
     }

@@ -512,7 +512,40 @@ fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<G
     groups.extend(documents);
     groups.extend(files);
     groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
+    scoped(groups, &super::spotlight_scope::current())
+}
+
+/// The category a hit is listed under in Settings > Spotlight, and the path it names when it is a file. `None` for
+/// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
+fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
+    use super::spotlight_scope::Category as C;
+    match hit {
+        Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
+        Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } => (Some(C::Settings), None),
+        Hit::Contact { .. } => (Some(C::Contacts), None),
+        Hit::Event { .. } => (Some(C::CalendarEvents), None),
+        Hit::File { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
+        Hit::Indexed { .. } => (Some(C::Documents), None),
+        Hit::City(_) => (Some(C::Cities), None),
+        Hit::Answer(_) => (Some(C::Calculator), None),
+        Hit::Deildu(_) | Hit::Terminal(_) => (None, None),
+    }
+}
+
+/// Drops the hits Settings > Spotlight hides, and any group left empty. A group with no hits stays only when it was
+/// empty to begin with (the "Search in Apps" action is never hidden).
+fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
     groups
+        .into_iter()
+        .filter_map(|mut g| {
+            let had = !g.hits.is_empty();
+            g.hits.retain(|h| {
+                let (cat, path) = hit_category(h);
+                !cat.is_some_and(|c| scope.hides(c, path))
+            });
+            (!had || !g.hits.is_empty()).then_some(g)
+        })
+        .collect()
 }
 
 /// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
@@ -2118,6 +2151,26 @@ mod tests {
         let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
         assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
         set_wallpaper_catalogue(Vec::new());
+    }
+
+    #[test]
+    fn spotlight_scope_hides_switched_off_kinds_and_excluded_folders() {
+        use super::super::spotlight_scope::{Category, Scope};
+        let mut scope = Scope::default();
+        scope.set_allowed(Category::Settings, false);
+        scope.exclude(Path::new("/home/u/Private"));
+        let groups = vec![Group {
+            title: "Top Hit",
+            hits: vec![
+                Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" },
+                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into() },
+                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() },
+            ],
+        }, Group { title: "Settings", hits: vec![Hit::SettingsIntent { id: "open-sound", title: "Open Sound" }] }, Group { title: "Search in Apps", hits: vec![Hit::Terminal("x".into())] }];
+        let kept = scoped(groups, &scope);
+        assert_eq!(kept.len(), 2, "the Settings group empties and goes: {kept:?}");
+        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() }]);
+        assert_eq!(kept[1].title, "Search in Apps", "the action is never hidden");
     }
 
     /// A one-piece torrent named `name`.

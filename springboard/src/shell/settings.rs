@@ -2536,6 +2536,13 @@ impl Settings {
                         self.apply_pointer();
                         vec![]
                     }
+                    Pick::SpotlightExclude(k) => {
+                        if self.opts.spotlight.remove_excluded(k) {
+                            self.opts.save(prefs);
+                            super::spotlight_scope::install(self.opts.spotlight.clone());
+                        }
+                        vec![]
+                    }
                     Pick::MouseSecondary(k) => {
                         self.opts.swap_buttons = super::mouse_page::swaps_buttons(k);
                         self.opts.save(prefs);
@@ -2946,6 +2953,13 @@ impl Settings {
                 }
                 None => false,
             },
+            Toggle::SpotlightCategory(c) => {
+                let on = !self.opts.spotlight.allows(c);
+                self.opts.spotlight.set_allowed(c, on);
+                self.opts.save(prefs);
+                super::spotlight_scope::install(self.opts.spotlight.clone());
+                on
+            }
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),
             Toggle::DockRecents => flip(&mut self.opts.dock_recents),
             Toggle::DockAutohide => {

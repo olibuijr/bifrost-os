@@ -94,6 +94,7 @@ pub enum PageId {
     InterfaceScale,
     Appearance,
     Privacy,
+    Spotlight,
     /// Privacy › Analytics & Diagnostics
     Diagnostics,
     /// Privacy › App Permissions: which installed apps may use the camera, microphone or screen
@@ -223,6 +224,8 @@ pub enum Toggle {
     BgRefresh,
     FourFinger,
     CornerSwipe,
+    /// Settings > Spotlight: a kind of result Search lists, switched on or off
+    SpotlightCategory(super::spotlight_scope::Category),
     /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
     Permission(Media, usize),
     /// App Permissions > Location: the app at this index may use location while it is in use
@@ -249,6 +252,8 @@ pub enum Toggle {
 pub enum Pick {
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
+    /// Settings > Spotlight > Privacy: stop excluding the folder at this index
+    SpotlightExclude(usize),
     /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
     Remap(usize, usize),
     /// Settings > Sound: the n-th listed output / input becomes the default
@@ -791,6 +796,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                    Item::new("Spotlight").icon(Icon::General).link(PageId::Spotlight),
                     Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
                     Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
@@ -1453,6 +1459,21 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
+        PageId::Spotlight => {
+            use super::spotlight_scope::Category;
+            let scope = &o.spotlight;
+            let kinds = Category::ALL.into_iter().map(|c| Item::new(c.title()).switch(scope.allows(c), Action::Toggle(Toggle::SpotlightCategory(c)))).collect();
+            let folders: Vec<Item> = scope.excluded().iter().enumerate().map(|(i, f)| Item::new(f.display().to_string()).action(Action::Pick(Pick::SpotlightExclude(i)))).collect();
+            let folders = if folders.is_empty() { vec![Item::new("No Excluded Folders").tint(Tint::Dim)] } else { folders };
+            page(
+                "Spotlight",
+                false,
+                vec![
+                    Group::new(kinds).header("RESULTS").footer("Turn off a kind of result to keep it out of Search."),
+                    Group::new(folders).header("PRIVACY").footer("Search never lists files in an excluded folder or inside it. Tap a folder to include it again."),
+                ],
+            )
+        }
         PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Location Services").link(PageId::LocationServices), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
         // built by `diagnostics_page::spec`, which knows the crash logs
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),

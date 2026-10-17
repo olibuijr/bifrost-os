@@ -154,6 +154,7 @@ pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;
+pub mod spotlight_scope;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
