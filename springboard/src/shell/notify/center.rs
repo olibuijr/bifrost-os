@@ -315,6 +315,7 @@ impl Shell {
                 }
             }
             Some(Hit::ClearAll) => self.clear_all_notifications(),
+            Some(Hit::Action { id, slot, .. }) => self.list_action(id, slot, t),
             Some(Hit::Collapse(_)) => {}
             None => c.settle(1.0, false, t),
         }
