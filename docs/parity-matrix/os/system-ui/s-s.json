@@ -21,7 +21,16 @@
    "bifrost": "springboard/apps/assistant-desktop",
    "status": "partial",
    "note": "assistant app",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model"
+    }
+   ],
+   "ready_note": "covers: assistant app"
   },
   {
    "id": "path:/System/Library/CoreServices/Screen Time.app",
@@ -41,7 +50,16 @@
    "bifrost": "springboard/src/shell/screentime/mod.rs",
    "status": "partial",
    "note": "Screen Time",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime"
+    }
+   ],
+   "ready_note": "covers: Screen Time"
   },
   {
    "id": "path:/System/Library/CoreServices/ScreenSaverEngine.app",
@@ -61,7 +79,16 @@
    "bifrost": "springboard/src/shell/screensaver.rs",
    "status": "partial",
    "note": "screen saver",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screensaver"
+    }
+   ],
+   "ready_note": "covers: screen saver"
   },
   {
    "id": "path:/System/Library/CoreServices/Script Menu.app",
@@ -141,7 +168,16 @@
    "bifrost": "springboard/src/setup.rs, springboard/apps/setup-assistant/src/main.rs",
    "status": "partial",
    "note": "first-run steps, state file and apply step exist; built on os/team-l-07-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "setup"
+    }
+   ],
+   "ready_note": "covers: first-run steps, state file and apply step exist; built on os/team-l-07-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/ShortcutDroplet.app",
@@ -201,7 +237,16 @@
    "bifrost": "springboard/apps/shortcuts-desktop",
    "status": "partial",
    "note": "Shortcuts app",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation"
+    }
+   ],
+   "ready_note": "covers: Shortcuts app"
   },
   {
    "id": "path:/System/Library/CoreServices/Siri.app",
@@ -221,7 +266,16 @@
    "bifrost": "springboard/apps/assistant-desktop",
    "status": "partial",
    "note": "assistant app",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant",
+     "filter": "model"
+    }
+   ],
+   "ready_note": "covers: assistant app"
   },
   {
    "id": "path:/System/Library/CoreServices/Software Update.app",
@@ -241,7 +295,16 @@
    "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
    "note": "Software Update",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update"
+    }
+   ],
+   "ready_note": "covers: Software Update"
   },
   {
    "id": "path:/System/Library/CoreServices/SpacesTouchBarAgent.app",
@@ -281,7 +344,16 @@
    "bifrost": "springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "quick search",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch"
+    }
+   ],
+   "ready_note": "covers: quick search"
   },
   {
    "id": "path:/System/Library/CoreServices/StageManagerOnboarding.app",
@@ -341,7 +413,16 @@
    "bifrost": "springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "App Intents declared in manifests and run from Search; built on os/team-l-07-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents"
+    }
+   ],
+   "ready_note": "covers: App Intents declared in manifests and run from Search; built on os/team-l-07-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/SystemUIServer.app",
@@ -361,7 +442,16 @@
    "bifrost": "springboard/src/shell/desktop_bar.rs",
    "status": "partial",
    "note": "menu bar",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_bar"
+    }
+   ],
+   "ready_note": "covers: menu bar"
   },
   {
    "id": "path:/System/Library/CoreServices/screencaptureui.app",
@@ -381,7 +471,16 @@
    "bifrost": "springboard/src/shell/screenshot.rs",
    "status": "partial",
    "note": "screenshot UI",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screenshot"
+    }
+   ],
+   "ready_note": "covers: screenshot UI"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SAMaintenance.appex",
@@ -641,7 +740,16 @@
    "bifrost": "springboard/apps/clock-desktop/src/main.rs, springboard/apps/clock-desktop/src/clock/stopwatch.rs",
    "status": "partial",
    "note": "Start Stopwatch, Stop Stopwatch and Record Lap intents; reset is not an intent yet. built on os/team-l-07-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::stopwatch"
+    }
+   ],
+   "ready_note": "covers: Start Stopwatch, Stop Stopwatch and Record Lap intents; reset is not an intent yet. built on os/team-l-07-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SuggestedActionsRemoteUI.appex",

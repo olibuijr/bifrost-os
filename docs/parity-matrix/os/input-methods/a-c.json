@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "Ainu katakana composer (AinuComposer, source bifrost.inputmethod.Ainu.Katakana): romaji keys to katakana, small finals ㇰ ㇱ ㇲ ㇳ ㇴ ㇵ ㇷ ㇺ ㇻ, ト゚ and ㇷ゚ for tu and pu, y/w after a vowel as i/u, Latin passthrough, backspace per key. Host tests only; needs a native Ainu check of the small h final and the unassigned small kana (ㇶ ㇸ ㇹ ㇼ ㇽ ㇾ ㇿ), a Midget check, and wiring in kb_input.rs and the kb_layouts source list (the method is in input_methods SOURCES and the plugin engine list).",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_methods::ainu"
+    }
+   ],
+   "ready_note": "covers: Ainu katakana composer (AinuComposer, source bifrost.inputmethod.Ainu.Katakana): romaji keys to katakana, small finals ㇰ ㇱ ㇲ ㇳ ㇴ ㇵ ㇷ ㇺ ㇻ, ト゚ and ㇷ゚ for tu and pu, y/w after a vowel as i/u, Latin passthrough, backspace per key. Host tests only; needs a native Ainu check of the small h final and the unassigned small kana (ㇶ ㇸ ㇹ ㇼ ㇽ ㇾ ㇿ), a Midget check, and wiring in kb_input.rs and the kb_layouts source list (the method is in input_methods SOURCES and the plugin engine list)."
   },
   {
    "id": "path:/System/Library/Input Methods/Assistive Control.app",
@@ -85,7 +94,16 @@
    "status": "partial",
    "note": "heuristic: keyboard layouts module",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: heuristic: keyboard layouts module"
   }
  ]
 }

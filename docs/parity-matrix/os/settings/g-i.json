@@ -81,7 +81,16 @@
    "bifrost": "springboard/src/shell/game_controllers_page.rs",
    "status": "partial",
    "note": "has: game controller list and per-controller page (pages.rs:1356); missing: button remapping and profiles",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::game_controllers_page"
+    }
+   ],
+   "ready_note": "covers: game controller list and per-controller page (pages.rs:1356)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameControllerSettingsIntents.appex",
@@ -121,7 +130,16 @@
    "bifrost": "springboard/src/shell/pages.rs:901",
    "status": "partial",
    "note": "has: General page (pages.rs:901): About, Software Update, Storage, Background App Refresh, Date & Time, Keyboard, Fonts, Language & Region, Login Items, Game Mode, Backup, Restart",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: General page (pages.rs:901): About, Software Update, Storage, Background App Refresh, Date & Time, Keyboard, Fonts, Language & Region, Login Items, Game Mode, Backup, Restart"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GenerativePartnerSettingsExtension.appex",
@@ -201,7 +219,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1154",
    "status": "partial",
    "note": "has: Language & Region (pages.rs:1154, region pages.rs:1188): preferred language, first day of week, formats; missing: per-app language override",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Language & Region (pages.rs:1154, region pages.rs:1188): preferred language, first day of week, formats"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InternetAccountsSettingsExtension.appex",

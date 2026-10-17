@@ -61,7 +61,16 @@
    "bifrost": "springboard/src/shell/accessibility/reader.rs",
    "status": "partial",
    "note": "reader view",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::reader"
+    }
+   ],
+   "ready_note": "covers: reader view"
   },
   {
    "id": "path:/System/Library/CoreServices/AccessibilityUIServer.app",
@@ -81,7 +90,16 @@
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
    "status": "partial",
    "note": "accessibility tree and actions",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready_note": "covers: accessibility tree and actions"
   },
   {
    "id": "path:/System/Library/CoreServices/AddPrinter.app",
@@ -221,7 +239,16 @@
    "bifrost": "springboard/src/shell/permission_sheet.rs",
    "status": "partial",
    "note": "permission sheet in the shell",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::permission_sheet"
+    }
+   ],
+   "ready_note": "covers: permission sheet in the shell"
   },
   {
    "id": "path:/System/Library/CoreServices/Automator Application Stub.app",
@@ -281,7 +308,16 @@
    "bifrost": "springboard/src/shell/battery.rs",
    "status": "partial",
    "note": "battery status",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::battery"
+    }
+   ],
+   "ready_note": "covers: battery status"
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothSetupAssistant.app",
@@ -321,7 +357,16 @@
    "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
    "status": "partial",
    "note": "Bluetooth service",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service"
+    }
+   ],
+   "ready_note": "covers: Bluetooth service"
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothUIService.app",
@@ -341,7 +386,16 @@
    "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
    "status": "partial",
    "note": "Bluetooth service",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::bluetooth_service"
+    }
+   ],
+   "ready_note": "covers: Bluetooth service"
   },
   {
    "id": "path:/System/Library/CoreServices/CalendarFileHandler.app",
@@ -381,7 +435,16 @@
    "bifrost": "springboard/src/net/captive.rs",
    "status": "partial",
    "note": "captive portal probe and sign-in offer exist; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::captive"
+    }
+   ],
+   "ready_note": "covers: captive portal probe and sign-in offer exist; built on os/team-l-01-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/Certificate Assistant.app",
@@ -421,7 +484,16 @@
    "bifrost": "springboard/src/shell/screensaver.rs",
    "status": "partial",
    "note": "Clock screen saver exists; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screensaver"
+    }
+   ],
+   "ready_note": "covers: Clock screen saver exists; built on os/team-l-01-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/CoreServices/ControlCenter.app",
@@ -441,7 +513,16 @@
    "bifrost": "springboard/src/shell/control_center.rs",
    "status": "partial",
    "note": "Control Centre",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::control_center"
+    }
+   ],
+   "ready_note": "covers: Control Centre"
   },
   {
    "id": "path:/System/Library/CoreServices/ControlStrip.app",
@@ -481,7 +562,16 @@
    "bifrost": "springboard/ui/src/location_auth.rs",
    "status": "partial",
    "note": "location authorisation",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "location_auth"
+    }
+   ],
+   "ready_note": "covers: location authorisation"
   },
   {
    "id": "path:/System/Library/CoreServices/CoreServicesUIAgent.app",
@@ -641,7 +731,16 @@
    "bifrost": "springboard/apps/music-desktop/src/music.rs",
    "status": "partial",
    "note": "artwork decoding and album cover display exist; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-music",
+     "filter": "music"
+    }
+   ],
+   "ready_note": "covers: artwork decoding and album cover display exist; built on os/team-l-01-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AlchemistInferenceProvider.appex",
@@ -881,7 +980,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: embedded cover, else a waveform card (thumbs::media); no duration badge or video poster frame. Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: embedded cover, else a waveform card (thumbs::media); no duration badge or video poster frame. Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BiomeSELFIngestor.appex",
@@ -961,7 +1069,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: calendar page with the first event's date (thumbs::cards). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: calendar page with the first event's date (thumbs::cards). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ChallengesMessageExtension.appex",
@@ -1041,7 +1158,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: clipped text on a tabbed page (thumbs::text::ClippingsProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: clipped text on a tabbed page (thumbs::text::ClippingsProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CloudWorker.appex",
@@ -1101,7 +1227,16 @@
    "bifrost": "springboard/src/shell/sharing_page.rs; springboard/src/privd_client.rs",
    "status": "partial",
    "note": "computer name is set in Sharing; About page shows it; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page"
+    }
+   ],
+   "ready_note": "covers: computer name is set in Sharing; About page shows it; built on os/team-l-01-system-ui; not yet verified on Midget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ConfigurationProfilesFollowUpExtension.appex",
@@ -1141,7 +1276,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: contact card with initials and name (thumbs::cards). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: contact card with initials and name (thumbs::cards). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ContactsAppIntentsExtension.appex",
@@ -1219,8 +1363,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "filesystem extension, no FSKit on PC",
+   "status": "n/a",
+   "note": "FTP filesystem extension; the PC desktop does not mount FTP volumes as filesystems",
    "rea": []
   },
   {

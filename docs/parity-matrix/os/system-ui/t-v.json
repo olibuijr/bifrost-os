@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "keyboard layouts and input menu",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: keyboard layouts and input menu"
   },
   {
    "id": "path:/System/Library/CoreServices/TextInputSwitcher.app",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/kb_layouts.rs",
    "status": "partial",
    "note": "input source switching",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::kb_layouts"
+    }
+   ],
+   "ready_note": "covers: input source switching"
   },
   {
    "id": "path:/System/Library/CoreServices/ThermalTrap.app",
@@ -141,7 +159,16 @@
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
    "status": "partial",
    "note": "accessibility controls",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility"
+    }
+   ],
+   "ready_note": "covers: accessibility controls"
   },
   {
    "id": "path:/System/Library/CoreServices/UniversalControl.app",
@@ -201,7 +228,16 @@
    "bifrost": "springboard/src/shell/usernotif.rs",
    "status": "partial",
    "note": "user notifications",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::usernotif"
+    }
+   ],
+   "ready_note": "covers: user notifications"
   },
   {
    "id": "path:/System/Library/CoreServices/VoiceOver.app",
@@ -221,7 +257,16 @@
    "bifrost": "springboard/src/shell/atspi/mod.rs",
    "status": "partial",
    "note": "AT-SPI bridge, screen reader support",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::atspi"
+    }
+   ],
+   "ready_note": "covers: AT-SPI bridge, screen reader support"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TGOnDeviceInferenceProviderService.appex",
@@ -281,7 +326,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransferResetExtension.appex",
@@ -461,7 +515,16 @@
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "VPN page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: VPN page"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VPNAppIntentWidgetExtension.appex",

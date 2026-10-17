@@ -21,7 +21,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1085",
    "status": "partial",
    "note": "has: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648); missing: dictation and keyboard brightness",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/KeyboardSettingsIntents.appex",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
    "note": "has: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group; missing: add a login item from a picker",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page"
+    }
+   ],
+   "ready_note": "covers: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItemsIntentsExtension.appex",
@@ -101,7 +119,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1085",
    "status": "partial",
    "note": "has: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list; missing: input-source HUD settings and dictation",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Localization.prefPane",
@@ -121,7 +148,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1154",
    "status": "partial",
    "note": "has: Language & Region (pages.rs:1154): preferred language, first day, date, currency; missing: per-app language override",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Language & Region (pages.rs:1154): preferred language, first day, date, currency"
   }
  ]
 }

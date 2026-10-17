@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
    "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click; missing: pointer size and colour",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page"
+    }
+   ],
+   "ready_note": "covers: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MouseIntentsExtension.appex",
@@ -79,8 +88,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page with bundled stills; the Apple wallpaper resource bundle has no counterpart",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -101,7 +110,16 @@
    "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
    "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NetworkSettingsIntents.appex",
@@ -141,7 +159,16 @@
    "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
    "note": "has: Notifications page (notify_page.rs:186); missing: summary delivery",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page"
+    }
+   ],
+   "ready_note": "covers: Notifications page (notify_page.rs:186)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NotificationsSettingsIntents.appex",
@@ -181,7 +208,16 @@
    "bifrost": "springboard/src/shell/mouse_page.rs",
    "status": "partial",
    "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons); missing: pointer size and colour",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::mouse_page"
+    }
+   ],
+   "ready_note": "covers: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Network.prefPane",
@@ -201,7 +237,16 @@
    "bifrost": "springboard/src/shell/pages.rs:750",
    "status": "partial",
    "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Notifications.prefPane",
@@ -221,7 +266,16 @@
    "bifrost": "springboard/src/shell/notify_page.rs",
    "status": "partial",
    "note": "has: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners; missing: scheduled summary delivery UI",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page"
+    }
+   ],
+   "ready_note": "covers: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners"
   }
  ]
 }

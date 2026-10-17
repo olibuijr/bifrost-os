@@ -101,7 +101,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
    "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TrackpadIntentsExtension.appex",
@@ -161,7 +170,16 @@
    "bifrost": "springboard/src/shell/users_page.rs",
    "status": "partial",
    "note": "has: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options; missing: per-user login-item options",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::users_page"
+    }
+   ],
+   "ready_note": "covers: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroupsIntentsExtension.appex",
@@ -261,7 +279,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1035",
    "status": "partial",
    "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links"
   },
   {
    "id": "path:/System/Library/PreferencePanes/UniversalAccessPref.prefPane",
@@ -281,7 +308,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
    "note": "has: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader; missing: live captions, voice control, hearing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader"
   }
  ]
 }

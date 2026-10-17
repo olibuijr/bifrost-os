@@ -141,7 +141,16 @@
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
    "status": "partial",
    "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/Installer Progress.app",
@@ -161,7 +170,16 @@
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
    "status": "partial",
    "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/Installer.app",
@@ -181,7 +199,16 @@
    "bifrost": "springboard/src/installer/app.rs",
    "status": "partial",
    "note": "The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer"
+    }
+   ],
+   "ready_note": "covers: The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/CoreServices/iCloud+.app",
@@ -521,7 +548,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InferenceProviderService.appex",

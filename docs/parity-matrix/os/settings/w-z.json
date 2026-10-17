@@ -41,7 +41,16 @@
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
    "note": "has: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm; missing: wallpaper from the user's photos",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex",
@@ -101,7 +110,16 @@
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
    "note": "has: Wallpaper page gradients (wallpaper_page.rs)",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page gradients (wallpaper_page.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex",
@@ -121,7 +139,16 @@
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
    "note": "has: Wallpaper page image wallpapers (wallpaper_page.rs); missing: user photos as wallpaper",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_page"
+    }
+   ],
+   "ready_note": "covers: Wallpaper page image wallpapers (wallpaper_page.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperLegacyExtension.appex",
@@ -139,8 +166,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -159,8 +186,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -179,8 +206,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -199,8 +226,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -239,8 +266,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {
@@ -259,8 +286,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page: bundled stills stand in for the resource bundle",
+   "status": "n/a",
+   "note": "Apple named wallpaper resource bundle; BifrOSt ships its own stills and gradients on the Wallpaper page, and the bundle is Apple data that is not copied",
    "rea": []
   },
   {

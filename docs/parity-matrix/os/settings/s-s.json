@@ -61,7 +61,16 @@
    "bifrost": "springboard/src/shell/screentime/page.rs",
    "status": "partial",
    "note": "has: Screen Time page with downtime and app limits (screentime/page.rs:91); missing: family sharing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime"
+    }
+   ],
+   "ready_note": "covers: Screen Time page with downtime and app limits (screentime/page.rs:91)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeSettingsResponseExtension.appex",
@@ -79,8 +88,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
-   "status": "partial",
-   "note": "has: Screen Time page; missing: responses to remote requests",
+   "status": "n/a",
+   "note": "answers Family Sharing screen-time requests from Apple family accounts; BifrOSt has no family group",
    "rea": []
   },
   {
@@ -121,7 +130,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1361",
    "status": "partial",
    "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics; missing: advanced protections",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex",
@@ -181,7 +199,16 @@
    "bifrost": "springboard/src/shell/sharing_page.rs",
    "status": "partial",
    "note": "has: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page"
+    }
+   ],
+   "ready_note": "covers: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SharingIntents.appex",
@@ -601,7 +628,16 @@
    "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
    "note": "has: Software Update page (update.rs): version and OTA; missing: update history",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update"
+    }
+   ],
+   "ready_note": "covers: Software Update page (update.rs): version and OTA"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtensionIntents.appex",
@@ -641,7 +677,16 @@
    "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
    "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sound_page"
+    }
+   ],
+   "ready_note": "covers: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoundIntentsExtension.appex",
@@ -721,7 +766,16 @@
    "bifrost": "springboard/src/shell/storage_page.rs",
    "status": "partial",
    "note": "has: Storage page (storage_page.rs:68): per-category usage bars; missing: recommendation actions",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::storage_page"
+    }
+   ],
+   "ready_note": "covers: Storage page (storage_page.rs:68): per-category usage bars"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESDXC.appex",
@@ -801,7 +855,16 @@
    "bifrost": "springboard/src/shell/screentime/page.rs",
    "status": "partial",
    "note": "has: Screen Time page (screentime/page.rs:91): downtime and limits; missing: communication limits",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::screentime"
+    }
+   ],
+   "ready_note": "covers: Screen Time page (screentime/page.rs:91): downtime and limits"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Security.prefPane",
@@ -821,7 +884,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1361",
    "status": "partial",
    "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics; missing: advanced protections",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics"
   },
   {
    "id": "path:/System/Library/PreferencePanes/SharingPref.prefPane",
@@ -841,7 +913,16 @@
    "bifrost": "springboard/src/shell/sharing_page.rs",
    "status": "partial",
    "note": "has: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page"
+    }
+   ],
+   "ready_note": "covers: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff"
   },
   {
    "id": "path:/System/Library/PreferencePanes/SoftwareUpdate.prefPane",
@@ -861,7 +942,16 @@
    "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
    "note": "has: Software Update page (update.rs); missing: update history",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::update"
+    }
+   ],
+   "ready_note": "covers: Software Update page (update.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Sound.prefPane",
@@ -881,7 +971,16 @@
    "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
    "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sound_page"
+    }
+   ],
+   "ready_note": "covers: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Speech.prefPane",
@@ -921,7 +1020,16 @@
    "bifrost": "springboard/src/shell/quicksearch.rs",
    "status": "partial",
    "note": "has: search and index (quicksearch.rs); missing: Spotlight settings page",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch"
+    }
+   ],
+   "ready_note": "covers: search and index (quicksearch.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/StartupDisk.prefPane",

@@ -21,7 +21,16 @@
    "bifrost": "springboard/src/shell/pages.rs:931",
    "status": "partial",
    "note": "has: About page (pages.rs:931): model, OS version and build; missing: serial and name editing, hardware detail beyond the Model row",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: About page (pages.rs:931): model, OS version and build"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AboutSettingsIntents.appex",
@@ -61,7 +70,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1290",
    "status": "partial",
    "note": "has: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader; missing: Live Captions, Voice Control, hearing and speech panes",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsSearchExtension.appex",
@@ -81,7 +99,16 @@
    "bifrost": "springboard/src/shell/settings_search.rs",
    "status": "partial",
    "note": "has: settings search over the Accessibility pages; missing: search terms served to the system index",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_search"
+    }
+   ],
+   "ready_note": "covers: settings search over the Accessibility pages"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsWidgetExtension.appex",
@@ -141,7 +168,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
    "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs)"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppearanceIntentsExtension.appex",
@@ -261,7 +297,16 @@
    "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
    "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BluetoothSettingsAppIntentsWidgetExtension.appex",
@@ -461,7 +506,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1326",
    "status": "partial",
    "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); missing: accent colour choice",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs)"
   },
   {
    "id": "path:/System/Library/PreferencePanes/AppleIDPrefPane.prefPane",
@@ -501,7 +555,16 @@
    "bifrost": "springboard/src/shell/pages.rs:1253",
    "status": "partial",
    "note": "has: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode; missing: per-app energy list",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode"
   },
   {
    "id": "path:/System/Library/PreferencePanes/Bluetooth.prefPane",
@@ -521,7 +584,16 @@
    "bifrost": "springboard/src/shell/pages.rs:816",
    "status": "partial",
    "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages"
+    }
+   ],
+   "ready_note": "covers: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget"
   },
   {
    "id": "path:/System/Library/PreferencePanes/ClassKitPreferencePane.prefPane",

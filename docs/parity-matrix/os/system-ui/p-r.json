@@ -161,7 +161,16 @@
    "bifrost": "springboard/src/shell/services/quick_look.rs",
    "status": "partial",
    "note": "Quick Look",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::quick_look"
+    }
+   ],
+   "ready_note": "covers: Quick Look"
   },
   {
    "id": "path:/System/Library/CoreServices/PreviewShellMac.app",
@@ -181,7 +190,16 @@
    "bifrost": "springboard/src/shell/services/quick_look.rs",
    "status": "partial",
    "note": "Quick Look",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::quick_look"
+    }
+   ],
+   "ready_note": "covers: Quick Look"
   },
   {
    "id": "path:/System/Library/CoreServices/Pro Display Calibrator.app",
@@ -221,7 +239,16 @@
    "bifrost": "springboard/src/shell/diag.rs",
    "status": "partial",
    "note": "diagnostics",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::diag"
+    }
+   ],
+   "ready_note": "covers: diagnostics"
   },
   {
    "id": "path:/System/Library/CoreServices/ProfileHelper.app",
@@ -381,7 +408,16 @@
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
    "status": "partial",
    "note": "Draws: archive card with format badge and entry count for zip and tar, else type icon with badge (thumbs::cards, shell/services/thumb_providers.rs). Needs a Midget check for parity.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs"
+    }
+   ],
+   "ready_note": "covers: Draws: archive card with format badge and entry count for zip and tar, else type icon with badge (thumbs::cards, shell/services/thumb_providers.rs). Needs a Midget check for parity."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PaperKitExtension.appex",
@@ -401,7 +437,16 @@
    "bifrost": "springboard/src/shell/markup.rs",
    "status": "partial",
    "note": "markup tools in the shell",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup"
+    }
+   ],
+   "ready_note": "covers: markup tools in the shell"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhoneAppIntentsExtension.appex",
@@ -441,7 +486,16 @@
    "bifrost": "springboard/src/shell/photos/mod.rs",
    "status": "partial",
    "note": "photo picker",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos"
+    }
+   ],
+   "ready_note": "covers: photo picker"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPicker.appex",
@@ -461,7 +515,16 @@
    "bifrost": "springboard/src/shell/photos/mod.rs",
    "status": "partial",
    "note": "photo picker",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos"
+    }
+   ],
+   "ready_note": "covers: photo picker"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPosterProvider.appex",
