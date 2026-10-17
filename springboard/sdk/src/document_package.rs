@@ -72,6 +72,20 @@ fn sibling_name(name: &str, tag: &str) -> String {
     format!(".{name}.{tag}-{}-{nanos}", std::process::id())
 }
 
+/// Writes a package's files into a folder the shell made for the save (`begin_save` of a package name). The folder
+/// is not replaced here: the shell puts it in place when the save commits. Each name must be a leaf name.
+pub fn write_package_contents(dir: &Path, files: &[(&str, &[u8])]) -> io::Result<()> {
+    if let Some((bad, _)) = files.iter().find(|(n, _)| !is_leaf_name(n)) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("\"{bad}\" cannot be a file in a package")));
+    }
+    for (file, bytes) in files {
+        let mut f = fs::OpenOptions::new().write(true).create_new(true).open(dir.join(file))?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    Ok(())
+}
+
 /// Writes a package directory atomically: the files go into a temporary sibling directory first, which then takes
 /// the package's place. The old package (if any) is moved aside and removed only after the new one is in place, and
 /// is moved back if putting the new one in place fails. Each name must be a leaf name.
@@ -127,6 +141,20 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn the_files_go_into_a_folder_the_shell_made_and_a_leaf_name_only() {
+        let dir = scratch("contents");
+        let staging = dir.join("Notes.rtfd.tmp");
+        fs::create_dir(&staging).unwrap();
+        write_package_contents(&staging, &[("TXT.rtf", b"{\\rtf1}"), ("image.png", b"png")]).unwrap();
+        assert_eq!(fs::read(staging.join("TXT.rtf")).unwrap(), b"{\\rtf1}");
+        assert_eq!(read_package_dir(&staging).unwrap().len(), 2);
+        assert!(write_package_contents(&staging, &[("TXT.rtf", b"again")]).is_err(), "an existing file is not overwritten");
+        assert!(write_package_contents(&staging, &[("../escape", b"x")]).is_err());
+        assert!(!dir.join("escape").exists());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
