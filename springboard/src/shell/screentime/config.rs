@@ -13,6 +13,10 @@ use std::path::Path;
 pub const LIMIT_STEPS: [u32; 7] = [0, 15, 30, 60, 120, 180, 240];
 /// How long "Ignore Limit for 15 min" lasts.
 pub const IGNORE_SECS: i64 = 15 * 60;
+/// How long "Ignore Limit for 1 more minute" lasts.
+pub const ONE_MORE_MINUTE_SECS: i64 = 60;
+/// How long before a daily limit runs out the warning notification is posted.
+pub const WARN_LEAD_SECS: u32 = 5 * 60;
 
 /// Why an app is covered by the Time Limit screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +28,7 @@ pub enum Reason {
 /// How long an ignore grant lasts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ignore {
+    OneMinute,
     Fifteen,
     Today,
 }
@@ -107,6 +112,9 @@ impl Config {
     pub fn grant(&mut self, app: AppId, how: Ignore, unix: i64, offset: i32) {
         let k = key(app);
         match how {
+            Ignore::OneMinute => {
+                let _ = self.prefs.set(&format!("ignore.until.{k}"), &(unix + ONE_MORE_MINUTE_SECS).to_string());
+            }
             Ignore::Fifteen => {
                 let _ = self.prefs.set(&format!("ignore.until.{k}"), &(unix + IGNORE_SECS).to_string());
             }
@@ -119,6 +127,22 @@ impl Config {
     pub fn ignored(&self, app: AppId, unix: i64, offset: i32) -> bool {
         let k = key(app);
         num(&self.prefs, &format!("ignore.until.{k}")).is_some_and(|u| u > unix) || num(&self.prefs, &format!("ignore.day.{k}")) == Some(day_of(unix, offset))
+    }
+
+    /// True when `app` has a daily limit that runs out within `WARN_LEAD_SECS`
+    /// (and has not run out yet), so the shell can warn once. An ignored or
+    /// unlimited app never warns.
+    pub fn warn_due(&self, app: AppId, used_secs: u32, unix: i64, offset: i32) -> bool {
+        if app == AppId::Settings || unix <= 0 || self.ignored(app, unix, offset) {
+            return false;
+        }
+        match self.limit_mins(app) {
+            Some(m) => {
+                let limit = m * 60;
+                used_secs < limit && used_secs + WARN_LEAD_SECS >= limit
+            }
+            None => false,
+        }
     }
 
     /// The reason `app` must be covered now, given its seconds used today.
@@ -205,6 +229,31 @@ mod tests {
         assert!(c.allowed(AppId::Settings));
         c.set_limit(AppId::Files, Some(15));
         assert_eq!(c.block(AppId::Files, 99_999, 0, 0), None);
+    }
+
+    #[test]
+    fn one_more_minute_and_fifteen_minute_grants_expire_separately() {
+        let mut c = Config::memory();
+        c.set_limit(AppId::Files, Some(30));
+        c.grant(AppId::Files, Ignore::OneMinute, NOON, 0);
+        assert_eq!(c.block(AppId::Files, 1800, NOON + 59, 0), None);
+        assert_eq!(c.block(AppId::Files, 1800, NOON + 61, 0), Some(Reason::Limit), "one minute is all it grants");
+        c.grant(AppId::Files, Ignore::Fifteen, NOON, 0);
+        assert_eq!(c.block(AppId::Files, 1800, NOON + 14 * 60, 0), None);
+    }
+
+    #[test]
+    fn a_limit_warns_five_minutes_before_it_runs_out_once_it_is_close() {
+        let mut c = Config::memory();
+        c.set_limit(AppId::Files, Some(30));
+        assert!(!c.warn_due(AppId::Files, 1499, NOON, 0), "more than five minutes left");
+        assert!(c.warn_due(AppId::Files, 1500, NOON, 0), "exactly five minutes left");
+        assert!(c.warn_due(AppId::Files, 1799, NOON, 0));
+        assert!(!c.warn_due(AppId::Files, 1800, NOON, 0), "the limit itself is a block, not a warning");
+        assert!(!c.warn_due(AppId::Photos, 1700, NOON, 0), "no limit, no warning");
+        assert!(!c.warn_due(AppId::Settings, 1700, NOON, 0));
+        c.grant(AppId::Files, Ignore::OneMinute, NOON, 0);
+        assert!(!c.warn_due(AppId::Files, 1700, NOON, 0), "an ignored limit does not warn");
     }
 
     #[test]

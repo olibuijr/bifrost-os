@@ -10,7 +10,8 @@ pub mod page;
 pub mod shield;
 pub mod usage;
 
-use super::{AppId, Drawn, Effect, Event, Screen, Shell};
+use super::notify::Notification;
+use super::{Anim, AppId, Drawn, Effect, Event, Screen, Shell, apps};
 use config::Config;
 use shield::{Out, Shield};
 use std::path::PathBuf;
@@ -65,12 +66,17 @@ impl Shell {
             self.st_checked = unix;
             self.screentime.tick(unix, offset, fg, self.screen_on);
         }
-        if let Some(sh) = &mut self.shield {
-            if fg != Some(sh.app) || self.clock.alert().is_some() || self.low_alert.is_some() || self.power_menu.is_some() {
+        if let Some(sh) = &self.shield {
+            // the cover stays up while its app is still zooming open
+            let opening = matches!(self.anim, Some((Anim::Open { app, .. }, _)) if app == sh.app);
+            let kept = fg == Some(sh.app) || opening;
+            if !kept || self.st_suspended() {
                 self.shield = None;
                 self.dirty = true;
-            } else if sh.tick(unix, t) {
-                self.dirty = true;
+            } else if let Some(sh) = &mut self.shield {
+                if sh.tick(unix, t) {
+                    self.dirty = true;
+                }
             }
             return;
         }
@@ -79,6 +85,35 @@ impl Shell {
             return;
         }
         self.st_blocked_at = unix;
+        let used = self.screentime.today().app_secs(app);
+        self.st_warn(app, used, unix, offset);
+        if let Some(reason) = self.st_config().block(app, used, unix, offset) {
+            self.shield = Some(Shield::new(app, reason, self.w, self.h));
+            self.dirty = true;
+            self.drawn = Drawn::Nothing;
+        }
+    }
+
+    /// Posts the five-minutes-left notification once per app per day.
+    fn st_warn(&mut self, app: AppId, used: u32, unix: i64, offset: i32) {
+        let day = usage::day_of(unix, offset);
+        if !self.st_config().warn_due(app, used, unix, offset) || self.st_warned.contains(&(day, app)) {
+            return;
+        }
+        self.st_warned.retain(|(d, _)| *d == day);
+        self.st_warned.push((day, app));
+        let name = apps().iter().find(|a| a.id == app).map_or("this app", |a| a.name);
+        self.notify(Notification::new(app, "Screen Time", format!("5 minutes left today for {name}."), unix));
+    }
+
+    /// Checks a launch before the app's frame zooms open: a limit that is
+    /// already reached (or Downtime) covers the app at once, so it never
+    /// shows its own screen.
+    pub(super) fn st_launch_check(&mut self, app: AppId, t: f64) {
+        if self.st_suspended() {
+            return;
+        }
+        let (unix, offset) = self.wall_now(t);
         let used = self.screentime.today().app_secs(app);
         if let Some(reason) = self.st_config().block(app, used, unix, offset) {
             self.shield = Some(Shield::new(app, reason, self.w, self.h));
