@@ -118,6 +118,90 @@ pub fn card_texts(send: &mut Send<'_>, base: &str, auth: &str) -> Result<Vec<Str
     Ok(out)
 }
 
+/// The write transport: sends one request and reads its status and `ETag` header. [`session_send_etag`] uses the URL
+/// session; tests pass canned answers.
+pub type SendEtag<'a> = dyn FnMut(&URLRequest) -> Result<(u16, Option<String>), String> + 'a;
+
+/// The URL session transport for writes: blocking, reads the status and the `ETag` header, and discards the body.
+pub fn session_send_etag(req: &URLRequest) -> Result<(u16, Option<String>), String> {
+    let cancel = AtomicBool::new(false);
+    let head: HTTPURLResponse = URLSession::shared()
+        .bytes(req, &cancel, &mut |_: &HTTPURLResponse| {}, &mut |_: &[u8]| true)
+        .map_err(|e| e.to_string())?;
+    Ok((head.status_code, head.value("ETag").map(str::to_string)))
+}
+
+/// Why a write was not done.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WriteError {
+    /// The server refused the precondition (412): the item changed since it was read, so sync again before writing.
+    Conflict,
+    /// Any other status that is not 2xx.
+    Refused(u16),
+    /// The request did not reach the server or no answer came back.
+    Transport(String),
+}
+
+/// When a PUT may replace what is on the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Precondition<'a> {
+    /// Write whatever is there (no `If-Match` header).
+    Any,
+    /// Only create the item: the write fails when one already exists at that URL (`If-None-Match: *`).
+    Create,
+    /// Only replace the item the given ETag names (`If-Match`).
+    Match(&'a str),
+}
+
+fn content_type(kind: &Kind) -> &'static str {
+    match kind {
+        Kind::CardDav => "text/vcard; charset=utf-8",
+        _ => "text/calendar; charset=utf-8",
+    }
+}
+
+/// Writes one calendar object (CalDAV) or card (CardDAV) to `url` with a PUT. Returns the new ETag when the server
+/// sends one. A 2xx status is success; a failed precondition is [`WriteError::Conflict`].
+pub fn put_resource(
+    send: &mut SendEtag<'_>,
+    url: &str,
+    auth: &str,
+    kind: &Kind,
+    body: &str,
+    precondition: Precondition<'_>,
+) -> Result<Option<String>, WriteError> {
+    let mut req = URLRequest { method: "PUT".to_string(), body: Some(body.as_bytes().to_vec()), ..URLRequest::new(url) };
+    req.set_header("Authorization", auth);
+    req.set_header("Content-Type", content_type(kind));
+    match precondition {
+        Precondition::Any => {}
+        Precondition::Create => req.set_header("If-None-Match", "*"),
+        Precondition::Match(etag) => req.set_header("If-Match", etag),
+    }
+    let (status, etag) = send(&req).map_err(WriteError::Transport)?;
+    match status {
+        412 => Err(WriteError::Conflict),
+        200..=299 => Ok(etag),
+        other => Err(WriteError::Refused(other)),
+    }
+}
+
+/// Deletes the calendar object or card at `url`. With an ETag, the delete only happens when the item still has that
+/// version (`If-Match`); otherwise it is a [`WriteError::Conflict`].
+pub fn delete_resource(send: &mut SendEtag<'_>, url: &str, auth: &str, etag: Option<&str>) -> Result<(), WriteError> {
+    let mut req = URLRequest { method: "DELETE".to_string(), ..URLRequest::new(url) };
+    req.set_header("Authorization", auth);
+    if let Some(etag) = etag {
+        req.set_header("If-Match", etag);
+    }
+    let (status, _) = send(&req).map_err(WriteError::Transport)?;
+    match status {
+        412 => Err(WriteError::Conflict),
+        200..=299 => Ok(()),
+        other => Err(WriteError::Refused(other)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,5 +272,66 @@ mod tests {
         assert_eq!(req.method, "PROPFIND");
         assert!(req.headers.iter().any(|(k, v)| k == "Depth" && v == "1"));
         assert!(req.headers.iter().any(|(k, v)| k == "Authorization" && v == "Basic abc"));
+    }
+
+    type Seen = Vec<(String, Vec<(String, String)>)>;
+
+    fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn a_put_replaces_only_the_version_it_names_and_returns_the_new_etag() {
+        let mut seen: Seen = Vec::new();
+        let mut send = |req: &URLRequest| {
+            seen.push((req.method.clone(), req.headers.clone()));
+            Ok((204, Some("\"v2\"".to_string())))
+        };
+        let etag = put_resource(&mut send, "https://dav.example.com/c/a.ics", "Basic x", &Kind::CalDav, "BEGIN:VCALENDAR", Precondition::Match("\"v1\""));
+        assert_eq!(etag, Ok(Some("\"v2\"".to_string())));
+        assert_eq!(seen[0].0, "PUT");
+        assert_eq!(header(&seen[0].1, "If-Match"), Some("\"v1\""));
+        assert_eq!(header(&seen[0].1, "Content-Type"), Some("text/calendar; charset=utf-8"));
+        assert_eq!(header(&seen[0].1, "Authorization"), Some("Basic x"));
+    }
+
+    #[test]
+    fn a_create_only_put_sends_if_none_match_and_an_any_put_sends_no_precondition() {
+        let mut seen: Seen = Vec::new();
+        let mut send = |req: &URLRequest| {
+            seen.push((req.method.clone(), req.headers.clone()));
+            Ok((201, None))
+        };
+        put_resource(&mut send, "https://dav.example.com/b/1.vcf", "Basic x", &Kind::CardDav, "BEGIN:VCARD", Precondition::Create).unwrap();
+        put_resource(&mut send, "https://dav.example.com/b/2.vcf", "Basic x", &Kind::CardDav, "BEGIN:VCARD", Precondition::Any).unwrap();
+        assert_eq!(header(&seen[0].1, "If-None-Match"), Some("*"));
+        assert_eq!(header(&seen[0].1, "Content-Type"), Some("text/vcard; charset=utf-8"));
+        assert!(header(&seen[1].1, "If-Match").is_none() && header(&seen[1].1, "If-None-Match").is_none());
+    }
+
+    #[test]
+    fn a_failed_precondition_is_a_conflict_and_other_statuses_are_refusals() {
+        let mut conflict = |_: &URLRequest| Ok((412, None));
+        assert_eq!(put_resource(&mut conflict, "https://x/a.ics", "", &Kind::CalDav, "", Precondition::Match("\"old\"")), Err(WriteError::Conflict));
+        let mut refused = |_: &URLRequest| Ok((403, None));
+        assert_eq!(put_resource(&mut refused, "https://x/a.ics", "", &Kind::CalDav, "", Precondition::Any), Err(WriteError::Refused(403)));
+        let mut down = |_: &URLRequest| Err("no route".to_string());
+        assert_eq!(put_resource(&mut down, "https://x/a.ics", "", &Kind::CalDav, "", Precondition::Any), Err(WriteError::Transport("no route".into())));
+    }
+
+    #[test]
+    fn a_delete_carries_the_etag_and_maps_its_status() {
+        let mut seen: Seen = Vec::new();
+        let mut send = |req: &URLRequest| {
+            seen.push((req.method.clone(), req.headers.clone()));
+            Ok((204, None))
+        };
+        assert_eq!(delete_resource(&mut send, "https://x/c/a.ics", "Basic x", Some("\"v3\"")), Ok(()));
+        assert_eq!(seen[0].0, "DELETE");
+        assert_eq!(header(&seen[0].1, "If-Match"), Some("\"v3\""));
+        let mut gone = |_: &URLRequest| Ok((404, None));
+        assert_eq!(delete_resource(&mut gone, "https://x/c/a.ics", "", None), Err(WriteError::Refused(404)));
+        let mut stale = |_: &URLRequest| Ok((412, None));
+        assert_eq!(delete_resource(&mut stale, "https://x/c/a.ics", "", Some("\"v2\"")), Err(WriteError::Conflict));
     }
 }

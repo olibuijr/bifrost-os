@@ -2987,7 +2987,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. The module docs describe reads only, so writing edits back to the server is not covered.",
+   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local.",
    "rea": [],
    "method": "assessed"
   },
