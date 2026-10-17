@@ -4557,3 +4557,39 @@ One icon model and renderer for every app icon. Code: `springboard/render/src/ic
 - **Tests.** Superellipse area at 32 to 256 px (within 0.01 of 0.9502), corner and centre coverage, Porter-Duff and
   blend formulas, variant colour mapping, cache keys and eviction, legacy fallback on the plate and under the mask, the
   shadow below and not above the body, JSON and hex parsing, and the built-in Terminal icon.
+
+
+## Math typesetting (`bifrost_render::math`, OS layer MathTypesetting)
+
+Source: `springboard/render/src/math/`. Status in the parity matrix: `partial` (`docs/parity-matrix/os/frameworks/m-o.json`).
+
+* `parse::parse_tex(src)` reads a LaTeX subset: `\frac \dfrac \tfrac`, `\sqrt[n]{x}`, `^` and `_`, `\sum \prod \int`
+  with `\limits` and `\nolimits`, Greek letters, operators and relations, `\left ... \right` (with `.` for an invisible
+  side), `matrix pmatrix bmatrix vmatrix Vmatrix Bmatrix` environments, `\text{}` and `\mathrm{}`, spacing commands
+  `\, \; \: \! \quad \qquad`, and function names (`\sin`, `\lim`, ...). `parse::parse_linear(src)` reads `a/b`, `x^2`,
+  `sqrt(x)`, parentheses and Greek words (`pi`). Both return `parse::ParseError` with an index.
+* `metrics::FontMetrics` gives per-glyph advance, ascent and descent in em, optional stretchy variants, and optional
+  `MathConstants`. `MathConstants::from_math_table(bytes, upem)` reads the OpenType `MATH` table. Without it,
+  `MathConstants::DEFAULT` (TeX defaults) is used. `metrics::stretch` picks the variant that covers a target height, or
+  scales the largest one. `EstimatedMetrics` is a rough font-free fallback.
+* `layout::typeset_tex(src, Options, metrics)` and `layout::typeset_linear(...)` return `Layout`: width, ascent, depth,
+  glyphs (`ch`, `x`, `y` on the baseline with y down, `size` in px) and rules (fraction bars, radical overlines). The
+  output is in pixels, so a caller maps it onto its own text drawing.
+* Layout follows TeX: styles D, T, S, SS with cramped variants, the 8x8 inter-atom spacing table (thin, medium and
+  thick spaces suppressed in script styles, bin operators demoted where TeX demotes them), fraction shifts and
+  clearances, script shifts with the sub/superscript gap, radical clearance, big operators with limits in display style,
+  and delimiters stretched to 0.901 of the contents' height and centred on the axis.
+
+Decisions and gaps:
+
+* No math font is bundled, and none of the shipped fonts has a `MATH` table, so the TeX defaults are used. Bundling a
+  math font (for example one with a MATH table) is the next step; the reader is already in place.
+* Ordinary letters are upright. TeX sets them italic; without an italic correction table the output is upright.
+* `\dfrac` and `\tfrac` are plain `\frac`; the style is not forced.
+* Linear input takes one atom as a denominator (`a/bc` is `(a/b)c`); write `a/(bc)` for more.
+* Not wired yet: no glyph painter for the app text stack, Notes `$...$` and `$$...$$` (the text layout in
+  `ui/src/typeset.rs` has no inline-object hook), and the Calculator display (its text is pre-rendered images from an
+  app cache, with no face access). These are the open items before the row can be `parity`.
+* Tests: parser trees, errors, fake-font fraction and script metrics, spacing between classes, delimiter sizing, matrix
+  and radical geometry, and the `MATH` table reader on a synthetic table. Not run in the session that wrote them; run
+  `cargo test -p <render crate> math::` before relying on them.
