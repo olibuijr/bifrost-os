@@ -123,6 +123,7 @@ pub mod snapshot_backup;
 pub mod quarantine;
 pub mod dns_settings;
 pub mod content_filter;
+pub mod link_tracking;
 pub mod pref_session;
 pub mod relay;
 pub mod dns_message;
