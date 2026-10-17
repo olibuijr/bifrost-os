@@ -158,9 +158,55 @@ pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
-/// The open families that stand in for `family`, preferred first. Empty when the name is unknown.
+/// Licensed reference faces (lowercase) that have their own open substitute, ahead of the class list. Each is an
+/// open face from an Arch package (`packaging/arch/runtime-packages.txt`), metric-compatible where one is packaged
+/// and design-similar otherwise. The reference face itself is never shipped.
+const OVERRIDES: &[(&str, &[&str])] = &[
+    ("helvetica neue", &["TeX Gyre Heros"]),
+    ("georgia", &["Source Serif 4"]),
+    ("garamond", &["Libertinus Serif"]),
+    ("hoefler text", &["Libertinus Serif"]),
+    ("iowan old style", &["Libertinus Serif"]),
+    ("domaine display", &["Libertinus Serif"]),
+    ("herculanum", &["Libertinus Serif"]),
+    ("gill sans", &["Lato"]),
+    ("geneva", &["Lato"]),
+    ("forgotten futurist", &["Lato"]),
+    ("dash", &["Inter"]),
+    ("founders grotesk", &["Inter"]),
+    ("founders grotesk condensed", &["Inter"]),
+    ("founders grotesk text", &["Inter"]),
+    ("graphik", &["Inter"]),
+    ("graphik compact", &["Inter"]),
+    ("headline a", &["Inter"]),
+    ("kefa iii", &["Noto Sans Ethiopic"]),
+];
+
+/// The open substitutes that `OVERRIDES` names for `family`, empty when there are none.
+fn override_for(family: &str) -> &'static [&'static str] {
+    let key = family.trim().to_lowercase();
+    OVERRIDES.iter().find(|(n, _)| *n == key).map(|(_, f)| *f).unwrap_or(&[])
+}
+
+/// `first` followed by the entries of `rest` it does not already hold.
+fn merge_families(first: &[&'static str], rest: &[&'static str]) -> Vec<&'static str> {
+    let mut out = first.to_vec();
+    for &f in rest {
+        if !out.contains(&f) {
+            out.push(f);
+        }
+    }
+    out
+}
+
+/// The open families that stand in for `family`, preferred first: its own override, then the equivalents of its
+/// class. Empty when the name is unknown.
 pub fn substitute(family: &str) -> Vec<&'static str> {
-    class_of_family(family).map(|c| c.equivalents().to_vec()).unwrap_or_default()
+    let own = override_for(family);
+    match class_of_family(family) {
+        Some(c) => merge_families(own, c.equivalents()),
+        None => own.to_vec(),
+    }
 }
 
 /// The generic class for a descriptor whose family is unknown: fixed pitch is monospaced, everything else is the
@@ -178,13 +224,12 @@ pub fn class_for_spec(spec: &FontSpec) -> FamilyClass {
 pub fn candidates(spec: &FontSpec) -> Vec<FontSpec> {
     let Some(name) = spec.family.as_deref() else { return Vec::new() };
     let class = class_of_family(name).unwrap_or_else(|| class_for_spec(spec));
-    class
-        .equivalents()
-        .iter()
+    merge_families(override_for(name), class.equivalents())
+        .into_iter()
         .filter(|f| !f.eq_ignore_ascii_case(name))
         .map(|f| {
             let mut s = spec.clone();
-            s.family = Some((*f).to_string());
+            s.family = Some(f.to_string());
             s
         })
         .collect()
@@ -263,10 +308,25 @@ mod tests {
 
     #[test]
     fn substitute_lists_open_equivalents_preferred_first() {
-        assert_eq!(substitute("Helvetica Neue")[0], "Inter");
+        assert_eq!(substitute("Helvetica Neue")[0], "TeX Gyre Heros");
+        assert_eq!(substitute("Helvetica Neue")[1], "Inter");
         assert_eq!(substitute("Futura")[0], "Outfit");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
+    }
+
+    #[test]
+    fn licensed_faces_get_their_open_substitute_first() {
+        assert_eq!(substitute("Georgia")[0], "Source Serif 4");
+        assert_eq!(substitute("Garamond")[0], "Libertinus Serif");
+        assert_eq!(substitute("Gill Sans")[0], "Lato");
+        assert_eq!(substitute("Founders Grotesk Condensed")[0], "Inter");
+        assert_eq!(substitute("Kefa III")[0], "Noto Sans Ethiopic");
+        let c = candidates(&FontSpec::new().family("Georgia"));
+        assert_eq!(c[0].family.as_deref(), Some("Source Serif 4"));
+        let dash: Vec<String> = candidates(&FontSpec::new().family("Dash")).into_iter().filter_map(|c| c.family).collect();
+        assert_eq!(dash[0], "Inter");
+        assert!(dash.iter().all(|f| f != "Dash"));
     }
 
     #[test]
