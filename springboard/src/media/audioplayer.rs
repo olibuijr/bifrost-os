@@ -689,7 +689,7 @@ mod tests {
         let mut p = AudioPlayer::new(Box::new(NullOut::new())).unwrap();
         assert_eq!(p.snapshot().rate, 1.0, "normal speed until asked");
         p.set_rate(4.0);
-        assert_eq!(p.snapshot().rate, 2.0);
+        assert_eq!(p.snapshot().rate, 3.0, "the ceiling is 3x");
         p.set_rate(0.25);
         assert_eq!(p.snapshot().rate, 0.5);
         p.set_rate(f32::NAN);
