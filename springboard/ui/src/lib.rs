@@ -600,6 +600,8 @@ pub mod recognizer;
 pub mod identity;
 pub mod directory_node;
 pub mod directory_query;
+/// The directory servers this machine searches and the client file that follows from them.
+pub mod directory_config;
 pub mod directory_contacts;
 /// The local account directory: users and groups read from `/etc/passwd` and `/etc/group` into a directory node.
 pub mod directory_local;

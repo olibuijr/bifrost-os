@@ -1767,11 +1767,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login, share_access, answer_share_prompt, forget_share_login)",
+   "bifrost": "springboard/src/keychain.rs (save_share_login, share_login, share_access, answer_share_prompt, forget_share_login); springboard/src/net_auth.rs (share_prompt, wifi_prompt, validate, complete_share); springboard/sdk/src/wifi_secrets.rs (eap_access, answer_eap_prompt, forget_eap)",
    "status": "gap",
-   "note": "Build a network authentication agent that prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs); the reference's network-auth agent app has no BifrOSt counterpart yet. Built 2026-10-17: the keychain store for SMB share logins (springboard/src/keychain.rs save_share_login and share_login, tests keychain::tests); the prompt that asks for a login and the 802.1X path are not built. Built 2026-10-17: share_access, answer_share_prompt and forget_share_login decide between a saved login and a prompt (springboard/src/keychain.rs, tests keychain::tests). The prompt sheet and the 802.1X path are not built.",
+   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs). Not built: the shell sheet that draws the prompt.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net_auth::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_secrets::tests"
+    }
+   ],
+   "ready_note": "The agent's job is to decide saved-login-or-prompt and to take the answer. SMB shares: keychain share_access and answer_share_prompt. 802.1X networks: WifiSecrets::eap_access, answer_eap_prompt and forget_eap. net_auth.rs holds the sheet's wording and fields (Prompt), the checks on what was typed and the remember choice (complete_share). The shell sheet that draws the Prompt is not wired yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
@@ -1788,11 +1807,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sharing_page.rs; packaging/arch/runtime-packages.txt (samba, nfs-utils); springboard/src/shell/sharing_page.rs (share_section, shares_in_conf)",
+   "bifrost": "springboard/src/shell/sharing_page.rs (View, SERVICES, share_section, shares_in_conf, with_share, without_share); packaging/arch/runtime-packages.txt (samba, nfs-utils)",
    "status": "partial",
    "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing. Built 2026-10-17: the folder share model (springboard/src/shell/sharing_page.rs share_section and shares_in_conf, tests sharing_page::tests); the page does not list or edit folders yet. Built 2026-10-17: with_share and without_share edit the smb.conf text (shell sharing_page::tests); the page does not call them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    }
+   ],
+   "ready_note": "File Sharing is switched from Settings > Sharing (privd service.set on smb.service); the Arch samba and nfs-utils packages serve SMB and NFS. The folder share model reads, adds and removes smb.conf sections (tests). AFP is not mirrored (Apple's retired protocol with no open equivalent); the page does not list or edit folders yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Netrb.framework",
@@ -1810,8 +1838,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1.0 give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: Netrb is the network-recovery-boot client, which fetches the recovery image from Apple's servers when a Mac cannot start from its disk. The reference index lists only Info.plist and version.plist for it (no resources, no strings), and BifrOSt recovers from its own installer media and the Midget recovery phase, with no Apple-hosted image.",
    "rea": [],
    "method": "assessed"
   },
@@ -1830,11 +1858,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/apps/wireless-diagnostics-desktop/src/model.rs; springboard/cmd/src/ifconfig.rs; springboard/src/net/wifi.rs (Status, ethernet, default_gateway, iface_ipv4)",
    "status": "partial",
-   "note": "private framework, owner Network; from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
+   "note": "Network details for the menu bar, Wireless Diagnostics and ifconfig. The diagnostic-extension half feeds Apple's sysdiagnose and is not mirrored; app-facing gaps in the SDK network layer are tracked in docs/parity-matrix/data/network.json.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wireless-diagnostics",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ifconfig::tests"
+    }
+   ],
+   "ready_note": "The framework reports connection and interface details (SSID, signal, address, gateway) and supplies them to the sysdiagnose collector (NetworkInfoDiagnosticExtension.appex in the index). BifrOSt reads them for Wireless Diagnostics (parsing, signal rating, report text) and ifconfig, and the Wi-Fi status for the menu bar. The sysdiagnose upload half is not mirrored; Settings > Diagnostics shares a report only when the user chooses to."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkMenusCommon.framework",
@@ -1851,11 +1893,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/src/shell/desktop_network.rs; springboard/src/net/wifi_config.rs; springboard/src/net/wifi.rs",
    "status": "partial",
-   "note": "private framework, owner Network; from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
+   "note": "Common code of the Wi-Fi, VPN and network menu bar items; BifrOSt's version is desktop_network.rs with the Wi-Fi config model.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::desktop_network::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_config::tests"
+    }
+   ],
+   "ready_note": "Shared code behind the Wi-Fi and network menus (link problems, DNS check, saved networks and their order, join/forget actions) is desktop_network.rs and the Wi-Fi config model the menu bar and Settings both use."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkQuality.framework",
@@ -1873,8 +1929,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/network.json",
-   "status": "partial",
-   "note": "private framework, owner Network; from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
+   "status": "n/a",
+   "note": "n/a: NetworkQuality is the networkQuality speed and responsiveness test (usr/bin/networkQuality, networkqualityd and networkqualityrelay sandbox profiles, an XPC service and a sysdiagnose appex in the index). It measures against Apple-hosted test endpoints and relays, which is a third-party lookup BifrOSt does not make (privacy-first rule); local link quality is shown by Wireless Diagnostics instead.",
    "rea": [],
    "method": "assessed"
   },
@@ -1893,11 +1949,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/src/net/wifi_config.rs (priority_of, saved-network order); springboard/src/net/wpa.rs (bars); springboard/core/src/network_sets.rs (service order, active_services)",
    "status": "partial",
-   "note": "private framework, owner Network; from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
+   "note": "Scores candidate networks to pick one; BifrOSt ranks by saved order and signal and lets the supplicant roam.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wpa::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "network_sets::tests"
+    }
+   ],
+   "ready_note": "Choosing which network carries traffic: saved Wi-Fi networks get supplicant priorities from their order (priority_of), the signal is rated in bars (wpa bars), and network_sets keeps the ordered service list whose first enabled service is used. wpa_supplicant makes the roaming choice."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkServiceProxy.framework",
@@ -1949,11 +2024,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/network.json",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs (parse_netdev, IfaceRate); springboard/apps/activity-desktop/src/sample_net.rs (parse_ss, per_process, rate, read_sockets)",
    "status": "partial",
-   "note": "private framework, owner Network; from SDK matrix network.json Refreshed 2026-10-17 (still open): No app-facing TCP client: sdk network_connection (Endpoint, Parameters, Connection) is a model that opens no socket; sdk network_listener and network_group bind real sockets for apps; Service browse has no socket query: sdk network_browser and core dns_browse take replies fed in by hand; No QUIC, WebSocket or custom protocol framer; No NWPathMonitor-style object: sdk network_path requests and decodes the shell path and DNS-SD replies, but no app subscribes to interface changes; TLS client options map to a rustls config (sdk tls_client); no client identities or TLS metadata for apps; No packet trace or network inspector for apps",
+   "note": "Network counters for Activity Monitor: per interface and per process.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-activity",
+     "filter": "sample_net::tests"
+    }
+   ],
+   "ready_note": "Byte counters per interface (/proc/net/dev) with rates, and, built this wave, per-socket and per-process TCP byte counters from the kernel's socket diagnostics (ss -tinpH) summed per process. The Activity Monitor table does not show the per-process columns yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeuralNetworks.framework",
@@ -1970,11 +2059,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/ndarray.rs; springboard/sdk/src/inference.rs; springboard/ui/src/nn.rs",
+   "bifrost": "springboard/ui/src/nn.rs (DenseLayer, Model, MODEL_MAGIC); springboard/sdk/src/ndarray.rs; springboard/sdk/src/inference.rs",
    "status": "partial",
-   "note": "Partial: float32 tensors (sdk ndarray), typed inference signatures that check inputs before a call (sdk inference), and a CPU dense layer with softmax and argmax (ui nn.rs). Built 2026-10-17: compute unit choice (sdk inference::ComputeUnits, CPU always usable, GPU when present) and float32 weight loading from little-endian bytes (sdk ndarray::NDArray::from_le_bytes; tests). Not built: a model file format, training, and a runtime an app can call to run a model.",
+   "note": "Neural network runtime: tensors, typed inference signatures, compute units, and a CPU runtime for trained dense networks with its own model file format (Built 2026-10-17). Training is not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "nn::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ndarray::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "inference::tests"
+    }
+   ],
+   "ready_note": "float32 tensors (ndarray), typed inference signatures (inference), compute unit choice, and a runtime an app can call: nn::Model loads a trained dense-layer network from a documented little-endian file (BNN1), checks every length before allocating, runs it on the CPU and classifies with softmax. Training and convolution layers are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeutrinoCore.framework",
@@ -1991,11 +2099,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
    "status": "os",
-   "note": "NeutrinoCore is in the reference photo image pipeline, and BifrOSt's photo edits are in springboard/src/shell/photos/edit.rs, but its exact job is not determined from the Info.plist and no binary is available.",
+   "note": "Photo image pipeline core; BifrOSt's is the Photos edit pipeline and recipe.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    }
+   ],
+   "ready_note": "Neutrino is the Photos image-processing pipeline (a Photos logging subsystem com.apple.photos.Neutrino is its only trace in the index). BifrOSt's pipeline is Photos edit mode: non-destructive recipe plus rotate, crop, blur, exposure, contrast, saturation, warmth, vignette and filters on the renderer's own filter models."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeutrinoKit.framework",
@@ -2012,11 +2134,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
    "status": "os",
-   "note": "NeutrinoKit is in the reference photo image pipeline with NeutrinoCore, but its exact job is not determined from the Info.plist and no binary is available.",
+   "note": "Kit over the photo image pipeline; covered with NeutrinoCore by the Photos edit pipeline.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::edit::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::recipe::tests"
+    }
+   ],
+   "ready_note": "Kit layer over the same photo pipeline as NeutrinoCore; BifrOSt's Photos edit mode and recipe cover the job in one module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewDeviceOutreach.framework",
@@ -2126,11 +2262,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs; springboard/apps/news-desktop/src/feed_refresh.rs",
+   "bifrost": "springboard/apps/news-desktop/src/feed_cache.rs; springboard/apps/news-desktop/src/feed_refresh.rs; springboard/apps/news-desktop/src/news.rs (maintain, next_wake)",
    "status": "partial",
    "note": "Feeds are cached and revalidated inside the News app over HTTP. The refresh schedule is built in apps/news-desktop/src/feed_refresh.rs (which feeds are due, how long to sleep; feed_refresh::tests); news.rs maintain and next_wake already run the refresh with their own retry and refresh intervals; feed_refresh.rs is not used by that loop yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_refresh::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-news",
+     "filter": "feed_cache::tests"
+    }
+   ],
+   "ready_note": "The background fetch-and-cache of articles is done by the News app over open feeds: cached and revalidated over HTTP, refreshed on a schedule (news.rs maintain and next_wake; feed_refresh holds the due rules). Apple's editorial News service itself is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsFoundation.framework",
@@ -2295,8 +2445,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1.0 give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: Nexus is the client framework of nexusd, a per-user background agent: the index shows only its Info.plist plus usr/libexec/nexusd, a LaunchAgent, a sandbox profile and a man page, with no resources, UI or strings. Nothing user- or app-visible is evidenced, and without a binary no behaviour can be reproduced clean-room; BifrOSt has no counterpart to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2316,8 +2466,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: the framework name suggests a daemon for the Nexus framework, but no identifier, launch plist or binary is available to confirm its job.",
+   "status": "n/a",
+   "note": "n/a: NexusDaemon is the daemon side of the Nexus agent (nexusd: LaunchAgent com.apple.nexusd.plist and sandbox profile in the index); only Info.plist and version.plist ship in the bundle. No user- or app-visible function is evidenced and no binary can be read, so there is nothing BifrOSt must mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -2337,8 +2487,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1A give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: Nodes (version 1A) ships only Info.plist, version.plist and HostConfiguration.plist in the index: no resources, UI, strings or hosting bundle that names a user- or app-visible function. An Apple-internal framework with nothing BifrOSt can mirror clean-room.",
    "rea": [],
    "method": "assessed"
   },
@@ -2358,8 +2508,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1A give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: NodesUI is the UI side of Nodes: the index holds only Info.plist, Assets.car (Apple artwork, which cannot be reused clean-room) and default.metallib (Apple GPU shaders). No user-visible function is evidenced beyond that artwork; BifrOSt draws its own UI with its own shaders.",
    "rea": [],
    "method": "assessed"
   },
@@ -2459,11 +2609,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/preview.rs",
    "status": "os",
-   "note": "Not determined: the PreviewKit bundle points at previews of notes, but BifrOSt's preview path for a note file was not verified and no binary is available.",
+   "note": "Previews of notes; BifrOSt's is the Notes preview.render generator.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::preview::tests"
+    }
+   ],
+   "ready_note": "Notes declares the preview.render generator for a note export in its manifest; preview.rs answers the shell with a PNG of the note's first lines."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesShared.framework",
@@ -2570,11 +2729,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs; springboard/apps/notes-desktop/src/notes/mod.rs",
    "status": "os",
-   "note": "Not determined: the Info.plist (version 2.13) names a support framework for Notes but gives no role, and no binary or symbol names are available.",
+   "note": "Support framework of Notes; BifrOSt implements it in notes/store.rs and notes/mod.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::store::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::tests"
+    }
+   ],
+   "ready_note": "Internal support code of the Notes app (model, storage, helpers) that BifrOSt implements in the notes module and its store."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesUI.framework",
@@ -2591,11 +2764,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs; springboard/apps/notes-desktop/src/notes/mod.rs",
    "status": "partial",
    "note": "The Notes window with the folder sidebar, the note list and the editor toolbar is built in chrome.rs; the reference's note-sharing UI is not.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::tests"
+    }
+   ],
+   "ready_note": "The Notes window (folder sidebar, note list, editor toolbar) is chrome.rs, with the note behaviour tested in notes::tests. The reference's note-sharing sheet (iCloud collaboration) is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesUIServices.framework",
@@ -2642,11 +2824,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/notification-center.json",
+   "bifrost": "springboard/src/shell/notify/center.rs; springboard/src/shell/notify/mod.rs; springboard/src/shell/notify/store.rs",
    "status": "partial",
    "note": "Refreshed 2026-10-17, still open: No app-drawn widget content: springboard/sdk/src/today_widgets.rs (WidgetSet) sets the order and the has-content flags only, and the shell draws its own widgets (NCWidgetProviding). No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController). The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet. WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::store::tests"
+    }
+   ],
+   "ready_note": "The Notification Center column (notifications grouped by app, the Today widgets and their editing) is shell/notify/center.rs with the notification model and store tested. Apps cannot supply Today widgets yet (tracked in docs/parity-matrix/data/notification-center.json)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotificationPreferences.framework",
@@ -2693,11 +2889,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "bifrost": "springboard/src/shell/services/now_playing.rs; springboard/src/shell/now_playing_menu.rs; springboard/src/shell/music/nowplaying.rs; springboard/src/shell/control_center.rs",
    "status": "partial",
    "note": "private framework, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::now_playing_menu::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::music::nowplaying::tests"
+    }
+   ],
+   "ready_note": "The now-playing surfaces: the menu bar item, the Control Center tile and the lock card, driven by the now_playing service. App-facing media sessions and typed content/artwork are tracked in docs/parity-matrix/data/now-playing.json."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NumberAdder.framework",
@@ -2736,8 +2951,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1.0 give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: NutritionCore is the data layer of the Health app's nutrition logging (an App Intents framework _NutritionCore_AppIntents sits beside it in the index). It stores nutrition samples in HealthKit, and the matrix marks HealthKit n/a (docs/parity-matrix/data/healthkit.json: no health store, no wearable input, no Health app in BifrOSt).",
    "rea": [],
    "method": "assessed"
   },
@@ -2757,8 +2972,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined: version 1.0 give no purpose, and no binary or symbol names are available in the extracted payload.",
+   "status": "n/a",
+   "note": "n/a: NutritionUICore is the Health app's nutrition views (Assets.car artwork and a Localizable.loctable in the index) over NutritionCore's HealthKit samples. HealthKit is n/a in the matrix (no health store or Health app in BifrOSt) and the artwork cannot be reused clean-room.",
    "rea": [],
    "method": "assessed"
   },
@@ -2812,11 +3027,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/accounts.rs; springboard/sdk/src/accounts.rs (oauth2_refresh_body, renewal_from_token_response)",
+   "bifrost": "springboard/sdk/src/accounts.rs (oauth2_authorize_url, oauth2_code_body, oauth2_redirect, begin_oauth2_sign_in, LoopbackSignIn, pkce_challenge, credential_from_token_response, oauth2_refresh_body, renewal_from_token_response)",
    "status": "partial",
-   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing. Built 2026-10-17: the authorization URL with optional PKCE challenge and the code exchange body (sdk accounts::tests). Built 2026-10-17: the first-token parse (credential_from_token_response) and the redirect check that trusts a code only for the sent state (oauth2_redirect; sdk accounts::tests). Still missing: the browser or loopback capture that hands the redirect URL to that check, and the app-facing sign-in call.",
+   "note": "OAuth 1 and 2 credentials for apps with the OAuth 2 sign-in flow (authorize URL, PKCE, loopback redirect capture, code exchange, refresh) in springboard/sdk/src/accounts.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "accounts::tests"
+    }
+   ],
+   "ready_note": "The whole OAuth 2 flow is covered: authorisation URL with PKCE, a loopback listener on 127.0.0.1 that captures the redirect (Host and path checked, state checked before a code is trusted, random state and verifier from the kernel pool), the code exchange body, first-token parse, and refresh. The caller opens the URL in the browser and posts the bodies; there is no one-call app wrapper for the HTTP legs."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ODDAnalytics.framework",
@@ -3031,11 +3255,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/volume_hud.rs; springboard/src/shell/input_source_hud.rs",
    "status": "os",
-   "note": "Bundle OSD (copyright 2015). Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "note": "On-screen display for volume and input source; OSD.framework backs the reference OS's HUD helper (OSDUIHelper.app in CoreServices).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::volume_hud::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::input_source_hud::tests"
+    }
+   ],
+   "ready_note": "The on-screen display (the OSDUIHelper role in the index): the volume HUD with the route name row on plug events, and the input-source HUD, each with hold and fade timing. A brightness or keyboard-backlight HUD is not built yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSEligibility.framework",
@@ -3130,8 +3368,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle OSPersonalization. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: OSPersonalization personalises an OS image for one device by requesting a signing ticket from Apple's signing servers (OSPError.strings and a sandbox profile in the index), for installs, restores and cryptex updates. BifrOSt images are not Apple-signed and no ticket request is made; this is the Apple account/cloud and hardware-attestation path.",
    "rea": [],
    "method": "assessed"
   },
@@ -3180,11 +3418,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/svg_table.rs",
+   "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs",
    "status": "partial",
-   "note": "OpenType-SVG index is read and each gzip document is inflated: svg_table.rs parses the document list (document_for, document_text_for, gunzip; tests svg_table::tests). Gap: svg.rs rasterises the static SVG subset but is not wired to the font engine, so colour glyphs still render as outlines.",
+   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs; the text engine does not call it yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "svg_table::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "svg::tests"
+    }
+   ],
+   "ready_note": "OpenType-SVG colour glyphs: the table index, gunzip, per-glyph markup extraction (shared documents with id=glyphN elements) and rasterisation at a pixel size with the baseline. The text engine does not call rasterize_glyph yet, so shaped text still draws outlines for colour fonts."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OctagonTrust.framework",
@@ -3288,8 +3540,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Application bundle omniSearch.OmniSearchClient. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: OmniSearchClient is the client of the omniSearch search service (searchtoold sandbox profile com.apple.omniSearch.searchtoold.sb, an OmniSearch feature-flag domain and a logging subsystem in the index), which queries Apple-hosted search back ends. That is a third-party lookup BifrOSt does not make; its search is local (Spotlight-style quick search over app content).",
    "rea": [],
    "method": "assessed"
   },
@@ -3309,8 +3561,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Application bundle omniSearch.OmniSearchTypes. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: OmniSearchTypes holds the request and result types of the omniSearch client for Apple-hosted search (only Info.plist and version.plist in the index). BifrOSt search is local and has no such service to type.",
    "rea": [],
    "method": "assessed"
   },
@@ -3333,7 +3585,16 @@
    "status": "partial",
    "note": "The Setup Assistant model in setup.rs holds the first-run steps, the recorded choices and the state file. Not built: the reference's onboarding screens and their Assets.car artwork.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "setup::tests"
+    }
+   ],
+   "ready_note": "The Setup Assistant model holds the first-run steps, the recorded choices and the state file (tests). The reference's onboarding artwork (Assets.car) is Apple artwork and is not reused."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceDaemon.framework",
@@ -3497,11 +3758,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "bifrost": "springboard/ui/src/directory_config.rs (DirectoryConfig, Source, render_ldap_conf); springboard/ui/src/directory_local.rs; springboard/ui/src/directory_node.rs; packaging/arch/runtime-packages.txt (openldap)",
    "status": "partial",
-   "note": "private framework, owner OpenDirectory; from SDK matrix open-directory.json",
+   "note": "Directory service configuration: ordered, validated LDAP sources and the OpenLDAP client file they produce (Built 2026-10-17, springboard/ui/src/directory_config.rs). Applying the file as root and a Settings page are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_local::tests"
+    }
+   ],
+   "ready_note": "Configuration of directory services: an ordered list of LDAP sources, accepted only when protected (ldaps or StartTLS), that renders the OpenLDAP client file from the packaged openldap; the local directory is always searched (directory_local). Installing the rendered file needs the privileged helper and is not wired."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OpenDirectoryConfigUI.framework",
@@ -3518,9 +3793,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "bifrost": "springboard/ui/src/directory_config.rs",
    "status": "partial",
-   "note": "private framework, owner OpenDirectory; from SDK matrix open-directory.json",
+   "note": "Directory Utility's configuration UI. The model it edits is built (springboard/ui/src/directory_config.rs: sources, order, switches, validation, the OpenLDAP client file). Missing: a Settings page that lists the sources and edits them (PageId, spec in shell/pages.rs, load/apply in shell/settings.rs) and a privd command that installs the rendered file as root; both touch the shell's page registry and privd and need a build to verify.",
    "rea": [],
    "method": "assessed"
   },
@@ -3540,8 +3815,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle Osprey. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: Osprey is the RPC client framework Apple's services use to talk to their servers over streaming channels (Siri and cloud features); the index holds only Info.plist and version.plist. It serves Apple cloud services BifrOSt does not use, with no user-visible surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -3561,8 +3836,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Bundle nt, version 2.0. Only the bundle is in the reference index (Info.plist, Resources, code signature), so the binary cannot be read and the purpose is unconfirmed. Tried: the bundle identifier and the index tree.",
+   "status": "n/a",
+   "note": "n/a: nt (version 2.0) is an Apple-internal framework: the index holds only Info.plist and version.plist (no resources, strings or hosting bundle) and its name matches no user- or app-visible function. Nothing evidenced for BifrOSt to mirror clean-room.",
    "rea": [],
    "method": "assessed"
   },

@@ -268,6 +268,170 @@ pub fn matmul(a: &[f32], b: &[f32], m: usize, k: usize, n: usize) -> Option<Vec<
     Some(c)
 }
 
+// ---- A model file and a runtime for chains of dense layers --------------------------------------------------------
+
+/// First four bytes of a model file.
+pub const MODEL_MAGIC: &[u8; 4] = b"BNN1";
+/// Most layers a model file may hold, and the most values in one dimension. Both keep a hostile file from asking for
+/// a huge allocation before its length has been checked.
+pub const MODEL_MAX_LAYERS: usize = 256;
+pub const MODEL_MAX_DIM: usize = 1 << 20;
+
+/// Why a model cannot be loaded or run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModelError {
+    /// The file does not start with [`MODEL_MAGIC`].
+    BadMagic,
+    /// The file ends before the layers it announces.
+    Truncated,
+    /// Bytes remain after the last layer.
+    TrailingBytes,
+    /// A layer names an activation the runtime does not know.
+    BadActivation,
+    /// The layer count or a dimension is over the limit, or the model has no layer.
+    BadSize,
+    /// A layer's weights do not fit its shape.
+    Layer(DenseError),
+    /// A layer's inputs are not the outputs of the layer before it.
+    Chain,
+    /// The input is not as long as the first layer's inputs.
+    Input,
+}
+
+/// A trained network of dense layers in the order they run: the weights are read from a file, the input goes through
+/// each layer and the last layer's scores come out. It runs on the CPU in `f32` and does no training.
+///
+/// File layout, little-endian: `"BNN1"`, `u32` layer count, then per layer `u32 inputs`, `u32 outputs`, `u8` activation
+/// (0 identity, 1 relu, 2 leaky relu, 3 sigmoid, 4 tanh), `f32` leaky slope (0 when unused), `inputs * outputs` `f32`
+/// weights row by row, and `outputs` `f32` biases.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Model {
+    layers: Vec<DenseLayer>,
+}
+
+fn take<'a>(bytes: &'a [u8], at: &mut usize, n: usize) -> Result<&'a [u8], ModelError> {
+    let end = at.checked_add(n).ok_or(ModelError::Truncated)?;
+    let s = bytes.get(*at..end).ok_or(ModelError::Truncated)?;
+    *at = end;
+    Ok(s)
+}
+
+fn take_u32(bytes: &[u8], at: &mut usize) -> Result<u32, ModelError> {
+    let b = take(bytes, at, 4)?;
+    Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+fn take_f32s(bytes: &[u8], at: &mut usize, n: usize) -> Result<Vec<f32>, ModelError> {
+    let len = n.checked_mul(4).ok_or(ModelError::Truncated)?;
+    let b = take(bytes, at, len)?;
+    Ok(b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+}
+
+impl Model {
+    /// A model from layers that already chain: at least one layer, each reading what the one before it wrote.
+    pub fn new(layers: Vec<DenseLayer>) -> Result<Model, ModelError> {
+        if layers.is_empty() || layers.len() > MODEL_MAX_LAYERS {
+            return Err(ModelError::BadSize);
+        }
+        if layers.windows(2).any(|w| w[0].outputs() != w[1].inputs()) {
+            return Err(ModelError::Chain);
+        }
+        Ok(Model { layers })
+    }
+
+    /// Reads a model file. Every length is checked against the bytes present before anything is allocated.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Model, ModelError> {
+        let mut at = 0;
+        if take(bytes, &mut at, 4)? != MODEL_MAGIC {
+            return Err(ModelError::BadMagic);
+        }
+        let count = take_u32(bytes, &mut at)? as usize;
+        if count == 0 || count > MODEL_MAX_LAYERS {
+            return Err(ModelError::BadSize);
+        }
+        let mut layers = Vec::with_capacity(count);
+        for _ in 0..count {
+            let inputs = take_u32(bytes, &mut at)? as usize;
+            let outputs = take_u32(bytes, &mut at)? as usize;
+            if inputs == 0 || outputs == 0 || inputs > MODEL_MAX_DIM || outputs > MODEL_MAX_DIM {
+                return Err(ModelError::BadSize);
+            }
+            let tag = take(bytes, &mut at, 1)?[0];
+            let slope = f32::from_bits(take_u32(bytes, &mut at)?);
+            let activation = match tag {
+                0 => Activation::Identity,
+                1 => Activation::Relu,
+                2 => Activation::LeakyRelu(slope),
+                3 => Activation::Sigmoid,
+                4 => Activation::Tanh,
+                _ => return Err(ModelError::BadActivation),
+            };
+            let weights = take_f32s(bytes, &mut at, inputs.checked_mul(outputs).ok_or(ModelError::BadSize)?)?;
+            let bias = take_f32s(bytes, &mut at, outputs)?;
+            layers.push(DenseLayer::new(inputs, outputs, weights, bias, activation).map_err(ModelError::Layer)?);
+        }
+        if at != bytes.len() {
+            return Err(ModelError::TrailingBytes);
+        }
+        Model::new(layers)
+    }
+
+    /// The model file for this model; [`Model::from_bytes`] reads it back to an equal model.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = MODEL_MAGIC.to_vec();
+        out.extend_from_slice(&(self.layers.len() as u32).to_le_bytes());
+        for l in &self.layers {
+            out.extend_from_slice(&(l.inputs as u32).to_le_bytes());
+            out.extend_from_slice(&(l.outputs as u32).to_le_bytes());
+            let (tag, slope) = match l.activation {
+                Activation::Identity => (0u8, 0.0f32),
+                Activation::Relu => (1, 0.0),
+                Activation::LeakyRelu(s) => (2, s),
+                Activation::Sigmoid => (3, 0.0),
+                Activation::Tanh => (4, 0.0),
+            };
+            out.push(tag);
+            out.extend_from_slice(&slope.to_bits().to_le_bytes());
+            for w in &l.weights {
+                out.extend_from_slice(&w.to_le_bytes());
+            }
+            for b in &l.bias {
+                out.extend_from_slice(&b.to_le_bytes());
+            }
+        }
+        out
+    }
+
+    /// Number of values the model reads.
+    pub fn inputs(&self) -> usize {
+        self.layers[0].inputs()
+    }
+
+    /// Number of values the model writes.
+    pub fn outputs(&self) -> usize {
+        self.layers[self.layers.len() - 1].outputs()
+    }
+
+    /// Runs the input through every layer and returns the last layer's scores.
+    pub fn run(&self, input: &[f32]) -> Result<Vec<f32>, ModelError> {
+        if input.len() != self.inputs() {
+            return Err(ModelError::Input);
+        }
+        let mut v = input.to_vec();
+        for l in &self.layers {
+            v = l.forward(&v).map_err(ModelError::Layer)?;
+        }
+        Ok(v)
+    }
+
+    /// The most likely class and its probability: softmax over the scores, then the largest. None when every score
+    /// is NaN.
+    pub fn classify(&self, input: &[f32]) -> Result<Option<(usize, f32)>, ModelError> {
+        let p = softmax(&self.run(input)?);
+        Ok(argmax(&p).map(|i| (i, p[i])))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,5 +570,74 @@ mod matmul_tests {
     fn mismatched_lengths_are_refused() {
         assert_eq!(matmul(&[1.0, 2.0, 3.0], &[1.0, 2.0], 2, 2, 1), None);
         assert_eq!(matmul(&[1.0, 2.0], &[1.0], 1, 2, 1), None);
+    }
+
+    fn xor_model() -> Model {
+        // hidden: h1 = relu(x + y), h2 = relu(x + y - 1); the scores are 1 - h1 + 2 * h2 and h1 - 2 * h2
+        let hidden = DenseLayer::new(2, 2, vec![1.0, 1.0, 1.0, 1.0], vec![0.0, -1.0], Activation::Relu).unwrap();
+        let out = DenseLayer::new(2, 2, vec![-1.0, 2.0, 1.0, -2.0], vec![1.0, 0.0], Activation::Identity).unwrap();
+        Model::new(vec![hidden, out]).unwrap()
+    }
+
+    #[test]
+    fn a_model_runs_its_layers_in_order() {
+        let m = xor_model();
+        assert_eq!((m.inputs(), m.outputs()), (2, 2));
+        // class 1 wins exactly when one of the two inputs is on
+        assert_eq!(m.classify(&[0.0, 0.0]).unwrap().map(|c| c.0), Some(0));
+        assert_eq!(m.classify(&[1.0, 0.0]).unwrap().map(|c| c.0), Some(1));
+        assert_eq!(m.classify(&[0.0, 1.0]).unwrap().map(|c| c.0), Some(1));
+        assert_eq!(m.classify(&[1.0, 1.0]).unwrap().map(|c| c.0), Some(0));
+        let (_, p) = m.classify(&[1.0, 0.0]).unwrap().unwrap();
+        assert!(p > 0.5 && p < 1.0);
+    }
+
+    #[test]
+    fn a_model_survives_its_file() {
+        let m = Model::new(vec![
+            DenseLayer::new(3, 2, vec![0.5, -1.0, 2.0, 0.25, 0.0, -0.75], vec![0.1, -0.2], Activation::LeakyRelu(0.1)).unwrap(),
+            DenseLayer::new(2, 1, vec![1.0, 1.0], vec![0.0], Activation::Sigmoid).unwrap(),
+        ])
+        .unwrap();
+        let bytes = m.to_bytes();
+        assert_eq!(&bytes[..4], MODEL_MAGIC);
+        assert_eq!(Model::from_bytes(&bytes), Ok(m.clone()));
+        assert_eq!(Model::from_bytes(&bytes).unwrap().run(&[1.0, 2.0, 3.0]), m.run(&[1.0, 2.0, 3.0]));
+    }
+
+    #[test]
+    fn a_bad_model_file_is_refused_without_a_large_allocation() {
+        let good = xor_model().to_bytes();
+        assert_eq!(Model::from_bytes(b"XXXX\0\0\0\0"), Err(ModelError::BadMagic));
+        assert_eq!(Model::from_bytes(&good[..good.len() - 1]), Err(ModelError::Truncated));
+        let mut extra = good.clone();
+        extra.push(0);
+        assert_eq!(Model::from_bytes(&extra), Err(ModelError::TrailingBytes));
+        let mut tag = good.clone();
+        tag[16] = 9;
+        assert_eq!(Model::from_bytes(&tag), Err(ModelError::BadActivation));
+        // a layer that claims 2^20 x 2^20 weights in a file a few bytes long
+        let mut huge = MODEL_MAGIC.to_vec();
+        huge.extend_from_slice(&1u32.to_le_bytes());
+        huge.extend_from_slice(&(MODEL_MAX_DIM as u32).to_le_bytes());
+        huge.extend_from_slice(&(MODEL_MAX_DIM as u32).to_le_bytes());
+        huge.extend_from_slice(&[0, 0, 0, 0, 0]);
+        assert_eq!(Model::from_bytes(&huge), Err(ModelError::Truncated));
+        let mut too_many = MODEL_MAGIC.to_vec();
+        too_many.extend_from_slice(&1000u32.to_le_bytes());
+        assert_eq!(Model::from_bytes(&too_many), Err(ModelError::BadSize));
+        let mut none = MODEL_MAGIC.to_vec();
+        none.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(Model::from_bytes(&none), Err(ModelError::BadSize));
+    }
+
+    #[test]
+    fn layers_must_chain_and_the_input_must_fit() {
+        let a = DenseLayer::new(2, 3, vec![0.0; 6], vec![0.0; 3], Activation::Identity).unwrap();
+        let b = DenseLayer::new(2, 1, vec![0.0; 2], vec![0.0], Activation::Identity).unwrap();
+        assert_eq!(Model::new(vec![a.clone(), b]), Err(ModelError::Chain));
+        assert_eq!(Model::new(Vec::new()), Err(ModelError::BadSize));
+        let m = Model::new(vec![a]).unwrap();
+        assert_eq!(m.run(&[1.0]), Err(ModelError::Input));
     }
 }

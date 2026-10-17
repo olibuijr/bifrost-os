@@ -729,6 +729,139 @@ fn form_decode(value: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// The PKCE code challenge for a code verifier (RFC 7636, section 4.2, method `S256`): the URL-safe base64 of the
+/// SHA-256 of the verifier, without padding.
+pub fn pkce_challenge(code_verifier: &str) -> String {
+    crate::passkey::base64url(&bifrost_core::sha256::digest(code_verifier.as_bytes()))
+}
+
+/// Path the loopback listener answers on.
+pub const LOOPBACK_PATH: &str = "/callback";
+
+/// The redirect URI of a loopback sign-in (RFC 8252, section 7.3): the IPv4 loopback address, the listener's port and
+/// [`LOOPBACK_PATH`].
+pub fn oauth2_loopback_uri(port: u16) -> String {
+    format!("http://127.0.0.1:{port}{LOOPBACK_PATH}")
+}
+
+/// The redirect URL a browser request carries, as an absolute URL for [`oauth2_redirect`]. `head` is the request line
+/// and headers. Only `GET` of [`LOOPBACK_PATH`] counts, and the `Host` header must name this listener (`127.0.0.1` or
+/// `localhost` with `port`), which keeps a page on another site from steering the listener by a rebinding trick. Any other
+/// request (a favicon, a wrong path or host) is `None`.
+pub fn redirect_from_request(head: &str, port: u16) -> Option<String> {
+    let mut lines = head.split("\r\n");
+    let mut parts = lines.next()?.split(' ');
+    let (method, target, version) = (parts.next()?, parts.next()?, parts.next()?);
+    if method != "GET" || !version.starts_with("HTTP/1.") || parts.next().is_some() {
+        return None;
+    }
+    let rest = target.strip_prefix(LOOPBACK_PATH)?;
+    if !(rest.is_empty() || rest.starts_with('?')) {
+        return None;
+    }
+    let host_ok = lines.any(|l| {
+        l.split_once(':').is_some_and(|(k, v)| {
+            k.eq_ignore_ascii_case("host") && [format!("127.0.0.1:{port}"), format!("localhost:{port}")].contains(&v.trim().to_string())
+        })
+    });
+    host_ok.then(|| format!("http://127.0.0.1:{port}{target}"))
+}
+
+/// What an app needs to run one OAuth 2 sign-in with the authorization code grant and a loopback redirect.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SignIn {
+    /// The URL to open in the browser.
+    pub url: String,
+    /// The redirect URI sent in `url`, and again with the code in [`oauth2_code_body`].
+    pub redirect_uri: String,
+    /// The random `state` the redirect must carry back.
+    pub state: String,
+    /// The PKCE verifier for the code exchange.
+    pub code_verifier: String,
+}
+
+/// A sign-in waiting for the browser: the listener on a free loopback port and the request that was sent.
+#[derive(Debug)]
+pub struct LoopbackSignIn {
+    listener: std::net::TcpListener,
+    pub request: SignIn,
+}
+
+/// The page the browser shows once the redirect has been received.
+const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Signed in</title><p>You can close this tab and return to the app.";
+
+/// Starts a sign-in: binds the loopback listener on a free port, draws a random `state` and PKCE verifier from the kernel
+/// pool and builds the authorization URL. The caller opens `request.url` in the browser, then calls
+/// [`LoopbackSignIn::wait_for_redirect`]. Nothing leaves the machine except what the browser sends to `endpoint`.
+pub fn begin_oauth2_sign_in(endpoint: &str, client_id: &str, scope: Option<&str>) -> io::Result<LoopbackSignIn> {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+    listener.set_nonblocking(true)?;
+    let port = listener.local_addr()?.port();
+    let random = |n: usize| crate::entropy::bytes(n).map_err(|_| io::Error::new(io::ErrorKind::Other, "no random bytes"));
+    let state = crate::passkey::base64url(&random(16)?);
+    let code_verifier = crate::passkey::base64url(&random(32)?);
+    let redirect_uri = oauth2_loopback_uri(port);
+    let url = oauth2_authorize_url(endpoint, client_id, &redirect_uri, scope, &state, Some(&pkce_challenge(&code_verifier)));
+    Ok(LoopbackSignIn { listener, request: SignIn { url, redirect_uri, state, code_verifier } })
+}
+
+impl LoopbackSignIn {
+    /// The port the listener is bound to.
+    pub fn port(&self) -> u16 {
+        self.listener.local_addr().map(|a| a.port()).unwrap_or(0)
+    }
+
+    /// Waits up to `timeout` for the browser to come back to the redirect URI, answers it with a short page and returns
+    /// what the redirect says, checked against this sign-in's `state`. Requests that are not the redirect (a favicon, a
+    /// wrong host) get a 404 and are ignored. `TimedOut` when no redirect arrives in time.
+    pub fn wait_for_redirect(&self, timeout: Duration) -> io::Result<RedirectOutcome> {
+        let deadline = std::time::Instant::now() + timeout;
+        let port = self.port();
+        loop {
+            match self.listener.accept() {
+                Ok((mut stream, _)) => {
+                    use std::io::{Read, Write};
+                    stream.set_nonblocking(false)?;
+                    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+                    let mut head = Vec::new();
+                    let mut buf = [0u8; 1024];
+                    while head.len() < 8192 && !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                        match stream.read(&mut buf) {
+                            Ok(0) | Err(_) => break,
+                            Ok(n) => head.extend_from_slice(&buf[..n]),
+                        }
+                    }
+                    let head = String::from_utf8_lossy(&head);
+                    let (status, body, found) = match redirect_from_request(&head, port) {
+                        Some(url) => ("200 OK", DONE_PAGE, Some(url)),
+                        None => ("404 Not Found", "", None),
+                    };
+                    let reply = format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = stream.write_all(reply.as_bytes());
+                    if let Some(url) = found {
+                        return Ok(oauth2_redirect(&url, &self.request.state));
+                    }
+                }
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(io::Error::new(io::ErrorKind::TimedOut, "no sign-in redirect arrived"));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// The form body that trades `code` for tokens: [`oauth2_code_body`] with this sign-in's redirect URI and verifier.
+    pub fn code_body(&self, code: &str, client_id: &str) -> String {
+        oauth2_code_body(code, &self.request.redirect_uri, client_id, Some(&self.request.code_verifier))
+    }
+}
+
 /// The file name of the store the apps share, inside the `bifrost` directory of the user's data directory.
 pub const SHARED_FILE: &str = account_store::FILE_NAME;
 
@@ -1361,5 +1494,73 @@ mod tests {
         assert_eq!(oauth2_redirect(empty, "s1"), RedirectOutcome::Missing);
         let bad_escape = "https://app.example/cb?state=s1&code=%zz";
         assert_eq!(oauth2_redirect(bad_escape, "s1"), RedirectOutcome::Missing);
+    }
+
+    #[test]
+    fn the_pkce_challenge_matches_the_published_vector() {
+        assert_eq!(pkce_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    }
+
+    #[test]
+    fn only_a_get_of_the_callback_on_this_listener_is_the_redirect() {
+        let ok = "GET /callback?code=c1&state=s1 HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nAccept: */*\r\n\r\n";
+        assert_eq!(redirect_from_request(ok, 5000).as_deref(), Some("http://127.0.0.1:5000/callback?code=c1&state=s1"));
+        let local = "GET /callback?code=c1 HTTP/1.1\r\nhost: localhost:5000\r\n\r\n";
+        assert!(redirect_from_request(local, 5000).is_some());
+        assert_eq!(redirect_from_request(ok, 5001), None, "another port");
+        assert_eq!(redirect_from_request("GET /callback?code=c1 HTTP/1.1\r\nHost: evil.example:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("GET /callback?code=c1 HTTP/1.1\r\n\r\n", 5000), None, "no host");
+        assert_eq!(redirect_from_request("GET /favicon.ico HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("GET /callbackx?code=c HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("POST /callback HTTP/1.1\r\nHost: 127.0.0.1:5000\r\n\r\n", 5000), None);
+        assert_eq!(redirect_from_request("", 5000), None);
+        assert_eq!(oauth2_loopback_uri(5000), "http://127.0.0.1:5000/callback");
+    }
+
+    fn browser(port: u16, requests: &[String]) -> std::thread::JoinHandle<Vec<String>> {
+        use std::io::{Read, Write};
+        let requests = requests.to_vec();
+        std::thread::spawn(move || {
+            let mut replies = Vec::new();
+            for r in requests {
+                let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+                s.write_all(format!("GET {r} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n").as_bytes()).unwrap();
+                let mut text = String::new();
+                s.read_to_string(&mut text).unwrap();
+                replies.push(text);
+            }
+            replies
+        })
+    }
+
+    #[test]
+    fn a_loopback_sign_in_hands_the_code_back_for_its_own_state() {
+        let sign = begin_oauth2_sign_in("https://id.example/auth", "app.example", Some("mail")).unwrap();
+        let port = sign.port();
+        assert_eq!(sign.request.redirect_uri, oauth2_loopback_uri(port));
+        assert!(sign.request.url.contains(&format!("state={}", sign.request.state)));
+        assert!(sign.request.url.contains(&format!("code_challenge={}", pkce_challenge(&sign.request.code_verifier))));
+        assert!(sign.request.code_verifier.len() >= 43, "RFC 7636 asks for 43 characters or more");
+        let state = sign.request.state.clone();
+        let b = browser(port, &["/favicon.ico".to_string(), format!("/callback?code=the%20code&state={state}")]);
+        let outcome = sign.wait_for_redirect(Duration::from_secs(5)).unwrap();
+        assert_eq!(outcome, RedirectOutcome::Code("the code".into()));
+        let replies = b.join().unwrap();
+        assert!(replies[0].starts_with("HTTP/1.1 404"));
+        assert!(replies[1].starts_with("HTTP/1.1 200") && replies[1].contains("close this tab"));
+        let body = sign.code_body("the code", "app.example");
+        assert!(body.contains("code=the%20code") && body.contains(&format!("code_verifier={}", sign.request.code_verifier)));
+    }
+
+    #[test]
+    fn a_redirect_for_another_state_gives_no_code_and_a_silent_browser_times_out() {
+        let sign = begin_oauth2_sign_in("https://id.example/auth", "app", None).unwrap();
+        let b = browser(sign.port(), &["/callback?code=x&state=not-ours".to_string()]);
+        assert_eq!(sign.wait_for_redirect(Duration::from_secs(5)).unwrap(), RedirectOutcome::StateMismatch);
+        b.join().unwrap();
+        let quiet = begin_oauth2_sign_in("https://id.example/auth", "app", None).unwrap();
+        let err = quiet.wait_for_redirect(Duration::from_millis(50)).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert_ne!(sign.request.state, quiet.request.state);
     }
 }
