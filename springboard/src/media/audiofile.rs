@@ -84,6 +84,18 @@ pub struct Tags {
     pub cover: Option<Vec<u8>>,
     /// the unsynchronised lyrics text as tagged (ID3 USLT), when the file carries it
     pub lyrics: Option<String>,
+    /// the track gain of the file's ReplayGain tag (`REPLAYGAIN_TRACK_GAIN`), in dB
+    pub replaygain_db: Option<f32>,
+}
+
+/// The gain a ReplayGain tag states, in dB: `-6.54 dB` or `-6.54`. `None` when the text is not a finite number.
+pub fn parse_replaygain_db(text: &str) -> Option<f32> {
+    let t = text.trim();
+    let t = match t.len().checked_sub(2).and_then(|i| t.get(i..)) {
+        Some(end) if end.eq_ignore_ascii_case("db") => &t[..t.len() - 2],
+        _ => t,
+    };
+    t.trim().parse::<f32>().ok().filter(|v| v.is_finite())
 }
 
 /// A decoded audio stream: interleaved S16 at its own rate and channel

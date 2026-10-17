@@ -1,7 +1,7 @@
 //! iTunes metadata (`moov/udta/meta/ilst`) of an M4A file: title, artist,
 //! album, album artist, track number, year and the cover picture.
 
-use super::audiofile::Tags;
+use super::audiofile::{parse_replaygain_db, Tags};
 use super::mp4::{child, children, header};
 use super::source::Source;
 use super::Error;
@@ -43,6 +43,11 @@ pub fn parse_moov(moov: &[u8]) -> Tags {
             b"aART" => tags.album_artist = text(),
             b"\xa9day" => tags.year = text().and_then(|t| t.get(..4)?.parse().ok()),
             b"trkn" => tags.track = payload.get(2..4).map(|b| u16::from_be_bytes([b[0], b[1]]) as u32).filter(|&n| n > 0),
+            b"----" => {
+                if tags.replaygain_db.is_none() {
+                    tags.replaygain_db = freeform_replaygain(item);
+                }
+            }
             b"covr" => {
                 if tags.cover.is_none() && (ty == 13 || ty == 14 || ty == 0) && !payload.is_empty() {
                     tags.cover = Some(payload.to_vec());
@@ -52,6 +57,18 @@ pub fn parse_moov(moov: &[u8]) -> Tags {
         }
     }
     tags
+}
+
+/// The gain of a freeform (`----`) item whose name is `REPLAYGAIN_TRACK_GAIN`: its `name` atom is a version and flags
+/// word then the name, its `data` atom holds the text (type 1).
+fn freeform_replaygain(item: &[u8]) -> Option<f32> {
+    let name = child(item, b"name")?.get(4..)?;
+    if !String::from_utf8_lossy(name).eq_ignore_ascii_case("REPLAYGAIN_TRACK_GAIN") {
+        return None;
+    }
+    let data = child(item, b"data").filter(|d| d.len() >= 8)?;
+    let ty = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) & 0xff_ffff;
+    (ty == 1).then(|| parse_replaygain_db(&String::from_utf8_lossy(&data[8..]))).flatten()
 }
 
 #[cfg(test)]
@@ -85,6 +102,19 @@ mod tests {
         assert_eq!(t.album_artist.as_deref(), Some("Various"));
         assert_eq!(t.track, Some(2));
         assert_eq!(&t.cover.unwrap()[..2], &[0xFF, 0xD8]);
+    }
+
+    #[test]
+    fn freeform_replaygain_item_is_read() {
+        let mut name = vec![0; 4];
+        name.extend(b"REPLAYGAIN_TRACK_GAIN");
+        let mut data = vec![0, 0, 0, 1, 0, 0, 0, 0];
+        data.extend(b"-3.50 dB");
+        let ilst = full(b"----", &[full(b"name", &name), full(b"data", &data)].concat());
+        let mut meta = vec![0, 0, 0, 0];
+        meta.extend(full(b"ilst", &ilst));
+        let moov = full(b"udta", &full(b"meta", &meta));
+        assert_eq!(parse_moov(&moov).replaygain_db, Some(-3.5));
     }
 
     #[test]

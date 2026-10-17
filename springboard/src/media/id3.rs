@@ -112,6 +112,11 @@ fn apply(tags: &mut Tags, f: Frame) {
                 tags.cover = picture(&f.data, f.id[3] == b' ');
             }
         }
+        b"TXXX" | b"TXX " => {
+            if tags.replaygain_db.is_none() {
+                tags.replaygain_db = user_text(&f.data, "REPLAYGAIN_TRACK_GAIN").and_then(|v| super::audiofile::parse_replaygain_db(&v));
+            }
+        }
         b"USLT" | b"ULT " => {
             if tags.lyrics.is_none() {
                 tags.lyrics = lyrics(&f.data);
@@ -146,6 +151,19 @@ fn lyrics(d: &[u8]) -> Option<String> {
     let mut text = vec![enc];
     text.extend_from_slice(body);
     decode_text(&text).filter(|s| !s.trim().is_empty())
+}
+
+/// The value of a TXXX (2.2 TXX) user text frame whose description is `want` (case aside). The frame body is the
+/// encoding byte, the description (terminated in the frame's encoding), then the value.
+fn user_text(d: &[u8], want: &str) -> Option<String> {
+    let enc = *d.first()?;
+    let rest = d.get(1..)?;
+    let skip = terminator(rest, enc)?;
+    let desc = decode_text(&[&[enc][..], &rest[..skip]].concat())?;
+    if !desc.eq_ignore_ascii_case(want) {
+        return None;
+    }
+    decode_text(&[&[enc][..], rest.get(skip..)?].concat())
 }
 
 /// Length of the string at the start of `d` including its terminator, for
@@ -252,6 +270,17 @@ mod tests {
         assert_eq!(t.album.as_deref(), Some("Album Two"));
         assert!(t.cover.is_none() && t.track.is_none());
         assert_eq!(tag_len(V24), 102);
+    }
+
+    #[test]
+    fn txxx_replaygain_is_read_from_its_description_and_value() {
+        let mut body = vec![0u8];
+        body.extend(b"replaygain_track_gain\0-6.54 dB");
+        let t = parse(&tag(3, 0, &frame(b"TXXX", &body, false, 0))).unwrap();
+        assert_eq!(t.replaygain_db, Some(-6.54));
+        let mut other = vec![0u8];
+        other.extend(b"REPLAYGAIN_ALBUM_GAIN\0-2.00 dB");
+        assert_eq!(parse(&tag(3, 0, &frame(b"TXXX", &other, false, 0))).unwrap().replaygain_db, None);
     }
 
     #[test]
