@@ -5569,11 +5569,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Host tests for the App Intents model (sdk intents.rs: Intent, Param, ParamType, IntentResult), which is the schema layer the matrix row describes. Not verified on Midget; the Apple app's own intents are not ported."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppIntentsCLISupport.framework",
@@ -5945,9 +5954,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/quick_actions.rs, springboard/src/shell/quick_actions.rs",
    "status": "gap",
-   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests). Still open: no use counts are recorded to feed it, and no surface draws it; build both on springboard/src/shell/quick_actions.rs.",
+   "note": "Gap: the surface that shows suggested actions such as Do Not Disturb, Handoff and casting to a device. Built 2026-10-17: the suggestion model, bifrost_ui::quick_actions::suggest (most-used quick actions first; tests quick_actions::tests). Still open: no use counts are recorded to feed it, and no surface draws it; build both on springboard/src/shell/quick_actions.rs. Built 2026-10-17: record_use keeps a usage ledger for suggest() (quick_actions::tests). Still open: the shell does not record uses yet, and no surface draws the suggestions.",
    "rea": [],
    "method": "assessed"
   },
