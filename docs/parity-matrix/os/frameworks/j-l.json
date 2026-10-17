@@ -101,8 +101,22 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (sdk/src/krb5_client.rs, tests krb5_client::tests), using the credential cache from gss_krb5. Not covered: the GSS context export and ticket cache copy.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "krb5_client::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v kinit && command -v klist",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "kinit and klist are run through the SDK and their output is parsed (krb5_client::tests). The GSS context export and cache copy are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/Kernel.framework",
@@ -163,8 +177,22 @@
    "doc": "",
    "bifrost": "springboard/ui/src/directory_query.rs",
    "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
-   "rea": []
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: directory nodes filled from ldapsearch (sdk/src/ldap_directory.rs, tests ldap_directory::tests). Simple anonymous binds only; base64 LDIF attributes are skipped.",
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "command -v ldapsearch",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "ldapsearch LDIF is parsed into directory records and loaded into a directory node (ldap_directory::tests). Authenticated binds and base64 attributes are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/LatentSemanticMapping.framework",
@@ -1918,9 +1946,28 @@
    "doc": "",
    "bifrost": "springboard/src/bare/boost.rs; packaging/arch/runtime-packages.txt (power-profiles-daemon)",
    "status": "partial",
-   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine.",
+   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine. Built 2026-10-17 (verified existing): Low Power Mode switch on the Battery page (src/shell/pages.rs), SDK ProcessInfo::is_low_power_mode_enabled and observe_low_power_mode, and the desktop power-saver hand-off to power-profiles-daemon (boost::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::boost::tests::desktop_profiles_map_to_power_profiles_daemon"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "process_info::tests::low_power_state_file_parses"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "power_service::tests"
+    }
+   ],
+   "ready_note": "The Battery page switch, the SDK low power query and change event, and the power-saver hand-off are covered by these tests. No Control Center tile yet: the cluster grid has no free slot."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/kperf.framework",
