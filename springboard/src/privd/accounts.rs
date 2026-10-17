@@ -452,6 +452,11 @@ fn screen_sharing_configure(p: &Json) -> Result<Json, PErr> {
         run(&ss::keygen_argv(ss::KEY), None)?;
     }
     super::methods::write_nofollow(ss::USERS, &ss::users_text(user)).map_err(|e| PErr::internal(e.to_string()))?;
+    // the account name is not a secret and Settings reads it to show it; the key and the configuration stay root-only
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(ss::USERS, std::fs::Permissions::from_mode(0o644)).map_err(|e| PErr::internal(e.to_string()))?;
+    }
     screen_sharing_write_config()?;
     // a running server keeps the account it started with: restart it only when it is running
     let _ = run(&strs(&["systemctl", "try-restart", "bifrost-wayvnc.service"]), None);
