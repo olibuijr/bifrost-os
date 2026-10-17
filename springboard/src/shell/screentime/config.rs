@@ -3,10 +3,10 @@
 //! temporary "ignore limit" grants. `Config::block` is the single policy
 //! decision; Settings itself is never blocked.
 
-use super::super::notify::schedule::Schedule;
 use super::super::prefs::Prefs;
-use super::super::AppId;
-use super::usage::{day_of, key, minute_of};
+use super::super::{AppId, apps};
+use bifrost_ui::os_services::time_limits::{Policy, Reason as ModelReason};
+use super::usage::{day_of, key};
 use std::path::Path;
 
 /// Daily limit choices in minutes, cycled by tapping an app in App Limits (0 = none).
@@ -33,25 +33,41 @@ pub enum Ignore {
     Today,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Downtime {
-    pub on: bool,
-    /// minutes after midnight
-    pub start: u16,
-    pub end: u16,
-}
-
-impl Downtime {
-    /// The same daily window as a notification `Schedule` (the one place that knows it may cross midnight).
-    pub fn schedule(&self) -> Schedule {
-        Schedule { enabled: self.on, start: self.start, end: self.end }
-    }
-}
+/// The Downtime window. One copy lives in the UI model (`os_services::time_limits`), which the shell uses as-is.
+pub use bifrost_ui::os_services::time_limits::Downtime;
 
 /// The Screen Time preferences as stored on disk.
+///
+/// The rules live in `policy`, the UI model. It is loaded from `prefs`, and every setter writes both, so the page and
+/// the shield read one state. `policy_from` rebuilds the model from the stored settings.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     prefs: Prefs,
+    policy: Policy,
+}
+
+/// The Downtime window as stored: minutes after midnight, wrapped into the day, with the defaults the page shows.
+fn read_downtime(prefs: &Prefs) -> Downtime {
+    let m = |k: &str, d: u16| num(prefs, k).map_or(d, |v| (v.rem_euclid(1440)) as u16);
+    Downtime { on: num(prefs, "downtime.on") == Some(1), start: m("downtime.start", 22 * 60), end: m("downtime.end", 7 * 60) }
+}
+
+/// The model built from the stored settings: Downtime, limits, allowed apps and the grants.
+fn policy_from(prefs: &Prefs) -> Policy {
+    let mut policy = Policy::default();
+    policy.set_downtime(read_downtime(prefs));
+    for app in apps().iter().map(|a| a.id) {
+        let k = key(app);
+        if let Some(m) = num(prefs, &format!("limit.{k}")).filter(|&m| m > 0) {
+            // The page only stores the steps; a hand-edited value that is not one of them is left unlimited.
+            let _ = policy.set_limit(&k, m as u32);
+        }
+        if let Some(v) = num(prefs, &format!("allow.{k}")) {
+            policy.set_allowed(&k, v == 1);
+        }
+        policy.restore_ignore(&k, num(prefs, &format!("ignore.until.{k}")), num(prefs, &format!("ignore.day.{k}")));
+    }
+    policy
 }
 
 fn num(prefs: &Prefs, k: &str) -> Option<i64> {
@@ -60,20 +76,24 @@ fn num(prefs: &Prefs, k: &str) -> Option<i64> {
 
 impl Config {
     pub fn load(path: &Path) -> Self {
-        Config { prefs: Prefs::load(path) }
+        let prefs = Prefs::load(path);
+        let policy = policy_from(&prefs);
+        Config { prefs, policy }
     }
 
     pub fn memory() -> Self {
-        Config { prefs: Prefs::memory() }
+        Config { prefs: Prefs::memory(), policy: Policy::default() }
     }
 
     /// The app's daily limit in minutes, if one is set.
     pub fn limit_mins(&self, app: AppId) -> Option<u32> {
-        num(&self.prefs, &format!("limit.{}", key(app))).filter(|&m| m > 0).map(|m| m as u32)
+        self.policy.limit(&key(app))
     }
 
     pub fn set_limit(&mut self, app: AppId, mins: Option<u32>) {
-        let _ = self.prefs.set(&format!("limit.{}", key(app)), &mins.unwrap_or(0).to_string());
+        let mins = mins.unwrap_or(0);
+        let _ = self.prefs.set(&format!("limit.{}", key(app)), &mins.to_string());
+        let _ = self.policy.set_limit(&key(app), mins);
     }
 
     /// The next limit step after the app's current one, wrapping to none.
@@ -87,8 +107,7 @@ impl Config {
     }
 
     pub fn downtime(&self) -> Downtime {
-        let m = |k: &str, d: u16| num(&self.prefs, k).map_or(d, |v| (v.rem_euclid(1440)) as u16);
-        Downtime { on: num(&self.prefs, "downtime.on") == Some(1), start: m("downtime.start", 22 * 60), end: m("downtime.end", 7 * 60) }
+        self.policy.downtime()
     }
 
     pub fn set_downtime(&mut self, d: Downtime) {
@@ -97,15 +116,17 @@ impl Config {
             ("downtime.start", &(d.start % 1440).to_string()),
             ("downtime.end", &(d.end % 1440).to_string()),
         ]);
+        self.policy.set_downtime(d);
     }
 
     /// Whether Downtime leaves `app` usable. Settings always is; Clock is by default.
     pub fn allowed(&self, app: AppId) -> bool {
-        app == AppId::Settings || num(&self.prefs, &format!("allow.{}", key(app))).map_or(key(app) == "clock", |v| v == 1)
+        self.policy.allowed(&key(app))
     }
 
     pub fn set_allowed(&mut self, app: AppId, on: bool) {
         let _ = self.prefs.set(&format!("allow.{}", key(app)), if on { "1" } else { "0" });
+        self.policy.set_allowed(&key(app), on);
     }
 
     /// Grants a temporary pass for `app` from `unix` (local `offset`).
@@ -122,11 +143,17 @@ impl Config {
                 let _ = self.prefs.set(&format!("ignore.day.{k}"), &day_of(unix, offset).to_string());
             }
         }
+        self.restore_grant(app);
+    }
+
+    /// Copies the stored grants of `app` into the model.
+    fn restore_grant(&mut self, app: AppId) {
+        let k = key(app);
+        self.policy.restore_ignore(&k, num(&self.prefs, &format!("ignore.until.{k}")), num(&self.prefs, &format!("ignore.day.{k}")));
     }
 
     pub fn ignored(&self, app: AppId, unix: i64, offset: i32) -> bool {
-        let k = key(app);
-        num(&self.prefs, &format!("ignore.until.{k}")).is_some_and(|u| u > unix) || num(&self.prefs, &format!("ignore.day.{k}")) == Some(day_of(unix, offset))
+        self.policy.ignored(&key(app), unix, offset)
     }
 
     /// True when `app` has a daily limit that runs out within `WARN_LEAD_SECS`
@@ -149,16 +176,10 @@ impl Config {
     /// Settings is exempt so the limits can always be changed or removed,
     /// and an unset clock (`unix` 0) never blocks anything.
     pub fn block(&self, app: AppId, used_secs: u32, unix: i64, offset: i32) -> Option<Reason> {
-        if app == AppId::Settings || unix <= 0 || self.ignored(app, unix, offset) {
-            return None;
-        }
-        if self.downtime().schedule().active(minute_of(unix, offset)) && !self.allowed(app) {
-            return Some(Reason::Downtime);
-        }
-        match self.limit_mins(app) {
-            Some(m) if used_secs >= m * 60 => Some(Reason::Limit),
-            _ => None,
-        }
+        self.policy.block(&key(app), used_secs, unix, offset).map(|r| match r {
+            ModelReason::Limit => Reason::Limit,
+            ModelReason::Downtime => Reason::Downtime,
+        })
     }
 }
 
@@ -211,15 +232,28 @@ mod tests {
         }
     }
 
+    /// The model the shell holds is the one it would rebuild from the stored settings, after every kind of change.
+    #[test]
+    fn the_held_policy_matches_a_rebuild_from_the_stored_settings() {
+        let mut c = Config::memory();
+        c.set_limit(AppId::Files, Some(30));
+        c.set_allowed(AppId::Photos, true);
+        c.set_downtime(Downtime::new(true, 22 * 60, 7 * 60).unwrap());
+        c.grant(AppId::Files, Ignore::Fifteen, NOON, 0);
+        c.grant(AppId::Terminal, Ignore::Today, NOON, 0);
+        assert_eq!(c.policy, policy_from(&c.prefs));
+        assert_eq!(c.block(AppId::Files, 1800, NOON + 60, 0), None, "the grant covers the limit");
+    }
+
     #[test]
     fn downtime_window_may_cross_midnight() {
-        let d = Downtime { on: true, start: 22 * 60, end: 7 * 60 };
-        assert!(d.schedule().active(23 * 60) && d.schedule().active(0) && d.schedule().active(6 * 60 + 59));
-        assert!(!d.schedule().active(7 * 60) && !d.schedule().active(12 * 60));
-        let day = Downtime { on: true, start: 9 * 60, end: 17 * 60 };
-        assert!(day.schedule().active(9 * 60) && !day.schedule().active(17 * 60));
-        assert!(!Downtime { on: false, ..d }.schedule().active(23 * 60));
-        assert!(!Downtime { on: true, start: 5, end: 5 }.schedule().active(5));
+        let d = Downtime::new(true, 22 * 60, 7 * 60).unwrap();
+        assert!(d.active(23 * 60) && d.active(0) && d.active(6 * 60 + 59));
+        assert!(!d.active(7 * 60) && !d.active(12 * 60));
+        let day = Downtime::new(true, 9 * 60, 17 * 60).unwrap();
+        assert!(day.active(9 * 60) && !day.active(17 * 60));
+        assert!(!Downtime { on: false, ..d }.active(23 * 60));
+        assert!(!Downtime::new(true, 5, 5).unwrap().active(5));
     }
 
     #[test]

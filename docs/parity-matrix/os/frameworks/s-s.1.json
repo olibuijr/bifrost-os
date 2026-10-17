@@ -102,11 +102,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/Frameworks/ScriptingBridge.framework",
@@ -1621,11 +1655,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeServiceUI.framework",
@@ -1642,11 +1710,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsFoundation.framework",
@@ -1663,11 +1765,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsServices.framework",
@@ -1684,11 +1820,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsServicesUI.framework",
@@ -1705,11 +1875,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSettingsUI.framework",
@@ -1726,11 +1930,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeSwift.framework",
@@ -1747,11 +1985,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeUI.framework",
@@ -1768,11 +2040,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenTimeUICore.framework",
@@ -1789,11 +2095,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/screen-time.json",
+   "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
    "status": "partial",
    "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_time::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "screen_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::config::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::shield::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "screentime::page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "a_stored_grant_is_restored_as_it_was_written"
+    }
+   ],
+   "ready_note": "Covers the Screen Time model, the shell rule that now reads it, the Settings wiring, the configuration observer and the app's own usage, with headless tests. Web usage reporting, the Content Restrictions page and drawing the shield in the model are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SearchAds.framework",
