@@ -178,6 +178,30 @@ pub fn latest(dir: &Path) -> Option<(PathBuf, u64)> {
         .max_by_key(|&(_, t)| t)
 }
 
+/// Deletes every backup archive in `dir/backups`, as the user asks for; returns how many were removed. Only
+/// `backup-<unix>.sbk` files are touched, so the live data and anything else in the folder stay. A missing folder
+/// holds no backups.
+pub fn delete_backups(dir: &Path) -> io::Result<usize> {
+    let entries = match std::fs::read_dir(dir.join(BACKUP_DIR)) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e),
+    };
+    let mut removed = 0;
+    for e in entries.flatten() {
+        let Ok(name) = e.file_name().into_string() else { continue };
+        let is_backup = name
+            .strip_prefix("backup-")
+            .and_then(|s| s.strip_suffix(".sbk"))
+            .is_some_and(|t| t.parse::<u64>().is_ok());
+        if is_backup {
+            std::fs::remove_file(e.path())?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 /// Stages `archive` for the next start after checking it is sound.
 pub fn stage(dir: &Path, archive: &Path) -> io::Result<usize> {
     let bytes = std::fs::read(archive)?;
@@ -271,5 +295,22 @@ mod tests {
             std::fs::write(backup_path(&d, t), b"x").unwrap();
         }
         assert_eq!(latest(&d).unwrap().1, 100);
+    }
+
+    #[test]
+    fn delete_removes_only_backup_archives() {
+        let d = scratch("delete");
+        std::fs::create_dir_all(d.join(BACKUP_DIR)).unwrap();
+        for t in [5, 100] {
+            std::fs::write(backup_path(&d, t), b"x").unwrap();
+        }
+        std::fs::write(d.join(BACKUP_DIR).join("notes.txt"), b"keep").unwrap();
+        std::fs::write(d.join("settings.ini"), b"keep").unwrap();
+        assert_eq!(delete_backups(&d).unwrap(), 2);
+        assert!(latest(&d).is_none());
+        assert!(d.join(BACKUP_DIR).join("notes.txt").exists());
+        assert!(d.join("settings.ini").exists());
+        assert_eq!(delete_backups(&d).unwrap(), 0);
+        assert_eq!(delete_backups(&scratch("delete-none")).unwrap(), 0);
     }
 }
