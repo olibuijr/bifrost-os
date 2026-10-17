@@ -5322,3 +5322,18 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   sentence boundaries with an optional overlap. No caller yet. Parity row: ChunkingLibrary.
 - **Cloth (`bifrost_ui::cloth`)**: `Cloth` is a CPU Verlet cloth sheet with pins, gravity, wind, a ground plane and mesh triangles.
   No GPU path. No caller yet. Parity row: ClothPhysics.
+
+### OS rows settle wave 13 (slice o00, 2026-10-17)
+
+- **Folder actions (`bifrost_app::folder_actions`)**: a client of the `folder-actions` shell service
+  (`springboard/src/shell/services/folder_actions_service.rs`) for the Folder Actions Setup app: `list` answers the attachments and the
+  intents installed apps offer for a folder (an intent that takes `file`, or none, with every other parameter optional), `attach`,
+  `detach` and `detach_folder` edit them. Only `is.olibuijr.folderactions.desktop` may call the service, because an attached action
+  starts an app's intent for every file that lands in the folder. The shell saves each change (`Watcher::save`,
+  `folder-actions.tsv`). Apple's folder-picking panel has no counterpart in the SDK yet, so the app takes the folder as a typed path.
+- **VNC authentication (`bifrost_rfb::des`, `handshake::connect_with`)**: the Screen Sharing viewer answers the RFB DES challenge when a
+  password is typed. The scheme is weak by design (8 characters, 56-bit key); it is offered only when a password is given, and the
+  password is cleared once connected. TLS and the Tight, ZRLE and Hextile encodings are still missing.
+- **Command-line tools**: `ifconfig` lists IPv4 addresses, `ipconfig`, `leaks`, `smbutil`, `tiffutil`, `security` and `automator` are new
+  (`springboard/cmd`), `pmset` gains `-g batt` and `lowpowermode`, `mdutil -i` hides a volume from Search, and `textutil` reads and writes
+  docx and odt.
