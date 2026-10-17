@@ -394,7 +394,6 @@ mod tests {
         assert!(d.worker.is_none());
     }
 
-    use super::*;
 
     #[test]
     fn the_most_chosen_listed_outputs_are_suggested() {

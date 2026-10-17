@@ -199,6 +199,7 @@ impl RecognitionBackend for WhisperBackend {
 
 #[cfg(test)]
 mod tests {
+    use bifrost_ui::analyzer_input::AudioFormat;
     use super::*;
 
     fn t(text: &str, is_final: bool) -> Transcript {
