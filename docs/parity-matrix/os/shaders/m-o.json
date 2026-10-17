@@ -40,8 +40,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -61,8 +61,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -82,8 +82,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },

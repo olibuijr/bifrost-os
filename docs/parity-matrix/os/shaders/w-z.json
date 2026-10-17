@@ -40,8 +40,8 @@
    "role": "Effects shader of WeatherMaps (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/colormap.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Colour ramps and gradients exist as CPU pixel code; the weather map layer and its animation shader do not.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   }
