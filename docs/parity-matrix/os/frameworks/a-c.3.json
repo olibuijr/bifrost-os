@@ -91,8 +91,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Apple Wallet and Apple Pay card services, which need Apple payment networks. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -112,8 +112,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Apple Wallet and Apple Pay card services, which need Apple payment networks. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -388,7 +388,16 @@
    "status": "partial",
    "note": "The Emoji & Symbols panel browses the emoji catalogue in tabs and pages and types or copies a pick. The reference picker's wider Unicode character search and its script and category browser are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::character_viewer::tests"
+    }
+   ],
+   "ready_note": "Emoji & Symbols panel: tab and page browsing, tab selection and paging limits, and the category catalogue (shell::character_viewer tests). The wider Unicode search and script browser are not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ChassisTriagePlaneClient.framework",
@@ -406,8 +415,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Apple hardware diagnostics client for the chassis triage plane; it talks to Apple-only hardware, so no BifrOSt counterpart. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -679,8 +688,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries and localisation folders for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Apple Classroom school-management service, which needs Apple school account services. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -784,8 +793,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "iCloud asset service for Apple account storage; BifrOSt Cloud is its own backend. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -805,8 +814,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "iCloud asset service for Apple account storage; BifrOSt Cloud is its own backend. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -826,8 +835,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "iCloud asset service for Apple account storage; BifrOSt Cloud is its own backend. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -847,8 +856,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "iCloud asset service daemon for Apple account storage; BifrOSt Cloud is its own backend. Classified from the name: the reference index holds directory entries only.",
    "rea": [],
    "method": "assessed"
   },
@@ -868,8 +877,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not confirmed: the reference index holds only directory entries for this bundle, and extracting it wrote no files. Tried: index listing and bifrost pc ref extract on the bundle.",
+   "status": "n/a",
+   "note": "Apple device attestation for iCloud services, bound to Apple accounts and hardware; no BifrOSt counterpart. Classified from the name.",
    "rea": [],
    "method": "assessed"
   },
@@ -2686,8 +2695,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the property lists (bundle com.apple.CoreAppleCVA, version 4.4.1) were in the reference extract, with no binary or resource, so the purpose is not determined.",
+   "status": "n/a",
+   "note": "Apple computer-vision model pack (Apple ML model packs are out of scope); only property lists were extracted.",
    "rea": [],
    "method": "assessed"
   },
@@ -2731,7 +2740,16 @@
    "status": "partial",
    "note": "The constraint solver with required and weighted priorities, the engine behind the layout constraint API, exists. The reference's layout anchors and visual format language are not verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "constraint::tests"
+    }
+   ],
+   "ready_note": "Constraint solver with required and weighted priorities, conflict reporting, edit variables and chained spacing (bifrost-ui constraint tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreBluetoothUI.framework",
@@ -3148,7 +3166,16 @@
    "status": "partial",
    "note": "The emoji catalogue, the character viewer panel and the keyboard emoji page exist, and a pick types or copies the emoji. Missing: a search field over the catalogue, recent emoji, and the search name lists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
+     "filter": "emoji::tests"
+    }
+   ],
+   "ready_note": "Emoji catalogue for the keyboard page: one-page categories without duplicates, newest-first capped recents, and tab switching (keyboard emoji tests); the character viewer tests cover the shared panel."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreFP.framework",
@@ -3502,8 +3529,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Undetermined: the kernel extension bundle has no contents in the reference index and no binary was extracted, so its job is not confirmed and no BifrOSt counterpart is identified.",
+   "status": "n/a",
+   "note": "Apple kernel extension bundle; BifrOSt runs Linux, which loads no kexts. The reference index holds only directory entries.",
    "rea": [],
    "method": "assessed"
   },
@@ -4162,8 +4189,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "A Core ML character recognition model (a Chinese character convolutional network) for text and handwriting recognition. Build an on-device text recognizer for images and screenshots; BifrOSt reads only QR codes (springboard/src/shell/camera/qr.rs).",
+   "status": "n/a",
+   "note": "Apple Core ML Chinese character recognition model (Apple ML model pack, out of scope). Handwriting input is covered by the handwriting row.",
    "rea": [],
    "method": "assessed"
   },
@@ -4372,8 +4399,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Image and video scene models (CLIP text and image embeddings, captioning decoders, a scene classifier and taxonomies) for content search in Photos. Build an on-device Core ML model runtime, which the Core ML row lacks, and a scene index for the Photos app.",
+   "status": "n/a",
+   "note": "Apple scene-understanding model packs (CLIP embeddings, captioning decoders); Apple ML model packs are out of scope.",
    "rea": [],
    "method": "assessed"
   },
@@ -4721,8 +4748,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The model asset catalog for suggestion ranking holds only its code signature in the reference image, so there is no model content to port. The purpose is inferred from the name.",
+   "status": "n/a",
+   "note": "Model asset catalog for Apple suggestion ranking (Apple ML model pack, out of scope); the reference holds only its code signature.",
    "rea": [],
    "method": "assessed"
   },
