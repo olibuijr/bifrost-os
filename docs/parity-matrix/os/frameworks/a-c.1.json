@@ -1764,48 +1764,9 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/cloud_records.rs, springboard/ui/src/record_sync.rs, springboard/ui/src/record_share.rs, springboard/ui/src/record_asset.rs, springboard/ui/src/record_store.rs, springboard/ui/src/web_service_token.rs, springboard/src/shell/backup.rs",
    "status": "partial",
-   "note": "from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers",
+   "note": "from SDK matrix cloudkit.json Refreshed 2026-10-17 (still open): App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API; Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified; Subscriptions and push; Record sharing between users; Assets; Per-app containers Lead 2026-10-17: not ready: no record queries or per-app containers yet, which is the framework main job.",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "cloud_records::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "record_sync::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "record_share::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "record_asset::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "record_store::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "web_service_token::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::backup::tests"
-    }
-   ],
-   "ready_note": "Record storage and sync for apps against BifrOSt Cloud, not an Apple service: zones and records (sdk cloud_records), the sync engine with server change tokens and conflict handling (ui record_sync), sharing, assets and the record store. Host tests only. Open: record queries, subscriptions and push, and per-app containers."
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Cocoa.framework",
