@@ -46,7 +46,9 @@ use layout::Layout;
 use prefs::Options;
 use spell::Spelling;
 use std::ops::Range;
-use text::{Align, Cell, Kind, Style, Transform};
+use text::{Align, Cell, Kind, Style, Transform, OBJECT};
+use bifrost_app::graphics_imageio;
+use bifrost_app::pasteboard::NativePasteboard;
 use view::{Action, Button, Focus, Hit};
 
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
@@ -145,6 +147,27 @@ struct Completion {
 }
 
 /// The document of the active window, if any.
+/// The data of the first attachment among the cells, if any (a copy of a picture takes its file's bytes).
+fn picture_of(doc: &TextDocument, cells: &[Cell]) -> Option<Vec<u8>> {
+    cells.iter().filter(|c| c.ch == OBJECT).find_map(|c| doc.text.attachment_of(&c.style)).map(|a| a.data.clone()).filter(|d| !d.is_empty())
+}
+
+/// Puts a picture on the general pasteboard as its own type (PNG or JPEG); other formats are not put on it.
+fn put_picture(ctx: &Ctx, data: &[u8]) {
+    let Some(format) = graphics_imageio::detect(data) else { return };
+    let uti = format.type_identifier();
+    if matches!(uti, "public.png" | "public.jpeg") {
+        NativePasteboard::general().set_data(ctx, data, uti);
+    }
+}
+
+/// The picture on the general pasteboard (PNG or JPEG), if there is one.
+fn picture_on_board() -> Option<Vec<u8>> {
+    let board = NativePasteboard::general();
+    let uti = board.available_type(&["public.png", "public.jpeg"])?;
+    board.data(&uti).filter(|d| !d.is_empty())
+}
+
 fn active_doc(docs: &DocumentController<TextDocument>) -> Option<&TextDocument> {
     docs.active().and_then(|id| docs.get(id))
 }
@@ -369,6 +392,12 @@ impl TextEditApp {
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
+        }
+        // a paste with no text on the clipboard takes the picture on the pasteboard, if there is one
+        if matches!(action, Action::Paste) && clipboard::text().filter(|s| !s.is_empty()).is_none() {
+            if let Some(data) = picture_on_board() {
+                return self.insert_picture("Picture", data);
+            }
         }
         match action {
             Action::Document(id) => {
@@ -706,18 +735,31 @@ impl TextEditApp {
             Action::Redo => doc.text.redo(),
             Action::Cut => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
+                let picture = picture_of(doc, &picked);
                 let cut = doc.text.cut();
+                // the clipboard text leaves the attachment characters out: they mean nothing to another application
+                let text: String = cut.chars().filter(|&c| c != OBJECT).collect();
+                if let Some(data) = picture {
+                    put_picture(ctx, &data);
+                }
                 if cut.is_empty() {
                     false
                 } else {
-                    clipboard::set_text(&cut);
-                    self.rich_clip = Some((cut, picked));
+                    clipboard::set_text(&text);
+                    self.rich_clip = Some((text, picked));
                     true
                 }
             }
             Action::Copy => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
-                let copied: String = picked.iter().map(|c| c.ch).collect();
+                let copied: String = picked.iter().filter(|c| c.ch != OBJECT).map(|c| c.ch).collect();
+                if let Some(data) = picture_of(doc, &picked) {
+                    put_picture(ctx, &data);
+                    // a picture alone: the text clipboard is emptied so a paste takes the picture
+                    if copied.is_empty() {
+                        clipboard::set_text("");
+                    }
+                }
                 if !copied.is_empty() {
                     clipboard::set_text(&copied);
                     self.rich_clip = Some((copied, picked));
