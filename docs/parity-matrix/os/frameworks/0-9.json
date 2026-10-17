@@ -1089,11 +1089,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/scenekit.json",
+   "bifrost": "springboard/sdk/src/view/scene_widget.rs, docs/parity-matrix/data/scenekit.json",
    "status": "partial",
-   "note": "Open: SceneView needs a 3D scene renderer. The scene graph, camera, projection and hit-test models exist (ui scene3d, scene_view, shading, primitives3d, physics3d) but nothing rasterises a Scene into a window, and the SDK has no View that hosts one. Missing: a CPU or GPU scene renderer and the hosting view.",
+   "note": "SceneView is the SceneWidget view in the SDK: a scene3d Scene rendered by the CPU rasteriser into the app window, with orbit by drag, zoom and a click that picks.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::scene_widget::tests"
+    }
+   ],
+   "ready_note": "A SceneWidget view in the SDK (bifrost_app::view::SceneWidget) renders a scene3d Scene through its camera into the app window with the CPU triangle rasteriser (raster3d: flat shading and a depth buffer; drawables tie scene nodes to primitives3d geometry and materials), redrawing only when something changed. Dragging orbits the camera, scroll() and the + and - keys zoom, and a click picks the nearest drawable by bounding sphere through SceneView and sends an action. Host tests only. Not covered: GPU rendering, per-triangle picking, clipping of triangles that cross the near plane (they are dropped), textures, a wheel event (the SDK delivers none to views yet, so scroll() is for the app to call) and importing a scene file into drawables."
   },
   {
    "id": "path:/System/Library/Frameworks/_ScreenCaptureKit_SwiftUI.framework",
@@ -1223,11 +1232,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/spritekit.json",
+   "bifrost": "springboard/sdk/src/view/sprite_widget.rs, springboard/ui/src/sk_node.rs, docs/parity-matrix/data/spritekit.json",
    "status": "partial",
-   "note": "Open: SpriteView needs a 2D scene renderer and node tree. The pieces exist as models (ui scene2d view scaling, sk_action, sk_atlas, sk_tilemap, emitter, physics, scene_loop) but there is no sprite node tree that draws them and no SDK View that hosts a scene. Missing: the node tree with drawing and the hosting view.",
+   "note": "SpriteView is the SpriteWidget view in the SDK: a node tree drawn every frame by its scene loop, with scale modes, node actions and click picking.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "view::sprite_widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "sk_node::tests"
+    }
+   ],
+   "ready_note": "A SpriteWidget view in the SDK (bifrost_app::view::SpriteWidget) hosts a sk_node NodeTree with its scene2d scaling (the four scale modes and the anchor) and its scene_loop clock, and draws rectangles, circles, labels and registered images every frame; the tree reports rotated boxes through NodeTree::draw_quads. The view runs node actions and hands every frame phase to the app's on_step closure, pauses with the loop, and a click picks the topmost node by its own shape and sends an action. Host tests only. Not covered: shader nodes, rotated labels (a label is drawn upright), the physics world (the app steps it in on_step), colours stored in the model (the view keeps one per node) and archived scene files."
   },
   {
    "id": "path:/System/Library/Frameworks/_StoreKit_SwiftUI.framework",

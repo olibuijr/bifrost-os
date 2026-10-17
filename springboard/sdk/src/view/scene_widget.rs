@@ -1,4 +1,4 @@
-//! Embedded 3D scene view (the SwiftUI `SceneView` content): a [`View`] that renders a
+//! Embedded 3D scene view (the `SceneView` content of a declarative UI): a [`View`] that renders a
 //! `bifrost_app::framework_kits::scenekit::scene3d::Scene` into the app window with the CPU triangle rasteriser
 //! (`raster3d`), lets the person orbit the camera by dragging and zoom by scrolling, and finds the object under a click.
 //!

@@ -1,4 +1,4 @@
-//! Embedded 2D scene view (the SwiftUI `SpriteView` content): a [`View`] that hosts a node tree
+//! Embedded 2D scene view (the `SpriteView` content of a declarative UI): a [`View`] that hosts a node tree
 //! (`bifrost_app::framework_kits::spritekit::sk_node::NodeTree`) with the scene loop that drives it, and draws the tree's
 //! shapes, labels and images into the app window every frame.
 //!
