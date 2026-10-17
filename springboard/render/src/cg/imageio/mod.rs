@@ -267,7 +267,15 @@ impl ImageSource {
     }
 
     fn all(&self) -> Option<&Decoded> {
-        self.decoded.get_or_init(|| decode_all(self.format()?, &self.data)).as_ref()
+        self.decoded
+            .get_or_init(|| {
+                decode_all(self.format()?, &self.data).map(|mut d| {
+                    // Pictures with an embedded profile are brought to the display profile here, once per decode.
+                    crate::icc_transform::to_display(&mut d);
+                    d
+                })
+            })
+            .as_ref()
     }
 
     /// The number of images in the file (0 until the header is readable).
@@ -376,7 +384,8 @@ impl ImageSource {
             None => CgImage::from_rgba8(f.w, f.h, f.rgba8.clone())?,
         };
         if let Some(profile) = p.and_then(|p| p.icc_profile.as_ref()) {
-            if profile.get(16..20) == Some(b"RGB ") {
+            // Pixels already converted to the display profile carry no source profile.
+            if profile.get(16..20) == Some(b"RGB ") && !crate::icc_transform::converts(profile) {
                 img = img.copy_with_color_space(ImageColorSpace::Icc { components: 3, profile: std::sync::Arc::new(profile.clone()) })?;
             }
         }
