@@ -56,6 +56,11 @@ impl ContactsApp {
             self.index.sync(ctx, all);
         }
         // after the last use of `c`: a card window needs all of `self`
+        if let Some(c) = self.app.as_mut() {
+            if let Some(id) = c.take_card_edit() {
+                c.edit_from_card(&ctx.ui, id);
+            }
+        }
         if let Some((id, name)) = self.app.as_mut().and_then(|c| c.take_card_request()) {
             self.open_card_window(ctx, id, &name);
         }
@@ -285,6 +290,25 @@ impl App for ContactsApp {
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
+    }
+
+    /// A touch in a card window goes to that contact's card (`Contacts::touch_card`); the main window gets `event`.
+    fn window_event(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, ev: Input) -> bool {
+        if window.is_main() {
+            return self.event(ctx, ev);
+        }
+        let Some(contact) = self.cards.card_of(window) else { return false };
+        let Input::Touch { kind, x, y, t, .. } = ev else { return false };
+        let e = match kind {
+            TouchKind::Down => Event::Down(x, y),
+            TouchKind::Move => Event::Move(x, y),
+            TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
+        };
+        if let Some(c) = &mut self.app {
+            c.touch_card(&ctx.ui, contact, e, t);
+        }
+        self.after_input(ctx);
+        true
     }
 
     /// The shell closed a card window (or the app did): its contact is no longer shown in a window.

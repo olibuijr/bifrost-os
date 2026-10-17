@@ -105,6 +105,19 @@ pub fn menu_title(slug: &str, name: &str, bounds: Rect) -> Element {
     }
 }
 
+/// A window of an app as an element: the window's title and its bounds in screen pixels.
+pub fn window(id: u32, name: &str, bounds: Rect) -> Element {
+    Element {
+        address: format!("os/window/{id}"),
+        name: name.to_string(),
+        role: "window".to_string(),
+        value: String::new(),
+        enabled: true,
+        bounds: Some(bounds),
+        handle: String::new(),
+    }
+}
+
 /// A row of the open menu as an element. `index` counts the rows without separators.
 pub fn menu_row(index: usize, text: &str, enabled: bool, bounds: Rect) -> Element {
     Element {
