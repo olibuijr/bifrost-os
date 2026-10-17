@@ -47,7 +47,7 @@
       "apple": "Offering Actions in the Shortcuts App, INShortcut, INVoiceShortcutCenter",
       "bifrost": "springboard/src/shell/intents.rs (ManifestIntent::runnable, request_line); springboard/src/shell/quicksearch.rs (shortcut_items, the Search 'Shortcuts' section); springboard/src/shell/apphost.rs (Manifest::parse reads [[intent]] with shortcut = true); springboard/tests/parity_sdk-tests-11.rs",
       "status": "partial",
-      "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage."
+      "note": "Manifest [[intent]] parsing, the runnable filter that Search applies and the request and reply lines are tested headless in parity_sdk-tests-11.rs. Gap: the Search list itself has no test, there are no user-added voice shortcuts and no suggestions from usage. Built 2026-10-17: Search's shortcut list now comes from the shared shell::intents::runnable_shortcuts; tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app."
     },
     {
       "feature": "Donating interactions and shortcuts",
@@ -61,7 +61,7 @@
       "apple": "Adding User Interactivity with Siri Shortcuts and the Shortcuts App",
       "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, Intent::manifest_toml, intent.list)",
       "status": "partial",
-      "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Gap: the Shortcuts app does not read those listings yet, so it cannot list or run another app's intents."
+      "note": "Apps declare typed intents with a shortcut flag, serve them on the control socket as intent.list and intent.<id>, and write manifest text for a static listing. Gap: the Shortcuts app does not read those listings yet, so it cannot list or run another app's intents. Built 2026-10-17: springboard/src/shell/intents.rs runnable_shortcuts(apps) lists every installed app's runnable shortcut intents from its manifest (no app launched), and quicksearch.rs shortcut_items uses it; tests shell::intents::tests::runnable_shortcuts_lists_only_parameterless_shortcuts_per_app. The Shortcuts app's action library still lists only its own intents."
     },
     {
       "feature": "Siri voice input and spoken responses",

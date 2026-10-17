@@ -221,14 +221,14 @@ mod indexed_label_tests {
 
 /// The runnable `[[intent]]` shortcuts of the installed apps, with their folded search text.
 fn shortcut_items() -> Vec<(Hit, String)> {
-    let mut v = vec![];
-    for app in super::apphost::installed().iter() {
-        for i in app.manifest.intents.iter().filter(|i| i.runnable()) {
-            let hit = Hit::Shortcut { app_id: app.manifest.id.clone(), app_name: app.manifest.name.clone(), intent: i.id.clone(), title: i.title.clone() };
-            v.push((hit, fuzzy::fold(&format!("{} {}", i.title, app.manifest.name))));
-        }
-    }
-    v
+    super::intents::runnable_shortcuts(&super::apphost::installed())
+        .into_iter()
+        .map(|s| {
+            let folded = fuzzy::fold(&format!("{} {}", s.intent.title, s.app_name));
+            let hit = Hit::Shortcut { app_id: s.app_id, app_name: s.app_name, intent: s.intent.id, title: s.intent.title };
+            (hit, folded)
+        })
+        .collect()
 }
 
 /// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
