@@ -150,3 +150,7 @@ ttf-ibm-plex
 inter-font
 ttf-jetbrains-mono
 ttf-nunito
+ttf-carlito
+ttf-roboto
+ttf-montserrat
+tex-gyre-fonts
