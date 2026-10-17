@@ -13,12 +13,26 @@
 //! it back), so it is staged as `restore.pending` and applied by
 //! `apply_pending` at the start of the next run.
 
+//!
+//! Encryption (format version 2, `SBBK2\n`): the version 1 bytes above are sealed with XChaCha20-Poly1305 under a
+//! random 256-bit key kept in the shell keychain (`backup_key`), with a random 24-byte nonce in the header. The header
+//! is bound as associated data. Version 1 archives stay readable without a key.
+
 use super::sha256::{digest, Sha256};
 use super::prefs::write_atomic;
+use crate::keychain::Store;
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use std::io;
 use std::path::{Path, PathBuf};
 
 const MAGIC: &[u8] = b"SBBK1\n";
+const MAGIC_V2: &[u8] = b"SBBK2\n";
+const NONCE_LEN: usize = 24;
+const TAG_LEN: usize = 16;
+/// The keychain app id (`<data dir>/keychain/bifrost.backup.kc`) and item that hold the archive key.
+pub const KEY_APP: &str = "bifrost.backup";
+const KEY_ACCOUNT: &str = "archive-key";
 /// Directories and files (relative to the data directory) a backup holds.
 pub const SOURCES: [&str; 6] = ["Notes", "Contacts", "Calendar", "reminders.tsv", "settings.ini", "notifications.ini"];
 pub const BACKUP_DIR: &str = "backups";
@@ -131,25 +145,87 @@ pub fn collect(dir: &Path) -> Vec<String> {
     v
 }
 
-/// Writes an archive of `dir`'s data to `out` (via a temporary name); returns the file count.
-pub fn create(dir: &Path, out: &Path) -> io::Result<usize> {
+/// The archive key: read from the keychain, or created on first use from `/dev/urandom`.
+pub fn backup_key(dir: &Path) -> io::Result<[u8; 32]> {
+    let store = Store::open(dir, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
+    match store.get(KEY_APP, KEY_ACCOUNT) {
+        Ok(bytes) => bytes.as_slice().try_into().map_err(|_| bad("the backup key in the keychain has the wrong length")),
+        Err(crate::keychain::Error::ItemNotFound) => {
+            let key: [u8; 32] = random_bytes()?;
+            store.add(KEY_APP, KEY_ACCOUNT, &key).map_err(|e| io::Error::other(e.to_string()))?;
+            Ok(key)
+        }
+        Err(e) => Err(io::Error::other(e.to_string())),
+    }
+}
+
+fn random_bytes<const N: usize>() -> io::Result<[u8; N]> {
+    use std::io::Read;
+    let mut buf = [0u8; N];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf))?;
+    Ok(buf)
+}
+
+/// Seals a version 1 body as a version 2 archive under `key` with a fresh random nonce.
+pub fn seal(key: &[u8; 32], body: &[u8]) -> io::Result<Vec<u8>> {
+    let nonce: [u8; NONCE_LEN] = random_bytes()?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let ct = cipher
+        .encrypt(XNonce::from_slice(&nonce), Payload { msg: body, aad: MAGIC_V2 })
+        .map_err(|_| io::Error::other("backup encryption failed"))?;
+    let mut out = Vec::with_capacity(MAGIC_V2.len() + NONCE_LEN + ct.len());
+    out.extend_from_slice(MAGIC_V2);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Ok(out)
+}
+
+/// The version 1 body of an archive's bytes. A version 1 archive is returned as it is (its own checksums are checked
+/// by [`decode`]); a version 2 archive is opened with the key that `key` supplies, which is asked for only then.
+pub fn open(bytes: &[u8], key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<Vec<u8>> {
+    if !bytes.starts_with(MAGIC_V2) {
+        return Ok(bytes.to_vec());
+    }
+    let rest = &bytes[MAGIC_V2.len()..];
+    if rest.len() < NONCE_LEN + TAG_LEN {
+        return Err(bad("encrypted backup is truncated"));
+    }
+    let (nonce, ct) = rest.split_at(NONCE_LEN);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key()?));
+    cipher
+        .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad: MAGIC_V2 })
+        .map_err(|_| bad("the backup key does not open this archive, or the archive was changed"))
+}
+
+/// Writes an archive of `dir`'s data to `out` (via a temporary name), sealed under `key`; returns the file count.
+pub fn create_with(dir: &Path, out: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<usize> {
     let mut entries = vec![];
     for name in collect(dir) {
         if name_ok(&name) {
             entries.push((name.clone(), std::fs::read(dir.join(&name))?));
         }
     }
-    write_atomic(out, &encode(&entries))?;
+    write_atomic(out, &seal(&key()?, &encode(&entries))?)?;
     Ok(entries.len())
 }
 
+/// Writes an encrypted archive of `dir`'s data to `out`, with the keychain's archive key; returns the file count.
+pub fn create(dir: &Path, out: &Path) -> io::Result<usize> {
+    create_with(dir, out, &|| backup_key(dir))
+}
+
 /// Verifies `archive`, then writes its files under `dir`; returns the file count.
-pub fn restore(dir: &Path, archive: &Path) -> io::Result<usize> {
-    let entries = decode(&std::fs::read(archive)?)?;
+pub fn restore_with(dir: &Path, archive: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<usize> {
+    let entries = decode(&open(&std::fs::read(archive)?, key)?)?;
     for (name, data) in &entries {
         write_atomic(&dir.join(name), data)?;
     }
     Ok(entries.len())
+}
+
+/// Restores `archive` into `dir`, with the keychain's archive key for a version 2 archive.
+pub fn restore(dir: &Path, archive: &Path) -> io::Result<usize> {
+    restore_with(dir, archive, &|| backup_key(dir))
 }
 
 /// `<dir>/backups/backup-<unix>.sbk`
@@ -203,11 +279,17 @@ pub fn delete_backups(dir: &Path) -> io::Result<usize> {
 }
 
 /// Stages `archive` for the next start after checking it is sound.
-pub fn stage(dir: &Path, archive: &Path) -> io::Result<usize> {
+pub fn stage_with(dir: &Path, archive: &Path, key: &dyn Fn() -> io::Result<[u8; 32]>) -> io::Result<usize> {
     let bytes = std::fs::read(archive)?;
-    let n = decode(&bytes)?.len();
+    let n = decode(&open(&bytes, key)?)?.len();
+    // The staged copy stays sealed; `apply_pending` opens it with the same keychain key.
     write_atomic(&dir.join(PENDING), &bytes)?;
     Ok(n)
+}
+
+/// Stages `archive` for the next start, with the keychain's archive key for a version 2 archive.
+pub fn stage(dir: &Path, archive: &Path) -> io::Result<usize> {
+    stage_with(dir, archive, &|| backup_key(dir))
 }
 
 /// Applies a staged restore (at start-up, before anything loads); the
@@ -312,5 +394,90 @@ mod tests {
         assert!(d.join("settings.ini").exists());
         assert_eq!(delete_backups(&d).unwrap(), 0);
         assert_eq!(delete_backups(&scratch("delete-none")).unwrap(), 0);
+    }
+
+    const KEY: [u8; 32] = [7; 32];
+    const OTHER_KEY: [u8; 32] = [9; 32];
+
+    fn key_a() -> io::Result<[u8; 32]> {
+        Ok(KEY)
+    }
+
+    fn no_key() -> io::Result<[u8; 32]> {
+        Err(bad("no key was asked for"))
+    }
+
+    #[test]
+    fn encrypted_round_trip_with_a_key() {
+        let src = scratch("enc-src");
+        std::fs::create_dir_all(src.join("Notes")).unwrap();
+        std::fs::write(src.join("Notes/1.md"), "secret note").unwrap();
+        let out = src.join("b.sbk");
+        assert_eq!(create_with(&src, &out, &key_a).unwrap(), 1);
+        let bytes = std::fs::read(&out).unwrap();
+        assert!(bytes.starts_with(MAGIC_V2));
+        assert!(!bytes.windows(b"secret note".len()).any(|w| w == b"secret note"), "plaintext in archive");
+        let dst = scratch("enc-dst");
+        assert_eq!(restore_with(&dst, &out, &key_a).unwrap(), 1);
+        assert_eq!(std::fs::read_to_string(dst.join("Notes/1.md")).unwrap(), "secret note");
+    }
+
+    #[test]
+    fn a_tampered_encrypted_archive_fails() {
+        let body = encode(&[("settings.ini".to_string(), b"a=b\n".to_vec())]);
+        let sealed = seal(&KEY, &body).unwrap();
+        assert_eq!(open(&sealed, &key_a).unwrap(), body);
+        let mut t = sealed.clone();
+        let i = MAGIC_V2.len() + NONCE_LEN + 3;
+        t[i] ^= 1;
+        assert!(open(&t, &key_a).is_err(), "flipped ciphertext opened");
+        let mut h = sealed.clone();
+        h[MAGIC_V2.len() - 1] ^= 1;
+        assert!(open(&h, &key_a).is_err(), "changed header opened");
+        assert!(open(&sealed[..sealed.len() - 1], &key_a).is_err(), "truncated tag opened");
+    }
+
+    #[test]
+    fn a_wrong_key_fails() {
+        let body = encode(&[("settings.ini".to_string(), b"a=b\n".to_vec())]);
+        let sealed = seal(&KEY, &body).unwrap();
+        let other = || -> io::Result<[u8; 32]> { Ok(OTHER_KEY) };
+        assert!(open(&sealed, &other).is_err());
+    }
+
+    #[test]
+    fn an_encrypted_archive_does_not_ask_for_a_key_it_does_not_need() {
+        let src = scratch("nokey");
+        std::fs::write(src.join("settings.ini"), "v=1\n").unwrap();
+        let out = src.join("b.sbk");
+        create_with(&src, &out, &key_a).unwrap();
+        assert!(restore_with(&src, &out, &no_key).is_err(), "restored without its key");
+        let plain = std::fs::read(&out).unwrap();
+        assert!(open(&plain, &no_key).is_err());
+    }
+
+    #[test]
+    fn version_one_archives_still_restore_without_a_key() {
+        let src = scratch("legacy");
+        let out = src.join("old.sbk");
+        std::fs::write(&out, encode(&[("settings.ini".to_string(), b"v=old\n".to_vec())])).unwrap();
+        let dst = scratch("legacy-dst");
+        assert_eq!(restore_with(&dst, &out, &no_key).unwrap(), 1);
+        assert_eq!(std::fs::read_to_string(dst.join("settings.ini")).unwrap(), "v=old\n");
+        assert_eq!(stage_with(&dst, &out, &no_key).unwrap(), 1);
+    }
+
+    #[test]
+    fn staged_encrypted_restore_opens_with_the_key() {
+        let src = scratch("stage-enc");
+        std::fs::write(src.join("settings.ini"), "v=1\n").unwrap();
+        let out = src.join("b.sbk");
+        create_with(&src, &out, &key_a).unwrap();
+        std::fs::write(src.join("settings.ini"), "v=2\n").unwrap();
+        assert_eq!(stage_with(&src, &out, &key_a).unwrap(), 1);
+        assert!(src.join(PENDING).exists());
+        let applied = restore_with(&src, &src.join(PENDING), &key_a).unwrap();
+        assert_eq!(applied, 1);
+        assert_eq!(std::fs::read_to_string(src.join("settings.ini")).unwrap(), "v=1\n");
     }
 }
