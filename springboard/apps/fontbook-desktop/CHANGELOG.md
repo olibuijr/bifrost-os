@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6 — 2026-10-17
+
+- Font collections (.ttc) install: the install preview, Add Fonts and Validate File accept them, and the renderer lists a
+  collection under its first face's family.
+- Installing and removing a font rebuilds the fontconfig cache of the user's fonts (`fc-cache` on ~/.local/share/fonts
+  only, no root, at most once every 10 seconds), so other apps see the change after the next font lookup.
+- Still missing: the sample size slider, style and language smart rules, Type 1 and suitcases, Libraries sidebar.
 ## 0.6.5 — 2026-10-17
 
 - Add the Italic Fonts smart collection (a face whose file name says italic or oblique), in the Font menu.
