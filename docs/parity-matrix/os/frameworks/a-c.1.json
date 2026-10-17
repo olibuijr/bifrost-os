@@ -3589,11 +3589,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accessibility.json; springboard/ui/src/motion_cues.rs (cue model, gravity estimate); springboard/core/src/inertial_sensors.rs (accelerometer reader)",
+   "bifrost": "springboard/ui/src/motion_cues.rs; springboard/core/src/inertial_sensors.rs; springboard/src/shell/accessibility/motion_cues.rs; springboard/src/shell/mod.rs; springboard/src/shell/pages.rs; springboard/src/shell/accessibility/mod.rs",
    "status": "partial",
    "note": "private framework, owner Accessibility; from SDK matrix accessibility.json Not covered yet: motion cues are not built; the shell honours Reduce Motion only. Built 2026-10-17: MotionCues model (low-passed acceleration, ring of 12 dots); tests motion_cues::tests. Built 2026-10-17: GravityEstimate, which removes gravity from the accelerometer's g readings and returns the vehicle motion in m/s²; tests motion_cues::gravity_tests. Still open: the shell does not draw the dots and does not yet feed the cues from the accelerometer.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "motion_cues::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "motion_cues::gravity_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "inertial_sensors::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::motion_cues::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::pages::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: Vehicle Motion Cues. shell::accessibility::motion_cues::MotionCuesFeed reads the accelerometer every 50 ms, takes gravity out and feeds the cue model; the shell draws the ring of dots over the screen while they show, and Settings > Accessibility > Motion has Show Vehicle Motion Cues on machines with an accelerometer (a11y_motion_cues, off until chosen). Tested with temp-directory sensor trees; not yet seen on a tablet. The reference's Automatic mode (cues only while the device detects a vehicle) is not built: the cues are on or off."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AXRuntime.framework",

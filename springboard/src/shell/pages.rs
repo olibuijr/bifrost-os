@@ -200,6 +200,8 @@ pub enum Toggle {
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
     MouseKeys,
+    /// Accessibility > Motion > Show Vehicle Motion Cues: dots at the screen edge follow the accelerometer (`a11y.motion_cues`)
+    MotionCues,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1396,9 +1398,19 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     ])
                         .header("KEYBOARD")
                         .footer("Press a modifier key once to hold it for the next key you press, or twice to hold it until you press it again. Slow Keys ignores a key that is not held long enough."),
-                    Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
+                    Group::new({
+                        let mut rows = vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))];
+                        if m.info.motion_sensor_supported {
+                            rows.push(Item::new("Show Vehicle Motion Cues").switch(a.motion_cues, Action::Toggle(Toggle::MotionCues)));
+                        }
+                        rows
+                    })
                         .header("MOTION")
-                        .footer("Opening, closing and switching apps cross-fade instead of zooming."),
+                        .footer(if m.info.motion_sensor_supported {
+                            "Opening, closing and switching apps cross-fade instead of zooming. Vehicle Motion Cues show dots at the edge of the screen that follow the motion of a moving vehicle."
+                        } else {
+                            "Opening, closing and switching apps cross-fade instead of zooming."
+                        }),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
                     Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
                         .header("SHORTCUT")
@@ -2164,6 +2176,26 @@ mod tests {
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
         assert_eq!(s.groups[1].items.len(), 1, "no light sensor, no automatic brightness switch");
+    }
+
+    #[test]
+    fn the_motion_group_offers_vehicle_motion_cues_only_with_an_accelerometer() {
+        let opts = Options::default();
+        let mut info = info();
+        let motion_rows = |info: &Info, a: &AccessibilitySettings| -> Vec<(String, Accessory)> {
+            let m = Model { a11y: a, ..model(info, &opts) };
+            let s = spec(PageId::Accessibility, &m);
+            let group = s.groups.iter().find(|g| g.header.as_deref() == Some("MOTION")).expect("the Motion group");
+            group.items.iter().map(|i| (i.label.clone(), i.accessory.clone())).collect()
+        };
+        let off = AccessibilitySettings::default();
+        let rows = motion_rows(&info, &off);
+        assert_eq!(rows.len(), 1, "no accelerometer, no cues switch: {rows:?}");
+        info.motion_sensor_supported = true;
+        let rows = motion_rows(&info, &off);
+        assert_eq!(rows[1], ("Show Vehicle Motion Cues".to_string(), Accessory::Switch(false)));
+        let on = AccessibilitySettings { motion_cues: true, ..Default::default() };
+        assert_eq!(motion_rows(&info, &on)[1].1, Accessory::Switch(true), "the switch follows the setting");
     }
 
     #[test]

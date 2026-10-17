@@ -18,6 +18,7 @@ pub mod braille_out;
 pub mod dwell;
 pub mod earcons;
 pub mod guided;
+pub mod motion_cues;
 pub mod reader;
 pub mod shortcut;
 pub mod shortcut_panel;
@@ -66,6 +67,8 @@ pub struct AccessibilitySettings {
     pub slow: usize,
     /// Mouse Keys: the number keypad moves the pointer and the 5 key clicks (`mouse_keys`, read by the input loop).
     pub mouse_keys: bool,
+    /// Vehicle Motion Cues: dots at the screen edge follow the motion of a moving vehicle (`motion_cues`). Off until chosen.
+    pub motion_cues: bool,
     /// index into `HOLD_MS`
     pub hold: usize,
     /// Cursor Size, 0..1 from the Settings slider: the pointer draws at 1x up to 2x (`cursor_scale`)
@@ -81,7 +84,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
+    pub const DEFAULT: Self = AccessibilitySettings { text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new() };
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -103,6 +106,7 @@ impl AccessibilitySettings {
             dwell: index("a11y_dwell", dwell::DELAYS_MS.len()).unwrap_or(d.dwell),
             slow: index("a11y_slow_keys", super::slow_keys::DELAYS_MS.len()).unwrap_or(d.slow),
             mouse_keys: flag("a11y_mouse_keys", d.mouse_keys),
+            motion_cues: flag("a11y_motion_cues", d.motion_cues),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
             shortcut: shortcut::parse(p.get(shortcut::PREF).unwrap_or("")),
@@ -128,6 +132,7 @@ impl AccessibilitySettings {
             ("a11y_dwell", &self.dwell.to_string()),
             ("a11y_slow_keys", &self.slow.to_string()),
             ("a11y_mouse_keys", flag(self.mouse_keys)),
+            ("a11y_motion_cues", flag(self.motion_cues)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
             (shortcut::PREF, &shortcut::encode(&self.shortcut)),
@@ -250,6 +255,16 @@ mod tests {
         STICKY_KEYS.store(true, std::sync::atomic::Ordering::Relaxed);
         assert!(sticky_keys());
         STICKY_KEYS.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[test]
+    fn vehicle_motion_cues_round_trip_and_are_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).motion_cues);
+        let a = AccessibilitySettings { motion_cues: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).motion_cues);
+        assert_eq!(p.get("a11y_motion_cues"), Some("1"));
     }
 
     #[test]

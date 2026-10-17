@@ -258,6 +258,7 @@ fn run() -> std::io::Result<()> {
     let panel_sizes = disp.sizes.clone();
     let brightness_supported = power::find_backlight(std::path::Path::new("/sys/class/backlight")).is_some();
     let ambient_light_supported = springboard::bare::ambient_sensor::sensor_present();
+    let motion_sensor_supported = bifrost_core::inertial_sensors::Sensors::scan_default().accelerometer.is_some();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
     let clock_info: std::cell::RefCell<(f64, String, i64)> = std::cell::RefCell::new((f64::NEG_INFINITY, String::new(), 0));
@@ -297,6 +298,7 @@ fn run() -> std::io::Result<()> {
             display_sizes: panel_sizes.clone(),
             brightness_supported,
             ambient_light_supported,
+            motion_sensor_supported,
             battery_present,
             desktop_network: None,
             wifi: wifi_text,

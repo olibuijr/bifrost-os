@@ -3011,6 +3011,7 @@ impl Settings {
             Toggle::ScreenReader => flip(&mut self.a11y.screen_reader),
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
+            Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"
