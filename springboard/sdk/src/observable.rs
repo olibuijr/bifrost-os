@@ -512,6 +512,32 @@ impl<T: Clone + 'static> PassthroughSubject<T> {
 }
 
 impl<T: Clone + 'static> PassthroughSubject<T> {
+    /// `flatMap` for inner publishers that answer later: each value is turned into a [`Future`], and its success
+    /// value is sent when that future resolves. A failed future sends nothing. Results arrive in the order the
+    /// futures resolve, which need not be the order the values were sent.
+    pub fn flat_map_future<U, E>(
+        &self,
+        f: impl Fn(&T) -> Future<U, E> + 'static,
+    ) -> (PassthroughSubject<U>, Subscription)
+    where
+        U: Clone + 'static,
+        E: Clone + 'static,
+    {
+        let out = PassthroughSubject::new();
+        let o = out.clone();
+        let sub = self.sink(move |v| {
+            let o2 = o.clone();
+            f(v).subscribe(move |result| {
+                if let Ok(u) = result {
+                    o2.send(u.clone());
+                }
+            });
+        });
+        (out, sub)
+    }
+}
+
+impl<T: Clone + 'static> PassthroughSubject<T> {
     /// `debounce(for:scheduler:)`: sends a value only once `interval` has passed with no newer value. Each value
     /// restarts the wait, and the last one is the one sent. Timing comes from `run_loop`, which the app's tick
     /// advances. The returned `Subscription` detaches this subject from `self`; a wait already running still ends
@@ -1359,5 +1385,51 @@ mod merge_flat_map_tests {
         rl.advance(Duration::from_millis(100));
         src.send(4);
         assert_eq!(*log.borrow(), vec![1, 4]);
+    }
+}
+
+#[cfg(test)]
+mod flat_map_future_tests {
+    use super::*;
+
+    #[test]
+    fn each_value_is_sent_when_its_future_resolves_in_resolution_order() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        src.send(2);
+        assert!(log.borrow().is_empty(), "nothing is sent before the futures resolve");
+        let second = promises.borrow_mut().remove(1);
+        second.resolve(Ok(20));
+        assert_eq!(*log.borrow(), vec![20]);
+        let first = promises.borrow_mut().remove(0);
+        first.resolve(Ok(10));
+        assert_eq!(*log.borrow(), vec![20, 10]);
+    }
+
+    #[test]
+    fn a_failed_future_sends_nothing() {
+        let src: PassthroughSubject<i32> = PassthroughSubject::new();
+        let promises: Rc<RefCell<Vec<Promise<i32, String>>>> = Rc::new(RefCell::new(Vec::new()));
+        let keep = promises.clone();
+        let (out, _sub) = src.flat_map_future(move |_n: &i32| {
+            let keep = keep.clone();
+            Future::new(move |p| keep.borrow_mut().push(p))
+        });
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let l = log.clone();
+        let _log_sub = out.sink(move |v: &i32| l.borrow_mut().push(*v));
+        src.send(1);
+        let p = promises.borrow_mut().remove(0);
+        p.resolve(Err("offline".to_string()));
+        assert!(log.borrow().is_empty());
     }
 }
