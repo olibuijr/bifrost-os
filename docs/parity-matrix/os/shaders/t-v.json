@@ -169,7 +169,36 @@
    "status": "partial",
    "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "filter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorfx::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "composite_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blur_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "colorcube::tests"
+    }
+   ],
+   "ready_note": "Ready: the Core Image filter family this library ships is implemented as CPU pixel code in springboard/render (filter.rs convolution, morphology, arithmetic and histogram; colorfx.rs colour filters; composite_filters.rs blend modes; blur_filters.rs blurs; colorcube.rs LUT colour cubes), each with tests. The GPU kernel itself is not reproduced; large images run slower."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/Metal/VertexShaders.metallib",

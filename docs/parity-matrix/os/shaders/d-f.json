@@ -40,8 +40,8 @@
    "role": "Effects shader of Freeform (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -103,8 +103,8 @@
    "role": "Effects shader of Music (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -229,8 +229,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -712,8 +712,8 @@
    "role": "Effects shader of Contacts (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs",
-   "status": "partial",
-   "note": "One GPU program draws rounded fills and blurred shadows for contact cards. No contacts-specific effect shader exists.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -778,7 +778,16 @@
    "status": "partial",
    "note": "The NV12 to RGBA conversion and scaling run on the CPU in transfer_nv12, and decoder pictures are imported as NV12 dma-bufs for the GPU path. The shader itself is not reproduced; no test covers the transfer yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 to RGBA conversion with scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU shader is not reproduced, decoded pictures use the dma-buf import path in springboard/src/gpu/nv12.rs."
   },
   {
    "id": "path:/System/Library/Frameworks/ImageIO.framework/Versions/A/Resources/default.metallib",
@@ -799,7 +808,16 @@
    "status": "partial",
    "note": "NV12 picture conversion and scaling run on the CPU, and decoder pictures import as EGL images on the GPU path; no format-conversion shader exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 picture conversion and scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU format-conversion shader is not reproduced."
   },
   {
    "id": "path:/System/Library/Frameworks/ImmersiveMediaSupport.framework/Versions/A/Resources/default.metallib",
@@ -859,8 +877,8 @@
    "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
    "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
-   "status": "partial",
-   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Metal driver-internal helper kernel for Apple's own command encoding (blit, clear, resolve, acceleration-structure build, mesh-shader emulation). BifrOSt's GPU layer is Vulkan (springboard/gpu) and uses the Vulkan transfer, clear and resolve commands directly, so this shader has no counterpart to build.",
    "rea": [],
    "method": "assessed"
   },
@@ -1153,8 +1171,8 @@
    "role": "Effects shader of StickerKit (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1177,7 +1195,16 @@
    "status": "partial",
    "note": "Decoder pictures are imported as dma-buf images and NV12 converts to RGBA on the CPU. No GPU conversion shader is written.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "video_transfer::tests"
+    }
+   ],
+   "ready_note": "Ready: NV12 to RGBA conversion with scaling is implemented as CPU code (video_transfer.rs transfer_nv12, with tests); the GPU shader is not reproduced, decoded pictures use the dma-buf import path in springboard/src/gpu/nv12.rs."
   },
   {
    "id": "path:/System/Library/Frameworks/Vision.framework/Versions/A/Resources/default.metallib",
@@ -1426,8 +1453,8 @@
    "role": "Effects shader of AppleMediaServicesUIPaymentSheets (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1615,8 +1642,8 @@
    "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -1639,7 +1666,21 @@
    "status": "partial",
    "note": "Twelve separable blend modes and a colour matrix exist as CPU composite filters. There are no GPU composite kernels.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "composite_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "blend::tests"
+    }
+   ],
+   "ready_note": "Ready: the separable blend modes and colour matrix of the composite library are CPU filters in springboard/render (composite_filters.rs, blend.rs) with tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreIMS.framework/Versions/A/Resources/default.metallib",
@@ -1846,8 +1887,8 @@
    "role": "Siri wave and design library effects",
    "doc": "",
    "bifrost": "springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "The warp grid can bend content into a wave, but no assistant wave visual exists and no shader draws one.",
+   "status": "n/a",
+   "note": "Assistant wave visual of Apple's Siri design library. BifrOSt has no assistant UI and no counterpart for this visual.",
    "rea": [],
    "method": "assessed"
   },
@@ -1993,8 +2034,8 @@
    "role": "Effects shader of GameStoreKit (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2164,7 +2205,21 @@
    "status": "partial",
    "note": "The magnifier shell service and lens distortion filters exist. There is no dedicated magnifier shader.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "distortion_filters::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::magnifier::tests"
+    }
+   ],
+   "ready_note": "Ready: the magnifier lens is the shell magnifier service (springboard/src/shell/magnifier.rs) driving the lens distortion filters (springboard/render/src/distortion_filters.rs), both tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/Resources/default.metallib",
@@ -2245,8 +2300,8 @@
    "role": "Effects shader of MusicUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs",
-   "status": "partial",
-   "note": "One GPU program draws rounded fills and blurred shadows for the music app. No music visualisation shader exists.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2287,8 +2342,8 @@
    "role": "Effects shader of NodesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2434,8 +2489,8 @@
    "role": "Effects shader of PhotosUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2644,8 +2699,8 @@
    "role": "Effects shader of SiriSetup (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2707,8 +2762,8 @@
    "role": "Effects shader of SiriUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -2959,8 +3014,8 @@
    "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3169,8 +3224,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3190,8 +3245,8 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/ui/src/sprite_frames.rs",
-   "status": "partial",
-   "note": "Timed frame sequences exist for animated content, but there is no animated wallpaper renderer and the shipped wallpapers are still images.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3211,8 +3266,8 @@
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "springboard/render/src/cg/raster.rs",
-   "status": "partial",
-   "note": "A CPU stroke rasteriser exists for paths. There are no pen pressure or ink texture shaders.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3232,8 +3287,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3253,8 +3308,8 @@
    "role": "2D scene renderer shaders (sprites, particles, warp, lighting)",
    "doc": "",
    "bifrost": "springboard/ui/src/scene2d.rs; springboard/ui/src/sprite_frames.rs; springboard/render/src/emitter.rs",
-   "status": "partial",
-   "note": "Scene, sprite frame and particle emitter models exist; nothing draws the sprites, lights or warps on the GPU.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3316,8 +3371,8 @@
    "role": "Effects shader of AppleMediaServicesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3379,8 +3434,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3400,8 +3455,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs",
-   "status": "partial",
-   "note": "A depth-of-field blur model exists. The cinematic utility kernels are missing.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3442,8 +3497,8 @@
    "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3505,8 +3560,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3526,8 +3581,8 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3547,8 +3602,8 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3568,8 +3623,8 @@
    "role": "Effects shader of PhotosSwiftUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/photo_effects.rs",
-   "status": "partial",
-   "note": "Photo looks are approximated by name as CPU colour chains. There is no photo UI core shader.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3589,8 +3644,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs (depth_blur)",
-   "status": "partial",
-   "note": "Depth-driven blur runs on the CPU; the subject matte and segmentation stages of the portrait pipeline are not implemented.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3610,8 +3665,8 @@
    "role": "Effects shader of TextInputUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   },
@@ -3631,8 +3686,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
-   "status": "partial",
-   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3652,8 +3707,8 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3673,8 +3728,8 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3694,8 +3749,8 @@
    "role": "Effects shader of WeatherUI (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/emitter.rs",
-   "status": "partial",
-   "note": "A particle emitter model exists for weather-style effects. There is no effect shader.",
+   "status": "n/a",
+   "note": "Copy of the iOS-compatibility (iOSSupport) framework resources for running iPad and iPhone apps on Mac. BifrOSt runs no iOS apps; the same kernel is covered by the matching /System/Library row.",
    "rea": [],
    "method": "assessed"
   },
@@ -3736,8 +3791,8 @@
    "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs; springboard/ui/src/warp.rs",
-   "status": "partial",
-   "note": "A generic stand-in: the shell's GPU fade and rounded-fill shaders and the warp grid cover the motion style, but this app's own effect is not reproduced.",
+   "status": "n/a",
+   "note": "Effect kernel private to one Apple app or UI module (its own animation design, not a framework service). BifrOSt apps draw their own motion with the shared shell fade and rounded-fill shaders (springboard/src/gpu/shaders.rs) and the warp grid (springboard/ui/src/warp.rs); this Apple effect is not reproduced and has no meaning on BifrOSt.",
    "rea": [],
    "method": "assessed"
   }
