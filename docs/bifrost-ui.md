@@ -2592,11 +2592,34 @@ render code; the SDK re-exports it, so there is one API.
 Decisions: composite filters take premultiplied pixels (as `blend::composite` does); colour filters take straight RGBA
 (as `colorfx` does, and as Core Image's colour kernels unpremultiply first). Output keeps the input size. Blend math is
 the W3C separable set in `render/src/blend.rs`; the `Normal` blend is `sourceOver`.
-Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext` or render
-destination; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
+Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext`, and the
+render destination below is CPU only; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
 `CIRadialGradient`, checkerboard or stripes generators; the filters are CPU only, with no GPU path. Not built or run on
 Midget in this round (unit tests written, not run). The parity matrix row for "Composite operations and blend modes" and
 "Colour adjustment" can move to partial; parity needs a Midget test.
+
+#### Render destinations, accumulator, perspective and video filtering
+
+Code: `springboard/render/src/render_destination.rs`, `springboard/render/src/perspective.rs` (pure CPU models); app API
+`bifrost_app::image_render` (`springboard/sdk/src/image_render.rs`).
+
+| Apple | BifrOSt |
+|---|---|
+| `CIRenderDestination` (format, colour space, alpha mode, region) | `Destination::new(w, h, PixelFormat)` with `Rgba8Premultiplied`, `Rgba8Straight` or `RgbaF32Premultiplied`, the `ColorSpace::Srgb` tag, and `render_into(src, Region, &mut dest, origin)`, which clips both rectangles and returns the pixels written; `render_to_destination(img, format)` for a whole image |
+| `CIImageAccumulator` (state across frames, `setImage`, `setImage(_:dirtyRect:)`) | `Accumulator::new(w, h)`, `feed(&frame, retain)` (source-over of the frame over the retained state, `retain` clamped to 0..1), `snapshot()`, `clear()`; a size mismatch is refused |
+| `CIPerspectiveCorrection` | `perspective_correct(img, quad, out_w, out_h)`: a homography from the four corners (`homography`, `map_point`) with bilinear inverse mapping and transparent edges |
+| Running a `CIFilter` chain on each frame of a video | `VideoFilter::new(FilterChain).with_feedback(retain)` and `process(&frame)`, which runs the chain and then the optional accumulator; `reset()` starts a new trail. The app passes the frames it gets from its own player |
+
+Decisions: destinations are tightly packed rows; the 8-bit straight conversion rounds `c * 255 / a`, and a zero alpha gives
+black. Pixel input is the software rasteriser's premultiplied u32 (R in the low byte). Tests (written, not run) hold these
+to hand-computed images: clipping at negative origins and past the edges, straight-alpha unpremultiply (128 over 128 gives
+255), accumulator fades (retain 0.5 gives 128, then 64), homography identity and 2x scale, a sub-quad crop, and degenerate
+quads.
+
+Gaps: no GPU destination (`CIContext.render(_:to:)` has no GPU counterpart; the GL dispatch is not wired); only sRGB is
+produced, with no colour-managed conversion; `VideoFilter` is not wired to the shell media player (`take_frame` in
+`springboard/src/media/player.rs` is not exposed to apps) and Photo Booth and Photos video do not use it yet; no
+`CIPerspectiveTransform` (free quad-to-quad) and no perspective tile. Nothing here is verified on Midget.
 
 #### Core Image GPU path (colour kernels)
 

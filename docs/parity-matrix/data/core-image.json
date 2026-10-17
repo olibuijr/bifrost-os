@@ -19,7 +19,7 @@
       "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
       "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply); springboard/sdk/src/image_filter.rs (FilterChain, the app API for named filters)",
       "status": "partial",
-      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget."
+      "note": "Named filters and the chain are a pure model with host unit tests, and apps run a chain through the SDK FilterChain. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Gap: the chain has no lazy evaluation or render context, and the app chain is not verified on Midget. Wave (theme-01, image filters round): the SDK VideoFilter (bifrost_app::image_render) runs a FilterChain per video frame, with optional feedback."
     },
     {
       "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
@@ -52,9 +52,9 @@
     {
       "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
       "apple": "perspectiveTransform(), perspectiveCorrection(), lanczosScaleTransform(), bicubicScaleTransform(), straighten(), keystoneCorrectionCombined()",
-      "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/render/src/affine.rs (Affine, transform, crop), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten)",
+      "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/render/src/affine.rs (Affine, transform, crop), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten); springboard/render/src/perspective.rs (homography from four corners, perspective_correct with bilinear inverse mapping); springboard/sdk/src/image_render.rs (perspective_correct for apps)",
       "status": "partial",
-      "note": "Quarter-turn and bilinear rotation exist, Photos applies crop and straighten, and affine.rs adds a general affine transform and crop, tested headless in tests/parity_sdk-complete-01.rs. Gap: there is no perspective transform or perspective correction, no SDK API for these transforms yet, and nothing is verified on Midget."
+      "note": "Quarter-turn and bilinear rotation exist, Photos applies crop and straighten, and affine.rs adds a general affine transform and crop, tested headless in tests/parity_sdk-complete-01.rs. Wave (theme-01, image filters round): perspectiveCorrection is now a pure CPU model: a homography solved from four corners, with bilinear inverse mapping and transparent edges, tested headless by hand-computed cases (identity, 2x scale, sub-quad crop, degenerate quads). Gap: CIPerspectiveTransform (arbitrary quad to quad without a fixed output rectangle) is not exposed separately, lanczos and bicubic scale are not covered by this row, no SDK filter object wraps the transform, and nothing is verified on Midget."
     },
     {
       "feature": "Composite operations and blend modes",
@@ -94,9 +94,9 @@
     {
       "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
       "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
-      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice)",
+      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice); springboard/render/src/render_destination.rs (Destination in 8-bit premultiplied, 8-bit straight or float premultiplied formats, sRGB tag, render_into with clipping, Accumulator with retain factor); springboard/sdk/src/image_render.rs (app API: Destination, render_into, Accumulator, render_to_destination, VideoFilter)",
       "status": "partial",
-      "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. No app API for rendering filtered frames to a destination"
+      "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. Wave (theme-01, image filters round): the CPU destination (pixel format, alpha mode, colour space tag, clipped region copy) and the feedback accumulator (state kept across frames, source-over with a retain factor) are pure models with host unit tests, reachable from apps through bifrost_app::image_render. VideoFilter runs an app's FilterChain on each decoded frame, with optional feedback; an app feeds it the frames it gets from its own player. Gap: the shell's media player (springboard/src/media/player.rs take_frame) is not exposed to apps, Photo Booth and Photos video do not use VideoFilter yet, the GL dispatch is not wired, and nothing is verified on Midget."
     },
     {
       "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
@@ -171,12 +171,13 @@
   ],
   "gaps": [
     "No lazy image graph: no CIImage or CIContext equivalent that defers and fuses filters; filters run eagerly on CPU images (lazy_image.rs is a model not yet used by the SDK).",
-    "No render destination for apps: filtered frames are not rendered to a destination, and the generated GPU colour shaders are not dispatched.",
+    "No GPU render destination: the render destination and accumulator (springboard/render/src/render_destination.rs) are CPU models; the generated GPU colour shaders are not dispatched, and CIContext.render(_:to:) has no GPU counterpart.",
+    "No video filtering in apps' media pipeline: VideoFilter (sdk image_render) is an API for per-frame filtering, but the shell media player is not exposed to apps and Photo Booth and Photos video are not wired to it.",
     "No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).",
     "Colour: the temperature and tint model is a gain approximation, not a white-point conversion. Photos uses brightness and contrast only.",
     "Feature detection covers axis-aligned bright rectangles only. No perspective quadrilaterals, faces, text, barcodes, or barcode and QR generation.",
     "Depth blur needs an app-supplied depth map; there is no depth estimation from stereo or a single image, and no lens shape.",
-    "Missing filters: comic, spot light, depth of field, circle splash, torus lens, and the perspective, triangle and parallelogram tiles.",
+    "Missing filters: triangle and parallelogram tiles, the perspective tile (CIPerspectiveTile), and the torus lens and circle splash profiles are approximate. Comic and spot light exist; see stylize and tile rows.",
     "Photo looks approximate the reference tone curves; they are not exact.",
     "Colour lookup: palettize is missing; colour cube, colour map and Lab are models only.",
     "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
