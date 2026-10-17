@@ -435,7 +435,7 @@ mod tests {
         assert_eq!(location_purpose_gate("  Finna næstu stöð  "), Ok(()));
         assert!(location_purpose_gate("").is_err());
         assert!(location_purpose_gate(" \t ").is_err());
-        assert!(location_purpose_gate("x").unwrap_err().contains("[privacy] location"));
+        assert!(location_purpose_gate("").unwrap_err().contains("[privacy] location"), "the error names the manifest key");
     }
 
     fn obj(media: &str) -> Json {
