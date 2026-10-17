@@ -450,6 +450,8 @@ pub mod reachability;
 pub mod auth_events;
 pub mod identity_events;
 pub mod memory_events;
+/// The memory pressure level bifrostd publishes (`published()`); changes come from `dispatch::DispatchSource`.
+pub mod memory_pressure;
 pub mod route_events;
 pub mod bluetooth_events;
 pub mod bluetooth_controller;

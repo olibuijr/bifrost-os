@@ -12869,9 +12869,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Purges app cache directories of removed or memory-pressured apps; BifrOSt has no cache-purge service, so build one that frees per-app caches when the disk is low.",
+   "bifrost": "springboard/bifrostd/src/purge.rs",
+   "status": "partial",
+   "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. Gaps: apps do not declare cache directories (no manifest key), the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet, and nothing sets the Storage policy file yet.",
    "rea": []
   },
   {
@@ -13366,9 +13366,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "Creates and removes swap files under memory pressure; the installer only detects existing swap partitions (springboard/src/installer/disks.rs), so nothing grows swap on demand and that needs building.",
+   "bifrost": "springboard/bifrostd/src/pager.rs",
+   "status": "partial",
+   "note": "bifrostd sets up a zram swap of half the RAM (at most 8 GiB) at boot (bifrost-zram.service), adds 1 GiB swap files in /var/lib/bifrost/swap under PSI pressure when swap is under 25 % free, removes unused ones after 10 min of calm, and publishes normal/warn/critical to /run/bifrost/memory-pressure (bifrost_app::memory_pressure). Gaps: the pager runs inside bifrostd, which starts after the first desktop frame, so disk swap files are not added before the desktop; not verified on a device.",
    "rea": []
   },
   {
