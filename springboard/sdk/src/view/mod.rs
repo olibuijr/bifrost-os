@@ -58,6 +58,7 @@ mod local_auth_view;
 mod map_widget;
 mod scene_widget;
 mod security_views;
+mod sprite_widget;
 mod content_unavailable;
 mod large_content;
 pub use keyanim::ViewState;
@@ -75,6 +76,7 @@ pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 pub use picker::PickerView;
 pub use local_auth_view::{kind_label, LocalAuthenticationView};
 pub use map_widget::{picture_to_image, MapWidget};
+pub use sprite_widget::{Placed as SpritePlaced, SpriteWidget, StepFn as SpriteStepFn, ACTION_TOUCH};
 pub use scene_widget::{SceneDrawable, SceneWidget, ACTION_PICK};
 pub use security_views::{
     CertificatePanelView, IdentityChooserView, TrustEditorView, ACTION_CERTIFICATE_DISCLOSURE, ACTION_CERTIFICATE_SELECT,
