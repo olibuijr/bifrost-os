@@ -22,7 +22,16 @@
    "status": "partial",
    "note": "rule: file watching, coordination and provider models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    }
+   ],
+   "ready_note": "The SDK file watcher (sdk fswatch.rs) delivers file change events to apps; the watcher logic is covered by its tests."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.fskit.fskit_helper.plist",
@@ -442,7 +451,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary installs and updates packages; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.iomfb_bics_daemon.plist",
@@ -817,7 +840,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-journald.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "journald stores the entries; the core Logger, subsystem registry and LogStore model (log.rs) format and route them. The Console app reads them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.logd_helper.plist",
@@ -838,7 +875,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-journald.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "journald stores the entries; the core Logger and LogStore model (log.rs) format and route them. The Console app reads them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.logd_reporter.plist",
@@ -859,7 +910,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-journald.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "journald stores the entries; the core Logger and LogStore model (log.rs) format and route them. The Console app reads them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.logind.plist",
@@ -880,7 +945,21 @@
    "status": "partial",
    "note": "Session handling in the shell; the login manager is the Linux base",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-logind.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::session::tests"
+    }
+   ],
+   "ready_note": "systemd-logind is the session and seat manager; the shell's session handling (shell/session.rs) acts on it."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.loginwindow.plist",
@@ -901,7 +980,21 @@
    "status": "partial",
    "note": "role filled by login.rs and passcode.rs; no separate process; no fast user switching daemon",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "springboard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::tests"
+    }
+   ],
+   "ready_note": "The login screen runs in the springboard.service desktop session; login.rs holds the sign-in state and password check."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.logkextloadsd.plist",
@@ -942,7 +1035,16 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::launch_services::tests"
+    }
+   ],
+   "ready_note": "The shell's launch service answers the Open With and default app queries; the user chooses defaults in Settings."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.lskdd.plist",
@@ -1131,7 +1233,21 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-audiod.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::now_playing::tests"
+    }
+   ],
+   "ready_note": "bifrost-audiod runs the audio clients; the shell's now-playing service (shell/services/now_playing.rs) holds the media session state."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.memory-maintenance.plist",
@@ -1382,7 +1498,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary checks for and applies system updates; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.mobile.storage_mounter.plist",
@@ -1400,8 +1530,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs",
-   "status": "partial",
-   "note": "rule: directory and session models",
+   "status": "n/a",
+   "note": "rule: iOS-only: mounts developer disk images on iPhone and iPad; BifrOSt is a Linux desktop with no such device path",
    "rea": [],
    "method": "rule"
   },
@@ -1421,8 +1551,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs",
-   "status": "partial",
-   "note": "rule: directory and session models",
+   "status": "n/a",
+   "note": "rule: iOS-only: proxy for the iOS developer disk image mount; BifrOSt has no such device path",
    "rea": [],
    "method": "rule"
   },
@@ -1800,7 +1930,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ],
+   "ready_note": "NetworkManager (enabled on every install) runs the VPN connections; the core VPN model renders the keyfile it loads."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.nesessionmanager.plist",
@@ -1821,7 +1965,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ],
+   "ready_note": "NetworkManager (enabled on every install) brings VPN sessions up; the core VPN model renders the keyfile it loads."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.netauth.sys.auth.plist",
@@ -1988,7 +2146,21 @@
    "status": "partial",
    "note": "rule: notification centre and notify bus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "notify_center::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::notify_bus::tests"
+    }
+   ],
+   "ready_note": "The notify center (core notify_center.rs) and the shell's notify bus service carry the named change notifications."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.nsurlsessiond.plist",
@@ -2009,7 +2181,16 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::background::tests"
+    }
+   ],
+   "ready_note": "The shell's background service (shell/services/background.rs) runs the background transfers that apps request."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.oahd-root-helper.plist",
@@ -2342,7 +2523,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary runs the post-upgrade steps; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.powerd.swd.plist",
@@ -2363,7 +2558,21 @@
    "status": "partial",
    "note": "rule: power and thermal service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "power-profiles-daemon.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::power_service::tests"
+    }
+   ],
+   "ready_note": "power-profiles-daemon is enabled on every install and the shell's power service (shell/services/power_service.rs) serves the ProcessInfo power state to apps."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.powerdatad.plist",
@@ -2446,7 +2655,21 @@
    "status": "partial",
    "note": "rule: time zone model; time sync is the Linux timesyncd unit",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-privd.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "time_zone::tests"
+    }
+   ],
+   "ready_note": "bifrost-privd runs the privileged time changes; the time zone model (sdk time_zone.rs) reads the tz database."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.printtool.daemon.plist",
@@ -2717,7 +2940,21 @@
    "bifrost": "springboard/src/shell/apphost.rs",
    "status": "partial",
    "note": "The app host tracks launched app processes and their pids; background activity assertions and state-based throttling are not built.",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrostd.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    }
+   ],
+   "ready_note": "bifrostd supervises the services; the app host (shell/apphost.rs) tracks launched app processes and their pids. Background activity assertions are not built (see note)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.sandboxd.plist",
@@ -2819,8 +3056,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "n/a",
+   "note": "rule: FileVault recovery agent: BifrOSt installs without full-disk encryption (the boot line sets rd.luks=0), so there is no recovery key to hand out",
    "rea": [],
    "method": "rule"
   },
@@ -2843,7 +3080,21 @@
    "status": "partial",
    "note": "Login and password prompt",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "springboard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::tests"
+    }
+   ],
+   "ready_note": "The login prompt is drawn by the springboard.service session (shell/login.rs)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.security.authhost.plist",
@@ -2903,8 +3154,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "n/a",
+   "note": "rule: Cryptex is Apple's sealed system-extension volume format; BifrOSt ships its system as plain btrfs subvolumes and packages",
    "rea": [],
    "method": "rule"
   },
@@ -2969,7 +3220,16 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "keychain::tests"
+    }
+   ],
+   "ready_note": "The shell keychain (springboard/src/keychain.rs) stores the app secrets under each app's id."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.securityd.system.plist",
@@ -3053,7 +3313,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-journald.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "signpost::tests"
+    }
+   ],
+   "ready_note": "journald stores the entries; the core signpost model (signpost.rs) emits the interval records."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.smb.preferences.plist",
@@ -3137,7 +3411,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary checks for and applies system updates; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.spindump.plist",
@@ -3493,7 +3781,21 @@
    "status": "partial",
    "note": "rule: unified logging and signpost models; Console app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "systemd-journald.service",
+     "state": "active"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "log::tests"
+    }
+   ],
+   "ready_note": "journald is the system log store on BifrOSt; the core Logger writes entries to it (log.rs)."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.sysmond.plist",
@@ -3535,7 +3837,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary handles system package installs; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.systemkeychain.plist",
@@ -3724,7 +4040,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "The shell's privacy permission service and the core permission-request model hold the per-app grants the privacy daemon keeps."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.testmanagerd.plist",
@@ -3765,7 +4095,16 @@
    "status": "partial",
    "note": "rule: power and thermal service models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "thermal::tests"
+    }
+   ],
+   "ready_note": "The thermal model (core thermal.rs) reads the kernel thermal zones and classifies the worst zone; the power service uses it."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.threadradiod.plist",
@@ -4058,7 +4397,21 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-update-guard.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "The updated binary removes installed packages; bifrost-update-guard runs on every boot."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.unmountassistant.sysagent.plist",
@@ -4100,7 +4453,21 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "bifrost-audiod.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::audio_devices::tests"
+    }
+   ],
+   "ready_note": "bifrost-audiod is the audio server that owns devices, USB audio included; the shell's audio device service lists them."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.usbctelemetryd.plist",
@@ -4307,8 +4674,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "n/a",
+   "note": "rule: Apple Wi-Fi analytics upload service for Apple's own cloud telemetry; BifrOSt has no Apple cloud and mirrors none of it",
    "rea": [],
    "method": "rule"
   },
