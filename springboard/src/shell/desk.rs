@@ -2183,6 +2183,7 @@ impl Shell {
         }
         #[cfg(feature="desktop-wayland")]
         self.draw_desktop_popup(s);
+        self.quick_look_prepare(s.w as f32, s.h as f32);
         self.draw_quick_look(s);
         self.draw_cmdtab(s);
         // Developer > Performance HUD: the desktop branch never reached `draw_assistive`, so it never showed
