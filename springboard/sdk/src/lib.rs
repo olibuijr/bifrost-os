@@ -473,6 +473,7 @@ pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
 pub mod disk_arbitration;
+pub mod disk_image;
 /// Aggregate devices (`AudioHardwareCreateAggregateDevice` keys) and clock domains, as a pure model.
 pub mod audio_aggregate;
 /// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
