@@ -173,6 +173,55 @@ impl Fog {
     }
 }
 
+/// Physically based surface term (metallic-roughness): a Cook-Torrance specular lobe with GGX normal
+/// distribution, Schlick Fresnel and Smith-GGX (Schlick-form) geometry, over a Lambert diffuse lobe.
+/// The inputs are the cosines of the light, eye and half vectors with the normal (`n_dot_l`, `n_dot_v`,
+/// `n_dot_h`) and of the half vector with the eye (`v_dot_h`), which the caller computes from its own
+/// vectors. `roughness` is 0..=1 (clamped to 0.045..=1 so the lobe never degenerates), `metallic` is
+/// 0..=1 and `base` is the albedo. The result is the outgoing radiance per unit light irradiance, times
+/// `n_dot_l`, so it is zero for a surface facing away from the light. This is a CPU reference for a
+/// per-pixel shader; the GLSL port is not built yet.
+pub fn pbr_surface(
+    n_dot_l: f32,
+    n_dot_v: f32,
+    n_dot_h: f32,
+    v_dot_h: f32,
+    roughness: f32,
+    metallic: f32,
+    base: Rgb,
+) -> Rgb {
+    if n_dot_l <= 0.0 || n_dot_v <= 0.0 {
+        return Rgb::new(0.0, 0.0, 0.0);
+    }
+    let pi = std::f32::consts::PI;
+    let r = roughness.clamp(0.045, 1.0);
+    let metallic = metallic.clamp(0.0, 1.0);
+    let a2 = (r * r) * (r * r);
+    // GGX normal distribution.
+    let nh2 = n_dot_h.clamp(0.0, 1.0).powi(2);
+    let denom = nh2 * (a2 - 1.0) + 1.0;
+    let d = a2 / (pi * denom * denom);
+    // Schlick Fresnel with F0 = 0.04 for dielectrics, the albedo for metals.
+    let f0 = |c: f32| 0.04 + (c - 0.04) * metallic;
+    let fresnel = 1.0 - v_dot_h.clamp(0.0, 1.0);
+    let f_pow = fresnel.powi(5);
+    let fr = Rgb::new(f0(base.r), f0(base.g), f0(base.b)).scaled(1.0 - f_pow).added(Rgb::new(f_pow, f_pow, f_pow));
+    // Smith geometry with the direct-lighting remap k = (r + 1)^2 / 8.
+    let k = (r + 1.0) * (r + 1.0) / 8.0;
+    let g1 = |x: f32| x / (x * (1.0 - k) + k);
+    let g = g1(n_dot_l) * g1(n_dot_v);
+    let spec_scale = d * g / (4.0 * n_dot_l * n_dot_v);
+    let spec = fr.scaled(spec_scale);
+    // Diffuse only where the metal term does not take the light; the Fresnel part is removed (energy).
+    let diffuse_weight = (1.0 - metallic) / pi;
+    let diffuse = Rgb::new(
+        base.r * diffuse_weight * (1.0 - fr.r),
+        base.g * diffuse_weight * (1.0 - fr.g),
+        base.b * diffuse_weight * (1.0 - fr.b),
+    );
+    spec.added(diffuse).scaled(n_dot_l)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,6 +316,40 @@ mod tests {
         assert!(fog.amount(100.0) > 0.99);
         let half = Fog::Linear { start: 0.0, end: 2.0 }.apply(Rgb::BLACK, Rgb::WHITE, 1.0);
         assert_rgb(half, Rgb::new(0.5, 0.5, 0.5));
+    }
+
+    #[test]
+    fn pbr_surface_is_dark_facing_away_and_finite_everywhere() {
+        let white = Rgb::new(1.0, 1.0, 1.0);
+        assert_rgb(pbr_surface(0.0, 0.8, 0.8, 0.8, 0.5, 0.0, white), Rgb::BLACK);
+        assert_rgb(pbr_surface(-0.3, 0.8, 0.8, 0.8, 0.5, 0.0, white), Rgb::BLACK);
+        for &nl in &[0.1f32, 0.5, 1.0] {
+            for &r in &[0.0f32, 0.3, 1.0] {
+                for &m in &[0.0f32, 0.5, 1.0] {
+                    let c = pbr_surface(nl, nl, 1.0, 1.0, r, m, white);
+                    assert!(c.r.is_finite() && c.g.is_finite() && c.b.is_finite());
+                    assert!(c.r >= 0.0 && c.g >= 0.0 && c.b >= 0.0, "negative radiance: {c:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pbr_specular_peaks_at_the_mirror_direction() {
+        // Smooth metal: the highlight is brightest when the half vector meets the normal.
+        let steel = Rgb::new(0.8, 0.8, 0.8);
+        let peak = pbr_surface(0.7, 0.7, 1.0, 1.0, 0.2, 1.0, steel);
+        let off = pbr_surface(0.7, 0.7, 0.8, 0.95, 0.2, 1.0, steel);
+        assert!(peak.r > off.r, "peak {peak:?} should beat off-peak {off:?}");
+    }
+
+    #[test]
+    fn pbr_metal_has_no_diffuse_term() {
+        // A black metal has no diffuse term and an F0 of zero, so it returns no light at all. A black
+        // dielectric still reflects its 4 percent Fresnel floor, so it is not black.
+        let black = Rgb::BLACK;
+        assert_rgb(pbr_surface(0.5, 0.5, 1.0, 1.0, 0.5, 1.0, black), Rgb::BLACK);
+        assert!(pbr_surface(0.5, 0.5, 1.0, 1.0, 0.5, 0.0, black).r > 0.0);
     }
 }
 

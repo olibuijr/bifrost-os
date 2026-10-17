@@ -290,6 +290,38 @@ pub fn shutter_blend(frames: &[&[[f32; 3]]], angle_deg: f32) -> Option<Vec<[f32;
     Some(out)
 }
 
+/// Temporal deghosting: the per-channel median of the sub-frames of one interval. A moving object
+/// is in each frame at a different place, so the median keeps the static background and drops the
+/// ghost of the object, which a plain average would smear. `frames` are oldest first, and all have
+/// the same length. With an even count the median is the mean of the two middle values. Returns
+/// `None` for no frames or frames of unequal length.
+pub fn median_deghost(frames: &[&[[f32; 3]]]) -> Option<Vec<[f32; 3]>> {
+    if frames.is_empty() {
+        return None;
+    }
+    let n = frames[0].len();
+    if frames.iter().any(|f| f.len() != n) {
+        return None;
+    }
+    let m = frames.len();
+    let mut out = vec![[0.0f32; 3]; n];
+    let mut column = vec![0.0f32; m];
+    for (i, o) in out.iter_mut().enumerate() {
+        for ch in 0..3 {
+            for (c, f) in column.iter_mut().zip(frames.iter()) {
+                *c = f[i][ch];
+            }
+            column.sort_by(|a, b| a.total_cmp(b));
+            o[ch] = if m % 2 == 1 {
+                column[m / 2]
+            } else {
+                (column[m / 2 - 1] + column[m / 2]) * 0.5
+            };
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,5 +445,27 @@ mod tests {
         assert!(shutter_blend(&[&one[..]], 400.0).is_none());
         assert!(shutter_blend(&[&one[..], &two[..]], 180.0).is_none());
         assert_eq!(shutter_blend(&[&one[..]], 90.0).unwrap(), vec![[0.5; 3]]);
+    }
+
+    #[test]
+    fn median_deghost_drops_a_moving_ghost() {
+        // Background 0.2 in every frame; a bright object (0.9) passes through pixel 0 in one frame only.
+        let bg = [[0.2f32; 3]];
+        let ghost = [[0.9f32; 3]];
+        let frames: [&[[f32; 3]]; 3] = [&bg, &ghost, &bg];
+        let out = median_deghost(&frames).unwrap();
+        assert!(near(out[0][0], 0.2));
+        // The plain average would keep the ghost: (0.2 + 0.9 + 0.2) / 3 is about 0.433.
+        assert!(shutter_blend(&frames, 360.0).unwrap()[0][0] > 0.4);
+    }
+
+    #[test]
+    fn median_deghost_even_count_and_bad_input() {
+        let a = [[0.0f32; 3]];
+        let b = [[1.0f32; 3]];
+        assert!(near(median_deghost(&[&a[..], &b[..]]).unwrap()[0][1], 0.5));
+        assert!(median_deghost(&[]).is_none());
+        let two = [[0.5f32; 3], [0.5f32; 3]];
+        assert!(median_deghost(&[&a[..], &two[..]]).is_none());
     }
 }
