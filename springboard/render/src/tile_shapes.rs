@@ -38,6 +38,30 @@ pub fn triangle_tile(img: &Image, center: (f32, f32), angle: f32, width: f32) ->
     })
 }
 
+/// `CIParallelogramTile`: the plane is cut into parallelograms with one side `width` pixels long
+/// along the turned x axis and the other side at `acute` radians to it (reference default pi/3),
+/// all turned by `angle` about `center`. Each parallelogram shows the whole image, so the tiles
+/// repeat with no mirroring. A width that is not positive, or an `acute` angle with no sine, returns a copy.
+pub fn parallelogram_tile(img: &Image, center: (f32, f32), angle: f32, acute: f32, width: f32) -> Image {
+    let w = fin(width, 0.0);
+    let acute = fin(acute, std::f32::consts::FRAC_PI_3);
+    let (skew_s, skew_c) = acute.sin_cos();
+    if img.w == 0 || img.h == 0 || w <= 0.0 || skew_s.abs() < 1e-6 {
+        return img.clone();
+    }
+    let (sn, cs) = fin(angle, 0.0).sin_cos();
+    let (cx, cy) = (fin(center.0, 0.0), fin(center.1, 0.0));
+    warp(img, |x, y| {
+        let (dx, dy) = (x - cx, y - cy);
+        let (u, v) = (dx * cs + dy * sn, -dx * sn + dy * cs);
+        // Solve (u, v) = a * (w, 0) + b * (w cos acute, w sin acute) for the lattice coordinates a, b.
+        let b = v / (w * skew_s);
+        let a = (u - b * w * skew_c) / w;
+        let (fu, fv) = (a - a.floor(), b - b.floor());
+        to_pixel(img, fu, fv)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,6 +110,32 @@ mod tests {
                 assert!(near(o.px[y * 12 + x], o.px[y * 12 + x + 4]), "x {x} y {y}");
             }
         }
+    }
+
+    #[test]
+    fn a_flat_image_stays_flat_under_the_parallelogram_tile() {
+        let i = flat(9, 9, 0xff33_6699);
+        let o = parallelogram_tile(&i, (2.0, 3.0), 0.4, 1.0, 5.0);
+        assert!(o.px.iter().all(|&p| p == 0xff33_6699));
+    }
+
+    #[test]
+    fn a_parallelogram_repeats_along_its_side() {
+        // A right-angle skew with no turn: one side is the x axis, so a shift of one width repeats the cell.
+        let i = gradient(12, 12);
+        let o = parallelogram_tile(&i, (0.0, 0.0), 0.0, std::f32::consts::FRAC_PI_2, 4.0);
+        for y in 0..12 {
+            for x in 0..8 {
+                assert!(near(o.px[y * 12 + x], o.px[y * 12 + x + 4]), "x {x} y {y}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_degenerate_skew_or_width_returns_the_input() {
+        let i = gradient(6, 6);
+        assert_eq!(parallelogram_tile(&i, (0.0, 0.0), 0.0, 0.0, 4.0), i);
+        assert_eq!(parallelogram_tile(&i, (0.0, 0.0), 0.0, 1.0, -2.0), i);
     }
 
     #[test]
