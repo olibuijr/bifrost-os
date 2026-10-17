@@ -4131,11 +4131,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/accounts.json",
+   "bifrost": "springboard/ui/src/account_suggestions.rs, springboard/src/shell/forms.rs",
    "status": "partial",
    "note": "private framework, owner Accounts; from SDK matrix accounts.json Built 2026-10-17: the store registers the system account types, keeps credentials in the keychain and reports renewal due. Open: the Internet Accounts page does not list the store and the access-grant prompt is missing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "account_suggestions::tests"
+    }
+   ],
+   "ready_note": "The mail suggestion from the address's domain (built-in provider table or the imap./smtp. guess), shown at the user-name step of Add Account. Computed on the device only."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccountsDaemon.framework",

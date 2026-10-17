@@ -148,10 +148,15 @@ impl Prompt {
     /// Internet Accounts step 2: the user name. A mail account starts with its address.
     pub fn new_account_user(kind: Kind, address: &str) -> Prompt {
         let initial = if kind == Kind::Mail { address.to_string() } else { String::new() };
+        // a mail address gets the server suggestion from its domain, read on this device only
+        let message = match (kind, bifrost_ui::account_suggestions::for_address(address)) {
+            (Kind::Mail, Some(s)) => format!("Enter the user name for the account.\n{}", bifrost_ui::account_suggestions::describe(&s)),
+            _ => "Enter the user name for the account.".to_string(),
+        };
         Prompt {
             max: 128,
             initial,
-            ..Prompt::new(Purpose::NewAccountUser { kind, address: address.to_string() }, "Add Account", "Enter the user name for the account.", "User Name", "Next")
+            ..Prompt::new(Purpose::NewAccountUser { kind, address: address.to_string() }, "Add Account", &message, "User Name", "Next")
         }
     }
 
