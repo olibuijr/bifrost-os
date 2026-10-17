@@ -838,7 +838,7 @@ mod tests {
                 id: "MSG".into(),
                 actions: vec![
                     NotifAction::button("archive", "Archive"),
-                    NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: false, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "".into() }) },
+                    NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: false, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "".into() }), icon: String::new() },
                     NotifAction { destructive: true, ..NotifAction::button("delete", "Delete") },
                 ],
             }],

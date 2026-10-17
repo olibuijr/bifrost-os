@@ -38,11 +38,19 @@ pub struct NotifAction {
     pub foreground: bool,
     /// set for `UNTextInputNotificationAction`
     pub text_input: Option<TextInput>,
+    /// the name of an icon from the shell's icon set, drawn with the action; empty for none (`UNNotificationActionIcon`)
+    pub icon: String,
 }
 
 impl NotifAction {
     pub fn button(id: &str, title: &str) -> Self {
-        NotifAction { id: id.into(), title: title.into(), destructive: false, foreground: false, text_input: None }
+        NotifAction { id: id.into(), title: title.into(), destructive: false, foreground: false, text_input: None, icon: String::new() }
+    }
+
+    /// The same action with an icon (`UNNotificationActionIcon`).
+    pub fn with_icon(mut self, name: &str) -> Self {
+        self.icon = name.into();
+        self
     }
 }
 
@@ -377,6 +385,7 @@ fn put_categories(b: &mut Vec<u8>, list: &[NotifCategory]) {
         for a in &c.actions[..m] {
             put(b, &a.id, MAX_NOTIF_ID);
             put(b, &a.title, MAX_NOTIF_TEXT);
+            put(b, &a.icon, MAX_NOTIF_ID);
             b.push(a.destructive as u8 | (a.foreground as u8) << 1 | (a.text_input.is_some() as u8) << 2);
             if let Some(t) = &a.text_input {
                 put(b, &t.button_title, MAX_NOTIF_TEXT);
@@ -400,12 +409,13 @@ fn get_categories(r: &mut Reader) -> Result<Vec<NotifCategory>, DecodeError> {
         for _ in 0..m {
             let aid = get(r, MAX_NOTIF_ID)?;
             let title = get(r, MAX_NOTIF_TEXT)?;
+            let icon = get(r, MAX_NOTIF_ID)?;
             let f = r.u8()?;
             if f > 7 {
                 return Err(DecodeError::BadValue);
             }
             let text_input = if f & 4 != 0 { Some(TextInput { button_title: get(r, MAX_NOTIF_TEXT)?, placeholder: get(r, MAX_NOTIF_TEXT)? }) } else { None };
-            actions.push(NotifAction { id: aid, title, destructive: f & 1 != 0, foreground: f & 2 != 0, text_input });
+            actions.push(NotifAction { id: aid, title, destructive: f & 1 != 0, foreground: f & 2 != 0, text_input, icon });
         }
         out.push(NotifCategory { id, actions, options });
     }
@@ -904,7 +914,7 @@ mod tests {
             actions: vec![
                 NotifAction::button("open", "Open"),
                 NotifAction { destructive: true, ..NotifAction::button("delete", "Delete") },
-                NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: true, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "Message".into() }) },
+                NotifAction { id: "reply".into(), title: "Reply".into(), destructive: false, foreground: true, text_input: Some(TextInput { button_title: "Send".into(), placeholder: "Message".into() }), icon: "reply".into() },
             ],
         }
     }
@@ -979,6 +989,14 @@ mod tests {
         assert_eq!(bytes[13], 0);
         bytes[13] = 0x80;
         assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_action_icons_round_trip() {
+        let icons = NotifCategory { id: "i".into(), actions: vec![NotifAction::button("a", "A").with_icon("trash"), NotifAction::button("b", "B")], options: 0 };
+        shell_rt(ToShell::NotifyCategories(vec![icons.clone()]));
+        assert_eq!(icons.actions[0].icon, "trash");
+        assert!(icons.actions[1].icon.is_empty());
     }
 
     #[test]
