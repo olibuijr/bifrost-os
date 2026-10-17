@@ -1146,7 +1146,7 @@ mod tests {
         assert_eq!(text, "");
         // an action the category does not have, and an unknown notification, are refused
         assert!(r.respond(5, "launch-missiles", "").is_none());
-        assert!(r.respond(6, "archive", "").is_none());
+        assert!(r.respond(99, "archive", "").is_none());
         // default and dismiss exist on every notification
         let ToApp::NotificationAction { action, .. } = r.respond(5, NOTIF_DEFAULT_ACTION, "x").unwrap().1 else { panic!() };
         assert_eq!(action, NOTIF_DEFAULT_ACTION);
