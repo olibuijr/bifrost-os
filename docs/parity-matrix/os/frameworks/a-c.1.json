@@ -1427,7 +1427,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/http_cookies.rs, springboard/sdk/src/http_auth.rs, springboard/sdk/src/ftp.rs, springboard/sdk/src/dns_service.rs, springboard/sdk/src/host_addressing.rs, springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/http_message.rs, springboard/core/src/proxy.rs",
+   "bifrost": "springboard/sdk/src/http_cookies.rs, springboard/sdk/src/http_auth.rs, springboard/sdk/src/ftp.rs, springboard/sdk/src/dns_service.rs, springboard/sdk/src/host_addressing.rs, springboard/core/src/net_diagnostic.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/http_message.rs, springboard/core/src/proxy.rs",
    "status": "partial",
    "note": "System proxy model (proxy_settings.rs) and cookie storage (http_cookies.rs). Built 2026-10-17: Set-Cookie Expires is read in IMF-fixdate form when there is no Max-Age (tests http_cookies::tests). Still missing: cookie storage is not wired into URLSession, URL credentials, host lookup, Bonjour browse and register, network diagnostics, FTP and raw HTTP messages (SDK matrix cfnetwork.json). Built 2026-10-17: raw HTTP message model (http_message::tests). Still open: cookie storage is not wired into URLSession, host lookup, Bonjour and network diagnostics as listed in the data file.",
    "rea": [],
@@ -1461,7 +1461,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "net_diagnostic::tests"
     },
     {

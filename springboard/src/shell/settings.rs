@@ -12,7 +12,7 @@ use super::settings_load::Loaded;
 use super::settings_search::{self, Search};
 use super::night_shift::{NightEdit, NightShift};
 use super::notify_page::{self, NotifyChange, NotifyEdit, NotifyPrefs};
-use super::list::{Hit, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
+use super::list::{Group, Hit, Item, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
 use super::options::{Options, AUTO_LOCK, GAME_MODES, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::pages::{spec, Action, Command, Model, PageId, Pick, Slider, Toggle};
 use super::power_menu::PowerAction;
@@ -249,6 +249,8 @@ struct Loads {
     account_view: Loaded<super::account_page::View>,
     /// a sign-in or sign-out that finished on its worker thread; `poll_loads` acts on it once
     account_done: Loaded<super::account_page::Landed>,
+    /// Network > Diagnose: the last finished run of the connection probes
+    net_diag: Loaded<Option<bifrost_core::net_probe::Report>>,
 }
 
 impl Loads {
@@ -268,12 +270,13 @@ impl Loads {
         landed |= self.printers.poll();
         landed |= self.screentime.poll();
         landed |= self.account_view.poll();
+        landed |= self.net_diag.poll();
         landed
     }
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy()
     }
 }
 
@@ -353,6 +356,14 @@ pub struct Settings {
     night: NightShift,
     /// the Night Shift time being picked: true for From
     night_edge: Option<bool>,
+    /// the probes Network > Diagnose runs (the system's own; tests swap in a fake)
+    net_probe: std::sync::Arc<dyn bifrost_core::net_probe::Probe + Send + Sync>,
+    /// Privacy > Allow Apps From (see `launch_gate`)
+    allow_from: bifrost_core::launch_policy::Setting,
+    /// Battery > Schedule: the repeating wake and power-on times
+    wake: bifrost_core::wake_schedule::Schedule,
+    /// the Schedule entry whose time the time-of-day picker is editing
+    wake_edge: Option<usize>,
     alert: Option<Alert>,
     pressed: Option<Hit>,
     /// a thumbnail held on the Wallpaper page
@@ -575,6 +586,10 @@ impl Settings {
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
+            net_probe: std::sync::Arc::new(bifrost_core::net_probe::SystemProbe::default()),
+            allow_from: prefs.get(super::launch_gate::SETTING_PREF).and_then(bifrost_core::launch_policy::Setting::parse).unwrap_or(bifrost_core::launch_policy::Setting::StoreAndIdentified),
+            wake: super::wake_page::load(prefs),
+            wake_edge: None,
             alert: None,
             pw_pending: None,
             pw_revealed: None,
@@ -684,6 +699,37 @@ impl Settings {
             PageId::Notifications => notify_page::spec(&self.notify),
             PageId::NotificationApp => notify_page::app_spec(&self.notify, &self.detail),
             PageId::NightShift => self.night.spec(self.opts.clock_24h),
+            PageId::Network => {
+                let mut s = spec(id, &self.model());
+                let (host, _) = super::net_diagnose_page::target_of(self.updater.url());
+                s.groups.extend(super::net_diagnose_page::groups(self.loads.net_diag.busy(), self.loads.net_diag.get().and_then(|r| r.as_ref()), &host));
+                s
+            }
+            PageId::Privacy => {
+                let mut s = spec(id, &self.model());
+                let blocked = super::launch_gate::read_blocked(&self.data_dir);
+                let mut extra = super::launch_gate::groups(self.allow_from, blocked.as_ref());
+                // the blocked program comes first, the setting after the page's own rows
+                if blocked.is_some() {
+                    s.groups.insert(0, extra.remove(0));
+                }
+                s.groups.extend(extra);
+                s
+            }
+            PageId::WakeSchedule => {
+                let (unix, off) = crate::bare::sys::wall_time();
+                super::wake_page::spec(&self.wake, self.opts.clock_24h, unix, i64::from(off))
+            }
+            PageId::Battery => {
+                // the Schedule row sits under Energy
+                let mut s = spec(id, &self.model());
+                let row = Item::new("Schedule").value(super::wake_page::summary(&self.wake)).link(PageId::WakeSchedule);
+                match s.groups.iter().position(|g| g.items.iter().any(|it| it.label == "Energy")) {
+                    Some(k) => s.groups[k].items.push(row),
+                    None => s.groups.push(Group::new(vec![row])),
+                }
+                s
+            }
             PageId::Focus => {
                 let mut s = spec(id, &self.model());
                 let prefs = NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() };
@@ -1195,6 +1241,39 @@ impl Settings {
         }
     }
 
+    /// A Battery > Schedule row was tapped: Time opens the picker, the others edit the schedule at once.
+    fn wake_edit(&mut self, ui: &Ui, prefs: &mut Prefs, edit: super::wake_page::WakeEdit) -> Vec<Effect> {
+        use super::wake_page::{self, WakeEdit};
+        if let WakeEdit::Time(i) = edit {
+            if wake_page::apply(&mut self.wake, edit) {
+                self.wake_edge = Some(i);
+                self.time_picker = Some(TimePicker::of_day(ui, self.w, self.h, wake_page::minute_of(&self.wake, i), "Time"));
+            }
+            return vec![];
+        }
+        if !wake_page::apply(&mut self.wake, edit) {
+            return vec![];
+        }
+        self.wake_changed(ui, prefs)
+    }
+
+    /// The time picker chose `minute` for Schedule entry `index`.
+    fn wake_set_minute(&mut self, ui: &Ui, prefs: &mut Prefs, index: usize, minute: u16) -> Vec<Effect> {
+        if super::wake_page::set_minute(&mut self.wake, index, minute) {
+            self.wake_changed(ui, prefs)
+        } else {
+            vec![]
+        }
+    }
+
+    /// Keeps the schedule, redraws the page and asks the shell binary to arm the clock for the next moment.
+    fn wake_changed(&mut self, ui: &Ui, prefs: &mut Prefs) -> Vec<Effect> {
+        super::wake_page::save(&self.wake, prefs);
+        self.rebuild(ui);
+        let (unix, off) = crate::bare::sys::wall_time();
+        vec![Effect::WakeSchedule(super::wake_page::next_at(&self.wake, unix, i64::from(off)))]
+    }
+
     /// The Screen Time pages from the day files and the config on disk.
     fn st_spec(&self, id: PageId) -> super::list::Spec {
         let (cfg, days) = &self.loads.screentime.value;
@@ -1422,7 +1501,7 @@ impl Settings {
         self.stack.truncate(usize::from(self.side_w == 0));
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
-                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
+                HomeScreen, Battery, WakeSchedule, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
                 BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, DwellControl, SlowKeys, AccessibilityShortcut, ScreenReaderSpeech]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
@@ -1650,6 +1729,7 @@ impl Settings {
             (ev, x, y)
         };
         if let Some(picker) = &mut self.time_picker {
+            let mut wake_fx = Vec::new();
             match picker.touch(ui, ev, t, |u| crate::bare::timezone::offset_at(u).unwrap_or(0)) {
                 TimeEvent::None => {}
                 TimeEvent::Cancel => {
@@ -1657,9 +1737,13 @@ impl Settings {
                     self.notify_edge = None;
                     self.st_edge = None;
                     self.night_edge = None;
+                    self.wake_edge = None;
                 }
                 TimeEvent::SetMinute(m) => {
                     self.time_picker = None;
+                    if let Some(index) = self.wake_edge.take() {
+                        wake_fx = self.wake_set_minute(ui, prefs, index, m);
+                    }
                     if let Some(from) = self.st_edge.take() {
                         self.st_set_edge(ui, from, m);
                     }
@@ -1678,7 +1762,7 @@ impl Settings {
                 }
                 TimeEvent::Set(unix) => self.apply_time(ui, unix),
             }
-            return vec![];
+            return wake_fx;
         }
         if let Some(picker) = &mut self.zone_picker {
             match picker.touch(ui, ev, t) {
@@ -2617,6 +2701,12 @@ impl Settings {
                         self.set_parent_value(ui, "Energy", label);
                         vec![Effect::SystemSleepAfter(self.opts.system_sleep_min)]
                     }
+                    Pick::AllowAppsFrom(k) => {
+                        let (_, setting) = super::launch_gate::SETTINGS[k.min(super::launch_gate::SETTINGS.len() - 1)];
+                        self.allow_from = setting;
+                        let _ = prefs.set(super::launch_gate::SETTING_PREF, setting.label());
+                        vec![]
+                    }
                     Pick::GameMode(k) => {
                         self.opts.game_mode = GAME_MODES[k.min(GAME_MODES.len() - 1)].1;
                         self.opts.save(prefs);
@@ -2903,6 +2993,23 @@ impl Settings {
             }
             Action::Notify(edit) => {
                 self.notify_edit(ui, edit, g, i, t);
+                vec![]
+            }
+            Action::Wake(edit) => self.wake_edit(ui, prefs, edit),
+            Action::OpenAnyway => {
+                // the blocked program is remembered for this code; the page drops the block and says to open it again
+                super::launch_gate::open_anyway(&self.data_dir, prefs);
+                self.rebuild(ui);
+                vec![]
+            }
+            Action::NetDiagnose => {
+                if !self.loads.net_diag.busy() {
+                    let (host, port) = super::net_diagnose_page::target_of(self.updater.url());
+                    let probe = self.net_probe.clone();
+                    // the resolve and connect have time limits, but they still run off the UI thread
+                    self.loads.net_diag.start("net-diagnose", move || Some(bifrost_core::net_probe::run(&*probe, &bifrost_core::net_probe::Target::new(&host, port))));
+                    self.rebuild_visible(ui);
+                }
                 vec![]
             }
             Action::Night(edit) => {
@@ -4254,6 +4361,107 @@ mod tests {
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
+    }
+
+    #[test]
+    fn privacy_offers_open_anyway_for_a_blocked_program_and_the_allow_setting() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        let dir = std::env::temp_dir().join(format!("settings-launch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let prog = dir.join("tool");
+        std::fs::write(&prog, "#!/bin/sh\n").unwrap();
+        st.set_data_dir(&dir);
+        tap_row(&mut st, &ui, &mut prefs, "Privacy");
+        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "nothing waits");
+        assert!(st.row_centre(&ui, "Anywhere").is_some());
+        back(&mut st, &ui, &mut prefs);
+        super::super::launch_gate::write_blocked(&dir, &prog, "\"tool\" cannot be opened because its developer cannot be identified.");
+        tap_row(&mut st, &ui, &mut prefs, "Privacy");
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Open Anyway"), vec![]);
+        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "the block is lifted");
+        let remembered = std::fs::read_to_string(dir.join("launch_overrides.txt")).unwrap();
+        assert!(remembered.starts_with(&format!("{}\t", prog.display())), "{remembered:?}");
+        // the setting persists and the check follows the tap
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Anywhere"), vec![]);
+        assert_eq!(prefs.get("allow_apps_from"), Some("anywhere"));
+        assert_eq!(super::super::launch_gate::load_policy(&prefs, &dir).setting(), bifrost_core::launch_policy::Setting::Anywhere);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Probes that answer from a table instead of the network.
+    struct FakeProbe {
+        resolves: bool,
+    }
+
+    impl bifrost_core::net_probe::Probe for FakeProbe {
+        fn link_states(&self) -> Vec<(String, String)> {
+            vec![("lo".into(), "unknown".into()), ("wlan0".into(), "up".into())]
+        }
+        fn global_addresses(&self) -> String {
+            "3: wlan0    inet 192.168.1.20/24 brd 192.168.1.255 scope global dynamic wlan0\n".into()
+        }
+        fn resolve(&self, _host: &str, port: u16) -> Vec<std::net::SocketAddr> {
+            if self.resolves { vec![std::net::SocketAddr::from(([192, 168, 1, 1], port))] } else { Vec::new() }
+        }
+        fn connect(&self, _addr: std::net::SocketAddr) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn network_diagnose_runs_the_probe_off_the_draw_thread_and_shows_the_diagnosis() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        st.net_probe = std::sync::Arc::new(FakeProbe { resolves: false });
+        tap_row(&mut st, &ui, &mut prefs, "Network");
+        assert_eq!(st.page(), PageId::Network);
+        assert!(st.row_centre(&ui, "Diagnose").is_some());
+        assert!(st.row_centre(&ui, "Name Lookup").is_none(), "no result before a run");
+        // tap without settling: the run is on its worker, the page says so
+        let (x, y) = st.row_centre(&ui, "Diagnose").unwrap();
+        assert_eq!(tap(&mut st, &ui, &mut prefs, x, y), vec![]);
+        assert!(st.loads.net_diag.busy() || st.loads.net_diag.get().is_some());
+        settle(&mut st, &ui);
+        let report = st.loads.net_diag.get().and_then(|r| r.as_ref()).expect("the run landed");
+        assert_eq!(report.diagnosis.stage, bifrost_core::net_diagnostic::Stage::Name);
+        // the steps and the diagnosis are on the page
+        assert!(st.row_centre(&ui, "Name Lookup").is_some());
+        assert!(st.row_centre(&ui, "Connection").is_some());
+        assert!(st.row_centre(&ui, report.diagnosis.title).is_some());
+    }
+
+    #[test]
+    fn battery_schedule_adds_and_edits_times_and_arms_the_wake() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        tap_row(&mut st, &ui, &mut prefs, "Battery");
+        tap_row(&mut st, &ui, &mut prefs, "Schedule");
+        assert_eq!(st.page(), PageId::WakeSchedule);
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Add Time");
+        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
+        assert_eq!(prefs.get("wake_schedule"), Some("31,420,wake,1"));
+        tap_row(&mut st, &ui, &mut prefs, "Repeat");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,420,wake,1"));
+        tap_row(&mut st, &ui, &mut prefs, "Action");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,420,poweron,1"));
+        // the time row opens the time-of-day picker; its answer moves the entry and arms the clock again
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Time"), vec![]);
+        assert!(st.time_picker.is_some());
+        let fx = st.wake_set_minute(&ui, &mut prefs, 0, 8 * 60);
+        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
+        assert_eq!(prefs.get("wake_schedule"), Some("96,480,poweron,1"));
+        st.time_picker = None;
+        // a fresh Settings reads it back and the Battery page shows it
+        let reloaded = Settings::new(&ui, &info(), &prefs, 1200, 1920, Rc::new(vec![]));
+        assert_eq!(super::super::wake_page::summary(&reloaded.wake), "1 time");
+        // off disarms (0), and Remove deletes the entry
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Enabled");
+        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
+        let fx = tap_row(&mut st, &ui, &mut prefs, "Remove");
+        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
+        assert_eq!(prefs.get("wake_schedule"), Some(""));
     }
 
     #[test]

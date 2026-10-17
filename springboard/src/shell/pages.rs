@@ -77,6 +77,8 @@ pub enum PageId {
     /// Lock Screen > Require Password: the grace after the display goes off (see `options::REQUIRE_AFTER`)
     RequirePassword,
     Energy,
+    /// Battery > Schedule: the repeating wake and power-on times (see `wake_page`)
+    WakeSchedule,
     HomeScreen,
     Battery,
     ControlCentre,
@@ -271,6 +273,8 @@ pub enum Toggle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Privacy > Allow Apps From: the index into `launch_gate::SETTINGS`
+    AllowAppsFrom(usize),
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
     /// Settings > Spotlight > Privacy: stop excluding the folder at this index
@@ -445,6 +449,12 @@ pub enum Action {
     /// a notification setting: DND schedule rows or a per-app mute
     Notify(super::notify_page::NotifyEdit),
     Night(super::night_shift::NightEdit),
+    /// a Battery > Schedule row (see `wake_page::WakeEdit`)
+    Wake(super::wake_page::WakeEdit),
+    /// Network > Diagnose: run the connection probes on a worker thread (see `net_diagnose_page`)
+    NetDiagnose,
+    /// Privacy > Security: let the program that was blocked open (see `launch_gate`)
+    OpenAnyway,
     /// a Screen Time row: range, limits, Downtime, allowed apps, its passcode
     ScreenTime(super::screentime::page::StEdit),
     /// opens the "Other Network" sheet
@@ -1533,7 +1543,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `storage_page::spec`, which also knows the live state
         PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
-        PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
+        PageId::Notifications | PageId::NotificationApp | PageId::NightShift | PageId::WakeSchedule => page("Notifications", false, vec![]),
         PageId::Spotlight => {
             use super::spotlight_scope::Category;
             let scope = &o.spotlight;

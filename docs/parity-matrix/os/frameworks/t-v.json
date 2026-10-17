@@ -1322,11 +1322,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/core/src/spellcheck.rs",
+   "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/ui/src/proofread_panel.rs, springboard/core/src/spellcheck.rs, springboard/apps/notes-desktop/src/notes/mod.rs, springboard/apps/mail-desktop/src/state.rs, springboard/apps/mail-desktop/src/window.rs, springboard/apps/mail-desktop/src/draw.rs",
    "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no app opens the writing assistant on a text view yet.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "proofread_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-notes",
+     "filter": "notes::tests::proofread_lists_the_suggestions_and_accepting_edits_the_note"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "state::tests::proofreading_marks_the_slips_and_accepting_edits_the_message_in_its_style"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "window::tests::the_writing_menu_offers_proofread_while_writing_and_the_answers_while_suggestions_wait"
+    }
+   ],
+   "ready_note": "proofread_panel.rs opens a writing_assist Session over proofread findings and answers Accept, Skip and Accept All (suggestions move with each change). Notes: Proofread in the editor menu lists the suggestions of the selection or the note in the menu (Remove, Add, Change rows and Accept All); a row edits the note through its own editor so Undo works. Mail compose: Writing > Proofread, Accept Suggestion, Skip Suggestion and Accept All Suggestions; the suggestions are underlined in blue (thicker for the one in view), the status line says what it changes, and an edit of the message drops them. Host tests only; not verified on Midget. There is no right-click text context menu in the SDK text view or in these apps yet, so Proofread is in the apps' own menus; the English rules run on text without Icelandic letters (Mail) or text the language recogniser reads as English (Notes)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextComposerRuntime.framework",

@@ -18,6 +18,8 @@ use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Se
 use bifrost_app::controls::contact_book::Contact;
 use bifrost_app::controls::found_in::{self, Action, Dismissed, Found, Pager};
 use bifrost_app::controls::recipient_autocomplete::{Key as RecipientKey, RecipientField, Suggestion};
+use bifrost_app::controls::proofread::Options as ProofreadOptions;
+use bifrost_app::controls::proofread_panel::{self, Panel};
 use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -244,6 +246,8 @@ pub struct Compose {
     /// The misspelled words the last spelling check found, as ranges of characters of the message, and the one in view.
     pub misspelled: Vec<Range<usize>>,
     pub misspelled_at: usize,
+    /// Writing > Proofread: the suggestions of the writing assistant for the message, while they are being gone through.
+    pub proofread: Option<Panel>,
     /// The Message-ID of this message's draft in Drafts; empty until the first save.
     pub draft_id: String,
 }
@@ -262,6 +266,7 @@ impl Compose {
             typing: Style::default(),
             misspelled: Vec::new(),
             misspelled_at: 0,
+            proofread: None,
             draft_id: String::new(),
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
@@ -293,10 +298,19 @@ impl Compose {
             self.styles.truncate(after);
         }
         self.misspelled.clear();
+        self.proofread = None;
     }
 
-    /// Replaces the characters `start..end` of the message with `with`, in `style`. The styles of the rest stay.
+    /// Replaces the characters `start..end` of the message with `with`, in `style`. The styles of the rest stay. The
+    /// spelling marks and the proofreading suggestions no longer fit the text and are dropped.
     fn splice_message(&mut self, start: usize, end: usize, with: &str, style: Style) {
+        self.splice_raw(start, end, with, style);
+        self.misspelled.clear();
+        self.proofread = None;
+    }
+
+    /// `splice_message` without dropping the marks, for edits the caller keeps the marks in step with.
+    fn splice_raw(&mut self, start: usize, end: usize, with: &str, style: Style) {
         let chars: Vec<char> = self.message().chars().collect();
         let start = start.min(chars.len());
         let end = end.clamp(start, chars.len());
@@ -309,7 +323,6 @@ impl Compose {
         self.styles.resize(chars.len(), Style::default());
         let added = vec![style; with.chars().count()];
         drop(self.styles.splice(start..end, added));
-        self.misspelled.clear();
     }
 
     /// Format > Bold, Italic and Underline: turn the style of the text typed next on or off.
@@ -392,6 +405,61 @@ impl Compose {
         let style = self.styles.get(range.start).copied().unwrap_or_default();
         self.splice_message(range.start, range.end, word, style);
         true
+    }
+
+    /// Writing > Proofread: the writing assistant reads the whole message and keeps what it would change. Returns how many
+    /// suggestions there are (0 when the message reads fine or is empty).
+    pub fn start_proofread(&mut self) -> usize {
+        let text = self.message().to_string();
+        let options = ProofreadOptions { english: proofread_panel::english_by_letters(&text) };
+        self.proofread = Panel::open(&text, 0..0, options).ok().filter(|panel| !panel.is_empty());
+        self.proofread.as_ref().map_or(0, Panel::len)
+    }
+
+    /// The suggestions as ranges of characters of the message, and the index of the one in view.
+    pub fn proofread_marks(&self) -> (Vec<Range<usize>>, usize) {
+        let Some(panel) = &self.proofread else { return (Vec::new(), 0) };
+        let text = self.message();
+        let chars = |bytes: usize| text.get(..bytes).map_or(0, |head| head.chars().count());
+        (panel.suggestions().iter().map(|s| chars(s.range.start)..chars(s.range.end)).collect(), panel.at())
+    }
+
+    /// The line for the status bar: which suggestion is in view and what it would change.
+    pub fn proofread_line(&self) -> Option<String> {
+        let panel = self.proofread.as_ref()?;
+        let what = panel.describe(self.message(), panel.at())?;
+        Some(format!("Suggestion {} of {}. {what}", panel.at() + 1, panel.len()))
+    }
+
+    /// Writing > Accept Suggestion (or Accept All Suggestions): the change is made in the message, keeping the style of
+    /// the text it replaces, and the suggestions that are left move with it. Returns how many changes were made.
+    pub fn accept_suggestion(&mut self, all: bool) -> usize {
+        let Some(mut panel) = self.proofread.take() else { return 0 };
+        let mut text = self.message().to_string();
+        let steps = if all { panel.accept_all(&text) } else { panel.accept(&text).map(|(step, _)| vec![step]) };
+        let Ok(steps) = steps else { return 0 };
+        let made = steps.len();
+        for step in steps {
+            let (start, end) = (text[..step.range.start].chars().count(), text[..step.range.end].chars().count());
+            let style = self.styles.get(start).copied().unwrap_or_default();
+            self.splice_raw(start, end, &step.replacement, style);
+            text = self.message().to_string();
+        }
+        self.misspelled.clear();
+        if !panel.is_empty() {
+            self.proofread = Some(panel);
+        }
+        made
+    }
+
+    /// Writing > Skip Suggestion: the one in view is left as it is and the next comes into view.
+    pub fn skip_suggestion(&mut self) {
+        if let Some(panel) = self.proofread.as_mut() {
+            let _ = panel.skip();
+            if panel.is_empty() {
+                self.proofread = None;
+            }
+        }
     }
 
     /// Adds a file to send with the message. Refused past [`MAX_ATTACHMENTS`] files or [`MAX_ATTACHMENT_BYTES`] bytes.
@@ -3049,6 +3117,35 @@ mod tests {
         compose.set_misspelled(vec![16..19]);
         compose.edit(|form| form.type_text("!"));
         assert!(compose.misspelled.is_empty(), "typing clears the marks");
+    }
+
+    #[test]
+    fn proofreading_marks_the_slips_and_accepting_edits_the_message_in_its_style() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("Say it it again, red,green"));
+        assert_eq!(compose.start_proofread(), 2);
+        let (marks, at) = compose.proofread_marks();
+        assert_eq!((marks.len(), at), (2, 0));
+        assert!(compose.proofread_line().unwrap().starts_with("Suggestion 1 of 2."), "{:?}", compose.proofread_line());
+        assert_eq!(compose.accept_suggestion(false), 1);
+        assert_eq!(compose.message(), "Say it again, red,green");
+        assert_eq!(compose.styles.len(), compose.message().chars().count());
+        assert!(compose.styles.iter().all(|s| s.bold));
+        assert_eq!(compose.proofread.as_ref().map(Panel::len), Some(1), "the other suggestion moved with the edit");
+        compose.skip_suggestion();
+        assert!(compose.proofread.is_none() && compose.proofread_line().is_none());
+        // all at once, and typing drops the suggestions
+        let mut again = message_compose("the the  cat red,green");
+        assert_eq!(again.start_proofread(), 3);
+        assert_eq!(again.accept_suggestion(true), 3);
+        assert_eq!(again.message(), "the cat red, green");
+        assert!(again.proofread.is_none());
+        let mut typed = message_compose("so so");
+        assert_eq!(typed.start_proofread(), 1);
+        typed.edit(|form| form.type_text("!"));
+        assert!(typed.proofread.is_none(), "the suggestions no longer fit the text");
+        assert_eq!(message_compose("").start_proofread(), 0);
     }
 
     #[test]

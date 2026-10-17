@@ -90,6 +90,11 @@ fn checker(words: &str, lang: &str) -> SpellChecker {
     SpellChecker::new(Box::new(WordList::new(lang, list)))
 }
 
+/// True when the English proofreading rules apply: the note reads as English, or has too few letters to tell.
+pub fn note_is_english(text: &str) -> bool {
+    matches!(note_language(text), Some(Language::English) | None)
+}
+
 /// The ranges Check Spelling and Links flags, in order: the misspelled words of the note, plus its links, dates,
 /// street addresses, flight numbers and phone numbers. A misspelling inside a detected item (the "www" of a link) is dropped, so each piece of text is
 /// flagged once. Spelling uses the word list of the note's language: English and Icelandic have one; a note in any

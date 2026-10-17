@@ -295,6 +295,14 @@ enum Act {
     ToggleWholeWord,
     /// Check Spelling and Links in the open note
     CheckSpelling,
+    /// Proofread the selection, or the whole note: the menu lists the suggestions
+    Proofread,
+    /// accept suggestion n of the proofreading menu
+    ProofreadAccept(usize),
+    /// accept every suggestion left
+    ProofreadAll,
+    /// close the proofreading menu
+    ProofreadDone,
     /// Find > Replace: opens the replace card for the find text
     Replace,
     /// Sort > Newest First (`false`) or Oldest First (`true`)
@@ -466,6 +474,8 @@ pub struct Notes {
     hl: Vec<Range<usize>>,
     hl_cur: usize,
     hl_query: String,
+    /// Proofread: the suggestions left, while the person goes through them (see `bifrost_ui::proofread_panel`)
+    proofread: Option<bifrost_app::controls::proofread_panel::Panel>,
     /// Find > Match Whole Word: a search hit must not touch a letter or digit.
     whole_word: bool,
     rows: Vec<Row>,
@@ -585,6 +595,7 @@ impl Notes {
             hl: vec![],
             hl_cur: 0,
             hl_query: String::new(),
+            proofread: None,
             whole_word: false,
             dir,
             wall,
@@ -1329,6 +1340,64 @@ impl Notes {
         self.dirty = true;
     }
 
+    /// Proofread (editor menu): the writing assistant reads the selection, or the whole note, and the menu lists what it
+    /// would change. Nothing changes until a row is chosen.
+    fn proofread_note(&mut self, ui: &Ui) {
+        use bifrost_app::controls::{proofread::Options, proofread_panel::Panel};
+        if !self.is_editing() {
+            return;
+        }
+        let text = self.editor.text().to_string();
+        let byte_of = |n: usize| text.char_indices().nth(n).map_or(text.len(), |(i, _)| i);
+        let selection = self.editor.selection().map_or(0..0, |r| byte_of(r.start)..byte_of(r.end));
+        match Panel::open(&text, selection, Options { english: parity::note_is_english(&text) }) {
+            Ok(panel) => {
+                self.proofread = Some(panel);
+                self.show_proofread(ui);
+            }
+            Err(e) => eprintln!("notes: proofread: {e:?}"),
+        }
+    }
+
+    /// The proofreading menu: one row per suggestion, Accept All when there are several.
+    fn show_proofread(&mut self, ui: &Ui) {
+        let items = {
+            let Some(panel) = &self.proofread else { return };
+            let text = self.editor.text();
+            let mut items: Vec<(String, Act, bool)> = (0..panel.len()).filter_map(|i| panel.brief(text, i).map(|label| (label, Act::ProofreadAccept(i), false))).collect();
+            if items.is_empty() {
+                items.push(("No Suggestions".to_string(), Act::ProofreadDone, false));
+            } else if items.len() > 1 {
+                items.push(("Accept All".to_string(), Act::ProofreadAll, false));
+            }
+            items
+        };
+        let (mx, my, _, mh) = self.editor_more_rect(ui);
+        self.show_menu(ui, items, mx, my + mh + ui.pt(SPACE_XS));
+    }
+
+    /// Accepts suggestion `index` of the proofreading menu, or every one left (`None`), in the note's own editor so Undo
+    /// works. The menu comes back with what is left.
+    fn proofread_accept(&mut self, ui: &Ui, index: Option<usize>, t: f64) {
+        let Some(mut panel) = self.proofread.take() else { return };
+        let mut text = self.editor.text().to_string();
+        let steps = match index {
+            Some(i) => panel.accept_at(&text, i).map(|(step, _)| vec![step]),
+            None => panel.accept_all(&text),
+        };
+        let Ok(steps) = steps else { return };
+        for step in steps {
+            let chars = text[..step.range.start].chars().count()..text[..step.range.end].chars().count();
+            self.editor.replace_range(ui, chars, &step.replacement, t, false);
+            text = self.editor.text().to_string();
+        }
+        self.changed(ui, t);
+        if !panel.is_empty() {
+            self.proofread = Some(panel);
+            self.show_proofread(ui);
+        }
+    }
+
     /// Scrolls the current match into view.
     fn scroll_to_match(&mut self, ui: &Ui) {
         if let Some(r) = self.hl.get(self.hl_cur).cloned() {
@@ -2026,6 +2095,7 @@ impl Notes {
             ("Insert Sketch".to_string(), Act::InsertSketch, false),
             ("Insert Table".to_string(), Act::InsertTable, false),
             ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
+            ("Proofread".to_string(), Act::Proofread, false),
             ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
             ("Replace in Note".to_string(), Act::Replace, false),
         ];
@@ -2393,6 +2463,10 @@ impl Notes {
                 self.dirty = true;
             }
             Act::CheckSpelling => self.check_note(ui),
+            Act::Proofread => self.proofread_note(ui),
+            Act::ProofreadAccept(i) => self.proofread_accept(ui, Some(i), t),
+            Act::ProofreadAll => self.proofread_accept(ui, None, t),
+            Act::ProofreadDone => self.proofread = None,
             Act::Replace => self.start_replacing(ui, t),
             Act::SortOrder(oldest) => {
                 self.prefs.oldest_first = oldest;
@@ -4803,6 +4877,35 @@ mod tests {
         assert!(flagged.iter().any(|s| s == "https://example.com"), "{flagged:?}");
         assert!(flagged.iter().any(|s| s == "2026-10-09"), "{flagged:?}");
         assert!(n.match_state().0 == 1, "the first flagged item is selected");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn proofread_lists_the_suggestions_and_accepting_edits_the_note() {
+        let ui = ui();
+        let dir = scratch("proofread");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Say it it again, red,green");
+        n.open_editor_menu(&ui);
+        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, ..)| l == "Proofread"));
+        n.menu = None;
+        let rows = |n: &Notes| n.menu.as_ref().unwrap().items.iter().map(|(l, ..)| l.clone()).collect::<Vec<_>>();
+        n.run(&ui, Act::Proofread, 100.0);
+        assert_eq!(rows(&n), ["Remove \"it\"", "Add a space", "Accept All"]);
+        n.run(&ui, Act::ProofreadAccept(0), 200.0);
+        assert_eq!(n.editor.text(), "Say it again, red,green");
+        assert_eq!(rows(&n), ["Add a space"], "the menu comes back with what is left");
+        n.run(&ui, Act::ProofreadAccept(0), 300.0);
+        assert_eq!(n.editor.text(), "Say it again, red, green");
+        assert!(n.proofread.is_none());
+        assert_eq!(n.notes[0].text, "Say it again, red, green", "the note itself changed");
+        // Accept All applies the rest in one go
+        n.menu = None;
+        let all = n.editor.text().chars().count();
+        n.editor.replace_range(&ui, 0..all, "the the  cat", 400.0, false);
+        n.run(&ui, Act::Proofread, 500.0);
+        n.run(&ui, Act::ProofreadAll, 600.0);
+        assert_eq!(n.editor.text(), "the cat");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

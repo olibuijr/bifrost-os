@@ -67,6 +67,8 @@ pub enum Request {
     OpenBook(PathBuf),
     /// mark up this picture in the shell's Markup editor (Preview)
     Markup(PathBuf),
+    /// open this program (an executable or AppImage-like file); the shell assesses a downloaded one first
+    Launch(Entry),
 }
 
 /// What a preview job found.
@@ -957,6 +959,9 @@ impl Files {
                     }
                     if self.handoff && entry.kind == Kind::Audio {
                         return vec![Request::PlayAudio(entry)];
+                    }
+                    if self.handoff && crate::shell::launch_gate::is_program(&entry.path) {
+                        return vec![Request::Launch(entry)];
                     }
                     self.open_preview(ui, &entry, t);
                 }

@@ -437,8 +437,8 @@ pub mod host_addressing;
 pub mod ftp;
 pub mod smb;
 pub mod dns_service;
-pub mod net_diagnostic;
-pub mod net_probe;
+// the connection diagnosis lives in bifrost-core so the shell (which the SDK depends on) can run it too
+pub use bifrost_core::{net_diagnostic, net_probe};
 pub mod stream;
 pub mod websocket;
 pub mod url_cache;
