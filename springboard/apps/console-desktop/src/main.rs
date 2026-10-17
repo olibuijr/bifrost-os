@@ -21,6 +21,7 @@ mod security;
 mod services;
 mod signposts;
 mod source;
+mod spin;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]
@@ -483,7 +484,10 @@ fn menus(c: &Console, can_reveal: bool, can_trash: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_SUBSYSTEM, "Show Only This Subsystem").enabled(c.selected_entry().is_some_and(|e| !e.subsystem.is_empty())),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_COPY, "Copy Message").enabled(c.selected_entry().is_some()),
-        AppMenuItem::new(MENU_SAVE_MESSAGES, "Save Messages...").enabled(!c.visible.is_empty()),
+        AppMenuItem::new(MENU_MARK, if c.selected_marked() { "Unmark Message" } else { "Mark Message" }).enabled(c.selected.is_some()),
+        AppMenuItem::new(MENU_CLEAR_MARKS, "Clear Marks").enabled(!c.marked.is_empty()),
+        AppMenuItem::new(MENU_SAVE_MESSAGES, if c.marked.is_empty() { "Save Messages..." } else { "Save Marked Messages..." })
+            .enabled(!c.visible.is_empty()),
     ];
     vec![
         AppMenu { title: "File".into(), items: file },

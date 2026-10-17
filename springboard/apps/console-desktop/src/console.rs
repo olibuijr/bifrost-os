@@ -7,6 +7,7 @@ use crate::cursor;
 use crate::draw;
 use crate::find;
 use crate::kernel::{self, KernelReports};
+use crate::spin::{self, SpinReports};
 use crate::opened::OpenedLog;
 use crate::rows::{Extra, Rows};
 use crate::export;
@@ -63,6 +64,7 @@ const ROW_SECURITY: u32 = 4;
 const ROW_HANG: u32 = 5;
 const ROW_DAILY: u32 = 6;
 const ROW_KERNEL: u32 = 7;
+const ROW_SPIN: u32 = 8;
 const FILE_ROW: u32 = 100;
 const SAVED_ROW: u32 = 200;
 const OPENED_ROW: u32 = 300;
@@ -89,6 +91,7 @@ pub enum View {
     Signposts,
     Security,
     Kernel,
+    Spins,
     File(usize),
     /// An opened file or a captured archive: indexes `Console::opened`.
     Opened(usize),
@@ -138,6 +141,8 @@ pub struct Console {
     follow: Option<Follow>,
     pending: Arc<Mutex<Vec<LogEntry>>>,
     pub selected: Option<u64>,
+    /// Messages marked with Log > Mark Message, by sequence. When any are marked, Save Messages writes them.
+    pub marked: std::collections::BTreeSet<u64>,
     /// The selected entry's extra detail text (`coredumpctl info` for a crash), with the sequence it belongs to.
     pub detail: Option<(u64, String)>,
     /// The selected entry's position in the log's sequence, as text (`Position::encode`).
@@ -193,6 +198,7 @@ impl Console {
             follow: None,
             pending: Arc::new(Mutex::new(Vec::new())),
             selected: None,
+            marked: std::collections::BTreeSet::new(),
             detail: None,
             position: None,
             after: None,
@@ -236,6 +242,7 @@ impl Console {
             View::Signposts => Box::new(Journal),
             View::Security => Box::new(Security),
             View::Kernel => Box::new(KernelReports::default()),
+            View::Spins => Box::new(SpinReports::default()),
             View::File(i) => Box::new(LogFile { path: self.files.get(i).cloned().unwrap_or_default() }),
             View::Opened(i) => Box::new(Loaded { entries: self.opened.get(i).map(|o| o.entries.clone()).unwrap_or_default() }),
         };
@@ -265,6 +272,7 @@ impl Console {
             View::Hangs => self.status = diagnostics::HANG_NOTE.to_string(),
             View::Daily => self.status = diagnostics::DAILY_NOTE.to_string(),
             View::Kernel if self.status.is_empty() => self.status = kernel::NOTE.to_string(),
+            View::Spins if self.status.is_empty() => self.status = spin::NOTE.to_string(),
             _ => {}
         }
         self.rebuild();
@@ -409,6 +417,7 @@ impl Console {
         items.push(SidebarItem::row(ROW_DAILY, "Daily Summary").with_symbol("calendar"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
         items.push(SidebarItem::row(ROW_KERNEL, "Kernel Reports").with_symbol("flag"));
+        items.push(SidebarItem::row(ROW_SPIN, "Spin Reports").with_symbol("arrow.triangle.2.circlepath"));
         items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
         // the section appears once a search is saved, so the default sidebar is unchanged
         if !self.saved.is_empty() {
@@ -437,6 +446,7 @@ impl Console {
             View::Signposts => ROW_SIGNPOST,
             View::Security => ROW_SECURITY,
             View::Kernel => ROW_KERNEL,
+            View::Spins => ROW_SPIN,
             View::File(i) => FILE_ROW + i as u32,
             View::Opened(i) => OPENED_ROW + i as u32,
         }));
@@ -471,6 +481,7 @@ impl Console {
             ROW_HANG => View::Hangs,
             ROW_DAILY => View::Daily,
             ROW_KERNEL => View::Kernel,
+            ROW_SPIN => View::Spins,
             id if id >= FILE_ROW && ((id - FILE_ROW) as usize) < self.files.len() => View::File((id - FILE_ROW) as usize),
             _ => return,
         };
@@ -817,6 +828,8 @@ impl Console {
             MENU_AFTER => self.toggle_after(),
             MENU_SUBSYSTEM => self.show_subsystem(),
             MENU_SAVE_SEARCH => self.keep_search(),
+            MENU_MARK => self.toggle_mark(),
+            MENU_CLEAR_MARKS => self.clear_marks(),
             MENU_DELETE_SEARCH => self.drop_search(),
             MENU_RELOAD => self.reload(),
             MENU_SIDEBAR => self.show_sidebar = !self.show_sidebar,
@@ -926,10 +939,36 @@ impl Console {
 
     /// The text File > Save Messages writes: the selected message, or every message the window shows.
     pub fn messages_to_save(&self) -> String {
+        if !self.marked.is_empty() {
+            return export::text(self.buffer.iter().filter(|(seq, _)| self.marked.contains(seq)).map(|(_, e)| e));
+        }
         match self.selected_entry() {
             Some(e) => export::text([e]),
             None => export::text(self.visible.iter().filter_map(|s| self.buffer.get(*s))),
         }
+    }
+
+    /// Log > Mark Message: adds the selected message to the marked set, or takes it out again. Marked messages are what
+    /// Save Messages writes. Nothing happens with no message selected.
+    pub fn toggle_mark(&mut self) {
+        let Some(seq) = self.selected else { return };
+        if !self.marked.remove(&seq) {
+            self.marked.insert(seq);
+        }
+        self.status = match self.marked.len() {
+            0 => "No messages marked.".into(),
+            n => format!("{n} marked for Save Messages."),
+        };
+    }
+
+    /// Log > Clear Marks: forgets every marked message.
+    pub fn clear_marks(&mut self) {
+        self.marked.clear();
+    }
+
+    /// Whether the selected message is marked (the Log menu then reads Unmark Message).
+    pub fn selected_marked(&self) -> bool {
+        self.selected.is_some_and(|s| self.marked.contains(&s))
     }
 
     /// Save Messages without a save panel (a shell that has none): writes to `EXPORT_DIR` under `home`. The saved path, or
@@ -1024,6 +1063,7 @@ impl Console {
             View::Signposts => "No Signposts",
             View::Security => "No Security Events",
             View::Kernel => "No Kernel Reports",
+            View::Spins => "No Spin Reports",
             View::File(_) | View::Opened(_) => "No Log Entries",
         }
     }
@@ -1109,6 +1149,9 @@ pub const MENU_TRASH: u32 = 23;
 pub const MENU_COLUMN: u32 = 30;
 /// File > Open Recent: item `MENU_RECENT + i` shows the i-th newest opened log.
 pub const MENU_RECENT: u32 = 40;
+/// Log > Mark Message (toggles the selected message) and Log > Clear Marks.
+pub const MENU_MARK: u32 = 26;
+pub const MENU_CLEAR_MARKS: u32 = 27;
 /// Logs held under Opened Files; opening one more drops the oldest.
 pub const MAX_OPENED: usize = 8;
 
