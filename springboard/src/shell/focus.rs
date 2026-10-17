@@ -18,6 +18,14 @@ impl Shell {
         self.set_focus_mode(on.then_some(notify::modes::DND_ID));
     }
 
+    /// The Focus mode names, in list order, and the index of the mode that is on by hand: what Settings > Focus lists.
+    pub(super) fn focus_mode_view(&self) -> (Vec<String>, Option<usize>) {
+        let modes = &self.notify.modes;
+        let names = modes.list.iter().map(|m| m.name.clone()).collect();
+        let on = modes.manual.as_deref().and_then(|id| modes.list.iter().position(|m| m.id == id));
+        (names, on)
+    }
+
     /// Switches the Focus mode `id` on by hand, or Focus off (None), and saves the choice. Returns false for a mode
     /// that does not exist.
     pub fn set_focus_mode(&mut self, id: Option<&str>) -> bool {
@@ -29,7 +37,9 @@ impl Shell {
         let mut opts = self.options();
         opts.dnd = on;
         opts.save(&mut self.prefs);
+        let (names, mode_on) = self.focus_mode_view();
         if let Some(st) = &mut self.settings {
+            st.set_focus_modes(names, mode_on);
             st.set_dnd(&self.ui, on);
         }
         self.notify.save_modes();
@@ -50,6 +60,19 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-focus").join(std::process::id().to_string());
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(name)
+    }
+
+    #[test]
+    fn settings_lists_the_modes_and_follows_the_one_on_by_hand() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        let (names, on) = sh.focus_mode_view();
+        assert_eq!(names, ["Do Not Disturb", "Work", "Personal", "Sleep"]);
+        assert_eq!(on, None);
+        assert!(sh.set_focus_mode(Some("work")));
+        assert_eq!(sh.focus_mode_view().1, Some(1));
+        assert!(sh.set_focus_mode(None));
+        assert_eq!(sh.focus_mode_view().1, None);
     }
 
     #[test]

@@ -677,7 +677,9 @@ impl Settings {
             PageId::NightShift => self.night.spec(self.opts.clock_24h),
             PageId::Focus => {
                 let mut s = spec(id, &self.model());
-                s.groups.push(notify_page::schedule_group(&NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() }));
+                let prefs = NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() };
+                s.groups.push(notify_page::modes_group(&prefs));
+                s.groups.push(notify_page::schedule_group(&prefs));
                 s
             }
             PageId::Graphics => super::gpu_page::spec(self.loads.gpus.get().map(Vec::as_slice)),
@@ -901,8 +903,15 @@ impl Settings {
 
     /// Loads the notification state (schedule, muted apps) from the shell.
     pub(super) fn set_notify(&mut self, ui: &Ui, schedule: super::notify::Schedule, muted: Vec<super::AppId>, apps: Vec<(super::AppId, notify_page::AppNotif)>, focus_allowed: Vec<super::AppId>) {
-        self.notify = NotifyPrefs { schedule, muted, clock_24h: self.opts.clock_24h, apps, focus_allowed };
+        self.notify = NotifyPrefs { schedule, muted, clock_24h: self.opts.clock_24h, apps, focus_allowed, ..self.notify.clone() };
         self.rebuild(ui);
+    }
+
+    /// Loads the Focus mode names and the mode that is on by hand. The page is rebuilt by the call that follows
+    /// (`set_notify` or `set_dnd`).
+    pub(super) fn set_focus_modes(&mut self, names: Vec<String>, on: Option<usize>) {
+        self.notify.modes = names;
+        self.notify.mode_on = on;
     }
 
     /// The crash log the user tapped, for the shell to open in Files' viewer.
@@ -1149,6 +1158,13 @@ impl Settings {
                     self.notify.focus_allowed.push(app);
                 }
                 self.notify_out.push(NotifyChange::FocusAllowed(app, on));
+                self.rebuild(ui);
+            }
+            NotifyEdit::Mode(i) => {
+                // the mode that is on is tapped again: Focus goes off
+                let next = if self.notify.mode_on == Some(i) { None } else { Some(i) };
+                self.notify.mode_on = next;
+                self.notify_out.push(NotifyChange::Mode(next));
                 self.rebuild(ui);
             }
             NotifyEdit::From | NotifyEdit::To => {

@@ -715,6 +715,8 @@ pub mod voxel_array;
 pub mod mesh_primitives;
 pub mod mesh_file;
 pub mod mesh_process;
+/// Lossy compact byte format for `PrimitiveMesh` data (quantized positions, octahedral normals, delta indices).
+pub mod mesh_compress;
 pub mod procedural_texture;
 pub mod asset_resolver;
 pub mod stereo_camera;
@@ -748,6 +750,8 @@ pub mod gameplay_values;
 pub mod rule_system;
 pub mod tensor;
 pub mod graph;
+/// A CPU runtime for compiled compute graphs (`graph_run::run`): every operator of `graph`, all element types.
+pub mod graph_run;
 pub mod nn;
 pub mod cnn_layers;
 pub mod save_sync;

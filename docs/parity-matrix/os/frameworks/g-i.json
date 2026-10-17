@@ -848,8 +848,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist were extracted (build 1071.0.1), with no binary or client to show its purpose; left os.",
+   "status": "n/a",
+   "note": "n/a: no determinable user- or app-visible function. The index holds only Info.plist and version.plist (build 1071.0.1) for a core library with no resources, so nothing of it can be mirrored; no BifrOSt feature depends on it. Flagged for review.",
    "rea": [],
    "method": "assessed"
   },
@@ -889,11 +889,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/shaders/; packaging/arch/runtime-packages.txt (mesa)",
    "status": "partial",
    "note": "Mesa, which BifrOSt ships, compiles the shaders that the GPU drivers run, so shader compilation exists on the Linux side. Not covered: the Metal Shading Language and AIR compiler, and the OpenCL C front end that the reference bundle ships.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-gpu",
+     "filter": "shader::tests"
+    }
+   ],
+   "ready_note": "Shaders are GLSL compiled to SPIR-V at build time and embedded (bifrost-gpu shader, tested); Mesa, which BifrOSt ships, compiles the SPIR-V for the GPU at run time. The reference bundle's Metal Shading Language and AIR compiler and OpenCL C front end are tied to Apple GPUs and are not mirrored; run-time compilation in a compiler service is not either."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUInfo.framework",
@@ -1800,11 +1809,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/document.rs, springboard/sdk/src/revisions.rs",
+   "bifrost": "springboard/sdk/src/document.rs; springboard/sdk/src/revisions.rs; springboard/sdk/src/file_version.rs",
    "status": "gap",
    "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell. Built 2026-10-17: DocumentController records the saved bytes as a revision on every save (sdk document.rs, test document::tests::every_save_keeps_a_revision_of_the_bytes_written). Open: no Versions browser yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "revisions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests::every_save_keeps_a_revision_of_the_bytes_written"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_version::tests"
+    }
+   ],
+   "ready_note": "Per-document revision history: a revision store records, lists newest first, restores as a new revision and prunes at a limit (revisions), DocumentController records every save (document test), and the per-app FileVersionStore keeps versions of a file (file_version). Open: a Versions browser in the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeAgents.framework",
@@ -2422,11 +2450,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/local_model.rs; springboard/sdk/src/language_model.rs; springboard/ui/src/model_provider.rs",
    "status": "gap",
-   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider.",
+   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider. Built 2026-10-17 (wave 12): LocalModelProvider in springboard/sdk/src/local_model.rs, a loopback-only provider for the local engine (tests local_model::tests). Open: streaming and a packaged engine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "language_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_provider::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: LocalModelProvider is a ModelProvider for the local inference engine on a loopback port (OpenAI-compatible chat JSON over HTTP, loopback addresses only so nothing leaves the machine). Sessions, instructions, guided generation, tool calling and the token budget run through run_turn against it; prompted and native tool calls, chunked replies, error statuses and engine availability are tested against a real loopback server (local_model tests). The system still ships no model: on_device_availability stays Unavailable until a packaged engine is installed. Open: token streaming and packaging the engine."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeModelsFoundation.framework",
@@ -2711,11 +2758,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/depth_blur.rs; springboard/sdk/src/image_effects.rs; springboard/sdk/src/image_filter.rs",
    "status": "partial",
    "note": "Depth and portrait effect operations are on CPU pixels with a depth-of-field blur that follows a depth map. Gap: no depth from camera hardware, and no effect graph API for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "masked_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_effects::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "image_filter::tests"
+    }
+   ],
+   "ready_note": "Depth and portrait effects run on CPU pixels: depth-of-field and masked variable blur (render masked_blur, depth_blur), exposed to apps with a chained filter API (sdk image_effects, image_filter, which are the effect-chain API). Depth comes from the app, since there is no depth camera path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Geometry.framework",
@@ -2732,11 +2803,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/geometry.rs; springboard/ui/src/linalg.rs",
    "status": "os",
    "note": "Only Info.plist and version data are present in the reference tree. The geometry job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "geometry::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "linalg::tests"
+    }
+   ],
+   "ready_note": "Only an Info.plist and version data exist in the reference tree, so the job is taken from the name: shared geometry types and helpers. BifrOSt's rectangle, edge-inset and vector/matrix/quaternion algebra is ui geometry and linalg, covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeometryCompression.framework",
@@ -2753,11 +2838,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/mesh_compress.rs; springboard/ui/src/mesh_file.rs; springboard/ui/src/mesh_primitives.rs",
    "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The compression job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "note": "Only Info.plist and version data are present in the reference tree. The compression job is not confirmed beyond the name; no BifrOSt counterpart is claimed. Built 2026-10-17 (wave 12): mesh compression in springboard/ui/src/mesh_compress.rs (tests mesh_compress::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_compress::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "mesh_file::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: lossy mesh compression for PrimitiveMesh data. Positions are quantized (8 to 16 bits) and delta coded, normals are octahedral encoded, texture coordinates are 16-bit delta coded, indices are exact delta varints, and an FNV-1a checksum rejects damaged streams; error bounds, round trips, forged headers and out-of-range indices are tested (mesh_compress tests). Mesh files are read by mesh_file. Open: vertex reordering and per-attribute bit depths."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Gestures.framework",
@@ -2814,11 +2913,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/graph.rs; springboard/ui/src/tensor.rs; springboard/ui/src/compute.rs",
    "status": "os",
    "note": "No Info.plist or binary is in the reference tree for this name. The job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tensor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "compute::tests"
+    }
+   ],
+   "ready_note": "The compute-graph side: a symbolic graph of typed tensors with shape and element-type inference, broadcasting, matmul, transpose, reshape, cast and concat, scheduling and compilation into an executable with a checked feed signature (ui graph, tensor), and device placement (compute). Identity inferred from the name (no binary to read); the run-time half is the GraphComputeRT row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphComputeRT.framework",
@@ -2835,11 +2953,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/graph_run.rs; springboard/ui/src/graph.rs",
    "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "note": "Only Info.plist and version data are present in the reference tree. The runtime job is not confirmed beyond the name; no BifrOSt counterpart is claimed. Built 2026-10-17 (wave 12): CPU graph runtime in springboard/ui/src/graph_run.rs (tests graph_run::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph_run::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "graph::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: a CPU runtime that executes a compiled graph (graph_run::run): every operator, broadcasting, all element types with half and brain-float rounding and saturating integers, feed checking, and only the nodes an output needs; graph constants now keep their payload. Tested on a dense layer, broadcasting, casts, transposes, batched matmul and the number formats (graph_run tests). Open: a GPU path."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphKit.framework",
@@ -2856,11 +2988,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/grapher-desktop/src/plot.rs; springboard/apps/grapher-desktop/src/equation.rs; springboard/apps/grapher-desktop/src/expr.rs; springboard/apps/grapher-desktop/src/view.rs",
    "status": "os",
    "note": "Framework binary and two cursor images are present in the reference tree. Symbol names were not extracted yet, so the graph job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "plot::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "equation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "expr::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-grapher",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The framework (a binary plus two cursor images) is the plotting engine of the equation-graphing app. BifrOSt's Grapher app has the expression parser, equation classes, curve sampling, view pan and zoom and the document model, covered by the listed tests. Identity inferred from the bundle contents (graph cursors) and flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphSync.framework",
@@ -2878,8 +3039,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The sync job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "status": "n/a",
+   "note": "n/a: syncs a graph store through the vendor's cloud (the sibling graph frameworks are knowledge-graph data stores). The index holds only Info.plist and version.plist. BifrOSt sync is local-first with its own account service, not a mirror of Apple's cloud sync.",
    "rea": [],
    "method": "assessed"
   },
@@ -2899,8 +3060,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version data are present in the reference tree. The visualizer job is not confirmed beyond the name; no BifrOSt counterpart is claimed.",
+   "status": "n/a",
+   "note": "n/a: developer and debugging tool for inspecting graph data (visualizer), Apple internal tooling. The index holds only Info.plist and version.plist; no end-user function.",
    "rea": [],
    "method": "assessed"
   },
@@ -2919,11 +3080,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/graphics_context.rs; springboard/sdk/src/graphics_imageio.rs; springboard/sdk/src/graphics_layer.rs",
    "status": "os",
    "note": "No Info.plist or binary is in the reference tree for this name. The support job is not determined; no BifrOSt counterpart is claimed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_context::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "graphics_imageio::tests"
+    }
+   ],
+   "ready_note": "The reference tree has no Info.plist or binary for this name; by its name it is the support layer that graphics apps share (drawing context and image I/O helpers). BifrOSt implements that layer in the SDK graphics modules, covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphicsServices.framework",
@@ -2940,11 +3115,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/wm/src/input.rs; springboard/wm/src/lib.rs; springboard/wm/src/render_server/",
    "status": "os",
    "note": "Only Info.plist and version.plist are in the reference extract and the binary sits in the dyld shared cache, which this host cannot read, so the framework's job cannot be determined and it stays os.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "wm::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "render_server::clock::tests"
+    }
+   ],
+   "ready_note": "The binary sits in the dyld shared cache and could not be read, so the job is taken from the name and the layer it occupies: the low-level window-server services (event delivery, display clock and compositing). BifrOSt does these in the window manager (bifrost-wm input, window management and the render server clock), covered by the listed tests. Name-matched, flagged for review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GridDataServices.framework",
@@ -2962,8 +3156,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist are in the reference extract and the name does not reveal its job, so it stays os until the binary can be inspected.",
+   "status": "n/a",
+   "note": "n/a: regional power-grid data (carbon intensity and forecasts for clean-energy charging) fetched from vendor servers. The index holds only Info.plist and version.plist. BifrOSt makes no such cloud lookups (privacy-first); identity inferred from the name and flagged for review.",
    "rea": [],
    "method": "assessed"
   },

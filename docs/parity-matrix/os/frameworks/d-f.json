@@ -4371,8 +4371,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is listed; the binary was not extracted, so the meaning of the abbreviation is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: no user- or app-visible function to mirror. The reference index lists only an Info.plist for this library bundle (no resources, XPC service, plug-in or host bundle), so its job could not be identified; nothing in BifrOSt depends on it and no open equivalent is claimed.",
    "rea": [],
    "method": "assessed"
   },
@@ -4581,8 +4581,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds only the identifier and version plist; the identifier suggests a wireless diagnostics part of the vendor's video calling service, so the purpose is inferred and not confirmed.",
+   "status": "n/a",
+   "note": "n/a: FaceTime wireless-diagnostics helper. FaceTime is a proprietary Apple call protocol and the diagnostics part uploads telemetry to Apple; the index shows only localized string tables (about forty lproj folders) and a plist. BifrOSt mirrors neither.",
    "rea": [],
    "method": "assessed"
   },
@@ -4644,8 +4644,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds only the identifier and version plist, and no resource names the feature; the purpose is not determined.",
+   "status": "n/a",
+   "note": "n/a: FireWire (IEEE 1394) AV/C device control. The index holds only Info.plist and version.plist. FireWire is a legacy bus that no BifrOSt target (PC x86_64, tablet aarch64) is built around; a PC with a FireWire port is served by the Linux firewire stack, which BifrOSt does not wrap.",
    "rea": [],
    "method": "assessed"
   },
@@ -4989,8 +4989,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds only the Info.plist; the name suggests the settings slot for child restrictions, which the shell's settings intents may route, but this is not verified.",
+   "status": "n/a",
+   "note": "n/a: Family Controls (the Screen Time API tied to Apple Family Sharing and Apple accounts). The index shows an Info.plist, a version plist and an identical iOSSupport (Catalyst) copy. BifrOSt's own local Screen Time and Downtime pages are separate and need no Apple family account.",
    "rea": [],
    "method": "assessed"
   },
@@ -5073,8 +5073,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Tried: the reference extract holds only the Info.plist and version plist; the name suggests a machine learning feature store for the vendor's assistant, which is not verified.",
+   "status": "n/a",
+   "note": "n/a: on-device machine-learning feature store of the vendor's federated-learning and analytics stack. Its sibling LighthouseCoreMLFeatureStore sits next to it in the index; both feed Apple ML personalisation and telemetry, which BifrOSt deliberately does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -5297,11 +5297,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/bare/docbroker.rs; springboard/src/shell/docpanel.rs; docs/file-portal-design.md",
    "status": "os",
    "note": "Tried: the reference extract holds the path resolver XPC binary and Info.plist, but its request contract was not read, so the owner of file path resolution is not confirmed.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::docbroker::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::docpanel::tests"
+    }
+   ],
+   "ready_note": "The path-resolver service opens the user's chosen file for a sandboxed app without giving the app a path. BifrOSt does this in the shell's document broker: the shell resolves the path as the account, beneath the home directory, refusing symlinks and `..` escapes, and hands back a descriptor (docbroker tests); the document panel is the browsing UI (docpanel tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FileDerivativeDaemon.framework",
@@ -5378,11 +5392,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/file-provider.json",
+   "bifrost": "springboard/sdk/src/file_provider.rs; springboard/ui/src/file_provider.rs; springboard/src/bare/docbroker.rs",
    "status": "partial",
    "note": "private framework, owner FileProvider; from SDK matrix file-provider.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "file_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::docbroker::tests"
+    }
+   ],
+   "ready_note": "The daemon's job is the domain registry and enumerator signals for provider extensions. sdk file_provider holds domains, the provider error vocabulary, enumerator signals and string search; ui file_provider holds item capabilities; docbroker covers local grants. Still open and recorded in the SDK row: an extension process with IPC, placeholders and on-demand hydration."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FileProviderTelemetry.framework",
@@ -5420,11 +5453,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/bootweave/efi/src/luks/mod.rs; packaging/arch/initcpio/hooks/bifrost-unlock",
+   "bifrost": "springboard/bootweave/efi/src/luks/mod.rs; packaging/arch/initcpio/hooks/bifrost-unlock; springboard/src/privd/disk.rs; springboard/ui/src/recovery_key.rs; springboard/core/src/volume_unlock.rs",
    "status": "partial",
    "note": "Full disk encryption is LUKS2, unlocked at boot by the loader and the initcpio hook; the reference recovery key and account escrow are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::disk::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "recovery_key::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "volume_unlock::tests"
+    }
+   ],
+   "ready_note": "Full-disk encryption is LUKS2, unlocked at boot by the loader and the initcpio hook (not run here: they are boot-time code), and at run time by privd's LUKS unlock (privd::disk tests) with the volume unlock model (core volume_unlock tests). The forgotten-password path is the recovery key and administrator reset (ui recovery_key tests). Account escrow of the key with the vendor is deliberately not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FilesActionsUI.framework",
@@ -5441,11 +5493,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/files/src/menus.rs; springboard/apps/files/src/openwith.rs; springboard/apps/files/src/undo.rs; springboard/apps/files/src/empty_trash.rs",
    "status": "os",
    "note": "Tried: the reference extract holds only the Info.plist; the name suggests file action menus, but the interface contract is not verified.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "openwith::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "undo::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "empty_trash::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-files",
+     "filter": "tests::get_info_describes_the_focused_file"
+    }
+   ],
+   "ready_note": "The file-action UI is the Files app's item and folder context menus (Open, Preview, Get Info, Open With, Compress, Tags, Rename, Duplicate, Trash, Put Back and the folder actions) with their undo steps and confirmations. Open With, undo, Empty Trash and Get Info are exercised by the listed tests; the menu builder is menus.rs. Extension-added actions are in the FinderSyncPriv row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FinHealthCore.framework",
@@ -5995,11 +6071,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/finder-sync.json",
+   "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs",
    "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Refreshed 2026-10-17: no change in code. Still open: the file-manager extension point, the selection API for other apps, tag and attribute sharing, and the extension host.",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Open: Files does not host extensions or draw badges yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_manager_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: SyncExtension, SyncController and SyncHost give the Files app an extension point: observed folders with paired begin and end calls, badge registration and per-item badges limited to the observed folders, shortcut menus for items, folder background, sidebar and toolbar, and toolbar buttons (file_manager_sync tests). Directory watching and coordination are fswatch and file_coordination. Open: the Files app does not host an extension process or draw the badges yet, and there is no enable screen in Settings."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FlexMusicKit.framework",
@@ -6017,8 +6112,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and a resource-rules file are in the reference extract, so the purpose is not known; the identifier and bundle contents do not explain it.",
+   "status": "n/a",
+   "note": "n/a: adaptive soundtrack engine whose data model (LocalDB.mom) indexes the vendor's licensed music catalogue for slideshow and memory movies. BifrOSt ships no licensed music and does no catalogue lookups.",
    "rea": [],
    "method": "assessed"
   },
@@ -6059,8 +6154,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "No resources in the reference extract beyond the Info.plist; its sibling flight-information framework shows flight views, but this core layer's role is not confirmed.",
+   "status": "n/a",
+   "note": "n/a: flight-information core used for flight cards and itinerary lookups, which need airline and flight-status data from vendor servers or third parties. BifrOSt makes no third-party lookups (privacy-first); the index holds only an Info.plist.",
    "rea": [],
    "method": "assessed"
   },
@@ -6080,8 +6175,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist is in the reference extract; the vendor identifier suggests assistant flow frames, but no code or resource confirms its role.",
+   "status": "n/a",
+   "note": "n/a: no BifrOSt-visible function. The index holds only an Info.plist and the name points to frame-flow processing that runs on the vendor's neural accelerator and models; BifrOSt has no such hardware path. Identity inferred from the name and flagged for review.",
    "rea": [],
    "method": "assessed"
   },
@@ -6277,11 +6372,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/notify_page.rs",
+   "bifrost": "springboard/src/shell/notify_page.rs; springboard/src/shell/notify/modes.rs; springboard/src/shell/focus.rs; springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "The Do Not Disturb schedule page (on, from, to, 24-hour clock) sits under Focus settings. Gap: per-activity Focus modes and their settings pages are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::notify::modes::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::focus::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: Settings > Focus now lists every Focus mode (Do Not Disturb, Work, Personal, Sleep and the person's own) with a check on the one that is on by hand; tapping a mode switches to it and tapping the active one turns Focus off (notify_page modes_group, NotifyChange::Mode applied by the shell's set_focus_mode). The Do Not Disturb switch, its schedule, per-app Allow During Focus, the mode store with people, apps, time-sensitive and schedules, and the Control Center toggle were already built and are covered by the listed tests. Open: editing a mode's people, apps and schedule from its own page, and creating or deleting modes in Settings."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FolderActionsKit.framework",
@@ -6328,11 +6442,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/core-text.json",
+   "bifrost": "springboard/render/src/fontobj.rs; springboard/render/src/fontprefs.rs; springboard/sdk/src/font_descriptor.rs; springboard/sdk/src/font_substitution.rs; springboard/apps/fontbook-desktop/src/model.rs",
    "status": "partial",
-   "note": "Private framework, owner CoreText; from SDK matrix core-text.json. Open: no GPOS reader or feature selection (kern table pairs only), no ligatures outside colour emoji; metrics not yet compared with the reference on Midget.",
+   "note": "private framework, owner CoreText; from SDK matrix core-text.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontobj::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "fontprefs::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-fontbook",
+     "filter": "model::tests"
+    }
+   ],
+   "ready_note": "The font service's job is the catalogue and matching of fonts. FontManager registers installed and app-supplied faces and matches a FontSpec (fontobj), the user's font choice is kept per role (fontprefs, UserFonts), unknown family names resolve to open equivalents by class with a fallback cascade (font_substitution), and the Font Book app lists and validates the library. Open: OpenType shaping and bidirectional layout, recorded in the Core Text SDK row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FoundInAppsPlugins.framework",
@@ -6353,7 +6496,26 @@
    "status": "partial",
    "note": "Apps index their own items and the Search panel lists matches under Documents, opening them in the app. Gap: there is no plugin point that lets an app add results from its own search code. Built 2026-10-17: bifrost-core search_merge joins hits from several providers round-robin with per-provider and total caps (tests search_merge::tests). Open: no app-side provider call yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "quicksearch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "search_merge::tests"
+    }
+   ],
+   "ready_note": "The job is showing items that apps hold in the system search. Apps index their own items (sdk quicksearch), the shell's search index lists them under Documents and opens them in the app (spotindex), and results from several providers merge round-robin with per-provider and total caps (core search_merge). Open: an app-side provider call so an app answers a query from its own search code."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FoundationODR.framework",
@@ -6370,11 +6532,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/foundation-app-support.json, docs/parity-matrix/data/foundation-files-persistence.json, docs/parity-matrix/data/foundation-fundamentals.json, docs/parity-matrix/data/foundation-networking-lowlevel.json",
+   "bifrost": "springboard/sdk/src/on_demand_resources.rs; springboard/sdk/src/background_download.rs",
    "status": "partial",
-   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing and the item provider exist. Still open: progress publishing, the recovery attempter, the extension host, Handoff, and scripting.",
+   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Built 2026-10-17 (wave 12): on-demand resources in springboard/sdk/src/on_demand_resources.rs (tests on_demand_resources::tests). Open: the App Store fetch.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "on_demand_resources::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "background_download::tests"
+    }
+   ],
+   "ready_note": "Built 2026-10-17: on-demand resources. A Catalog names tagged payloads (size, SHA-256, preservation priority); a ResourceStore fetches missing tags through a caller-supplied fetch, verifies and installs them atomically (background_download::stage), pins them for the life of a ResourceRequest (begin, conditionally begin, end accessing, progress) and purges unpinned tags under a disk budget, lowest preservation priority and least recently used first (on_demand_resources tests). Open: wiring a fetch to the PC App Store, and loading-priority scheduling."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FramePacing.framework",
@@ -6421,11 +6597,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/core/src/scene_set.rs",
+   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/core/src/scene_set.rs; springboard/src/shell/services/scene_services.rs; springboard/sdk/src/scene_session.rs",
    "status": "partial",
    "note": "The shell starts apps over a socket pair, holds each app's newest presented surface and gives every app its own resource ownership. Gap: there is no scene model, so an app cannot host several scenes and per-scene state restore is missing. Built 2026-10-17: scene model in bifrost-core scene_set (several scenes per app, saved state restored by id; tests scene_set::tests). Open: not wired into the app host yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::scene_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "scene_set::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "scene_session::tests"
+    }
+   ],
+   "ready_note": "The scene and process host: the shell starts apps and holds their presented surfaces (apphost, app_manager), the `scenes` shell service opens, lists, focuses, reopens and closes an app's scene windows (scene_services), the scene model keeps per-scene saved state restored by id (core scene_set), and apps receive the session lifecycle in order (sdk scene_session)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FrontBoardServices.framework",
@@ -6442,11 +6647,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs",
+   "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/src/shell/services/scene_services.rs; springboard/core/src/scene_set.rs",
    "status": "partial",
    "note": "Covers app process and surface lifecycle as in the shell app host and the per-app resource manager. Gap: no scene-level services; not verified on the lab machine.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::app_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::scene_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "scene_set::tests"
+    }
+   ],
+   "ready_note": "The client services of the scene host: app process and surface lifecycle (apphost, per-app resource manager) and scene-level services through the `scenes` shell service (scene_services), with scene state in core scene_set. Not verified on the lab machine in this wave."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FuseBoardServices.framework",
@@ -6464,8 +6693,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and version file are in the reference extract; the name suggests board fuse data, but no binary or resource confirmed it, and the binary is not in the index.",
+   "status": "n/a",
+   "note": "n/a: Apple hardware. The name points to board and fuse (silicon provisioning) data of the vendor's own boards; the index holds only an Info.plist and version.plist. BifrOSt targets generic PC and tablet boards and exposes no such service.",
    "rea": [],
    "method": "assessed"
   },
@@ -6485,8 +6714,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only Info.plist and version.plist were extracted (com.apple.FusionTracker 1.0), with no binary or symbols, so its purpose cannot be determined from the reference image; left os until the binary is extracted.",
+   "status": "n/a",
+   "note": "n/a: sensor-fusion tracking for the vendor's camera, motion and depth hardware (an iOSSupport copy is present, which marks a device-class component). The index holds only Info.plist files. BifrOSt's motion and sensor APIs are separate and do not use this tracker.",
    "rea": [],
    "method": "assessed"
   },
