@@ -12,6 +12,10 @@
 //!   event spans its whole civil day. A repeating event appears once for each occurrence that overlaps the range, all
 //!   with its id; an occurrence that starts the day before the range and runs into it is included.
 //!
+//! - `save_event {title, start, end, all_day, location}` appends one event to the shared store and returns `{id}`. A
+//!   timed event lasts 15 minutes to 24 hours; an all-day event takes the civil day of `start`. The store is read and
+//!   rewritten whole, so a save made while the Calendar app is writing can be lost; the Calendar app is the owner.
+//!
 //! Without the `calendars` permission every method but `access` is an error.
 use super::{Shell, SystemService};
 use crate::shell::calendar::store::{self, CalendarEvent};
@@ -136,6 +140,59 @@ pub fn answer(app_id: &str, permitted: bool, method: &str, params: &Json, events
     }
 }
 
+/// The event a `save_event` call names, with the next free id. Pure: the caller stores the list. The params are
+/// `{title, start, end, all_day, location}`: a timed event lasts 15 minutes to 24 hours from `start` to `end`; an
+/// all-day event takes the civil day of `start` and may not run past the next midnight.
+pub fn new_event(params: &Json, events: &[CalendarEvent]) -> Result<CalendarEvent, String> {
+    let text = |key: &str| params.get(key).and_then(Json::as_str).ok_or_else(|| format!("{key} is required"));
+    let title = text("title")?.to_string();
+    let location = params.get("location").and_then(Json::as_str).unwrap_or("").to_string();
+    let all_day = matches!(params.get("all_day"), Some(Json::Bool(true)));
+    let (start, end) = range_of(params)?;
+    let (minute, duration) = if all_day {
+        if end - start > 1440 {
+            return Err("an all-day event spans one civil day".into());
+        }
+        (0, 1440)
+    } else {
+        let len = end - start;
+        if !(15..=1440).contains(&len) {
+            return Err("a timed event lasts between 15 minutes and 24 hours".into());
+        }
+        (start.rem_euclid(1440) as u16, len as u16)
+    };
+    if events.len() >= store::MAX_EVENTS {
+        return Err("the calendar is full".into());
+    }
+    let event = CalendarEvent {
+        id: store::next_id(events),
+        date: Date::from_days(start.div_euclid(1440)),
+        minute,
+        duration,
+        all_day,
+        title,
+        location,
+        notes: String::new(),
+        repeat: 0,
+        alert: 0,
+    };
+    if !event.valid() {
+        return Err("the event has an invalid title or location".into());
+    }
+    Ok(event)
+}
+
+/// Appends the event a `save_event` call names to the shared store and returns `{id}`.
+fn save_event(shell: &Shell, params: &Json) -> Result<Json, String> {
+    let path = store_path(&shell.data_dir);
+    let mut events = store::load(&path).map_err(|e| e.to_string())?;
+    let event = new_event(params, &events)?;
+    let id = event.id;
+    events.push(event);
+    store::save(&path, &events).map_err(|e| e.to_string())?;
+    Ok(Json::Obj(vec![("id".into(), Json::Num(id as f64))]))
+}
+
 pub struct Calendar;
 
 impl SystemService for Calendar {
@@ -145,6 +202,12 @@ impl SystemService for Calendar {
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let permitted = super::app_has_permission(app_id, PERMISSION);
+        if method == "save_event" {
+            if !permitted {
+                return Err(format!("{app_id} has no {PERMISSION} permission"));
+            }
+            return save_event(shell, params);
+        }
         let events = if method == "events" && permitted {
             store::load(&store_path(&shell.data_dir)).map_err(|e| e.to_string())?
         } else {
@@ -323,5 +386,77 @@ mod tests {
     fn the_store_is_the_calendar_apps_events_file() {
         let path = store_path(Path::new("/root"));
         assert_eq!(path, PathBuf::from("/root/appdata/is.olibuijr.calendar.desktop/events.tsv"));
+    }
+
+    fn save_params(title: &str, start: &str, end: &str, all_day: bool) -> Json {
+        Json::Obj(vec![
+            ("title".into(), Json::Str(title.into())),
+            ("start".into(), Json::Str(start.into())),
+            ("end".into(), Json::Str(end.into())),
+            ("all_day".into(), Json::Bool(all_day)),
+            ("location".into(), Json::Str("Desk".into())),
+        ])
+    }
+
+    #[test]
+    fn a_timed_event_is_saved_with_the_next_id_and_its_civil_fields() {
+        let book = day_book();
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &book).unwrap();
+        assert_eq!(e.id, 5);
+        assert_eq!(e.date, Date { year: 2026, month: 10, day: 13 });
+        assert_eq!(e.minute, 12 * 60 + 30);
+        assert_eq!(e.duration, 45);
+        assert!(!e.all_day);
+        assert_eq!(e.title, "Lunch");
+        assert_eq!(e.location, "Desk");
+        assert_eq!((e.repeat, e.alert), (0, 0));
+    }
+
+    #[test]
+    fn a_saved_event_appears_in_the_events_call_for_its_day() {
+        let mut book = day_book();
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &book).unwrap();
+        book.push(e);
+        let reply = answer("is.example.cal", true, "events", &range("2026-10-13T00:00", "2026-10-14T00:00"), &book).unwrap();
+        // event 2 runs into the 13th from the 12th; then 4 at 08:00, 1 at 09:00 and the new event at 12:30
+        assert_eq!(ids(&reply), vec![2, 4, 1, 5]);
+    }
+
+    #[test]
+    fn an_all_day_event_takes_its_civil_day_and_cannot_run_past_it() {
+        let ok = new_event(&save_params("Holiday", "2026-10-13T00:00", "2026-10-14T00:00", true), &[]).unwrap();
+        assert!(ok.all_day);
+        assert_eq!((ok.minute, ok.duration), (0, 1440));
+        assert!(new_event(&save_params("Two days", "2026-10-13T00:00", "2026-10-15T00:00", true), &[]).is_err());
+    }
+
+    #[test]
+    fn a_timed_event_must_last_between_fifteen_minutes_and_a_day() {
+        assert!(new_event(&save_params("Blink", "2026-10-13T09:00", "2026-10-13T09:10", false), &[]).is_err());
+        assert!(new_event(&save_params("Long", "2026-10-13T09:00", "2026-10-14T10:00", false), &[]).is_err());
+    }
+
+    #[test]
+    fn a_save_without_a_title_or_with_a_control_character_is_refused() {
+        assert!(new_event(&save_params("", "2026-10-13T09:00", "2026-10-13T10:00", false), &[]).is_err());
+        assert!(new_event(&save_params("A\nB", "2026-10-13T09:00", "2026-10-13T10:00", false), &[]).is_err());
+    }
+
+    #[test]
+    fn a_full_calendar_refuses_a_new_event() {
+        let full: Vec<CalendarEvent> = (1..=store::MAX_EVENTS as u64).map(|id| event(id, (2026, 10, 13), 0, 60, false, "x")).collect();
+        assert!(new_event(&save_params("Extra", "2026-10-13T09:00", "2026-10-13T10:00", false), &full).is_err());
+    }
+
+    #[test]
+    fn a_saved_event_round_trips_through_the_store_file() {
+        let path = std::env::temp_dir().join(format!("bifrost-cal-save-{}.tsv", std::process::id()));
+        let e = new_event(&save_params("Lunch", "2026-10-13T12:30", "2026-10-13T13:15", false), &day_book()).unwrap();
+        let mut book = day_book();
+        book.push(e.clone());
+        store::save(&path, &book).unwrap();
+        let loaded = store::load(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(loaded.contains(&e));
     }
 }
