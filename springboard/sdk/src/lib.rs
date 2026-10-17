@@ -411,6 +411,7 @@ pub mod focus_filter;
 pub mod pointer_focus;
 pub mod gamepad_service;
 pub mod gamepad_input;
+pub mod maps;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;

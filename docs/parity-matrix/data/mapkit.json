@@ -12,7 +12,7 @@
       "apple": "MKMapView, Map (SwiftUI)",
       "bifrost": "springboard/ui/src/mapview.rs (MapView, MapType, MapInteraction); wired: springboard/apps/weather-desktop/src/insights.rs (map_view, grid) and weather.rs MAP card",
       "status": "partial",
-      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no map renderer, tile source or map widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Built 2026-10-17: bifrost_app::maps re-exports the map view, camera, controls, user location, snapshot and place models for apps; tests maps::tests. Drawing the map and its tile source are still missing."
     },
     {
       "feature": "Map camera and region",
