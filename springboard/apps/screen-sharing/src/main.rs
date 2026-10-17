@@ -308,6 +308,7 @@ impl App for ScreenSharing {
     fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
         let mut changed = false;
         let mut ended: Option<String> = None;
+        let mut connected = false;
         let mut texts = Vec::new();
         if let Some(c) = self.conn.as_ref() {
             while let Ok(t) = c.cut_text.try_recv() {
@@ -320,13 +321,16 @@ impl App for ScreenSharing {
                         self.message = format!("Connected to {name}.");
                         changed = true;
                     }
-                    self.clear_password_when_connected();
+                    connected = true;
                 }
                 Status::Closed(reason) => ended = Some(reason),
             }
             if c.shared.generation.load(Ordering::SeqCst) != self.drawn {
                 changed = true;
             }
+        }
+        if connected {
+            self.clear_password_when_connected();
         }
         // The server's clipboard goes to the shell's clipboard, so the next paste anywhere gets it.
         for t in texts {

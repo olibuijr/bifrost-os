@@ -492,11 +492,11 @@ mod tests {
         // slot 0 is the newest picture (the library is listed newest first)
         let newest = sh.pick().entries[sh.visible[0]].id.clone();
         assert_eq!(newest, "PH-039");
-        assert_eq!(tap(&mut sh, &ui, cell_centre(&sh, &ui, 0)), Outcome::Redraw);
-        assert_eq!(tap(&mut sh, &ui, cell_centre(&sh, &ui, 1)), Outcome::Redraw);
-        assert_eq!(tap(&mut sh, &ui, cell_centre(&sh, &ui, 2)), Outcome::Idle, "the limit of two is reached");
+        assert_eq!({ let p = cell_centre(&sh, &ui, 0); tap(&mut sh, &ui, p) }, Outcome::Redraw);
+        assert_eq!({ let p = cell_centre(&sh, &ui, 1); tap(&mut sh, &ui, p) }, Outcome::Redraw);
+        assert_eq!({ let p = cell_centre(&sh, &ui, 2); tap(&mut sh, &ui, p) }, Outcome::Idle, "the limit of two is reached");
         assert_eq!(sh.pick().selected().len(), 2);
-        assert_eq!(tap(&mut sh, &ui, cell_centre(&sh, &ui, 0)), Outcome::Redraw, "a chosen picture unchooses");
+        assert_eq!({ let p = cell_centre(&sh, &ui, 0); tap(&mut sh, &ui, p) }, Outcome::Redraw, "a chosen picture unchooses");
         assert_eq!(sh.pick().selected().len(), 1);
     }
 
@@ -507,8 +507,8 @@ mod tests {
         let mut sh = sheet(app, vec![], 3, 12);
         let add = centre(sh.add_rect(&ui, &sh.geo(&ui, W, H)));
         assert_eq!(tap(&mut sh, &ui, add), Outcome::Idle, "nothing chosen yet");
-        tap(&mut sh, &ui, cell_centre(&sh, &ui, 3));
-        tap(&mut sh, &ui, cell_centre(&sh, &ui, 0));
+        { let p = cell_centre(&sh, &ui, 3); tap(&mut sh, &ui, p) };
+        { let p = cell_centre(&sh, &ui, 0); tap(&mut sh, &ui, p) };
         assert_eq!(tap(&mut sh, &ui, add), Outcome::Add);
         let chosen = sh.pick().selected().to_vec();
         assert_eq!(chosen.len(), 2);
@@ -521,7 +521,7 @@ mod tests {
         let ui = crate::shell::tests::ui();
         let app = "is.example.sheet-cancel";
         let mut sh = sheet(app, vec![], 1, 5);
-        tap(&mut sh, &ui, cell_centre(&sh, &ui, 0));
+        { let p = cell_centre(&sh, &ui, 0); tap(&mut sh, &ui, p) };
         let cancel = centre(sh.cancel_rect(&ui, &sh.geo(&ui, W, H)));
         assert_eq!(tap(&mut sh, &ui, cancel), Outcome::Cancel);
         sh.cancel();
@@ -591,7 +591,7 @@ mod tests {
         assert_eq!(sh.requested.len(), before, "a failed thumbnail is not asked for again");
         let mut px = vec![0u32; (W * H) as usize];
         let mut surface = Surface { w: W as usize, h: H as usize, stride: W as usize, px: &mut px, y0: 0 };
-        tap(&mut sh, &ui, cell_centre(&sh, &ui, 0));
+        { let p = cell_centre(&sh, &ui, 0); tap(&mut sh, &ui, p) };
         sh.draw(&mut surface, &ui, W, H);
         assert!(px.iter().any(|p| *p != 0), "the dimmed screen and the card were drawn");
     }
