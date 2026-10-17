@@ -913,11 +913,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (mesa)",
+   "bifrost": "springboard/src/installer/plan.rs (gpu_packages adds opencl-mesa for Intel and AMD)",
    "status": "partial",
    "note": "Provided at the system layer: springboard/src/installer/plan.rs gpu_packages adds opencl-mesa (mesa's rusticl OpenCL driver) for Intel and AMD, and a test pins it (installer::plan::tests::gpu_packages_follow_the_hardware). NVIDIA keeps its own OpenCL stack, which gpu_packages does not add. Apps get no compute SDK, so the row stays partial until an SDK surface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests::gpu_packages_follow_the_hardware"
+    }
+   ],
+   "ready_note": "The system provides OpenCL: the installer adds opencl-mesa (mesa rusticl) for Intel and AMD GPUs, and the test pins the package choice. NVIDIA keeps its own OpenCL stack. No compute API reaches apps, so the row describes the system layer only."
   },
   {
    "id": "path:/System/Library/Frameworks/OpenDirectory.framework",
