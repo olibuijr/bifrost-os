@@ -678,11 +678,55 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/quick-look.json",
+   "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
    "status": "partial",
    "note": "overlay module, owner QuickLook; from SDK matrix quick-look.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "peek::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preview_manifest::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "preview_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::preview_gen::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::preview_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::thumbnails::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs::pdf::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "thumbs::media::poster_tests"
+    }
+   ],
+   "ready_note": "The Quick Look main job is covered by the preview panel, file previews, app preview generators (the [[preview]] manifest block, called over the control socket) and thumbnails. Host-tested only; the Midget check is still open (see docs/parity-matrix/data/quick-look.json)."
   },
   {
    "id": "path:/System/Library/Frameworks/_RealityKit_ComputeGraph.framework",
