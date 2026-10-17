@@ -164,9 +164,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs",
+   "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs; springboard/src/shell/guardian_sheet.rs; springboard/src/shell/mod.rs",
    "status": "partial",
-   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Not built: the guardian sheet that shows a question and calls respond, and a timer that calls expire.",
+   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Built 2026-10-17: the guardian sheet (shell/guardian_sheet.rs) lists the oldest pending question as an alert card with one button per choice and answers it with respond; the shell's tick calls expire each frame so an unanswered question goes away on time, and the sheet closes with it (tests guardian_sheet::tests, services::permission_kit::tests). Not built: a live check on the lab machine, and no app can send a question on the lab image yet.",
    "rea": [],
    "method": "assessed"
   },

@@ -112,6 +112,7 @@ pub mod list;
 pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
+pub mod guardian_sheet;
 pub mod contact_pick_sheet;
 pub mod options;
 pub mod gamemode;
@@ -748,6 +749,10 @@ pub struct Shell {
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the guardian's sheet for an app's PermissionKit question (`guardian_sheet.rs`), and the shell's last tick time
+    /// in seconds, which the answer and the expiry use
+    guardian_sheet: Option<guardian_sheet::GuardianSheet>,
+    guardian_now: u64,
     /// the contact picker sheet for an app's open contact pick (see `contact_pick_sheet.rs`)
     pick_sheet: Option<contact_pick_sheet::PickSheet>,
     /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
@@ -1064,6 +1069,8 @@ impl Shell {
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            guardian_sheet: None,
+            guardian_now: 0,
             pick_sheet: None,
             crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
@@ -1422,6 +1429,23 @@ impl Shell {
     fn permission_tick(&mut self, t: f64) {
         services::privacy_permissions::persist_grants(&self.data_dir);
         self.pick_tick();
+        // PermissionKit: drop the questions no guardian answered in time, and show the next one when no sheet is up
+        self.guardian_now = t.max(0.0) as u64;
+        if services::permission_kit::expire(self.guardian_now) > 0 {
+            self.dirty = true;
+        }
+        if self.guardian_sheet.as_ref().is_some_and(|g| !services::permission_kit::is_pending(g.question_id())) {
+            self.guardian_sheet = None;
+            self.dirty = true;
+            self.drawn = Drawn::Nothing;
+        }
+        if self.guardian_sheet.is_none() {
+            if let Some(next) = services::permission_kit::pending().into_iter().next() {
+                self.guardian_sheet = guardian_sheet::GuardianSheet::new(&self.ui, &next);
+                self.dirty = true;
+                self.drawn = Drawn::Nothing;
+            }
+        }
         // an Allow Once grant ends when its app quits, so the next request asks again
         let _ = services::privacy_permissions::expire_once(|app| self.ext.iter().flatten().any(|h| h.id == app && h.running()));
         if self.permission_sheet.is_some() {
@@ -1543,6 +1567,20 @@ impl Shell {
                 if let Some(tap) = hit {
                     if let Some(sheet) = self.pick_sheet.take() {
                         self.pick_sheet = sheet.tapped(&self.ui, tap);
+                    }
+                }
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
+            return Some(vec![]);
+        }
+        if self.guardian_sheet.is_some() {
+            // the guardian's sheet takes every touch until the guardian answers it
+            if matches!(ev, Event::Up(..)) {
+                let hit = self.guardian_sheet.as_ref().and_then(|s| s.hit(&self.ui, self.w, self.h, x, y));
+                if let Some(choice) = hit {
+                    if let Some(sheet) = self.guardian_sheet.take() {
+                        sheet.finish(&choice, self.guardian_now);
                     }
                 }
             }
@@ -3809,7 +3847,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.guardian_sheet.is_some() || self.pick_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.help_viewer.is_some() || self.keyboard_viewer.is_some() || self.a11y_panel.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3821,6 +3859,9 @@ impl Shell {
             }
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(g) = &self.guardian_sheet {
+                g.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(p) = &self.pick_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
@@ -3870,7 +3911,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.guardian_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3891,7 +3932,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.guardian_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.help_viewer.is_none() && self.keyboard_viewer.is_none() && self.a11y_panel.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
