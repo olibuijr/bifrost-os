@@ -167,6 +167,49 @@ mod tests {
     use super::*;
 
     const NOON: i64 = 1_700_000_000 - 1_700_000_000 % 86_400 + 12 * 3600;
+    const MIDNIGHT: i64 = NOON - 12 * 3600;
+
+    /// The shield's decision and the UI model's decision (`os_services::time_limits::Policy`) must be one rule.
+    /// Each case builds both from the same settings and compares the reason at several times and usages.
+    #[test]
+    fn the_shield_rule_agrees_with_the_model_rule() {
+        use bifrost_ui::os_services::time_limits::{Downtime as ModelDowntime, Ignore as ModelIgnore, Policy, Reason as ModelReason};
+
+        fn model_reason(r: Option<Reason>) -> Option<ModelReason> {
+            r.map(|r| match r {
+                Reason::Limit => ModelReason::Limit,
+                Reason::Downtime => ModelReason::Downtime,
+            })
+        }
+
+        let mut cfg = Config::memory();
+        let mut model = Policy::default();
+        cfg.set_limit(AppId::Terminal, Some(30));
+        model.set_limit("terminal", 30).expect("30 minutes is a step");
+        cfg.set_limit(AppId::Photos, Some(60));
+        model.set_limit("photos", 60).expect("60 minutes is a step");
+        cfg.set_downtime(Downtime { on: true, start: 22 * 60, end: 7 * 60 });
+        model.set_downtime(ModelDowntime::new(true, 22 * 60, 7 * 60).expect("minutes are in the day"));
+        cfg.set_allowed(AppId::Photos, true);
+        model.set_allowed("photos", true);
+
+        let apps = [(AppId::Terminal, "terminal"), (AppId::Photos, "photos"), (AppId::Files, "files"), (AppId::Settings, "settings")];
+        let times = [MIDNIGHT + 3 * 3600, NOON, MIDNIGHT + 23 * 3600];
+        let usages = [0u32, 1_800, 3_600, 7_200];
+        for (app, name) in apps {
+            for &unix in &times {
+                for &used in &usages {
+                    assert_eq!(model_reason(cfg.block(app, used, unix, 0)), model.block(name, used, unix, 0), "{name} at {unix} with {used}s");
+                }
+            }
+        }
+
+        cfg.grant(AppId::Terminal, Ignore::Fifteen, NOON, 0);
+        model.grant_ignore("terminal", ModelIgnore::Fifteen, NOON, 0);
+        for &unix in &[NOON, NOON + 60, NOON + 16 * 60] {
+            assert_eq!(model_reason(cfg.block(AppId::Terminal, 7_200, unix, 0)), model.block("terminal", 7_200, unix, 0), "grant at {unix}");
+        }
+    }
 
     #[test]
     fn downtime_window_may_cross_midnight() {
