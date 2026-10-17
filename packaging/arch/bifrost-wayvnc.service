@@ -1,0 +1,30 @@
+[Unit]
+Description=BifrOSt Screen Sharing (wayvnc, signed in and encrypted)
+Documentation=file:///usr/share/doc/bifrost/privd-protocol.md
+# Off by default: Settings > Sharing > Screen Sharing enables it through bifrost-privd, which first writes the
+# configuration, the per-computer RSA key and the one account allowed to sign in. Without all three it does not start.
+ConditionPathExists=/var/lib/springboard/screen-sharing/wayvnc.conf
+ConditionPathExists=/var/lib/springboard/screen-sharing/rsa_key.pem
+ConditionPathExists=/var/lib/springboard/screen-sharing/users
+After=springboard.service network.target
+
+[Service]
+Type=simple
+# There is no systemd user manager on BifrOSt (the session is started by springboard.service), so this is a system
+# unit. It joins the desktop's Wayland socket (the XDG_RUNTIME_DIR and WAYLAND_DISPLAY of /run/bifrost/user/session.json).
+Environment=XDG_RUNTIME_DIR=/run/bifrost/user
+Environment=WAYLAND_DISPLAY=wayland-0
+# The address (this computer's local-network address), the port, enable_auth, enable_pam (PAM service "wayvnc",
+# /etc/pam.d/wayvnc, limited to the one account) and the RSA-AES key are all in the configuration; nothing here opens
+# the screen without a login.
+ExecStart=/usr/bin/wayvnc --config=/var/lib/springboard/screen-sharing/wayvnc.conf
+Restart=on-failure
+RestartSec=3
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

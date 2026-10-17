@@ -276,6 +276,12 @@ impl Client {
         self.call("service.set", vec![("id", privd::s(id)), ("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Settings > Sharing > Screen Sharing: the account whose password lets a viewer in (`screen_sharing.configure`).
+    /// privd makes this computer's RSA key on the first call and writes the server configuration.
+    pub fn screen_sharing_configure(&self, user: &str) -> Result<(), ClientError> {
+        self.call_timeout("screen_sharing.configure", vec![("user", privd::s(user))], Duration::from_secs(120)).map(|_| ())
+    }
+
     pub fn update_check(&self) -> Result<UpdateInfo, ClientError> {
         let r = self.call_timeout("update.check", vec![], Duration::from_secs(300))?;
         Ok(UpdateInfo { installed: r.str_field("installed"), version: r.str_field("version"), size: r.get("size").and_then(Json::as_u64).unwrap_or(0), notes: r.str_field("notes") })

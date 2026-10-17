@@ -3847,11 +3847,47 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/accounts.rs, springboard/rfb, springboard/apps/remote",
+   "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/screen_sharing.rs, springboard/src/privd/accounts.rs, packaging/arch/bifrost-wayvnc.service, packaging/arch/pam-bifrost-wayvnc, springboard/rfb, springboard/apps/remote",
    "status": "partial",
-   "note": "Settings > Sharing > Screen Sharing switches wayvnc.service (privd service.set), the Screen Sharing viewer and the RFB protocol crate (springboard/rfb) exist, and the Remote app runs WayVNC on a private socket. Open, so the row stays partial: wayvnc.service has no unit in the repo and a raw VNC endpoint needs an authentication decision (WayVNC with enable_auth=false would expose the desktop). Needs owner decision: password plus TLS (WayVNC enable_auth, a generated key) set from Settings, then a unit that reads /run/bifrost/user/session.json like apps/remote/assets/server.py does.",
+   "note": "Settings > Sharing > Screen Sharing switches bifrost-wayvnc.service (privd service.set). Wired 2026-10-17: the switch first asks for the account that may sign in (screen_sharing.configure), privd makes a per-computer RSA key and writes the wayvnc configuration (enable_auth and enable_pam on, RSA-AES key, bound to the local-network address, never an open or unauthenticated port), and the unit is off until turned on. The Screen Sharing viewer and the RFB protocol crate (springboard/rfb) exist, and the Remote app runs wayvnc on a private socket.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/wayvnc"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/systemd/system/bifrost-wayvnc.service"
+    },
+    {
+     "kind": "file",
+     "path": "/etc/pam.d/wayvnc"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::screen_sharing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::accounts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::sharing_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::the_screen_sharing_switch"
+    }
+   ],
+   "ready_note": "Screen Sharing is real end to end on the host side: privd/screen_sharing.rs builds the configuration (authentication and PAM on, RSA-AES key from ssh-keygen, address from `ip -4 addr` skipping container and tunnel interfaces), privd refuses to start the unit without an account, a key and a local-network address, the PAM service limits sign-in to the one account (pam_listfile), and the Settings switch opens the account prompt first. Unverified until a Midget run: that wayvnc accepts enable_pam with rsa_private_key_file and uses the PAM service name wayvnc, and that a viewer on the LAN signs in. A system unit, not a user unit: BifrOSt has no systemd user manager. The bind address is chosen when the switch is turned on, not followed when DHCP changes it."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.scsid.plist",
@@ -4535,11 +4571,45 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/startup_disk.rs, springboard/src/privd/methods.rs, springboard/src/privd_client.rs, packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/src/shell/startup_disk_page.rs, springboard/core/src/startup_disk.rs, springboard/src/privd/methods.rs, springboard/src/privd_client.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "Built: startup disk selection (core startup_disk, privd startup_disk.list and startup_disk.set over efibootmgr). Lead 2026-10-17: not ready: no Settings row lists or sets the startup disk yet.",
+   "note": "Startup disk selection: General > Startup Disk lists the firmware boot entries (privd startup_disk.list over efibootmgr) and sets one (startup_disk.set) only after an administrator's password is approved on the shell's password sheet.",
    "rea": [],
-   "method": "built"
+   "method": "built",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::startup_disk_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::startup_disk_is_a_general_row"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::choosing_a_system_waits_for_the_password_sheet"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::a_wrong_password_is_reported"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "startup_disk::tests"
+    }
+   ],
+   "ready_note": "General > Startup Disk lists the boot systems and a tapped system queues the shell's password sheet (local_auth queue); only an approved answer calls startup_disk.set, and a cancel or wrong password changes nothing. Inactive entries are listed but cannot be chosen. Unverified until a Midget run: efibootmgr output on the real firmware."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.statd.notify.plist",

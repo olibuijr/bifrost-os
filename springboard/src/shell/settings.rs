@@ -1970,7 +1970,7 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname | super::forms::Purpose::ScreenSharingAccount { .. } => {
                     let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
                     self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
                     r
@@ -3692,6 +3692,19 @@ mod tests {
         st.loads.startup.set(View { disks: vec![disk("0001", "BifrOSt", true), disk("0003", "Rescue", false)], error: None });
         st.rebuild_visible(ui);
         (st, prefs)
+    }
+
+    #[test]
+    fn the_screen_sharing_switch_asks_for_an_account_before_anything_starts() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &wifi_info());
+        tap_row(&mut st, &ui, &mut prefs, "Sharing");
+        assert_eq!(st.page(), PageId::Sharing);
+        st.loads.sharing.set(super::super::sharing_page::View { computer: "Midget".into(), services: vec![("screen_sharing", false)], screen_user: None });
+        st.rebuild_visible(&ui);
+        tap_row(&mut st, &ui, &mut prefs, "Screen Sharing");
+        assert!(st.sheet.is_some(), "the account prompt is up");
+        assert!(st.alert().is_none(), "nothing was sent to privd");
     }
 
     #[test]

@@ -120,7 +120,7 @@ pub fn service_units(id: &str) -> Option<&'static [&'static str]> {
     match id {
         "remote_login" => Some(&["sshd.service"]),
         "file_sharing" => Some(&["smb.service", "nmb.service"]),
-        "screen_sharing" => Some(&["wayvnc.service"]),
+        "screen_sharing" => Some(&["bifrost-wayvnc.service"]),
         "printer_sharing" => Some(&["cups-lpd.socket"]),
         _ => None,
     }
@@ -265,6 +265,7 @@ pub fn call(method: &str, p: &Json) -> Option<Result<Json, PErr>> {
         "group.member" => group_member(p),
         "system.set_names" => set_names(p),
         "service.set" => service_set(p),
+        "screen_sharing.configure" => screen_sharing_configure(p),
         _ => return None,
     })
 }
@@ -407,9 +408,54 @@ fn service_set(p: &Json) -> Result<Json, PErr> {
     let id = text(p, "id")?;
     let units = service_units(id).ok_or_else(|| PErr::bad("unknown service"))?;
     let on = flag(p, "on")?;
+    if on && id == "screen_sharing" {
+        // never start the server without its account, key and a current local-network address
+        screen_sharing_prepare()?;
+    }
     let mut argv = vec!["systemctl", if on { "enable" } else { "disable" }, "--now"];
     argv.extend_from_slice(units);
     run(&strs(&argv), None).map(|_| obj(vec![]))
+}
+
+/// Writes the wayvnc configuration for the address this computer has on the local network now.
+fn screen_sharing_write_config() -> Result<(), PErr> {
+    use super::screen_sharing as ss;
+    let out = Command::new("ip").args(["-4", "-o", "addr", "show", "scope", "global"]).output().map_err(|e| PErr::internal(format!("ip: {e}")))?;
+    let address = ss::lan_address(&String::from_utf8_lossy(&out.stdout)).ok_or_else(|| PErr::bad("this computer has no local network address, so Screen Sharing stays off"))?;
+    super::methods::write_nofollow(ss::CONF, &ss::config_text(&address, ss::PORT, ss::KEY)).map_err(|e| PErr::internal(e.to_string()))
+}
+
+/// What must exist before the server starts: the account that may sign in and the key. The address is refreshed.
+fn screen_sharing_prepare() -> Result<(), PErr> {
+    use super::screen_sharing as ss;
+    let ready = std::fs::read_to_string(ss::USERS).ok().and_then(|t| ss::user_from(&t)).is_some() && std::path::Path::new(ss::KEY).is_file();
+    if !ready {
+        return Err(PErr::bad("choose the account for Screen Sharing first"));
+    }
+    screen_sharing_write_config()
+}
+
+/// `screen_sharing.configure {user}`: the account whose password lets a viewer in. The first call makes this computer's
+/// RSA key; the account must be a person's account. The server restarts when it runs, so the change takes effect.
+fn screen_sharing_configure(p: &Json) -> Result<Json, PErr> {
+    use super::screen_sharing as ss;
+    let user = text(p, "user")?;
+    if !valid_user(user) {
+        return Err(PErr::bad("invalid account name"));
+    }
+    let (users, _) = db();
+    if !users.iter().any(|u| u.name == user && is_human(u)) {
+        return Err(PErr::bad("not a person's account"));
+    }
+    std::fs::create_dir_all(ss::DIR).map_err(|e| PErr::internal(e.to_string()))?;
+    if !std::path::Path::new(ss::KEY).exists() {
+        run(&ss::keygen_argv(ss::KEY), None)?;
+    }
+    super::methods::write_nofollow(ss::USERS, &ss::users_text(user)).map_err(|e| PErr::internal(e.to_string()))?;
+    screen_sharing_write_config()?;
+    // a running server keeps the account it started with: restart it only when it is running
+    let _ = run(&strs(&["systemctl", "try-restart", "bifrost-wayvnc.service"]), None);
+    Ok(obj(vec![("user", s(user))]))
 }
 
 #[cfg(test)]
@@ -474,6 +520,11 @@ mod tests {
     }
 
     #[test]
+    fn screen_sharing_switches_the_packaged_unit() {
+        assert_eq!(service_units("screen_sharing"), Some(&["bifrost-wayvnc.service"][..]));
+    }
+
+    #[test]
     fn file_sharing_brings_the_netbios_name_service_with_it() {
         assert_eq!(service_units("file_sharing"), Some(&["smb.service", "nmb.service"][..]));
         assert_eq!(service_unit("file_sharing"), Some("smb.service"));
@@ -519,6 +570,9 @@ mod tests {
         assert_eq!(bad("user.add", vec![("name", s("ok")), ("full_name", s("x")), ("admin", Json::Bool(false)), ("password", s(""))]), "bad_params");
         assert_eq!(bad("user.delete", vec![("name", s("root")), ("remove_home", Json::Bool(true))]), "bad_params");
         assert_eq!(bad("service.set", vec![("id", s("telnet")), ("on", Json::Bool(true))]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![("user", s("Bad Name"))]), "bad_params");
+        assert_eq!(bad("screen_sharing.configure", vec![("user", s("root"))]), "bad_params", "root is not a person's account");
         assert_eq!(bad("system.set_names", vec![]), "bad_params");
         assert_eq!(bad("system.set_names", vec![("local", s("a b"))]), "bad_params");
         assert!(call("time.set_ntp", &obj(vec![])).is_none());

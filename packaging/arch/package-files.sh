@@ -74,6 +74,10 @@ package_bifrost_files() {
   fi
   install -Dm644 "$here/bifrost-privd.service" "$pkgdir/usr/lib/systemd/system/bifrost-privd.service"
   install -Dm644 "$here/pam-bifrost-login" "$pkgdir/etc/pam.d/bifrost-login"
+  # Screen Sharing: wayvnc behind a login (PAM service "wayvnc", limited to the one account Settings names) and its
+  # RSA-AES key; off until Settings > Sharing > Screen Sharing turns it on (privd writes the configuration first)
+  install -Dm644 "$here/bifrost-wayvnc.service" "$pkgdir/usr/lib/systemd/system/bifrost-wayvnc.service"
+  install -Dm644 "$here/pam-bifrost-wayvnc" "$pkgdir/etc/pam.d/wayvnc"
   # ALSA compatibility plug-in for third-party apps (audio task 08): the default PCM goes to bifrost-audiod
   if [[ -n ${PC_ALSA_PLUGIN:-} && -f ${PC_ALSA_PLUGIN} ]]; then
     install -Dm755 "$PC_ALSA_PLUGIN" "$pkgdir/usr/lib/alsa-lib/libasound_module_pcm_bifrost.so"
