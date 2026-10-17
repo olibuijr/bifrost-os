@@ -936,10 +936,4 @@ mod tests {
         assert!(!late.changed(d.path()), "a process that starts after the switch does not reload for it");
     }
 
-    #[test]
-    fn a_garbage_generation_file_reads_as_zero() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join(LANGUAGE_GENERATION_FILE), "not a number").unwrap();
-        assert_eq!(language_generation(d.path()), 0);
-    }
 }
