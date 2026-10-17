@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "n/a",
+   "note": "Legacy talk (ntalk) messaging daemon. No Arch package ships it and no BifrOSt service or app uses the talk protocol, so the service has no meaning on BifrOSt.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.apache.httpd.plist",
@@ -41,9 +41,23 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "Apache web server comes from the Arch apache package (runtime-packages.txt). The unit is installed but not enabled by default; BifrOSt has no Settings surface for it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "pacman -Q apache",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "systemctl cat httpd.service",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The apache package from packaging/arch/runtime-packages.txt ships the web server and its systemd unit httpd.service. Unit name not verified on a built image."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
@@ -62,9 +76,9 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
    "status": "partial",
-   "note": "rule: CUPS client and IPP models; Print Center app",
+   "note": "The cups-lpd binary ships in the cups package (/usr/lib/cups/daemon/cups-lpd), but no BifrOSt code enables or uses the LPD listener. The BifrOSt CUPS client (cups.rs, ipp.rs) talks to cupsd, not to LPD. Left partial.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",
@@ -83,9 +97,32 @@
    "doc": "",
    "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
    "status": "partial",
-   "note": "rule: CUPS client and IPP models; Print Center app",
+   "note": "The CUPS scheduler is the cups package; BifrOSt's CUPS and IPP client models and the Print Center app use it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/cupsd"
+    },
+    {
+     "kind": "cmd",
+     "run": "systemctl cat cups.service",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "cups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ipp::tests"
+    }
+   ],
+   "ready_note": "The CUPS scheduler comes from the cups package (cupsd and cups.service). BifrOSt's CUPS and IPP client models (cups.rs, ipp.rs) are tested against it and back the Print Center app."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
@@ -104,9 +141,23 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "snmpd comes from the net-snmp package (runtime-packages.txt). It is not enabled by default and BifrOSt has no Settings surface for it.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "pacman -Q net-snmp",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "systemctl cat snmpd.service",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The net-snmp package (runtime-packages.txt) ships the snmpd daemon and its unit snmpd.service. Unit name not verified on a built image."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/org.openldap.slapd.plist",
@@ -125,9 +176,23 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "slapd comes from the openldap package (runtime-packages.txt). It is not enabled by default and BifrOSt has no directory-service Settings surface.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "pacman -Q openldap",
+     "expect_exit": 0
+    },
+    {
+     "kind": "cmd",
+     "run": "systemctl cat slapd.service",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The openldap package (runtime-packages.txt) ships the slapd directory server and its unit slapd.service. Unit name not verified on a built image."
   }
  ]
 }

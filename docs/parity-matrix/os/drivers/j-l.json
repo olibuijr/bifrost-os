@@ -22,7 +22,15 @@
    "status": "partial",
    "note": "The math library is glibc's libm on Arch, and Rust's standard library links it on Linux. It is a userspace library, not a kernel extension, and BifrOSt has no math library of its own.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/lib/libm.so.6"
+    }
+   ],
+   "ready_note": "glibc libm.so.6 is installed on the system."
   }
  ]
 }

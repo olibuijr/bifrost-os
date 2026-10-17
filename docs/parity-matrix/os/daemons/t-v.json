@@ -20,9 +20,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "note": "tftp-hpa is listed in packaging/arch/runtime-packages.txt, but its daemon and unit were not verified on a built image and no BifrOSt code uses TFTP. Left as an OS-layer item.",
    "rea": [],
-   "method": "rule"
+   "method": "assessed"
   }
  ]
 }

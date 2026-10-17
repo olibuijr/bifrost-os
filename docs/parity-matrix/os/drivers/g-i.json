@@ -22,7 +22,21 @@
    "status": "partial",
    "note": "Serial over Bluetooth (RFCOMM) comes from the Linux rfcomm kernel module. bluetooth.rs drives the radio through the kernel management socket and does not open RFCOMM serial ports for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "modinfo -F filename rfcomm",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::bluetooth::tests"
+    }
+   ],
+   "ready_note": "The rfcomm kernel module provides the Bluetooth serial ports. bluetooth.rs is tested; it does not open RFCOMM ports for apps, so the app-facing side stays out of scope."
   }
  ]
 }
