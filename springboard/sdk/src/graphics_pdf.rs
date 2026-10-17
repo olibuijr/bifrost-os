@@ -18,6 +18,7 @@
 
 use bifrost_render::cg::pdf::doc::Doc;
 use bifrost_render::cg::pdf::draw;
+use bifrost_render::cg::pdf::extract::{Extractor, Piece};
 use bifrost_render::cg::pdf::outline_tree::{self, OutlineNode};
 use bifrost_render::cg::pdf::page::{self, PageBox};
 use bifrost_render::cg::pdf::writer::{self, Page as OutPage, PageImage};
@@ -79,6 +80,24 @@ impl Document {
         let items = page::outline(&self.doc);
         let page_index = |num: u32| pages.iter().find(|p| p.num == Some(num)).map(|p| p.index);
         entries(&outline_tree::outline_tree(&items), &page_index)
+    }
+
+    /// The indexes of the pages whose text contains `needle`, ignoring case and surrounding spaces. A match must lie
+    /// within one line of the page's text, so a phrase broken across lines is not found. An empty needle matches nothing.
+    pub fn find(&self, needle: &str) -> Vec<usize> {
+        let needle = needle.trim().to_lowercase();
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        page::pages(&self.doc)
+            .iter()
+            .filter(|page| {
+                let mut ex = Extractor::new(&self.doc);
+                ex.page(page);
+                ex.pieces.iter().any(|p| matches!(p, Piece::Line { text, .. } if text.to_lowercase().contains(&needle)))
+            })
+            .map(|page| page.index)
+            .collect()
     }
 
     /// Page `index` as a picture scaled to fit `max_w` x `max_h` pixels, keeping its aspect.
@@ -260,6 +279,18 @@ mod tests {
         let bytes = w.finish();
         assert!(bytes.windows(b"/BaseFont /Times-Roman".len()).any(|x| x == b"/BaseFont /Times-Roman"));
         assert_eq!(Document::open(bytes).expect("reads back").page_count(), 1);
+    }
+
+    #[test]
+    fn find_names_the_pages_whose_text_has_the_phrase() {
+        let mut w = PdfWriter::new();
+        w.add_page(300.0, 200.0).draw_text("Hello World", 10.0, 150.0, 12.0, Face::Helvetica);
+        w.add_page(300.0, 200.0).draw_text("Second page", 10.0, 150.0, 12.0, Face::Times);
+        let doc = Document::open(w.finish()).expect("reads back");
+        assert_eq!(doc.find("world"), vec![0]);
+        assert_eq!(doc.find("  SECOND page "), vec![1]);
+        assert!(doc.find("   ").is_empty());
+        assert!(doc.find("missing").is_empty());
     }
 
     #[test]
