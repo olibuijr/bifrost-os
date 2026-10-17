@@ -1528,11 +1528,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/mail-desktop/src/index.rs, springboard/apps/mail-desktop/src/search.rs",
    "status": "gap",
    "note": "Mail search is limited to the open mailbox in mail-desktop/src/search.rs, and no message reaches the shell search index in springboard/src/shell/spotindex.rs. Build a message indexer in the Mail app that feeds the Search panel.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "index::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "search::tests"
+    }
+   ],
+   "ready_note": "Message indexing: index::plan keeps the newest 200 messages of the mailbox on screen in Core Search (subject and sender, re-indexed on change, removed when gone or when \"Show in Search\" is off), fed by MailApp::index_tick (main.rs). Search query parsing with field filters (search.rs) is tested. Limit: only the open mailbox is indexed and bodies are not; the old note that no message reaches the shell index is out of date."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacSystemUI.framework",
@@ -1849,11 +1863,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/mail-desktop/src/index.rs",
    "status": "gap",
    "note": "Mail messages are not registered with the shell search index in springboard/src/shell/spotindex.rs, so there is no searchable schema for them. Build the field schema for mail messages and send it to the shell index from the Mail app.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "index::tests"
+    }
+   ],
+   "ready_note": "Mail messages are registered with Core Search in mail-desktop index.rs: domain \"mail\", id account/mailbox/uid, title = subject, description = sender, no body. Tests index::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailService.framework",
@@ -2379,8 +2402,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
-   "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "status": "n/a",
+   "note": "Apple sandboxed parser for Maps service payloads (BlastDoor-style). It exists only to decode Apple Maps server responses, which BifrOSt does not receive, so n/a.",
    "rea": [],
    "method": "assessed"
   },
@@ -2400,8 +2423,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
-   "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "status": "n/a",
+   "note": "Apple Maps on-device intelligence: its features depend on Apple Maps account data and Apple ML model packs. BifrOSt has no Apple Maps data service, so n/a.",
    "rea": [],
    "method": "assessed"
   },
@@ -2421,8 +2444,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
-   "status": "partial",
-   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
+   "status": "n/a",
+   "note": "Apple Maps suggestion service: ranks places from Apple server-side data and an Apple transport-mode model pack (MapsSuggestionsTransportModePrediction.mlmodelc). BifrOSt has no Apple Maps data service and no Apple model packs, so n/a.",
    "rea": [],
    "method": "assessed"
   },
