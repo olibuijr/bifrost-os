@@ -181,6 +181,7 @@ pub mod hitch_ratio;
 pub mod daily_metric_report;
 pub mod status_item;
 pub mod share;
+pub mod proxy_settings;
 pub use bifrost_ui::print;
 pub use bifrost_ui::print_pages;
 pub use bifrost_ui::print_presets;
