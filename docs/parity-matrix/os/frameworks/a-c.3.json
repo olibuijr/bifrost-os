@@ -3164,7 +3164,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/character_viewer.rs; springboard/apps/keyboard/src/emoji.rs",
    "status": "partial",
-   "note": "The emoji catalogue, the character viewer panel and the keyboard emoji page exist, and a pick types or copies the emoji. Missing: a search field over the catalogue, recent emoji, and the search name lists.",
+   "note": "The emoji catalogue, the character viewer panel and the keyboard emoji page exist, and a pick types or copies the emoji. The keyboard page has a keyword search over the catalogue and a persisted, newest-first recents list. Not built: the reference search name lists beyond the built-in keyword table.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3172,10 +3172,20 @@
     {
      "kind": "test",
      "crate": "bifrost-keyboard",
+     "filter": "kb_emoji::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-keyboard",
      "filter": "emoji::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::character_viewer::tests"
     }
    ],
-   "ready_note": "Emoji catalogue for the keyboard page: one-page categories without duplicates, newest-first capped recents, and tab switching (keyboard emoji tests); the character viewer tests cover the shared panel."
+   "ready_note": "Emoji catalogue, keyword search and persisted recents on the keyboard page (kb_emoji and emoji tests), and the shared Emoji and Symbols panel (character_viewer tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreFP.framework",
