@@ -741,4 +741,87 @@ mod tests {
         let r = ResumeData::decode(&bg.cancel_by_producing_resume_data(id).unwrap()).unwrap();
         assert_eq!((r.url.as_str(), r.bytes_received), ("http://h/f", 4));
     }
+
+    /// Answers every challenge with one disposition and counts the questions.
+    struct Answer {
+        disposition: AuthDisposition,
+        asked: Mutex<u32>,
+    }
+    impl URLSessionTaskDelegate for Answer {
+        fn did_receive(&self, _: &AuthChallenge) -> AuthDisposition {
+            *self.asked.lock().unwrap() += 1;
+            self.disposition.clone()
+        }
+    }
+
+    fn challenged(delegate: Option<Arc<dyn URLSessionTaskDelegate>>, storage: Arc<Mutex<URLCredentialStorage>>, replies: Vec<Vec<u8>>) -> (ConfiguredSession, Arc<Mutex<Vec<String>>>) {
+        let (s, log) = session(replies);
+        let mut c = URLSessionConfiguration::default_configuration(None);
+        c.url_credential_storage = Some(storage);
+        (ConfiguredSession::new(c, s, delegate), log)
+    }
+
+    /// A 401 that asks for `scheme` with realm "r", then a 200 with body "ok".
+    fn challenge_then_ok(scheme: &str) -> Vec<Vec<u8>> {
+        vec![reply("401 Unauthorized", &format!("WWW-Authenticate: {scheme} realm=\"r\"\r\n"), b""), reply("200 OK", "", b"ok")]
+    }
+
+    fn space() -> URLProtectionSpace {
+        URLProtectionSpace { host: "h".into(), port: 80, realm: Some("r".into()) }
+    }
+
+    #[test]
+    fn a_basic_challenge_is_answered_from_the_stored_credential() {
+        use crate::http_auth::{CredentialPersistence, URLCredential};
+        let storage = Arc::new(Mutex::new(URLCredentialStorage::new()));
+        storage.lock().unwrap().set_credential(URLCredential::new("ola", "pw", CredentialPersistence::ForSession), space());
+        let (cs, log) = challenged(None, storage, challenge_then_ok("Basic"));
+        let (resp, body) = cs.data(&URLRequest::new("http://h/f")).unwrap();
+        assert_eq!((resp.status_code, body.as_slice()), (200, &b"ok"[..]));
+        let log = log.lock().unwrap();
+        assert_eq!(log.len(), 2, "one retry");
+        assert!(log[1].contains("authorization: basic b2xhOnB3"), "{}", log[1]);
+    }
+
+    #[test]
+    fn a_delegate_credential_is_sent_and_kept_when_it_persists() {
+        use crate::http_auth::{CredentialPersistence, URLCredential};
+        let storage = Arc::new(Mutex::new(URLCredentialStorage::new()));
+        let answer = Arc::new(Answer { disposition: AuthDisposition::UseCredential(URLCredential::new("ana", "secret", CredentialPersistence::Permanent)), asked: Mutex::new(0) });
+        let (cs, log) = challenged(Some(answer.clone()), storage.clone(), challenge_then_ok("Basic"));
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 200);
+        assert_eq!(*answer.asked.lock().unwrap(), 1);
+        assert!(log.lock().unwrap()[1].contains("authorization: basic "));
+        assert_eq!(storage.lock().unwrap().credential(&space()).map(|c| c.user.clone()), Some("ana".to_string()));
+    }
+
+    #[test]
+    fn a_credential_that_is_not_kept_is_sent_but_not_stored() {
+        use crate::http_auth::{CredentialPersistence, URLCredential};
+        let storage = Arc::new(Mutex::new(URLCredentialStorage::new()));
+        let answer = Arc::new(Answer { disposition: AuthDisposition::UseCredential(URLCredential::new("ana", "secret", CredentialPersistence::None)), asked: Mutex::new(0) });
+        let (cs, log) = challenged(Some(answer), storage.clone(), challenge_then_ok("Basic"));
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 200);
+        assert!(log.lock().unwrap()[1].contains("authorization: basic "));
+        assert!(storage.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_declined_challenge_leaves_the_401_to_the_caller() {
+        let answer = Arc::new(Answer { disposition: AuthDisposition::PerformDefaultHandling, asked: Mutex::new(0) });
+        let replies = vec![reply("401 Unauthorized", "WWW-Authenticate: Basic realm=\"r\"\r\n", b"")];
+        let (cs, log) = challenged(Some(answer), Arc::new(Mutex::new(URLCredentialStorage::new())), replies);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
+        assert_eq!(log.lock().unwrap().len(), 1, "no retry");
+    }
+
+    #[test]
+    fn only_a_basic_challenge_is_answered() {
+        use crate::http_auth::{CredentialPersistence, URLCredential};
+        let answer = Arc::new(Answer { disposition: AuthDisposition::UseCredential(URLCredential::new("ana", "secret", CredentialPersistence::Permanent)), asked: Mutex::new(0) });
+        let replies = vec![reply("401 Unauthorized", "WWW-Authenticate: Digest realm=\"r\", nonce=\"n\"\r\n", b"")];
+        let (cs, log) = challenged(Some(answer), Arc::new(Mutex::new(URLCredentialStorage::new())), replies);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
+        assert_eq!(log.lock().unwrap().len(), 1, "a Digest challenge is not retried with Basic");
+    }
 }
