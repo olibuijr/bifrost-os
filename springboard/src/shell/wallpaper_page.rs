@@ -9,6 +9,44 @@ use super::ui::{centred, home_zone, Ui, Weight, CARD_RADIUS_PT, CARD_BG, CELL_RA
 use super::wifi_page::BLUE;
 use crate::gfx::{rrect_mask, Image, Surface, View};
 
+/// The id the gradient poster `name` is packed under: `gradient_ocean` for "Ocean".
+pub fn gradient_id(name: &str) -> String {
+    format!("gradient_{}", name.to_ascii_lowercase())
+}
+
+/// The gradient poster `name` (`bifrost_ui::procedural_texture::GRADIENT_PRESETS`) as an opaque `w` x `h` still.
+/// None for an unknown name or an empty size.
+pub fn gradient_image(name: &str, w: usize, h: usize) -> Option<Image> {
+    let texture = bifrost_ui::procedural_texture::gradient_poster(name, w, h)?;
+    Some(Image { w, h, px: texture.texels.iter().map(|t| crate::gfx::pack(t[0], t[1], t[2], t[3])).collect() })
+}
+
+/// The gradient posters as wallpapers, packed next to the stills: `wallpapers/gradient_<name>.raw` at `w` x `h` with a
+/// 320 x 180 thumbnail beside it. A poster already packed is read back, not drawn again. A poster whose files cannot
+/// be written is left out, so the picker never lists a wallpaper it cannot set.
+pub fn gradient_wallpapers(dir: &str, w: usize, h: usize) -> Vec<Wallpaper> {
+    use super::photos::thumbs::to_raw;
+    let base = std::path::Path::new(dir).join("wallpapers");
+    let mut out = Vec::new();
+    for preset in bifrost_ui::procedural_texture::GRADIENT_PRESETS {
+        let id = gradient_id(preset.name);
+        let (raw, thumb_path) = (base.join(format!("{id}.raw")), base.join(format!("{id}.thumb.raw")));
+        let packed = || -> Option<Image> {
+            if !raw.exists() || !thumb_path.exists() {
+                let full = gradient_image(preset.name, w, h)?;
+                std::fs::create_dir_all(&base).ok()?;
+                std::fs::write(&raw, to_raw(&full)).ok()?;
+                std::fs::write(&thumb_path, to_raw(&cover_fit(&full, 320, 180))).ok()?;
+            }
+            Image::from_raw(&std::fs::read(&thumb_path).ok()?)
+        };
+        if let Some(thumb) = packed() {
+            out.push(Wallpaper { id, name: preset.name.to_string(), thumb });
+        }
+    }
+    out
+}
+
 /// One packed wallpaper: `id` names `wallpapers/<id>.raw`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wallpaper {
@@ -336,6 +374,32 @@ mod tests {
         let picks: std::collections::BTreeSet<_> = (0..8).filter_map(|seed| first_wallpaper(d, seed)).collect();
         assert_eq!(picks.into_iter().collect::<Vec<_>>(), ["gullfoss_canyon", "kirkjufell_dusk"], "only Icelandic stills, and the seed varies the pick");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn gradient_posters_are_packed_once_and_listed_with_their_names() {
+        let dir = std::env::temp_dir().join(format!("wp-gradient-{}", std::process::id()));
+        let d = dir.to_str().unwrap();
+        let listed = gradient_wallpapers(d, 64, 36);
+        let names: Vec<&str> = listed.iter().map(|w| w.name.as_str()).collect();
+        assert_eq!(names, ["Sunrise", "Ocean", "Meadow", "Dusk", "Graphite"]);
+        assert_eq!(listed[1].id, "gradient_ocean");
+        assert!(crate::installer::plan::valid_wallpaper_id(&listed[1].id), "Settings can set it by id");
+        let raw = std::fs::read(dir.join("wallpapers/gradient_ocean.raw")).unwrap();
+        let still = Image::from_raw(&raw).expect("a RIMG still");
+        assert_eq!((still.w, still.h), (64, 36));
+        assert_ne!(still.px[0], still.px[63], "the left and right edges differ");
+        assert_eq!((listed[1].thumb.w, listed[1].thumb.h), (320, 180));
+        // a second call reads the packed files back
+        assert_eq!(gradient_wallpapers(d, 64, 36), listed);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_unknown_gradient_or_an_empty_size_gives_no_still() {
+        assert!(gradient_image("Nope", 8, 4).is_none());
+        assert!(gradient_image("Ocean", 0, 4).is_none());
+        assert_eq!(gradient_id("Graphite"), "gradient_graphite");
     }
 
     fn wallpapers(n: usize) -> Vec<Wallpaper> {
