@@ -7,6 +7,7 @@
 
 use bifrost_proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, NotifStatus, ToApp, NOTIF_AUTH_ALERT, NOTIF_AUTH_BADGE, NOTIF_AUTH_MASK, NOTIF_AUTH_PROVISIONAL, NOTIF_AUTH_SOUND, NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION, NOTIF_PRESENT_BADGE, NOTIF_PRESENT_BANNER, NOTIF_PRESENT_LIST, NOTIF_PRESENT_SOUND, NotifTrigger, NOTIF_CATEGORY_CUSTOM_DISMISS, NOTIF_CATEGORY_HIDDEN_SHOW_SUBTITLE, NOTIF_CATEGORY_HIDDEN_SHOW_TITLE};
 use crate::shell::clock::alarm::Alarm;
+use super::notify_page::AppNotif;
 use crate::gfx::Image;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
@@ -414,6 +415,21 @@ pub fn settings_for(permitted: bool, muted: bool, focus: bool) -> NotifSettings 
     NotifSettings { authorized: permitted, alert: on, sound: on, badge: on, focus }
 }
 
+/// The banner, sound and badge of a delivery after the app's page: an alert needs the Banners row, a sound the Sounds
+/// row and a badge the Badges row.
+pub fn gate_by_page(banner: bool, sound: bool, badge: bool, page: &AppNotif) -> (bool, bool, bool) {
+    (banner && page.banners, sound && page.sounds, badge && page.badges)
+}
+
+/// The settings an app's query answers, with the app's page applied: its alert, sound and badge are off when the
+/// page turns them off.
+pub fn apply_page(mut settings: NotifSettings, page: &AppNotif) -> NotifSettings {
+    settings.alert &= page.banners;
+    settings.sound &= page.sounds;
+    settings.badge &= page.badges;
+    settings
+}
+
 /// The text a delivered request shows: the subtitle goes between title and body the way Golden Gate stacks them.
 pub fn display(req: &NotifRequest) -> (String, String) {
     let body = if req.subtitle.is_empty() { req.body.clone() } else if req.body.is_empty() { req.subtitle.clone() } else { format!("{}\n{}", req.subtitle, req.body) };
@@ -452,6 +468,16 @@ pub fn request_sound(sound_kind: u8, sound_name: &str, alert: &str) -> Option<St
 #[cfg(test)]
 mod sound_tests {
     use super::*;
+
+    #[test]
+    fn the_apps_page_turns_off_its_banners_sounds_and_badges() {
+        let page = AppNotif { banners: false, sounds: true, badges: false, ..AppNotif::default() };
+        assert_eq!(gate_by_page(true, true, true, &page), (false, true, false));
+        let all = settings_for(true, false, false);
+        let s = apply_page(all, &page);
+        assert!(!s.alert && s.sound && !s.badge && s.authorized, "the page clears only what it turns off");
+        assert_eq!(apply_page(all, &AppNotif::default()), all, "the default page changes nothing");
+    }
 
     #[test]
     fn a_request_without_a_sound_plays_none() {
@@ -520,7 +546,8 @@ impl super::Shell {
             ToShell::NotifyPresentReply { token, options } => self.usernotif_presented(token, options, t),
             ToShell::NotifySettings { request } => {
                 let muted = self.notify.store().is_muted(super::AppId::External(slot));
-                let mut settings = settings_for(permitted, muted, self.dnd());
+                let page = self.app_notif(super::AppId::External(slot));
+                let mut settings = apply_page(settings_for(permitted, muted, self.dnd()), &page);
                 if let Some(bits) = self.usernotif.granted(&app) {
                     settings.authorized = permitted && bits != 0;
                     settings.alert &= bits & NOTIF_AUTH_ALERT != 0;
@@ -768,6 +795,9 @@ impl super::Shell {
             }
             Some(plan) => (plan & NOTIF_PRESENT_BANNER != 0, plan & NOTIF_PRESENT_SOUND != 0 && req.sound_kind != 0, plan & NOTIF_PRESENT_BADGE != 0),
         };
+        // the app's page in Settings > Notifications has the last word on banners, sounds and badges
+        let page = self.app_notif(super::AppId::External(slot));
+        let (banner, sound, badge_allowed) = gate_by_page(banner, sound, badge_allowed, &page);
         let id = self.notify_id_banner(n, banner);
         if sound {
             let alert = super::options::ALERT_SOUNDS[self.options().alert_sound.min(super::options::ALERT_SOUNDS.len() - 1)];
