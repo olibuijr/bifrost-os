@@ -211,7 +211,16 @@
    "status": "partial",
    "note": "rule: contacts model; Contacts app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The contacts model (sdk contacts.rs) is the address book database the abd role serves, with 23 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AirPlayUIAgent.plist",
@@ -316,7 +325,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The permission question centre and privacy request model (core permission_request.rs, sdk privacy_permissions.rs) hold the questions, answers and expiry the prompt shows, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.AssetCache.agent.plist",
@@ -776,11 +799,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/dwell.rs",
+   "bifrost": "springboard/src/shell/accessibility/dwell.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Dwell-click state only (shell/dwell.rs, with the accessibility model in shell/accessibility/dwell.rs). Not wired to the pointer: the click has to come from the bin input loop, and the dwell delay has no Settings switch yet.",
+   "note": "Dwell Control is built: Settings > Accessibility > Touch > Dwell Control sets a delay (Off, 0.5 s, 1 s, 2 s). The shell input loop (bin/shell.rs) clicks a pointer that rests inside the radius for that delay, with no button held. Model: shell/accessibility/dwell.rs. shell/dwell.rs is an older, unused copy of the model. Needs a Midget check before it counts as parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::dwell::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::tests"
+    }
+   ],
+   "ready_note": "Dwell Control: Settings > Accessibility > Touch > Dwell Control picks the delay (accessibility/mod.rs, pages.rs DwellControl, settings.rs Pick::Dwell). bin/shell.rs feeds each resting pointer sample to accessibility::dwell::DwellClick and injects a press and release where it rests. The pure model and the settings round trip are tested; pointer behaviour needs a Midget check."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.EscrowSecurityAlert.plist",
@@ -885,7 +922,26 @@
    "status": "partial",
    "note": "rule: file watching, coordination and provider models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_provider::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_coordination::tests"
+    }
+   ],
+   "ready_note": "The file provider, file watching and file coordination models (sdk file_provider.rs, fswatch.rs, file_coordination.rs) cover the provider's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FilesystemUI.plist",
@@ -1118,9 +1174,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs",
+   "bifrost": "springboard/src/shell/sticky_keys.rs, springboard/src/shell/hwkeys.rs, springboard/src/shell/slow_keys.rs",
    "status": "partial",
-   "note": "Sticky Keys is on and off from Settings > Accessibility > Keyboard (a11y_sticky_keys, shell/accessibility/mod.rs). The switch drives HwKeys, which taps the latches on modifier presses and holds them for the next text key (hwkeys.rs). Slow Keys, Repeat Keys and Mouse Keys are not built.",
+   "note": "Sticky Keys is on and off from Settings > Accessibility > Keyboard (a11y_sticky_keys). HwKeys taps the latches on modifier presses and holds them for the next text key (hwkeys.rs). Slow Keys is built (shell/slow_keys.rs, Settings > Accessibility > Keyboard > Slow Keys): the input loop holds a key press until the delay has passed and drops presses released before it. Repeat Keys is the key auto-repeat in hwkeys.rs (Settings > Keyboard > Key Repeat). Mouse Keys is not built: the numeric keypad does not move the pointer yet.",
    "rea": [],
    "method": "heuristic"
   },
@@ -1593,7 +1649,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "The crash report and call stack tree models (sdk crash_report.rs, call_stack_tree.rs) cover the crash reporter's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ReportGPURestart.plist",
@@ -2037,7 +2107,21 @@
    "status": "partial",
    "note": "rule: snapshot backup model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "snapshot_backup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "backup_exclusion::tests"
+    }
+   ],
+   "ready_note": "The snapshot backup model and the backup exclusion rules (core snapshot_backup.rs, backup_exclusion.rs) cover the backup helper's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TextInputMenuAgent.plist",
@@ -2118,7 +2202,21 @@
    "status": "partial",
    "note": "rule: Matter commissioning and interaction models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "matter_interaction::tests"
+    }
+   ],
+   "ready_note": "The Matter commissioning model and its interaction model (core matter.rs, matter_interaction.rs) cover the Thread commissioner's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TrustEvaluationAgent.plist",
@@ -2139,7 +2237,16 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    }
+   ],
+   "ready_note": "Trust evaluation (chain, host and anchor checks) is the SDK trust model in sdk/src/trust.rs, with its tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.UsageTrackingAgent.plist",
@@ -2181,7 +2288,16 @@
    "status": "partial",
    "note": "rule: defaults and preference domain models; Settings app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "defaults::tests"
+    }
+   ],
+   "ready_note": "The defaults model (sdk defaults.rs) covers user defaults and preference events for the Aqua session, with 13 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.UserEventAgent-CryptexContainer.plist",
@@ -2990,7 +3106,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    }
+   ],
+   "ready_note": "The permission question centre (core permission_request.rs) and the privacy request and status wire (sdk privacy_permissions.rs) cover the permission service's job, with tests for both."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.asktod.plist",
@@ -3179,7 +3309,16 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ],
+   "ready_note": "The asset pack model (ui assetpack.rs) covers the background assets role, with 10 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.backgroundtaskmanagement.agent.plist",
@@ -3461,7 +3600,21 @@
    "status": "partial",
    "note": "rule: calendar and sync models; Calendar and Reminders apps",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    }
+   ],
+   "ready_note": "The calendar model and the DAV sync model (sdk calendar.rs, dav_sync.rs) cover the calendar access service's job, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.calendar.CalendarAgentBookmarkMigrationService.plist",
@@ -3874,7 +4027,16 @@
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    }
+   ],
+   "ready_note": "The colour profile model (render icc.rs) loads and applies profiles, with 23 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.commerce.plist",
@@ -4000,7 +4162,16 @@
    "status": "partial",
    "note": "rule: contacts model; Contacts app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "The contacts model (sdk contacts.rs) is the store the contacts service serves, with 23 tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.containermanagerd.plist",
@@ -4561,7 +4732,21 @@
    "status": "partial",
    "note": "rule: calendar and sync models; Calendar and Reminders apps",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "dav_sync::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "calendar::tests"
+    }
+   ],
+   "ready_note": "The DAV sync and calendar models (sdk dav_sync.rs, calendar.rs) cover the data access daemon's job for calendars, with tests."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.devicecheckd.plist",
