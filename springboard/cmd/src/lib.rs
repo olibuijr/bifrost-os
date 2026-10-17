@@ -26,6 +26,7 @@ pub mod plistbuddy;
 pub mod plutil;
 pub mod pasteboard;
 pub mod pmset;
+pub mod purge;
 pub mod say;
 pub mod shortcuts;
 pub mod sips;
