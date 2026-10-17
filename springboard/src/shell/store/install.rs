@@ -477,6 +477,26 @@ pub fn install_package(root: &Path, bytes: &[u8], sha256: &str, shell: &str) -> 
     install_archive(root, &mut std::io::Cursor::new(bytes), shell)
 }
 
+/// The ML-DSA context string that separates package signatures from other uses of a publisher key.
+pub const PACKAGE_SIGNATURE_CONTEXT: &[u8] = b"bifrost-package";
+
+/// Checks a detached ML-DSA-65 signature over the package `bytes` against one publisher's public key.
+pub fn package_signature_is_valid(bytes: &[u8], signature: &[u8], publisher_key: &[u8]) -> bool {
+    matches!(
+        bifrost_core::mldsa::verify(bifrost_core::mldsa::Params::MlDsa65, publisher_key, bytes, PACKAGE_SIGNATURE_CONTEXT, signature),
+        Ok(true)
+    )
+}
+
+/// Verifies `bytes` against `sha256` and a detached `signature` from one of the `publisher_keys`, then installs the
+/// package. A package with no valid signature from a known publisher is discarded before anything is unpacked.
+pub fn install_package_signed(root: &Path, bytes: &[u8], sha256: &str, signature: &[u8], publisher_keys: &[&[u8]], shell: &str) -> Result<InstalledApp, String> {
+    if !publisher_keys.iter().any(|k| package_signature_is_valid(bytes, signature, k)) {
+        return Err("signature check failed; package discarded".into());
+    }
+    install_package(root, bytes, sha256, shell)
+}
+
 /// Installs the (already verified) package `r` holds: the archive is indexed and
 /// unpacked straight from where it is, never loaded whole.
 fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
@@ -822,6 +842,30 @@ pub mod tests {
         let sum: u32 = link[..512].iter().enumerate().map(|(i, &b)| if (148..156).contains(&i) { 32 } else { b as u32 }).sum();
         link[148..155].copy_from_slice(format!("{sum:06o}\0").as_bytes());
         assert!(read_tar(&link).unwrap_err().contains("unsupported"));
+    }
+
+    #[test]
+    fn a_package_needs_a_signature_from_a_known_publisher() {
+        use bifrost_core::mldsa::{keygen, sign, verify, Params};
+        let bytes = pkg(MANIFEST);
+        let publisher = keygen(Params::MlDsa65, &[7u8; 32]);
+        let other = keygen(Params::MlDsa65, &[9u8; 32]);
+        let sig = sign(Params::MlDsa65, &publisher.secret_key, &bytes, PACKAGE_SIGNATURE_CONTEXT, &[0u8; 32]).unwrap();
+        assert_eq!(verify(Params::MlDsa65, &publisher.public_key, &bytes, PACKAGE_SIGNATURE_CONTEXT, &sig), Ok(true));
+        assert!(package_signature_is_valid(&bytes, &sig, &publisher.public_key));
+        assert!(!package_signature_is_valid(&bytes, &sig, &other.public_key), "a key that did not sign the package");
+        assert!(!package_signature_is_valid(&bytes, &sig, b"short"), "a malformed key");
+        let mut edited = bytes.clone();
+        edited[10] ^= 1;
+        assert!(!package_signature_is_valid(&edited, &sig, &publisher.public_key), "edited bytes");
+
+        let root = scratch("signed");
+        assert!(install_package_signed(&root, &bytes, &sum(&bytes), &sig, &[&other.public_key], "0.1.0").is_err());
+        assert!(!apps_dir(&root).join("is.olibuijr.calc").exists(), "nothing unpacked without a valid signature");
+        let keys: [&[u8]; 2] = [&other.public_key, &publisher.public_key];
+        let app = install_package_signed(&root, &bytes, &sum(&bytes), &sig, &keys, "0.1.0").unwrap();
+        assert_eq!(app.id, "is.olibuijr.calc");
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
