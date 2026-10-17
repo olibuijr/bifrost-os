@@ -1373,9 +1373,9 @@
    "description": "",
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/glass_lens.rs",
    "status": "partial",
-   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path, and the edge lens and rim highlight model in springboard/render/src/glass_lens.rs. Built 2026-10-17: lens displacement and rim specular; tests glass_lens::tests. Still missing: the icon-layer shaders themselves (the metallib was not disassembled), so the row stays open.",
    "rea": [],
    "method": "assessed"
   },
