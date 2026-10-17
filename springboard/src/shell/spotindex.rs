@@ -433,6 +433,15 @@ impl Index {
             self.mark(app_id);
         }
     }
+
+    /// Drops the items of every app not in `installed`; returns how many apps went.
+    pub fn forget_missing(&mut self, installed: &[&str]) -> usize {
+        let gone: Vec<String> = self.apps.keys().filter(|app| !installed.contains(&app.as_str())).cloned().collect();
+        for app in &gone {
+            self.forget_app(app);
+        }
+        gone.len()
+    }
 }
 
 // ---- filters: file types and time phrases -------------------------------------------------------------------------
@@ -721,6 +730,11 @@ pub fn set_expiry(app_id: &str, unique_id: &str, at: Option<u64>) -> bool {
     with(|ix| ix.set_expiry(app_id, unique_id, at))
 }
 
+/// Drops the items of apps that are no longer installed (an uninstalled app's items go with it); returns how many apps.
+pub fn forget_missing(installed: &[&str]) -> usize {
+    with(|ix| ix.forget_missing(installed))
+}
+
 /// Items of `app_id` matching `query`, at most `limit`. Expired items are not returned.
 pub fn search_app(app_id: &str, query: &str, limit: usize) -> Vec<Found> {
     let now = now_secs();
@@ -868,6 +882,18 @@ mod tests {
         assert_eq!(ix.search_app("a", "mail", 10).len(), 1);
         assert_eq!(ix.search_app("a", "mail", 10)[0].app_id, "a");
         assert_eq!(ix.search("mail", 10).len(), 2);
+    }
+
+    #[test]
+    fn forgetting_missing_apps_drops_only_their_items() {
+        let mut ix = Index::default();
+        ix.index("notes", vec![it("1", "", "Groceries", "", &[])]);
+        ix.index("mail", vec![it("1", "", "Groceries receipt", "", &[])]);
+        ix.index("gone", vec![it("1", "", "Groceries list", "", &[])]);
+        assert_eq!(ix.forget_missing(&["notes", "mail"]), 1);
+        assert_eq!(ix.search_app("gone", "groceries", 10).len(), 0);
+        assert_eq!(ix.search("groceries", 10).len(), 2);
+        assert_eq!(ix.forget_missing(&["notes", "mail"]), 0, "nothing left to forget");
     }
 
     #[test]

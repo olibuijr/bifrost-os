@@ -1639,6 +1639,14 @@ impl Shell {
     /// Adds home-screen tiles for apps installed since start-up (`apphost::refresh`); they join
     /// the end of the grid and the App Library like any app.
     pub(super) fn installed_changed(&mut self) {
+        // an uninstalled app's indexed items leave Search with it; an empty list is a registry not read yet, so it keeps all
+        let ids: Vec<String> = apphost::installed().iter().map(|a| a.manifest.id.clone()).collect();
+        if !ids.is_empty() {
+            let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+            if spotindex::forget_missing(&refs) > 0 {
+                spotindex::flush();
+            }
+        }
         // an install or an update rewrote installed.json: the icons of every app are drawn again
         let stamp = helpbook::installed_stamp(&apphost::root());
         if stamp != self.installed_stamp {
