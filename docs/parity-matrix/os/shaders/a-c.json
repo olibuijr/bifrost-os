@@ -828,9 +828,9 @@
    "description": "",
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs",
    "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and no RAW container decoder (DNG, CR2, NEF, ARW), no colour matrix and no tone curve, so the row stays open. Corrected 2026-10-17.",
    "rea": [],
    "method": "assessed"
   },
@@ -849,9 +849,9 @@
    "description": "",
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs",
    "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "RAW processing shader library. BifrOSt has the RAW parameter model (springboard/render/src/raw_params.rs), a Bayer demosaic with white balance (springboard/render/src/bayer.rs), and no RAW container decoder (DNG, CR2, NEF, ARW), no colour matrix and no tone curve, so the row stays open. Corrected 2026-10-17.",
    "rea": [],
    "method": "assessed"
   },
@@ -1218,11 +1218,11 @@
     "size": 11341344
    },
    "description": "",
-   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
+   "role": "Unknown: CoreUI shader archive (name only; not disassembled)",
    "doc": "",
-   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "bifrost": "",
    "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "note": "Unknown purpose: the name suggests a shader archive for the CoreUI interface frameworks, but the metallib was not disassembled, so no BifrOSt counterpart is claimed. Left open until its contents are inventoried. Corrected 2026-10-17.",
    "rea": [],
    "method": "assessed"
   },
@@ -1451,9 +1451,9 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
+   "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/render/src/depth_blur.rs; springboard/render/src/portrait_lighting.rs; springboard/ui/src/cnn_layers.rs",
    "status": "partial",
-   "note": "Depth blur, photo looks and small eager network layers run as CPU pixel code; there are no GPU kernels and no trained model ships.",
+   "note": "Depth blur, photo looks and portrait relighting run as CPU pixel code (depth_blur.rs, photo_effects.rs, portrait_lighting.rs). Small eager neural-network layers exist (springboard/ui/src/cnn_layers.rs) but no trained model ships. Open: the trained network weights are part of Apple's ML model packs, which BifrOSt does not carry, so this row stays open until a model pack is decided. Corrected 2026-10-17.",
    "rea": [],
    "method": "assessed"
   },
@@ -1472,11 +1472,25 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "springboard/render/src/depth_blur.rs; springboard/ui/src/image_kernels.rs (convolve, source_over, histogram)",
+   "bifrost": "springboard/render/src/depth_blur.rs; springboard/render/src/portrait_lighting.rs; springboard/ui/src/image_kernels.rs (convolve, source_over, histogram)",
    "status": "partial",
-   "note": "Depth-driven blur and CPU reference kernels (convolve, source-over, histogram) exist. The portrait lighting kernels and any on-device model are missing.",
+   "note": "Depth-driven blur, portrait relighting from a depth map (portrait_lighting.rs, a Lambert model of this crate's own) and CPU reference kernels (convolve, source-over, histogram) exist. The relighting curves are not the reference ones. Built 2026-10-17: relight() in portrait_lighting.rs.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "depth_blur::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "portrait_lighting::tests"
+    }
+   ],
+   "ready_note": "Ready: the depth-driven blur (depth_blur.rs) and the depth-map relighting (portrait_lighting.rs) cover this library's portrait and computational photography job on the CPU, each with host tests. The convolve, source-over and histogram kernels live in springboard/ui/src/image_kernels.rs. Trained model weights are not part of this row."
   }
  ]
 }

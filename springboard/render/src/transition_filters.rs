@@ -8,6 +8,7 @@
 //! Differences from the reference: the bars swipe alternates the direction of each bar instead of
 //! using the reference bar timing, and the copy machine's light band is linear in distance.
 use crate::colorfx::{self, Rgb};
+use crate::distortion_filters::sample;
 use crate::gfx::Image;
 
 /// The sweep frame of a `w` by `h` image turned by `angle`: the direction (dx, dy), the centre, and
@@ -130,6 +131,155 @@ pub fn copy_machine(from: &Image, to: &Image, time: f32, angle: f32, band: f32) 
     }))
 }
 
+/// `CIFlashTransition`: a flash of light centred on `center` (pixels). In the first half of the
+/// transition the picture brightens towards white at the centre and the glow fades with distance
+/// (to nothing at the far corner), peaking at time 0.5; in the second half the picture switches to
+/// `to`, still flashed, and the glow dies away. `None` when the sizes differ or `center` is not finite.
+pub fn flash(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let strength = 1.0 - (2.0 * t - 1.0).abs();
+    let white = Rgb::new(1.0, 1.0, 1.0);
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let d = ((x as f32 + 0.5 - center.0).powi(2) + (y as f32 + 0.5 - center.1).powi(2)).sqrt();
+        let glow = strength * (1.0 - d / reach).max(0.0);
+        let px = if t < 0.5 { a } else { b };
+        if glow <= 0.0 { px } else { colorfx::map_pixel(px, |c| c.mix(white, glow)) }
+    }))
+}
+
+/// `CIModTransition`: a radial reveal of `to` from `center` (pixels) whose front is modulated by
+/// `lobes` bumps around the centre, so it spreads as a flower rather than a circle. A pixel shows `to`
+/// once its distance over the far-corner distance is below `time * (1.25 + 0.25 * cos(lobes * theta))`.
+/// Time 0 shows `from` everywhere and time 1 shows `to` everywhere. `None` when the sizes differ or
+/// `center` is not finite. A `lobes` of 0 is treated as 1.
+pub fn mod_reveal(from: &Image, to: &Image, time: f32, center: (f32, f32), lobes: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let k = lobes.max(1) as f32;
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let (dx, dy) = (x as f32 + 0.5 - center.0, y as f32 + 0.5 - center.1);
+        let d = (dx * dx + dy * dy).sqrt();
+        let theta = dy.atan2(dx);
+        let front = t * (1.25 + 0.25 * (k * theta).cos());
+        if d / reach < front { b } else { a }
+    }))
+}
+
+/// `CIPageCurlTransition`: a page turns over a fold line across the image, perpendicular to `angle`.
+/// Behind the fold the page has turned, so the picture is `to`; ahead of it the picture is still
+/// `from`. While the page is mid-turn (0 < `time` < 1), the `curl` pixels just ahead of the fold are
+/// lifted, and that band shows `from` reflected across the fold, with transparent black where the
+/// reflection falls off the picture. `None` when the sizes differ, `angle` is not finite, or `curl`
+/// is negative or not finite.
+pub fn page_curl(from: &Image, to: &Image, time: f32, angle: f32, curl: f32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !angle.is_finite() || !curl.is_finite() || curl < 0.0 {
+        return None;
+    }
+    let sw = Sweep::new(from.w, from.h, angle);
+    let t = time_of(time);
+    let front = t * sw.along_len;
+    let lifting = t > 0.0 && t < 1.0;
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let s = sw.along(x, y);
+        if s < front {
+            return b;
+        }
+        let lift = s - front;
+        if lifting && lift < curl {
+            let (px, py) = (x as f32 + 0.5 - 2.0 * lift * sw.dx, y as f32 + 0.5 - 2.0 * lift * sw.dy);
+            sample(from, px, py)
+        } else {
+            a
+        }
+    }))
+}
+
+/// `CIRippleTransition`: a ring spreads out from `center` (pixels) across the picture. The ring is at
+/// radius `time` times the far-corner distance, and its edge is wobbled by a sine of the distance, so
+/// it ripples. Inside the ring the picture is `to`, outside it is `from`. The wobble vanishes at time
+/// 0 and time 1, so the ends are exactly `from` and `to`. `None` when the sizes differ or `center` is
+/// not finite.
+pub fn ripple(from: &Image, to: &Image, time: f32, center: (f32, f32)) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if !center.0.is_finite() || !center.1.is_finite() {
+        return None;
+    }
+    let t = time_of(time);
+    let reach = ((from.w * from.w + from.h * from.h) as f32).sqrt();
+    let wobble = 6.0 * (std::f32::consts::PI * t).sin();
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let d = ((x as f32 + 0.5 - center.0).powi(2) + (y as f32 + 0.5 - center.1).powi(2)).sqrt();
+        let front = t * reach + wobble * (d * 0.25).sin();
+        if d < front { b } else { a }
+    }))
+}
+
+/// `CIAccordionFoldTransition`: the picture folds like an accordion into `folds` vertical panels.
+/// Each panel keeps its left edge and compresses to the fraction `1 - time` of its width, so the
+/// `from` picture is squeezed into the left part of the panel, and the rest of the panel shows `to`.
+/// At time 0 nothing is folded and at time 1 the whole picture is `to`. `None` when the sizes
+/// differ or `folds` is 0.
+pub fn accordion_fold(from: &Image, to: &Image, time: f32, folds: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    if folds == 0 {
+        return None;
+    }
+    let t = time_of(time);
+    let panel = from.w as f32 / folds as f32;
+    let keep = 1.0 - t;
+    Some(select(from, to, n, |i, _, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        let fx = x as f32 + 0.5;
+        let index = (fx / panel).floor();
+        let local = fx - index * panel;
+        if t >= 1.0 || local >= panel * keep {
+            return b;
+        }
+        // Read from's panel stretched back to full width: local / keep runs over the whole panel.
+        let sx = ((index * panel + local / keep).max(0.0) as usize).min(from.w - 1);
+        from.px[y * from.w + sx]
+    }))
+}
+
+/// A fixed threshold in 0..1 for the pixel (x, y), drawn from a hash of its position and `seed`.
+fn pixel_threshold(x: usize, y: usize, seed: u32) -> f32 {
+    let mut h = seed ^ (x as u32).wrapping_mul(0x27d4_eb2d) ^ (y as u32).wrapping_mul(0x1656_67b1);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7feb_352d);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x846c_a68b);
+    h ^= h >> 16;
+    h as f32 / 4_294_967_296.0
+}
+
+/// `CIDisintegrateWithMaskTransition`: the picture breaks into pieces that vanish at random. Each
+/// pixel has a fixed threshold in 0..1 and shows `to` once `time` passes it. The reference reads the
+/// threshold from a mask image; this model draws it from a hash of the pixel position and `seed`, so
+/// the same seed always gives the same pattern. Time 0 is `from` and time 1 is `to`. `None` when the
+/// sizes differ.
+pub fn disintegrate(from: &Image, to: &Image, time: f32, seed: u32) -> Option<Image> {
+    let n = same_size(from, to)?;
+    let t = time_of(time);
+    Some(select(from, to, n, |i, a, b| {
+        let (x, y) = (i % from.w, i / from.w);
+        if t >= 1.0 || (t > 0.0 && pixel_threshold(x, y, seed) < t) { b } else { a }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,6 +358,99 @@ mod tests {
         assert_eq!(mid.px[7], BLACK);
         assert_eq!(copy_machine(&a, &b, 1.0, 0.0, 2.0).unwrap(), b);
         assert_eq!(copy_machine(&a, &b, 0.0, 0.0, 2.0).unwrap(), a);
+    }
+
+    #[test]
+    fn disintegrate_is_seeded_and_breaks_up_at_mid_time() {
+        let (a, b) = (flat(16, 16, BLACK), flat(16, 16, GREY));
+        assert_eq!(disintegrate(&a, &b, 0.0, 9).unwrap(), a);
+        assert_eq!(disintegrate(&a, &b, 1.0, 9).unwrap(), b);
+        let mid = disintegrate(&a, &b, 0.5, 9).unwrap();
+        assert_eq!(mid, disintegrate(&a, &b, 0.5, 9).unwrap(), "the same seed gives the same pattern");
+        let shown = mid.px.iter().filter(|&&p| p == GREY).count();
+        assert!(shown > 0 && shown < 256, "some pieces show to and some do not, got {shown}");
+    }
+
+    #[test]
+    fn accordion_fold_squeezes_each_panel_into_its_left_part() {
+        let from = Image { w: 8, h: 1, px: (0..8u32).map(|i| (i * 16) | 0xff00_0000).collect() };
+        let to = flat(8, 1, GREY);
+        let out = accordion_fold(&from, &to, 0.5, 2).unwrap();
+        // Two panels of 4 pixels, each keeping half its width: pixels 0 and 1 show from's pixels 1 and 3,
+        // and pixels 2 and 3 show to.
+        assert_eq!(out.px[0], from.px[1]);
+        assert_eq!(out.px[1], from.px[3]);
+        assert_eq!(out.px[2], GREY);
+        assert_eq!(out.px[3], GREY);
+        assert_eq!(out.px[4], from.px[5]);
+    }
+
+    #[test]
+    fn accordion_fold_ends_and_rejects_zero_folds() {
+        let (a, b) = (flat(8, 2, BLACK), flat(8, 2, GREY));
+        assert_eq!(accordion_fold(&a, &b, 0.0, 3).unwrap(), a);
+        assert_eq!(accordion_fold(&a, &b, 1.0, 3).unwrap(), b);
+        assert!(accordion_fold(&a, &b, 0.5, 0).is_none());
+    }
+
+    #[test]
+    fn ripple_ends_on_the_pictures_and_spreads_from_the_centre() {
+        let (a, b) = (flat(9, 9, BLACK), flat(9, 9, GREY));
+        assert_eq!(ripple(&a, &b, 0.0, (4.0, 4.0)).unwrap(), a);
+        assert_eq!(ripple(&a, &b, 1.0, (4.0, 4.0)).unwrap(), b);
+        let mid = ripple(&a, &b, 0.5, (4.0, 4.0)).unwrap();
+        assert_eq!(mid.px[4 * 9 + 4], GREY, "the centre is inside the ring at mid time");
+    }
+
+    #[test]
+    fn ripple_rejects_a_non_finite_centre() {
+        let a = flat(4, 4, BLACK);
+        assert!(ripple(&a, &a, 0.5, (0.0, f32::INFINITY)).is_none());
+    }
+
+    #[test]
+    fn page_curl_without_curl_is_a_plain_swipe_and_ends_on_to() {
+        let (a, b) = (flat(8, 1, BLACK), flat(8, 1, GREY));
+        assert_eq!(page_curl(&a, &b, 0.5, 0.0, 0.0), swipe(&a, &b, 0.5, 0.0));
+        assert_eq!(page_curl(&a, &b, 0.0, 0.0, 3.0).unwrap(), a);
+        assert_eq!(page_curl(&a, &b, 1.0, 0.0, 3.0).unwrap(), b);
+    }
+
+    #[test]
+    fn the_lifted_page_shows_the_source_reflected_across_the_fold() {
+        let from = Image { w: 8, h: 1, px: (0..8u32).map(|i| (i * 16) | 0xff00_0000).collect() };
+        let to = flat(8, 1, GREY);
+        let out = page_curl(&from, &to, 0.5, 0.0, 3.0).unwrap();
+        // The fold is at x = 4. Pixel 4 is 0.5 ahead of it, so it shows from's pixel 3, its mirror image.
+        assert_eq!(out.px[4], from.px[3]);
+        assert_eq!(out.px[0], GREY, "behind the fold shows to");
+    }
+
+    #[test]
+    fn flash_starts_and_ends_on_the_pictures_and_peaks_at_the_centre() {
+        let (a, b) = (flat(8, 8, BLACK), flat(8, 8, GREY));
+        assert_eq!(flash(&a, &b, 0.0, (4.0, 4.0)).unwrap(), a);
+        assert_eq!(flash(&a, &b, 1.0, (4.0, 4.0)).unwrap(), b);
+        let mid = flash(&a, &b, 0.5, (4.0, 4.0)).unwrap();
+        assert!(mid.px[4 * 8 + 4] & 0xff > 0xe0, "the centre is nearly white at the peak");
+        assert!(mid.px[4 * 8 + 4] & 0xff > mid.px[0] & 0xff, "the glow fades with distance");
+    }
+
+    #[test]
+    fn mod_reveals_in_flower_lobes_and_ends_on_to() {
+        let (a, b) = (flat(9, 9, BLACK), flat(9, 9, GREY));
+        assert_eq!(mod_reveal(&a, &b, 0.0, (4.0, 4.0), 1).unwrap(), a);
+        assert_eq!(mod_reveal(&a, &b, 1.0, (4.0, 4.0), 1).unwrap(), b);
+        let mid = mod_reveal(&a, &b, 0.25, (4.0, 4.0), 1).unwrap();
+        // One lobe: the front reaches further along +x than along -x, so (8, 4) is revealed and (0, 4) is not.
+        assert_eq!(mid.px[4 * 9 + 8], GREY);
+        assert_eq!(mid.px[4 * 9], BLACK);
+    }
+
+    #[test]
+    fn flash_rejects_a_non_finite_centre() {
+        let a = flat(4, 4, BLACK);
+        assert!(flash(&a, &a, 0.5, (f32::NAN, 0.0)).is_none());
     }
 
     #[test]

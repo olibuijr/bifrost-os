@@ -91,6 +91,15 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CISwipeTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE] },
     FilterInfo { name: "CIBarsSwipeTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE, a("inputWidth", 30.0, 1.0, 1000.0)] },
     FilterInfo { name: "CICopyMachineTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE, a("inputWidth", 50.0, 0.0, 1000.0)] },
+    FilterInfo { name: "CIFlashTransition", category: CATEGORY_TRANSITION, attributes: &[TIME] },
+    FilterInfo { name: "CIModTransition", category: CATEGORY_TRANSITION, attributes: &[TIME] },
+    FilterInfo { name: "CIPageCurlTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, ANGLE] },
+    FilterInfo { name: "CIRippleTransition", category: CATEGORY_TRANSITION, attributes: &[TIME] },
+    FilterInfo { name: "CIAccordionFoldTransition", category: CATEGORY_TRANSITION, attributes: &[TIME, a("inputNumberOfFolds", 3.0, 1.0, 50.0)] },
+    FilterInfo { name: "CIDisintegrateWithMaskTransition", category: CATEGORY_TRANSITION, attributes: &[TIME] },
+    FilterInfo { name: "CITriangleTile", category: CATEGORY_TILE, attributes: &[ANGLE, a("inputWidth", 100.0, 1.0, 1000.0)] },
+    FilterInfo { name: "CIParallelogramTile", category: CATEGORY_TILE, attributes: &[ANGLE, a("inputAcuteAngle", 1.047, 0.0, 3.1416), a("inputWidth", 100.0, 1.0, 1000.0)] },
+    FilterInfo { name: "CIPerspectiveTile", category: CATEGORY_TILE, attributes: &[] },
 ];
 
 /// Every catalogued filter name, in catalogue order.
@@ -146,7 +155,21 @@ mod tests {
 
     #[test]
     fn colour_stylize_generator_and_transition_filters_are_listed() {
-        assert_eq!(filter_names(Some(CATEGORY_TRANSITION)), ["CISwipeTransition", "CIBarsSwipeTransition", "CICopyMachineTransition"]);
+        assert_eq!(
+            filter_names(Some(CATEGORY_TRANSITION)),
+            [
+                "CISwipeTransition",
+                "CIBarsSwipeTransition",
+                "CICopyMachineTransition",
+                "CIFlashTransition",
+                "CIModTransition",
+                "CIPageCurlTransition",
+                "CIRippleTransition",
+                "CIAccordionFoldTransition",
+                "CIDisintegrateWithMaskTransition"
+            ]
+        );
+        assert!(filter_names(Some(CATEGORY_TILE)).contains(&"CIPerspectiveTile"));
         assert_eq!(filter_names(Some(CATEGORY_GRADIENT)), ["CILinearGradient", "CIRadialGradient"]);
         assert!(filter_names(Some(CATEGORY_COLOR_EFFECT)).contains(&"CIFalseColor"));
         assert!(filter_names(Some(CATEGORY_COLOR_ADJUSTMENT)).contains(&"CIWhitePointAdjust"));
