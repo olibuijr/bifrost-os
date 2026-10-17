@@ -13,6 +13,7 @@ mod html;
 mod layout;
 mod links;
 mod odt;
+mod office;
 mod prefs;
 mod print;
 mod properties;
