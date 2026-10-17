@@ -2,6 +2,7 @@
 pub mod json;
 pub mod container_layout;
 pub mod login_directories;
+pub mod system_config_store;
 pub mod plist;
 pub mod plist_binary;
 pub mod defaults_file;

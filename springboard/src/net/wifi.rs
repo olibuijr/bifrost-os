@@ -241,9 +241,20 @@ impl Manager {
                 }
             }
             self.desktop_tick();
+            self.publish_state();
             let state = self.status.lock().map(|s| s.state).unwrap_or_default();
             let transient = self.last_scan.is_some() || self.attempt.is_some() || self.manual.is_some() || self.next_dhcp.is_some();
             wait = tick_interval(state, transient, self.ctrl.is_some());
+        }
+    }
+
+    /// Publishes the link's address, router and network name into the system configuration store.
+    fn publish_state(&self) {
+        let Ok(s) = self.status.lock() else { return };
+        let desired = super::state_publish::desired(&self.iface, s.ip, s.router, s.ssid.as_deref());
+        drop(s);
+        if let Ok(mut store) = super::state_publish::store().lock() {
+            super::state_publish::apply(&mut store, &desired);
         }
     }
 
