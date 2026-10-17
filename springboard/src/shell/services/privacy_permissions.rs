@@ -295,6 +295,7 @@ pub fn access(app_id: &str) -> CaptureAccess {
 
 /// A change the person makes in Settings for one app and media type.
 pub fn set_by_user(app_id: &str, media: Media, allowed: bool) -> Result<Status, Error> {
+    mark_grants_dirty();
     STORE.with(|s| {
         let mut map = s.borrow_mut();
         let entry = map.entry(app_id.to_string()).or_default();
@@ -595,5 +596,129 @@ mod tests {
         queue_prompt(id, "Late", Kind::Location, "");
         set_location_by_user(id, false);
         assert!(take_prompt().is_none());
+    }
+}
+
+// ---- persisted grants -------------------------------------------------------------------------------------------------
+// The capture (camera, microphone, screen) and contacts answers are saved to `privacy-grants.tsv` beside the other shell
+// data, so an Allow or Don't Allow survives a restart. Location answers are not saved yet.
+
+const GRANTS_FILE: &str = "privacy-grants.tsv";
+const GRANTS_HEADER: &str = "springboard-privacy-grants-v1";
+
+thread_local! {
+    static GRANTS_DIRTY: std::cell::Cell<bool> = std::cell::Cell::new(false);
+    static GRANTS_LOADED: std::cell::Cell<bool> = std::cell::Cell::new(false);
+}
+
+/// Marks the grants as changed, so the next `persist_grants` writes them.
+pub fn mark_grants_dirty() {
+    GRANTS_DIRTY.with(|d| d.set(true));
+}
+
+/// Restores the saved grants the first time it runs, then writes them again whenever they change. Called from the
+/// shell's tick, so a grant made in Settings or on a sheet is saved within a tick.
+pub fn persist_grants(data_dir: &std::path::Path) {
+    let path = data_dir.join(GRANTS_FILE);
+    if !GRANTS_LOADED.with(|l| l.replace(true)) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            apply_grants(&text);
+        }
+        GRANTS_DIRTY.with(|d| d.set(false));
+        return;
+    }
+    if GRANTS_DIRTY.with(|d| d.replace(false)) {
+        if bifrost_core::fsutil::write_atomic(&path, render_grants()).is_err() {
+            mark_grants_dirty();
+        }
+    }
+}
+
+/// The saved grants as text: one `media` line per capture answer and one `contacts` line per contacts answer.
+pub fn render_grants() -> String {
+    let mut out = format!("{GRANTS_HEADER}\n");
+    STORE.with(|s| {
+        for (app, access) in s.borrow().iter() {
+            for media in MEDIA {
+                match access.status(media) {
+                    Status::Authorized => out.push_str(&format!("media\t{app}\t{}\t1\n", media_name(media))),
+                    Status::Denied => out.push_str(&format!("media\t{app}\t{}\t0\n", media_name(media))),
+                    Status::NotDetermined | Status::Restricted => {}
+                }
+            }
+        }
+    });
+    for (app, status, picked) in super::contacts::grants_snapshot() {
+        match status {
+            bifrost_ui::contact_access::Status::Authorized => out.push_str(&format!("contacts\t{app}\tall\n")),
+            bifrost_ui::contact_access::Status::Denied => out.push_str(&format!("contacts\t{app}\tdeny\n")),
+            bifrost_ui::contact_access::Status::Limited => {
+                let ids: Vec<String> = picked.iter().map(|id| id.to_string()).collect();
+                out.push_str(&format!("contacts\t{app}\tpicked\t{}\n", ids.join(",")));
+            }
+            bifrost_ui::contact_access::Status::NotDetermined | bifrost_ui::contact_access::Status::Restricted => {}
+        }
+    }
+    out
+}
+
+/// Applies saved grants. Lines that do not parse are skipped; a restricted answer keeps its status as the model says.
+pub fn apply_grants(text: &str) {
+    if text.lines().next() != Some(GRANTS_HEADER) {
+        return;
+    }
+    for line in text.lines().skip(1) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        match fields.as_slice() {
+            ["media", app, name, allowed] => {
+                let Some(media) = MEDIA.iter().copied().find(|m| media_name(*m) == *name) else { continue };
+                let _ = set_by_user(app, media, *allowed == "1");
+            }
+            ["contacts", app, "all"] => {
+                let _ = super::contacts::answer_prompt(app, bifrost_ui::contact_access::Choice::All);
+            }
+            ["contacts", app, "deny"] => {
+                let _ = super::contacts::answer_prompt(app, bifrost_ui::contact_access::Choice::Deny);
+            }
+            ["contacts", app, "picked", ids] => {
+                let picked: Option<std::collections::BTreeSet<u64>> = ids
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.parse::<u64>().ok())
+                    .collect();
+                if let Some(picked) = picked {
+                    let _ = super::contacts::answer_prompt(app, bifrost_ui::contact_access::Choice::Picked(picked));
+                }
+            }
+            _ => {}
+        }
+    }
+    GRANTS_DIRTY.with(|d| d.set(false));
+}
+
+#[cfg(test)]
+mod grants_tests {
+    use super::*;
+
+    #[test]
+    fn a_saved_grant_round_trips_through_its_text() {
+        let app = "is.example.grants.round";
+        set_by_user(app, Media::Video, true).unwrap();
+        let picked = "is.example.grants.picked";
+        super::super::contacts::answer_prompt(picked, bifrost_ui::contact_access::Choice::Picked([3u64, 9].into_iter().collect())).unwrap();
+        let text = render_grants();
+        assert!(text.contains(&format!("media\t{app}\tcamera\t1\n")), "{text}");
+        assert!(text.contains(&format!("contacts\t{picked}\tpicked\t3,9\n")), "{text}");
+
+        let other = "is.example.grants.restored";
+        apply_grants(&text.replace("is.example.grants.round", other).replace("is.example.grants.picked", "is.example.grants.picked2"));
+        assert_eq!(access(other).status(Media::Video), Status::Authorized);
+        assert_eq!(super::super::contacts::access_of("is.example.grants.picked2").picked().len(), 2);
+    }
+
+    #[test]
+    fn a_file_without_the_header_restores_nothing() {
+        apply_grants("media\tis.example.grants.none\tcamera\t1\n");
+        assert_eq!(access("is.example.grants.none").status(Media::Video), Status::NotDetermined);
     }
 }

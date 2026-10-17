@@ -15,7 +15,8 @@
 //! ```
 //! Saving needs full access: a limited grant reads only, and an app with no answer is refused.
 //! The person decides access: an app that has not been answered reads `NotDetermined` and gets an error from `fetch`.
-//! `request` reports the status and never grants it; the answer comes from the shell's access sheet or Settings. The
+//! `request` reports the status and never grants it. An app that is undecided gets the access sheet queued, and the answer
+//! comes from that sheet or from Settings. The
 //! service is `springboard/src/shell/services/contacts.rs`, and the model is `bifrost_ui::contact_access` (every
 //! contact, a picked set read-only, or none) with the records in `bifrost_ui::contact_fetch`.
 pub use crate::controls::contact_access::{Choice, Error, Status};
@@ -38,7 +39,9 @@ pub fn access(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "access", &Json::Null)
 }
 
-/// Asks for the current status. It changes nothing: the person answers the access sheet or Settings.
+/// Asks for the current status. It never grants access itself. An app that has not been answered yet gets the access sheet
+/// queued, so the person can answer it; the answer shows in later `request` and `access` replies, and the person can
+/// also change it in Settings > Privacy & Security > App Permissions.
 pub fn request(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "request", &Json::Null)
 }

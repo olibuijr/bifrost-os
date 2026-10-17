@@ -33,7 +33,7 @@
       "apple": "ABPeoplePickerView, ABPersonView",
       "bifrost": "springboard/ui/src/contact_picker.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one Built 2026-10-17: SDK contacts::picker exposes the picker model to apps (picker test in the SDK contacts tests). No embeddable person view yet. Built 2026-10-17 (shell): The contacts service pick and pick_result start and read the picker (contactpick.rs; SDK contacts::picker). The picker sheet that draws the list is not built yet."
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one Built 2026-10-17: SDK contacts::picker exposes the picker model to apps (picker test in the SDK contacts tests). No embeddable person view yet. Built 2026-10-17 (shell): The contacts service pick and pick_result start and read the picker (contactpick.rs; SDK contacts::picker). The picker sheet that draws the list is not built yet. Built 2026-10-17 (shell, round 4): The picker sheet is drawn by the shell (contact_pick_sheet.rs). No embeddable person view yet."
     },
     {
       "feature": "Groups",
@@ -89,7 +89,7 @@
       "apple": "ABAddressBookRequestAccessWithCompletion, ABAddressBookGetAuthorizationStatus",
       "bifrost": "springboard/ui/src/contact_access.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage Built 2026-10-17 (shell): Settings > App Permissions has a Contacts switch per app, and undecided apps queue the access sheet (privacy_permissions Kind::Contacts). Grants still reset on restart."
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage Built 2026-10-17 (shell): Settings > App Permissions has a Contacts switch per app, and undecided apps queue the access sheet (privacy_permissions Kind::Contacts). Grants still reset on restart. Built 2026-10-17 (shell, round 4): Contact grants persist with the other privacy grants (privacy-grants.tsv); the picker sheet draws the open pick (contact_pick_sheet.rs)."
     },
     {
       "feature": "Action plug-in delegate",

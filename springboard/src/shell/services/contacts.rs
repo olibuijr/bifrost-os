@@ -50,11 +50,23 @@ pub fn access_of(app_id: &str) -> Access {
 
 /// The answer to the access prompt the app is waiting on. The prompt is shown once.
 pub fn answer_prompt(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().request(choice))
+}
+
+/// Every app with a contacts answer, as `(app, status, picked contacts)`, for the privacy store to save.
+pub fn grants_snapshot() -> Vec<(String, Status, Vec<u64>)> {
+    ACCESS.with(|a| {
+        a.borrow()
+            .iter()
+            .map(|(app, access)| (app.clone(), access.status(), access.picked().iter().copied().collect()))
+            .collect()
+    })
 }
 
 /// A change the person makes in Settings for one app. Only a system restriction blocks it.
 pub fn change_by_user(app_id: &str, choice: Choice) -> Result<Status, Error> {
+    super::privacy_permissions::mark_grants_dirty();
     ACCESS.with(|a| a.borrow_mut().entry(app_id.to_string()).or_default().change_in_settings(choice))
 }
 
@@ -460,7 +472,11 @@ impl SystemService for Contacts {
                 let mode_name = params.get("mode").and_then(Json::as_str).unwrap_or("");
                 let mode = contactpick::mode_of(mode_name, need, keys)?;
                 let entries = contactpick::entries_of(&load()?);
-                contactpick::start(app_id, bifrost_ui::contact_picker::Picker::new(entries, mode));
+                let app_name = super::super::apphost::installed()
+                    .iter()
+                    .find(|a| a.manifest.id == app_id)
+                    .map_or_else(|| app_id.to_string(), |a| a.manifest.name.clone());
+                contactpick::start(app_id, &app_name, bifrost_ui::contact_picker::Picker::new(entries.clone(), mode), &entries);
                 Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))]))
             }
             "pick_result" => match contactpick::outcome(app_id) {

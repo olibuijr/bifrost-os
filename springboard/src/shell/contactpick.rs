@@ -1,7 +1,7 @@
 //! The pending contact pick of each app. An app starts a pick (the contacts service `pick`), the shell's picker sheet
-//! shows the list and lets the person select a contact or one value of it, and the app reads the result with
-//! `pick_result`. Only the final choice is kept for the app; the sheet calls `select` and `choose`, and `visible`
-//! gives it the list to draw. A pick is per app and replaces an earlier one that has not been read yet.
+//! shows the list (`contact_pick_sheet`) and the person selects a contact or one value of it, and the app reads the
+//! result with `pick_result`. Only the final choice is kept for the app. A pick is per app and replaces an earlier one
+//! that has not been read yet.
 use crate::shell::contactstore::Contact;
 use bifrost_ui::contact_card::{Entry, Field, Key};
 use bifrost_ui::contact_picker::{Choice, Error, Mode, Picker};
@@ -20,6 +20,8 @@ pub enum Outcome {
 }
 
 struct Pending {
+    app_name: String,
+    names: BTreeMap<u64, String>,
     picker: Option<Picker>,
     chosen: Option<Choice>,
 }
@@ -40,9 +42,12 @@ pub fn card_key(name: &str) -> Option<Key> {
     }
 }
 
-/// Starts a pick for an app, replacing any pick it has not read.
-pub fn start(app_id: &str, picker: Picker) {
-    PICKS.with(|p| p.borrow_mut().insert(app_id.to_string(), Pending { picker: Some(picker), chosen: None }));
+/// Starts a pick for an app, replacing any pick it has not read. `app_name` is the name the sheet shows.
+pub fn start(app_id: &str, app_name: &str, picker: Picker, entries: &[Entry]) {
+    let names = entries.iter().map(|e| (e.id, e.name.clone())).collect();
+    PICKS.with(|p| {
+        p.borrow_mut().insert(app_id.to_string(), Pending { app_name: app_name.to_string(), names, picker: Some(picker), chosen: None })
+    });
 }
 
 /// What the app's pick stands at. Reading a chosen result clears it.
@@ -64,13 +69,57 @@ pub fn outcome(app_id: &str) -> Outcome {
     })
 }
 
-/// The contacts the open pick lists, for the sheet to draw. `None` when no pick is open.
-pub fn visible(app_id: &str) -> Option<Vec<u64>> {
-    PICKS.with(|p| p.borrow().get(app_id).and_then(|pending| pending.picker.as_ref().map(|picker| picker.visible())))
+/// Ends an open pick without a choice, as the person pressing Cancel does.
+pub fn cancel(app_id: &str) {
+    PICKS.with(|p| {
+        p.borrow_mut().remove(app_id);
+    });
+}
+
+/// The app with an open pick (still waiting for the person), with the name the sheet shows. Apps are listed in order,
+/// so the first open one is shown first.
+pub fn open_app() -> Option<(String, String)> {
+    PICKS.with(|p| {
+        p.borrow()
+            .iter()
+            .find(|(_, pending)| pending.picker.is_some())
+            .map(|(id, pending)| (id.clone(), pending.app_name.clone()))
+    })
+}
+
+/// The contacts the open pick lists, with their names, for the sheet to draw. `None` when no pick is open.
+pub fn choices(app_id: &str) -> Option<Vec<(u64, String)>> {
+    PICKS.with(|p| {
+        let picks = p.borrow();
+        let pending = picks.get(app_id)?;
+        let picker = pending.picker.as_ref()?;
+        Some(picker.visible().into_iter().map(|id| (id, pending.names.get(&id).cloned().unwrap_or_default())).collect())
+    })
+}
+
+/// The values the sheet offers for the open contact in a property pick: each field's key, and its position among the
+/// contact's values under that key (the `nth` that `choose` takes). `None` when no contact is open.
+pub fn values(app_id: &str) -> Option<Vec<(Key, usize, String)>> {
+    PICKS.with(|p| {
+        let picks = p.borrow();
+        let picker = picks.get(app_id)?.picker.as_ref()?;
+        picker.open_contact()?;
+        let fields: Vec<&Field> = picker.detail();
+        let mut seen: BTreeMap<Key, usize> = BTreeMap::new();
+        Some(
+            fields
+                .into_iter()
+                .map(|f| {
+                    let nth = *seen.entry(f.key).and_modify(|n| *n += 1).or_insert(0);
+                    (f.key, nth, f.value.clone())
+                })
+                .collect(),
+        )
+    })
 }
 
 /// Selects a contact in the open pick. In contact mode the choice is kept for the app; in property mode the contact
-/// opens and the sheet calls `choose` next. Returns whether a choice was kept.
+/// opens and the sheet offers its values next. Returns whether a choice was kept.
 pub fn select(app_id: &str, id: u64) -> Result<bool, Error> {
     step(app_id, |picker| picker.select(id))
 }
@@ -142,20 +191,25 @@ mod tests {
     fn a_contact_pick_keeps_only_the_chosen_contact_for_the_app() {
         let app = "is.example.pick-contact";
         assert!(matches!(outcome(app), Outcome::None));
-        start(app, Picker::new(entries_of(&[ada()]), Mode::Contact { need: None }));
+        let entries = entries_of(&[ada()]);
+        start(app, "Notes", Picker::new(entries.clone(), Mode::Contact { need: None }), &entries);
         assert!(matches!(outcome(app), Outcome::Pending));
-        assert_eq!(visible(app), Some(vec![4]));
+        assert_eq!(open_app(), Some((app.to_string(), "Notes".to_string())));
+        assert_eq!(choices(app), Some(vec![(4, "Ada Lovelace".to_string())]));
         assert_eq!(select(app, 4), Ok(true));
         assert!(matches!(outcome(app), Outcome::Chosen(Choice::Contact(4))));
         assert!(matches!(outcome(app), Outcome::None));
     }
 
     #[test]
-    fn a_property_pick_chooses_one_value_of_the_opened_contact() {
+    fn a_property_pick_offers_the_values_then_chooses_one() {
         let app = "is.example.pick-property";
-        let mode = mode_of("property", None, vec![Key::Email]).unwrap();
-        start(app, Picker::new(entries_of(&[ada()]), mode));
+        let mode = mode_of("property", None, vec![Key::Email, Key::Phone]).unwrap();
+        let entries = entries_of(&[ada()]);
+        start(app, "Mail", Picker::new(entries.clone(), mode), &entries);
+        assert_eq!(values(app), None, "no contact is open yet");
         assert_eq!(select(app, 4), Ok(false));
+        assert_eq!(values(app), Some(vec![(Key::Phone, 0, "555 0100".to_string()), (Key::Email, 0, "ada@example.com".to_string())]));
         assert_eq!(choose(app, Key::Email, 0), Ok(true));
         match outcome(app) {
             Outcome::Chosen(Choice::Property { contact, key, value }) => {
@@ -163,6 +217,16 @@ mod tests {
             }
             other => panic!("expected a property choice, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn cancel_ends_an_open_pick_without_a_choice() {
+        let app = "is.example.pick-cancel";
+        let entries = entries_of(&[ada()]);
+        start(app, "Notes", Picker::new(entries.clone(), Mode::Contact { need: None }), &entries);
+        cancel(app);
+        assert!(matches!(outcome(app), Outcome::None));
+        assert_eq!(select(app, 4), Err(Error::NoneOpen));
     }
 
     #[test]

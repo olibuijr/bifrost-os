@@ -19,8 +19,8 @@
 //!
 //! System names the shell posts, once per change, after the first tick (which only records the state):
 //! `system.appearance.change` (the scheme went Light or Dark), `system.screen.locked` and `system.screen.unlocked`,
-//! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contacts file
-//! changed), `system.calendar.change` (the events file changed), `system.timezone.change` (the local time zone file
+//! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contact change log grew: each saved change appends to it),
+//! `system.calendar.change` (the events file changed), `system.timezone.change` (the local time zone file
 //! changed), `system.hostname.change` (the host name file changed) and `system.volume.mount` or
 //! `system.volume.unmount` (the number of removable volumes in the mount table went up or down). Each reaches the apps
 //! that hold a token on it and may read that store: a read grant for contacts, the `calendars` permission for events.
@@ -62,6 +62,11 @@ const LOCAL_TIME_ZONE: &str = "/etc/localtime";
 const HOST_NAME_FILE: &str = "/etc/hostname";
 /// The kernel's mount table.
 const MOUNT_TABLE: &str = "/proc/mounts";
+
+/// The file whose change means the contacts changed: the contact change log, which every saved change appends to.
+fn contacts_change_log(data_dir: &Path) -> std::path::PathBuf {
+    crate::shell::contactchanges::path_for(&crate::shell::contactstore::store_path(data_dir))
+}
 
 /// Whether `app` may hear `name`. The store-change names say that a person's private data changed, so only an app
 /// with that store's access hears them (the reference platform sends the contacts and event-store change notices only to apps that can
@@ -245,7 +250,7 @@ impl NotifyBus {
             Some(at) if t - at < STORE_STAT_INTERVAL => {}
             _ => {
                 self.stat_at = Some(t);
-                let contacts = crate::shell::contactstore::store_path(data_dir);
+                let contacts = contacts_change_log(data_dir);
                 let calendar = super::calendar::store_path(data_dir);
                 self.stores = (stamp(&contacts), stamp(&calendar));
                 self.system_files = SystemFiles {
