@@ -150,9 +150,91 @@ pub fn shares_in_conf(conf: &str) -> Vec<SharedFolder> {
     out
 }
 
+/// The smb.conf text without the folder share called `name` (its section header and the lines under it, up to the next
+/// header). `global` and `homes` are not folder shares and are never removed; a name with no section leaves the text as
+/// it was.
+pub fn without_share(conf: &str, name: &str) -> String {
+    let name = name.trim();
+    if name.eq_ignore_ascii_case("global") || name.eq_ignore_ascii_case("homes") {
+        return conf.to_string();
+    }
+    let mut out = String::new();
+    let mut skipping = false;
+    for raw in conf.split_inclusive('\n') {
+        if let Some(section) = raw.trim().strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+            skipping = section.trim().eq_ignore_ascii_case(name);
+        }
+        if !skipping {
+            out.push_str(raw);
+        }
+    }
+    out
+}
+
+/// The smb.conf text with `folder` shared: any existing share of the same name is replaced, and the new section is
+/// added at the end after a blank line. Other sections keep their order and text.
+pub fn with_share(conf: &str, folder: &SharedFolder) -> String {
+    if folder.name.trim().eq_ignore_ascii_case("global") || folder.name.trim().eq_ignore_ascii_case("homes") {
+        return conf.to_string();
+    }
+    let mut out = without_share(conf, &folder.name);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&share_section(folder));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_share_added_to_the_conf_reads_back_with_the_others() {
+        let docs = SharedFolder { name: "Docs".into(), path: "/srv/docs".into(), writable: false };
+        let drop = SharedFolder { name: "Drop".into(), path: "/srv/drop".into(), writable: true };
+        let conf = with_share("[global]\n   workgroup = HOME\n", &docs);
+        let conf = with_share(&conf, &drop);
+        assert!(conf.starts_with("[global]\n   workgroup = HOME\n\n[Docs]"));
+        assert_eq!(shares_in_conf(&conf), vec![docs, drop]);
+    }
+
+    #[test]
+    fn sharing_a_name_again_replaces_that_section_only() {
+        let old = SharedFolder { name: "Docs".into(), path: "/srv/old".into(), writable: false };
+        let new = SharedFolder { name: "docs".into(), path: "/srv/new".into(), writable: true };
+        let conf = format!("[global]\n workgroup = HOME\n\n{}\n[Music]\n path = /srv/music\n", share_section(&old));
+        let conf = with_share(&conf, &new);
+        assert_eq!(
+            shares_in_conf(&conf),
+            vec![
+                SharedFolder { name: "Music".into(), path: "/srv/music".into(), writable: false },
+                new,
+            ]
+        );
+        assert!(conf.contains("workgroup = HOME"));
+    }
+
+    #[test]
+    fn unsharing_removes_one_section_and_keeps_the_rest() {
+        let docs = SharedFolder { name: "Docs".into(), path: "/srv/docs".into(), writable: false };
+        let conf = format!("[global]\n workgroup = HOME\n\n{}\n[Music]\n path = /srv/music\n", share_section(&docs));
+        let after = without_share(&conf, "DOCS");
+        assert_eq!(after, "[global]\n workgroup = HOME\n\n[Music]\n path = /srv/music\n");
+        assert_eq!(without_share(&after, "missing"), after);
+    }
+
+    #[test]
+    fn global_and_homes_are_never_removed_or_replaced() {
+        let conf = "[global]\n workgroup = HOME\n[homes]\n path = /home\n";
+        assert_eq!(without_share(conf, "global"), conf);
+        assert_eq!(without_share(conf, "Homes"), conf);
+        let bad = SharedFolder { name: "global".into(), path: "/x".into(), writable: true };
+        assert_eq!(with_share(conf, &bad), conf);
+    }
 
     #[test]
     fn a_folder_share_is_written_as_a_section_and_read_back() {

@@ -391,7 +391,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format.",
+   "note": "Downloads on-demand asset packs for apps and the system. springboard/ui/src/managed_download.rs (queue, daily budget, three attempts) and assetpack.rs (manifest and pack state) are pure models that only the asset mock uses (ui/src/assetmock.rs); nothing runs the queue. Build a shell service that runs it, with the asset pack format. Built 2026-10-17: ManagedDownloads::run_next and run_all run the queue through a transfer callback (ui managed_download::tests); the shell service that calls them and fetches the packs is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -412,7 +412,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated.",
+   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built.",
    "rea": [],
    "method": "assessed"
   },
@@ -1790,7 +1790,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs; packaging/arch/runtime-packages.txt (samba, nfs-utils); springboard/src/shell/sharing_page.rs (share_section, shares_in_conf)",
    "status": "partial",
-   "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing. Built 2026-10-17: the folder share model (springboard/src/shell/sharing_page.rs share_section and shares_in_conf, tests sharing_page::tests); the page does not list or edit folders yet.",
+   "note": "File Sharing is switched on and off from Settings > Sharing through smb.service, and the Arch samba and nfs-utils packages serve SMB and NFS shares; there is no per-folder share list or AFP sharing. Built 2026-10-17: the folder share model (springboard/src/shell/sharing_page.rs share_section and shares_in_conf, tests sharing_page::tests); the page does not list or edit folders yet. Built 2026-10-17: with_share and without_share edit the smb.conf text (shell sharing_page::tests); the page does not call them yet.",
    "rea": [],
    "method": "assessed"
   },
@@ -2814,7 +2814,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/accounts.rs; springboard/sdk/src/accounts.rs (oauth2_refresh_body, renewal_from_token_response)",
    "status": "partial",
-   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing.",
+   "note": "The account store in accounts.rs keeps OAuth 1 and OAuth 2 credentials for an app and removes them with the official error cases. Not built: the sign-in flow that obtains the tokens and the refresh of expired ones. Built 2026-10-17: the OAuth 2 refresh request body and the token-endpoint answer as a renewal outcome (sdk accounts::tests); the sign-in flow that gets the first tokens is still missing. Built 2026-10-17: the authorization URL with optional PKCE challenge and the code exchange body (sdk accounts::tests). The redirect capture that receives the code, and the parse of the first tokens, are still missing.",
    "rea": [],
    "method": "assessed"
   },
