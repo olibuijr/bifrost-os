@@ -33,6 +33,24 @@ struct Active {
 #[derive(Default)]
 pub struct ScreenStreamService {
     active: HashMap<String, Active>,
+    presented: Presented,
+}
+
+/// The picture of the shell the streams share. It is drawn again only when the shell changed, so a stream whose
+/// frames are due on an idle desktop costs no drawing.
+#[derive(Default)]
+pub struct Presented {
+    base: Option<Image>,
+}
+
+impl Presented {
+    /// The picture to stream: `draw` runs when there is none yet or when `changed` is set.
+    pub fn picture(&mut self, changed: bool, draw: impl FnOnce() -> Image) -> &Image {
+        if changed {
+            self.base = None;
+        }
+        self.base.get_or_insert_with(draw)
+    }
 }
 
 /// The stream config an app asks for. `width` and `height` default to the display size; `minFrameInterval` is in
@@ -135,14 +153,20 @@ impl SystemService for ScreenStreamService {
             return Vec::new();
         }
         due.sort();
-        // one draw serves every stream that is due this tick
-        let mut img = Image::new(shell.w as usize, shell.h as usize);
-        shell.drawn = super::super::Drawn::Nothing;
-        shell.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
-        shell.drawn = super::super::Drawn::Nothing;
-        shell.dirty = true;
+        // the shell is drawn again only when it changed; otherwise the stream reuses the picture it drew last
+        let changed = shell.dirty || shell.desk_animating(t);
+        let (w, h) = (shell.w as usize, shell.h as usize);
+        let img = self.presented.picture(changed, || {
+            let mut img = Image::new(w, h);
+            shell.drawn = super::super::Drawn::Nothing;
+            shell.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
+            shell.drawn = super::super::Drawn::Nothing;
+            // the presenter still owes the screen this change, so it stays marked dirty
+            shell.dirty = true;
+            img
+        });
         // the pointer is part of the picture: a moved pointer makes a fresh frame
-        let framed = with_pointer(&img, super::screen_sample::pointer_position());
+        let framed = with_pointer(img, super::screen_sample::pointer_position());
         let hash = frame_hash(&framed.px);
         let (unix, _) = shell.wall_now(t);
         let dir = shell.data_dir.join("ScreenStream");
@@ -198,6 +222,24 @@ mod tests {
         assert_eq!(file_stem("is.olibuijr.mail"), "is.olibuijr.mail");
         assert_eq!(file_stem("../etc/passwd"), ".._etc_passwd");
         assert_eq!(file_stem(""), "app");
+    }
+
+    #[test]
+    fn the_picture_is_drawn_again_only_when_the_shell_changed() {
+        use std::cell::Cell;
+        let draws = Cell::new(0);
+        let mut presented = Presented::default();
+        let blank = || {
+            draws.set(draws.get() + 1);
+            Image { w: 2, h: 2, px: vec![0u32; 4] }
+        };
+        presented.picture(false, blank);
+        assert_eq!(draws.get(), 1, "the first picture is always drawn");
+        presented.picture(false, blank);
+        presented.picture(false, blank);
+        assert_eq!(draws.get(), 1, "an idle shell reuses the presented picture");
+        presented.picture(true, blank);
+        assert_eq!(draws.get(), 2, "a change draws again");
     }
 
     #[test]
