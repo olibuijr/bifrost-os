@@ -48,6 +48,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Json::Bool(on)) => storage_policy_set(*on),
             _ => Err(PErr::bad("empty_trash_after_30_days must be a boolean")),
         },
+        "network.dns_set" => network_dns_set(p),
         "locale.set" => set_locale(str_param(p, "lang")?, str_param(p, "region")?),
         "update.check" => update_check(),
         "update.apply" => {
@@ -233,9 +234,81 @@ fn boot_attempt(event: &str) -> Result<Json, PErr> {
     }
 }
 
+/// The DNS servers the user set in Settings > Network (`network.dns_set`), kept as a systemd-resolved drop-in.
+pub const DNS_PREFS_FILE: &str = "/etc/systemd/resolved.conf.d/10-bifrost-dns.conf";
+
+/// The most servers one list may carry.
+const MAX_DNS_SERVERS: usize = 4;
+
+/// True for a literal IPv4 or IPv6 address: no name, no port, no zone.
+pub fn valid_dns_server(addr: &str) -> bool {
+    addr.parse::<std::net::IpAddr>().is_ok()
+}
+
+/// The drop-in text: a `[Resolve]` section with one `DNS=` line, the servers in the order given.
+pub fn dns_text(servers: &[String]) -> String {
+    format!("[Resolve]\nDNS={}\n", servers.join(" "))
+}
+
+/// Writes the DNS servers (`network.dns_set`, a list of addresses; an empty list removes the drop-in) and has
+/// systemd-resolved reload them. Every address is checked before any file is touched.
+fn network_dns_set(p: &Json) -> Result<Json, PErr> {
+    let items = p.get("servers").and_then(Json::as_array).ok_or_else(|| PErr::bad("servers must be a list"))?;
+    let mut servers = Vec::with_capacity(items.len());
+    for item in items {
+        match item.as_str() {
+            Some(addr) if valid_dns_server(addr) => servers.push(addr.to_string()),
+            _ => return Err(PErr::bad("each server must be an IPv4 or IPv6 address")),
+        }
+    }
+    if servers.len() > MAX_DNS_SERVERS {
+        return Err(PErr::bad(format!("at most {MAX_DNS_SERVERS} servers")));
+    }
+    if servers.is_empty() {
+        match std::fs::remove_file(DNS_PREFS_FILE) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(PErr::internal(e.to_string())),
+        }
+    } else {
+        let dir = Path::new(DNS_PREFS_FILE).parent().unwrap_or(Path::new("/etc/systemd/resolved.conf.d"));
+        std::fs::create_dir_all(dir).map_err(|e| PErr::internal(e.to_string()))?;
+        write_nofollow(DNS_PREFS_FILE, &dns_text(&servers)).map_err(|e| PErr::internal(e.to_string()))?;
+    }
+    run("systemctl", &["try-reload-or-restart", "systemd-resolved"])?;
+    Ok(obj(vec![("servers", Json::Arr(servers.into_iter().map(s).collect()))]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dns_servers_must_be_plain_addresses() {
+        for good in ["1.1.1.1", "9.9.9.9", "2606:4700:4700::1111", "::1"] {
+            assert!(valid_dns_server(good), "{good}");
+        }
+        for bad in ["", "one.one.one.one", "1.1.1.1;reboot", "1.1.1.1:53", "fe80::1%eth0", "256.1.1.1", "1.1.1.1 8.8.8.8"] {
+            assert!(!valid_dns_server(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn dns_drop_in_lists_the_servers_in_order() {
+        assert_eq!(dns_text(&["1.1.1.1".into(), "2606:4700::1111".into()]), "[Resolve]\nDNS=1.1.1.1 2606:4700::1111\n");
+        assert_eq!(DNS_PREFS_FILE, "/etc/systemd/resolved.conf.d/10-bifrost-dns.conf");
+    }
+
+    #[test]
+    fn network_dns_set_refuses_bad_lists_before_any_file_or_command() {
+        let dns = |servers: Json| call("network.dns_set", &obj(vec![("servers", servers)]));
+        assert_eq!(dns(Json::Arr(vec![s("8.8.8.8;reboot")])).unwrap_err().code, "bad_params");
+        assert_eq!(dns(Json::Arr(vec![s("dns.example")])).unwrap_err().code, "bad_params");
+        assert_eq!(dns(Json::Arr(vec![Json::Bool(true)])).unwrap_err().code, "bad_params");
+        assert_eq!(dns(Json::Arr((0..5).map(|_| s("1.1.1.1")).collect())).unwrap_err().code, "bad_params");
+        assert_eq!(dns(s("1.1.1.1")).unwrap_err().code, "bad_params");
+        assert_eq!(call("network.dns_set", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
 
     #[test]
     fn zone_names_are_plain_relative_paths() {

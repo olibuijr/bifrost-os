@@ -170,6 +170,13 @@ impl Client {
         self.call("storage.policy_set", vec![("empty_trash_after_30_days", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Sets the DNS servers the user chose (`network.dns_set`, at most four IPv4 or IPv6 addresses, in order); an empty
+    /// list goes back to the servers the network provides. privd writes them as a systemd-resolved drop-in.
+    pub fn set_dns_servers(&self, servers: &[String]) -> Result<(), ClientError> {
+        let list = servers.iter().map(|a| privd::s(a.as_str())).collect();
+        self.call("network.dns_set", vec![("servers", Json::Arr(list))]).map(|_| ())
+    }
+
     /// Sets the system language (`lang`, LANG) and formats (`region`, LC_TIME and the other format categories)
     /// through `localectl`; both are locale identifiers such as "is_IS".
     pub fn set_locale(&self, lang: &str, region: &str) -> Result<(), ClientError> {
