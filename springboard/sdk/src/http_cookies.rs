@@ -1,9 +1,9 @@
 //! `HTTPCookie` and `HTTPCookieStorage` parity for the URL loading system: parses `Set-Cookie` values, stores cookies
 //! per host, path and secure flag, and builds the `Cookie` request header for a URL.
 //!
-//! Pure std, no network. The clock is passed in as Unix seconds (`now`), so expiry is testable. Only `Max-Age` sets an
-//! expiry: `Expires` dates are ignored, so such a cookie behaves as a session cookie (a gap, see `docs/parity/w3-cfnetwork.md`).
-//! Domain matching follows RFC 6265 section 5.1.3 without a public-suffix list.
+//! Pure std, no network. The clock is passed in as Unix seconds (`now`), so expiry is testable. `Max-Age` sets the
+//! expiry; without it, an `Expires` date in IMF-fixdate form sets it. Other date forms are not read, so such a cookie
+//! behaves as a session cookie. Domain matching follows RFC 6265 section 5.1.3 without a public-suffix list.
 
 use crate::url_components::URLComponents;
 
@@ -54,6 +54,7 @@ impl HTTPCookie {
             created: now,
         };
         let mut max_age: Option<i64> = None;
+        let mut expires_at: Option<u64> = None;
         for field in fields {
             let (key, val) = match field.split_once('=') {
                 Some((k, v)) => (k.trim(), v.trim()),
@@ -73,14 +74,17 @@ impl HTTPCookie {
                 }
                 "path" if val.starts_with('/') => cookie.path = val.to_string(),
                 "max-age" => max_age = val.parse::<i64>().ok(),
+                "expires" => expires_at = parse_http_date(val),
                 "secure" => cookie.secure = true,
                 "httponly" => cookie.http_only = true,
                 _ => {}
             }
         }
-        // Max-Age wins over Expires in RFC 6265, and Expires is not parsed here.
-        if let Some(age) = max_age {
-            cookie.expires = Some(if age <= 0 { 0 } else { now.saturating_add(age as u64) });
+        // Max-Age wins over Expires (RFC 6265 section 5.3, step 3).
+        match (max_age, expires_at) {
+            (Some(age), _) => cookie.expires = Some(if age <= 0 { 0 } else { now.saturating_add(age as u64) }),
+            (None, Some(at)) => cookie.expires = Some(at),
+            (None, None) => {}
         }
         Some(cookie)
     }
@@ -89,6 +93,40 @@ impl HTTPCookie {
     pub fn is_expired(&self, now: u64) -> bool {
         self.expires.map_or(false, |e| e <= now)
     }
+}
+
+/// Reads an HTTP date in IMF-fixdate form, `Sun, 06 Nov 1994 08:49:37 GMT`, as Unix seconds. The weekday is not
+/// checked. Other forms (RFC 850, asctime) and dates before 1970 are `None`.
+pub fn parse_http_date(text: &str) -> Option<u64> {
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let fields: Vec<&str> = text.split_whitespace().collect();
+    let &[_weekday, day, month, year, clock, zone] = fields.as_slice() else {
+        return None;
+    };
+    if zone != "GMT" {
+        return None;
+    }
+    let day: i64 = day.parse().ok()?;
+    let month = MONTHS.iter().position(|name| *name == month)? as i64 + 1;
+    let year: i64 = year.parse().ok()?;
+    let mut clock = clock.split(':').map(|part| part.parse::<i64>().ok());
+    let (hour, minute, second) = (clock.next()??, clock.next()??, clock.next()??);
+    if clock.next().is_some() || !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 60 || year < 1970 {
+        return None;
+    }
+    let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
+    u64::try_from(seconds).ok()
+}
+
+/// Days from 1970-01-01 to a Gregorian date (the civil-calendar day count, proleptic Gregorian).
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let year_of_era = y - era * 400;
+    let month_from_march = (month + 9) % 12;
+    let day_of_year = (153 * month_from_march + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
 }
 
 /// Default cookie path (RFC 6265 section 5.1.4): the request path up to its last `/`.
@@ -253,6 +291,37 @@ mod tests {
         assert_eq!(root.path, "/");
         let bare = HTTPCookie::parse_set_cookie("a=1", "https://example.com", 0).unwrap();
         assert_eq!(bare.path, "/");
+    }
+
+    #[test]
+    fn http_dates_read_as_unix_seconds() {
+        assert_eq!(parse_http_date("Sun, 06 Nov 1994 08:49:37 GMT"), Some(784_111_777));
+        assert_eq!(parse_http_date("Thu, 01 Jan 1970 00:00:00 GMT"), Some(0));
+        assert_eq!(parse_http_date("Wed, 29 Feb 2000 00:00:00 GMT"), Some(951_782_400));
+        assert_eq!(parse_http_date("Sun, 06 Nov 1994 08:49:37 PST"), None);
+        assert_eq!(parse_http_date("Sunday, 06-Nov-94 08:49:37 GMT"), None);
+        assert_eq!(parse_http_date("Sun, 06 Nov 1969 00:00:00 GMT"), None);
+    }
+
+    #[test]
+    fn expires_sets_the_expiry_unless_max_age_does() {
+        let dated = HTTPCookie::parse_set_cookie(
+            "a=1; Expires=Sun, 06 Nov 1994 08:49:37 GMT",
+            "https://example.com/",
+            1000,
+        )
+        .unwrap();
+        assert_eq!(dated.expires, Some(784_111_777));
+        assert!(dated.is_expired(784_111_777));
+        let both = HTTPCookie::parse_set_cookie(
+            "a=1; Expires=Sun, 06 Nov 1994 08:49:37 GMT; Max-Age=60",
+            "https://example.com/",
+            1000,
+        )
+        .unwrap();
+        assert_eq!(both.expires, Some(1060));
+        let unreadable = HTTPCookie::parse_set_cookie("a=1; Expires=soon", "https://example.com/", 1000).unwrap();
+        assert_eq!(unreadable.expires, None);
     }
 
     #[test]

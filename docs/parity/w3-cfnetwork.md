@@ -48,7 +48,9 @@ Both rows stay partial. What is not done:
 
 - The cookie storage is not yet wired into `URLSession` (`springboard/sdk/src/url.rs`). The shell HTTP client keeps
   its own jar, so no app request sends or stores cookies through this model yet.
-- `Expires` dates are ignored. Only `Max-Age` gives an expiry.
+- `Expires` is read only in IMF-fixdate form (`Sun, 06 Nov 1994 08:49:37 GMT`), and only when there is no `Max-Age`.
+  The RFC 850 and asctime forms are still ignored, so such a cookie is a session cookie. Built 2026-10-17; tests
+  `http_cookies::tests`.
 - `Permanent` credentials live in memory only. There is no keychain persistence, and nothing survives a restart.
 - No Digest, client-certificate or server-trust authentication. `URLAuthenticationChallenge` is represented only by
   the parsed HTTP Basic challenge. No challenge sender or completion handler exists.

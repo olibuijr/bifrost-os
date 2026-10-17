@@ -14,6 +14,33 @@ pub enum Feature {
     ContentSharing,
 }
 
+impl Feature {
+    /// Every feature, in the order the policy file lists them.
+    pub const ALL: [Feature; 5] = [
+        Feature::Purchases,
+        Feature::Camera,
+        Feature::Microphone,
+        Feature::Location,
+        Feature::ContentSharing,
+    ];
+
+    /// The name a feature has in the policy file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Feature::Purchases => "purchases",
+            Feature::Camera => "camera",
+            Feature::Microphone => "microphone",
+            Feature::Location => "location",
+            Feature::ContentSharing => "content-sharing",
+        }
+    }
+
+    /// The feature with this policy-file name, if there is one.
+    pub fn from_name(name: &str) -> Option<Feature> {
+        Feature::ALL.into_iter().find(|feature| feature.name() == name)
+    }
+}
+
 /// Why a request is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Denial {
@@ -133,6 +160,110 @@ impl PolicyTable {
             return Err(Denial::InvalidId);
         }
         self.policy(account_id).map_or(Ok(()), |policy| policy.check_feature(feature))
+    }
+}
+
+impl std::fmt::Display for Denial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Denial::InvalidId => write!(f, "empty account or app identifier"),
+            Denial::AppBlocked(app) => write!(f, "{app} is blocked for this account"),
+            Denial::FeatureDisabled(feature) => write!(f, "{} is switched off for this account", feature.name()),
+        }
+    }
+}
+
+impl PolicyTable {
+    /// Reads a policy file. Each non-blank line that does not start with `#` is one rule:
+    /// `<account> block <app>` or `<account> disable <feature>`, separated by spaces or tabs.
+    /// Any other line is an error, so a damaged file cannot silently drop a restriction.
+    pub fn parse(text: &str) -> Result<PolicyTable, String> {
+        let mut table = PolicyTable::new();
+        for (number, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let at = number + 1;
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let &[account, verb, value] = fields.as_slice() else {
+                return Err(format!("policy line {at}: expected three fields"));
+            };
+            let mut policy = table.policy(account).cloned().unwrap_or_default();
+            match verb {
+                "block" => policy.block_app(value).map_err(|e| format!("policy line {at}: {e:?}"))?,
+                "disable" => match Feature::from_name(value) {
+                    Some(feature) => policy.disable(feature),
+                    None => return Err(format!("policy line {at}: unknown feature {value}")),
+                },
+                _ => return Err(format!("policy line {at}: unknown rule {verb}")),
+            }
+            table.set(account, policy).map_err(|e| format!("policy line {at}: {e:?}"))?;
+        }
+        Ok(table)
+    }
+
+    /// Writes the table in the form `parse` reads, accounts and rules in sorted order.
+    pub fn to_text(&self) -> String {
+        let mut out = String::new();
+        for (account, policy) in &self.accounts {
+            for app in &policy.blocked_apps {
+                out.push_str(&format!("{account} block {app}\n"));
+            }
+            for feature in &policy.disabled {
+                out.push_str(&format!("{account} disable {}\n", feature.name()));
+            }
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn policy_file_round_trips() {
+        let mut table = PolicyTable::new();
+        let mut kid = Policy::unrestricted();
+        kid.block_app("is.bifrost.browser").unwrap();
+        kid.block_app("is.bifrost.store").unwrap();
+        kid.disable(Feature::Camera);
+        kid.disable(Feature::ContentSharing);
+        table.set("kid", kid).unwrap();
+        table.set("guest", Policy::unrestricted()).unwrap();
+        let text = table.to_text();
+        assert_eq!(PolicyTable::parse(&text).unwrap(), table);
+        assert_eq!(PolicyTable::parse(&text).unwrap().to_text(), text);
+    }
+
+    #[test]
+    fn policy_file_skips_comments_and_blank_lines() {
+        let table = PolicyTable::parse("# rules\n\nkid\tblock\tis.bifrost.store\n").unwrap();
+        assert_eq!(table.check_app("kid", "is.bifrost.store"), Err(Denial::AppBlocked("is.bifrost.store".into())));
+        assert_eq!(table.check_app("kid", "is.bifrost.notes"), Ok(()));
+    }
+
+    #[test]
+    fn policy_file_rejects_damaged_rules() {
+        assert!(PolicyTable::parse("kid block").is_err());
+        assert!(PolicyTable::parse("kid disable teleport").is_err());
+        assert!(PolicyTable::parse("kid allow is.bifrost.store").is_err());
+        assert!(PolicyTable::parse("  block is.bifrost.store").is_err());
+    }
+
+    #[test]
+    fn feature_names_are_unique_and_parse_back() {
+        for feature in Feature::ALL {
+            assert_eq!(Feature::from_name(feature.name()), Some(feature));
+        }
+        assert_eq!(Feature::from_name("unknown"), None);
+    }
+
+    #[test]
+    fn denial_text_names_the_app_or_feature() {
+        assert_eq!(Denial::AppBlocked("is.bifrost.store".into()).to_string(), "is.bifrost.store is blocked for this account");
+        assert_eq!(Denial::FeatureDisabled(Feature::Camera).to_string(), "camera is switched off for this account");
     }
 }
 

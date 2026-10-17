@@ -164,6 +164,29 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
         self.faults.clear();
     }
 
+    /// The saved state in identity order. A persistent store writes this after [`ManagedContext::save`].
+    pub fn saved_state(&self) -> Vec<(ObjectId, R)> {
+        self.saved.iter().map(|(id, record)| (*id, record.clone())).collect()
+    }
+
+    /// The identity the next insert will get. Identities are never reused, so a store keeps this with the saved state.
+    pub fn next_id(&self) -> ObjectId {
+        self.next_id
+    }
+
+    /// A context whose saved state is `saved`, with no working changes, as a store reads it back. `next_id` is raised
+    /// past every saved identity, so an identity is never handed out twice.
+    pub fn restored(next_id: ObjectId, saved: Vec<(ObjectId, R)>) -> Self {
+        let saved: BTreeMap<ObjectId, R> = saved.into_iter().collect();
+        let floor = saved.keys().next_back().map_or(1, |id| id + 1);
+        ManagedContext {
+            working: saved.clone(),
+            saved,
+            faults: BTreeSet::new(),
+            next_id: next_id.max(floor),
+        }
+    }
+
     /// The working objects that match `request`, in the request's order, with their identities.
     pub fn fetch(&self, request: &FetchRequest) -> Vec<(ObjectId, R)> {
         // Faults are read from the saved state, so a fetch sees every object without loading it.
