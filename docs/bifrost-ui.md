@@ -4462,3 +4462,26 @@ ships in its bundle; BifrOSt has the same shape as a package.
   before the row becomes `parity`.
 - **Tests.** `springboard/src/shell/helpbook.rs` (front matter, anchors, ranking, AND matching, link resolution,
   menu search, built-in book, reading a book from disk). Run by the lead: `cargo test -p springboard helpbook`.
+
+
+## Memory pressure and purgeable storage (bifrostd)
+
+The `dynamic_pager` and `deleted_helper` daemon rows (`docs/parity-matrix/os/daemons/a-c.json`) are `partial`.
+
+- **Swap.** `springboard/bifrostd/src/pager.rs`. At boot `bifrost-zram.service` runs `bifrostd zram-setup`: a zram swap of
+  half the RAM (at most 8 GiB, priority 100). While bifrostd runs, PSI (`/proc/pressure/memory`, `avg10`) and
+  `/proc/meminfo` decide: under warning or critical pressure with less than 25 % of swap free, one 1 GiB file
+  `/var/lib/bifrost/swap/swapN` is added (priority -2). After 10 minutes of normal pressure the newest file that holds
+  no pages is removed. Decisions are pure (`decide`), tested with fixed inputs.
+- **Level.** `/run/bifrost/memory-pressure` holds `normal`, `warn` or `critical`. Apps read it with
+  `bifrost_app::memory_pressure::published()`, or subscribe with `DispatchSource::memory_pressure`, which uses the
+  in-process PSI watcher and needs no daemon.
+- **Purge.** `springboard/bifrostd/src/purge.rs`. Below 10 GiB or 5 % free on `/` or `/home`, it deletes, in order: app
+  caches under `~/.cache/<app>` (real directories only, never symlinks), the shell thumbnail cache (`/var/lib/springboard/cache`),
+  Recently Deleted items older than 30 days (only when `empty_trash_after_30_days = true` in `/etc/bifrost/storage.conf`),
+  and pacman packages beyond the newest two per name (mtime order). It stops at 20 GiB free or 10 % of the disk.
+  Documents are never listed.
+- **Storage page (not done).** The shell's "Free Up Space" writes `/run/bifrost/purge-request`; bifrostd runs the full
+  purge and writes the bytes to `/run/bifrost/purge-result` and the Purgeable figure to `/run/bifrost/purgeable`.
+  The Settings > General > Storage UI and the policy file writer are still to be built. Open decision: `/run/bifrost` is
+  root-owned, so a user-side request needs a writable request directory or a privd call.

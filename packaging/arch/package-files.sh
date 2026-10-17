@@ -53,6 +53,8 @@ package_bifrost_files() {
   # under, and the trigger that starts the target on the first desktop frame
   install -Dm755 "$PC_BIFROSTD" "$pkgdir/usr/bin/bifrostd"
   install -Dm644 "$here/bifrostd.service" "$pkgdir/usr/lib/systemd/system/bifrostd.service"
+  # zram swap at boot (memory pressure; bifrostd adds swap files under pressure once it runs)
+  install -Dm644 "$here/bifrost-zram.service" "$pkgdir/usr/lib/systemd/system/bifrost-zram.service"
   install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"

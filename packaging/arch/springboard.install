@@ -16,6 +16,8 @@ bifrost_post_update() {
     # socket-activated services: started on the first desktop frame by bifrost-desktop-ready (docs/boot-architecture.md)
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl enable bifrost-desktop-ready.service bifrostd.service >/dev/null 2>&1 || true
+    # zram swap at boot (bifrostd adds disk swap files under memory pressure)
+    systemctl enable bifrost-zram.service >/dev/null 2>&1 || true
     # root helper: the group, the installed account's membership, then the daemon (docs/login-session.md)
     systemd-sysusers /usr/lib/sysusers.d/bifrost.conf >/dev/null 2>&1 || true
     # stage 1: the account is not added to bifrost-session (privd serves root only until the user-session stage)
