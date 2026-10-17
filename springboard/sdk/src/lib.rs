@@ -897,6 +897,7 @@ pub mod spectrogram;
 pub mod extent_map;
 pub mod os_services;
 pub mod buffer_handoff;
+pub mod framework_kits;
 
 #[cfg(test)]
 mod kit_image_tools {
