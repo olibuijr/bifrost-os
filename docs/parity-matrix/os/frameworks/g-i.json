@@ -81,11 +81,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/Frameworks/GameKit.framework",
@@ -1216,11 +1235,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerIO.framework",
@@ -1237,11 +1275,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerServer.framework",
@@ -1258,11 +1315,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerSettings.framework",
@@ -1279,11 +1355,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerSettingsUI.framework",
@@ -1300,11 +1395,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameControllerUI.framework",
@@ -1321,11 +1435,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/game-controller.json",
+   "bifrost": "springboard/sdk/src/gamepad_input.rs, springboard/sdk/src/gamepad_service.rs, springboard/ui/src/gamepad.rs, springboard/src/shell/services/gamepad_service.rs",
    "status": "partial",
    "note": "private framework, owner GameController; from SDK matrix game-controller.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "gamepad_service::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "gamepad::tests"
+    }
+   ],
+   "ready_note": "Controller discovery, connect and disconnect events, per-controller input streams and the named extended profile are covered by host tests. Web Gamepad input in the browser engine is not wired, and the controller path still needs a Midget check."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameKitServices.framework",
