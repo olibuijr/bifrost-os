@@ -98,6 +98,8 @@ pub enum PageId {
     Passwords,
     /// Settings > Internet Accounts: the mail, calendar and contact accounts (see `internet_accounts_page`)
     InternetAccounts,
+    /// Settings > BifrOSt Account: the signed-in account, its devices and Sign Out (see `account_page`)
+    Account,
     Developer,
     ScreenTime,
     StDowntime,
@@ -395,6 +397,8 @@ pub enum Action {
     Passwords(super::passwords_page::Act),
     /// a tap on a Settings > Internet Accounts row (see `internet_accounts_page::Act`)
     InternetAccounts(super::internet_accounts_page::Act),
+    /// a tap on the Settings > BifrOSt Account page (see `account_page::Act`)
+    Account(super::account_page::Act),
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -447,6 +451,8 @@ pub struct Model<'a> {
     pub update_badge: bool,
     /// the desktop dock as the shell holds it (Desktop & Dock page)
     pub dock: super::desktop_dock::Preferences,
+    /// the value of the BifrOSt Account row at the top of Settings (`account_page::label`)
+    pub account: &'a str,
     /// the Default Apps page: categories, candidates and the current default
     pub defaults: &'a [super::defaultapps::CategoryView],
     /// the Login Items page: (app id, name) of each login item
@@ -704,6 +710,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             "Settings",
             true,
             vec![
+                Group::new(vec![Item::new("BifrOSt Account").value(m.account).link(PageId::Account)]),
                 Group::new(vec![
                     Item::new("Airplane Mode").icon(Icon::Airplane).switch(m.airplane, Action::Toggle(Toggle::Airplane)),
                     if info.desktop_network.is_some() {Item::new("Network").icon(Icon::Wifi).value(if info.online {"Connected"}else{"Not Connected"}).link(PageId::Network)} else {Item::new("Wi-Fi").icon(Icon::Wifi).value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi)},
@@ -1348,7 +1355,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
-        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
         PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Location Services").link(PageId::LocationServices), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
@@ -1770,7 +1777,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), account: "", defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
     }
 
     #[test]
@@ -1839,7 +1846,8 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
+        assert_eq!(labels[0], "BifrOSt Account");
+        assert_eq!(labels[8..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[2].items[13].value, "Lake Day");

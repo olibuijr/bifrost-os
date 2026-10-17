@@ -225,6 +225,10 @@ struct Loads {
     sharing: Loaded<super::sharing_page::View>,
     printers: Loaded<super::print_scan_page::View>,
     screentime: Loaded<(StConfig, Vec<(i64, st_usage::Day)>)>,
+    /// Settings > BifrOSt Account: the signed-in account and its devices (`account_page::load`)
+    account_view: Loaded<super::account_page::View>,
+    /// a sign-in or sign-out that finished on its worker thread; `poll_loads` acts on it once
+    account_done: Loaded<super::account_page::Landed>,
 }
 
 impl Loads {
@@ -241,6 +245,7 @@ impl Loads {
         landed |= self.sharing.poll();
         landed |= self.printers.poll();
         landed |= self.screentime.poll();
+        landed |= self.account_view.poll();
         landed
     }
 
@@ -367,6 +372,12 @@ pub struct Settings {
     pw_revealed: Option<(String, String, String)>,
     /// Settings > Internet Accounts: why the last change did not happen
     ia_note: String,
+    /// Settings > BifrOSt Account: the value of the root row (`account_page::label`; blank until the first read)
+    account_label: String,
+    /// Settings > BifrOSt Account: why the last sign-in or sign-out did not happen
+    account_note: String,
+    /// the account read is started once per Settings window
+    account_started: bool,
     /// Screen Time: weekly chart shown, the Downtime row the time picker edits (true = From), and the passcode prompt guarding an edit
     st_weekly: bool,
     st_edge: Option<bool>,
@@ -530,6 +541,9 @@ impl Settings {
             pw_pending: None,
             pw_revealed: None,
             ia_note: String::new(),
+            account_label: String::new(),
+            account_note: String::new(),
+            account_started: false,
             pressed: None,
             pressed_thumb: None,
             pressed_sheet: None,
@@ -605,7 +619,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, refresh: self.refresh, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, refresh: self.refresh, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value, account: &self.account_label }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -650,6 +664,11 @@ impl Settings {
                 super::passwords_page::spec(&super::passwords_page::PageState { logins: &self.loads.logins.value, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
             }
             PageId::InternetAccounts => super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &self.loads.accounts.value, note: &self.ia_note }),
+            PageId::Account => super::account_page::spec(&super::account_page::PageState {
+                view: self.loads.account_view.get(),
+                note: &self.account_note,
+                busy: self.loads.account_done.busy(),
+            }),
             PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
@@ -890,6 +909,7 @@ impl Settings {
                 self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
             }
             PageId::InternetAccounts => self.loads.accounts.start("accounts-read", super::internet_accounts_page::load),
+            PageId::Account => self.start_account_view(),
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => self.loads.users.start("users-read", super::users_page::View::load),
             PageId::Sharing => self.loads.sharing.start("sharing-read", super::sharing_page::View::load),
             PageId::PrintScan => self.loads.printers.start("print-scan-read", super::print_scan_page::View::load),
@@ -906,12 +926,65 @@ impl Settings {
     }
 
     /// Takes the reads that landed and rebuilds the page on top when one did; true when a frame is needed.
-    fn poll_loads(&mut self, ui: &Ui) -> bool {
-        if self.loads.poll() {
-            self.rebuild_visible(ui);
-            return true;
+    fn poll_loads(&mut self, ui: &Ui, t: f64) -> bool {
+        if !self.account_started {
+            self.account_started = true;
+            self.start_account_view();
         }
-        false
+        let mut frame = self.loads.poll();
+        if self.loads.account_done.poll() {
+            self.account_landed(ui, t);
+            frame = true;
+        }
+        self.account_label = super::account_page::label(self.loads.account_view.get());
+        if frame {
+            self.rebuild_visible(ui);
+        }
+        frame
+    }
+
+    /// Reads the BifrOSt Account page's account on a worker thread: the stored session, its name and devices.
+    fn start_account_view(&mut self) {
+        let root = super::apphost::root();
+        self.loads.account_view.start("account-read", move || super::account_page::load(&root));
+    }
+
+    /// A sign-in or sign-out finished. A refused sign-in reopens the password prompt with the cloud's reason; a finished
+    /// one reloads the account. A sign-out the cloud did not confirm says so on the page.
+    fn account_landed(&mut self, ui: &Ui, t: f64) {
+        use super::account_page::Landed;
+        match self.loads.account_done.value.clone() {
+            Landed::Idle => {}
+            Landed::SignedIn { result: Ok(_), .. } => {
+                self.account_note.clear();
+                self.start_account_view();
+            }
+            Landed::SignedIn { email, result: Err(e) } => {
+                self.sheet = Some(Sheet::form(ui, self.w, t, super::account_page::password_prompt(&email, &e)));
+            }
+            Landed::SignedOut(result) => {
+                self.account_note = result.err().unwrap_or_default();
+                self.start_account_view();
+            }
+        }
+    }
+
+    /// Settings > BifrOSt Account: Sign In opens the email sheet; Sign Out runs on a worker thread.
+    fn account_act(&mut self, ui: &Ui, act: super::account_page::Act, t: f64) -> Vec<Effect> {
+        use super::account_page::Act;
+        match act {
+            Act::SignIn => {
+                self.account_note.clear();
+                self.sheet = Some(Sheet::form(ui, self.w, t, super::account_page::email_prompt("")));
+            }
+            Act::SignOut => {
+                let root = super::apphost::root();
+                self.account_note.clear();
+                self.loads.account_done.start("account-sign-out", move || super::account_page::Landed::SignedOut(super::account_page::sign_out(&root)));
+                self.rebuild_visible(ui);
+            }
+        }
+        vec![]
     }
 
     pub(super) fn set_defaults(&mut self, v: Vec<super::defaultapps::CategoryView>) {
@@ -1291,7 +1364,7 @@ impl Settings {
             self.rebuild(ui);
             frame = true;
         }
-        frame |= self.poll_loads(ui);
+        frame |= self.poll_loads(ui, t);
         frame |= self.poll_install(ui);
         if let Some(res) = self.backup_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.backup_rx = None;
@@ -1837,8 +1910,24 @@ impl Settings {
                 }
             };
         }
+        if super::account_page::owns(purpose) {
+            match super::account_page::next_prompt(purpose, text) {
+                super::account_page::Step::Ask(next) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
+                super::account_page::Step::SignIn { email, password } => {
+                    let root = super::apphost::root();
+                    let for_done = email.clone();
+                    self.account_note.clear();
+                    self.loads.account_done.start("account-sign-in", move || {
+                        let result = super::account_page::sign_in(&root, &email, &password);
+                        super::account_page::Landed::SignedIn { email: for_done, result }
+                    });
+                }
+            }
+            self.rebuild_visible(ui);
+            return vec![];
+        }
         if super::internet_accounts_page::owns(purpose) {
-            let r = super::internet_accounts_page::list_path().and_then(|path| super::internet_accounts_page::finish(&path, &super::apphost::root(), purpose, text));
+            let r =super::internet_accounts_page::list_path().and_then(|path| super::internet_accounts_page::finish(&path, &super::apphost::root(), purpose, text));
             match r {
                 Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
                 Ok(None) => self.ia_note.clear(),
@@ -2246,6 +2335,7 @@ impl Settings {
             }
             Action::Passwords(act) => self.passwords_act(ui, act),
             Action::InternetAccounts(act) => self.ia_act(ui, act, t),
+            Action::Account(act) => self.account_act(ui, act, t),
             Action::Pick(pick) => {
                 self.list_mut().expect("list").set_check(g, i);
                 match pick {
