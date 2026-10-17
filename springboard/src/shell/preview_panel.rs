@@ -29,6 +29,8 @@ const PICTURES: &str = "desk.pictures";
 const TEXT: &str = "desk.text";
 const PDF: &str = "desk.pdf";
 const AUDIO: &str = "desk.audio";
+const VIDEO: &str = "desk.video";
+const FONT: &str = "desk.font";
 
 /// The registry the panel previews with: one provider per kind of item.
 pub fn registry() -> Registry {
@@ -37,6 +39,8 @@ pub fn registry() -> Registry {
     let _ = r.register(TEXT, &["public.text"]);
     let _ = r.register(PDF, &["com.adobe.pdf"]);
     let _ = r.register(AUDIO, &["public.audio"]);
+    let _ = r.register(VIDEO, &["public.movie"]);
+    let _ = r.register(FONT, &["public.font"]);
     r
 }
 
@@ -54,6 +58,10 @@ pub enum Kind {
     Text,
     Pdf,
     Audio,
+    Video,
+    Font,
+    /// a directory: its item count and size (see [`folder_summary`]), never an extension
+    Folder,
     Other,
 }
 
@@ -66,8 +74,49 @@ pub fn kind_for(file_name: &str) -> Kind {
         Some(TEXT) => Kind::Text,
         Some(PDF) => Kind::Pdf,
         Some(AUDIO) => Kind::Audio,
+        Some(VIDEO) => Kind::Video,
+        Some(FONT) => Kind::Font,
         _ => Kind::Other,
     }
+}
+
+/// The preview kind of a path: a directory is a folder, anything else goes by its name ([`kind_for`]).
+pub fn kind_for_path(path: &Path) -> Kind {
+    if path.is_dir() {
+        return Kind::Folder;
+    }
+    kind_for(path.file_name().and_then(|n| n.to_str()).unwrap_or(""))
+}
+
+/// Folders are summarised from at most this many entries; a larger folder reads "more than".
+pub const MAX_FOLDER_SCAN: usize = 10_000;
+
+/// The item count of a folder's direct entries and the total size of its files, scanning at most
+/// [`MAX_FOLDER_SCAN`] entries. None when the folder cannot be read. The flag is true when the scan stopped early.
+pub fn folder_summary(dir: &Path) -> Option<(usize, u64, bool)> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    let (mut count, mut bytes) = (0usize, 0u64);
+    for entry in entries.take(MAX_FOLDER_SCAN) {
+        count += 1;
+        if let Ok(meta) = entry.and_then(|e| e.metadata()) {
+            if meta.is_file() {
+                bytes += meta.len();
+            }
+        }
+    }
+    Some((count, bytes, count == MAX_FOLDER_SCAN))
+}
+
+/// The folder summary line: "3 items, 2.5 KB", or "More than 10000 items, ..." when the scan stopped early.
+pub fn folder_text(count: usize, bytes: u64, truncated: bool) -> String {
+    let items = if truncated {
+        format!("More than {count} items")
+    } else if count == 1 {
+        "1 item".to_string()
+    } else {
+        format!("{count} items")
+    };
+    format!("{items}, {}", crate::files::fs::size_text(bytes))
 }
 
 /// The first lines of a text file, lossy UTF-8, cut to the preview's limits. Control characters other than tab are dropped.
@@ -103,8 +152,14 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
     let p = Path::new(path);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    match kind_for(name) {
+    match kind_for_path(p) {
         Kind::Pdf | Kind::Audio | Kind::Image => Body::Loading,
+        Kind::Folder => match folder_summary(p) {
+            Some((count, bytes, truncated)) => Body::Info(folder_text(count, bytes, truncated)),
+            None => Body::Info("This folder cannot be read.".into()),
+        },
+        Kind::Video => Body::Info("Video file. Open it in a video player to watch it.".into()),
+        Kind::Font => Body::Info(format!("Font file {name}. Install it to use the face in documents.")),
         Kind::Text => {
             let mut buf = Vec::new();
             match std::fs::File::open(p).and_then(|f| f.take(MAX_TEXT_BYTES).read_to_end(&mut buf)) {
@@ -122,6 +177,7 @@ pub fn fallback_body(item: &PreviewItem) -> Body {
     Body::Info(match kind_for(name) {
         Kind::Pdf => "PDF document. Open it in Books to read it.".into(),
         Kind::Audio => "Audio file. Open it in Music to play it.".into(),
+        Kind::Video => "Video file. Open it in a video player to watch it.".into(),
         Kind::Image => "This picture cannot be shown.".into(),
         _ => "No preview for this file.".into(),
     })
@@ -490,9 +546,39 @@ mod tests {
         assert_eq!(kind_for("main.rs"), Kind::Text);
         assert_eq!(kind_for("paper.pdf"), Kind::Pdf);
         assert_eq!(kind_for("song.mp3"), Kind::Audio);
-        assert_eq!(kind_for("clip.mp4"), Kind::Other, "movies have no preview yet");
+        assert_eq!(kind_for("clip.mp4"), Kind::Video, "MPEG-4 movies conform to public.movie");
+        assert_eq!(kind_for("clip.mov"), Kind::Video);
+        assert_eq!(kind_for("face.ttf"), Kind::Font);
+        assert_eq!(kind_for("face.otf"), Kind::Font);
         assert_eq!(kind_for("archive.zip"), Kind::Other);
         assert_eq!(kind_for("README"), Kind::Other, "no extension, no type");
+    }
+
+    #[test]
+    fn a_directory_is_a_folder_and_is_summarised_by_its_entries() {
+        let dir = std::env::temp_dir().join(format!("ql-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("a.txt"), vec![0u8; 2000]).unwrap();
+        std::fs::write(dir.join("b.txt"), vec![0u8; 500]).unwrap();
+        assert_eq!(kind_for_path(&dir), Kind::Folder, "a directory decides, not its name");
+        assert_eq!(folder_summary(&dir), Some((3, 2500, false)), "subfolders count as items, only files add bytes");
+        assert_eq!(folder_text(3, 2500, false), format!("3 items, {}", crate::files::fs::size_text(2500)));
+        assert_eq!(folder_text(1, 0, false), format!("1 item, {}", crate::files::fs::size_text(0)));
+        assert!(folder_text(MAX_FOLDER_SCAN, 0, true).starts_with("More than 10000 items"));
+        assert_eq!(folder_summary(&dir.join("missing")), None);
+        let body = load_body(Some(&item(&format!("file://{}", dir.display()), "dir")));
+        assert!(matches!(body, Body::Info(ref t) if t.starts_with("3 items")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn video_and_font_items_get_an_info_line_and_no_thumbnail_wait() {
+        let video = item("file:///x/clip.mp4", "clip");
+        assert!(matches!(load_body(Some(&video)), Body::Info(_)));
+        assert!(matches!(fallback_body(&video), Body::Info(ref t) if t.starts_with("Video file")));
+        let font = item("file:///x/face.ttf", "face");
+        assert!(matches!(load_body(Some(&font)), Body::Info(ref t) if t.contains("face.ttf")));
     }
 
     #[test]
