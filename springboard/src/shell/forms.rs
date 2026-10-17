@@ -28,6 +28,10 @@ pub enum Purpose {
     NewAccountUser { kind: Kind, address: String },
     /// step 3: the password, which is saved in Passwords when the account is added
     NewAccountPassword { kind: Kind, address: String, username: String },
+    /// Location Services > Set Location, step 1 of 2: the latitude in degrees (see `location_page::step`)
+    SetLatitude,
+    /// step 2: the longitude; `latitude` is the text typed in step 1
+    SetLongitude { latitude: String },
 }
 
 /// What the sheet shows.
@@ -71,6 +75,23 @@ impl Prompt {
 
     pub fn printer_address() -> Prompt {
         Prompt { max: 255, ..Prompt::new(Purpose::PrinterAddress, "Add Printer", "Enter the address of the printer, such as ipp://printer.local/ipp/print or socket://192.168.1.20.", "Address", "Add") }
+    }
+
+    /// Location Services > Set Location, step 1: the latitude, prefilled with the current one.
+    pub fn set_latitude(current: &str) -> Prompt {
+        Prompt {
+            max: 16,
+            initial: current.into(),
+            ..Prompt::new(Purpose::SetLatitude, "Set Location", "Enter the latitude in degrees, from -90 (south) to 90 (north). A decimal comma works too.", "Latitude", "Next")
+        }
+    }
+
+    /// Location Services > Set Location, step 2: the longitude.
+    pub fn set_longitude(latitude: &str) -> Prompt {
+        Prompt {
+            max: 16,
+            ..Prompt::new(Purpose::SetLongitude { latitude: latitude.into() }, "Set Location", "Enter the longitude in degrees, from -180 (west) to 180 (east).", "Longitude", "Set")
+        }
     }
 
     pub fn new_group() -> Prompt {
@@ -153,6 +174,8 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
         Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
         Purpose::NewAccountPassword { .. } => !text.is_empty(),
+        Purpose::SetLatitude => super::location_page::coordinate(text, 90.0).is_some(),
+        Purpose::SetLongitude { .. } => super::location_page::coordinate(text, 180.0).is_some(),
     }
 }
 

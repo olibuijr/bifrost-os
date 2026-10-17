@@ -120,7 +120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "Privacy page",
+   "note": "Privacy page. Location Services page built in springboard/src/shell/location_page.rs (switch, System location, per-app access, Precise Location, last 24 hours); host-tested, partial until checked on Midget; no app icons in its rows",
    "rea": []
   },
   {

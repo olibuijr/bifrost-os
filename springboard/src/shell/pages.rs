@@ -86,6 +86,10 @@ pub enum PageId {
     Diagnostics,
     /// Privacy › App Permissions: which installed apps may use the camera, microphone or screen
     PrivacyPermissions,
+    /// Privacy › Location Services: the global switch, System location and each app (see `location_page::spec`)
+    LocationServices,
+    /// Location Services › one app's access popup (the index into `location_page::app_rows`)
+    LocationAccess(usize),
     Storage,
     /// Display & Brightness > Graphics (desktop): adapters and displays, read-only
     Graphics,
@@ -404,6 +408,8 @@ pub enum Action {
     Sharing(super::sharing_page::Edit),
     /// Print & Scan: make a printer the default, or add one (see `print_scan_page`)
     PrintScan(super::print_scan_page::Edit),
+    /// Location Services: the switches, the place and the apps' access (see `location_page::Edit`)
+    Location(super::location_page::Edit),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -1333,11 +1339,13 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
-        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
+        PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Location Services").link(PageId::LocationServices), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
         // built by `diagnostics_page::spec`, which knows the crash logs
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
         // built by `permissions_page`, which reads the installed apps and their answers
         PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
+        // built by `location_page::spec`, which reads the prefs and the location answers
+        PageId::LocationServices | PageId::LocationAccess(_) => page("Location Services", false, vec![]),
     }
 }
 
