@@ -106,7 +106,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: rm installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "rm --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils rm; --version runs headless"
   },
   {
    "id": "path:/bin/rmdir",
@@ -127,7 +136,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: rmdir installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "rmdir --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "coreutils rmdir; --version runs headless"
   },
   {
    "id": "path:/sbin/pfctl",
@@ -169,7 +187,16 @@
    "status": "partial",
    "note": "Midget 0.7.25: ping installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ping -V",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "iputils ping (base networking); -V prints the version"
   },
   {
    "id": "path:/sbin/ping6",
@@ -188,7 +215,7 @@
    "doc": "",
    "bifrost": "/usr/bin/ping",
    "status": "partial",
-   "note": "Midget 0.7.25: ping installed, --version/--help probe failed",
+   "note": "no ping6 command on the installed system; iputils provides ping -6, which is not the same name",
    "rea": [],
    "method": "assessed"
   },
@@ -211,7 +238,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/quotacheck"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/sbin/reboot",
@@ -232,7 +267,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: reboot installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/reboot"
+    }
+   ],
+   "ready_note": "systemd reboot; not run (changes machine state); Arch package systemd ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/sbin/route",
@@ -251,7 +294,7 @@
    "doc": "",
    "bifrost": "/usr/bin/ip",
    "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
+   "note": "net-tools route is not installed; ip route covers routing tables but not route's options",
    "rea": [],
    "method": "assessed"
   },
@@ -421,7 +464,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: passwd installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/passwd"
+    }
+   ],
+   "ready_note": "shadow passwd from the base package; not run (changes account state)"
   },
   {
    "id": "path:/usr/bin/paste",
@@ -463,7 +514,16 @@
    "status": "partial",
    "note": "provided by Arch package patch; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "patch --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "GNU patch from the patch package"
   },
   {
    "id": "path:/usr/bin/pathchk",
@@ -524,7 +584,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbcopy.rs",
    "status": "partial",
-   "note": "general clipboard only, through wl-copy; named boards refused; not yet built or checked on Midget",
+   "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered",
    "rea": [],
    "method": "assessed"
   },
@@ -545,7 +605,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbpaste.rs",
    "status": "partial",
-   "note": "general clipboard only, through wl-paste; named boards refused; not yet built or checked on Midget",
+   "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered",
    "rea": [],
    "method": "assessed"
   },
@@ -587,7 +647,7 @@
    "doc": "",
    "bifrost": "/usr/bin/pcsc_scan",
    "status": "partial",
-   "note": "approximation: pcsctest is mapped to pcsc_scan (smart card reader check), provided by Arch package pcsc-tools; not yet verified on Midget",
+   "note": "pcsc_scan is an approximation of pcsctest (different tool, different output); not the same job",
    "rea": [],
    "method": "assessed"
   },
@@ -673,7 +733,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: perldoc installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/perldoc"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/perlivp",
@@ -736,7 +804,15 @@
    "status": "partial",
    "note": "pico is linked to nano by packaging/arch/package-files.sh; the nano package ships only nano; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/pico"
+    }
+   ],
+   "ready_note": "packaging/arch/package-files.sh links pico to nano; Arch package nano ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/piconv",
@@ -902,7 +978,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/plutil.rs",
    "status": "partial",
-   "note": "-lint, -p, -convert, -insert, -replace, -remove, -extract, -type, -create; binary1 output and swift/objc refused; not yet built or checked on Midget",
+   "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused",
    "rea": [],
    "method": "assessed"
   },
@@ -923,7 +999,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pmset.rs",
    "status": "partial",
-   "note": "reads and sets the sleep timer only; other pmset options not supported yet; not yet built or checked on Midget",
+   "note": "pmset covers the sleep timer only; other pmset options are not implemented",
    "rea": [],
    "method": "assessed"
   },
@@ -946,7 +1022,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: pod2html installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/pod2html"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/pod2man",
@@ -1030,7 +1114,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: pod2usage installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/pod2usage"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/podchecker",
@@ -1051,7 +1143,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: podchecker installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/podchecker"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/power_report.sh",
@@ -1135,7 +1235,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ppdc"
+    }
+   ],
+   "ready_note": "Arch package cups ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ppdhtml",
@@ -1156,7 +1264,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ppdhtml"
+    }
+   ],
+   "ready_note": "Arch package cups ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ppdi",
@@ -1177,7 +1293,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ppdi"
+    }
+   ],
+   "ready_note": "Arch package cups ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ppdmerge",
@@ -1198,7 +1322,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ppdmerge"
+    }
+   ],
+   "ready_note": "Arch package cups ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ppdpo",
@@ -1219,7 +1351,15 @@
    "status": "partial",
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ppdpo"
+    }
+   ],
+   "ready_note": "Arch package cups ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/pr",
@@ -1471,7 +1611,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ptar installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/ptar"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ptardiff",
@@ -1492,7 +1640,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: ptardiff installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/core_perl/ptardiff"
+    }
+   ],
+   "ready_note": "Arch package perl ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ptargrep",
@@ -1555,7 +1711,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/quota"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/rails",
@@ -1597,7 +1761,15 @@
    "status": "partial",
    "note": "provided by Arch package ruby-rake; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rake"
+    }
+   ],
+   "ready_note": "Arch package ruby-rake ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/rdma_ctl",
@@ -1639,7 +1811,15 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rdoc"
+    }
+   ],
+   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/readlink",
@@ -1723,7 +1903,15 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/ri"
+    }
+   ],
+   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/rs",
@@ -1765,7 +1953,16 @@
    "status": "partial",
    "note": "provided by Arch package rsync; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "rsync --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package rsync ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/ruby",
@@ -1786,7 +1983,16 @@
    "status": "partial",
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "ruby --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/bin/rwbypid.d",
@@ -1910,7 +2116,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/plistbuddy.rs",
    "status": "partial",
-   "note": "-c Print, Set, Add, Delete, Clear, Save, Exit; no interactive mode; writes XML; not yet built or checked on Midget",
+   "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; no interactive mode; writes XML only",
    "rea": [],
    "method": "assessed"
   },
@@ -2605,7 +2811,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpc.rquotad"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/libexec/rpcsvchost",
@@ -2752,7 +2966,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postalias"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postcat",
@@ -2773,7 +2995,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postcat"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postconf",
@@ -2794,7 +3024,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postconf"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postdrop",
@@ -2815,7 +3053,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postdrop"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postfix",
@@ -2836,7 +3082,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postfix"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postkick",
@@ -2857,7 +3111,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postkick"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postlock",
@@ -2878,7 +3140,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postlock"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postlog",
@@ -2899,7 +3169,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postlog"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postmap",
@@ -2920,7 +3198,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postmap"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postmulti",
@@ -2941,7 +3227,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postmulti"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postqueue",
@@ -2962,7 +3256,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postqueue"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/postsuper",
@@ -2983,7 +3285,15 @@
    "status": "partial",
    "note": "provided by Arch package postfix; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/postsuper"
+    }
+   ],
+   "ready_note": "Arch package postfix ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/pppd",
@@ -3044,7 +3354,7 @@
    "doc": "",
    "bifrost": "/usr/bin/sync",
    "status": "partial",
-   "note": "Midget 0.7.25: sync installed, not run headless (changes machine state)",
+   "note": "sync flushes file buffers only; macOS purge drops the memory caches, which needs root and drop_caches (not wired)",
    "rea": [],
    "method": "assessed"
   },
@@ -3088,7 +3398,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/quotaoff"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/racoon",
@@ -3172,7 +3490,15 @@
    "status": "partial",
    "note": "provided by Arch package quota-tools; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/repquota"
+    }
+   ],
+   "ready_note": "Arch package quota-tools ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/rotatelogs",
@@ -3193,7 +3519,15 @@
    "status": "partial",
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rotatelogs"
+    }
+   ],
+   "ready_note": "Arch package apache ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/rpc.lockd",
@@ -3235,7 +3569,15 @@
    "status": "partial",
    "note": "provided by Arch package nfs-utils; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpc.statd"
+    }
+   ],
+   "ready_note": "Arch package nfs-utils ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/rpcbind",
@@ -3256,7 +3598,15 @@
    "status": "partial",
    "note": "provided by Arch package rpcbind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpcbind"
+    }
+   ],
+   "ready_note": "Arch package rpcbind ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/rpcinfo",
@@ -3277,7 +3627,15 @@
    "status": "partial",
    "note": "provided by Arch package rpcbind; not yet verified on Midget",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/rpcinfo"
+    }
+   ],
+   "ready_note": "Arch package rpcbind ships it (packaging/arch/runtime-packages.txt)"
   },
   {
    "id": "path:/usr/sbin/rtadvd",
