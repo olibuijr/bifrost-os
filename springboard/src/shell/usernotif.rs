@@ -438,6 +438,36 @@ pub fn delivery_plan(grant: Option<u8>, muted: bool, sound_kind: u8) -> (bool, b
     (banner, sound)
 }
 
+/// The sound a delivery plays, by the request's `content.sound` kind: none for 0, the request's own bundled sound for
+/// 2 (when it names one), and otherwise the person's alert sound from Settings > Sound. Critical sounds (3 and 4) have
+/// no sound of their own here, so they play the alert sound too.
+pub fn request_sound(sound_kind: u8, sound_name: &str, alert: &str) -> Option<String> {
+    match sound_kind {
+        0 => None,
+        2 if !sound_name.is_empty() => Some(sound_name.to_string()),
+        _ => Some(alert.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod sound_tests {
+    use super::*;
+
+    #[test]
+    fn a_request_without_a_sound_plays_none() {
+        assert_eq!(request_sound(0, "Glass", "Chime"), None);
+    }
+
+    #[test]
+    fn a_named_sound_plays_its_own_file_and_the_default_plays_the_alert_sound() {
+        assert_eq!(request_sound(2, "Glass", "Chime").as_deref(), Some("Glass"));
+        assert_eq!(request_sound(1, "Glass", "Chime").as_deref(), Some("Chime"), "the default follows Settings > Sound");
+        assert_eq!(request_sound(2, "", "Chime").as_deref(), Some("Chime"), "a named sound with no name falls back");
+        assert_eq!(request_sound(3, "", "Tink").as_deref(), Some("Tink"));
+        assert_eq!(request_sound(4, "", "Tink").as_deref(), Some("Tink"));
+    }
+}
+
 /// True when the app `app` (its id) has the `notifications` permission in its manifest.
 pub(super) fn permitted(app: &str) -> bool {
     super::apphost::installed().iter().any(|p| p.manifest.id == app && p.manifest.permissions.iter().any(|x| x == "notifications"))
@@ -740,8 +770,10 @@ impl super::Shell {
         };
         let id = self.notify_id_banner(n, banner);
         if sound {
-            let name = if req.sound_kind == 2 { req.sound_name.as_str() } else { super::options::ALERT_SOUNDS[0] };
-            super::apphost::queue_request_sound(name);
+            let alert = super::options::ALERT_SOUNDS[self.options().alert_sound.min(super::options::ALERT_SOUNDS.len() - 1)];
+            if let Some(name) = request_sound(req.sound_kind, &req.sound_name, alert) {
+                super::apphost::queue_request_sound(&name);
+            }
         }
         if let Some(count) = req.badge.filter(|_| badge_allowed) {
             if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
