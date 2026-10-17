@@ -357,6 +357,10 @@ fn run() -> std::io::Result<()> {
     let mut dynamic_fx: Vec<Effect> = Vec::new();
     // the help index reads every installed help book; built on a worker so the first frame is not held up
     std::thread::spawn(|| springboard::shell::helpbook::with_index(std::path::Path::new(springboard::shell::store::install::ROOT), |_| ()));
+    // read the executables of the apps most likely to open next so their first launch finds them in the page cache
+    std::thread::spawn(|| {
+        bifrost_core::launch_prefetch::warm_default();
+    });
     shell.set_route(router.route(), vol.level(), false, 0.0);
     shell.set_headphones_present(jack.plugged());
     // the wallpaper catalogue reads the packed thumbnails and may crop Pictures stills on first use: a worker builds

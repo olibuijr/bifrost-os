@@ -152,6 +152,7 @@ pub mod krb5_client;
 pub mod perf_counters;
 pub mod positional_audio;
 pub mod ldap_directory;
+pub mod directory_servers;
 pub mod typed_path;
 pub mod archive;
 pub mod tar_package;
