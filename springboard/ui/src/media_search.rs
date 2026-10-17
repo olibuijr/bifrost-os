@@ -192,9 +192,42 @@ pub fn resolve<'a>(search: &MediaSearch, catalogue: &'a [MediaItem]) -> Resoluti
     }
 }
 
+/// Whether the person must confirm a resolved item before the app acts on it (the `requestConfirmation` case). A
+/// text request asks when its content words do not spell the item's title, so a loose match ("rain" for "Heavy
+/// rain") is checked first. A link names its item and a recommendation was accepted by asking, so neither asks.
+pub fn needs_confirmation(search: &MediaSearch, item: &MediaItem) -> bool {
+    match &search.criteria {
+        MediaCriteria::SearchQuery(q) => tokens(q).join(" ") != tokens(&item.title).join(" "),
+        MediaCriteria::Unspecified | MediaCriteria::Url(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_text_request_that_spells_the_title_needs_no_confirmation() {
+        let item = song("r", "Rain", "Ambient");
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("rain".into())), &item));
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("play Rain".into())), &item), "filler words do not count");
+    }
+
+    #[test]
+    fn a_loose_text_match_asks_first() {
+        let item = song("h", "Heavy rain", "Band");
+        assert!(needs_confirmation(&MediaSearch::new(MediaCriteria::SearchQuery("rain".into())), &item));
+        let by_artist = song("e", "Example song", "Example artist");
+        let search = MediaSearch::new(MediaCriteria::SearchQuery("Example song by Example artist".into()));
+        assert!(needs_confirmation(&search, &by_artist), "the artist words are not in the title");
+    }
+
+    #[test]
+    fn links_and_recommendations_never_ask() {
+        let item = song("h", "Heavy rain", "Band");
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::Url("h".into())), &item));
+        assert!(!needs_confirmation(&MediaSearch::new(MediaCriteria::Unspecified), &item));
+    }
 
     fn song(id: &str, title: &str, artist: &str) -> MediaItem {
         let mut m = MediaItem::new(id, MediaKind::Song, title);
