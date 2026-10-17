@@ -715,11 +715,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
    "status": "partial",
-   "note": "from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
+   "note": "from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::visual_search_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/Frameworks/vmnet.framework",
@@ -5284,11 +5308,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
+   "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list. Lead 2026-10-17: not ready: no screenshot or camera UI starts a visual search yet.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::visual_search_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework",
@@ -5305,11 +5353,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
+   "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list. Lead 2026-10-17: not ready: no screenshot or camera UI starts a visual search yet.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::visual_search_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCoreDDSupport.framework",
@@ -5326,11 +5398,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
+   "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list. Lead 2026-10-17: not ready: no screenshot or camera UI starts a visual search yet.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::visual_search_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceServices.framework",
@@ -5347,11 +5443,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
+   "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
    "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list. Lead 2026-10-17: not ready: no screenshot or camera UI starts a visual search yet.",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::visual_search_panel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::markup::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::photos::tests::the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework",
@@ -5515,11 +5635,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/voice_commands.rs, springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/services/recognizer.rs",
+   "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/accessibility/voice_overlay.rs, springboard/src/shell/services/recognizer.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/shell/accessibility/reader.rs, springboard/ui/src/voice_commands.rs",
    "status": "os",
-   "note": "private framework, no plausible owner found Lead 2026-10-17: not ready: Settings has no switch for Voice Control (only a hand-edited pref).",
+   "note": "private framework, no plausible owner found Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_overlay::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceControlUI.framework",
@@ -5536,11 +5675,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/accessibility/voice_overlay.rs, springboard/src/shell/services/recognizer.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/shell/accessibility/reader.rs, springboard/ui/src/voice_commands.rs",
    "status": "os",
-   "note": "Voice Control overlays are not drawn. The grammar and numbering exist (ui voice_commands: Overlay::Numbers/Names/Grid, number_targets, resolve) and the session runs (services/recognizer.rs), but no shell code draws numbered or gridded labels over the screen, and Settings has no Voice Control switch. Needs: an overlay drawn in Shell::draw from the element map (axmap) rectangles, driven by Command::Show/Hide, plus a Settings row for the voice_control preference.",
+   "note": "Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_overlay::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab.",
+   "ready": true
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceProcessor.framework",

@@ -1,6 +1,7 @@
 //! Markup: the editor a tap on the screenshot thumbnail opens. Pen, marker,
 //! pencil and eraser draw on the capture; a colour row, Undo, Cancel and Done
-//! (which saves the marked-up PNG over the capture) frame it as in bifrost.
+//! (which saves the marked-up PNG over the capture) frame it as in bifrost. Look Up sends the marked-up picture to the
+//! apps that answer visual searches (`visual_search_panel`); circling an object first is how the person selects it.
 
 use super::switcher::draw_scaled;
 use super::ui::{Ui, Weight, BLACK, CARD_RADIUS_PT, CELL, SECONDARY, SEPARATOR, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED, SYSTEM_YELLOW, TINT, WHITE};
@@ -50,6 +51,8 @@ struct Stroke {
 pub enum Outcome {
     Cancel,
     Done,
+    /// Look Up in Visual Search: the shell searches with the picture as it is marked now.
+    LookUp,
 }
 
 pub struct Markup {
@@ -79,12 +82,22 @@ fn bar_starts(m: f32, pad: f32, undo_w: f32, redo_w: f32) -> [f32; 3] {
     [undo, redo, cancel]
 }
 
+/// The bar button that sends the picture to the apps that answer visual searches.
+const LOOK_UP_LABEL: &str = "Look Up";
+
+/// Left edge of the Look Up button: it sits just left of Done, whose text is `done_w` wide, in a bar `w` wide with margin
+/// `m` and button padding `pad`; its text is `look_w` wide.
+fn look_up_start(w: f32, m: f32, pad: f32, done_w: f32, look_w: f32) -> f32 {
+    w - m - done_w - pad - (look_w + 2.0 * pad)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Hit {
     Undo,
     Redo,
     Cancel,
     Done,
+    LookUp,
     Tool(Tool),
     Color(usize),
 }
@@ -142,12 +155,14 @@ impl Markup {
         let m = 16.0 * self.s;
         let mut v = vec![];
         let (uw, rw, cw, dw) = (ui.measure("Undo", 17.0, Weight::Regular), ui.measure("Redo", 17.0, Weight::Regular), ui.measure("Cancel", 17.0, Weight::Regular), ui.measure("Done", 17.0, Weight::Semibold));
+        let lw = ui.measure(LOOK_UP_LABEL, 17.0, Weight::Regular);
         let pad = 12.0 * self.s;
         let xs = bar_starts(m, pad, uw, rw);
         v.push((Hit::Undo, self.button(xs[0], uw + 2.0 * pad)));
         v.push((Hit::Redo, self.button(xs[1], rw + 2.0 * pad)));
         v.push((Hit::Cancel, self.button(xs[2], cw + 2.0 * pad)));
         v.push((Hit::Done, self.button(self.w as f32 - m - dw - pad, dw + 2.0 * pad)));
+        v.push((Hit::LookUp, self.button(look_up_start(self.w as f32, m, pad, dw, lw), lw + 2.0 * pad)));
         let tray = self.tray();
         let n = TOOLS.len() as i32;
         let gap = (8.0 * self.s) as i32;
@@ -209,6 +224,7 @@ impl Markup {
                         Hit::Redo => self.redo(),
                         Hit::Cancel => return Some(Outcome::Cancel),
                         Hit::Done => return Some(Outcome::Done),
+                        Hit::LookUp => return Some(Outcome::LookUp),
                         Hit::Tool(t) => self.tool = t,
                         Hit::Color(i) => {
                             self.color = i;
@@ -316,11 +332,12 @@ impl Markup {
         for (h, r) in self.rects(ui) {
             let down = self.pressed == Some(h);
             match h {
-                Hit::Undo | Hit::Redo | Hit::Cancel | Hit::Done => {
+                Hit::Undo | Hit::Redo | Hit::Cancel | Hit::Done | Hit::LookUp => {
                     let (label, weight) = match h {
                         Hit::Undo => ("Undo", Weight::Regular),
                         Hit::Redo => ("Redo", Weight::Regular),
                         Hit::Cancel => ("Cancel", Weight::Regular),
+                        Hit::LookUp => (LOOK_UP_LABEL, Weight::Regular),
                         _ => ("Done", Weight::Semibold),
                     };
                     let dim = (h == Hit::Undo && !self.can_undo()) || (h == Hit::Redo && !self.can_redo());
@@ -403,5 +420,48 @@ mod tests {
         assert!(!m.can_redo());
         m.redo();
         assert!(!m.can_undo());
+    }
+
+    #[test]
+    fn look_up_sits_left_of_done_and_clear_of_the_title_and_cancel() {
+        // 1200 wide, margin 16, pad 12: Done is 50 wide, Look Up 70
+        let start = look_up_start(1200.0, 16.0, 12.0, 50.0, 70.0);
+        let done = 1200.0 - 16.0 - 50.0 - 12.0;
+        assert_eq!(start + 70.0 + 2.0 * 12.0, done, "the buttons touch edge to edge");
+        let cancel_end = bar_starts(16.0, 12.0, 40.0, 40.0)[2] + 60.0 + 24.0;
+        assert!(cancel_end < start && start > 600.0, "Look Up is right of Cancel and of the centred title");
+    }
+
+    #[test]
+    fn a_tap_on_look_up_finishes_the_touch_with_the_look_up_outcome() {
+        let ui = crate::shell::tests::ui();
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), ui.s);
+        m.w = 1200;
+        m.h = 800;
+        let r = m.rects(&ui).into_iter().find(|(h, _)| *h == Hit::LookUp).map(|(_, r)| r).expect("the bar has a Look Up button");
+        let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+        assert_eq!(m.touch(&ui, crate::shell::Event::Down(x, y), 0.0), None);
+        assert_eq!(m.touch(&ui, crate::shell::Event::Up(x, y), 0.0), Some(Outcome::LookUp));
+        assert!(m.strokes.is_empty(), "the tap drew nothing");
+    }
+
+    #[test]
+    fn look_up_in_the_editor_opens_the_visual_search_panel_and_keeps_the_editor() {
+        use crate::shell::Event;
+        let mut sh = crate::shell::tests::desktop_shell();
+        let base = Image { w: 100, h: 100, px: vec![pack(0, 0, 0, 255); 100 * 100] };
+        let mut m = Markup::new(base, PathBuf::from("/x.png"), sh.ui.s);
+        m.w = sh.w;
+        m.h = sh.h;
+        let r = m.rects(&sh.ui).into_iter().find(|(h, _)| *h == Hit::LookUp).map(|(_, r)| r).expect("the bar has a Look Up button");
+        let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+        sh.markup = Some(m);
+        assert!(sh.visual_search.is_none());
+        assert!(sh.markup_touch(Event::Down(x, y), 1.0));
+        assert!(sh.visual_search.is_none(), "a press alone searches nothing");
+        assert!(sh.markup_touch(Event::Up(x, y), 2.0));
+        assert!(sh.visual_search.is_some(), "the tap opens the panel");
+        assert!(sh.markup.is_some(), "the editor stays open under it");
     }
 }
