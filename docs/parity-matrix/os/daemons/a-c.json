@@ -1007,7 +1007,7 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Build a game policy service that reads whether the frontmost app is a game and sets focus, notification and power policy while it runs. Gamepad input exists in springboard/src/shell/services/gamepad_service.rs, but no policy uses it. Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a full-screen game is in front (Games category or game = true), leaves after 3 s, sets the CPU profile to Performance and has a General setting. Not built: the notice and menu bar item, background task and indexing pause, game priority (no bifrostd request), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps.",
+   "note": "Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a game is in front full screen (Games category or game = true), leaves after 3 s, and while on: CPU profile Performance, the game's nice and uclamp raised through bifrostd (priority socket), the background task scheduler paused, a menu bar item with Turn Off Game Mode, and a one-time notice. Full screen for app windows is the green button or ToShell::SetFullScreen. Not built: file indexing pause (no indexer runs in the shell), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps to read the state.",
    "rea": [],
    "method": "audit"
   },
