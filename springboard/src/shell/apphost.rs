@@ -544,6 +544,10 @@ impl AppHost {
         let route = launch_route();
         let (mine, theirs) = sys::socketpair_pair()?;
         let _ = std::fs::create_dir_all(data_dir);
+        // the app container: its Documents, Library, Caches and tmp folders exist from the first launch on
+        if let Err(e) = bifrost_core::container_layout::ContainerLayout::new(data_dir).ensure() {
+            eprintln!("springboard: app container for {id}: {e}");
+        }
         let fd = theirs.fd();
         #[cfg(feature="desktop-wayland")]
         let mut cmd = if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
