@@ -2987,7 +2987,7 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs",
    "status": "partial",
-   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local.",
+   "note": "CalDAV and CardDAV principal and collection discovery, event and card reads, and periodic sync for Calendar and Contacts exist. Writes: put_resource and delete_resource (sdk dav_client.rs) send PUT and DELETE with If-Match, If-None-Match for creates, and map 412 to a conflict. Not built: dav_sync does not yet push local edits or queue them, so Calendar and Contacts edits stay local. Built 2026-10-17: Outbox in sdk dav_sync.rs queues local Put and Delete writes and flushes them through put_resource and delete_resource, keeping the queue on a transport failure; tests a_flush_sends_the_edits_in_order_and_empties_the_outbox and the two following. Still open: Sync does not hold an outbox yet and Calendar and Contacts do not queue their edits.",
    "rea": [],
    "method": "assessed"
   },
@@ -3803,7 +3803,7 @@
    "doc": "",
    "bifrost": "springboard/src/media/mod.rs; springboard/src/media/hls.rs",
    "status": "partial",
-   "note": "File demux and playback in springboard/src/media exist. HLS media playlists are now parsed and their segment addresses resolved (media/hls.rs). Not built: fetching the segments over HTTP, joining them into one stream for the demuxer, and master playlist variant selection, so streamed network media does not play yet.",
+   "note": "File demux and playback in springboard/src/media exist. HLS media playlists are now parsed and their segment addresses resolved (media/hls.rs). Not built: fetching the segments over HTTP, joining them into one stream for the demuxer, and master playlist variant selection, so streamed network media does not play yet. Built 2026-10-17: master playlist variant selection (media/hls.rs parse_master, select_variant; tests a_master_playlist_lists_its_variants, the_variant_is_the_best_one_under_the_limit). Still open: fetching the segments over HTTP and joining them for the demuxer.",
    "rea": [],
    "method": "assessed"
   },
@@ -3908,7 +3908,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/contacts.rs (split_name); springboard/ui/src/contact_fetch.rs (MiddleName, NameSuffix); springboard/ui/src/contact_vcard.rs",
    "status": "partial",
-   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). The contact fetch layer now has middle_name and name_suffix keys (ui contact_fetch.rs, additive), and the vCard reader already splits middle and suffix parts (contact_vcard.rs). Not built: the store holds one name string, so the shell does not yet split a typed name into middle and suffix, and the bundled frequency and surname tables are missing.",
+   "note": "Partial: the contacts store splits a full name at its last word into given and family name (split_name in services/contacts.rs). The contact fetch layer now has middle_name and name_suffix keys (ui contact_fetch.rs, additive), and the vCard reader already splits middle and suffix parts (contact_vcard.rs). Not built: the store holds one name string, so the shell does not yet split a typed name into middle and suffix, and the bundled frequency and surname tables are missing. Built 2026-10-17: name parts (given, middle, family, suffix) are read from the store name and joined back on save (services/contacts.rs name_parts, join_name); tests a_name_splits_into_given_middle_and_family, a_trailing_suffix_is_split_off_the_name. Still open: the bundled frequency and surname tables.",
    "rea": [],
    "method": "assessed"
   },
