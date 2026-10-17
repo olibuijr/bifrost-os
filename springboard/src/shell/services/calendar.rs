@@ -166,6 +166,7 @@ pub fn new_event(params: &Json, events: &[CalendarEvent]) -> Result<CalendarEven
     }
     let event = CalendarEvent {
         id: store::next_id(events),
+        uid: String::new(),
         date: Date::from_days(start.div_euclid(1440)),
         minute,
         duration,
