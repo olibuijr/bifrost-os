@@ -483,7 +483,16 @@
    "status": "partial",
    "note": "PNG, JPEG, GIF, BMP, ICO and TIFF decode and write with EXIF, GPS and animation frames, in the render crate and the SDK. Not covered: HEIC, RAW, HDR gain maps, and XMP or IPTC metadata.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::imageio::tests"
+    }
+   ],
+   "ready_note": "Render crate codecs (PNG, JPEG, GIF, BMP, ICO, TIFF with EXIF and GPS) are tested; HEIC, RAW and metadata gaps stay in the note."
   },
   {
    "id": "path:/System/Library/Frameworks/ImagePlayground.framework",
@@ -735,7 +744,21 @@
    "status": "partial",
    "note": "The Graphics page and the PCI device model read each adapter's vendor, class and driver from sysfs and pci.ids. Not covered: GPU counters, Metal device capability queries, and any SDK API for apps.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gpu_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "sysinfo::tests"
+    }
+   ],
+   "ready_note": "The Graphics page and the PCI/sysfs adapter model read vendor, class and driver; GPU counters and SDK API stay open."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPURawCounter.framework",
@@ -2037,7 +2060,16 @@
    "status": "partial",
    "note": "Maps state, route and user-location tracking are headless and tested in the maps app and the user-location model. Gap: the reference world map data, time zone map and city picker are not provided.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-maps",
+     "filter": "state::tests"
+    }
+   ],
+   "ready_note": "Maps state, routes and user-location tracking run headless and are tested; the world map data is not provided."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GeoServices.framework",
@@ -2184,7 +2216,26 @@
    "status": "partial",
    "note": "Trackpad swipe, pinch and hold reach the window server and clients with paired begin and end events; the shell has touch state machines for edge gestures. Gap: no SDK-level gesture recognizers for trackpad hold or three-finger swipes.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trackpad_gesture::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::gestures::tests"
+    }
+   ],
+   "ready_note": "Trackpad swipe, pinch and hold reach the window server with paired begin and end events; edge gestures are tested in the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GraphCompute.framework",
@@ -2457,7 +2508,21 @@
    "status": "partial",
    "note": "Keyboards, pointers and touch are read through evdev, and evdev keys map to HID keyboard usages in a tested table. Apps get decoded events but no HID reports or elements, and vendor HID drivers are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "key_usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "bare::input::tests"
+    }
+   ],
+   "ready_note": "Keyboards, pointers and touch are read through evdev; the evdev-to-HID keyboard usage table is tested. Apps get no HID reports."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDAnalytics.framework",
@@ -2520,7 +2585,16 @@
    "status": "partial",
    "note": "Pointer and keyboard preferences (acceleration, natural scrolling, tap, layout) are parsed from the preferences file and applied through libinput configuration. The reference preferences domain and its settings panel are not mirrored.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-wm",
+     "filter": "input::tests"
+    }
+   ],
+   "ready_note": "Pointer and keyboard preferences are parsed and applied through libinput configuration, with tests; the reference settings domain is not mirrored."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HIDRMClientKit.framework",
@@ -2958,8 +3032,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only InfoPlist.loctable is in the extract and the core's job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -2979,8 +3053,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist only; the name points at the Hearing Mode service, but the binary is not in the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3000,8 +3074,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Plist and one notification tone only; its job is unconfirmed without the binary, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -3042,8 +3116,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Asset catalogue only; the framework's job is unconfirmed from the extract, so it stays os.",
+   "status": "n/a",
+   "note": "Apple hearing-accessory feature (hearing aids and Hearing Mode on Apple hardware); BifrOSt has no such hardware or service.",
    "rea": [],
    "method": "assessed"
   },
@@ -4326,7 +4400,16 @@
    "status": "partial",
    "note": "netd runs Wi-Fi scans, association, DHCP and status to clients, and nl80211.rs reads and sets power save. Gap: no per-interface regulatory or roaming control, and the 802.11 driver itself is the Linux kernel's, not BifrOSt's.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    }
+   ],
+   "ready_note": "netd and the Wi-Fi module run scans, association and DHCP status; the 802.11 driver is the Linux kernel's."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOAccelMemoryInfo.framework",
@@ -4368,7 +4451,20 @@
    "status": "partial",
    "note": "The kernel GPU driver and mesa give the shell GPU access through DRM and EGL (springboard/src/gpu/egl.rs). Gap: no app-facing accelerator interface exists, and the reference accelerator's per-device user client has no counterpart.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libEGL.so.1"
+    }
+   ],
+   "ready_note": "The kernel DRM driver and mesa give the shell GPU access through EGL; the EGL presenter path is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOCEC.framework",
@@ -4431,7 +4527,20 @@
    "status": "partial",
    "note": "GPU command submission on this system goes through the kernel DRM driver and mesa, reached by the shell's EGL presenter (springboard/src/gpu/egl.rs). Gap: no app-facing GPU device interface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "gpu::egl::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/lib/libEGL.so.1"
+    }
+   ],
+   "ready_note": "GPU command submission goes through the kernel DRM driver and mesa, reached by the shell's EGL presenter."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOImageLoader.framework",
@@ -4473,7 +4582,16 @@
    "status": "partial",
    "note": "The reference bundle identifier marks this as the audio-class kernel driver family; the kernel ALSA drivers with alsa-utils and the shell's audio daemon (springboard/audiod) cover the same job. Gap: no app-facing audio device-driver interface exists.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "cmd",
+     "run": "aplay --version",
+     "expect_exit": 0
+    }
+   ],
+   "ready_note": "The kernel ALSA drivers with alsa-utils and the shell's audio daemon (bifrost-audiod, enabled by the install hook) do the audio-driver job."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IOMobileFramebuffer.framework",
@@ -4578,7 +4696,26 @@
    "status": "partial",
    "note": "The network daemon and the Wi-Fi module configure addresses, routes and DHCP leases, and defer to the host's own DHCP client when one runs (wifi.rs). Gap: no per-interface IP configuration API is offered to apps, and the helper service has no equivalent.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "unit",
+     "name": "NetworkManager.service",
+     "state": "enabled"
+    },
+    {
+     "kind": "cmd",
+     "run": "nmcli --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::wifi::tests"
+    }
+   ],
+   "ready_note": "NetworkManager, enabled by the installer, configures addresses, routes and DHCP leases; the Wi-Fi module defers to a host DHCP client."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IPTelephony.framework",
@@ -4596,8 +4733,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined from the reference index, which lists only its signing requirements and Info.plist; the name suggests IP telephony, which BifrOSt does not offer.",
+   "status": "n/a",
+   "note": "Cellular telephony stack; BifrOSt PC and Wi-Fi tablet have no cellular modem interface.",
    "rea": [],
    "method": "assessed"
   },
@@ -4641,7 +4778,16 @@
    "status": "partial",
    "note": "Camera frames are captured from V4L2 nodes and converted to the shell's pixels (v4l2.rs). Gap: the image-signal-processing pipeline and its tuning are not exposed, and the camera driver does the processing.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "media::v4l2::tests"
+    }
+   ],
+   "ready_note": "Camera frames are captured from V4L2 nodes and converted to the shell's pixels; ISP tuning belongs to the camera driver."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconFoundation.framework",
@@ -4683,7 +4829,16 @@
    "status": "partial",
    "note": "Pure renderer: any pixel size and scale from one icon source, masked to the continuous-corner superellipse body (exponent 5) on an 80 percent canvas, with a specular edge and a drop shadow, premultiplied output, and a cache keyed by app, size, scale and variant. Gap: the file thumbnails do not use it yet, the body and shadow proportions are not checked against the reference grid, and layers must be PNG.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icon_doc::tests"
+    }
+   ],
+   "ready_note": "The icon renderer produces any size and scale from one source, with a cache keyed by app, size, scale and variant, and is tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconServices.framework",
@@ -4746,7 +4901,16 @@
    "status": "partial",
    "note": "The device browser finds cameras and scanners and their hot-plug events, and the camera device model controls and downloads from them (camera_device.rs). Gap: the PTP and camera-specific driver modules are not covered beyond what the shell uses.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "The device browser finds cameras and scanners with hot-plug events, and the camera model controls and downloads, with tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageGenerationServices.framework",
@@ -5082,7 +5246,16 @@
    "status": "partial",
    "note": "The candidates window model holds the alternate text, paging and panel placement, and the shell paints it (candidates.rs). Gap: the input tool's own settings and picker panels are not built.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "candidates::tests"
+    }
+   ],
+   "ready_note": "The candidates window model (paging, alternate text, panel placement) is tested and painted by the shell."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InputTranscoder.framework",
@@ -5124,7 +5297,21 @@
    "status": "partial",
    "note": "The native installer lays down the system and the store installs packages from verified archives (store/install.rs). Gap: no installer-plugin or package-service API exists for third-party code, and package transactions go through pacman rather than a shared service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests"
+    }
+   ],
+   "ready_note": "The native installer lays down the system and the store installs verified packages; both paths are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InstallCoordination.framework",
@@ -5859,7 +6046,16 @@
    "status": "partial",
    "note": "Locale, number, date and list formatting with built-in en and is data. Other languages fall back to the en tables, so the reference language coverage is a gap.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "locale::tests"
+    }
+   ],
+   "ready_note": "Locale, number, date and list formatting with built-in en and is tables is tested; other languages fall back to en."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/InternationalTextSearch.framework",
@@ -5985,7 +6181,16 @@
    "status": "partial",
    "note": "An RFC 5545 reader and writer for events covering line folding, RRULE, EXDATE, VALARM and VTIMEZONE offsets. The reference calendar database and sync are not covered.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-calendar",
+     "filter": "calendar::ics::tests"
+    }
+   ],
+   "ready_note": "The RFC 5545 reader and writer (folding, RRULE, EXDATE, VALARM, VTIMEZONE) is tested in the calendar app."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/iCloudDriveCore.framework",
