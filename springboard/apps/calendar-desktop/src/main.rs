@@ -580,10 +580,13 @@ impl App for CalendarApp {
 }
 
 impl CalendarApp {
-    /// Hands the queued replies and invitations to Mail. Each .ics file is granted first; the message follows in
-    /// `document` (`Job::Attach`).
+    /// Hands the queued replies and invitations to Mail, and opens a Show in Maps link. Each .ics file is granted first;
+    /// the message follows in `document` (`Job::Attach`).
     fn send_outbox(&mut self, ctx: &Ctx) {
         let Some(c) = &mut self.cal else { return };
+        if let Some(url) = c.take_map_link() {
+            let _ = ctx.open_url(&url);
+        }
         for mail in c.take_outgoing() {
             let draft = Compose { to: mail.to, subject: mail.subject, body: mail.body, ..Default::default() };
             let request = ctx.grant_path(&mail.file.to_string_lossy());
