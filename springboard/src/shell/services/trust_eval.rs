@@ -1,23 +1,52 @@
 //! The `trust` service: certificate chain evaluation for apps (`SecTrustEvaluateWithError`). The model is
-//! `bifrost_ui::trust` (validity, names, CA and path rules, the chain and the anchors). The model never reads a
-//! signature, and this service does not parse certificates from DER either: the app sends the fields it parsed.
+//! `bifrost_ui::trust` (validity, names, CA and path rules, the chain and the anchors). The model asks a verify
+//! callback whether each link is signed; this service answers that with Ed25519 (`bifrost_ui::ed25519`, the same
+//! primitive the SDK's `crypto_kit` uses). It does not parse certificates from DER: the app sends the fields it parsed,
+//! and the bytes that were signed.
 //!
-//! Signature checking is not built here. The verify callback answers `false` for every link, so a chain that passes
-//! the other rules still fails with `SignatureInvalid`. That keeps the service fail-closed: it can say a chain is
-//! malformed, expired or for another host, but it never says a chain is trusted. Network connections are verified by
-//! the TLS stack (rustls with the webpki roots), not by this service.
+//! A link is trusted only when the child certificate carries `signed` and `signature` and the issuer carries
+//! `public_key`, and the signature verifies over `signed`. A certificate without those fields fails its link, so the
+//! service stays fail-closed for anything it cannot check. Network connections are verified by the TLS stack (rustls
+//! with the webpki roots), not by this service.
 //!
 //! Methods (JSON parameters):
 //! - `evaluate {chain, anchors, host?, now?}`: `chain` is a list of certificates, leaf first; `anchors` the trusted
 //!   roots; `host` selects the SSL policy (a leaf that names it), and without it the basic policy applies; `now` is
 //!   unix seconds (default: the clock). A certificate is `{subject, issuer, not_before, not_after, is_ca,
-//!   path_len?, digital_signature, dns_names}`.
+//!   path_len?, digital_signature, dns_names, public_key?, signed?, signature?}`. `public_key` is 32 bytes of Ed25519
+//!   key, `signed` the signed bytes and `signature` the 64-byte signature, all as hex text.
 //!   Answers `{verdict, passes, failures}`: `verdict` is `invalid`, `unspecified`, `recoverable` or `fatal`, and
 //!   `failures` lists each failure as text.
 use super::location::now_unix;
 use super::{Shell, SystemService};
 use bifrost_core::json::Json;
+use bifrost_core::plist::hex_decode;
+use bifrost_ui::ed25519::PublicKey;
 use bifrost_ui::trust::{evaluate, Certificate, Policy, Verdict};
+
+/// The signature material of one certificate: what it holds, and what it signed. `None` where the app sent none.
+#[derive(Default)]
+struct Signing {
+    public_key: Option<Vec<u8>>,
+    signed: Option<Vec<u8>>,
+    signature: Option<Vec<u8>>,
+}
+
+/// The signing material of `cert`, found by its address in one of the `(certificates, material)` lists.
+fn material<'a>(lists: &[(&[Certificate], &'a [Signing])], cert: &Certificate) -> Option<&'a Signing> {
+    lists.iter().find_map(|(certs, signing)| certs.iter().position(|c| std::ptr::eq(c, cert)).map(|i| &signing[i]))
+}
+
+/// Whether the certificate `child` is signed by the key of `issuer`. Missing material is a failed link.
+fn link_signed(child: &Signing, issuer: &Signing) -> bool {
+    let (Some(signed), Some(signature), Some(key)) = (&child.signed, &child.signature, &issuer.public_key) else {
+        return false;
+    };
+    match PublicKey::from_raw_representation(key) {
+        Ok(key) => key.is_valid_signature(signature, signed),
+        Err(_) => false,
+    }
+}
 
 /// The service name.
 pub const SERVICE: &str = "trust";
@@ -40,15 +69,23 @@ pub fn answer(method: &str, params: &Json) -> Result<Json, String> {
     if method != "evaluate" {
         return Err(format!("trust has no method {method}"));
     }
-    let chain = certificates(params, "chain")?;
-    let anchors = certificates(params, "anchors")?;
+    let (chain, chain_signing) = certificates(params, "chain")?;
+    let (anchors, anchor_signing) = certificates(params, "anchors")?;
     let policy = match params.str_field("host") {
         Some(host) => Policy::Ssl { host },
         None => Policy::Basic,
     };
     let now = params.get("now").and_then(Json::as_u64).unwrap_or_else(|| now_unix() as u64);
-    // Fail-closed: no signature is ever accepted by this service (see the module doc).
-    let evaluation = evaluate(&chain, &anchors, &policy, now, &|_child: &Certificate, _issuer: &Certificate| false);
+    // Each certificate is found by its address in the request lists, so the callback reads the material the app
+    // sent for exactly that certificate.
+    let verify = |child: &Certificate, issuer: &Certificate| {
+        let lists = [(&chain[..], &chain_signing[..]), (&anchors[..], &anchor_signing[..])];
+        match (material(&lists, child), material(&lists, issuer)) {
+            (Some(c), Some(i)) => link_signed(c, i),
+            _ => false,
+        }
+    };
+    let evaluation = evaluate(&chain, &anchors, &policy, now, &verify);
     let verdict = match evaluation.verdict {
         Verdict::Invalid => "invalid",
         Verdict::Unspecified => "unspecified",
@@ -63,12 +100,28 @@ pub fn answer(method: &str, params: &Json) -> Result<Json, String> {
     ]))
 }
 
-fn certificates(params: &Json, key: &str) -> Result<Vec<Certificate>, String> {
+/// The certificates named by `key`, with their signing material in the same order.
+fn certificates(params: &Json, key: &str) -> Result<(Vec<Certificate>, Vec<Signing>), String> {
     match params.get(key) {
-        None | Some(Json::Null) => Ok(Vec::new()),
-        Some(Json::Arr(items)) => items.iter().map(certificate).collect(),
+        None | Some(Json::Null) => Ok((Vec::new(), Vec::new())),
+        Some(Json::Arr(items)) => {
+            let certs = items.iter().map(certificate).collect::<Result<Vec<_>, _>>()?;
+            let signing = items.iter().map(signing).collect::<Result<Vec<_>, _>>()?;
+            Ok((certs, signing))
+        }
         Some(_) => Err(format!("{key} must be a list of certificates")),
     }
+}
+
+/// The signing fields of one certificate. Each is hex text; a field that is absent stays `None`.
+fn signing(j: &Json) -> Result<Signing, String> {
+    let field = |k: &str| -> Result<Option<Vec<u8>>, String> {
+        match j.str_field(k) {
+            None => Ok(None),
+            Some(hex) => hex_decode(&hex).map(Some).ok_or_else(|| format!("certificate {k} must be hex text")),
+        }
+    };
+    Ok(Signing { public_key: field("public_key")?, signed: field("signed")?, signature: field("signature")? })
 }
 
 fn certificate(j: &Json) -> Result<Certificate, String> {
@@ -98,6 +151,8 @@ fn certificate(j: &Json) -> Result<Certificate, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_core::plist::hex_encode;
+    use bifrost_ui::ed25519::PrivateKey;
 
     fn cert(subject: &str, issuer: &str, is_ca: bool) -> Json {
         Json::Obj(vec![
@@ -127,12 +182,76 @@ mod tests {
     }
 
     #[test]
-    fn no_chain_passes_without_signature_checks() {
+    fn unsigned_links_still_fail() {
         let chain = vec![cert("example.com", "Root", false), cert("Root", "Root", true)];
         let r = answer("evaluate", &request(chain, Some("example.com"))).unwrap();
         assert_eq!(r.get("passes"), Some(&Json::Bool(false)));
         let failures = r.get("failures").and_then(Json::as_array).unwrap();
         assert!(!failures.is_empty());
+    }
+
+    /// The certificate `subject` issued by `issuer`, holding `own`'s public key and signed by `signer` over its fields.
+    fn signed(subject: &str, issuer: &str, is_ca: bool, own: &PrivateKey, signer: &PrivateKey) -> Json {
+        let tbs = format!("{subject}|{issuer}|{is_ca}").into_bytes();
+        let signature = signer.signature_for(&tbs);
+        let mut c = cert(subject, issuer, is_ca);
+        if let Json::Obj(pairs) = &mut c {
+            pairs.push(("public_key".into(), Json::Str(hex_encode(&own.public_key().raw_representation()))));
+            pairs.push(("signed".into(), Json::Str(hex_encode(&tbs))));
+            pairs.push(("signature".into(), Json::Str(hex_encode(&signature))));
+        }
+        c
+    }
+
+    fn chain_with_anchor(leaf: Json, root: Json) -> Json {
+        Json::Obj(vec![
+            ("chain".into(), Json::Arr(vec![leaf, root.clone()])),
+            ("anchors".into(), Json::Arr(vec![root])),
+            ("now".into(), Json::Num(1_000.0)),
+            ("host".into(), Json::Str("example.com".into())),
+        ])
+    }
+
+    #[test]
+    fn a_chain_signed_by_its_anchor_passes() {
+        let root_key = PrivateKey::generate().unwrap();
+        let leaf_key = PrivateKey::generate().unwrap();
+        let root = signed("Root", "Root", true, &root_key, &root_key);
+        let leaf = signed("example.com", "Root", false, &leaf_key, &root_key);
+        let r = answer("evaluate", &chain_with_anchor(leaf, root)).unwrap();
+        assert_eq!(r.get("passes"), Some(&Json::Bool(true)), "{r:?}");
+    }
+
+    #[test]
+    fn a_leaf_signed_by_another_key_or_altered_after_signing_fails() {
+        let root_key = PrivateKey::generate().unwrap();
+        let other_key = PrivateKey::generate().unwrap();
+        let leaf_key = PrivateKey::generate().unwrap();
+        let root = signed("Root", "Root", true, &root_key, &root_key);
+        let forged = signed("example.com", "Root", false, &leaf_key, &other_key);
+        let r = answer("evaluate", &chain_with_anchor(forged, root.clone())).unwrap();
+        assert_eq!(r.get("passes"), Some(&Json::Bool(false)));
+        assert!(format!("{:?}", r.get("failures")).contains("SignatureInvalid"));
+
+        let mut altered = signed("example.com", "Root", false, &leaf_key, &root_key);
+        if let Json::Obj(pairs) = &mut altered {
+            for (k, v) in pairs.iter_mut() {
+                if k == "subject" {
+                    *v = Json::Str("evil.example".into());
+                }
+            }
+        }
+        let r = answer("evaluate", &chain_with_anchor(altered, root)).unwrap();
+        assert_eq!(r.get("passes"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn a_hex_field_that_is_not_hex_is_an_error() {
+        let mut c = cert("example.com", "Root", false);
+        if let Json::Obj(pairs) = &mut c {
+            pairs.push(("signature".into(), Json::Str("zz".into())));
+        }
+        assert!(answer("evaluate", &request(vec![c], None)).is_err());
     }
 
     #[test]

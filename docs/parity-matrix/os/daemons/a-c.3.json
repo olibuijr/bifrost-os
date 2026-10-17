@@ -1918,8 +1918,27 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs, springboard/src/shell/services/trust_eval.rs",
+   "ready_note": "The trust service evaluates chains with the model in bifrost_ui::trust and checks each link with Ed25519 (bifrost_ui::ed25519, the primitive crypto_kit uses), tests shell::services::trust_eval::tests. A chain is trusted only when every link verifies, so unsigned or forged chains fail. Network TLS is verified by rustls.",
    "status": "partial",
-   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and fails closed (no signature check yet), so it never reports a chain trusted; network TLS is verified by rustls",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::trust_eval::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ed25519::tests"
+    }
+   ],
+   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and checks each link with Ed25519 (built 2026-10-17), so a chain is trusted only when every link verifies; network TLS is verified by rustls",
    "rea": [],
    "method": "rule"
   },
