@@ -1053,11 +1053,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/window.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "window::tests"
+    }
+   ],
+   "ready_note": "The workflow editor is the step editor of the Shortcuts app (widget.rs: typing and editing a step's text in place, name entry, search, gallery and folders) and of Automator (window.rs); their tests exercise editing, refusing empty or duplicate names and keeping edits."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowKit.framework",
@@ -1074,11 +1088,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shortcuts.rs, springboard/src/shortcuts/flow.rs, springboard/apps/shortcuts-desktop/src/runner.rs, springboard/sdk/src/workflow.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::flow::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "workflow::tests"
+    }
+   ],
+   "ready_note": "The workflow engine: the shortcut file format (shortcuts.rs round trips), the flow runner with variables, If and Repeat blocks and step output passing (shortcuts/flow.rs), the app host that performs or refuses steps (runner.rs) and the SDK's sequential workflow model with pause, step and stop (sdk workflow.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowResponsiveness.framework",
@@ -1096,8 +1134,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple performance telemetry; the resources are WorkflowPlists/*.plist latency budgets for named Apple features (dictation, the assistant, chat flows, notification catch-up) that feed Apple diagnostics, and BifrOSt collects no such telemetry (its own timing is core/src/signpost.rs).",
    "rea": [],
    "method": "assessed"
   },
@@ -1116,11 +1154,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/draw.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "draw::tests"
+    }
+   ],
+   "ready_note": "The views of the workflow editor are the Shortcuts window (widget.rs: gallery grid, sidebar, step rows, result panel) and the Automator canvas (draw.rs); their tests cover layout, hit testing and drawing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUICore.framework",
@@ -1137,11 +1189,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/model.rs, springboard/apps/automator-desktop/src/actions.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "widget::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-automator",
+     "filter": "actions::tests"
+    }
+   ],
+   "ready_note": "Internal split of the workflow editor UI (shared view state and the action field models): BifrOSt keeps these in the Shortcuts widget module and the Automator model and action modules, whose tests cover them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUIServices.framework",
@@ -1158,11 +1229,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/runner.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/services.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "runner::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "automation::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-shortcuts",
+     "filter": "services::tests"
+    }
+   ],
+   "ready_note": "The services that show a workflow's run to the person: the in-app run host with notification and result panel (runner.rs), the picker and onscreen-context queries other apps use (automation.rs) and the reminder and login-item services (services.rs)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkoutAnnouncements.framework",
@@ -1200,11 +1290,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-clock",
+     "filter": "clock::intent::tests"
+    }
+   ],
+   "ready_note": "The Clock app declares the world-clock-time and next-alarm App Intents (clock/intent.rs) as runnable shortcuts; the tests cover the declarations, city lookup ignoring case, daylight saving, the device-time default and rejection of unknown intents and cities."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WritingTools.framework",
@@ -1264,8 +1363,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple silicon secure-storage hardware (xART anti-replay tokens held with the Secure Enclave); the bundle holds only Info.plist and version.plist and BifrOSt runs on Arch with no such hardware.",
    "rea": [],
    "method": "assessed"
   },
@@ -1411,8 +1510,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple-only proprietary cross-device transport (XPC carried between a user's Apple devices); the bundle holds only Info.plist and a logging subsystem plist, and no open equivalent exists. BifrOSt's app IPC is the control socket in sdk/src/control.rs.",
    "rea": [],
    "method": "assessed"
   },
@@ -1431,11 +1530,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/control.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "control::tests"
+    }
+   ],
+   "ready_note": "XPC plumbing for apps and their helpers; BifrOSt's inter-process layer is the app control endpoint (JSON-RPC 2.0 over an owner-only Unix socket with peer-credential checks, sdk control.rs), covered by its tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XQuery.framework",
@@ -1452,11 +1560,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/xml_query.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "xml_query::tests"
+    }
+   ],
+   "ready_note": "Built in core/src/xml_query.rs: an XML parser (elements, attributes, CDATA, entities, depth and size limits) and a path-query evaluator (steps, // and .., predicates with comparisons and and/or/not, count/string/exists/contains/starts-with/name/position/last). The XQuery language beyond paths (FLWOR, constructors, arithmetic) is not supported and is refused with an error."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XprotectFramework.framework",
@@ -1473,11 +1590,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/malware_scan.rs, springboard/core/src/pattern_rules.rs, springboard/core/src/quarantine.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "malware_scan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pattern_rules::tests"
+    }
+   ],
+   "ready_note": "Built in core/src/malware_scan.rs: a local signature scanner for files and trees, a rule store that installs only compiled, newer rule sets and detects tampering by SHA-256, and a disposition that blocks or warns, escalating for items that carry a quarantine record. Nothing is fetched from the network: updates are files handed to the store. Wiring the scan into the open path of the shell is separate."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ZeoliteFramework.framework",
@@ -1495,8 +1626,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple on-device ML evaluation tooling; the only dependent in the index is ZeoliteEvalExtension.appex (an evaluation harness extension) and the bundle holds only Info.plist. BifrOSt ships no Apple-style on-device model.",
    "rea": [],
    "method": "assessed"
   },
@@ -1516,8 +1647,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple on-device language model evaluation support, paired with ZeoliteFramework; the bundle holds only Info.plist and the sole dependent is ZeoliteEvalExtension.appex. BifrOSt ships no Apple-style on-device model.",
    "rea": [],
    "method": "assessed"
   },
@@ -1536,11 +1667,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/pattern_rules.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "pattern_rules::tests"
+    }
+   ],
+   "ready_note": "Built in core/src/pattern_rules.rs: a rule language with text patterns (nocase, wide, ascii, fullword), hex patterns with wildcards, counts, offsets, filesize, any/all/N of sets and and/or/not. Hex jumps, regular expressions and modules are not supported and are refused at compile time."
   }
  ]
 }
