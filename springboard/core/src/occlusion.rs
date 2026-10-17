@@ -101,9 +101,32 @@ impl Occlusion {
     }
 }
 
+/// The signal that stops an app's processes when it is suspended (`SIGSTOP`, 19 on Linux for x86_64 and aarch64).
+pub const SIGSTOP: i32 = 19;
+/// The signal that resumes an app's processes (`SIGCONT`, 18 on Linux for x86_64 and aarch64).
+pub const SIGCONT: i32 = 18;
+
+/// The signal the shell sends an app's process group for a transition, or `None` when nothing is sent. The shell
+/// sends it only when the Settings toggle that allows suspension is on.
+pub fn signal_for(transition: Transition) -> Option<i32> {
+    match transition {
+        Transition::None => None,
+        Transition::Suspend => Some(SIGSTOP),
+        Transition::Resume => Some(SIGCONT),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_suspension_stops_the_app_and_a_resume_continues_it() {
+        assert_eq!(signal_for(Transition::Suspend), Some(SIGSTOP));
+        assert_eq!(signal_for(Transition::Resume), Some(SIGCONT));
+        assert_eq!(signal_for(Transition::None), None);
+        assert_eq!((SIGSTOP, SIGCONT), (19, 18));
+    }
 
     #[test]
     fn visible_unfocused_app_keeps_running() {
