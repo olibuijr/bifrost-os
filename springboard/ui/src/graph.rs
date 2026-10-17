@@ -110,6 +110,8 @@ pub struct Options {
 pub struct Graph {
     nodes: Vec<Node>,
     options: Options,
+    /// the payload of each constant node, so a run can read it (`graph_run`)
+    constants: Vec<(TensorId, TensorData)>,
 }
 
 impl Graph {
@@ -151,7 +153,14 @@ impl Graph {
     /// A constant whose type is the payload's type.
     pub fn constant(&mut self, data: TensorData) -> TensorId {
         let ty = data.ty().clone();
-        self.push(Kind::Constant, ty)
+        let id = self.push(Kind::Constant, ty);
+        self.constants.push((id, data));
+        id
+    }
+
+    /// The payload of a constant node.
+    pub fn constant_data(&self, id: TensorId) -> Option<&TensorData> {
+        self.constants.iter().find(|(c, _)| *c == id).map(|(_, d)| d)
     }
 
     /// An element-wise operator. The result has the broadcast shape and the operands' element type.

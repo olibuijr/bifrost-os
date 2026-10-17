@@ -744,6 +744,8 @@ pub mod gameplay_values;
 pub mod rule_system;
 pub mod tensor;
 pub mod graph;
+/// A CPU runtime for compiled compute graphs (`graph_run::run`): every operator of `graph`, all element types.
+pub mod graph_run;
 pub mod nn;
 pub mod cnn_layers;
 pub mod save_sync;
