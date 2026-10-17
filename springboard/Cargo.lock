@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-dictionary"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

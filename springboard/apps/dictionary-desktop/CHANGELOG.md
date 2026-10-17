@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5 — 2026-10-17
+
+- File > New Window (cmd+n) opens a second window with its own lookup, history, scope and find. Touch works in every window; the keyboard and the menus stay with the main window.
+
 ## 0.5.4 — 2026-10-14
 
 - Add the generated app compliance harness.
