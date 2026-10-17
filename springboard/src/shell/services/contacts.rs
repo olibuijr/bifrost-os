@@ -28,6 +28,7 @@ use super::{Shell, SystemService};
 use crate::shell::contactextras::{self, Book, Extras};
 use crate::shell::contactchanges;
 use crate::shell::contactgroups;
+use crate::shell::contactpick;
 use crate::shell::contactphotos;
 use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
@@ -446,6 +447,37 @@ impl SystemService for Contacts {
                 let extras = contactextras::load(&contactextras::path_for(&path));
                 answer_with(app_id, method, params, &load()?, &extras)
             }
+            "pick" => {
+                // A pick shows the whole book to the person, who chooses; the app itself reads nothing from it.
+                let need = params.get("need").and_then(Json::as_str).and_then(contactpick::card_key);
+                let keys = params
+                    .get("keys")
+                    .and_then(Json::as_array)
+                    .unwrap_or(&[])
+                    .iter()
+                    .filter_map(|k| k.as_str().and_then(contactpick::card_key))
+                    .collect();
+                let mode_name = params.get("mode").and_then(Json::as_str).unwrap_or("");
+                let mode = contactpick::mode_of(mode_name, need, keys)?;
+                let entries = contactpick::entries_of(&load()?);
+                contactpick::start(app_id, bifrost_ui::contact_picker::Picker::new(entries, mode));
+                Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))]))
+            }
+            "pick_result" => match contactpick::outcome(app_id) {
+                contactpick::Outcome::None => Err("no contact pick is open for this app".into()),
+                contactpick::Outcome::Pending => Ok(Json::Obj(vec![("status".into(), Json::Str("pending".into()))])),
+                contactpick::Outcome::Chosen(bifrost_ui::contact_picker::Choice::Contact(id)) => Ok(Json::Obj(vec![
+                    ("status".into(), Json::Str("chosen".into())),
+                    ("contact".into(), Json::Num(id as f64)),
+                ])),
+                contactpick::Outcome::Chosen(bifrost_ui::contact_picker::Choice::Property { contact, key: _, value }) => {
+                    Ok(Json::Obj(vec![
+                        ("status".into(), Json::Str("chosen".into())),
+                        ("contact".into(), Json::Num(contact as f64)),
+                        ("value".into(), Json::Str(value)),
+                    ]))
+                }
+            },
             "photo" => {
                 if !reads(app_id) {
                     return Err("contacts access is not granted".into());
