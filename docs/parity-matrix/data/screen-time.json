@@ -19,7 +19,7 @@
       "apple": "STScreenTimeConfigurationObserver(updateQueue:), startObserving(), stopObserving(), configuration; STScreenTimeConfiguration.enforcesChildRestrictions",
       "bifrost": "springboard/sdk/src/screen_time.rs (Configuration, ConfigurationObserver); tests sdk/tests/parity_sdk-tests-09.rs",
       "status": "partial",
-      "note": "The restriction rule and the observer's change reports are tested headless in sdk/tests/parity_sdk-tests-09.rs. Gap: not wired into apps or the shell, not tested on the VM or Midget, and apps get no child-restrictions query."
+      "note": "The restriction rule and the observer's change reports are tested headless in sdk/tests/parity_sdk-tests-09.rs. Built 2026-10-17: ConfigurationObserver::system watches the shell settings file at /var/lib/springboard/screentime.ini (springboard/sdk/src/screen_time.rs; test system_observer test in that file), and the shell rule is checked against the model (springboard/src/shell/screentime/config.rs test the_shield_rule_agrees_with_the_model_rule). Gap: not tested on the VM or Midget, and the query is not yet exposed through the runtime to apps."
     },
     {
       "feature": "Web-history deletion (STWebHistory)",
@@ -33,7 +33,7 @@
       "apple": "Not an Apple API; the Screen Time app's usage data (no public API in this framework)",
       "bifrost": "springboard/ui/src/os_services/usage_record.rs (UsageDay parse, to_text, ranked, add, window_days); springboard/src/shell/screentime/usage.rs (Tracker, one key=value day file per day, 7-day chart history)",
       "status": "partial",
-      "note": "The day file format, ranking, totals and the seven-day window are tested headless, and the shell tracker writes the same keys. Gap: the shell reads the day files for Settings only and no app can read usage."
+      "note": "The day file format, ranking, totals and the seven-day window are tested headless, and the shell tracker writes the same keys. Built 2026-10-17: an app reads its own foreground seconds for a day (springboard/sdk/src/screen_usage.rs, own_seconds; tests in that file). It never sees other apps. Gap: no other app usage is exposed, by design."
     },
     {
       "feature": "Daily app limits and the Time Limit shield",
@@ -58,10 +58,9 @@
     }
   ],
   "gaps": [
-    "Web-usage reporting: no equivalent of STWebpageController to report visited URLs, playing video or picture-in-picture, or to ask whether a URL is blocked.",
-    "Web-history API: no equivalent of STWebHistory to fetch or delete browsing history by bundle identifier, profile or date range.",
-    "Configuration query: apps cannot observe the device Screen Time configuration or ask whether child restrictions are enforced.",
-    "Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.",
-    "No SDK module exposes the shell's Screen Time usage or limit state to apps; none is documented in docs/bifrost-ui.md."
+    "Web-usage and web-history models exist headless (springboard/sdk/src/web_usage.rs, web_history.rs) but no browser reports into them yet, so no visit is recorded on a device.",
+    "The web-history store is in memory; the browser that owns it has no persistence yet.",
+        "Web-usage data in the Settings chart and no URL block list, so the shield covers apps only.",
+    "Limit state is not exposed to apps (only the app's own usage is, by springboard/sdk/src/screen_usage.rs); docs/bifrost-ui.md does not document the module yet."
   ]
 }
