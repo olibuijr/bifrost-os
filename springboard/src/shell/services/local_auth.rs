@@ -94,6 +94,26 @@ fn requirement(policy: Policy) -> bio::Requirement {
     }
 }
 
+/// The wire name of a biometry type, as `device_state` reports it.
+pub fn biometry_wire(kind: bio::BiometryType) -> &'static str {
+    match kind {
+        bio::BiometryType::None => "none",
+        bio::BiometryType::Touch => "touch_id",
+        bio::BiometryType::Face => "face_id",
+        bio::BiometryType::Optic => "optic_id",
+    }
+}
+
+/// The `device_state` reply: the biometry type this device has and whether a passcode is set.
+pub fn device_state_reply(password_set: bool) -> Json {
+    let facts = device_facts(password_set);
+    Json::Obj(vec![
+        ("ok".into(), Json::Bool(true)),
+        ("biometry_type".into(), Json::Str(biometry_wire(facts.biometry).into())),
+        ("passcode_set".into(), Json::Bool(facts.passcode_set)),
+    ])
+}
+
 impl LocalAuth {
     /// The policy check without a prompt, decided by the biometry model. `password_set` is whether the device has an
     /// account password.
@@ -169,6 +189,7 @@ impl SystemService for LocalAuth {
                 });
                 Ok(reply(r))
             }
+            "device_state" => Ok(device_state_reply(shell.login_backend.is_some())),
             other => Err(format!("local_auth: unknown method {other}")),
         }
     }
@@ -187,6 +208,15 @@ mod tests {
         assert_eq!(LocalAuth::can_evaluate(Policy::Biometrics, true), Err(Failure::BiometryNotAvailable));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, true), Ok(()));
         assert_eq!(LocalAuth::can_evaluate(Policy::DeviceOwner, false), Err(Failure::PasscodeNotSet));
+    }
+
+    #[test]
+    fn device_state_reports_no_biometry_and_the_passcode() {
+        let reply = device_state_reply(true);
+        assert_eq!(reply.get("biometry_type").and_then(Json::as_str), Some("none"));
+        assert_eq!(reply.get("passcode_set"), Some(&Json::Bool(true)));
+        assert_eq!(device_state_reply(false).get("passcode_set"), Some(&Json::Bool(false)));
+        assert_eq!(biometry_wire(bio::BiometryType::Face), "face_id");
     }
 
     #[test]

@@ -68,7 +68,7 @@
    "apple": "LADomainState, LADomainStateBiometry, LAEnvironment, kLABiometryTypeNone/TouchID/FaceID/OpticID",
    "bifrost": "springboard/core/src/biometry.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability. Built 2026-10-17: the shell service answers device_state with biometry_type none (touch_id, face_id, optic_id are the wire names) and passcode_set; the SDK reads it with BiometryType::from_device_state; tests device_state_reports_no_biometry_and_the_passcode (springboard/src/shell/services/local_auth.rs) and device_state_reply_decodes_the_biometry_type (springboard/sdk/src/local_auth.rs)."
   },
   {
    "feature": "Companion device authentication (Apple Watch, Vision Pro)",

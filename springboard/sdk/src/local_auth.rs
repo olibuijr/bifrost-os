@@ -40,6 +40,33 @@ pub enum BiometryType {
     OpticID,
 }
 
+impl BiometryType {
+    /// The wire name the shell's `device_state` reply uses.
+    pub fn wire(self) -> &'static str {
+        match self {
+            BiometryType::None => "none",
+            BiometryType::TouchID => "touch_id",
+            BiometryType::FaceID => "face_id",
+            BiometryType::OpticID => "optic_id",
+        }
+    }
+
+    /// The type for a wire name. An unknown or missing name is `None`, the type of a device with no sensor.
+    pub fn from_wire(name: &str) -> BiometryType {
+        match name {
+            "touch_id" => BiometryType::TouchID,
+            "face_id" => BiometryType::FaceID,
+            "optic_id" => BiometryType::OpticID,
+            _ => BiometryType::None,
+        }
+    }
+
+    /// The type a `device_state` reply from the shell reports (`biometry_type`). A reply without the field is `None`.
+    pub fn from_device_state(reply: &Json) -> BiometryType {
+        reply.get("biometry_type").and_then(Json::as_str).map_or(BiometryType::None, BiometryType::from_wire)
+    }
+}
+
 /// The error domain name of [`LAError`] values on the wire and in logs.
 pub const ERROR_DOMAIN: &str = "bifrost.local-authentication";
 
@@ -218,6 +245,19 @@ mod tests {
     fn biometrics_policy_is_not_available() {
         assert_eq!(ctx().can_evaluate_policy(LAPolicy::DeviceOwnerAuthenticationWithBiometrics), Err(LAError::BiometryNotAvailable));
         assert_eq!(ctx().biometry_type(), BiometryType::None);
+    }
+
+    #[test]
+    fn device_state_reply_decodes_the_biometry_type() {
+        let state = |name: &str| Json::Obj(vec![("biometry_type".into(), Json::Str(name.into()))]);
+        assert_eq!(BiometryType::from_device_state(&state("none")), BiometryType::None);
+        assert_eq!(BiometryType::from_device_state(&state("face_id")), BiometryType::FaceID);
+        assert_eq!(BiometryType::from_device_state(&state("touch_id")), BiometryType::TouchID);
+        assert_eq!(BiometryType::from_device_state(&state("laser")), BiometryType::None);
+        assert_eq!(BiometryType::from_device_state(&Json::Null), BiometryType::None);
+        for t in [BiometryType::None, BiometryType::TouchID, BiometryType::FaceID, BiometryType::OpticID] {
+            assert_eq!(BiometryType::from_wire(t.wire()), t);
+        }
     }
 
     #[test]
