@@ -1,7 +1,7 @@
 //! Background work for the window: the sign-in, the sync loop and the sends. Jobs run on utility dispatch queues and
 //! push [`Event`]s into a shared queue; a byte on the wake pipe tells the window's loop to drain it.
 
-use crate::api::Api;
+use crate::api::{Api, Patch};
 use crate::protocol::Sync;
 use springboard::deildu::http::Transport;
 use bifrost_app::dispatch::{DispatchQueue, Qos};
@@ -37,6 +37,8 @@ pub enum Event {
     Renamed { room: String, name: String, result: Result<(), String> },
     /// The session ended on the homeserver (the local sign-out has already happened).
     LoggedOut { result: Result<(), String> },
+    /// The keys worker took in room keys, and these messages now open (they were undecryptable until then).
+    Decrypted(Vec<Patch>),
 }
 
 /// Runs `work` on a new thread and sends its event, then writes the wake pipe.
@@ -79,12 +81,22 @@ pub fn sign_in(
 pub fn run_sync(api: Arc<Api>, tx: EventQueue, wake: Option<UnixStream>) {
     DispatchQueue::serial_qos("is.olibuijr.messages.sync", Qos::Utility).async_(move || {
         let mut wake = wake;
+        let keys = DispatchQueue::serial_qos("is.olibuijr.messages.keys", Qos::Utility);
         let mut since: Option<String> = None;
         loop {
             match api.sync(since.as_deref()) {
                 Ok(mut sync) => {
                     since = Some(sync.next_batch.clone());
-                    api.process_sync(&mut sync);
+                    if let Some(work) = api.sync_crypto(&mut sync) {
+                        let (api, tx) = (api.clone(), tx.clone());
+                        let mut keys_wake = wake.as_ref().and_then(|w| w.try_clone().ok());
+                        keys.async_(move || {
+                            let patches = api.run_key_work(work);
+                            if !patches.is_empty() {
+                                notify(&tx, &mut keys_wake, Event::Decrypted(patches));
+                            }
+                        });
+                    }
                     if !notify(&tx, &mut wake, Event::Synced(Ok(sync))) {
                         return;
                     }

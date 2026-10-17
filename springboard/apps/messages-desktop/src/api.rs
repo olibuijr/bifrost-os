@@ -4,7 +4,7 @@
 //! (see [`crate::sync`]).
 
 use crate::crypto::{self, Machine};
-use crate::protocol::{self, Login, Sync};
+use crate::protocol::{self, Body, Ciphertext, Login, Sync, ToDevice};
 use bifrost_core::json::{self, Json};
 use springboard::deildu::http::{Client, Jar, Response, Transport};
 use std::collections::{HashMap, HashSet};
@@ -18,6 +18,18 @@ const SYNC_LIMIT: usize = 32 * 1024 * 1024;
 const CALL_LIMIT: usize = 1024 * 1024;
 /// The largest image the app uploads.
 pub const UPLOAD_LIMIT: usize = 25 * 1024 * 1024;
+/// The most messages kept waiting for a room key. The oldest are dropped first.
+const MAX_PENDING: usize = 500;
+
+/// The bodies that now open in one room, for the window: the room id, then (event id, body, the event it answers).
+pub type Patch = (String, Vec<(String, Body, Option<String>)>);
+
+/// The key work one sync leaves for the keys worker (see [`Api::run_key_work`]).
+pub struct KeyWork {
+    upload: bool,
+    device_changed: Vec<String>,
+    to_device: Vec<ToDevice>,
+}
 
 /// A signed-in session on one homeserver.
 pub struct Api {
@@ -32,6 +44,8 @@ pub struct Api {
     encrypted_rooms: Mutex<HashSet<String>>,
     /// The joined members of each room, as the syncs reported them.
     room_members: Mutex<HashMap<String, Vec<String>>>,
+    /// Encrypted messages that did not open yet, waiting for their room key.
+    pending_ciphertexts: Mutex<Vec<(String, Ciphertext)>>,
 }
 
 impl Api {
@@ -52,6 +66,7 @@ impl Api {
             crypto,
             encrypted_rooms: Mutex::new(HashSet::new()),
             room_members: Mutex::new(HashMap::new()),
+            pending_ciphertexts: Mutex::new(Vec::new()),
         })
     }
 
@@ -88,11 +103,11 @@ impl Api {
         self.crypto.lock().ok()?.snapshot()
     }
 
-    /// Takes in a sync answer before the window sees it: the rooms' encryption state is noted, the device keys of the
-    /// senders of room keys are fetched, the room keys are taken in and the encrypted messages are opened (or marked
-    /// undecryptable), and the one-time keys are topped up when the server runs low. Failures never stop the sync: a
-    /// message that cannot be opened shows as undecryptable.
-    pub fn process_sync(&self, sync: &mut Sync) {
+    /// Looks at a sync answer on the sync thread, before the window sees it: the rooms' encryption state and members are
+    /// noted, and the encrypted messages that the keys already held open are opened. The network work (device queries,
+    /// room keys, key uploads) is returned as a [`KeyWork`] for the keys worker, so a slow homeserver never holds the
+    /// sync. Messages that do not open yet show as undecryptable, and are opened later (see `run_key_work`).
+    pub fn sync_crypto(&self, sync: &mut Sync) -> Option<KeyWork> {
         if let Ok(mut rooms) = self.encrypted_rooms.lock() {
             for room in sync.rooms.iter().filter(|r| r.encrypted) {
                 rooms.insert(room.id.clone());
@@ -113,31 +128,78 @@ impl Api {
                 }
             }
         }
-        // Device keys are queried for the senders of room keys and requests, and for users whose devices changed.
-        let mut users: Vec<String> = sync.device_changed.clone();
-        users.extend(sync.to_device.iter().filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request").map(|e| e.sender.clone()));
+        // Open what the keys already held open. The rest waits for the key work (see `run_key_work`).
+        let mut failed: Vec<(String, Ciphertext)> = Vec::new();
+        for room in sync.rooms.iter_mut().filter(|r| !r.ciphertexts.is_empty()) {
+            if let Ok(mut m) = self.crypto.lock() {
+                m.decrypt_events(&room.id, &mut room.events, &room.ciphertexts);
+            }
+            for ct in &room.ciphertexts {
+                if room.events.iter().any(|e| e.id == ct.id && e.body == Body::Undecryptable) {
+                    failed.push((room.id.clone(), ct.clone()));
+                }
+            }
+        }
+        if let Ok(mut pending) = self.pending_ciphertexts.lock() {
+            pending.extend(failed);
+            let excess = pending.len().saturating_sub(MAX_PENDING);
+            pending.drain(..excess);
+        }
+        let to_device: Vec<ToDevice> = sync
+            .to_device
+            .iter()
+            .filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request")
+            .cloned()
+            .collect();
+        let upload = sync.otk_count.map_or(true, |n| n < crypto::OTK_FLOOR);
+        let has_pending = self.pending_ciphertexts.lock().map(|p| !p.is_empty()).unwrap_or(false);
+        if !upload && to_device.is_empty() && sync.device_changed.is_empty() && !has_pending {
+            return None;
+        }
+        Some(KeyWork { upload, device_changed: sync.device_changed.clone(), to_device })
+    }
+
+    /// The key work of one sync, on the keys worker (not the sync thread): uploads keys when the server runs low,
+    /// queries the devices of the users that changed or sent room keys and requests, takes in the room keys, answers the
+    /// key requests of this user's devices, shares room keys with devices that appeared, and opens the messages that were
+    /// waiting for a key. Returns the bodies that now open, per room, for the window.
+    pub fn run_key_work(&self, work: KeyWork) -> Vec<Patch> {
+        if work.upload {
+            let _ = self.upload_keys();
+        }
+        let mut users: Vec<String> = work.device_changed.clone();
+        users.extend(work.to_device.iter().filter(|e| e.kind == "m.room.encrypted" || e.kind == "m.room_key_request").map(|e| e.sender.clone()));
         users.sort();
         users.dedup();
         if !users.is_empty() {
             let _ = self.query_devices(&users);
         }
-        if sync.to_device.iter().any(|e| e.kind == "m.room.encrypted") {
+        if work.to_device.iter().any(|e| e.kind == "m.room.encrypted") {
             if let Ok(mut m) = self.crypto.lock() {
-                m.receive(&sync.to_device);
+                m.receive(&work.to_device);
             }
         }
-        self.answer_key_requests(&sync.to_device);
-        for (room, members) in self.rooms_with_new_devices(&sync.device_changed) {
+        self.answer_key_requests(&work.to_device);
+        for (room, members) in self.rooms_with_new_devices(&work.device_changed) {
             let _ = self.share_with_new_devices(&room, &members);
         }
-        for room in sync.rooms.iter_mut().filter(|r| !r.ciphertexts.is_empty()) {
-            if let Ok(mut m) = self.crypto.lock() {
-                m.decrypt_events(&room.id, &mut room.events, &room.ciphertexts);
+        // Retry the messages still waiting. Those that open now are patched in the window.
+        let waiting: Vec<(String, Ciphertext)> = self.pending_ciphertexts.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default();
+        let mut still = Vec::new();
+        let mut patches: Vec<Patch> = Vec::new();
+        for (room, ct) in waiting {
+            match self.with_crypto(|m| Ok(m.open_room_event(&room, &ct))).ok().flatten() {
+                Some((body, reply)) => match patches.iter_mut().find(|(r, _)| *r == room) {
+                    Some((_, events)) => events.push((ct.id.clone(), body, reply)),
+                    None => patches.push((room.clone(), vec![(ct.id.clone(), body, reply)])),
+                },
+                None => still.push((room, ct)),
             }
         }
-        if sync.otk_count.map_or(true, |n| n < crypto::OTK_FLOOR) {
-            let _ = self.upload_keys();
+        if let Ok(mut pending) = self.pending_ciphertexts.lock() {
+            pending.extend(still);
         }
+        patches
     }
 
     /// Whether `room` is end to end encrypted, as the syncs said.

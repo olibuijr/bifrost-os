@@ -342,6 +342,10 @@ impl MessagesWindow {
                 }
                 Err(e) => self.model.status = format!("Rename failed: {e}"),
             },
+            Event::Decrypted(patches) => {
+                self.model.apply_decrypted(&patches);
+                self.save_crypto(ctx);
+            }
             Event::LoggedOut { result: _ } => {}
         }
         self.dirty = true;
