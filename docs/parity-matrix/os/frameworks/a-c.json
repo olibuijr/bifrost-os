@@ -6507,9 +6507,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/control.rs (JSON-RPC app control socket); springboard/sdk/src/intents.rs (App Intents)",
+   "bifrost": "springboard/sdk/src/control.rs (JSON-RPC app control socket); springboard/sdk/src/intents.rs (App Intents); springboard/core/src/script/ (scripting language); springboard/cmd/src/osascript.rs",
    "status": "partial",
-   "note": "Apps can be driven by control-socket calls and intents, which covers the scripted-automation use of the reference scripting runtime. Not covered: a scripting language, the Apple event dictionary and the Script Editor app, which the reference image ships (System/Applications/Utilities/Script Editor.app).",
+   "note": "Apps can be driven by control-socket calls, intents and AppEvents. A small AppleScript-style language runs in osascript: tell blocks, handlers, variables, try, do shell script and dictionary commands. Not covered: the Script Editor app, the sdef dictionary format (dictionaries live in manifest.toml instead), recording, and the reference object model in full.",
    "rea": [],
    "method": "assessed"
   },

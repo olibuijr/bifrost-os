@@ -65,7 +65,7 @@
     }
   ],
   "gaps": [
-    "No generic scripting dictionary (sdef equivalent) and no generated client proxies; callers depend on each app's method list at runtime.",
+    "Scripting dictionaries are declared in manifest.toml ([[script.command]], [[script.class]]), not as sdef files, and there are no generated client proxies; the tell-block language resolves commands through them (springboard/core/src/script/dictionary.rs).",
     "No generic property and element model: apps cannot set properties through a shared API, and element lookup is limited to typed entity queries.",
     "No per-object or per-application last-error state and no failure delegate for callers.",
     "The control socket accepts only the owning user (SO_PEERCRED), so one app cannot script another app that runs under a different account.",
