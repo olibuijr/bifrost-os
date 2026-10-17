@@ -73,10 +73,10 @@
   ],
   "gaps": [
     "No text recognition (OCR) for camera frames or images, so Live Text, DataScanner text and ImageAnalyzer have no counterpart.",
-    "No document scanning mode (VNDocumentCameraViewController equivalent) in the Camera app or in the SDK.",
+    "Document scanning is an SDK model (sdk document_scan.rs: page corners to a flat page); the Camera app has no scanning mode.",
     "No subject lifting or background removal for images.",
     "No Visual Look Up.",
-    "Camera scanning exists only inside the system Camera app for QR model 2 codes. It has no SDK API and no other barcode formats.",
+    "Barcode scanning is an SDK model (sdk data_scanner.rs), and the Camera app scans QR model 2 codes; no other barcode formats.",
     "Plain-text data detection (controls::detect) has no image counterpart and does not cover transit information."
   ]
 }

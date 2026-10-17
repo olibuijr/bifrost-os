@@ -128,7 +128,7 @@
     }
   ],
   "gaps": [
-    "No app-facing media library: no query, filter, collection or library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",
+    "Media library queries are an SDK model over records the app supplies (sdk media_library.rs); no shell library is exposed, and there is no library change API (MPMediaQuery, MPMediaLibrary); the scan lives in springboard/apps/music-desktop/src/music/library.rs.",
     "No media picker view for apps. springboard/ui/src/media_picker.rs models the picker (kinds, selection rules, search, confirm), but no SDK widget or shell sheet draws it.",
     "No remote command handlers for apps (MPRemoteCommandCenter); Control Center transport and hardware media keys are not exposed to apps (springboard/src/bare/input.rs:826 notes the media-key remote but does not map it).",
     "No playlist, rating or feedback model in the SDK (MPMediaPlaylist, MPRatingCommand); favourites and playlists are private to the Music app.",

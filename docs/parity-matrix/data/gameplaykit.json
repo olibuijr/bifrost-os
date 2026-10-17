@@ -12,35 +12,35 @@
    "apple": "GKEntity, GKComponent, GKComponentSystem",
    "bifrost": "springboard/ui/src/ecs.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs). Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The entity-component model is in springboard/ui/src/ecs.rs. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs). Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "State machines",
    "apple": "GKStateMachine, GKState",
    "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. A reusable state machine model is in springboard/ui/src/state_machine.rs. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Spatial partitioning",
    "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)",
    "bifrost": "springboard/ui/src/quadtree.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The quadtree model is in springboard/ui/src/quadtree.rs. Hit testing is per-view. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Strategists (turn-based AI)",
    "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
    "bifrost": "springboard/ui/src/strategist.rs; wired: springboard/apps/games-desktop/src/tictactoe.rs (uses springboard/ui/src/strategist.rs)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The tic-tac-toe game uses the strategist (springboard/apps/games-desktop/src/tictactoe.rs). Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Decision trees and rule systems",
    "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule",
    "bifrost": "springboard/ui/src/decision.rs, springboard/ui/src/rules.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The rule and decision models are in springboard/ui/src/rules.rs and decision.rs. Predicate logic is written inline per app. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Pathfinding and navigation graphs",
@@ -54,14 +54,14 @@
    "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate",
    "bifrost": "springboard/ui/src/agents.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The agent model is in springboard/ui/src/agents.rs. Motion code in springboard/render/src/motion.rs is for shell animation, not agents. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Obstacles",
    "apple": "GKObstacle, GKCircleObstacle, GKSphereObstacle, GKPolygonObstacle",
    "bifrost": "springboard/ui/src/obstacle.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No obstacle primitives. Depends on the pathfinding and agent rows. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Obstacle primitives are in springboard/ui/src/obstacle.rs. Depends on the pathfinding and agent rows. Built 2026-10-17: exposed to apps through bifrost_app::gameplay_kit (or bifrost_app::random); tests gameplay_kit::tests."
   },
   {
    "feature": "Procedural noise",

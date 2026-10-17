@@ -100,7 +100,7 @@
     }
   ],
   "gaps": [
-    "No LZFSE, LZ4_RAW, LZMA or Brotli codec in either direction (LZ4 block and frame are implemented)",
+    "No LZFSE or Brotli codec in either direction (LZ4 block and frame and LZMA2 in an xz container are implemented)",
     "No incremental stream state (init, process, destroy): streams buffer their input and run on finalize",
     "DEFLATE encoder has no lazy matching; output is larger than zlib at the same level",
     "PNG writer stores uncompressed zlib blocks (springboard/src/pngenc.rs:31), not deflate-compressed",

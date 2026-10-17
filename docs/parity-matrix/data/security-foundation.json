@@ -46,7 +46,6 @@
   "gaps": [
     "No SDK call for an app to request or check an authorization right (obtain / obtain withRight) before a privileged operation.",
     "No user-facing authorization prompt that grants a right at run time; the manifest permission is the only grant.",
-    "No invalidateCredentials equivalent for dropping preserved authorization.",
     "No rights, flags or environment model in the app API."
   ]
 }

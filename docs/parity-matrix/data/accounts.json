@@ -72,10 +72,7 @@
     }
   ],
   "gaps": [
-    "No account list the apps share yet: the file-backed store (accounts.ini) exists, but no app reads it, and the Settings Internet Accounts pane keeps its own list in internet-accounts.ini, so Mail, Calendar and Contacts still see separate lists.",
-    "No account type registry and no access-grant prompt (requestAccessToAccounts, accessGranted).",
-    "No typed OAuth credential objects, token expiry or credential renewal.",
-    "No SDK API for the local OS account (bare/account.rs) or for the BifrOSt cloud account.",
+    "No SDK API for the local OS account (bare/account.rs). The BifrOSt cloud account has an SDK module (sdk cloud_account.rs).",
     "The framework itself is deprecated by Apple; new apps should use the service provider's SDK, so parity here is low priority."
   ]
 }

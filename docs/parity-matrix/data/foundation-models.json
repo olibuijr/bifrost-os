@@ -121,11 +121,11 @@
     }
   ],
   "gaps": [
-    "No on-device language model and no SDK API for it: an app cannot ask the system for text generation without a network call.",
+    "The SystemLanguageModel API is in the SDK (sdk language_model.rs), but no on-device model is installed, so availability is always Unavailable and apps cannot generate text on the device.",
     "No model session type with instructions, prompts, generation options and streamed partial output.",
     "No guided generation: model output cannot be constrained to a typed schema.",
     "No model-invoked tool calling; App Intents (springboard/sdk/src/intents.rs) exist but are not exposed to a model.",
-    "No context window or token budget API, and no transcript type shared across apps.",
+    "No transcript type shared across apps; the token budget is modelled in the SDK (language_model.rs).",
     "The Assistant (springboard/apps/assistant-desktop) is a cloud client for the Anthropic API, not an on-device or Apple-equivalent feature, so it does not count as parity."
   ]
 }

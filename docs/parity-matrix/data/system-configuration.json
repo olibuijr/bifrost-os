@@ -124,7 +124,7 @@
     "No SDK client for the network service (svc::net). Apps cannot read Wi-Fi or link state, which the Apple reachability and dynamic-store APIs would give them. springboard/docs/services.md lists the client as planned.",
     "No reachability test for a named host or address (SCNetworkReachability).",
     "No system-wide preferences store for apps (SCPreferences), and no way to read or set the computer or host name.",
-    "No proxy configuration, and no VPN or PPP connection control (SCNetworkConnection).",
+    "Proxy settings are read from the environment the shell publishes (sdk proxy_settings.rs); no VPN or PPP connection control (SCNetworkConnection).",
     "No network services, sets or locations, so service order and per-location settings do not exist.",
     "The Network page cannot edit IPv4 or IPv6 settings (manual addressing, DNS servers)."
   ]

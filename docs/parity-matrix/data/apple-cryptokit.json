@@ -107,11 +107,11 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK API for any hashing, cipher, MAC or signature primitive; apps can only store opaque secrets",
+    "CryptoKit is in the SDK (sdk crypto_kit.rs) with SHA-2, HKDF-SHA256, AES-GCM, X25519 and Ed25519; other primitives are missing",
     "SHA-2 is only SHA-256 and is not exposed; SHA-384, SHA-512 and SHA-3 are missing",
     "No AES-GCM and no ChaCha20-Poly1305 with Poly1305; the shell's ChaCha20 is internal and paired with HMAC instead",
-    "No asymmetric crypto: Ed25519, X25519 and NIST curve signatures or key agreement",
-    "No HKDF, HPKE or post-quantum KEM and signatures",
+    "No NIST curve signatures or key agreement; Ed25519 and X25519 exist",
+    "No HPKE. HKDF-SHA256 (crypto_kit.rs), ML-KEM (kem.rs) and ML-DSA (signature_pq.rs) exist",
     "No typed key objects (SymmetricKey, key references) in the keychain API",
     "No hardware-backed key source (Secure Enclave or TPM)"
   ]

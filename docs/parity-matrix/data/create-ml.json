@@ -17,6 +17,6 @@
   ],
   "gaps": [
     "No model training tool or training session API of any kind (none in springboard/sdk/src/ or springboard/ui/src/).",
-    "No Core ML model runtime for apps to load trained models; a desktop app that needs ML would ship its own runtime."
+    "The SDK runs small text-form models of dense, relu and softmax layers (sdk core_ml.rs); no other model formats and no training."
   ]
 }

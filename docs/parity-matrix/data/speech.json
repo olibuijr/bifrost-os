@@ -72,7 +72,7 @@
     }
   ],
   "gaps": [
-    "No speech recognizer or transcription module (SpeechAnalyzer, SpeechTranscriber, DictationTranscriber) in the SDK, the UI kit or the shell.",
+    "Live recognition is an SDK model over the shell's whisper recognizer (sdk speech_whisper.rs), but there are no SpeechAnalyzer, SpeechTranscriber or DictationTranscriber types.",
     "No SDK API that streams time-coded microphone audio to an app, so a recognizer cannot be fed from an app.",
     "No recognition result type with alternatives, confidence or time ranges.",
     "No custom vocabulary or contextual strings for recognition.",

@@ -109,7 +109,7 @@
   "gaps": [
     "No SDK calendar write API or reminder API for apps",
     "No calendar access prompt; the calendars manifest permission is the only grant",
-    "Calendar service returns base events only; recurring events are not expanded per date",
+    "The calendar service returns base events; recurrence expansion is an SDK model (sdk event_recurrence.rs)",
     "No attendees, invitations or account sources",
     "No location-based alarms",
     "No virtual conference extensions"

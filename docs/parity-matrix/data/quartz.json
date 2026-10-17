@@ -117,7 +117,7 @@
   "No SDK image view or image browser for apps (ImageKit IKImageView and IKImageBrowserView); image viewing exists only inside the Photos shell app.",
   "No parameterised image filter API (Core Image CIFilter) and no filter browser; Photos has five fixed colour filters.",
   "No scanner support (IKScannerDeviceView) and no SDK camera device browser or picture taker.",
-  "The Quick Look panel model in springboard/sdk/src/peek.rs is not drawn by the shell (ToShell::Preview is decoded and ignored) and no app adopts it; no QLPreviewView.",
+  "The Quick Look panel model in springboard/sdk/src/peek.rs is drawn by the shell for ToShell::Preview (src/shell/preview_panel.rs), but no app adopts it; no QLPreviewView.",
   "No PDF outline, selection or text access for apps (PDFOutline, PDFSelection); graphics_pdf::Document exposes page count, size and rendering only.",
   "No PDF annotation or form widget support in the PDF engine, which reads no annotations or AcroForm fields; PDFCraft's annotation UI is not reachable from apps.",
   "No PDF text in PdfWriter and no print-to-PDF filter pipeline (QuartzFilter); Save as PDF in the print sheet copies the file.",

@@ -109,7 +109,7 @@
   "gaps": [
     "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
     "No app-facing DCT API. The FFT is now public as bifrost_app::fft (radix-2 complex forward and inverse, springboard/sdk/src/fft.rs, tests fft::tests); the DAW convolver still has its own copy.",
-    "No LZFSE, LZ4, LZMA or Brotli codec. The SDK compression module covers DEFLATE and zlib only, and the PNG writer stores uncompressed blocks.",
+    "No LZFSE or Brotli codec. The SDK compression module covers DEFLATE, zlib, LZ4 and LZMA (xz), and the PNG writer stores uncompressed blocks.",
     "No general image convolution, morphology, or histogram API for apps (the arbitrary-angle turn is now PixelTransfer::rotated_by in springboard/sdk/src/pixel_transfer.rs, tests pixel_transfer::tests; no shear).",
     "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
     "No neural network inference or training API for apps.",

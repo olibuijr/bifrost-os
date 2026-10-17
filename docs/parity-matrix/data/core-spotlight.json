@@ -4,7 +4,7 @@
  "macos_since": "10.13",
  "status": "partial",
  "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet, UserActivity), springboard/src/shell/spotindex.rs (per-app on-disk index and search), springboard/src/shell/quicksearch.rs (Search panel, Documents section), springboard/proto/src/quicksearch.rs (wire messages); springboard/ui/src/search_rank.rs (tokenizer, BM25 hybrid ranker, merging runtime)",
- "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents, ordered by a hybrid ranker (BM25 over title and text, title match, indexing recency, local open counts; the semantic term is a hook with no local model yet). The Search panel queries its sources (apps, Settings, clock, Deildu, contacts, shortcuts, files, calendar) concurrently with a deadline and streams late sections in. A query, suggestion and assistant search tool exist as host-tested models over the same matching. None of the query, delegate, extension or tool models is wired to the shell or SDK yet, and index extensions and the Foundation pipeline types are not built.",
+ "summary": "BifrOSt covers the core indexing path: an app can add, replace and delete its own searchable items, the shell keeps a bounded per-app index, and the system Search panel lists the items under Documents, ordered by a hybrid ranker (BM25 over title and text, title match, indexing recency, local open counts; the semantic term is a hook with no local model yet). The Search panel queries its sources (apps, Settings, clock, Deildu, contacts, shortcuts, files, calendar) concurrently with a deadline and streams late sections in. A query, suggestion and assistant search tool exist as host-tested models over the same matching. CSSearchQuery reaches the shell's search-index service; the delegate and tool models are not wired yet, index extension requests are a model, and the Foundation pipeline types are not built.",
  "rea_evidence": "ev_4438bf59535e4bd6ba0ca70598c6a17e34d2cbccb6b6a1ca563a4e22a50cb41b",
  "features": [
   {
@@ -114,9 +114,9 @@
   }
  ],
  "gaps": [
-  "No attribute grammar in app queries (attribute == value, wildcards, && and ||) and no streaming found-items replies; CSSearchQuery matches words only.",
+  "Streamed found-items replies are not built: CSSearchQuery gets all hits at once. The query language (ui quicksearch_query.rs) has attribute comparisons, wildcards, && and ||.",
   "The shell does not pull from an index extension on protection-class or throttling events; it asks once per run when an app has no items. CSImportExtension is not built.",
-  "The default index is one JSON file per app with oldest-first eviction at 1000 items; the named-index descriptions carry only the name and protection class.",
+  "The default index is one JSON file per app, sealed with the shell's key (spotindex.rs), with oldest-first eviction at 1000 items; the named-index descriptions carry only the name and protection class.",
   "The Foundation models search tool is a model only: SpotlightSearchTool is not offered to the assistant app, and the pipeline types (SearchSource, CustomStage, SearchResultsTable and the rest) are not modelled."
  ]
 }

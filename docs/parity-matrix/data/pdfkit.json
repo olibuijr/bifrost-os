@@ -112,7 +112,7 @@
     "No page rendering into an app-provided context and no page thumbnails (PDFPage draw, PDFThumbnailView)",
     "No text selection or find in PDFs (PDFSelection, PDFDocument find); the reader extracts text only",
     "No write path: Save as PDF copies the original file, so page edits, rotation and password handling cannot be written",
-    "Printing sends the file to CUPS unchanged; there is no page-range or pagination handling for PDF content and no print sheet (see docs/bifrost-ui.md:1322-1333)",
+    "Printing sends the file to CUPS unchanged; page ranges are set in the shell's print sheet (ui print_ranges.rs), but there is no pagination of PDF content (see docs/bifrost-ui.md:1322-1333)",
     "Outline is read into the Books table of contents only, with no outline tree object for apps"
   ]
 }

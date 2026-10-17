@@ -65,10 +65,10 @@
     }
   ],
   "gaps": [
-    "No workflow engine: multi-step runs, variables and input/output passing between actions do not exist.",
+    "The workflow model exists (sdk workflow.rs, ui workflow.rs: ordered steps, each output feeds the next step); the action library and an Automator app are missing.",
     "Shortcuts actions that need the shell (Wi-Fi, Low Power, Do Not Disturb, brightness, open app, screenshot, timer) are logged, not executed (springboard/apps/shortcuts-desktop/src/main.rs).",
     "No action bundle format or install scan: no equivalent of /System/Library/Automator, /Library/Automator or ~/Library/Automator.",
-    "No workflow controller (run, pause, step, stop, reset) and no runWorkflow-by-path API.",
+    "The workflow controller runs, steps, resumes, stops and resets a workflow (ui workflow.rs); there is no runWorkflow-by-path API.",
     "Shortcuts does not list or run intents from other installed apps yet (docs/bifrost-ui.md, App Intents gaps).",
     "No shell script action API for workflow steps."
   ]

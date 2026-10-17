@@ -58,8 +58,8 @@
     }
   ],
   "gaps": [
-    "No client for LDAP or directory nodes: no session, node or record query API for apps.",
-    "No directory-backed user lookup or sign-in; the desktop has one local account.",
+    "LDAP directory nodes are read through ldapsearch (sdk ldap_directory.rs); there is no session object or node API for apps.",
+    "No directory-backed user lookup or sign-in; the local account directory (ui directory_local.rs) reads this machine only.",
     "No SDK call to verify or change the password of another account.",
     "Contacts app cannot search a directory server for people."
   ]

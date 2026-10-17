@@ -128,7 +128,7 @@
   }
  ],
  "gaps": [
-  "Shell-drawn print sheet and page layout panel (print.rs has no run_modal)",
+  "Page layout panel is not built; the shell-drawn print sheet exists (src/shell/print_sheet.rs), but print.rs has no run_modal",
   "Public Bezier path, gradient and shadow drawing API",
   "NSImage drawing in the kit, per-codec representation classes and template tinting",
   "SDK access to PDF rendering (currently inside the Books shell engine)",

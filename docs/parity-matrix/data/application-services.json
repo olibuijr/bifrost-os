@@ -96,8 +96,7 @@
   "Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.",
   "Accessibility announcements (live regions) and custom actions beyond press.",
   "ColorSync: springboard/render/src/cg/color.rs converts between matrix/TRC profiles, but there is no SDK profile or transform API for apps, no LUT-based profile support and no CMM.",
-  "Speech synthesis: no SDK voice or speech channel API.",
-  "Core Printing: no shell-drawn print sheet, no view pagination, and no print panel plug-in mechanism.",
+  "Core Printing: the shell's print sheet exists (src/shell/print_sheet.rs), but there is no view pagination and no print panel plug-in mechanism.",
   "HIShape: no shape or region type with boolean operations.",
   "Universal Access: no app-facing zoom focus API."
  ]

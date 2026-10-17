@@ -100,7 +100,7 @@
     }
   ],
   "gaps": [
-    "No SDK API to load a model file and run a prediction (MLModel, MLFeatureProvider)",
+    "The SDK loads a small text-form model and runs predictions (sdk core_ml.rs); there are no MLModel or MLFeatureProvider types for other formats",
     "No tensor or numeric array type for model inputs and outputs (MLTensor, MLFeatureValue)",
     "No compute-device policy exposed to apps (CPU, GPU, Neural Engine); the GPU is used only for rendering",
     "No domain APIs on top of inference: image classification, speech, sound analysis, natural language",

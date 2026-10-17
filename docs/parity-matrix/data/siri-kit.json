@@ -137,7 +137,7 @@
  "gaps": [
   "No Siri voice input: nothing recognises speech. The assistant reads its answers aloud behind Speak Answers; Search does not speak IntentResult.dialog (docs/bifrost-ui.md 'App Intents').",
   "No parameter resolution, disambiguation or confirmation steps; Search runs only parameterless intents (springboard/sdk/src/intents.rs Intent::validate).",
-  "No intent donation (INInteraction and donated shortcuts), so Search cannot suggest what the user did.",
+  "Intent donation models exist in the SDK (sdk donation.rs, donations.rs), but no shell path feeds Search with them.",
   "No SiriKit domain intents for messaging, media, lists beyond Reminders' and Notes' own intents, or payments; media and messaging are the most relevant for a desktop.",
   "The Shortcuts app lists every installed app's shortcut intents but runs one only while its app is open (springboard/apps/shortcuts-desktop).",
   "No vocabulary registration or synonyms for app names.",

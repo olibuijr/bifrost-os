@@ -4,7 +4,7 @@
  "macos_since": "10.14",
  "status": "partial",
  "bifrost": "bifrost_app::usernotif (springboard/sdk/src/usernotif.rs), shell registry springboard/src/shell/usernotif.rs, delivery UI springboard/src/shell/notify/",
- "summary": "Local notifications are covered: categories with buttons, destructive and text-reply actions, requests with title, subtitle, body, thread, category, a time-interval delay and a Dock badge, removal and listing of delivered and pending requests, and the user's response (also queued for an app that is not running). Remote push (APNs, device tokens, background push, the notification service extension), calendar and location triggers, communication notifications, attachments, per-request sounds, notification settings queries and the foreground presentation delegate are not covered.",
+ "summary": "Local notifications are covered: categories with buttons, destructive and text-reply actions, requests with title, subtitle, body, thread, category, a time-interval delay and a Dock badge, removal and listing of delivered and pending requests, and the user's response (also queued for an app that is not running). Remote push (APNs, device tokens, background push) and location triggers are not covered. Calendar and interval triggers, attachments, per-request sounds, the authorization and settings queries and the foreground presentation delegate exist; the notification service extension and communication notifications are models that the shell does not run yet.",
  "rea_evidence": "ev_153a89a120dc24e492871ed0c620f9e424d1d5c3b695af681112f5e45a5487f4",
  "features": [
   {
@@ -26,7 +26,7 @@
    "apple": "userNotificationCenter(_:didReceive:withCompletionHandler:), userNotificationCenter(_:willPresent:withCompletionHandler:)",
    "bifrost": "springboard/sdk/src/usernotif.rs (Event::Response, Response); springboard/sdk/src/usernotif_model.rs (PresentationOptions, foreground_presentation); springboard/sdk/tests/parity_sdk-tests-04.rs (tests)",
    "status": "partial",
-   "note": "Taps and action buttons arrive as Event::Response, including text-reply text, and are queued when the app is not running. The Response fields, the default action and the foreground presentation rules are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs.No willPresent hook: the app cannot choose presentation options for a notification that arrives while it is in front. Added: the willPresent decision model (banner, list, sound, badge cut to the user's settings; no delegate shows nothing). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending. Built 2026-10-17: willPresent. An app opts in with usernotif::set_presentation_delegate (ToShell 0x14d); a notification that arrives while the app is in front is sent as ToApp 58 NotificationWillPresent, and usernotif::will_present answers with the presentation bits (ToShell 0x14c). The answer is cut to the grant and the mute state; no answer within 1 s hides it. An app without the delegate keeps the banner it always had: a notification in front is hidden only when the app's delegate asks for nothing, and no answer in time hides it. Tests: proto rich::tests::notification_will_present_round_trips, sdk tests parity_sdk-tests-04 headless_will_present_opt_in_and_reply_send_the_known_bits_only, shell usernotif::tests::a_held_presentation_is_taken_once_and_expires_unanswered and presentation_is_cut_to_what_the_grant_and_mute_allow."
+   "note": "Taps and action buttons arrive as Event::Response, including text-reply text, and are queued when the app is not running. The Response fields, the default action and the foreground presentation rules are tested headless in springboard/sdk/tests/parity_sdk-tests-04.rs.The willPresent hook exists (set_presentation_delegate and will_present). Added: the willPresent decision model (banner, list, sound, badge cut to the user's settings; no delegate shows nothing). Model built and unit tested on the host (springboard/sdk/src/usernotif_model.rs); not yet wired to the shell wire protocol or the UI, so Midget check pending. Built 2026-10-17: willPresent. An app opts in with usernotif::set_presentation_delegate (ToShell 0x14d); a notification that arrives while the app is in front is sent as ToApp 58 NotificationWillPresent, and usernotif::will_present answers with the presentation bits (ToShell 0x14c). The answer is cut to the grant and the mute state; no answer within 1 s hides it. An app without the delegate keeps the banner it always had: a notification in front is hidden only when the app's delegate asks for nothing, and no answer in time hides it. Tests: proto rich::tests::notification_will_present_round_trips, sdk tests parity_sdk-tests-04 headless_will_present_opt_in_and_reply_send_the_known_bits_only, shell usernotif::tests::a_held_presentation_is_taken_once_and_expires_unanswered and presentation_is_cut_to_what_the_grant_and_mute_allow."
   },
   {
    "feature": "Notification categories and actions",
@@ -54,7 +54,7 @@
    "apple": "UNNotificationAttachment, UNNotificationAttachment options",
    "bifrost": "springboard/ui/src/notifattach.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attachment API. Notification cards show text only. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has Request::attachment; the shell draws the first attachment as a thumbnail. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
   },
   {
    "feature": "Notification sounds",
@@ -96,7 +96,7 @@
    "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
    "bifrost": "springboard/ui/src/notifservice.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. The content-extension model (ui notifservice.rs) is not run by the shell yet."
   },
   {
    "feature": "Communication notifications",
@@ -122,11 +122,8 @@
  ],
  "gaps": [
   "Remote push: no device token, no push registration, no background push wake-up (APNs or a BifrOSt equivalent).",
-  "Notification service extension: no hook to modify a notification before it is shown.",
-  "Calendar and location triggers: only a time-interval delay exists; no repeating or region-based notifications.",
-  "Attachments and per-request sounds: notification cards are text only and the sound is a per-app switch.",
-  "Runtime permission flow and settings query: permission is a manifest flag; there is no authorization status, no request options and no UNNotificationSettings equivalent.",
-  "Foreground presentation delegate (willPresent): an app cannot choose how a notification shows while it is in front.",
-  "Communication notifications and web push: no sender-based message notification and no Push API for the browser."
+  "The content-extension model is in springboard/ui/src/notifservice.rs, but no SDK call or shell path runs it before a notification is shown.",
+  "Location triggers are missing: interval and calendar triggers exist and repeat (usernotif.rs, shell usernotif.rs), but nothing is region-based.",
+  "Communication notifications are a model (springboard/ui/src/notifcomm.rs) that no app path sends, and there is no Push API for the browser."
  ]
 }

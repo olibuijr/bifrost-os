@@ -81,7 +81,7 @@
   "gaps": [
     "Language recognizer: no text language detection and no hypotheses API",
     "Linguistic tagger: no lexical class, lemma, name type or script tags for apps",
-    "Embeddings: no word or sentence vectors and no nearest-neighbour search for apps",
+    "Embeddings: sdk embedding.rs gives hashed bag-of-words vectors compared by cosine similarity; no learned word or sentence vectors and no nearest-neighbour search for apps",
     "Custom NLModel runtime for classifiers and word taggers",
     "Sentence and paragraph tokenization; word segmentation is alphanumeric runs, not UAX #29",
     "Named entity recognition: data detectors cover only link, date, address and phone"

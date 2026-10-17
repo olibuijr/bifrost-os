@@ -102,7 +102,7 @@
   "gaps": [
     "No cookie storage or URLCredential/HTTP authentication for URLSession apps (springboard/sdk/src/url.rs)",
     "No host name lookup API for apps (CFHost); the resolver stays inside springboard/src/deildu/http.rs",
-    "No proxy configuration read or applied (CFNetworkCopySystemProxySettings)",
+    "Proxy settings are read from the environment the shell publishes (sdk proxy_settings.rs); no system proxy store sits behind CFNetworkCopySystemProxySettings",
     "No Bonjour or network service browse and register API (CFNetService)",
     "No app-facing reachability or connectivity API; springboard/src/net/ntp.rs and springboard/src/net/wifi.rs use it internally only",
     "No network diagnostics window or API (CFNetDiagnostic)",
