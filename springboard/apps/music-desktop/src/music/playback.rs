@@ -8,6 +8,8 @@ use std::f32::consts::FRAC_PI_2;
 pub const SOUND_CHECK_TARGET_DB: f32 = -16.0;
 /// The largest change Sound Check makes to one song, in dB either way.
 pub const SOUND_CHECK_LIMIT_DB: f32 = 9.0;
+/// The loudness a ReplayGain tag is measured against, in dB: a song tagged `g` dB has measured `REPLAYGAIN_REFERENCE_DB - g`.
+pub const REPLAYGAIN_REFERENCE_DB: f32 = -18.0;
 /// The longest crossfade offered, in seconds.
 pub const CROSSFADE_MAX_SECS: u32 = 12;
 
@@ -61,6 +63,12 @@ impl Playback {
     pub fn to_text(&self) -> String {
         format!("crossfade {}\nsound_check {}\n", self.crossfade_secs, u8::from(self.sound_check))
     }
+}
+
+/// The loudness, in dB, that a song with a ReplayGain track tag of `gain_db` measures at. Sound Check levels that
+/// measurement with `Playback::gain`.
+pub fn loudness_from_replaygain(gain_db: f32) -> f32 {
+    REPLAYGAIN_REFERENCE_DB - gain_db
 }
 
 /// The gains of the song that ends and the song that starts at `t` through the crossfade (0 at its start, 1 at its

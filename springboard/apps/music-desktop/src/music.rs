@@ -27,6 +27,7 @@ pub mod system;
 pub mod tempo;
 pub mod equalizer;
 pub mod upnext;
+pub mod miniplayer;
 pub mod playback;
 pub mod visualizer;
 
@@ -1885,12 +1886,49 @@ impl Music {
         }
     }
 
+    /// What the MiniPlayer window shows of the current song.
+    pub fn mini_info(&self) -> miniplayer::Info {
+        let (title, artist) = match &self.snap.track {
+            Some(t) => {
+                let texts = self.texts(t, self.snap.live.as_ref());
+                (texts.2, texts.3)
+            }
+            None => ("Not Playing".to_string(), String::new()),
+        };
+        let progress = match self.snap.duration_ms {
+            Some(d) if d > 0.0 => (self.snap.position_ms / d).clamp(0.0, 1.0) as f32,
+            _ => 0.0,
+        };
+        miniplayer::Info { title, artist, playing: self.snap.playing, progress, volume: self.volume, live: self.is_live() }
+    }
+
+    /// The artwork of the current song for the MiniPlayer, when the cache has it.
+    pub fn mini_art(&mut self) -> Option<Image> {
+        let key = self.snap.track.as_ref().and_then(|t| self.art_key(t))?;
+        self.art.get(&key, BIG).cloned()
+    }
+
+    /// Seeks the current song to `f` of its length (0 to 1). A live station has no length to seek in.
+    pub fn seek_to_fraction(&mut self, f: f32) {
+        if self.is_live() {
+            return;
+        }
+        let Some(d) = self.snap.duration_ms.filter(|d| *d > 0.0) else { return };
+        self.player.seek_ms(d * f.clamp(0.0, 1.0) as f64);
+        self.take_snapshot();
+    }
+
+    /// Sets the volume to `f` (0 to 1), as the MiniPlayer's volume bar does.
+    pub fn set_volume_fraction(&mut self, f: f32) {
+        let _ = self.set_volume_from(f.clamp(0.0, 1.0));
+    }
+
     /// Runs a menu command; true when the screen needs a frame. File > Import is the window's (it owns the open panel)
     /// and is not run here.
     pub fn run_command(&mut self, cmd: Command) -> bool {
         let song = self.current_song();
         match cmd {
-            Command::Import => return false,
+            Command::Import | Command::MiniPlayer | Command::KeepMiniOnTop => return false,
             Command::PlayPause => self.control(nowplaying::Target::Play),
             Command::Next => self.control(nowplaying::Target::Next),
             Command::Previous => self.control(nowplaying::Target::Prev),
@@ -3204,7 +3242,7 @@ mod tests {
     fn scanned(title: &str, artist: &str, added: u64) -> Scanned {
         Scanned {
             path: PathBuf::from(format!("/m/{title}.mp3")),
-            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None, lyrics: None, chapters: Vec::new() },
+            tags: Tags { title: Some(title.into()), artist: Some(artist.into()), album: Some("Album".into()), album_artist: None, track: None, year: None, cover: None, lyrics: None, chapters: Vec::new(), replaygain_db: None },
             duration_ms: Some(200_000.0),
             has_cover: false,
             added,

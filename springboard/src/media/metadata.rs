@@ -229,6 +229,7 @@ mod tests {
             cover: Some(vec![0xFF, 0xD8]),
             lyrics: None,
             chapters: Vec::new(),
+            replaygain_db: None,
         }
     }
 

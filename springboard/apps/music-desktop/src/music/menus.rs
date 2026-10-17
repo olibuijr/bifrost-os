@@ -83,6 +83,10 @@ pub enum Command {
     Lyrics,
     /// Song > Get Info: edit the playing song's title, artist and album
     GetInfo,
+    /// Window > MiniPlayer: opens the small player window, or closes it when it is open
+    MiniPlayer,
+    /// Window > Keep MiniPlayer on Top: the MiniPlayer floats above the other windows
+    KeepMiniOnTop,
 }
 
 const IMPORT: u32 = 1;
@@ -100,6 +104,8 @@ const NEW_PLAYLIST: u32 = 22;
 const FAVOURITE: u32 = 23;
 const LYRICS: u32 = 24;
 const GET_INFO: u32 = 25;
+const MINI_PLAYER: u32 = 26;
+const KEEP_MINI_ON_TOP: u32 = 27;
 const RATE_BASE: u32 = 30;
 const SHOW_BASE: u32 = 40;
 const SORT_BASE: u32 = 60;
@@ -127,6 +133,8 @@ impl Command {
             Command::Favourite => FAVOURITE,
             Command::Lyrics => LYRICS,
             Command::GetInfo => GET_INFO,
+            Command::MiniPlayer => MINI_PLAYER,
+            Command::KeepMiniOnTop => KEEP_MINI_ON_TOP,
             Command::Rate(n) => RATE_BASE + u32::from(n.min(RATE_MAX)),
             Command::Show(p) => SHOW_BASE + Place::ALL.iter().position(|q| *q == p).unwrap_or(0) as u32,
             Command::SortBy(k) => SORT_BASE + SortKey::ALL.iter().position(|q| *q == k).unwrap_or(0) as u32,
@@ -153,6 +161,8 @@ impl Command {
             Command::Favourite,
             Command::Lyrics,
             Command::GetInfo,
+            Command::MiniPlayer,
+            Command::KeepMiniOnTop,
             Command::SortDescending,
         ];
         if let Some(c) = fixed.into_iter().find(|c| c.id() == id) {
@@ -208,6 +218,14 @@ fn item(cmd: Command, title: &str, key: &str) -> AppMenuItem {
 }
 
 /// The menus for the app's state: File, Song, Controls, View.
+/// The Window menu: the MiniPlayer and whether it floats. The app adds it, since the window state is the app's.
+pub fn window_menu(mini_open: bool, on_top: bool) -> AppMenu {
+    AppMenu {
+        title: "Window".into(),
+        items: vec![item(Command::MiniPlayer, "MiniPlayer", "cmd+alt+m").checked(mini_open), item(Command::KeepMiniOnTop, "Keep MiniPlayer on Top", "").checked(on_top)],
+    }
+}
+
 pub fn build(s: &MenuState) -> Vec<AppMenu> {
     let song = s.has_song;
     let mut add_to = vec![AppMenuItem::submenu("Add to Playlist"), item(Command::NewPlaylist, "New Playlist", "").depth(1).enabled(song)];

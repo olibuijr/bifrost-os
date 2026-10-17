@@ -145,9 +145,9 @@
    "area": "view",
    "apple": "Window > MiniPlayer / Full Screen Player",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs::draw_sheet",
-   "note": "Player sheet and mini bar, with the route button in the bar; no separate MiniPlayer window, because apps have no window size request in the SDK yet.",
-   "wire": "Add a compact MiniPlayer window mode from a Window menu item, once the SDK can resize an app window"
+   "bifrost": "springboard/apps/music-desktop/src/music/miniplayer.rs; springboard/apps/music-desktop/src/app.rs (MusicApp::toggle_mini, mini_touch, draw_window)",
+   "note": "Player sheet and mini bar. Window > MiniPlayer (Option+Cmd+M) opens a small extra window with the artwork, title and artist, the transport, a scrubber and the volume; closing it returns to the main window. Window > Keep MiniPlayer on Top floats it. The layout and hit tests are tested headless in music/miniplayer.rs. Not yet checked on Midget.",
+   "wire": "Check on Midget that the window opens, takes taps and drags, floats when asked and closes; confirm the artwork (the BIG cache size) fits its 80 pt box."
   },
   {
    "feature": "Lyrics view",
@@ -171,10 +171,10 @@
    "feature": "Playback settings: crossfade, Sound Check",
    "area": "settings",
    "apple": "Settings > Playback",
-   "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, parse, to_text)",
-   "note": "The crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file and the equal-power crossfade curve are tested headless in tests/parity_app-music_w8.rs. Not yet: no Settings page sets them, and the audio service has no crossfade or gain command, so the engine does not use them.",
-   "wire": "Settings page with the crossfade seconds and a Sound Check switch; crossfade and gain commands in the audio service"
+   "status": "gap",
+   "bifrost": "springboard/apps/music-desktop/src/music/playback.rs (Playback::gain, crossfade_gains, loudness_from_replaygain); springboard/src/media/id3.rs, ilst.rs (ReplayGain tag readers)",
+   "note": "Crossfade length (up to 12 seconds), the Sound Check gain toward -16 dB with a 9 dB limit, the settings file, the equal-power crossfade curve and the ReplayGain track tag (ID3 TXXX and MP4 freeform) are read and tested headless. Not yet: no Settings page sets them; the audio service plays one track at a time (springboard/src/media/audioplayer.rs has one decoder and one gain, the volume), so there is no second decoder to overlap the next track and no per-track gain stage, and nothing sends the values to the engine.",
+   "wire": "Settings page with the crossfade seconds and a Sound Check switch; a per-track gain stage and a second decoder in audioplayer.rs for the overlap; send the track gain (loudness_from_replaygain) with each queued track."
   },
   {
    "feature": "Recently Added / Recently Played",
@@ -243,9 +243,9 @@
  "summary": {
   "features": 26,
   "parity": 8,
-  "partial": 16,
-  "gap": 0,
+  "partial": 15,
+  "gap": 1,
   "n/a": 2,
-  "coverage_pct": 66.7
+  "coverage_pct": 64.6
  }
 }
