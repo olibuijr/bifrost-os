@@ -27,6 +27,8 @@ pub struct Manifest {
     pub min_shell: String,
     pub summary: String,
     pub category: String,
+    /// `game = true`: a game even outside the Games category (Game Mode, see `shell::gamemode`).
+    pub game: bool,
     pub permissions: Vec<String>,
     /// `keychain_groups = ["is.example.group"]`: keychain access groups the app shares items through (the
     /// `keychain-groups` service). Honoured only with the `keychain` permission; see `services::keychain_groups`.
@@ -156,6 +158,7 @@ impl Manifest {
                 "min_shell" => m.min_shell = unquote(v),
                 "summary" => m.summary = unquote(v),
                 "category" => m.category = unquote(v),
+                "game" => m.game = unquote(v) == "true",
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
                 "entitlements" => m.entitlements = strs(),

@@ -4,6 +4,7 @@
 use super::kb_input::{self, KeyPrefs, Remap};
 use super::prefs::Prefs;
 use crate::bare::cpuprofile::Pref;
+use super::gamemode::GamePref;
 use super::ui::{TEXT_SCALE_MAX, TEXT_SCALE_MIN};
 
 /// The Auto-Lock choices as (label, ms); 0 is Never.
@@ -17,6 +18,8 @@ pub const AUTO_LOCK: [(&str, u32); 5] = [("30 seconds", 30_000), ("1 minute", 60
 pub const TEXT_SIZES: [f32; 7] = [TEXT_SCALE_MIN, 0.9, 0.95, 1.0, 1.1, 1.2, TEXT_SCALE_MAX];
 /// Battery › Power Mode choices as (label, preference).
 pub const POWER_MODES: [(&str, Pref); 4] = [("Automatic", Pref::Auto), ("Performance", Pref::Performance), ("Balanced", Pref::Balanced), ("Battery Saver", Pref::Battery)];
+/// General › Game Mode choices.
+pub const GAME_MODES: [(&str, GamePref); 2] = [("Automatic", GamePref::Automatic), ("Off", GamePref::Off)];
 /// Home Screen & Dock › App Icons choices.
 pub const ICON_SIZES: [&str; 2] = ["More", "Bigger"];
 /// Pointer speed and scrolling multipliers: the Mouse and Trackpad sliders span this range.
@@ -184,15 +187,17 @@ pub struct Options {
     pub login_hints: bool,
     /// Lock Screen > Require Password: seconds the screen may stay off before a password is asked (0 = at once)
     pub lock_grace_s: u32,
+    /// Settings > Games > Game Mode: Automatic turns the CPU up for a full-screen game in front (see `gamemode`)
+    pub game_mode: GamePref,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0 }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, clock_date: true, clock_day: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, double_click_ms: super::mouse_page::DOUBLE_CLICK_DEFAULT_MS, mouse_accel: true, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0, game_mode: GamePref::Automatic }
     }
 }
 
-const KEYS: [&str; 55] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds"];
+const KEYS: [&str; 56] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "clock_date", "clock_day", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "double_click_ms", "mouse_acceleration", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", "lock_grace_seconds", "game_mode"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -255,6 +260,7 @@ impl Options {
             function_standard: flag("function_standard", d.function_standard),
             tab_navigation: flag("tab_navigation", d.tab_navigation),
             shortcuts_off: p.get_parsed::<u32>("shortcuts_off").unwrap_or(d.shortcuts_off),
+            game_mode: p.get("game_mode").and_then(GamePref::parse).unwrap_or(d.game_mode),
             lock_grace_s: p.get_parsed("lock_grace_seconds").filter(|s: &u32| REQUIRE_AFTER.iter().any(|(_, v)| v == s)).unwrap_or(d.lock_grace_s),
         }
     }
@@ -318,6 +324,7 @@ impl Options {
             flag(self.tab_navigation).into(),
             self.shortcuts_off.to_string(),
             self.lock_grace_s.to_string(),
+            self.game_mode.key().into(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -394,7 +401,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, clock_date: false, clock_day: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, double_click_ms: 700, mouse_accel: false, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101, lock_grace_s: 300 };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, clock_date: false, clock_day: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, double_click_ms: 700, mouse_accel: false, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101, lock_grace_s: 300, game_mode: GamePref::Off };
         o.save(&mut p);
         assert_eq!(p.get("key_repeat_delay_ms"), Some("1200"));
         assert_eq!(p.get("key_repeat_rate"), Some("5"));
@@ -414,6 +421,7 @@ mod tests {
         assert_eq!(p.get("low_power"), Some("1"));
         assert_eq!(p.get("power_profile"), Some("battery"));
         assert_eq!(p.get("lock_grace_seconds"), Some("300"));
+        assert_eq!(p.get("game_mode"), Some("off"));
         let back = Options::load(&p);
         assert_eq!(back, o);
         assert_eq!(back.auto_lock_label(), "Never");
@@ -430,6 +438,7 @@ mod tests {
         p.set("volume", "-1").unwrap();
         p.set("bold_text", "yes").unwrap();
         p.set("power_profile", "turbo").unwrap();
+        p.set("game_mode", "always").unwrap();
         let o = Options::load(&p);
         assert_eq!(o.auto_lock_ms, 0);
         assert_eq!(o.text_scale, TEXT_SCALE_MAX);
@@ -437,6 +446,7 @@ mod tests {
         assert_eq!(o.volume, 0.0);
         assert!(!o.bold_text);
         assert_eq!(o.power_profile, Pref::Auto);
+        assert_eq!(o.game_mode, GamePref::Automatic, "an unknown Game Mode falls back to Automatic");
         p.set("mouse_speed", "NaN").unwrap();
         p.set("trackpad_speed", "40").unwrap();
         p.set("trackpad_secondary", "9").unwrap();

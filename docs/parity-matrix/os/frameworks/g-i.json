@@ -1341,8 +1341,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Game Mode policy (its strings cover the Game Mode enabled, paused and disabled notices, a low power suggestion and game controller onboarding). Nothing in BifrOSt favours a running game; build a shell game-mode service that detects a fullscreen game, raises its CPU and GPU share and holds notifications.",
+   "status": "partial",
+   "note": "Game Mode policy (its strings cover the Game Mode enabled, paused and disabled notices, a low power suggestion and game controller onboarding). Nothing in BifrOSt favours a running game; build a shell game-mode service that detects a fullscreen game, raises its CPU and GPU share and holds notifications. Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a full-screen game is in front (Games category or game = true), leaves after 3 s, sets the CPU profile to Performance and has a General setting. Not built: the notice and menu bar item, background task and indexing pause, game priority (no bifrostd request), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -1362,8 +1362,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Shared model of the Game Mode policy, with the same localized notices as GamePolicy. Build it with the game-mode service in the shell so apps can read whether a game is active.",
+   "status": "partial",
+   "note": "Shared model of the Game Mode policy, with the same localized notices as GamePolicy. Build it with the game-mode service in the shell so apps can read whether a game is active. Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a full-screen game is in front (Games category or game = true), leaves after 3 s, sets the CPU profile to Performance and has a General setting. Not built: the notice and menu bar item, background task and indexing pause, game priority (no bifrostd request), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps.",
    "rea": [],
    "method": "assessed"
   },
@@ -1383,8 +1383,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "Service side of the Game Mode policy that applies it to the running session. Build it into the shell's game-mode service with GamePolicy; nothing applies a game policy today.",
+   "status": "partial",
+   "note": "Service side of the Game Mode policy that applies it to the running session. Build it into the shell's game-mode service with GamePolicy; nothing applies a game policy today. Partial: the shell's Game Mode (springboard/src/shell/gamemode.rs) enters when a full-screen game is in front (Games category or game = true), leaves after 3 s, sets the CPU profile to Performance and has a General setting. Not built: the notice and menu bar item, background task and indexing pause, game priority (no bifrostd request), Bluetooth sniff interval (no mgmt connection update), and no framework API for apps.",
    "rea": [],
    "method": "assessed"
   },

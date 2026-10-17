@@ -98,6 +98,7 @@ pub mod low_battery;
 pub mod crash_alert;
 pub mod permission_sheet;
 pub mod options;
+pub mod gamemode;
 pub mod pageedit;
 pub mod pages;
 mod login_items_page;
@@ -569,6 +570,8 @@ pub struct Shell {
     assistive_touch: assistive_touch::AssistiveTouch,
     /// an app hiding the status bar and home indicator
     fullscreen: bool,
+    /// Game Mode state with its leave hysteresis (`gamemode`)
+    game: gamemode::Model,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
     prefs: Prefs,
     /// Screen Zoom (Option+Cmd+8, =, -): the final-frame magnifier the GPU presenter draws (`accessibility::zoom`)
@@ -909,6 +912,7 @@ impl Shell {
             input_taps: Default::default(),
             dnd: dnd::State::default(),
             fullscreen: false,
+            game: Default::default(),
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
             ota: None,
@@ -1196,6 +1200,31 @@ impl Shell {
     /// the frame rate while it is on.
     pub fn low_power(&self) -> bool {
         self.options().low_power
+    }
+
+    /// Game Mode's wish: Settings allows it (Automatic) and an installed game is in front, full screen.
+    pub fn game_mode_wanted(&self) -> bool {
+        if self.options().game_mode != gamemode::GamePref::Automatic || !self.fullscreen {
+            return false;
+        }
+        let Screen::App(AppId::External(n)) = self.screen else { return false };
+        apphost::installed().get(n as usize).is_some_and(|a| gamemode::is_game(&a.manifest.category, a.manifest.game))
+    }
+
+    /// Advances Game Mode with the current wish; returns the change, if the state flipped.
+    pub fn game_mode_update(&mut self, now_ms: u64) -> Option<gamemode::Change> {
+        let wanted = self.game_mode_wanted();
+        self.game.update(wanted, now_ms)
+    }
+
+    /// Whether Game Mode is on now (the CPU profile is Performance while it is).
+    pub fn game_mode_on(&self) -> bool {
+        self.game.is_on()
+    }
+
+    /// True once per session, the first time Game Mode turns on (the notice is not built yet).
+    pub fn game_mode_first_notice(&mut self) -> bool {
+        self.game.take_first_notice()
     }
 
     /// Battery › Power Mode as the user left it; the binary maps it to the CPU profile.

@@ -13,7 +13,7 @@ use super::settings_search::{self, Search};
 use super::night_shift::{NightEdit, NightShift};
 use super::notify_page::{self, NotifyChange, NotifyEdit, NotifyPrefs};
 use super::list::{Hit, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
-use super::options::{Options, AUTO_LOCK, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
+use super::options::{Options, AUTO_LOCK, GAME_MODES, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::pages::{spec, Action, Command, Model, PageId, Pick, Slider, Toggle};
 use super::power_menu::PowerAction;
 use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
@@ -2232,6 +2232,11 @@ impl Settings {
                         let label = self.opts.system_sleep_label();
                         self.set_parent_value(ui, "Energy", label);
                         vec![Effect::SystemSleepAfter(self.opts.system_sleep_min)]
+                    }
+                    Pick::GameMode(k) => {
+                        self.opts.game_mode = GAME_MODES[k.min(GAME_MODES.len() - 1)].1;
+                        self.opts.save(prefs);
+                        vec![]
                     }
                     Pick::PowerMode(k) => {
                         self.opts.power_profile = POWER_MODES[k.min(POWER_MODES.len() - 1)].1;

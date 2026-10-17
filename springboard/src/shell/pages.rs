@@ -10,7 +10,7 @@ use super::icons::Icon;
 use super::row_glyphs::Glyph;
 use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
-use super::options::{speed_slider, Options, AUTO_LOCK, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
+use super::options::{speed_slider, Options, AUTO_LOCK, GAME_MODES, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
@@ -235,6 +235,7 @@ pub enum Pick {
     SystemSleep(usize),
     IconSize(usize),
     PowerMode(usize),
+    GameMode(usize),
     DisplayZoom(usize),
     TouchHold(usize),
     /// Accessibility > Accessibility Shortcut: the n-th of `accessibility::SHORTCUT_CHOICES` (0 is None)
@@ -890,6 +891,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 vec![
                     Group::new(vec![Item::new("About").glyph(Glyph::About).link(PageId::About), Item::new("Software Update").glyph(Glyph::Update).badge(usize::from(m.update_badge)).link(PageId::SoftwareUpdate)]),
                     Group::new(vec![Item::new("Nearby Share").glyph(Glyph::Nearby).link(PageId::Nearby)]),
+                    Group::new(GAME_MODES.iter().enumerate().map(|(i, (l, p))| Item::new(*l).check(*p == o.game_mode, Action::Pick(Pick::GameMode(i)))).collect())
+                        .header("GAME MODE")
+                        .footer("Automatic gives a full-screen game the whole processor while it is in front, and lets go a few seconds after the game leaves the front."),
                     Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
                     Group::new(vec![
                         Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
