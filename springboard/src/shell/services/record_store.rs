@@ -5,8 +5,9 @@
 //!
 //! Shared stores: a request with `suite` names a store that every first-party app can open by that name, the way a
 //! shared defaults suite does. A third-party app that names a suite is refused. A store's `revision` moves on every
-//! write; `changes {entity, since}` answers `{revision, changed, records}`, with the records of the entity only when
-//! the store changed since the revision the client holds. The revision starts from the clock, so one from before a
+//! write; `changes {entity, since}` answers `{revision, changed, full, records, removed}`: the records that writes
+//! changed since the revision the client holds (from a log of the last `LOG_LIMIT` changed records, kept per store),
+//! and the ids of those removed since. A client older than the log gets every record of the entity (`full`). The revision starts from the clock, so one from before a
 //! restart is never mistaken for the current one.
 //!
 //! Storage is in memory, and each app's records are also written to `<apphost root>/records/<app id>.json` after every
@@ -30,7 +31,7 @@ use crate::shell::apphost;
 use bifrost_core::json::{parse, Json};
 use bifrost_ui::data_store::{Batch, DataStore, DataStoreError, MemoryDataStore};
 use bifrost_ui::model_store::Record;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The service name.
@@ -45,10 +46,54 @@ pub struct RecordStore {
     stores: BTreeMap<String, Slot>,
 }
 
-/// One store and its revision.
+/// How many changed-record entries a store keeps for `changes`. Older ones are dropped, and a client that holds a
+/// revision older than the kept log gets the whole entity back instead (`full`).
+pub const LOG_LIMIT: usize = 512;
+
+/// One store, its revision, and the log of the records each write changed.
 struct Slot {
     store: MemoryDataStore,
     revision: u64,
+    /// The changed records since `log_base`, oldest first: one entry per record id a write changed, at its revision.
+    log: Vec<Change>,
+    /// The revision the log starts after. A client holding a revision from `log_base` on gets exact changes.
+    log_base: u64,
+}
+
+/// One record a write changed (a put, a removal, or an erase), at the store revision of that write.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Change {
+    revision: u64,
+    entity: String,
+    id: u64,
+}
+
+impl Slot {
+    fn new(store: MemoryDataStore, revision: u64) -> Slot {
+        Slot { store, revision, log: Vec::new(), log_base: revision }
+    }
+
+    /// Records the records that differ between `before` (the store before a write) and the store now, at `revision`.
+    fn log_changes(&mut self, before: &[Record], revision: u64) {
+        let after = self.store.all();
+        let old: BTreeMap<u64, &Record> = before.iter().map(|r| (r.id, r)).collect();
+        let new: BTreeMap<u64, &Record> = after.iter().map(|r| (r.id, r)).collect();
+        let ids: BTreeSet<u64> = old.keys().chain(new.keys()).copied().collect();
+        for id in ids {
+            let (a, b) = (old.get(&id), new.get(&id));
+            if a == b {
+                continue;
+            }
+            let entity = b.or(a).map(|r| r.entity.clone()).unwrap_or_default();
+            self.log.push(Change { revision, entity, id });
+        }
+        while self.log.len() > LOG_LIMIT {
+            let Some(first) = self.log.first().map(|c| c.revision) else { break };
+            let n = self.log.iter().take_while(|c| c.revision == first).count();
+            self.log.drain(..n);
+            self.log_base = first;
+        }
+    }
 }
 
 impl SystemService for RecordStore {
@@ -63,17 +108,21 @@ impl SystemService for RecordStore {
         let file = store_file(&apphost::root().join(DIR), &key);
         if !self.stores.contains_key(&key) {
             let store = file.as_deref().map(load).unwrap_or_default();
-            self.stores.insert(key.clone(), Slot { store, revision: epoch_now() });
+            self.stores.insert(key.clone(), Slot::new(store, epoch_now()));
         }
         let slot = self.stores.get_mut(&key).ok_or("records store is missing")?;
         if method == "changes" {
             let entity = text(params, "entity")?;
             let since = params.get("since").and_then(Json::as_u64).unwrap_or(0);
-            return Ok(changes_json(&slot.store, slot.revision, since, &entity));
+            return Ok(changes_json(slot, since, &entity));
         }
+        let writes = matches!(method, "put" | "remove" | "erase");
+        let before = if writes { slot.store.all() } else { Vec::new() };
         let out = answer(&mut slot.store, method, params)?;
-        if matches!(method, "put" | "remove" | "erase") {
+        if writes {
             slot.revision += 1;
+            let revision = slot.revision;
+            slot.log_changes(&before, revision);
             if let Some(path) = &file {
                 persist(path, &slot.store).map_err(|e| format!("records could not be saved: {e}"))?;
             }
@@ -96,14 +145,32 @@ pub fn epoch_now() -> u64 {
     (now_unix().max(0.0) as u64) * 1_000_000
 }
 
-/// The answer to `changes`: the records of `entity` when the store moved past `since`, else none.
-pub fn changes_json(store: &MemoryDataStore, revision: u64, since: u64, entity: &str) -> Json {
-    let changed = revision != since;
-    let records = if changed { store.fetch(entity).iter().map(record_json).collect() } else { Vec::new() };
+/// The answer to `changes`. When the store did not move past `since`, nothing. Otherwise the records of `entity` that
+/// writes changed since `since` (from the log), and the ids of those that are gone in `removed`. A client older than
+/// the kept log, or ahead of the store, gets every record of the entity with `full` set.
+pub fn changes_json(slot: &Slot, since: u64, entity: &str) -> Json {
+    let changed = slot.revision != since;
+    let full = since < slot.log_base || since > slot.revision;
+    let mut records = Vec::new();
+    let mut removed = Vec::new();
+    if changed && full {
+        records = slot.store.fetch(entity).iter().map(record_json).collect();
+    } else if changed {
+        let current = slot.store.all();
+        let ids: BTreeSet<u64> = slot.log.iter().filter(|c| c.revision > since && c.entity == entity).map(|c| c.id).collect();
+        for id in ids {
+            match current.iter().find(|r| r.id == id && r.entity == entity) {
+                Some(record) => records.push(record_json(record)),
+                None => removed.push(Json::Num(id as f64)),
+            }
+        }
+    }
     Json::Obj(vec![
-        ("revision".into(), Json::Num(revision as f64)),
+        ("revision".into(), Json::Num(slot.revision as f64)),
         ("changed".into(), Json::Bool(changed)),
+        ("full".into(), Json::Bool(changed && full)),
         ("records".into(), Json::Arr(records)),
+        ("removed".into(), Json::Arr(removed)),
     ])
 }
 
@@ -246,17 +313,91 @@ mod tests {
         assert_eq!(shared_key("app.notes", Some("group.shared"), true).unwrap(), "suite.group.shared");
     }
 
+    /// One write through the service path: runs it, moves the revision and logs what it changed.
+    fn write(slot: &mut Slot, method: &str, params: &Json) {
+        let before = slot.store.all();
+        answer(&mut slot.store, method, params).unwrap();
+        slot.revision += 1;
+        let revision = slot.revision;
+        slot.log_changes(&before, revision);
+    }
+
+    fn put_json(id: f64, name: &str) -> Json {
+        obj(vec![
+            ("id", Json::Num(id)),
+            ("entity", Json::Str("Note".into())),
+            ("fields", obj(vec![("name", Json::Str(name.into()))])),
+        ])
+    }
+
+    fn ids(json: &Json, key: &str) -> Vec<u64> {
+        json.get(key).and_then(Json::as_array).map(|a| a.iter().filter_map(|v| v.as_u64().or_else(|| v.get("id")?.as_u64())).collect()).unwrap_or_default()
+    }
+
     #[test]
     fn changes_answer_the_records_only_when_the_revision_moved() {
-        let mut store = MemoryDataStore::new();
-        put(&mut store, 1, "first").unwrap();
-        let moved = changes_json(&store, 7, 3, "Note");
-        assert_eq!(moved.get("changed"), Some(&Json::Bool(true)));
-        assert_eq!(moved.get("records").and_then(Json::as_array).map(|r| r.len()), Some(1));
-        let same = changes_json(&store, 7, 7, "Note");
+        let mut slot = Slot::new(MemoryDataStore::new(), 10);
+        write(&mut slot, "put", &put_json(1.0, "first"));
+        write(&mut slot, "put", &put_json(2.0, "second"));
+        let all = changes_json(&slot, 10, "Note");
+        assert_eq!(all.get("changed"), Some(&Json::Bool(true)));
+        assert_eq!(ids(&all, "records"), vec![1, 2]);
+        assert_eq!(all.get("full"), Some(&Json::Bool(false)));
+        // A client at revision 11 only needs the second record.
+        assert_eq!(ids(&changes_json(&slot, 11, "Note"), "records"), vec![2]);
+        let same = changes_json(&slot, 12, "Note");
         assert_eq!(same.get("changed"), Some(&Json::Bool(false)));
         assert_eq!(same.get("records").and_then(Json::as_array).map(|r| r.len()), Some(0));
         assert!(epoch_now() > 1_000_000);
+    }
+
+    #[test]
+    fn a_removed_record_is_named_so_the_client_drops_it() {
+        let mut slot = Slot::new(MemoryDataStore::new(), 10);
+        write(&mut slot, "put", &put_json(1.0, "first"));
+        write(&mut slot, "put", &put_json(2.0, "second"));
+        write(&mut slot, "remove", &obj(vec![("id", Json::Num(1.0))]));
+        let after = changes_json(&slot, 12, "Note");
+        assert!(ids(&after, "records").is_empty());
+        assert_eq!(ids(&after, "removed"), vec![1]);
+    }
+
+    #[test]
+    fn an_erase_names_every_record_it_removed() {
+        let mut slot = Slot::new(MemoryDataStore::new(), 10);
+        write(&mut slot, "put", &put_json(1.0, "first"));
+        write(&mut slot, "put", &put_json(2.0, "second"));
+        write(&mut slot, "erase", &obj(vec![]));
+        let after = changes_json(&slot, 12, "Note");
+        assert_eq!(ids(&after, "removed"), vec![1, 2]);
+        assert!(ids(&after, "records").is_empty());
+    }
+
+    #[test]
+    fn a_client_older_than_the_log_gets_the_whole_entity() {
+        let mut slot = Slot::new(MemoryDataStore::new(), 10);
+        write(&mut slot, "put", &put_json(1.0, "first"));
+        // Trim the log so it starts after revision 11: a client at 5 must be told everything.
+        slot.log.clear();
+        slot.log_base = 11;
+        let old = changes_json(&slot, 5, "Note");
+        assert_eq!(old.get("full"), Some(&Json::Bool(true)));
+        assert_eq!(ids(&old, "records"), vec![1]);
+        assert!(ids(&old, "removed").is_empty());
+        // A client at the base still gets exact changes (none are logged after it here).
+        assert_eq!(changes_json(&slot, 11, "Note").get("changed"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn the_log_is_capped_and_drops_whole_revisions() {
+        let mut slot = Slot::new(MemoryDataStore::new(), 0);
+        for i in 0..(LOG_LIMIT as u64 + 5) {
+            write(&mut slot, "put", &put_json((i + 1) as f64, "x"));
+        }
+        assert!(slot.log.len() <= LOG_LIMIT);
+        assert!(slot.log_base > 0);
+        assert!(slot.log.iter().all(|c| c.revision > slot.log_base));
+        assert_eq!(changes_json(&slot, 0, "Note").get("full"), Some(&Json::Bool(true)));
     }
 
     #[test]
