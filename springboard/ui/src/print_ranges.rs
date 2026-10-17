@@ -1,9 +1,9 @@
 //! Page ranges typed in the print sheet ("1-3, 5, 7-"): parsing, merging and applying them to a [`PrintInfo`].
 //!
 //! The sheet's Pages control offers All, or a list of pages and ranges. [`parse_page_ranges`] reads the typed text against
-//! the document's page count, sorts it and merges overlapping or touching ranges. A job can carry one range as the
-//! `page-ranges` attribute ([`PrintInfo::pages`]); a list of several ranges cannot be sent that way yet, so
-//! [`PageSelection::apply_to`] refuses it rather than printing the wrong pages.
+//! the document's page count, sorts it and merges overlapping or touching ranges. [`PageSelection::apply_to`] writes the
+//! result into a [`PrintInfo`]: one range goes to [`PrintInfo::pages`], a list goes to [`PrintInfo::page_list`], which
+//! the job sends as one `page-ranges` attribute with a value per range.
 
 use crate::print::PrintInfo;
 
@@ -26,8 +26,6 @@ pub enum RangeError {
     OutOfRange(u32),
     /// The document has no pages.
     NoPages,
-    /// A list of several ranges, which the job's `page-ranges` attribute cannot carry.
-    Multiple,
 }
 
 fn number(text: &str) -> Result<u32, RangeError> {
@@ -98,14 +96,23 @@ impl PageSelection {
         }
     }
 
-    /// Writes the selection into `info.pages`: `All` clears the range, one range sets it. A list of several ranges is
-    /// refused with [`RangeError::Multiple`] and `info` is left as it was.
+    /// Writes the selection into `info`: `All` clears both range fields, one range sets `pages`, and several ranges set
+    /// `page_list`. An empty list is refused with [`RangeError::NoPages`] and `info` is left as it was.
     pub fn apply_to(&self, info: &mut PrintInfo) -> Result<(), RangeError> {
         match self {
-            PageSelection::All => info.pages = None,
-            PageSelection::Ranges(r) if r.len() == 1 => info.pages = Some(r[0]),
+            PageSelection::All => {
+                info.pages = None;
+                info.page_list.clear();
+            }
             PageSelection::Ranges(r) if r.is_empty() => return Err(RangeError::NoPages),
-            PageSelection::Ranges(_) => return Err(RangeError::Multiple),
+            PageSelection::Ranges(r) if r.len() == 1 => {
+                info.pages = Some(r[0]);
+                info.page_list.clear();
+            }
+            PageSelection::Ranges(r) => {
+                info.pages = None;
+                info.page_list = r.clone();
+            }
         }
         Ok(())
     }
@@ -162,15 +169,16 @@ mod tests {
     }
 
     #[test]
-    fn one_range_goes_into_the_print_info_and_several_are_refused_unchanged() {
+    fn one_range_goes_into_pages_and_several_into_the_page_list() {
         let mut info = PrintInfo::default();
         parse_page_ranges("2-4", 10).unwrap().apply_to(&mut info).unwrap();
-        assert_eq!(info.pages, Some((2, 4)));
+        assert_eq!((info.pages, info.page_list.clone()), (Some((2, 4)), vec![]));
+        parse_page_ranges("1, 3", 10).unwrap().apply_to(&mut info).unwrap();
+        assert_eq!((info.pages, info.page_list.clone()), (None, vec![(1, 1), (3, 3)]));
+        assert_eq!(info.page_ranges(), vec![(1, 1), (3, 3)]);
         parse_page_ranges("all", 10).unwrap().apply_to(&mut info).unwrap();
-        assert_eq!(info.pages, None);
-        let several = parse_page_ranges("1, 3", 10).unwrap();
-        assert_eq!(several.apply_to(&mut info), Err(RangeError::Multiple));
-        assert_eq!(info.pages, None, "a refused selection changes nothing");
+        assert!(info.pages.is_none() && info.page_list.is_empty());
         assert_eq!(PageSelection::Ranges(Vec::new()).apply_to(&mut info), Err(RangeError::NoPages));
+        assert!(info.page_ranges().is_empty(), "a refused selection changes nothing");
     }
 }

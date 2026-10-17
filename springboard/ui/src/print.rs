@@ -141,6 +141,9 @@ pub struct PrintInfo {
     pub copies: u32,
     /// 1-based inclusive page range; `None` prints everything.
     pub pages: Option<(u32, u32)>,
+    /// Several 1-based inclusive ranges from the print sheet's page list, sent as one `page-ranges` attribute with a
+    /// value per range. When it is not empty it replaces [`PrintInfo::pages`]; see [`PrintInfo::page_ranges`].
+    pub page_list: Vec<(u32, u32)>,
     /// How large the content prints: 1.0 is actual size, 0.5 half size. Read through [`PrintInfo::scaling`], which keeps
     /// it inside [`SCALING_RANGE`].
     pub scaling_factor: f32,
@@ -161,6 +164,7 @@ impl Default for PrintInfo {
             margins: [72.0; 4],
             copies: 1,
             pages: None,
+            page_list: Vec::new(),
             scaling_factor: 1.0,
             job_disposition: JobDisposition::Spool,
             saving_path: None,
@@ -186,8 +190,17 @@ impl PrintInfo {
         let [t, l, b, r] = self.margins;
         (l, t, (w - l - r).max(0.0), (h - t - b).max(0.0))
     }
-    /// The job-template attributes for this info: copies, media, orientation and the page range (an IPP `rangeOfInteger`,
-    /// lower then upper bound).
+    /// The ranges this job prints: [`PrintInfo::page_list`] when it is set, otherwise [`PrintInfo::pages`]. Empty means
+    /// every page.
+    pub fn page_ranges(&self) -> Vec<(u32, u32)> {
+        if !self.page_list.is_empty() {
+            return self.page_list.clone();
+        }
+        self.pages.into_iter().collect()
+    }
+
+    /// The job-template attributes for this info: copies, media, orientation and the page ranges (an IPP `rangeOfInteger`
+    /// per range, lower then upper bound).
     pub fn attributes(&self) -> Vec<(String, Value)> {
         let orientation = if self.orientation == Orientation::Landscape { 4 } else { 3 };
         let mut a = vec![
@@ -195,7 +208,7 @@ impl PrintInfo {
             ("media".to_string(), Value::keyword(self.paper.pwg())),
             ("orientation-requested".to_string(), Value::Enum(orientation)),
         ];
-        if let Some((first, last)) = self.pages {
+        for (first, last) in self.page_ranges() {
             let mut bytes = (first as i32).to_be_bytes().to_vec();
             bytes.extend((last as i32).to_be_bytes());
             a.push(("page-ranges".to_string(), Value::Other { tag: tag::RANGE_OF_INTEGER, bytes }));
@@ -375,7 +388,7 @@ impl PrintOperation {
     pub fn print_operation(job_name: impl Into<String>, view: &dyn PrintableView, info: PrintInfo) -> Self {
         let pages = print_pages::render_pages(view, &info);
         let mut op = PrintOperation::pages(job_name, pages, vec!["Helvetica"]);
-        op.info = PrintInfo { pages: None, ..info };
+        op.info = PrintInfo { pages: None, page_list: Vec::new(), ..info };
         op
     }
     /// `pdfOperation(with:inside:to:)`: a job that writes the part of `view` inside `rect` as a one-page PDF at `to`.
@@ -513,6 +526,18 @@ fn submit(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn several_page_ranges_become_one_attribute_with_a_value_per_range() {
+        let info = PrintInfo { page_list: vec![(1, 2), (5, 5)], ..Default::default() };
+        assert_eq!(info.page_ranges(), vec![(1, 2), (5, 5)]);
+        let merged = crate::cups::merge_attributes(info.attributes());
+        let ranges = merged.iter().find(|(name, _)| name == "page-ranges").unwrap();
+        assert_eq!(ranges.1.len(), 2, "one attribute, one value per range");
+        let all = PrintInfo { pages: Some((3, 4)), page_list: Vec::new(), ..Default::default() };
+        assert_eq!(all.page_ranges(), vec![(3, 4)]);
+        assert!(PrintInfo::default().page_ranges().is_empty());
+    }
 
     #[test]
     fn landscape_swaps_paper_and_margins_shrink_the_imageable_rect() {

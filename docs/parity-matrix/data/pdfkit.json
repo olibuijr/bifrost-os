@@ -96,7 +96,7 @@
       "apple": "NSPrintOperation with PDFDocument printing (PDFDocument drawing into print context)",
       "bifrost": "springboard/ui/src/print.rs (PrintOperation::new, PrintOperation::document, document_format)",
       "status": "partial",
-      "note": "A PDF file job sends the file's own bytes with the application/pdf format, and a file job is named after its file: a_pdf_file_job_sends_the_file_bytes_unchanged and a_file_job_is_named_after_its_file_and_a_missing_file_is_refused in springboard/ui/tests/parity_sdk-tests-03.rs. Submission to CUPS (PrintOperation::run) is not covered; there is no page-level pagination or page range for PDF content (see docs/bifrost-ui.md:1322-1333); whether the Midget image ships CUPS is unchecked."
+      "note": "A PDF file job sends the file's own bytes with the application/pdf format, and a file job is named after its file: a_pdf_file_job_sends_the_file_bytes_unchanged and a_file_job_is_named_after_its_file_and_a_missing_file_is_refused in springboard/ui/tests/parity_sdk-tests-03.rs. Submission to CUPS (PrintOperation::run) is not covered; there is no page-level pagination or page range for PDF content (see docs/bifrost-ui.md:1322-1333); whether the Midget image ships CUPS is unchecked. Built 2026-10-17: a page list of several ranges is kept in PrintInfo::page_list (set by PageSelection::apply_to) and sent as one page-ranges attribute with a value per range (cups::merge_attributes joins the template); tests print::tests::several_page_ranges_become_one_attribute_with_a_value_per_range, cups::tests::merge_attributes_keeps_one_attribute_per_name_with_its_values_in_order, print_ranges::tests::one_range_goes_into_pages_and_several_into_the_page_list."
     },
     {
       "feature": "Page overlay and markup mode",
