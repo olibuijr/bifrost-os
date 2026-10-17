@@ -572,12 +572,15 @@ mod tests {
         fs::create_dir_all(docs.join("Notes.rtfd")).unwrap();
         fs::write(docs.join("Notes.rtfd/TXT.rtf"), "old").unwrap();
         let o = opener(&d);
-        let temp_of = || fs::read_dir(&docs).unwrap().map(|e| e.unwrap().path()).find(|p| p.file_name().unwrap().to_string_lossy().starts_with(".Notes.rtfd.bifrost-"));
+        let temp_of = |name: &str| {
+            let prefix = format!(".{name}.bifrost-");
+            fs::read_dir(&docs).unwrap().map(|e| e.unwrap().path()).find(|p| p.file_name().unwrap().to_string_lossy().starts_with(&prefix))
+        };
 
         // a save hands over a folder, and the app writes the package's files into it
         let (pending, f) = o.begin_save(Path::new("Documents"), "Notes.rtfd").unwrap();
         assert!(f.metadata().unwrap().is_dir());
-        fs::write(temp_of().unwrap().join("TXT.rtf"), "new").unwrap();
+        fs::write(temp_of("Notes.rtfd").unwrap().join("TXT.rtf"), "new").unwrap();
         assert_eq!(fs::read_to_string(docs.join("Notes.rtfd/TXT.rtf")).unwrap(), "old", "nothing is replaced before commit");
         let (path, _) = pending.commit(&o).unwrap();
         assert_eq!(path, Path::new("Documents/Notes.rtfd"));
@@ -587,14 +590,14 @@ mod tests {
 
         // an abort removes the temporary folder and leaves the package alone
         let (pending, _f) = o.begin_save(Path::new("Documents"), "Notes.rtfd").unwrap();
-        fs::write(temp_of().unwrap().join("TXT.rtf"), "lost").unwrap();
+        fs::write(temp_of("Notes.rtfd").unwrap().join("TXT.rtf"), "lost").unwrap();
         pending.abort(&o);
-        assert!(temp_of().is_none());
+        assert!(temp_of("Notes.rtfd").is_none());
         assert_eq!(fs::read_to_string(docs.join("Notes.rtfd/TXT.rtf")).unwrap(), "new");
 
         // a new name needs no old package to move aside
         let (pending, _f) = o.begin_save(Path::new("Documents"), "Copy.rtfd").unwrap();
-        fs::write(temp_of().unwrap().join("TXT.rtf"), "copy").unwrap();
+        fs::write(temp_of("Copy.rtfd").unwrap().join("TXT.rtf"), "copy").unwrap();
         assert_eq!(pending.commit(&o).unwrap().0, Path::new("Documents/Copy.rtfd"));
         assert_eq!(fs::read_to_string(docs.join("Copy.rtfd/TXT.rtf")).unwrap(), "copy");
         fs::remove_dir_all(&d).unwrap();
