@@ -240,6 +240,7 @@ pub mod quicksearch;
 pub mod indexed_entity;
 pub mod search_terms;
 pub mod search_kit;
+pub mod search_card_provider;
 pub mod embedding;
 pub mod tabular_summary;
 pub mod pixel_transfer;
