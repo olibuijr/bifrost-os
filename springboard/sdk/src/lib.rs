@@ -325,6 +325,10 @@ pub mod midi_network;
 pub mod motion_raw;
 pub mod device_registry;
 pub mod udev;
+/// Scripting object model: a dictionary of classes, properties and element arrays, and a `Target` that reads and writes
+/// properties by path, finds elements, keeps the last error and tells a delegate about each failure. The model is
+/// `bifrost_ui::scripting`, with its tests there.
+pub use bifrost_ui::scripting;
 pub mod script_value;
 pub mod script_syntax;
 pub mod script_export;
@@ -343,6 +347,9 @@ pub mod revisions;
 pub mod markup;
 pub mod log;
 pub mod signpost;
+/// App state reporting (`StateReporter`: named domains, one active state at a time, volatile and stable metadata).
+/// The model is `bifrost_ui::state_report`, with its tests there; this path is the app-facing name.
+pub use bifrost_ui::state_report as state_reporting;
 pub mod dispatch;
 pub mod operation_queue;
 pub mod actor;
@@ -548,6 +555,8 @@ pub mod errno {
 pub mod volume;
 pub mod identity;
 pub mod reachability;
+/// The route flags for a host or address, computed from the network path (`SCNetworkReachabilityFlags`).
+pub mod reachability_flags;
 pub mod auth_events;
 pub mod identity_events;
 pub mod memory_events;

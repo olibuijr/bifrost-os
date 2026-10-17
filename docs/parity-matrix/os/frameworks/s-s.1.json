@@ -183,7 +183,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/scripting-bridge.json",
    "status": "partial",
-   "note": "from SDK matrix scripting-bridge.json",
+   "note": "from SDK matrix scripting-bridge.json Built 2026-10-17: the scripting object model (get, set, elements, last error, error delegate) is exposed to apps as sdk scripting. Still open: no running app is attached to it, and launch flags are not exposed.",
    "rea": [],
    "method": "assessed"
   },
@@ -225,7 +225,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/security.json",
    "status": "partial",
-   "note": "from SDK matrix security.json",
+   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms.",
    "rea": [],
    "method": "assessed"
   },
@@ -631,7 +631,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/storekit.json",
    "status": "partial",
-   "note": "from SDK matrix storekit.json",
+   "note": "from SDK matrix storekit.json Built 2026-10-17: StoreSession scripted store for purchase tests (sdk testing.rs, testing::store_session_tests). Still open: subscriptions, offers, JWS verification, review prompt UI.",
    "rea": [],
    "method": "assessed"
   },
@@ -799,7 +799,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/system-configuration.json",
    "status": "partial",
-   "note": "from SDK matrix system-configuration.json",
+   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks.",
    "rea": [],
    "method": "assessed"
   },

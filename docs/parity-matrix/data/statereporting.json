@@ -12,7 +12,7 @@
       "apple": "StateReporter",
       "bifrost": "springboard/ui/src/state_report.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK type records a named domain or a single active state per domain; the log module only writes messages"
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (statereporting, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK type records a named domain or a single active state per domain; the log module only writes messages Built 2026-10-17: exposed to apps as the SDK path state_reporting (bifrost_ui::state_report, tests in that module)."
     },
     {
       "feature": "Reportable metadata (protocol, values, macros)",
