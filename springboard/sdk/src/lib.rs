@@ -39,6 +39,10 @@ pub mod kit {
     pub use bifrost_render::kernel;
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.
     pub use bifrost_render::pixel_layout;
+    /// Kernel convolution and grey-level morphology (dilate, erode, open, close) on 8-bit planes.
+    pub use bifrost_render::morphology;
+    /// Histograms, histogram equalization, level stretching and piecewise tone curves on 8-bit samples.
+    pub use bifrost_render::histogram;
     pub use springboard::shell::list;
     /// Loop regions for sampled playback: the loop modes (off, forward, ping-pong) and the read head through them.
     pub use springboard::media::loop_region;
@@ -878,3 +882,22 @@ pub mod spectrogram;
 pub mod extent_map;
 pub mod os_services;
 pub mod buffer_handoff;
+
+#[cfg(test)]
+mod kit_image_tools {
+    use super::kit::{histogram, morphology};
+
+    #[test]
+    fn a_bright_speck_dilates_over_its_neighbours() {
+        let mut plane = vec![0u8; 9];
+        plane[4] = 255;
+        let out = morphology::dilate(&plane, 3, 3, 1, 1).expect("a 3x3 plane dilates");
+        assert!(out.iter().all(|&v| v == 255));
+    }
+
+    #[test]
+    fn the_histogram_counts_each_sample_value() {
+        let h = histogram::histogram(&[0, 0, 5]);
+        assert_eq!((h[0], h[5]), (2, 1));
+    }
+}
