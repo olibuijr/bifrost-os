@@ -48,6 +48,23 @@ pub fn controller(plugin: &Descriptor) -> Option<Box<dyn InputController>> {
     engine_source(&plugin.engine).and_then(new_controller)
 }
 
+/// The input source plugins the installed packages declare (`input_sources` in each manifest), in install order. An
+/// id an earlier package already gave is skipped, and a package whose list does not parse contributes none.
+pub fn installed(apps: &[crate::shell::store::install::InstalledApp]) -> Vec<Descriptor> {
+    let mut seen: Vec<Descriptor> = Vec::new();
+    for app in apps {
+        let Ok(text) = std::fs::read_to_string(app.dir.join("manifest.toml")) else { continue };
+        let Ok(manifest) = crate::shell::store::install::parse_manifest(&text) else { continue };
+        let Ok(found) = parse(&manifest.input_sources.join("\n")) else { continue };
+        for d in found {
+            if !seen.iter().any(|s| s.id == d.id) {
+                seen.push(d);
+            }
+        }
+    }
+    seen
+}
+
 /// Reads a plugin list. Every entry needs four non-empty fields, a known engine, and an id that no earlier entry uses.
 pub fn parse(text: &str) -> Result<Vec<Descriptor>, ParseError> {
     let mut plugins: Vec<Descriptor> = Vec::new();
@@ -132,5 +149,29 @@ mod tests {
             engine: "zhuyin".into(),
         };
         assert!(controller(&plugin).is_some());
+    }
+
+    #[test]
+    fn installed_packages_add_their_sources_once_each() {
+        use crate::shell::store::install::InstalledApp;
+        let root = std::env::temp_dir().join(format!("input-plugins-{}-installed", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let app = |id: &str, sources: &str| {
+            let dir = root.join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("manifest.toml"), format!("id = \"{id}\"\nname = \"N\"\nversion = \"1.0.0\"\n{sources}")).unwrap();
+            InstalledApp { id: id.to_string(), dir, ..Default::default() }
+        };
+        let apps = [
+            app("is.x.one", "input_sources = [\"x.kana|Kana|ja|kana-typing\", \"x.pin|Pinyin|zh|pinyin\"]\n"),
+            app("is.x.two", "input_sources = [\"x.kana|Other|ja|kana-typing\", \"x.viet|Viet|vi|vietnamese-telex\"]\n"),
+            app("is.x.none", ""),
+        ];
+        let got = installed(&apps);
+        let ids: Vec<&str> = got.iter().map(|d| d.id.as_str()).collect();
+        assert_eq!(ids, ["x.kana", "x.pin", "x.viet"]);
+        assert_eq!(got[0].name, "Kana", "the first package keeps the id");
+        assert!(controller(&got[2]).is_some());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
