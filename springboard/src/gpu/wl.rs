@@ -17,6 +17,7 @@ use super::egl::*;
 use super::error::{egl_error, gl_error, has_extension};
 use super::health::Health;
 use crate::gfx::{Area, Damage, View};
+use bifrost_core::frame_metrics::{Recorder, Summary};
 use bifrost_render::glass::Rect as Glass;
 use std::collections::HashMap;
 use std::ffi::{c_void, CString};
@@ -173,6 +174,21 @@ pub struct Presenter {
     health: Health,
     /// the composed frame copied aside by Screen Zoom (a drawable cannot be sampled while it is the target)
     zoom_copy: Option<Tex>,
+    /// per-surface frame figures for the app's GPU metrics: the pass time of each presented frame
+    frames: HashMap<u32, Recorder>,
+    /// the origin of `presented_ns` in the frame figures
+    clock: std::time::Instant,
+}
+
+/// Frames kept per surface for the GPU metrics.
+const FRAME_WINDOW: usize = 120;
+/// Refresh period the frame figures are measured against until the shell says otherwise (60 Hz).
+const DEFAULT_REFRESH_NS: u64 = 16_666_667;
+
+/// Records one presented frame of surface `id`: the GPU pass time and the presentation time, both in nanoseconds on the
+/// presenter's clock. A frame that goes backwards in time is refused by the recorder and dropped here.
+fn record_pass(frames: &mut HashMap<u32, Recorder>, id: u32, gpu_ns: u64, presented_ns: u64) {
+    frames.entry(id).or_insert_with(|| Recorder::new(FRAME_WINDOW, DEFAULT_REFRESH_NS)).record(gpu_ns, presented_ns).ok();
 }
 
 const VS: &str = "#version 300 es
@@ -352,6 +368,8 @@ impl Presenter {
             implicit_sync,
             health: Health::default(),
             zoom_copy: None,
+            frames: HashMap::new(),
+            clock: std::time::Instant::now(),
         })
     }
 
@@ -459,6 +477,11 @@ impl Presenter {
         self.surfaces.contains_key(&id)
     }
 
+    /// The GPU figures of surface `id` over its recent frames, or `None` before it has presented one.
+    pub fn frame_summary(&self, id: u32) -> Option<Summary> {
+        self.frames.get(&id).map(|r| r.summary())
+    }
+
     /// Allocates one more drawable for surface `id` (owing a full redraw); returns it for a `wl_buffer`.
     pub fn add_drawable(&mut self, id: u32) -> io::Result<BufferInfo> {
         self.current();
@@ -495,6 +518,7 @@ impl Presenter {
 
     pub fn destroy_surface(&mut self, id: u32) {
         let Some(s) = self.surfaces.remove(&id) else { return };
+        self.frames.remove(&id);
         self.current();
         for d in s.ring {
             self.release(d);
@@ -714,6 +738,8 @@ impl Presenter {
             uploaded_px: up,
             drawn_px: drawn,
         };
+        // the pass time is the wait for the GPU to finish, and the finish is the presentation instant
+        record_pass(&mut self.frames, id, (t2 - t1).as_nanos() as u64, t2.duration_since(self.clock).as_nanos() as u64);
         owed
     }
 
@@ -1056,3 +1082,21 @@ fn link(gl: &Gles) -> io::Result<Program> {
     gl!(gl, uniform1i(tex, 0));
     Ok(Program { id, view: loc("u_view"), mode: loc("u_mode"), half: loc("u_half"), alpha: loc("u_alpha"), rrect: loc("u_rrect"), radius: loc("u_radius"), glass: loc("u_glass"), hole: loc("u_hole"), hole_r: loc("u_hole_r"), sat: loc("u_sat"), bright: loc("u_bright"), lum_amt: loc("u_lum_amt"), lum_v: loc("u_lum_v"), rim: loc("u_rim"), color: loc("u_color") })
 }
+
+#[cfg(test)]
+mod frame_feed_tests {
+    use super::*;
+
+    #[test]
+    fn presented_passes_feed_the_surface_summary_and_a_backwards_frame_is_dropped() {
+        let mut frames = HashMap::new();
+        record_pass(&mut frames, 7, 2_000_000, 16_000_000);
+        record_pass(&mut frames, 7, 3_000_000, 32_000_000);
+        record_pass(&mut frames, 7, 9_000_000, 10_000_000); // earlier than the last frame: refused
+        let summary = frames.get(&7).unwrap().summary();
+        assert_eq!(summary.frames, 2);
+        assert_eq!(summary.max_gpu_ns, 3_000_000);
+        assert!(frames.get(&8).is_none(), "another surface has no figures");
+    }
+}
+

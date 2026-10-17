@@ -96,7 +96,7 @@
       "apple": "GPUTimeMetric, MetalFrameRateMetric, PixelLuminanceMetric, AveragePixelLuminance",
       "bifrost": "springboard/core/src/frame_metrics.rs",
       "status": "partial",
-      "note": "Recorder keeps the last N presented frames of an app with GPU time per frame, mean and max GPU time, frame rate and dropped frames against the refresh period (frame_metrics::Recorder, Summary). The caller supplies the GPU time and presentation time; the presenter does not feed it yet, and no app reaches it, so per-layer measurement and pixel luminance remain missing. Built on parity/team-a-04; not yet verified on Midget."
+      "note": "Recorder keeps the last N presented frames of an app with GPU time per frame, mean and max GPU time, frame rate and dropped frames against the refresh period (frame_metrics::Recorder, Summary). The caller supplies the GPU time and presentation time; the presenter does not feed it yet, and no app reaches it, so per-layer measurement and pixel luminance remain missing. Built on parity/team-a-04; not yet verified on Midget. Built 2026-10-17: Built 2026-10-17: the presenter feeds every drawn surface's frame figures (springboard/src/gpu/wl.rs: the pass time, measured as the wait for the GPU in draw, and the finish instant on the presenter clock, recorded with frame_metrics::Recorder over 120 frames at 60 Hz until the shell sets the refresh); Presenter::frame_summary reads them. Tests frame_feed_tests::presented_passes_feed_the_surface_summary_and_a_backwards_frame_is_dropped. Gaps: no app reaches the summary yet, the refresh period is fixed, and per-layer and luminance metrics are missing. Not run: lead runs the tests."
     },
     {
       "feature": "Custom signpost intervals (SignpostIntervalMetric, mxSignpost)",
