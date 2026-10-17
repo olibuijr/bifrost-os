@@ -116,9 +116,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/setup.rs (Step::Language)",
+   "bifrost": "springboard/src/setup.rs (Step::Language), springboard/src/shell/settings_intents.rs",
    "status": "partial",
-   "note": "Setup language step only; no language chooser outside installer setup; built on os/team-l-04-system-ui; not yet verified on Midget",
+   "note": "Setup language step, plus Settings > Language & Region reachable by Search (settings_intents open-language-region, 2026-10-17). Still missing: a standalone Language Chooser app (the picker outside Settings); built on os/team-l-04-system-ui; not yet verified on Midget",
    "rea": []
   },
   {
