@@ -1320,10 +1320,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/contacts-desktop/src; springboard/sdk/src/intents.rs",
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs; springboard/apps/contacts-desktop/src/contacts.rs; springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "Contacts declares three App Intents: view-card, create-contact and search-contacts. Built 2026-10-17: no change; the intents have no unit test yet, so the row stays open until one covers them. Not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "contacts::tests"
+    }
+   ],
+   "ready_note": "Three App Intents (view-card, create-contact, search-contacts) declared in main.rs and run by Contacts::open_card, create_contact and search_contacts; the_intents_open_a_card_create_a_contact_and_search covers the model. Built 2026-10-17: no code change; the test the old note asked for now exists."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CoreMotionFoundationModelExtension.appex",

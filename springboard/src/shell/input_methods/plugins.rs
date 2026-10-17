@@ -48,6 +48,35 @@ pub fn controller(plugin: &Descriptor) -> Option<Box<dyn InputController>> {
     engine_source(&plugin.engine).and_then(new_controller)
 }
 
+/// One input source as the shell lists it: a built-in source or an installed plugin.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListedSource {
+    pub id: String,
+    pub name: String,
+    pub language: String,
+}
+
+/// The sources the shell offers: the built-in sources first, then each plugin whose id no built-in source uses.
+pub fn listed_sources(plugins: &[Descriptor]) -> Vec<ListedSource> {
+    let mut out: Vec<ListedSource> = super::sources()
+        .iter()
+        .map(|s| ListedSource { id: s.id.to_string(), name: s.localized_name.to_string(), language: s.language.to_string() })
+        .collect();
+    for p in plugins {
+        if out.iter().any(|s| s.id == p.id) {
+            continue;
+        }
+        out.push(ListedSource { id: p.id.clone(), name: p.name.clone(), language: p.language.clone() });
+    }
+    out
+}
+
+/// A fresh controller for a listed source id: a built-in source's controller, or the controller of the plugin that
+/// names the id. None for an id neither provides.
+pub fn controller_for(id: &str, plugins: &[Descriptor]) -> Option<Box<dyn InputController>> {
+    new_controller(id).or_else(|| plugins.iter().find(|p| p.id == id).and_then(controller))
+}
+
 /// The input source plugins the installed packages declare (`input_sources` in each manifest), in install order. An
 /// id an earlier package already gave is skipped, and a package whose list does not parse contributes none.
 pub fn installed(apps: &[crate::shell::store::install::InstalledApp]) -> Vec<Descriptor> {
@@ -149,6 +178,27 @@ mod tests {
             engine: "zhuyin".into(),
         };
         assert!(controller(&plugin).is_some());
+    }
+
+    #[test]
+    fn listed_sources_add_plugins_after_the_built_in_ones() {
+        let plugins = vec![
+            Descriptor { id: "x.pin2".into(), name: "Pinyin 2".into(), language: "zh-Hans".into(), engine: "pinyin".into() },
+            Descriptor { id: KOREAN_2SET.into(), name: "Clash".into(), language: "ko".into(), engine: "hangul-2set".into() },
+        ];
+        let listed = listed_sources(&plugins);
+        assert_eq!(listed.len(), super::super::sources().len() + 1, "a plugin reusing a built-in id is not listed");
+        let last = listed.last().unwrap();
+        assert_eq!((last.id.as_str(), last.name.as_str()), ("x.pin2", "Pinyin 2"));
+        assert_eq!(listed[0].name, "2-Set Korean", "built-in sources keep their names");
+    }
+
+    #[test]
+    fn controller_for_resolves_built_in_and_plugin_ids() {
+        let plugins = vec![Descriptor { id: "x.pin2".into(), name: "P".into(), language: "zh".into(), engine: "pinyin".into() }];
+        assert!(controller_for(PINYIN, &plugins).is_some());
+        assert!(controller_for("x.pin2", &plugins).is_some());
+        assert!(controller_for("x.missing", &plugins).is_none());
     }
 
     #[test]

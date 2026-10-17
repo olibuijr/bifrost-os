@@ -427,7 +427,7 @@
    "doc": "",
    "bifrost": "springboard/ui/src/procedural_texture.rs (gradient)",
    "status": "partial",
-   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget.",
+   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget. Built 2026-10-17: five named gradient presets and gradient_poster(name, w, h) (ui::procedural_texture, tests procedural_texture::tests). Still missing: the picker that shows the presets in the wallpaper settings.",
    "rea": []
   },
   {
