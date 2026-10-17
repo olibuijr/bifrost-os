@@ -671,7 +671,7 @@ pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep
 pub(super) enum FxCall { Open, Minimize, Restore, Zoom, Close }
 
 /// The id the frames and the presenter use for the window of `app` (its index in `apps()` plus one).
-fn win_id(app: AppId) -> Option<u32> {
+pub(super) fn win_id(app: AppId) -> Option<u32> {
     match app {
         AppId::ExternalWindow(slot, id) => Some(WINDOW_ID_FLAG | ((slot as u32) << 16) | id as u32),
         _ => apps().iter().position(|a| a.id == app).map(|i| i as u32 + 1),
@@ -1218,6 +1218,11 @@ impl Shell {
 
     /// Opens `app` in a window (or raises it) and makes it the focused app.
     pub(super) fn desk_open(&mut self, app: AppId, t: f64) {
+        // an extra window is raised (it is opened by its app, not by the shell)
+        if let AppId::ExternalWindow(slot, id) = app {
+            self.desk_focus_extra_window(slot, id);
+            return;
+        }
         self.recent_note(app);
         if let Some(d)=self.desk.as_mut(){d.raise_front=true;}
         // the Dock tile bounces while the app launches, whichever way it was opened (a running app starts none)
@@ -1283,10 +1288,12 @@ impl Shell {
     #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn desk_cycle_window(&mut self) {
         if let Some(d) = &mut self.desk {
+            // Cmd+` walks the windows of the front app, its extra windows included
+            let front = d.front().map(|w| w.app.parent());
             match &mut d.cmdtab {
                 Some((order, sel)) => *sel = (*sel + 1) % order.len(),
                 None => {
-                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).collect();
+                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).filter(|a| Some(a.parent()) == front).collect();
                     if order.len() >= 2 {
                         d.cmdtab = Some((order, 1));
                     }

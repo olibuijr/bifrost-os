@@ -222,6 +222,16 @@ impl Shell {
             }
         }
         }
+        // every window of the front app is a window of that app for the reader, its extra windows included
+        if let Some(front) = desk.front() {
+            let app = front.app.parent();
+            for w in desk.wins.iter().filter(|w| w.app.parent() == app && !w.minimized) {
+                let name = self.window_menu_name(w.app);
+                let bounds = Rect { x: w.r.x as f32, y: w.r.y as f32, w: w.r.w as f32, h: w.r.h as f32 };
+                let id = crate::shell::desk::win_id(w.app).unwrap_or(0);
+                out.push(walk::window(id, &name, bounds));
+            }
+        }
         if let Some(front) = desk.front() {
             match front.app {
                 AppId::Settings => {
