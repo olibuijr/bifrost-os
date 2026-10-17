@@ -4,6 +4,11 @@
 //! open board, so it lives under `freeform.rs` and reaches its fields.
 use super::*;
 use crate::items::NOTE_COLORS;
+
+/// Shapes popover: row height, the panel's padding and its width, in points.
+const SHAPE_ROW_PT: f32 = 28.0;
+const SHAPE_PAD_PT: f32 = 6.0;
+const SHAPE_PANEL_W_PT: f32 = 168.0;
 use bifrost_app::controls::prefs_layout::m;
 
 /// Two presses on one item closer together than this (milliseconds) are a double tap.
@@ -896,6 +901,68 @@ impl Freeform {
             let shown = self.boards.current_title().to_string();
             self.say(format!("Renamed to {shown}"));
         }
+    }
+
+    /// The Shapes popover in points: its panel, and one row per shape of `crate::SHAPES` (in that order).
+    pub(super) fn shapes_layout(&self) -> Option<(Rect, Vec<(ShapeKind, Rect)>)> {
+        if !self.shapes_open {
+            return None;
+        }
+        let anchor = self.placed.as_ref()?.rect_of(BAR_SHAPES)?;
+        let pad = SHAPE_PAD_PT;
+        let panel = Rect {
+            x: anchor.x,
+            y: anchor.y + anchor.h + pad,
+            w: SHAPE_PANEL_W_PT,
+            h: SHAPE_ROW_PT * crate::SHAPES.len() as f32 + 2.0 * pad,
+        };
+        let rows = crate::SHAPES
+            .iter()
+            .enumerate()
+            .map(|(i, (kind, _))| {
+                let row = Rect { x: panel.x + pad, y: panel.y + pad + i as f32 * SHAPE_ROW_PT, w: panel.w - 2.0 * pad, h: SHAPE_ROW_PT };
+                (*kind, row)
+            })
+            .collect();
+        Some((panel, rows))
+    }
+
+    /// Draws the Shapes popover: a material panel, with the shape the tool is set to in the tint.
+    pub(super) fn draw_shapes(&self, s: &mut Surface, ui: &Ui) {
+        let Some((panel, rows)) = self.shapes_layout() else { return };
+        widgets::material(s, ui, panel, m::CARD_RADIUS, widgets::Material::Popover);
+        let pad = ui.pt(SPACE_S);
+        for ((kind, row), (_, name)) in rows.iter().zip(crate::SHAPES.iter()) {
+            let chosen = self.tool.shape_kind() == Some(*kind);
+            if chosen {
+                s.fill_rrect(ui.pt(row.x), ui.pt(row.y), ui.pt(row.w), ui.pt(row.h), ui.pt(m::SELECTION_RADIUS), TINT);
+            }
+            let ink = if chosen { WHITE } else { LABEL.now() };
+            let img = ui.text(name, MAC_CALLOUT_PT, Weight::Regular, ink);
+            s.blit(&img, (ui.pt(row.x) + pad) as i32, (ui.pt(row.y) + (ui.pt(row.h) - img.h as f32) / 2.0) as i32, 255, 255);
+        }
+    }
+
+    /// A press while the Shapes popover is open. A row picks its shape tool and closes the popover; a press inside the
+    /// panel is used up; a press on the Shapes button is left to the toolbar, which toggles it; any other press closes
+    /// the popover and is handled as usual. True when the press was used.
+    pub(super) fn shapes_press(&mut self, ui: &Ui, x: f32, y: f32) -> bool {
+        let Some((panel, rows)) = self.shapes_layout() else { return false };
+        let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
+        let inside = |r: &Rect| px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+        if let Some((kind, _)) = rows.iter().find(|(_, r)| inside(r)) {
+            self.shapes_open = false;
+            self.activate(ui, Target::Tool(Tool::of_shape(*kind)));
+            return true;
+        }
+        if inside(&panel) {
+            return true;
+        }
+        let on_button = self.placed.as_ref().and_then(|p| p.rect_of(BAR_SHAPES)).is_some_and(|r| inside(&r));
+        if !on_button {
+            self.shapes_open = false;
+        }
+        false
     }
 
     /// A press while the search is open: a row opens that board, a press outside the panel closes the search.

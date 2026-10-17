@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.12.2"
+version = "1.13.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
