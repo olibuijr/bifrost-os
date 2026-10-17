@@ -112,7 +112,7 @@ tool on Midget (`tools/parity/os_cli.py`, mapping in `tools/parity/os_cli_map.js
    `bifrost` = command path, note "verified on Midget V"), `partial` (installed but the probe failed or is not run headless),
    `gap` (no equivalent or not installed), `n/a` (with the class reason).
 
-## OS layer: ready rows and the VM check (`os-verify`)
+## OS layer: ready rows and the target check (`os-verify`)
 
 A row becomes `parity` only after its checks pass on an installed BifrOSt system. Mark a row ready with `"ready": true`,
 a `"ready_note"` and a `"checks"` list (`tools/parity/os_verify.py`):
@@ -128,10 +128,12 @@ Commands (`bifrost pc parity os-verify ...`):
 
 1. `plan [--out plan.json]`: the ready rows (not `parity` or `n/a`) and the unique `(crate, filter)` pairs. Schema errors in
    `ready` or `checks` stop the plan; `bifrost pc parity check` reports them too.
-2. `run plan.json --target local|ssh:HOST [--repo DIR] [--out results.json]`: file, cmd and unit checks run on the target,
-   test checks run in `--repo`. Exit 1 when any row fails. Run as an unprivileged user.
-3. `promote results.json --version V [--target-name vm] [--dry-run]`: passing rows become `parity`, lose `ready` and get the note
-   "Verified on the vm with BifrOSt V (os_verify)." Failing rows keep their status and get `"ready": false` and
+2. `run plan.json --target local|ssh:HOST [--repo DIR] [--out results.json]`: file, cmd and unit checks run on the target
+   (`local` is this machine, `ssh:HOST` is a machine over ssh), test checks run in `--repo` (default: this checkout). Exit 1
+   when any row fails. With `local`, a root run refuses to start when the plan has cmd checks, because they run as the invoking user.
+3. `promote results.json --version V [--target-name NAME] [--dry-run]`: passing rows become `parity`, lose `ready` and get the note
+   "Verified on the NAME with BifrOSt V (os_verify)." `--target-name` defaults to `vm`; pass `--target-name midget` for evidence
+   taken on Midget. Failing rows keep their status and get `"ready": false` and
    `"ready_failed"` with the reason.
 
 Rows that build the component but do not have the check yet stay `partial`; a ready row that fails stays partial, never `parity`.
