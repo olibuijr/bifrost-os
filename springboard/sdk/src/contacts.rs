@@ -185,16 +185,36 @@ pub enum ContactsError {
     NothingPicked,
     /// The person already answered the access prompt.
     AlreadyDecided,
+    /// The save names no change: it needs at least one add, update or delete.
+    NothingToSave,
+    /// An update names no contact id.
+    MissingId,
+    /// A contact is not valid: it has no name, company, address, phone or email, or a field is out of its limits.
+    /// The message says which field.
+    InvalidContact(String),
+    /// The contacts file on disk is larger than the store reads.
+    FileTooLarge,
+    /// The contacts file is in a format this version does not read.
+    UnknownFormat,
     /// Any other failure, with the shell's message.
     Other(String),
 }
 
 impl ContactsError {
-    /// The variant for a shell error message.
+    /// The variant for a shell error message. Messages the shell does not name keep their text in `Other`.
     pub fn from_message(message: &str) -> Self {
         match message {
-            "contacts access is not granted" => ContactsError::NotGranted,
+            "contacts access is not granted" | "contacts write access is not granted" => ContactsError::NotGranted,
             "a limited contacts grant only reads; saving needs full access" => ContactsError::ReadOnly,
+            "save needs add, update or delete" => ContactsError::NothingToSave,
+            "update needs the id of a contact" => ContactsError::MissingId,
+            "Invalid contact" => ContactsError::InvalidContact(String::new()),
+            "Contacts file too large" => ContactsError::FileTooLarge,
+            "Unknown contacts format" => ContactsError::UnknownFormat,
+            other if other.starts_with("a contact needs a name") => ContactsError::InvalidContact(other.to_string()),
+            other if other.ends_with("is a list") || other.ends_with("cannot be saved yet") || other.contains("takes one value per contact") || other.ends_with("is text or a list of text") || other.starts_with("a contact is an object") => {
+                ContactsError::InvalidContact(other.to_string())
+            }
             other => ContactsError::Other(other.to_string()),
         }
     }
@@ -296,6 +316,18 @@ mod tests {
         store.save(vec![history::Op::Delete(ids[0])], |_| true).unwrap();
         assert_eq!(store.changes_since(token).unwrap().len(), 1);
         assert_eq!(store.save(vec![history::Op::Add(String::new())], |name| !name.is_empty()), Err(history::Error::Invalid(0)));
+    }
+
+    #[test]
+    fn shell_messages_map_to_typed_errors() {
+        assert_eq!(ContactsError::from_message("contacts write access is not granted"), ContactsError::NotGranted);
+        assert_eq!(ContactsError::from_message("save needs add, update or delete"), ContactsError::NothingToSave);
+        assert_eq!(ContactsError::from_message("update needs the id of a contact"), ContactsError::MissingId);
+        assert_eq!(ContactsError::from_message("Contacts file too large"), ContactsError::FileTooLarge);
+        assert_eq!(ContactsError::from_message("Unknown contacts format"), ContactsError::UnknownFormat);
+        assert_eq!(ContactsError::from_message("Invalid contact"), ContactsError::InvalidContact(String::new()));
+        assert!(matches!(ContactsError::from_message("phone is a list"), ContactsError::InvalidContact(_)));
+        assert_eq!(ContactsError::from_message("disk on fire"), ContactsError::Other("disk on fire".into()));
     }
 
     #[test]
