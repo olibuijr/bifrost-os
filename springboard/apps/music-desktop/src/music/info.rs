@@ -1,8 +1,10 @@
 //! Get Info: the title, artist and album a song is shown with, as the user edits them in the app. The edits are kept in
 //! a text file beside the library, one line per song and keyed by its path, and laid over the file's tags at every
-//! scan. The audio files themselves are not written, so an edit shows in this app only. Pure file logic, no UI.
+//! scan. An edit is also written into the song's file through the tag writer where the format takes tags (MP3, ADTS,
+//! M4A); see `write_back`. Pure file logic, no UI.
 
 use super::library::Scanned;
+use springboard::media::audiofile;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -95,6 +97,7 @@ impl Info {
             self.edits.remove(path);
         }
         self.save();
+        write_back(path, field, self.value(path, field));
         true
     }
 
@@ -142,6 +145,24 @@ impl Info {
         }
         text
     }
+}
+
+/// Writes one edited field into the song's own file through the tag writer (MP3, ADTS and M4A). The other tags are
+/// read first and written back unchanged. A file whose tags cannot be written (FLAC, WAV, ...) keeps the sidecar edit
+/// only, and so does a file with chapters, because the ID3 writer does not emit `CHAP` frames yet. An empty value
+/// clears the tag in the file.
+fn write_back(path: &Path, field: Field, value: Option<&str>) {
+    let Ok(mut tags) = audiofile::read_tags(path) else { return };
+    if !tags.chapters.is_empty() {
+        return;
+    }
+    let value = value.map(str::to_string);
+    match field {
+        Field::Title => tags.title = value,
+        Field::Artist => tags.artist = value,
+        Field::Album => tags.album = value,
+    }
+    let _ = audiofile::write_tags(path, &tags);
 }
 
 /// The edits in a file's text, as `Info::text` writes them.
