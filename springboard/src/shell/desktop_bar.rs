@@ -45,7 +45,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -523,6 +523,7 @@ impl Shell {
                     Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
                     Action::RecordStop=>self.recording_stop_from_menu(),
                     Action::Photo(command)=>effects.extend(self.photo_command(command,t)),
+                    Action::PhotoEditWith(key)=>self.photo_edit_with_viewed(&key,t),
                 }effects
     }
     /// Runs a Photos command from a menu row or a key equivalent, and opens the print sheet when it asked for one.
@@ -556,9 +557,16 @@ impl Shell {
         v.push(Row::separator());
         v.extend([P::Duplicate,P::CopyEdits,P::PasteEdits].into_iter().map(|c|photo_row(p,c)));
         v.push(Row::separator());
+        let edit_with=self.photo_edit_with_rows();
+        if !edit_with.is_empty(){v.extend(edit_with);v.push(Row::separator());}
         v.push(photo_row(p,P::MergeDuplicates));
         v.push(photo_row(p,P::Delete));
         v
+    }
+    /// Image > Edit With: one row per app that opens the open photo's type (not Photos), the default first.
+    fn photo_edit_with_rows(&self)->Vec<Row>{
+        let Some(photo)=self.photos.as_ref().and_then(|p|p.viewing()) else {return Vec::new();};
+        self.edit_with_choices(&photo.name()).into_iter().map(|c|Row::action(format!("Edit With {}",super::defaultapps::app_name(&c.app)),Action::PhotoEditWith(c.app))).collect()
     }
     /// The File, Edit and View menus while Photos is in front: Photos' own commands lead File and View, and its Edit
     /// menu replaces the shell's. The shell's Print row is Photos' own, so it is dropped from File.
@@ -567,7 +575,7 @@ impl Shell {
         let Some(p)=self.photos.as_ref() else {return rows;};
         match menu {
             Menu::File=>{
-                let mut v=vec![photo_row(p,P::NewAlbum),photo_row(p,P::RenameAlbum),photo_row(p,P::DeleteAlbum),Row::separator(),photo_row(p,P::Import),photo_row(p,P::Export),photo_row(p,P::Print),Row::separator(),photo_row(p,P::PlaySlideshow),Row::separator()];
+                let mut v=vec![photo_row(p,P::NewAlbum),photo_row(p,P::RenameAlbum),photo_row(p,P::DeleteAlbum),Row::separator(),photo_row(p,P::Import),photo_row(p,P::SwitchLibrary),photo_row(p,P::Export),photo_row(p,P::Print),Row::separator(),photo_row(p,P::PlaySlideshow),Row::separator()];
                 let mut rest:Vec<Row>=rows.into_iter().filter(|r|!r.text.starts_with("Print")).collect();
                 while rest.last().is_some_and(|r|r.sep){rest.pop();}
                 v.extend(rest);

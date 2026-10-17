@@ -1505,3 +1505,32 @@ pub(crate) mod tests {
         fs::remove_dir_all(&d).unwrap();
     }
 }
+
+impl super::Shell {
+    /// Image > Edit With: opens the photo at `path` in the app `key` with a write grant, so the app saves the original
+    /// file in place. Photos picks the change up on its next scan. False when the app or the file cannot be opened.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn photo_edit_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        let Some(def) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
+        let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let Some(broker) = self.doc_broker() else { return false };
+        // grants name files relative to the account's home
+        let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
+        let Ok(file) = broker.opener.open_any(&rel, DocMode::Write) else { return false };
+        let size = file.metadata().map_or(0, |m| m.len());
+        let Ok(grant) = broker.grants.add(key, &rel, DocMode::Write, &file) else { return false };
+        self.desk_open_or_start(def, t);
+        if let AppId::External(slot) = def {
+            let request = self.app_share.next_inbound();
+            self.doc_send(slot, ToApp::DocGranted { request, grant, mode: DocMode::Write, name, size }, Some(file));
+        }
+        true
+    }
+
+    /// Image > Edit With for the photo open in the viewer.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn photo_edit_with_viewed(&mut self, key: &str, t: f64) {
+        let Some(path) = self.photos.as_ref().and_then(|p| p.viewing()).map(|p| p.path.clone()) else { return };
+        self.photo_edit_with(key, &path, t);
+    }
+}

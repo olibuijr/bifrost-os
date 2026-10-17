@@ -144,6 +144,15 @@ impl super::Shell {
         self.defaults.as_ref().map_or_else(Vec::new, |(_, r, _)| r.open_with(name))
     }
 
+    /// The apps that can open a picture named `name` for editing (Image > Edit With): every app that opens its type
+    /// except Photos itself, the default first. Empty until the registry is built (`ensure_defaults`).
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn edit_with_choices(&self, name: &str) -> Vec<Choice> {
+        let own = apps().iter().find(|a| a.id == AppId::Photos).map(|a| a.icon);
+        let Some((_, r, _)) = self.defaults.as_ref() else { return Vec::new() };
+        r.open_with(name).into_iter().filter(|c| Some(c.app.as_str()) != own).collect()
+    }
+
     /// The app that opens a URL scheme, from the user's choice or the best declaration (the `launch` service).
     pub(super) fn default_app_for_scheme(&mut self, scheme: &str) -> Option<String> {
         self.ensure_defaults();
@@ -316,6 +325,16 @@ mod tests {
         // a local scheme is refused before any app is looked up
         assert_eq!(sh.desktop_open_link("file:///etc/passwd", 0.0).unwrap_err().to_string(), "Unsupported link");
         assert_eq!(sh.desktop_open_link("gopher://x", 0.0).unwrap_err().to_string(), "No app opens this link");
+    }
+
+    #[test]
+    fn edit_with_lists_the_other_apps_that_open_the_type_but_not_photos() {
+        let mut sh = crate::shell::tests::shell();
+        sh.ensure_defaults();
+        let c = sh.edit_with_choices("holiday.PNG");
+        assert!(c.iter().all(|x| x.app != "bifrost.photos"), "Photos is not offered to itself: {c:?}");
+        assert!(c.iter().any(|x| x.app == "bifrost.files"), "Files opens PNG too: {c:?}");
+        assert!(sh.edit_with_choices("notes.unknownext").is_empty());
     }
 
     #[test]

@@ -52,6 +52,8 @@ pub enum PhotoCommand {
     CopyEdits,
     PasteEdits,
     MergeDuplicates,
+    /// File > Switch Library…: types the folder of the library to show
+    SwitchLibrary,
 }
 
 /// One key equivalent: the evdev key code, whether Shift and Option are held, the command it runs and its text for
@@ -178,7 +180,7 @@ impl Photos {
             Export => viewing && self.album != Album::Trash,
             SelectAll => grid && !self.view.is_empty(),
             DeselectAll => self.selection.active && !self.selection.is_empty(),
-            Find | FilterDate | Import | ShowHidden | AspectGrid | AlbumsByName => true,
+            Find | FilterDate | Import | ShowHidden | AspectGrid | AlbumsByName | SwitchLibrary => true,
             NewestFirst | OldestFirst | ShowAll | FavouritesOnly | EditedOnly | ScreenshotsOnly => grid,
             ZoomIn => grid && self.cols > ZOOMS[ZOOMS.len() - 1],
             ZoomOut => grid && self.cols < ZOOMS[0],
@@ -271,6 +273,7 @@ impl Photos {
             CopyEdits => "Copy Edits".into(),
             PasteEdits => "Paste Edits".into(),
             MergeDuplicates => "Merge Duplicates".into(),
+            SwitchLibrary => "Switch Library…".into(),
         }
     }
 
@@ -400,6 +403,10 @@ impl Photos {
             }
             PasteEdits => self.paste_edits_to(ui, targets),
             MergeDuplicates => self.merge_duplicates(ui),
+            SwitchLibrary => {
+                let current = self.pictures.display().to_string();
+                self.open_entry(ui, Purpose::SwitchLibrary, &current, None, t);
+            }
         }
         self.dirty = true;
     }
