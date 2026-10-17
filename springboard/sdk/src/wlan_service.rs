@@ -93,6 +93,22 @@ pub fn request_forget(ctx: &Ctx, interface: Option<&str>, ssid: &str) -> u32 {
     crate::service::call(ctx, SERVICE, "forget", &forget_params(interface, ssid))
 }
 
+/// Offers a hotspot (an access point) on `interface` with `ssid`. An absent or empty password leaves it open. The shell
+/// brings it up with NetworkManager; the interface then reports `mode` `AP`. Reply: [`decode_queued`].
+pub fn request_host(ctx: &Ctx, interface: Option<&str>, ssid: &str, password: Option<&str>) -> u32 {
+    crate::service::call(ctx, SERVICE, "host", &join_params(interface, ssid, password))
+}
+
+/// Offers an open ad-hoc network on `interface` with `ssid`. Reply: [`decode_queued`].
+pub fn request_ad_hoc(ctx: &Ctx, interface: Option<&str>, ssid: &str) -> u32 {
+    crate::service::call(ctx, SERVICE, "ad_hoc", &join_params(interface, ssid, None))
+}
+
+/// Takes down the hotspot or ad-hoc network this app or the shell offered. Reply: [`decode_queued`].
+pub fn request_stop_hosting(ctx: &Ctx) -> u32 {
+    crate::service::call(ctx, SERVICE, "stop_hosting", &Json::Null)
+}
+
 /// The request body for `power`.
 pub fn power_params(interface: Option<&str>, on: bool) -> Json {
     let mut fields = interface_fields(interface);

@@ -94,6 +94,47 @@ pub struct Snapshot {
 pub enum Request {
     Wifi(WifiAction),
     Power(String),
+    /// Offers a network from this machine: an access point or an ad-hoc network.
+    Offer(Offer),
+    /// Takes down the network offered by [`Request::Offer`].
+    StopOffer,
+}
+
+/// A network this machine offers on one wireless interface.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Offer {
+    /// An access point (a hotspot). `psk` is the WPA passphrase or hex key; None leaves it open.
+    AccessPoint { ifname: String, ssid: String, psk: Option<String> },
+    /// An ad-hoc (IBSS) network, open.
+    AdHoc { ifname: String, ssid: String },
+}
+
+/// The NetworkManager connection names this machine uses for the networks it offers, so a stop finds them.
+pub const ACCESS_POINT_CON: &str = "bifrost-hotspot";
+pub const ADHOC_CON: &str = "bifrost-adhoc";
+
+/// The nmcli steps that bring an offered network up.
+fn start_offer(offer: &Offer) -> Result<String, String> {
+    match offer {
+        Offer::AccessPoint { ifname, ssid, psk } => {
+            let mut args: Vec<&str> = vec!["--wait", "8", "device", "wifi", "hotspot", "ifname", ifname.as_str(), "con-name", ACCESS_POINT_CON, "ssid", ssid.as_str()];
+            if let Some(password) = psk {
+                args.extend(["password", password.as_str()]);
+            }
+            output("nmcli", &args)
+        }
+        Offer::AdHoc { ifname, ssid } => {
+            // a leftover profile from an earlier ad-hoc network is replaced, not reused
+            let _ = output("nmcli", &["connection", "delete", "id", ADHOC_CON]);
+            output("nmcli", &["connection", "add", "type", "wifi", "ifname", ifname.as_str(), "con-name", ADHOC_CON, "ssid", ssid.as_str(), "mode", "adhoc"])?;
+            output("nmcli", &["--wait", "8", "connection", "up", "id", ADHOC_CON])
+        }
+    }
+}
+
+/// Takes down whichever offered network is up. Either profile may be absent; the error is the last one tried.
+fn stop_offer() -> Result<String, String> {
+    output("nmcli", &["connection", "down", "id", ACCESS_POINT_CON]).or_else(|_| output("nmcli", &["connection", "down", "id", ADHOC_CON]))
 }
 enum WorkerMessage { Request(Request), Changed }
 struct Service {
@@ -384,6 +425,8 @@ fn saved_uuid(ssid: &str) -> Result<String, String> {
 fn apply(request: Request) -> Result<(), String> {
     let result = match request {
         Request::Power(name) => output("powerprofilesctl", &["set", &name]),
+        Request::Offer(offer) => start_offer(&offer),
+        Request::StopOffer => stop_offer(),
         Request::Wifi(action) => match action {
             WifiAction::Scan => output("nmcli", &["--wait", "5", "device", "wifi", "rescan"]),
             WifiAction::Enable(on) => {

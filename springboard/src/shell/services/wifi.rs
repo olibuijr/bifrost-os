@@ -12,6 +12,8 @@
 //! - `scan` starts a rescan. Results arrive in the next `networks` read.
 //! - `join` `{ssid, password?}` joins a network. An absent or empty password joins an open network.
 //! - `forget` `{ssid}` removes a saved network. Only a saved network can be forgotten.
+//! - `host` `{ssid, password?}` offers a hotspot (an access point) on the interface; `ad_hoc` `{ssid}` offers an open
+//!   ad-hoc network; `stop_hosting` takes the offered network down. NetworkManager does the work (`desktop_network`).
 //!
 //! Each change returns `{queued: true}` at once. The outcome shows in `interfaces` and `networks` when netd has
 //! acted, so an app reads the state again rather than trusting the reply.
@@ -171,6 +173,22 @@ fn ssid_param(params: &Json) -> Result<String, String> {
     check_ssid(ssid)
 }
 
+/// The access point a `host` request names: an interface, an SSID and an optional passphrase (an absent or empty one
+/// leaves the network open).
+pub fn access_point_offer(net: Option<&Snapshot>, params: &Json) -> Result<desktop_network::Offer, String> {
+    let ifname = pick_interface(net, interface_param(params)?)?;
+    let ssid = ssid_param(params)?;
+    let psk = check_password(params.get("password").and_then(Json::as_str).unwrap_or(""))?;
+    Ok(desktop_network::Offer::AccessPoint { ifname, ssid, psk })
+}
+
+/// The ad-hoc network an `ad_hoc` request names: an interface and an SSID, open.
+pub fn ad_hoc_offer(net: Option<&Snapshot>, params: &Json) -> Result<desktop_network::Offer, String> {
+    let ifname = pick_interface(net, interface_param(params)?)?;
+    let ssid = ssid_param(params)?;
+    Ok(desktop_network::Offer::AdHoc { ifname, ssid })
+}
+
 fn queued() -> Json {
     Json::Obj(vec![("queued".into(), Json::Bool(true))])
 }
@@ -227,6 +245,20 @@ impl SystemService for WifiService {
                 desktop_network::send(Request::Wifi(WifiAction::Forget(ssid)));
                 Ok(queued())
             }
+            "host" => {
+                let offer = access_point_offer(net, params)?;
+                desktop_network::send(Request::Offer(offer));
+                Ok(queued())
+            }
+            "ad_hoc" => {
+                let offer = ad_hoc_offer(net, params)?;
+                desktop_network::send(Request::Offer(offer));
+                Ok(queued())
+            }
+            "stop_hosting" => {
+                desktop_network::send(Request::StopOffer);
+                Ok(queued())
+            }
             _ => Err(format!("wifi has no method {method}")),
         }
     }
@@ -278,6 +310,27 @@ mod tests {
         assert_eq!(pick_interface(Some(&snapshot()), Some("wlan1")).unwrap(), "wlan1");
         assert!(pick_interface(Some(&snapshot()), Some("eth0")).is_err());
         assert!(pick_interface(Some(&snapshot()), Some("wlan9")).is_err());
+    }
+
+    #[test]
+    fn a_hotspot_or_ad_hoc_network_is_checked_before_it_is_offered() {
+        let net = snapshot();
+        let host = |password: &str| Json::Obj(vec![("ssid".into(), Json::Str("Guest".into())), ("password".into(), Json::Str(password.into()))]);
+        assert_eq!(
+            access_point_offer(Some(&net), &host("correct-horse")),
+            Ok(desktop_network::Offer::AccessPoint { ifname: "wlan0".into(), ssid: "Guest".into(), psk: Some("correct-horse".into()) })
+        );
+        assert_eq!(
+            access_point_offer(Some(&net), &host("")),
+            Ok(desktop_network::Offer::AccessPoint { ifname: "wlan0".into(), ssid: "Guest".into(), psk: None }),
+            "an empty passphrase is an open hotspot"
+        );
+        assert!(access_point_offer(Some(&net), &host("short")).is_err(), "a passphrase is 8 to 63 characters");
+        let no_ssid = Json::Obj(vec![]);
+        assert!(access_point_offer(Some(&net), &no_ssid).is_err());
+        let ad_hoc = Json::Obj(vec![("ssid".into(), Json::Str("Camp".into()))]);
+        assert_eq!(ad_hoc_offer(Some(&net), &ad_hoc), Ok(desktop_network::Offer::AdHoc { ifname: "wlan0".into(), ssid: "Camp".into() }));
+        assert!(ad_hoc_offer(None, &ad_hoc).is_err(), "no Wi-Fi interface, no network");
     }
 
     #[test]
