@@ -15,7 +15,13 @@
 //!
 //! Events (to every app, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
 //! `disk_description_changed`.
+//!
+//! When a removable whole disk (not a partition) appears, the shell also posts a "USB Disk Connected" notice in
+//! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice.
 use super::{Event, Shell, SystemService};
+use crate::shell::apps::AppId;
+use crate::shell::notify::store::Notification;
+use bifrost_core::disk_events::{Disk, DiskEvent};
 use bifrost_core::disk_scan;
 use bifrost_core::disk_session::Session;
 use bifrost_core::disk_wire;
@@ -32,6 +38,8 @@ pub struct Disks {
     /// Whether a snapshot has been taken; the first one is recorded without events.
     primed: bool,
     next_scan: f64,
+    /// The removable whole disks that appeared in the last read, waiting for their notice.
+    arrivals: Vec<Disk>,
 }
 
 impl Default for Disks {
@@ -43,7 +51,14 @@ impl Default for Disks {
 impl Disks {
     /// A service reading the device tree at `sys_block` and the mount table file at `mounts`.
     pub fn at(sys_block: impl Into<PathBuf>, mounts: impl Into<PathBuf>) -> Self {
-        Disks { session: Session::new(), sys_block: sys_block.into(), mounts: mounts.into(), primed: false, next_scan: 0.0 }
+        Disks {
+            session: Session::new(),
+            sys_block: sys_block.into(),
+            mounts: mounts.into(),
+            primed: false,
+            next_scan: 0.0,
+            arrivals: Vec::new(),
+        }
     }
 
     /// Reads the devices now and returns the events since the last read (none the first time).
@@ -54,6 +69,13 @@ impl Disks {
         if !std::mem::replace(&mut self.primed, true) {
             return Vec::new();
         }
+        self.arrivals = events
+            .iter()
+            .filter_map(|e| match e {
+                DiskEvent::Appeared(d) if d.removable && self.sys_block.join(&d.bsd_name).is_dir() => Some(d.clone()),
+                _ => None,
+            })
+            .collect();
         events
             .iter()
             .map(|e| {
@@ -112,12 +134,18 @@ impl SystemService for Disks {
         self.handle(app_id, method, params)
     }
 
-    fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         if t < self.next_scan {
             return Vec::new();
         }
         self.next_scan = t + SCAN_EVERY_MS;
-        self.rescan()
+        let events = self.rescan();
+        let now = crate::bare::sys::wall_time().0;
+        for disk in std::mem::take(&mut self.arrivals) {
+            let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
+            shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now));
+        }
+        events
     }
 }
 
@@ -177,6 +205,19 @@ mod tests {
         assert!(s.rescan().is_empty());
         fs::remove_dir_all(sys.join("sdb")).unwrap();
         assert_eq!(names(&s.rescan()), vec!["disk_disappeared:sdb"]);
+    }
+
+    #[test]
+    fn a_removable_disk_arrival_is_queued_for_a_notice_and_a_fixed_one_is_not() {
+        let (sys, mounts) = fixture("notice");
+        let mut s = Disks::at(&sys, &mounts);
+        s.rescan();
+        add_disk(&sys, "sdb", "1", "2000");
+        s.rescan();
+        assert_eq!(s.arrivals.iter().map(|d| d.bsd_name.as_str()).collect::<Vec<_>>(), vec!["sdb"]);
+        add_disk(&sys, "sdc", "0", "3000");
+        s.rescan();
+        assert!(s.arrivals.is_empty());
     }
 
     #[test]

@@ -189,7 +189,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/services/disks.rs",
    "status": "partial",
-   "note": "disk attach handling; no general USB attach notice; built on arm; not yet verified on Midget",
+   "note": "disk attach handling; a removable disk that appears posts a USB Disk Connected notice in Settings (built 2026-10-17, tests shell::services::disks::tests); built on arm; not yet verified on Midget",
    "rea": [],
    "method": "heuristic"
   },
