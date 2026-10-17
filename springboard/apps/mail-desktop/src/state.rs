@@ -15,6 +15,7 @@ use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
+use bifrost_app::controls::recipient_recents::RecipientRecents;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
@@ -35,6 +36,9 @@ pub struct Line {
 
 /// Most lines the activity list keeps.
 pub const MAX_ACTIVITY: usize = 80;
+
+/// How many recent recipients Mail keeps for suggestions (the same cap as the recents menu).
+pub const MAX_RECIPIENT_RECENTS: usize = 50;
 
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
@@ -645,6 +649,9 @@ pub struct Mail {
     pub arrived: Vec<(String, Row)>,
     /// What Mail did lately, oldest first: each line starts with the time (Mailbox > Show Activity).
     pub activity: Vec<String>,
+    /// The addresses Mail sent to, most recent first, offered again as suggestions when a recipient is typed. Kept for
+    /// this run only.
+    pub recipients: RecipientRecents,
 }
 
 impl Mail {
@@ -687,6 +694,7 @@ impl Mail {
             find: None,
             arrived: Vec::new(),
             activity: Vec::new(),
+            recipients: RecipientRecents::new(MAX_RECIPIENT_RECENTS),
         }
     }
 
@@ -1759,6 +1767,18 @@ mod tests {
         a.imap = Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
         a.smtp = Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
         a
+    }
+
+    #[test]
+    fn sent_addresses_are_suggested_most_recent_first() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert!(mail.recipients.is_empty());
+        mail.recipients.record("Ana@Example.com", "");
+        mail.recipients.record("bo@example.com", "");
+        mail.recipients.record("ana@example.com", "");
+        let got: Vec<String> = mail.recipients.suggest("", 10).into_iter().map(|r| r.address).collect();
+        assert_eq!(got, vec!["ana@example.com", "bo@example.com"]);
+        assert_eq!(mail.recipients.suggest("bo", 10).len(), 1);
     }
 
     fn listed(uid: u32, subject: &str) -> Listed {
