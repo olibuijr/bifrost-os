@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 — 2026-10-17
+
+- The Megolm and Olm sessions are kept in an encrypted file in the app's data directory, not in a keychain item. The keychain caps an item at 8 KiB, so a long-lived account overflowed it. The file is sealed with ChaCha20-Poly1305 under the pickle key (which stays in the keychain), the account id is authenticated with it, and each save is written to a temporary file that is flushed and renamed over the old one. A changed byte, a wrong key or another account's file is refused.
+- Olm sessions are persisted with the Megolm ones, so a room key message still in flight opens after a restart.
+- A sessions item of 0.6.x is read once, migrated to the file, and removed from the keychain.
+- The keychain account and the Passwords login are the full user id the server returns at sign-in, whatever was typed. A login saved under a bare name is moved: its device, key and Passwords item are copied to the full id and the bare ones are removed. A bare name typed later starts a new device, because its items have moved.
+- Pictures and files in encrypted rooms are sent encrypted: AES-256-CTR under a random key with the Matrix file object (JWK, iv, SHA-256 of the ciphertext), uploaded as ciphertext under a neutral name. The send is no longer refused. Api::fetch_attachment downloads a received encrypted picture and checks its hash before it decrypts; the window does not show downloaded pictures yet.
+- AES-256-CTR is ctr_xor in src/attachment.rs, built on bifrost_core's AES block function, with the NIST SP 800-38A vectors (F.5.1 and F.5.5) in its tests.
+- Headless tests cover the sessions file (round trip, tamper, wrong key or account, atomic replace), the sessions text with Olm sessions, the account normalisation and the move, the CTR vectors, base64, and the file object round trip.
+- Not yet: device verification, key backup, cross-signing, encrypted reactions, showing received encrypted pictures. The changes are not built or run on Midget.
+
 ## 0.6.1 — 2026-10-17
 
 - The encryption state survives a restart. The device (its id and encrypted Olm account), the pickle key and the Megolm sessions are app keychain items per homeserver and login (matrix-key, matrix-device, matrix-sessions). A sign-in asks the login for the stored device id, so the same device is reused; a new one is made only when none is stored.
