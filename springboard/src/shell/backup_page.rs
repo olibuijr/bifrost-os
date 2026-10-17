@@ -154,6 +154,7 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::list::Accessory;
 
     #[test]
     fn update_page_offers_the_step_for_each_state() {
@@ -192,26 +193,27 @@ mod tests {
         let s = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
         let first = &s.groups[0];
         assert_eq!(first.items[0].label, "This Computer");
-        assert!(first.items[0].leading_check, "the data folder is the default");
+        assert_eq!(first.items[0].accessory, Accessory::Check(true), "the data folder is the default");
         assert_eq!(first.items[0].action, Action::Pick(Pick::BackupDestination(0)));
         let chosen = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "/run/media/u/USB" });
-        assert!(!chosen.groups[0].items[0].leading_check);
+        assert_eq!(chosen.groups[0].items[0].accessory, Accessory::Check(false));
     }
 
     #[test]
     fn delete_backups_is_offered_and_dim_without_a_backup() {
         let u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
         let none = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
-        assert_eq!(none.groups[2].items[0].action, Action::Run(Command::DeleteBackups));
-        assert_eq!(none.groups[2].items[0].tint, Tint::Dim);
+        // Groups: destination, backup, restore, delete.
+        assert_eq!(none.groups[3].items[0].action, Action::Run(Command::DeleteBackups));
+        assert_eq!(none.groups[3].items[0].tint, Tint::Dim);
         let some = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: Some(1), destination: "" });
-        assert_eq!(some.groups[2].items[0].tint, Tint::Red);
+        assert_eq!(some.groups[3].items[0].tint, Tint::Red);
     }
 
     #[test]
     fn restore_is_dim_without_a_backup() {
         let u = Updater::new(std::env::temp_dir().join("sb-nonexistent-dir"), None);
         let s = spec(PageId::Backup, &PageState { updater: &u, auto_update: true, backup_before_update: true, backup_note: "", latest_backup: None, destination: "" });
-        assert_eq!(s.groups[1].items[0].tint, Tint::Dim);
+        assert_eq!(s.groups[2].items[0].tint, Tint::Dim);
     }
 }
