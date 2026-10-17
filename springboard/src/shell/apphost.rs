@@ -2781,6 +2781,12 @@ fn queue_system_sound(name: String) {
     }
 }
 
+/// Queues the sound of a request the shell delivers for an app (`UNNotificationSound`); names outside the alert tones
+/// are dropped, as for `PlaySystemSound`.
+pub(super) fn queue_request_sound(name: &str) {
+    queue_system_sound(name.to_string());
+}
+
 /// Takes the queued system sounds. The shell's frame loop plays each one on the sound-effects role.
 pub fn take_system_sounds() -> Vec<String> {
     std::mem::take(&mut *SYSTEM_SOUNDS.lock().unwrap_or_else(|e| e.into_inner()))
