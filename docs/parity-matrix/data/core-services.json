@@ -124,7 +124,7 @@
       "apple": "NSWorkspace.icon(forFile:), Icon Storage article",
       "bifrost": "springboard/sdk/src/workspace.rs (icon_for_content_type, icon_for_file); springboard/sdk/src/widgets.rs (folder_icon)",
       "status": "partial",
-      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons."
+      "note": "Glyph names for content types and file names, and the procedural folder icon drawn offscreen and checked pixel by pixel, are tested in springboard/sdk/tests/parity_sdk-tests-16.rs. Gap: no bitmap icon sets or custom folder icons. Built 2026-10-17: Built 2026-10-17: bitmap icon sets per content type with nearest-ancestor lookup, a custom folder icon, and the best representation for a target and scale (springboard/sdk/src/icon_images.rs, IconImages, on ImageObject); tests icon_images::tests. Gap left: the shell does not draw these sets in Finder-style views yet. Not run: lead runs the tests."
     },
     {
       "feature": "Carbon Core (legacy managers)",
