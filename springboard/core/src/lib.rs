@@ -134,6 +134,7 @@ pub mod malware_scan;
 pub mod xml_query;
 pub mod dns_settings;
 pub mod content_filter;
+pub mod link_tracking;
 pub mod pref_session;
 pub mod relay;
 pub mod dns_message;

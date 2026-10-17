@@ -887,8 +887,11 @@ impl Browser {
     }
 
     /// Loads an address the user chose. While the network is down the tab shows the offline page instead, and the
-    /// address loads again when the network comes back.
+    /// address loads again when the network comes back. Campaign and click-identifier parameters (`utm_source`,
+    /// `fbclid`, ...) are dropped from the address first (`bifrost_core::link_tracking`).
     fn load_chosen(&mut self, view: WebViewId, url: &str) {
+        let cleaned = bifrost_core::link_tracking::strip_tracking(url);
+        let url = cleaned.url.as_str();
         let offline = self.net.offline();
         let Some(p) = self.pool.as_mut() else { return };
         if offline {

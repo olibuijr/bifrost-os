@@ -378,6 +378,8 @@ fn run() -> std::io::Result<()> {
     shell.set_volume(vol.level());
     // the stills of the dynamic wallpaper, in index order (the day is cut into one slice per still)
     let dynamic_stills: Vec<String> = springboard::shell::prefs::Prefs::load(format!("{dir}/wallpapers/index.ini")).entries().map(|(id, _)| id.to_string()).collect();
+    // the day wallpapers installed apps provide: while one is on screen the clock picks its picture
+    let app_days: Vec<springboard::shell::wallpaper_types::Provided> = springboard::shell::wallpaper_types::installed(&springboard::shell::store::install::installed_apps());
     // wallpaper changes the info tick asks for; they join the next turn's effects
     let mut dynamic_fx: Vec<Effect> = Vec::new();
     // the help index reads every installed help book; built on a worker so the first frame is not held up
@@ -1356,6 +1358,14 @@ fn run() -> std::io::Result<()> {
                 night_mult = m;
                 shell.force_full_redraw();
             }
+            // an app's day wallpaper on screen follows the clock through that app's pictures
+            if let Some(day) = springboard::shell::wallpaper_types::day_of(&app_days, &current_wallpaper) {
+                let minute = springboard::shell::notify::schedule::Schedule::minute_of_day(unix, offset) as u32;
+                let id = springboard::shell::wallpaper_types::current_id(day, minute);
+                if id != current_wallpaper && std::path::Path::new(&format!("{dir}/wallpapers/{id}.raw")).exists() {
+                    dynamic_fx.push(Effect::Wallpaper(id));
+                }
+            }
             // dynamic wallpaper (`wallpaper_dynamic=1` in settings.ini): the packed stills change with the time of day
             if prefs.get("wallpaper_dynamic") == Some("1") {
                 let minute = springboard::shell::notify::schedule::Schedule::minute_of_day(unix, offset) as u32;
@@ -2111,8 +2121,9 @@ fn cache_still(dir: &str, id: &str, src: &std::path::Path, tw: usize, th: usize)
     Image::from_raw(&fs::read(&thumb_path).ok()?)
 }
 
-/// The wallpapers the installed apps provide (`shell::wallpaper_types`): the first picture of each, cached as a
-/// still like a photo (`wallpapers/app_<app id>.raw`), so Settings lists them beside the packed stills.
+/// The wallpapers the installed apps provide (`shell::wallpaper_types`): every picture cached as a still like a
+/// photo (`wallpapers/app_<app id>.raw`, then `appday_<app id>_<n>.raw` for the rest of a day), and the first one
+/// listed in Settings beside the packed stills. A day wallpaper is stepped through by the clock in the main loop.
 #[cfg(target_os = "linux")]
 fn app_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
     use springboard::gfx::Image;
@@ -2123,10 +2134,12 @@ fn app_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpape
         .into_iter()
         .filter_map(|p| {
             let app = apps.iter().find(|a| a.id == p.app)?;
-            let picture = app.dir.join(p.images.first()?);
-            let stem: String = p.app.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-            let id = format!("app_{stem}");
-            let thumb = cache_still(dir, &id, &picture, base.w, base.h)?;
+            // every picture of a day is cached so the clock can step through them; Settings lists the first
+            for (k, image) in p.images.iter().enumerate().skip(1) {
+                let _ = cache_still(dir, &wallpaper_types::picture_id(&p.app, k), &app.dir.join(image), base.w, base.h);
+            }
+            let id = wallpaper_types::picture_id(&p.app, 0);
+            let thumb = cache_still(dir, &id, &app.dir.join(p.images.first()?), base.w, base.h)?;
             Some(springboard::shell::wallpaper_page::Wallpaper { id, name: app.name.clone(), thumb })
         })
         .collect()

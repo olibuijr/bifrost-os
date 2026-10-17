@@ -482,6 +482,8 @@ enum Drawn {
 pub struct Shell {
     pub w: i32,
     pub h: i32,
+    /// effects a spoken Voice Control command produced; the next tick returns them to the main loop
+    voice_fx: Vec<Effect>,
     ui: Ui,
     layout: Layout,
     /// the caller's mapping of the home still (stays mapped; never owned here)
@@ -1122,6 +1124,7 @@ impl Shell {
             braille: Default::default(),
             popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
+            voice_fx: Vec::new(),
             dirty: true,
             perf_only: false,
             overview:Default::default(),
@@ -3308,6 +3311,7 @@ impl Shell {
         self.fx_tick(t);
         self.metrics_tick(t);
         let mut fx = self.tick_inner(t);
+        fx.append(&mut self.voice_fx);
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx
     }

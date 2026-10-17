@@ -20,6 +20,9 @@ use bifrost_core::json::Json;
 pub const SERVICE: &str = "widgets_timeline";
 /// The event the shell sends when a timeline's reload date has passed. Its body is `{"kind": "..."}`.
 pub const EVENT_RELOAD: &str = "reload";
+/// The event the shell sends to an app that observes a widget (see [`observe`]) when the person adds, removes or
+/// resizes it. Its body is `{"kind": "...", "on_screen": bool, "large": bool}`.
+pub const EVENT_VISIBILITY: &str = "visibility";
 
 /// One dated entry of a widget timeline: shown from `date` until the next entry's date.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,15 +37,27 @@ pub struct Entry {
 pub enum Event {
     /// The shell asks for a new timeline for `kind`.
     Reload { kind: String },
+    /// The person changed an observed widget: it is `on_screen` (in the column with an entry for now) and `large` or not.
+    Visibility { kind: String, on_screen: bool, large: bool },
 }
 
 /// Decodes a service event: `Some` for this service's events the SDK knows, `None` for any other.
 pub fn parse_event(service: &str, event: &str, body: &Json) -> Option<Event> {
-    if service != SERVICE || event != EVENT_RELOAD {
+    if service != SERVICE {
         return None;
     }
     let kind = body.str_field("kind")?;
-    Some(Event::Reload { kind })
+    match event {
+        EVENT_RELOAD => Some(Event::Reload { kind }),
+        EVENT_VISIBILITY => {
+            let flag = |key: &str| match body.get(key) {
+                Some(Json::Bool(b)) => Some(*b),
+                _ => None,
+            };
+            Some(Event::Visibility { kind, on_screen: flag("on_screen")?, large: flag("large")? })
+        }
+        _ => None,
+    }
 }
 
 /// Replaces the timeline `kind` with `entries` under `policy`.
@@ -87,6 +102,17 @@ pub fn end_activity(ctx: &Ctx, id: u32, final_content: Option<(&str, &str)>, dis
 /// Lists this app's live activities on screen: `[{id, state, title, text}]`.
 pub fn activities(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "activities", &Json::Null)
+}
+
+/// Lists this app's widgets as the person arranged them: `[{kind, on_screen, large, configurable, title?}]`.
+pub fn widgets(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "widgets", &Json::Null)
+}
+
+/// Starts (`on`) or stops observing the widget `kind`: the shell then sends a [`Event::Visibility`] each time the
+/// person adds, removes or resizes it.
+pub fn observe(ctx: &Ctx, kind: &str, on: bool) -> u32 {
+    service::call(ctx, SERVICE, "observe", &obj(&[("kind", Json::Str(kind.into())), ("on", Json::Bool(on))]))
 }
 
 /// The method name and JSON body of a `reload` call. Split out so the encoding can be checked without a context.
@@ -175,6 +201,19 @@ mod tests {
         assert_eq!(parse_event("dock", EVENT_RELOAD, &body), None, "another service's event is not ours");
         assert_eq!(parse_event(SERVICE, "other", &body), None);
         assert_eq!(parse_event(SERVICE, EVENT_RELOAD, &Json::Null), None, "a reload event names its kind");
+    }
+
+    #[test]
+    fn the_visibility_event_carries_the_widget_state_and_needs_all_of_it() {
+        let body = Json::Obj(vec![
+            ("kind".into(), Json::Str("next".into())),
+            ("on_screen".into(), Json::Bool(true)),
+            ("large".into(), Json::Bool(false)),
+        ]);
+        assert_eq!(parse_event(SERVICE, EVENT_VISIBILITY, &body), Some(Event::Visibility { kind: "next".into(), on_screen: true, large: false }));
+        let partial = obj(&[("kind", Json::Str("next".into()))]);
+        assert_eq!(parse_event(SERVICE, EVENT_VISIBILITY, &partial), None);
+        assert_eq!(parse_event("dock", EVENT_VISIBILITY, &body), None);
     }
 
     #[test]

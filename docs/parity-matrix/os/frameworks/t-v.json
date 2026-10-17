@@ -4733,8 +4733,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the verifiable distributed aggregation framework, which splits a measurement into shares for privacy-preserving telemetry aggregation by remote aggregators (analytics upload). The index holds only Info.plist, version.plist and the binary, no resources and no host bundle. BifrOSt uploads no analytics.",
    "rea": [],
    "method": "assessed"
   },
@@ -4753,11 +4753,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/emitter.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/scene3d.rs, springboard/render/src/emitter.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "particle_system3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "emitter::tests"
+    }
+   ],
+   "ready_note": "The effects engine (particles, emitters, 3D scene graph) is covered by the seeded 2D and 3D particle emitters and the scene tree; the index shows the reference engine is a Metal pipeline (default.metallib, radiance/irradiance .ktx), which BifrOSt replaces with its own renderer."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VFXAssets.framework",
@@ -4775,8 +4799,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple-authored effect assets (com.apple.realitykit.vfx.general.vfx and com.apple.vfx.private.remoteEdition.vfx with scene.vfxbin and assets.json). Clean-room rule: no Apple data or artwork is copied; BifrOSt effects are built from its own emitters.",
    "rea": [],
    "method": "assessed"
   },
@@ -4795,11 +4819,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/emitter.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/scene3d.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "emitter::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "particle_system3d::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "scene3d::tests"
+    }
+   ],
+   "ready_note": "Base library of the effects engine (the index shows only a binary and Info.plist, also shipped for the iOS-support layer). BifrOSt implements the engine in the ui emitter and scene modules, so the base layer is internal plumbing of that module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VectorKit.framework",
@@ -4816,11 +4859,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/maptiles/tiles.rs, springboard/src/maptiles/cache.rs, springboard/src/maptiles/source.rs, springboard/src/maptiles/compose.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::tiles::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::cache::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::source::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::compose::tests"
+    }
+   ],
+   "ready_note": "Map display is done by the shared map tile modules (Web Mercator math, OpenStreetMap-compatible tile source with a pacing policy, on-disk cache with an offline area, composition) used by Maps and Photos Places. They draw raster tiles, not the reference vector tile format served by its geo service."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VectorSearch.framework",
@@ -4837,11 +4904,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/embedding.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "embedding::tests"
+    }
+   ],
+   "ready_note": "On-device text vectors and nearest-neighbour search (hashed bag-of-words embedding with cosine ranking, EmbeddingIndex::nearest). It is not a neural embedding model; nothing is downloaded."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VideoEffect.framework",
@@ -4859,8 +4935,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: camera and call video effects (portrait blur, studio lighting, reactions) that run machine-learning models on Apple silicon image hardware. The index shows a bare framework (Info.plist, version.plist, binary). BifrOSt ships no ML camera effects.",
    "rea": [],
    "method": "assessed"
   },
@@ -4880,8 +4956,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Photos-style video content analysis (scene and object understanding) built on Apple ML model packs; the only other index entry is its feature-flag domain plist (System/Library/FeatureFlags/Domain/VideoIntelligence.plist). BifrOSt Photos does no on-device content classification.",
    "rea": [],
    "method": "assessed"
   },
@@ -4901,8 +4977,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple silicon video enhancement. Index: espresso ML weights (mini-film-ifr-nano, ml_jfs_unet_res_c, repcain-vit-b12), cnn_frame_enhancer_192p .hwx binaries for the H13 to H17 neural engine generations, and a VCPRealtimeEncoder codec plug-in. BifrOSt plays and encodes video through its own codec catalogue (ui video_session) and uses no ML frame models.",
    "rea": [],
    "method": "assessed"
   },
@@ -5005,11 +5081,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/remote_view.rs, springboard/core/src/extension_process.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "remote_view::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "extension_process::tests"
+    }
+   ],
+   "ready_note": "A view drawn by another process and shown in the host window: the host-side remote view state machine (connect, bounds, placeholder, loss) and the extension process table with its connections. Built-in and external windows are composed by the window server (one rendering path), which is the transport the reference ViewBridge provided."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VirtualGarage.framework",
@@ -5027,8 +5117,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: vehicle profiles for car and in-car Maps features, synced through the Apple account (index: bare framework). BifrOSt has no vehicle integration or account sync.",
    "rea": [],
    "method": "assessed"
   },
@@ -5048,8 +5138,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, owner Vision, which no SDK file assesses yet",
+   "status": "n/a",
+   "note": "n/a: Apple Vision machine-learning model packs (index: personsemantics-v7.bundle weights, smartcam and junk-hierarchy label sets, landmark gating labels). BifrOSt ships no Apple model weights; classification labels come from the caller (ui visual_search).",
    "rea": [],
    "method": "assessed"
   },
@@ -5069,8 +5159,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, owner Vision, which no SDK file assesses yet",
+   "status": "n/a",
+   "note": "n/a: Live Text, subject lifting and Visual Look Up UI on top of Apple Vision models (index: 104 entries, mostly localised strings, and an accessibility bundle com.apple.VisionKitCore.axbundle). It needs Apple ML models and a cloud look-up. BifrOSt has barcode decoding (ui barcode) but no text recognition or lookup service.",
    "rea": [],
    "method": "assessed"
   },
@@ -5090,8 +5180,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: two precompiled Apple GPU shader libraries only (VSTPrecompiledPipelines.metallib, VSTShaders.metallib) and no code BifrOSt could share; BifrOSt renders through its own Vulkan/GPU pipeline (render, gpu).",
    "rea": [],
    "method": "assessed"
   },
@@ -5194,11 +5284,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Camera frames become scenes (visual_search_wire::scene_from_pixels with SceneKind::Photo or Stream, from the shell's packed pixels) and take the same path as a screenshot: shrunk to fit a control request, delivered to the apps that answer, merged. This is plumbing of the visual search module; no camera shot UI starts it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework",
@@ -5215,11 +5334,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Scene model (screenshot, photo, stream; labels; crop selection), the app return path (sdk visual_search::VisualSearchProvider, matches stamped with the answering app) and the delivery of a scene to every running app that declares the visual-search intent over its control socket (shell::intents::visual_search, wire format in visual_search_wire). The reference classification model (visualgrounding .mlmodelc) is an Apple ML pack and is not mirrored: labels come from the caller. Nothing in the shell UI triggers a search yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCoreDDSupport.framework",
@@ -5236,11 +5384,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "Support split of the core (the index shows a bare framework hosted next to VisualIntelligenceCore): scene labels travel in the request and reach the apps, who match them (label_score). Internal plumbing of the visual search module."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceServices.framework",
@@ -5257,11 +5434,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
+   "bifrost": "springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs, springboard/src/shell/intents.rs",
    "status": "partial",
    "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "visual_search_wire::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    }
+   ],
+   "ready_note": "The visualintelligenced service role (the index shows the daemon binary): the shell delivers a scene to the apps that answer and merges their matches in shell::intents::visual_search; the app side answers with sdk visual_search_wire::serve. Tested with an in-memory app transport and a real Unix socket."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework",
@@ -5279,8 +5485,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/visual-intelligence.json",
-   "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Checked 2026-10-17: app return path, scene labels and crop selection exist as models (sdk visual_search, ui visual_search); system delivery of camera or screenshot scenes is not built. Refreshed 2026-10-17: not ready, remaining: No system delivery of camera or screenshot scenes to third-party apps (the core of the framework). | App return path is a model only: sdk visual_search::VisualSearchProvider answers a Scene with Matches, and search() stamps each match with the provider app id (tests in sdk/src/visual_search.rs); the shell does not call it yet. | Scene labels and pixels exist (ui visual_search::Scene::new, with_labels, pixel); the caller supplies the labels, nothing classifies the scene. | Object selection exists as Scene::crop(PixelRect) in ui visual_search; no screenshot UI feeds it yet. | App Intents are not exposed to a Shortcuts app or to a Siri-like assistant; entity queries are reachable only through the control socket and the Spotlight shortcut list.",
+   "status": "n/a",
+   "note": "n/a: the phone-shaped capture interface of the reference feature (index: Generic3x4-depth.jpg and Generic9x16-depth.jpg placeholder images, a Metal library, Assets.car and a Metadata.appintents for Apple Intelligence actions). BifrOSt has no camera-control capture flow or Apple Intelligence schema; results are an app-facing API and a merge, not a panel.",
    "rea": [],
    "method": "assessed"
   },
@@ -5405,8 +5611,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Neural Engine model bundles for Voice Control action recognition (index: ANE_AX_FP16_20240430.e5 model.bundle with universal.bundle). BifrOSt Voice Control parses commands from the on-device whisper transcript instead.",
    "rea": [],
    "method": "assessed"
   },
@@ -5425,11 +5631,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/voice_commands.rs, springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/services/recognizer.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_commands::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "Spoken commands run: the shell holds its own on-device recognition while the voice_control preference is 1 (recognizer.rs voice_step, consent and model required, never takes the microphone from an app), each final transcript runs through Shell::voice_press (\"press Save\", \"run Daily Summary\"), and the effects go out with the next shell tick. Settings has no switch for the preference yet; it is set in settings.ini."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceControlUI.framework",
@@ -5448,7 +5673,7 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "private framework, no plausible owner found",
+   "note": "Voice Control overlays are not drawn. The grammar and numbering exist (ui voice_commands: Overlay::Numbers/Names/Grid, number_targets, resolve) and the session runs (services/recognizer.rs), but no shell code draws numbered or gridded labels over the screen, and Settings has no Voice Control switch. Needs: an overlay drawn in Shell::draw from the element map (axmap) rectangles, driven by Command::Show/Hide, plus a Settings row for the voice_control preference.",
    "rea": [],
    "method": "assessed"
   },
@@ -5467,11 +5692,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/voice_processing.rs, springboard/ui/src/echo_cancel.rs, springboard/ui/src/voice_activity.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_processing::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "echo_cancel::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_activity::tests"
+    }
+   ],
+   "ready_note": "Voice processing chain for calls and recording: NLMS echo cancellation, noise gate, automatic gain control to a target level with a gain limit, bypass and mute (voice_processing::VoiceProcessor), plus voice activity detection. A pure model over sample blocks; no device is opened here. It does not separate speech from steady noise of the same loudness."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceServices.framework",
@@ -5488,11 +5732,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/speech_engine.rs, springboard/sdk/src/speech.rs, springboard/src/shell/services/speech.rs, springboard/cmd/src/say.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "speech_engine::tests"
+    }
+   ],
+   "ready_note": "Speech runs through espeak-ng: engine programs, voice and rate arguments and the voice listing parser are in core speech_engine; the speech shell service and the SDK speech API drive it. The reference preinstalled voice models (fastspeech2 .mlmodelc assets) are Apple ML packs and are not used."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceShortcutClient.framework",
@@ -5509,11 +5762,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shortcuts.rs, springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs, springboard/sdk/src/intent_catalog.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Client side of running shortcuts and app intents: the shortcut store and action library shared by the Shortcuts app, its control socket and the shortcuts command, the intent catalogue an app declares, and the shell runner that calls intent.<id> on an app control socket."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceShortcuts.framework",
@@ -5530,11 +5802,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/intents.rs, springboard/src/shortcuts.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::accessibility::voice_control::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shortcuts::tests"
+    }
+   ],
+   "ready_note": "Running a shortcut by voice: \"run Daily Summary\" or \"run shortcut Daily Summary\" picks the runnable app shortcut with that title (case and spacing ignored, a title shared by two shortcuts is refused), opens its app and sends it the intent, as Search does. Needs the Voice Control session (see VoiceControl)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceTrigger.framework",
@@ -5552,8 +5843,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the always-listening hot-phrase detector of the reference voice assistant. Index: framework plus a host in System/Library/Extensions/AppleAOPVoiceTrigger.kext, i.e. Apple always-on processor firmware and Apple-trained trigger models. BifrOSt keeps the microphone off until the person starts it (privacy-first) and has no wake word.",
    "rea": [],
    "method": "assessed"
   },
@@ -5572,11 +5863,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/vcard.rs, springboard/ui/src/contact_vcard.rs, springboard/apps/contacts-desktop/src/exchange.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "vcard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "contact_vcard::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-contacts",
+     "filter": "exchange::tests"
+    }
+   ],
+   "ready_note": "vCard 3.0 and 4.0 read and write for contacts: names, organisation, labelled phones, emails, addresses, URLs, relations, social profiles, dates, photo, with line folding and escaping; the Contacts app imports and exports through it."
   }
  ]
 }

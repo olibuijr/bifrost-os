@@ -103,8 +103,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: the wireless proximity daemon behind Continuity, Handoff and AirDrop discovery (Apple-proprietary BLE advertising and proximity protocol with no open equivalent). Index: bare framework (Info.plist, version.plist, binary).",
    "rea": [],
    "method": "assessed"
   },
@@ -195,11 +195,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs, springboard/src/bin/shell.rs",
    "status": "partial",
    "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built 2026-10-17: wallpaper_types::installed reads the installed manifests, and the shell caches each app's first picture as wallpapers/app_<id>.raw (springboard/src/bin/shell.rs app_wallpapers) so the Settings Wallpaper grid lists it and choosing it uses the still path (tests wallpaper_types::tests). Gap: a day wallpaper shows its first picture only, and no extension runs to draw a wallpaper.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    }
+   ],
+   "ready_note": "Apps provide wallpapers through their manifest (still or day, checked against the package at install), Settings lists them, and a day wallpaper on screen steps through all of its pictures with the clock (shell.rs app_wallpapers caches every picture; wallpaper_types::day_of and current_id pick the one for the minute). BifrOSt runs no extension code in the wallpaper layer, so a wallpaper that draws itself live (the reference extension model, default.metallib) is not offered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperFoundation.framework",
@@ -645,11 +654,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/dns_proxy.rs, springboard/core/src/content_filter.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "dns_proxy::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "content_filter::tests"
+    }
+   ],
+   "ready_note": "DNS-level and URL-level web filtering decisions: the DNS proxy policy (most specific domain rule wins, refuse with NXDOMAIN or forward, one question matched) and the URL filter with allow or block rules and fail-closed. Pure decision models; the process that sits in front of the resolver passes each query to them."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebPrivacy.framework",
@@ -666,11 +689,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/link_tracking.rs, springboard/apps/browser/src/main.rs",
    "status": "os",
    "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "link_tracking::tests"
+    }
+   ],
+   "ready_note": "Link tracking protection: tracking and campaign query parameters (utm_*, fbclid, gclid, ...) are removed from addresses (the browser strips them from every address the person chooses), and a tracker host list blocks third-party requests to listed hosts, with person-added and allowed hosts. All local; nothing is reported or fetched. Private click measurement (advertising attribution reported to the reference servers) is not mirrored. The browser engine gives no request hooks, so the host list is a model that is not applied to page requests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Welcome.framework",
@@ -772,8 +804,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "Remaining from data file core-wlan (refreshed 2026-10-17): Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs. | The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs. | The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI. | Link quality beyond RSSI (noise, transmit rate) is not reported.",
+   "status": "n/a",
+   "note": "n/a: Apple Wireless Direct Link (AWDL), the proprietary peer-to-peer Wi-Fi used by AirDrop and Continuity, with no open equivalent. BifrOSt requests access-point and ad-hoc links through its own wlan service (sdk wlan_service).",
    "rea": [],
    "method": "assessed"
   },
@@ -793,8 +825,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "Remaining from data file core-wlan (refreshed 2026-10-17): Channel width is not decoded (the scan flags carry no width); channel, band and PHY mode are decoded in springboard/sdk/src/wlan.rs. | The configuration model has no channel setting; access-point (request_host) and ad-hoc (request_ad_hoc) requests exist in springboard/sdk/src/wlan_service.rs. | The Other Network sheet offers only the common security choices; WEP and WPA-only are modelled in springboard/src/net/wifi_config.rs (Security) but not offered in the UI. | Link quality beyond RSSI (noise, transmit rate) is not reported.",
+   "status": "n/a",
+   "note": "n/a: Apple Wi-Fi network-quality telemetry and cloud assets. Index: ThreeBars Core Data model and ThreeBarsXPCService (network quality scoring database), WiFiCloudAssetsXPCService with beaconData.db and a cloud-defaults plist, default_factors_1650.pb. BifrOSt scans, joins and auto-joins locally (src/net/wifi.rs) and sends no network-quality data.",
    "rea": [],
    "method": "assessed"
   },
@@ -869,11 +901,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
    "status": "partial",
    "note": "Widget state is kept by the shell (springboard/src/shell/widgets/mod.rs, today.rs); no app-facing observation API.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::widgets_timeline::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "widgets_timeline::tests"
+    }
+   ],
+   "ready_note": "An app can list its own widgets with what the person arranged (on screen, size, configurable, current title: widgets) and observe one (observe), then receives a visibility event when the person adds, removes or resizes it in Edit Widgets. The shell keeps the widget state; the SDK client has widgets, observe and Event::Visibility."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WidgetRenderer.framework",
@@ -1012,8 +1058,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "n/a",
+   "note": "n/a: Apple Wireless Diagnostics (AWD) telemetry. Index: libAWDProtobuf* libraries (Bluetooth, Location, FaceTime and iMessage), AWDMetadata.bin and hotship.config, i.e. metric protobufs and an upload configuration. BifrOSt's own Wireless Diagnostics app (apps/wireless-diagnostics-desktop) reads the local link and shows a report; nothing is uploaded.",
    "rea": [],
    "method": "assessed"
   },
