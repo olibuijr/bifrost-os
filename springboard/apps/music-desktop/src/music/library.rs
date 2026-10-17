@@ -409,7 +409,7 @@ mod tests {
     fn scanned(title: &str, artist: Option<&str>, album: Option<&str>, track: Option<u32>, cover: bool) -> Scanned {
         Scanned {
             path: PathBuf::from(format!("/m/{}.mp3", title.replace(' ', "_"))),
-            tags: Tags { title: Some(title.into()), artist: artist.map(Into::into), album: album.map(Into::into), album_artist: None, track, year: None, cover: cover.then(|| b"\xFF\xD8".to_vec()), lyrics: None },
+            tags: Tags { title: Some(title.into()), artist: artist.map(Into::into), album: album.map(Into::into), album_artist: None, track, year: None, cover: cover.then(|| b"\xFF\xD8".to_vec()), lyrics: None, chapters: Vec::new() },
             duration_ms: Some(200_000.0),
             has_cover: cover,
             added: 0,

@@ -147,7 +147,7 @@
    "status": "partial",
    "bifrost": "springboard/apps/podcasts-desktop/src/chapters.rs:13",
    "note": "Podcast namespace chapter marks parsed from the feed, or read from the JSON file a podcast:chapters link names (fetched when the episode plays or its page opens; hidden entries skipped); listed on the episode page and in a Now Playing Chapters panel (tap to seek, current one highlighted). Built on parity/team-d-podcasts; not yet verified on Midget.",
-   "wire": "Chapter marks in ID3 CHAP or MP4 chapter atoms of downloaded files: the demuxer does not expose them yet, and streamed episodes are not read. Then verify the feed and JSON chapters on Midget."
+   "wire": "Chapter marks in ID3 CHAP and MP4 chapter lists are read now: springboard/src/media/chapters.rs and Tags::chapters (audiofile::read_tags). Still to do: feed a downloaded episode's Tags::chapters into the Now Playing Chapters panel and add previous and next chapter skip buttons; streamed episodes are not read. Then verify on Midget."
   },
   {
    "feature": "Per-show settings (auto-download, keep, order)",

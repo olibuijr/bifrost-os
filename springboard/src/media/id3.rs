@@ -4,6 +4,7 @@
 //! level. Everything else is skipped without being decoded.
 
 use super::audiofile::Tags;
+use super::chapters::Chapter;
 
 /// The byte size of the ID3v2 tag at the start of `bytes` (header
 /// included, footer included for 2.4), or 0 when there is none; the audio
@@ -25,10 +26,79 @@ pub fn parse(bytes: &[u8]) -> Option<Tags> {
         p += size.min(body.len());
     }
     let mut tags = Tags::default();
+    let mut chapters = Vec::new();
+    let mut tocs = Vec::new();
     while let Some(frame) = Frame::read(&body, &mut p, h) {
-        apply(&mut tags, frame);
+        if &frame.id == b"CHAP" {
+            chapters.extend(chap(&frame.data, h));
+        } else if &frame.id == b"CTOC" {
+            tocs.extend(ctoc(&frame.data));
+        } else {
+            apply(&mut tags, frame);
+        }
     }
+    tags.chapters = order_chapters(chapters, &tocs);
     Some(tags)
+}
+
+/// A CHAP frame: the element id (a NUL-terminated string), the start and end times in milliseconds, two byte
+/// offsets (unused here, 0xFFFFFFFF when absent) and sub-frames with the chapter's title (TIT2) and picture (APIC).
+fn chap(d: &[u8], h: Header) -> Option<(String, Chapter)> {
+    let nul = d.iter().position(|&b| b == 0)?;
+    let id = String::from_utf8_lossy(&d[..nul]).into_owned();
+    let times = d.get(nul + 1..nul + 17)?;
+    let start = be32(times, 0) as u64;
+    let end = be32(times, 4) as u64;
+    let subs = d.get(nul + 17..).unwrap_or(&[]);
+    let (mut title, mut image) = (None, None);
+    let mut p = 0;
+    while let Some(f) = Frame::read(subs, &mut p, h) {
+        match &f.id {
+            b"TIT2" if title.is_none() => title = decode_text(&f.data),
+            b"APIC" if image.is_none() => image = picture(&f.data, false),
+            _ => {}
+        }
+    }
+    Some((id, Chapter { start_ms: start, end_ms: Some(end), title, image }))
+}
+
+/// A CTOC frame: the element id (not kept), the flags (bit 1 marks a top-level table of contents), the child element ids in
+/// their play order. Its sub-frames are not needed.
+fn ctoc(d: &[u8]) -> Option<Toc> {
+    let nul = d.iter().position(|&b| b == 0)?;
+    let flags = *d.get(nul + 1)?;
+    let count = *d.get(nul + 2)? as usize;
+    let mut p = nul + 3;
+    let mut children = Vec::with_capacity(count);
+    for _ in 0..count {
+        let rest = d.get(p..)?;
+        let n = rest.iter().position(|&b| b == 0)?;
+        children.push(String::from_utf8_lossy(&rest[..n]).into_owned());
+        p += n + 1;
+    }
+    Some(Toc { top_level: flags & 0x02 != 0, children })
+}
+
+/// A parsed CTOC frame.
+struct Toc {
+    top_level: bool,
+    children: Vec<String>,
+}
+
+/// The chapters in play order: the children of the first top-level table of contents, in its order, with any chapter
+/// it does not list following by start time. Without a table of contents the chapters sort by start time.
+fn order_chapters(mut chapters: Vec<(String, Chapter)>, tocs: &[Toc]) -> Vec<Chapter> {
+    chapters.sort_by_key(|(_, c)| c.start_ms);
+    let mut ordered = Vec::with_capacity(chapters.len());
+    if let Some(toc) = tocs.iter().find(|t| t.top_level) {
+        for id in &toc.children {
+            if let Some(i) = chapters.iter().position(|(known, _)| known == id) {
+                ordered.push(chapters.remove(i));
+            }
+        }
+    }
+    ordered.extend(chapters);
+    ordered.into_iter().map(|(_, c)| c).collect()
 }
 
 #[derive(Clone, Copy)]
@@ -195,6 +265,117 @@ fn resync(d: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Zero bytes left after the frames, so a later edit can grow the tag in place.
+const PADDING: usize = 512;
+
+/// The ID3v2.4 tag that stores `tags`: title, artist, album, album artist, track, year, lyrics (USLT) and cover (APIC),
+/// UTF-8 text, then padding. Fields that are `None` are left out. The audio is not included.
+pub fn build(tags: &Tags) -> Vec<u8> {
+    build_with(tags, &[])
+}
+
+/// `build` with `kept` (whole frames, already in the v2.4 layout) placed after the frames `Tags` writes.
+fn build_with(tags: &Tags, kept: &[u8]) -> Vec<u8> {
+    let mut frames = Vec::new();
+    let texts = [(b"TIT2", &tags.title), (b"TPE1", &tags.artist), (b"TALB", &tags.album), (b"TPE2", &tags.album_artist)];
+    for (id, value) in texts {
+        if let Some(text) = value {
+            push_frame(&mut frames, id, &text_body(text));
+        }
+    }
+    if let Some(track) = tags.track {
+        push_frame(&mut frames, b"TRCK", &text_body(&track.to_string()));
+    }
+    if let Some(year) = tags.year {
+        push_frame(&mut frames, b"TDRC", &text_body(&format!("{year:04}")));
+    }
+    if let Some(lyrics) = &tags.lyrics {
+        // encoding UTF-8, language, empty content descriptor, then the text
+        let mut body = vec![3];
+        body.extend(b"eng\0");
+        body.extend(lyrics.as_bytes());
+        push_frame(&mut frames, b"USLT", &body);
+    }
+    if let Some(cover) = &tags.cover {
+        let mime: &[u8] = if cover.starts_with(&[0x89, b'P', b'N', b'G']) { b"image/png" } else { b"image/jpeg" };
+        // encoding, MIME type, picture type 3 (front cover), empty description, then the picture
+        let mut body = vec![3];
+        body.extend(mime);
+        body.extend([0, 3, 0]);
+        body.extend(cover);
+        push_frame(&mut frames, b"APIC", &body);
+    }
+    frames.extend_from_slice(kept);
+    let mut out = b"ID3\x04\x00\x00".to_vec();
+    out.extend(syncsafe_bytes(frames.len() + PADDING));
+    out.extend(frames);
+    out.resize(out.len() + PADDING, 0);
+    out
+}
+
+/// The file with its ID3v2 tag replaced: the fields `Tags` knows are written, every other frame of the old tag
+/// (genre, comments, chapters, ratings and the rest) is copied over unchanged, and the audio frames and anything after
+/// them (an ID3v1 tag) are kept. None when the old tag cannot be copied safely (version 2.2, or a compressed or
+/// encrypted frame), so a caller refuses the write rather than lose data.
+pub fn replace_tag(file: &[u8], tags: &Tags) -> Option<Vec<u8>> {
+    let kept = kept_frames(file, tags)?;
+    let audio = &file[tag_len(file).min(file.len())..];
+    let mut out = build_with(tags, &kept);
+    out.extend_from_slice(audio);
+    Some(out)
+}
+
+/// The frames of the old tag that `build` does not write, re-encoded as v2.4 frames with their bodies unchanged.
+fn kept_frames(file: &[u8], tags: &Tags) -> Option<Vec<u8>> {
+    let Some(h) = Header::parse(file) else { return Some(Vec::new()) };
+    if h.version == 2 {
+        return None;
+    }
+    let body = file.get(10..10 + h.size)?;
+    let body = if h.unsync && h.version <= 3 { resync(body) } else { body.to_vec() };
+    let mut p = 0;
+    if h.extended {
+        let size = if h.version == 4 { syncsafe(&body) } else { be32(&body) + 4 };
+        p += size.min(body.len());
+    }
+    // the text frames `build` always owns; the year frames of v2.3 give way to TDRC when a year is written
+    let owned: &[&[u8; 4]] = &[b"TIT2", b"TPE1", b"TALB", b"TPE2", b"TRCK", b"TDRC"];
+    let mut out = Vec::new();
+    while let Some(frame) = Frame::read(&body, &mut p, h) {
+        let id = &frame.id;
+        if id == b"    " {
+            // a compressed or encrypted frame: it cannot be copied without its flags
+            return None;
+        }
+        let replaced = owned.contains(&id)
+            || (tags.year.is_some() && (id == b"TYER" || id == b"TDAT" || id == b"TIME"))
+            || (tags.lyrics.is_some() && id == b"USLT")
+            || (tags.cover.is_some() && id == b"APIC");
+        if !replaced {
+            push_frame(&mut out, id, &frame.data);
+        }
+    }
+    Some(out)
+}
+
+fn push_frame(out: &mut Vec<u8>, id: &[u8; 4], body: &[u8]) {
+    out.extend_from_slice(id);
+    out.extend(syncsafe_bytes(body.len()));
+    out.extend([0, 0]);
+    out.extend_from_slice(body);
+}
+
+fn text_body(text: &str) -> Vec<u8> {
+    let mut body = vec![3];
+    body.extend(text.as_bytes());
+    body
+}
+
+fn syncsafe_bytes(n: usize) -> [u8; 4] {
+    let n = n as u32;
+    [(n >> 21) as u8 & 0x7f, (n >> 14) as u8 & 0x7f, (n >> 7) as u8 & 0x7f, n as u8 & 0x7f]
+}
+
 fn syncsafe(b: &[u8]) -> usize {
     b.iter().take(4).fold(0, |a, &x| a << 7 | (x & 0x7f) as usize)
 }
@@ -349,8 +530,92 @@ mod tests {
     }
 
     #[test]
+    fn chap_and_ctoc_frames_give_ordered_chapters_with_titles_and_pictures() {
+        // CHAP "c2" 4000-9000 ms with a TIT2 sub-frame; CHAP "c1" 0-4000 ms with a PNG APIC; the CTOC lists c2 first
+        let mut title = vec![3u8];
+        title.extend(b"Second");
+        let mut apic = vec![3u8];
+        apic.extend(b"image/png\0\x03\0");
+        apic.extend(b"\x89PNG!");
+        let chap = |id: &[u8], start: u32, end: u32, subs: &[u8]| {
+            let mut b = id.to_vec();
+            b.push(0);
+            b.extend(start.to_be_bytes());
+            b.extend(end.to_be_bytes());
+            b.extend([0xFF; 8]);
+            b.extend_from_slice(subs);
+            b
+        };
+        let mut toc = b"toc\0".to_vec();
+        toc.push(0x03); // top-level, ordered
+        toc.push(2);
+        toc.extend(b"c2\0c1\0");
+        let mut body = frame(b"CTOC", &toc, true, 0);
+        body.extend(frame(b"CHAP", &chap(b"c2", 4000, 9000, &frame(b"TIT2", &title, true, 0)), true, 0));
+        body.extend(frame(b"CHAP", &chap(b"c1", 0, 4000, &frame(b"APIC", &apic, true, 0)), true, 0));
+        let t = parse(&tag(4, 0, &body)).unwrap();
+        assert_eq!(t.chapters.len(), 2);
+        assert_eq!(t.chapters[0], Chapter { start_ms: 4000, end_ms: Some(9000), title: Some("Second".into()), image: None });
+        assert_eq!(t.chapters[1].start_ms, 0);
+        assert_eq!(t.chapters[1].image.as_deref(), Some(&b"\x89PNG!"[..]));
+        // without a table of contents the chapters sort by start time
+        let t = parse(&tag(4, 0, &frame(b"CHAP", &chap(b"x", 5, 6, &[]), true, 0))).unwrap();
+        assert_eq!(t.chapters, vec![Chapter { start_ms: 5, end_ms: Some(6), title: None, image: None }]);
+    }
+
+    #[test]
+    fn written_tag_round_trips_and_keeps_the_audio_bytes() {
+        let tags = Tags {
+            title: Some("Höfði Round".into()),
+            artist: Some("Band".into()),
+            album: Some("Record".into()),
+            album_artist: Some("Various".into()),
+            track: Some(4),
+            year: Some(2020),
+            cover: Some(b"\x89PNG-cover".to_vec()),
+            lyrics: Some("line one\nline two".into()),
+            chapters: Vec::new(),
+        };
+        let out = replace_tag(V24, &tags).unwrap();
+        assert_eq!(parse(&out).unwrap(), tags, "write, then read back");
+        // the audio (everything after the old tag) is byte-identical and follows the new tag
+        assert_eq!(&out[tag_len(&out)..], &V24[tag_len(V24)..]);
+        // replacing again keeps a single tag
+        let again = replace_tag(&out, &Tags { title: Some("Again".into()), ..Tags::default() }).unwrap();
+        assert_eq!(parse(&again).unwrap().title.as_deref(), Some("Again"));
+        assert_eq!(&again[tag_len(&again)..], &V24[tag_len(V24)..]);
+        // the padding is inside the tag, not after it
+        assert_eq!(tag_len(&build(&tags)), build(&tags).len());
+    }
+
+    #[test]
     fn resync_only_touches_ff_00_pairs() {
         assert_eq!(resync(&[0xFF, 0x00, 0xFF, 0x00, 0x01, 0xFF]), [0xFF, 0xFF, 0x01, 0xFF]);
         assert_eq!(resync(&[0xFF, 0xE0]), [0xFF, 0xE0]);
+    }
+
+    #[test]
+    fn a_tag_edit_keeps_the_frames_it_does_not_write() {
+        // an old v2.4 tag with a title and a genre (TCON) the writer does not model
+        let mut frames = Vec::new();
+        push_frame(&mut frames, b"TIT2", &text_body("Old"));
+        push_frame(&mut frames, b"TCON", &text_body("Jazz"));
+        let mut file = b"ID3\x04\x00\x00".to_vec();
+        file.extend(syncsafe_bytes(frames.len()));
+        file.extend(&frames);
+        file.extend([0xff, 0xfb, 0x90, 0x00]);
+        let out = replace_tag(&file, &Tags { title: Some("New".into()), ..Tags::default() }).unwrap();
+        let tags = parse(&out).unwrap();
+        assert_eq!(tags.title.as_deref(), Some("New"));
+        assert!(out.windows(4).any(|w| w == b"TCON"), "the genre frame is kept");
+        assert_eq!(out.windows(3).filter(|w| *w == b"Old").count(), 0, "the old title is replaced");
+        assert!(out.ends_with(&[0xff, 0xfb, 0x90, 0x00]));
+    }
+
+    #[test]
+    fn a_tag_with_a_v22_header_is_not_rewritten() {
+        let mut file = b"ID3\x02\x00\x00\x00\x00\x00\x00".to_vec();
+        file.extend([0xff, 0xfb]);
+        assert!(replace_tag(&file, &Tags::default()).is_none());
     }
 }
