@@ -104,9 +104,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (special-purpose or test face, nothing to substitute); the UI face draws it.",
+   "note": "open equivalent Libertinus Keyboard (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusKeyboard-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Keyboard (otf-libertinus, OFL-1.1) for the same role (keyboard key symbols); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Kohinoor.ttc",
@@ -803,9 +815,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Jazz LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual display hand (no packaged casual face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/JournalSansInline.otf",
@@ -1090,9 +1114,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifThai-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Thai (noto-fonts, OFL-1.1) for the same role (a Thai-script serif text face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Kavivanar.ttf",
@@ -1140,9 +1176,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "note": "open equivalent Noto Sans Ethiopic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansEthiopic-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Ethiopic (noto-fonts, OFL-1.1) for the same role (an Ethiopic-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Kigelia.ttc",
@@ -1161,9 +1209,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "note": "open equivalent Noto Sans Arabic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Arabic (noto-fonts, OFL-1.1) for the same role (an Arabic-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/KigeliaArabic.ttc",
@@ -1501,9 +1561,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "note": "open equivalent Noto Serif CJK SC (noto-fonts-cjk), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif CJK SC (noto-fonts-cjk, OFL-1.1) for the same role (a Chinese clerical (Li) brush face (the CJK serif is the nearest packaged design)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/LingWaiSC-Medium.otf",

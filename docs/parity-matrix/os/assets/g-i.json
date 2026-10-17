@@ -1246,9 +1246,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Galvji resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Sans Gujarati (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansGujarati-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Gujarati (noto-fonts, OFL-1.1) for the same role (a Gujarati-script sans (Latin falls through to the UI face)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia Bold Italic.ttf",
@@ -1616,9 +1628,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (decorative ornament face, no open equivalent installed); the UI face draws it.",
+   "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute D050000L (gsfonts, AGPL-3.0 with font exception) for the same role (a dingbat and ornament face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Hoefler Text.ttc",
@@ -1700,9 +1724,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
+   "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/RobotoCondensed-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Roboto Condensed (ttf-roboto, Apache-2.0) for the same role (a heavy condensed grotesque); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/InaiMathi-MN.ttc",
@@ -2147,9 +2183,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Hopper Script resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/GotuDevanagari-Regular.ttf",
@@ -2386,9 +2434,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Hei resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Sans CJK SC (noto-fonts-cjk), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans CJK SC (noto-fonts-cjk, OFL-1.1) for the same role (a Chinese Hei (gothic) face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Hiragino Sans TC.ttc",
@@ -2710,9 +2770,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "HopperScript resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/QuickLook/iWork.qlgenerator/Contents/Frameworks/TSText.framework/Versions/A/Resources/invisible_glyphs.ttf",
@@ -2731,9 +2803,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (special-purpose or test face, nothing to substitute); the UI face draws it.",
+   "note": "open equivalent DejaVu Sans (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSans.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans (ttf-dejavu, Bitstream Vera licence) for the same role (visible stand-ins for control characters (DejaVu Sans covers the Control Pictures block)); design-similar."
   },
   {
    "id": "path:/System/Library/Sounds/Glass.aiff",

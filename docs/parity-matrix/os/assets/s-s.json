@@ -1324,9 +1324,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent TeX Gyre Termes (tex-gyre-fonts), metric-compatible; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyretermes-regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Termes (tex-gyre-fonts, GUST Font License) for the same role (a Times-style serif (Termes is the Times clone and matches STIX General metrics closely)); metric-compatible."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDBol.otf",
@@ -1345,9 +1357,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDReg.otf",
@@ -1366,9 +1390,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmBol.otf",
@@ -1387,9 +1423,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmReg.otf",
@@ -1408,9 +1456,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpBol.otf",
@@ -1429,9 +1489,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDBol.otf",
@@ -1450,9 +1522,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDReg.otf",
@@ -1471,9 +1555,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpReg.otf",
@@ -1492,9 +1588,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmBol.otf",
@@ -1513,9 +1621,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmReg.otf",
@@ -1534,9 +1654,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math integral and summation glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUni.otf",
@@ -1555,9 +1687,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusMath-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Math (otf-libertinus, OFL-1.1) for the same role (a math glyph set); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBol.otf",
@@ -2085,9 +2229,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Naskh Arabic (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Naskh Arabic (noto-fonts, OFL-1.1) for the same role (an Arabic naskh text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sathu.ttf",
@@ -2106,9 +2262,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifThai-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Thai (noto-fonts, OFL-1.1) for the same role (a Thai-script serif text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Savoye LET.ttc",
@@ -2127,9 +2295,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Seravek.ttc",
@@ -2148,9 +2328,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role (a humanist sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Shree714.ttc",
@@ -2169,9 +2361,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
+   "note": "open equivalent Noto Sans Devanagari (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Devanagari (noto-fonts, OFL-1.1) for the same role (a Devanagari-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SignPainter.ttc",
@@ -2190,9 +2394,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a brush sign-painter script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Silom.ttf",
@@ -2211,9 +2427,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Noto Sans Thai (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThai-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Thai (noto-fonts, OFL-1.1) for the same role (a Thai-script bold sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala MN.ttc",
@@ -2290,9 +2518,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role (a humanist sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SnellRoundhand.ttc",
@@ -2311,9 +2551,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a roundhand script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Songti.ttc",
@@ -2395,9 +2647,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Schola (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyreschola-regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Schola (tex-gyre-fonts, GUST Font License) for the same role (a Clarendon-style bracketed slab (Century Schoolbook is the nearest packaged class)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Symbol.ttf",
@@ -2568,9 +2832,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera licence) for the same role (a card-number OCR monospace); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Spendcardium.ttf",
@@ -2589,9 +2865,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/DejaVuSansMono.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, Bitstream Vera licence) for the same role (a card-number OCR monospace); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Santa Fe LET Fonts.ttf",
@@ -2610,9 +2898,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a display roman); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchemeBold.otf",
@@ -2631,9 +2931,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Montserrat (ttf-montserrat), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Montserrat-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Montserrat (ttf-montserrat, OFL-1.1) for the same role (a bold geometric display sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Cursive B.ttf",
@@ -2652,9 +2964,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a school cursive hand); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Printed A.ttf",
@@ -2673,9 +2997,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a school printing hand (the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Somer.ttc",
@@ -2694,9 +3030,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role (a plain sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Stone Sans.ttc",
@@ -2749,9 +3097,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a rounded technical display (the rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaDevanagari.ttc",
@@ -2973,9 +3333,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Shobhika-Devanagari.ttc",

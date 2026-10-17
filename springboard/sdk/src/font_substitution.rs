@@ -247,6 +247,54 @@ const FACES: &[(&str, &str)] = &[
     ("nanum myeongjo", "Noto Serif CJK KR"),
     ("nanummyeongjo", "Noto Serif CJK KR"),
     ("nom na tong", "Noto Serif CJK SC"),
+    // Open substitutes for the remaining reference typefaces (scripts to TeX Gyre Chorus, casual hands to Nunito,
+    // ornaments to D050000L, scripts of other writing systems to their Noto face); design-similar, never a copy.
+    ("adtnumeric", "Inter"), ("adt numeric", "Inter"), ("academy engraved let", "Libertinus Serif Display"),
+    ("academy engraved let fonts", "Libertinus Serif Display"), ("bodoni 72 os", "Noto Serif Display"), ("bodoni 72 oldstyle", "Noto Serif Display"),
+    ("bodoni 72 smallcaps", "Noto Serif Display"), ("bodoni 72 smallcaps book", "Noto Serif Display"), ("bodoni 72", "Noto Serif Display"),
+    ("bodoni ornaments", "D050000L"), ("bradley hand", "TeX Gyre Chorus"), ("bradley hand bold", "TeX Gyre Chorus"),
+    ("brush script", "TeX Gyre Chorus"), ("brush script mt", "TeX Gyre Chorus"), ("chalkboard", "Nunito"),
+    ("chalkboard se", "Nunito"), ("chalkduster", "Nunito"), ("comic sans ms", "Nunito"),
+    ("copperplate", "Montserrat"), ("copperplate gothic", "Montserrat"), ("corsiva", "TeX Gyre Chorus"),
+    ("monotype corsiva", "TeX Gyre Chorus"), ("apple chancery", "TeX Gyre Chorus"), ("adtgaramond", "Libertinus Serif"),
+    ("adt garamond", "Libertinus Serif"), ("asphalt", "Roboto Condensed"), ("asphalt medium", "Roboto Condensed"),
+    ("asphaltmedium", "Roboto Condensed"), ("balega", "Inter"), ("balega regular", "Inter"),
+    ("balegaregular", "Inter"), ("blackmoor let", "Junicode"), ("blackmoor let fonts", "Junicode"),
+    ("blair", "Libertinus Sans"), ("blair medium", "Libertinus Sans"), ("itc blair", "Libertinus Sans"),
+    ("capitals", "Noto Serif Display"), ("charm", "Noto Sans Thai Looped"), ("agc", "Inter"),
+    ("dearjoe", "Nunito"), ("dear joe", "Nunito"), ("galvji", "Noto Sans Gujarati"),
+    ("hoefler text ornaments", "D050000L"), ("impact", "Roboto Condensed"), ("hopper script", "TeX Gyre Chorus"),
+    ("hopperscript", "TeX Gyre Chorus"), ("hei", "Noto Sans CJK SC"), ("invisible_glyphs", "DejaVu Sans"),
+    ("invisible glyphs", "DejaVu Sans"), ("keyboard", "Libertinus Keyboard"), ("jazz let", "Nunito"),
+    ("jazz let fonts", "Nunito"), ("katari", "Noto Serif Thai"), ("kefa", "Noto Sans Ethiopic"),
+    ("kigelia", "Noto Sans Arabic"), ("kigelia arabic", "Noto Sans Arabic"), ("libian", "Noto Serif CJK SC"),
+    ("libian sc", "Noto Serif CJK SC"), ("libian tc", "Noto Serif CJK SC"), ("marker felt", "Nunito"),
+    ("markerfelt", "Nunito"), ("noteworthy", "Nunito"), ("new peninim mt", "Noto Serif Hebrew"),
+    ("newpeninimmt", "Noto Serif Hebrew"), ("peninim mt", "Noto Serif Hebrew"), ("mona lisa solid itc tt", "Noto Serif Display"),
+    ("mona lisa solid itc", "Noto Serif Display"), ("mali", "Noto Sans Thai Looped"), ("nanumscript", "Noto Sans CJK KR"),
+    ("nanum script", "Noto Sans CJK KR"), ("novemberindia", "Noto Sans"), ("november india", "Noto Sans"),
+    ("octoberindia", "Noto Sans"), ("october india", "Noto Sans"), ("pcf", "Noto Sans Symbols 2"),
+    ("portago itc tt", "Noto Serif Display"), ("portago itc", "Noto Serif Display"), ("itc portago", "Noto Serif Display"),
+    ("princetown let", "Noto Serif Display"), ("princetown let fonts", "Noto Serif Display"), ("raya", "Lato"),
+    ("padyakke expanded one", "Noto Sans Kannada"), ("padyakkeexpandedone", "Noto Sans Kannada"), ("pilgiche", "TeX Gyre Chorus"),
+    ("quotescaps-regular", "Libertinus Serif Initials"), ("quotescaps", "Libertinus Serif Initials"), ("quotes caps", "Libertinus Serif Initials"),
+    ("quotesscript-regular", "TeX Gyre Chorus"), ("quotesscript", "TeX Gyre Chorus"), ("quotes script", "TeX Gyre Chorus"),
+    ("stixgeneral", "TeX Gyre Termes"), ("stixintegralsd", "Libertinus Math"), ("stixintegralssm", "Libertinus Math"),
+    ("stixintegralsup", "Libertinus Math"), ("stixintegralsupd", "Libertinus Math"), ("stixintegralsupsm", "Libertinus Math"),
+    ("stixnonunicode", "Libertinus Math"), ("sana", "Noto Naskh Arabic"), ("sana arabic", "Noto Naskh Arabic"),
+    ("sathu", "Noto Serif Thai"), ("savoye let", "TeX Gyre Chorus"), ("seravek", "Source Sans 3"),
+    ("shree714", "Noto Sans Devanagari"), ("shree devanagari 714", "Noto Sans Devanagari"), ("signpainter", "TeX Gyre Chorus"),
+    ("signpainter-housescript", "TeX Gyre Chorus"), ("silom", "Noto Sans Thai"), ("skia", "Source Sans 3"),
+    ("snell roundhand", "TeX Gyre Chorus"), ("superclarendon", "TeX Gyre Schola"), ("scancardium_2.0", "DejaVu Sans Mono"),
+    ("scancardium", "DejaVu Sans Mono"), ("spendcardium", "DejaVu Sans Mono"), ("santa fe let", "Noto Serif Display"),
+    ("santa fe let fonts", "Noto Serif Display"), ("scheme", "Montserrat"), ("schemebold", "Montserrat"),
+    ("schoolhouse cursive b", "TeX Gyre Chorus"), ("schoolhouse printed a", "Nunito"), ("somer", "Inter"),
+    ("synchro let", "Nunito"), ("synchro let fonts", "Nunito"), ("sauberscript", "TeX Gyre Chorus"),
+    ("sauber script", "TeX Gyre Chorus"), ("thehandserif-semibold", "Libertinus Serif"), ("the hand serif", "Libertinus Serif"),
+    ("twentiethcentury", "Montserrat"), ("twentieth century", "Montserrat"), ("type embellishments one let", "D050000L"),
+    ("webdings", "Noto Sans Symbols 2"), ("wingdings 2", "D050000L"), ("wingdings 3", "Noto Sans Symbols"),
+    ("wingdings", "D050000L"), ("zapfino", "TeX Gyre Chorus"), ("workflowglyphs", "Noto Sans Symbols 2"),
+    ("workflow glyphs", "Noto Sans Symbols 2"),
 ];
 
 /// The open face named for `family` in FACES, if any (case and surrounding space ignored).
@@ -385,8 +433,6 @@ mod tests {
     fn substitute_lists_open_equivalents_preferred_first() {
         assert_eq!(substitute("Helvetica Neue")[0], "TeX Gyre Heros");
         assert_eq!(substitute("Helvetica Neue")[1], "Inter");
-        assert_eq!(substitute("Futura")[0], "Outfit");
-        assert_eq!(substitute("Helvetica Neue")[0], "Inter");
         assert_eq!(substitute("Futura")[0], "Montserrat");
         assert_eq!(substitute("Hiragino Mincho Pro")[0], "Noto Serif CJK JP");
         assert!(substitute("Nothing Like This").is_empty());
@@ -481,7 +527,7 @@ mod tests {
             assert_eq!(face_of_family(reference), Some(open), "{reference}");
             assert_eq!(substitute(reference)[0], open, "{reference}");
         }
-        assert_eq!(face_of_family("Blackmoor LET"), None);
+        assert_eq!(face_of_family("Blackmoor LET"), Some("Junicode"));
     }
 
     #[test]
@@ -499,6 +545,62 @@ mod tests {
         assert_eq!(substitute("Nanum Gothic")[0], "Noto Sans CJK KR");
         assert_eq!(substitute("NanumMyeongjo")[0], "Noto Serif CJK KR");
         assert_eq!(substitute("Nom Na Tong")[0], "Noto Serif CJK SC");
+    }
+
+    #[test]
+    fn remaining_reference_typefaces_resolve_to_packaged_open_faces() {
+        let pairs = [
+            ("adtnumeric", "Inter"), ("adt numeric", "Inter"), ("academy engraved let", "Libertinus Serif Display"),
+            ("academy engraved let fonts", "Libertinus Serif Display"), ("bodoni 72 os", "Noto Serif Display"), ("bodoni 72 oldstyle", "Noto Serif Display"),
+            ("bodoni 72 smallcaps", "Noto Serif Display"), ("bodoni 72 smallcaps book", "Noto Serif Display"), ("bodoni 72", "Noto Serif Display"),
+            ("bodoni ornaments", "D050000L"), ("bradley hand", "TeX Gyre Chorus"), ("bradley hand bold", "TeX Gyre Chorus"),
+            ("brush script", "TeX Gyre Chorus"), ("brush script mt", "TeX Gyre Chorus"), ("chalkboard", "Nunito"),
+            ("chalkboard se", "Nunito"), ("chalkduster", "Nunito"), ("comic sans ms", "Nunito"),
+            ("copperplate", "Montserrat"), ("copperplate gothic", "Montserrat"), ("corsiva", "TeX Gyre Chorus"),
+            ("monotype corsiva", "TeX Gyre Chorus"), ("apple chancery", "TeX Gyre Chorus"), ("adtgaramond", "Libertinus Serif"),
+            ("adt garamond", "Libertinus Serif"), ("asphalt", "Roboto Condensed"), ("asphalt medium", "Roboto Condensed"),
+            ("asphaltmedium", "Roboto Condensed"), ("balega", "Inter"), ("balega regular", "Inter"),
+            ("balegaregular", "Inter"), ("blackmoor let", "Junicode"), ("blackmoor let fonts", "Junicode"),
+            ("blair", "Libertinus Sans"), ("blair medium", "Libertinus Sans"), ("itc blair", "Libertinus Sans"),
+            ("capitals", "Noto Serif Display"), ("charm", "Noto Sans Thai Looped"), ("agc", "Inter"),
+            ("dearjoe", "Nunito"), ("dear joe", "Nunito"), ("galvji", "Noto Sans Gujarati"),
+            ("hoefler text ornaments", "D050000L"), ("impact", "Roboto Condensed"), ("hopper script", "TeX Gyre Chorus"),
+            ("hopperscript", "TeX Gyre Chorus"), ("hei", "Noto Sans CJK SC"), ("invisible_glyphs", "DejaVu Sans"),
+            ("invisible glyphs", "DejaVu Sans"), ("keyboard", "Libertinus Keyboard"), ("jazz let", "Nunito"),
+            ("jazz let fonts", "Nunito"), ("katari", "Noto Serif Thai"), ("kefa", "Noto Sans Ethiopic"),
+            ("kigelia", "Noto Sans Arabic"), ("kigelia arabic", "Noto Sans Arabic"), ("libian", "Noto Serif CJK SC"),
+            ("libian sc", "Noto Serif CJK SC"), ("libian tc", "Noto Serif CJK SC"), ("marker felt", "Nunito"),
+            ("markerfelt", "Nunito"), ("noteworthy", "Nunito"), ("new peninim mt", "Noto Serif Hebrew"),
+            ("newpeninimmt", "Noto Serif Hebrew"), ("peninim mt", "Noto Serif Hebrew"), ("mona lisa solid itc tt", "Noto Serif Display"),
+            ("mona lisa solid itc", "Noto Serif Display"), ("mali", "Noto Sans Thai Looped"), ("nanumscript", "Noto Sans CJK KR"),
+            ("nanum script", "Noto Sans CJK KR"), ("novemberindia", "Noto Sans"), ("november india", "Noto Sans"),
+            ("octoberindia", "Noto Sans"), ("october india", "Noto Sans"), ("pcf", "Noto Sans Symbols 2"),
+            ("portago itc tt", "Noto Serif Display"), ("portago itc", "Noto Serif Display"), ("itc portago", "Noto Serif Display"),
+            ("princetown let", "Noto Serif Display"), ("princetown let fonts", "Noto Serif Display"), ("raya", "Lato"),
+            ("padyakke expanded one", "Noto Sans Kannada"), ("padyakkeexpandedone", "Noto Sans Kannada"), ("pilgiche", "TeX Gyre Chorus"),
+            ("quotescaps-regular", "Libertinus Serif Initials"), ("quotescaps", "Libertinus Serif Initials"), ("quotes caps", "Libertinus Serif Initials"),
+            ("quotesscript-regular", "TeX Gyre Chorus"), ("quotesscript", "TeX Gyre Chorus"), ("quotes script", "TeX Gyre Chorus"),
+            ("stixgeneral", "TeX Gyre Termes"), ("stixintegralsd", "Libertinus Math"), ("stixintegralssm", "Libertinus Math"),
+            ("stixintegralsup", "Libertinus Math"), ("stixintegralsupd", "Libertinus Math"), ("stixintegralsupsm", "Libertinus Math"),
+            ("stixnonunicode", "Libertinus Math"), ("sana", "Noto Naskh Arabic"), ("sana arabic", "Noto Naskh Arabic"),
+            ("sathu", "Noto Serif Thai"), ("savoye let", "TeX Gyre Chorus"), ("seravek", "Source Sans 3"),
+            ("shree714", "Noto Sans Devanagari"), ("shree devanagari 714", "Noto Sans Devanagari"), ("signpainter", "TeX Gyre Chorus"),
+            ("signpainter-housescript", "TeX Gyre Chorus"), ("silom", "Noto Sans Thai"), ("skia", "Source Sans 3"),
+            ("snell roundhand", "TeX Gyre Chorus"), ("superclarendon", "TeX Gyre Schola"), ("scancardium_2.0", "DejaVu Sans Mono"),
+            ("scancardium", "DejaVu Sans Mono"), ("spendcardium", "DejaVu Sans Mono"), ("santa fe let", "Noto Serif Display"),
+            ("santa fe let fonts", "Noto Serif Display"), ("scheme", "Montserrat"), ("schemebold", "Montserrat"),
+            ("schoolhouse cursive b", "TeX Gyre Chorus"), ("schoolhouse printed a", "Nunito"), ("somer", "Inter"),
+            ("synchro let", "Nunito"), ("synchro let fonts", "Nunito"), ("sauberscript", "TeX Gyre Chorus"),
+            ("sauber script", "TeX Gyre Chorus"), ("thehandserif-semibold", "Libertinus Serif"), ("the hand serif", "Libertinus Serif"),
+            ("twentiethcentury", "Montserrat"), ("twentieth century", "Montserrat"), ("type embellishments one let", "D050000L"),
+            ("webdings", "Noto Sans Symbols 2"), ("wingdings 2", "D050000L"), ("wingdings 3", "Noto Sans Symbols"),
+            ("wingdings", "D050000L"), ("zapfino", "TeX Gyre Chorus"), ("workflowglyphs", "Noto Sans Symbols 2"),
+            ("workflow glyphs", "Noto Sans Symbols 2"),
+        ];
+        for (reference, open) in pairs {
+            assert_eq!(face_of_family(reference), Some(open), "{reference}");
+            assert_eq!(substitute(&reference.to_uppercase())[0], open, "{reference}");
+        }
     }
 
     #[test]

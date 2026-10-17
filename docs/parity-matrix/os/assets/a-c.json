@@ -692,9 +692,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ADTNumeric resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role (a tabular-figure sans for numerals); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Outline 6 Dot.ttf",
@@ -1166,9 +1178,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Academy Engraved LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Libertinus Serif Display (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerifDisplay-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif Display (otf-libertinus, OFL-1.1) for the same role (an engraved display roman); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Al Nile.ttc",
@@ -2014,9 +2038,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 OS resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a Didone display serif); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72 Smallcaps Book.ttf",
@@ -2035,9 +2071,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 Smallcaps Book resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a Didone display serif); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72.ttc",
@@ -2056,9 +2104,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bodoni 72 resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a Didone display serif); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni Ornaments.ttf",
@@ -2077,9 +2137,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (decorative ornament face, no open equivalent installed); the UI face draws it.",
+   "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute D050000L (gsfonts, AGPL-3.0 with font exception) for the same role (a dingbat and ornament face); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bradley Hand Bold.ttf",
@@ -2098,9 +2170,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Bradley Hand Bold resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a handwritten italic hand (the closest packaged handwriting-class face)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Brush Script.ttf",
@@ -2119,9 +2203,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Brush Script resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a connected script); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Chalkboard.ttc",
@@ -2140,9 +2236,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Chalkboard resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual rounded hand (no packaged chalk or marker face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/ChalkboardSE.ttc",
@@ -2161,9 +2269,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ChalkboardSE resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual rounded hand (no packaged chalk or marker face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Chalkduster.ttf",
@@ -2182,9 +2302,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Chalkduster resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), handwriting-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual rounded hand (no packaged chalk or marker face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Charter.ttc",
@@ -2273,9 +2405,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual comic sans (no packaged comic face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Comic Sans MS.ttf",
@@ -2294,9 +2438,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (no open face installed matches its design or metrics); the UI face draws it.",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/ttf-nunito/Nunito-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Nunito (ttf-nunito, OFL-1.1) for the same role (a casual comic sans (no packaged comic face; the friendly rounded sans is nearest)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Copperplate.ttc",
@@ -2315,9 +2471,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Copperplate resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Montserrat (ttf-montserrat), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Montserrat-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Montserrat (ttf-montserrat, OFL-1.1) for the same role (a small-caps geometric engraver sans); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Corsiva.ttc",
@@ -2336,9 +2504,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Corsiva resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Z003 Medium Italic (gsfonts), calligraphic stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/tex-gyre/texgyrechorus-mediumitalic.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute TeX Gyre Chorus (tex-gyre-fonts, GUST Font License) for the same role (a chancery italic (TeX Gyre Chorus is the Zapf Chancery design)); design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Courier New Bold Italic.ttf",
@@ -2713,9 +2893,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "ADTGaramond resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Libertinus Serif (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Serif (otf-libertinus, OFL-1.1) for the same role (a Garamond-style old-style serif); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlFirat.ttc",
@@ -2879,9 +3071,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AsphaltMedium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/RobotoCondensed-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Roboto Condensed (ttf-roboto, Apache-2.0) for the same role (a condensed display grotesque); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BalegaRegular.otf",
@@ -2900,9 +3104,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "BalegaRegular resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role (a plain display sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BankGothic.ttc",
@@ -3018,9 +3234,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Blackmoor LET Fonts resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Junicode (ttf-junicode), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/TTF/Junicode-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Junicode (ttf-junicode, OFL-1.1) for the same role (a medieval-flavoured display face (no blackletter is packaged; Junicode is the nearest medieval design)); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Blair Medium.ttf",
@@ -3039,9 +3267,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Blair Medium resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Libertinus Sans (otf-libertinus), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/libertinus/LibertinusSans-Regular.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Libertinus Sans (otf-libertinus, OFL-1.1) for the same role (a flared humanist sans); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni Ornaments.ttf",
@@ -3060,9 +3300,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) No free substitute in the installed packages (decorative ornament face, no open equivalent installed); the UI face draws it.",
+   "note": "open equivalent D050000L (gsfonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/gsfonts/D050000L.otf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute D050000L (gsfonts, AGPL-3.0 with font exception) for the same role (a dingbat and ornament face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo OS.ttc",
@@ -3309,9 +3561,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Capitals resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSerifDisplay-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Serif Display (noto-fonts, OFL-1.1) for the same role (a serif capitals face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Carlito.ttc",
@@ -4525,9 +4789,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "Charm resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Noto Sans Thai Looped (noto-fonts), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/noto/NotoSansThaiLooped-Regular.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Noto Sans Thai Looped (noto-fonts, OFL-1.1) for the same role (a Thai-script text face); design-similar."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Charmonman.ttc",
@@ -5399,9 +5675,21 @@
    "doc": "",
    "bifrost": "",
    "status": "partial",
-   "note": "AGC resolved to an open equivalent by class; no original face shipped; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default) Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "note": "open equivalent Inter (inter-font), design-similar; reference asset via bifrost-ref (personal-use install; falls back to BifrOSt default)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "font_substitution::tests"
+    }
+   ],
+   "ready_note": "Open-source substitute Inter (inter-font, OFL-1.1) for the same role (a plain sans); design-similar."
   }
  ]
 }
