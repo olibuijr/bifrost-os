@@ -33,7 +33,7 @@
       "apple": "ACAccountType: identifier, accountTypeDescription, accessGranted; accountType(withAccountTypeIdentifier:)",
       "bifrost": "springboard/sdk/src/accounts.rs",
       "status": "parity",
-      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests. The access grant (accessGranted) persists in accounts.ini, so a grant survives a restart. There is still no user prompt that grants access to a type of account, and the manifest permission binds only keychain access. Not yet wired into apps or the shell, not yet tested on the VM or Midget."
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests. The access grant (accessGranted) persists in accounts.ini, so a grant survives a restart. There is still no user prompt that grants access to a type of account, and the manifest permission binds only keychain access. Not yet wired into apps or the shell, not yet tested on the VM or Midget. Built 2026-10-17: AccountStore::register_builtin_types adds the system types (BUILTIN_TYPES: bifrost.mail, bifrost.caldav, bifrost.carddav, bifrost.cloud) that are not held yet, ungranted, and keeps existing grants; tests builtin_types_are_registered_once_and_keep_their_grant and builtin_types_survive_a_reopen (springboard/sdk/src/accounts.rs)."
     },
     {
       "feature": "Credential renewal (renewCredentials)",

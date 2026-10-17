@@ -199,6 +199,15 @@ impl ErrorCode for AccountError {
     }
 }
 
+/// The account types the system defines: identifier and description. They match the kinds of the Internet Accounts
+/// page (mail, CalDAV calendars and reminders, CardDAV contacts) and the BifrOSt account, so an app can name them.
+pub const BUILTIN_TYPES: [(&str, &str); 4] = [
+    ("bifrost.mail", "Mail"),
+    ("bifrost.caldav", "Calendars and Reminders"),
+    ("bifrost.carddav", "Contacts"),
+    ("bifrost.cloud", "BifrOSt Account"),
+];
+
 /// An account type (`ACAccountType`): all accounts of one kind, and whether the app may use them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccountType {
@@ -332,6 +341,21 @@ impl AccountStore {
                 None => d.types.push(AccountType { identifier: identifier.into(), description: description.into(), access_granted: false }),
             }
             Ok(())
+        })
+    }
+
+    /// Registers the account types the system defines ([`BUILTIN_TYPES`]) that the store does not hold yet, and returns
+    /// how many it added. Existing types keep their description and grant, so calling it at every start is harmless.
+    pub fn register_builtin_types(&mut self) -> Result<usize, AccountError> {
+        self.mutate(|d| {
+            let mut added = 0;
+            for (identifier, description) in BUILTIN_TYPES {
+                if d.account_type(identifier).is_none() {
+                    d.types.push(AccountType { identifier: identifier.into(), description: description.into(), access_granted: false });
+                    added += 1;
+                }
+            }
+            Ok(added)
         })
     }
 
@@ -655,6 +679,28 @@ mod tests {
         let mut store = AccountStore::new();
         store.register_type("mail.example", "Mail").unwrap();
         store
+    }
+
+    #[test]
+    fn builtin_types_are_registered_once_and_keep_their_grant() {
+        let mut store = AccountStore::new();
+        assert_eq!(store.register_builtin_types(), Ok(BUILTIN_TYPES.len()));
+        assert_eq!(store.register_builtin_types(), Ok(0), "a second start adds nothing");
+        assert_eq!(store.account_type("bifrost.mail").map(|t| t.description.as_str()), Some("Mail"));
+        assert!(store.account_type("bifrost.cloud").is_some_and(|t| !t.access_granted), "built-in types start ungranted");
+        store.set_access("bifrost.mail", true).unwrap();
+        store.register_builtin_types().unwrap();
+        assert!(store.account_type("bifrost.mail").is_some_and(|t| t.access_granted));
+    }
+
+    #[test]
+    fn builtin_types_survive_a_reopen() {
+        let path = scratch("builtin-types");
+        let mut store = AccountStore::open(&path).unwrap();
+        store.register_builtin_types().unwrap();
+        let reopened = AccountStore::open(&path).unwrap();
+        assert!(reopened.account_type("bifrost.carddav").is_some());
+        assert_eq!(AccountStore::open(&path).unwrap().register_builtin_types(), Ok(0));
     }
 
     /// A file path under the temp directory, unique per test name and process, with no file yet.
