@@ -73,6 +73,27 @@ pub fn radial_t(center: (f32, f32), radius: f32, x: f32, y: f32) -> f32 {
     (dx * dx + dy * dy).sqrt() / radius
 }
 
+/// A looping phase in 0..=1 for an animation that runs back and forth over `period` seconds: 0 at the
+/// start, 1 at half a period, 0 again at the end of each period. A non-positive period, or non-finite input,
+/// gives 0.
+pub fn ping_pong_phase(time: f32, period: f32) -> f32 {
+    if !(time.is_finite() && period.is_finite() && period > 0.0) {
+        return 0.0;
+    }
+    let f = (time / period).rem_euclid(1.0);
+    1.0 - (2.0 * f - 1.0).abs()
+}
+
+/// The colour at offset `t` of two ramps cross-faded by `phase`: 0 shows `from`, 1 shows `to`. The phase is
+/// clamped to 0..=1 and a non-finite phase shows `from`. Animated posters evaluate this per pixel with a
+/// phase from `ping_pong_phase`.
+pub fn cross_fade(from: &Ramp, to: &Ramp, phase: f32, t: f32) -> Rgb {
+    let p = if phase.is_finite() { phase.clamp(0.0, 1.0) } else { 0.0 };
+    let a = from.color_at(t);
+    let b = to.color_at(t);
+    Rgb::new(a.r + (b.r - a.r) * p, a.g + (b.g - a.g) * p, a.b + (b.b - a.b) * p)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +161,28 @@ mod tests {
         assert!(close(radial_t((0.0, 0.0), 10.0, 0.0, 0.0), 0.0));
         assert!(close(radial_t((0.0, 0.0), 5.0, 0.0, 10.0), 2.0));
         assert_eq!(radial_t((0.0, 0.0), 0.0, 1.0, 1.0), 1.0);
+    }
+
+
+    #[test]
+    fn ping_pong_phase_runs_up_and_back_each_period() {
+        assert!(ping_pong_phase(0.0, 4.0).abs() < 1e-6);
+        assert!((ping_pong_phase(2.0, 4.0) - 1.0).abs() < 1e-6, "half a period is the peak");
+        assert!((ping_pong_phase(1.0, 4.0) - 0.5).abs() < 1e-6);
+        assert!(ping_pong_phase(4.0, 4.0).abs() < 1e-6, "a whole period is back at the start");
+        assert_eq!(ping_pong_phase(1.0, 0.0), 0.0);
+        assert_eq!(ping_pong_phase(f32::NAN, 4.0), 0.0);
+    }
+
+    #[test]
+    fn cross_fade_moves_from_one_ramp_to_the_other() {
+        let black = Ramp::new(&[(0.0, BLACK), (1.0, BLACK)]).unwrap();
+        let white = Ramp::new(&[(0.0, WHITE), (1.0, WHITE)]).unwrap();
+        assert_eq!(cross_fade(&black, &white, 0.0, 0.3), BLACK);
+        assert_eq!(cross_fade(&black, &white, 1.0, 0.3), WHITE);
+        let half = cross_fade(&black, &white, 0.5, 0.3);
+        assert!(close(half.r, 0.5) && close(half.g, 0.5) && close(half.b, 0.5));
+        assert_eq!(cross_fade(&black, &white, 2.0, 0.3), WHITE, "phase above one is clamped");
+        assert_eq!(cross_fade(&black, &white, f32::NAN, 0.3), BLACK);
     }
 }
