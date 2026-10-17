@@ -23,7 +23,7 @@ pub const GROUP: &str = "is.bifrost.account";
 pub const SERVICE: &str = "bc_session";
 pub const ACCOUNT: &str = "session";
 /// The cloud API the session belongs to, when the stored item says nothing else (a migrated file).
-pub const SERVER: &str = "https://bifrost.olibuijr.com/api/cloud";
+pub const SERVER: &str = "https://bifrost.olibuijr.com/api/cloud/v1";
 /// The plain file a session used to live in, under the user's `bifrost` data directory.
 pub const FILE: &str = "cloud_session";
 /// The stored value's format version.
