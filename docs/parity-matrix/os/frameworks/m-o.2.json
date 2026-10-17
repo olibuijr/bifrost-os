@@ -412,18 +412,9 @@
    "doc": "",
    "bifrost": "springboard/updated/src/assets.rs",
    "status": "gap",
-   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built. Built 2026-10-17: AssetDaemon in springboard/updated/src/assets.rs runs the apps' queues (tests assets::tests).",
+   "note": "The background daemon behind on-demand assets (see MobileAsset). The managed download queue (springboard/ui/src/managed_download.rs) is a model with no runner. Build the daemon inside the update agent service set in springboard/updated. Built 2026-10-17: the runner the daemon needs (ManagedDownloads::run_all, ui managed_download::tests). The daemon inside springboard/updated that calls it is not built. Built 2026-10-17: AssetDaemon in springboard/updated/src/assets.rs runs the apps' queues (tests assets::tests). Lead 2026-10-17: not ready: the asset queue runs but the transfer is a stub (no pack source or format).",
    "rea": [],
-   "method": "assessed",
-   "ready": true,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "updated",
-     "filter": "assets::tests"
-    }
-   ],
-   "ready_note": "the asset daemon in the update agent: runs each app's managed download queue on unmetered links, with a daily budget, low-power stop and three attempts (springboard/updated/src/assets.rs); the pack transport is the MobileAsset row"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
