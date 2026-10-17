@@ -426,6 +426,8 @@ fn run() -> std::io::Result<()> {
     let mut profile_pref = shell.power_pref();
     let mut profile_low_power = low_power;
     let mut last_profile_check = f64::NEG_INFINITY;
+    // Game Mode is checked four times a second: entering must feel immediate (see `shell::gamemode`)
+    let mut last_game_check = f64::NEG_INFINITY;
     boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, power::battery().0, power::battery().1, low_power));
     let chord_key = |code: u16| match code {
         input::KEY_POWER => Some(springboard::shell::chord::Key::Power),
@@ -1046,14 +1048,31 @@ fn run() -> std::io::Result<()> {
                 power::set_brightness(panel_level(level, low_power, max));
             }
         }
-        // every 10 s, and at once when Power Mode or Low Power Mode changed
+        if t - last_game_check >= 250.0 {
+            last_game_check = t;
+            if let Some(change) = shell.game_mode_update(t as u64) {
+                eprintln!("springboard: game mode {}", if change == springboard::shell::gamemode::Change::Enter { "on" } else { "off" });
+                // the effects of a change are the CPU profile, which is recomputed below at once
+                last_profile_check = f64::NEG_INFINITY;
+                if change == springboard::shell::gamemode::Change::Enter && shell.game_mode_first_notice() {
+                    eprintln!("springboard: game mode notice (not built yet)");
+                }
+            }
+        }
+        // every 10 s, and at once when Power Mode, Low Power Mode or Game Mode changed
         if t - last_profile_check > 10_000.0 || shell.power_pref() != profile_pref || low_power != profile_low_power {
             last_profile_check = t;
             profile_pref = shell.power_pref();
             profile_low_power = low_power;
             let (percent, charging) = power::battery();
             let before = boost.profile();
-            boost.set_profile(springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, percent, charging, low_power));
+            // Game Mode holds Performance over the Power Mode choice; Low Power Mode still wins
+            let profile = if shell.game_mode_on() && !low_power {
+                springboard::bare::cpuprofile::Profile::Performance
+            } else {
+                springboard::bare::cpuprofile::resolve(profile_pref, &mut profile_auto, percent, charging, low_power)
+            };
+            boost.set_profile(profile);
             if boost.profile() != before {
                 eprintln!("springboard: power profile {}", boost.profile().label());
             }
