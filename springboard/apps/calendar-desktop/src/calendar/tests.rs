@@ -43,7 +43,7 @@ fn event(id: u64, title: &str) -> CalendarEvent {
         location: String::new(),
         notes: String::new(),
         repeat: 0,
-        alert: 0,
+        alert: 0, uid: String::new(),
     }
 }
 fn tap(c: &mut Calendar, ui: &Ui, x: f32, y: f32, t: f64) {

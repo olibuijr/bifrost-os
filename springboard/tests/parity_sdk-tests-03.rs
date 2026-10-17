@@ -257,6 +257,7 @@ fn a_saved_book_loads_back_with_its_labels_flags_and_company() {
         favorite: true,
         company: "Analytical Engines".into(),
         address: "1 Mill Lane".into(),
+        uid: String::new(),
         labels: [2, 1, 2],
     };
     let grace = contact(9, "Grace Hopper", "", "grace@example.com");
@@ -581,7 +582,7 @@ fn event(id: u64, minute: u16, title: &str) -> CalendarEvent {
         location: String::new(),
         notes: String::new(),
         repeat: 0,
-        alert: 0,
+        alert: 0, uid: String::new(),
     }
 }
 

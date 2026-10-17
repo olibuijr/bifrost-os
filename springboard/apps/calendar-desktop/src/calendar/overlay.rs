@@ -72,7 +72,7 @@ pub fn holiday_events(first: i64, last: i64) -> Vec<CalendarEvent> {
                 location: String::new(),
                 notes: String::new(),
                 repeat: 0,
-                alert: 0,
+                alert: 0, uid: String::new(),
             });
         }
     }

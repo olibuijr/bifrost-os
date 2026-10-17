@@ -283,7 +283,7 @@ mod tests {
             location: String::new(),
             notes: String::new(),
             repeat,
-            alert,
+            alert, uid: String::new(),
         }
     }
 

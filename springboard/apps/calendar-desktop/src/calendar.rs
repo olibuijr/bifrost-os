@@ -702,7 +702,7 @@ impl Calendar {
                 location: String::new(),
                 notes: String::new(),
                 repeat: 0,
-                alert: self.prefs.alert,
+                alert: self.prefs.alert, uid: String::new(),
             }
         };
         self.open_draft(ui, event, id.is_some());
@@ -748,7 +748,7 @@ impl Calendar {
             location: q.location.unwrap_or_default(),
             notes: String::new(),
             repeat: 0,
-            alert: self.prefs.alert,
+            alert: self.prefs.alert, uid: String::new(),
         };
         self.open_draft(ui, event, false);
         self.dirty = true;

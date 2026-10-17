@@ -103,7 +103,7 @@ pub fn overlay_events(items: &[Item], first: i64, last: i64, slot: usize) -> Vec
             location: String::new(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: 0, uid: String::new(),
         })
         .collect()
 }
