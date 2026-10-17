@@ -163,5 +163,13 @@
    "note": "",
    "wire": ""
   }
- ]
+ ],
+ "summary": {
+  "features": 17,
+  "parity": 3,
+  "partial": 13,
+  "gap": 0,
+  "n/a": 1,
+  "coverage_pct": 59.4
+ }
 }
