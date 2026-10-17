@@ -5,6 +5,7 @@ pub mod defaults;
 pub mod ditto;
 pub mod b64;
 pub mod caffeinate;
+pub mod chflags;
 pub mod control;
 pub mod network;
 pub mod notifyutil;
