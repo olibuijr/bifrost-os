@@ -777,10 +777,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/extension.rs",
+   "bifrost": "springboard/src/shell/login_items_page.rs, springboard/sdk/src/extension.rs",
    "status": "partial",
    "note": "extension points exist; no extension manager UI; built on os/team-l-01-system-ui; not yet verified on Midget",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests::a_turned_off_extension"
+    }
+   ],
+   "ready_note": "covers: the extension manager in Login Items & Extensions: each installed app's extension points listed with an on/off switch."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppleIntelligenceReportingSELFIngestor.appex",
