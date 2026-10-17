@@ -521,11 +521,15 @@ impl SystemService for Contacts {
                 let dir = contactphotos::dir_for(&path);
                 if method == "photo_remove" {
                     let removed = contactphotos::remove(&dir, id).map_err(|e| e.to_string())?;
+                    if removed {
+                        contactchanges::record_for(&path, &[(contactchanges::Kind::Updated, id)]).map_err(|e| e.to_string())?;
+                    }
                     return Ok(Json::Obj(vec![("removed".into(), Json::Bool(removed))]));
                 }
                 let encoded = params.get("data").and_then(Json::as_str).ok_or_else(|| "photo_set needs data".to_string())?;
                 let bytes = contact_vcard::base64_decode(encoded).ok_or_else(|| "photo data is not base64".to_string())?;
                 let format = contactphotos::write(&dir, id, &bytes)?;
+                contactchanges::record_for(&path, &[(contactchanges::Kind::Updated, id)]).map_err(|e| e.to_string())?;
                 Ok(Json::Obj(vec![("format".into(), Json::Str(contactphotos::format_name(format).into()))]))
             }
             "request" => {
@@ -566,10 +570,14 @@ impl SystemService for Contacts {
             }
             "groups" | "group_members" | "group_add" | "group_remove" | "group_add_member" | "group_remove_member" => {
                 let mut groups: Groups = contactgroups::load(&groups_path);
+                let before = groups.clone();
                 let contacts = if access_of(app_id).check_write().is_ok() || reads(app_id) { load()? } else { Vec::new() };
                 let (reply, changed) = groups_answer(app_id, method, params, &contacts, &mut groups)?;
                 if changed {
                     contactgroups::save(&groups_path, &groups).map_err(|e| e.to_string())?;
+                    // a contact whose groups changed is an updated contact in the change log
+                    let changes = contactchanges::group_changes(&before, &groups, &contacts);
+                    contactchanges::record_for(&path, &changes).map_err(|e| e.to_string())?;
                 }
                 Ok(reply)
             }

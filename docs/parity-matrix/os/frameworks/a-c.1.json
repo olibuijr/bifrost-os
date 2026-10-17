@@ -359,11 +359,50 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/address-book.json",
+   "bifrost": "springboard/sdk/src/contacts.rs, springboard/src/shell/contactgroups.rs, springboard/src/shell/contactphotos.rs, springboard/src/shell/contactchanges.rs, springboard/src/shell/contactpick.rs, springboard/src/shell/contact_pick_sheet.rs, springboard/src/shell/services/privacy_permissions.rs",
    "status": "partial",
    "note": "from SDK matrix address-book.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactgroups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactphotos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactchanges::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactpick::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contact_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::grants_tests"
+    }
+   ],
+   "ready_note": "Address-book behaviour through the contacts SDK and shell: groups, pictures, change log, picker sheet (capped at four choices), and persisted grants. Location Allow Once is not saved. Host tests only; Midget not verified."
   },
   {
    "id": "path:/System/Library/Frameworks/AppIntents.framework",
@@ -1265,11 +1304,65 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "bifrost": "springboard/sdk/src/contacts.rs, springboard/src/shell/contactstore.rs, springboard/src/shell/contactgroups.rs, springboard/src/shell/contactchanges.rs, springboard/src/shell/contactphotos.rs, springboard/src/shell/contactpick.rs, springboard/src/shell/contact_pick_sheet.rs, springboard/src/shell/services/contacts.rs, springboard/src/shell/services/privacy_permissions.rs, springboard/src/shell/services/notify_bus.rs, springboard/ui/src/contact_groups.rs",
    "status": "partial",
    "note": "from SDK matrix contacts.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactgroups::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactchanges::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactchanges::record_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactphotos::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contactpick::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::contact_pick_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::contacts::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::grants_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::privacy_permissions::location_grants_tests"
+    }
+   ],
+   "ready_note": "Contacts SDK and shell: groups, change log, pictures, picker sheet (capped at four choices per sheet), access sheet, Settings grants and persisted privacy grants. Location Allow Once is not saved (other location answers persist). Host tests only; Midget not verified."
   },
   {
    "id": "path:/System/Library/Frameworks/ContactsUI.framework",
