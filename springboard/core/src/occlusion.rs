@@ -112,6 +112,50 @@ impl Occlusion {
     }
 }
 
+/// Whether the window `[x, y, width, height]` is entirely covered by the windows in `above` (the windows of other apps
+/// stacked over it). A window with no area is covered: nothing of it can be seen. Each window that lies over the
+/// visible part cuts it into up to four pieces, and the window is covered when no piece is left.
+pub fn is_covered(window: [i64; 4], above: &[[i64; 4]]) -> bool {
+    let [_, _, w, h] = window;
+    if w <= 0 || h <= 0 {
+        return true;
+    }
+    let mut visible = vec![window];
+    for &occluder in above {
+        visible = visible.into_iter().flat_map(|piece| cut(piece, occluder)).collect();
+        if visible.is_empty() {
+            return true;
+        }
+    }
+    visible.is_empty()
+}
+
+/// The parts of `piece` that `over` does not cover: the bands above, below, left and right of the overlap.
+fn cut(piece: [i64; 4], over: [i64; 4]) -> Vec<[i64; 4]> {
+    let [px, py, pw, ph] = piece;
+    let [ox, oy, ow, oh] = over;
+    let (px1, py1) = (px + pw, py + ph);
+    let (ox1, oy1) = (ox + ow, oy + oh);
+    let (ix0, iy0, ix1, iy1) = (px.max(ox), py.max(oy), px1.min(ox1), py1.min(oy1));
+    if ix1 <= ix0 || iy1 <= iy0 {
+        return vec![piece];
+    }
+    let mut parts = Vec::new();
+    if iy0 > py {
+        parts.push([px, py, pw, iy0 - py]);
+    }
+    if iy1 < py1 {
+        parts.push([px, iy1, pw, py1 - iy1]);
+    }
+    if ix0 > px {
+        parts.push([px, iy0, ix0 - px, iy1 - iy0]);
+    }
+    if ix1 < px1 {
+        parts.push([ix1, iy0, px1 - ix1, iy1 - iy0]);
+    }
+    parts
+}
+
 /// The signal that stops an app's processes when it is suspended (`SIGSTOP`, 19 on Linux for x86_64 and aarch64).
 pub const SIGSTOP: i32 = 19;
 /// The signal that resumes an app's processes (`SIGCONT`, 18 on Linux for x86_64 and aarch64).
@@ -137,6 +181,41 @@ mod tests {
         assert_eq!(signal_for(Transition::Resume), Some(SIGCONT));
         assert_eq!(signal_for(Transition::None), None);
         assert_eq!((SIGSTOP, SIGCONT), (19, 18));
+    }
+
+    #[test]
+    fn a_window_under_one_larger_window_is_covered() {
+        assert!(is_covered([10, 10, 100, 50], &[[0, 0, 500, 500]]));
+        assert!(is_covered([10, 10, 100, 50], &[[10, 10, 100, 50]]), "the same rectangle");
+    }
+
+    #[test]
+    fn a_window_partly_showing_is_not_covered() {
+        assert!(!is_covered([0, 0, 100, 100], &[[50, 0, 100, 100]]));
+        assert!(!is_covered([0, 0, 100, 100], &[]), "nothing over it");
+        assert!(!is_covered([0, 0, 100, 100], &[[200, 200, 10, 10]]), "an occluder that misses it");
+    }
+
+    #[test]
+    fn two_windows_together_can_cover_one() {
+        let left = [0, 0, 50, 100];
+        let right = [50, 0, 50, 100];
+        assert!(is_covered([10, 10, 80, 80], &[left, right]));
+        // a gap of one pixel at the seam leaves the window showing
+        assert!(!is_covered([10, 10, 80, 80], &[[0, 0, 49, 100], [50, 0, 50, 100]]));
+    }
+
+    #[test]
+    fn a_window_with_no_area_is_covered() {
+        assert!(is_covered([5, 5, 0, 10], &[]));
+    }
+
+    #[test]
+    fn a_covering_fact_suspends_an_app_after_the_grace_period() {
+        let mut o = Occlusion::new();
+        let covered = is_covered([0, 0, 100, 100], &[[-10, -10, 200, 200]]);
+        assert_eq!(o.report(Event::Covered(covered), 0), Transition::None);
+        assert_eq!(o.tick(GRACE_MS), Transition::Suspend);
     }
 
     #[test]
