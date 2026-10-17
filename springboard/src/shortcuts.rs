@@ -642,19 +642,30 @@ pub enum Automation {
     AppOpens(usize),
     /// runs each time the charge falls below this percent (`MIN_BATTERY` to `MAX_BATTERY`)
     BatteryBelow(u8),
+    /// runs when a Focus turns on
+    FocusOn,
+    /// runs when the Focus that was on turns off
+    FocusOff,
 }
 
 impl Automation {
-    /// The form stored in the list file: `open:N` for `APP_CHOICES[N]`, or `battery:P`.
+    /// The form stored in the list file: `open:N` for `APP_CHOICES[N]`, `battery:P`, `focus:on` or `focus:off`.
     fn encode(self) -> String {
         match self {
             Automation::AppOpens(i) => format!("open:{i}"),
             Automation::BatteryBelow(p) => format!("battery:{p}"),
+            Automation::FocusOn => "focus:on".into(),
+            Automation::FocusOff => "focus:off".into(),
         }
     }
 
     /// The automation a stored form names; `None` for an unknown kind or a value out of range.
     fn decode(v: &str) -> Option<Automation> {
+        match v {
+            "focus:on" => return Some(Automation::FocusOn),
+            "focus:off" => return Some(Automation::FocusOff),
+            _ => {}
+        }
         let (kind, n) = v.split_once(':')?;
         let n: usize = n.parse().ok()?;
         match kind {
@@ -672,6 +683,8 @@ pub enum Event<'a> {
     AppOpened(&'a str),
     /// the battery charge changed from `before` (`None` for the first reading) to `now`, in percent
     BatteryLevel { before: Option<u8>, now: u8 },
+    /// a Focus turned on (`on` true) or off (`on` false)
+    FocusChanged { on: bool },
 }
 
 /// Whether a change in the charge crosses below `level`: the charge was at or above it and is now below it. The first
@@ -687,6 +700,8 @@ pub fn due(list: &[Shortcut], event: Event) -> Vec<usize> {
         .filter(|(_, s)| match (s.automation, event) {
             (Some(Automation::AppOpens(i)), Event::AppOpened(app)) => APP_CHOICES.get(i) == Some(&app),
             (Some(Automation::BatteryBelow(level)), Event::BatteryLevel { before, now }) => battery_fell_below(before, now, level),
+            (Some(Automation::FocusOn), Event::FocusChanged { on }) => on,
+            (Some(Automation::FocusOff), Event::FocusChanged { on }) => !on,
             _ => false,
         })
         .map(|(i, _)| i)
@@ -834,8 +849,11 @@ pub fn next_key(cur: u8) -> u8 {
 /// The automation after `cur` in the order the editor's Automation row steps through: none, each app in
 /// `APP_CHOICES`, each level in `BATTERY_CHOICES`, then none again. `None` for a value the row never offers.
 pub fn next_automation(cur: Option<Automation>) -> Option<Automation> {
-    let order: Vec<Automation> =
-        (0..APP_CHOICES.len()).map(Automation::AppOpens).chain(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p))).collect();
+    let order: Vec<Automation> = (0..APP_CHOICES.len())
+        .map(Automation::AppOpens)
+        .chain(BATTERY_CHOICES.iter().map(|&p| Automation::BatteryBelow(p)))
+        .chain([Automation::FocusOn, Automation::FocusOff])
+        .collect();
     match cur {
         None => order.first().copied(),
         Some(a) => order.iter().position(|&x| x == a).and_then(|k| order.get(k + 1).copied()),
@@ -851,6 +869,8 @@ pub fn automation_label(cur: Option<Automation>) -> String {
             None => "Off".into(),
         },
         Some(Automation::BatteryBelow(p)) => format!("Battery Below {p}%"),
+        Some(Automation::FocusOn) => "When Focus Turns On".into(),
+        Some(Automation::FocusOff) => "When Focus Turns Off".into(),
     }
 }
 

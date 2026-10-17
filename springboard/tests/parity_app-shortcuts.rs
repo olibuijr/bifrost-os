@@ -169,3 +169,21 @@ fn a_position_outside_the_list_has_no_neighbour() {
     assert_eq!(model::neighbour(3, 5, false), None);
     assert_eq!(model::neighbour(3, 3, true), None);
 }
+
+#[test]
+fn a_focus_automation_fires_when_a_focus_turns_on_or_off() {
+    let list = vec![with_automation("On", Some(Automation::FocusOn)), with_automation("Off", Some(Automation::FocusOff))];
+    assert_eq!(due(&list, Event::FocusChanged { on: true }), vec![0]);
+    assert_eq!(due(&list, Event::FocusChanged { on: false }), vec![1]);
+    assert_eq!(due(&list, Event::AppOpened("Notes")), Vec::<usize>::new());
+}
+
+#[test]
+fn focus_automations_survive_the_list_file_and_step_in_the_row() {
+    let list = vec![with_automation("On", Some(Automation::FocusOn)), with_automation("Off", Some(Automation::FocusOff))];
+    assert_eq!(parse(&serialize(&list)), list);
+    assert_eq!(model::next_automation(Some(Automation::BatteryBelow(50))), Some(Automation::FocusOn));
+    assert_eq!(model::next_automation(Some(Automation::FocusOn)), Some(Automation::FocusOff));
+    assert_eq!(model::next_automation(Some(Automation::FocusOff)), None);
+    assert_eq!(model::automation_label(Some(Automation::FocusOn)), "When Focus Turns On");
+}
