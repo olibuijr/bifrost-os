@@ -145,7 +145,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/pencilkit.json",
    "status": "partial",
-   "note": "from SDK matrix pencilkit.json",
+   "note": "From SDK matrix pencilkit.json. Open: no app canvas view captures strokes (the drawing model and tool picker are re-exported by the SDK); no handwriting recognizer; no Scribble routing; the shell and Freeform save PNG only; stylus tilt is not read from the device.",
    "rea": [],
    "method": "assessed"
   },
@@ -369,7 +369,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-animation.json",
    "status": "partial",
-   "note": "from SDK matrix core-animation.json",
+   "note": "From SDK matrix core-animation.json. Open: no CALayer class hierarchy for apps; no keyframe or key-path animation through Window::animate; no CAMetalLayer or drawable for apps; spring mass not exposed; layer filters beyond background blur.",
    "rea": [],
    "method": "assessed"
   },

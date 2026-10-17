@@ -682,7 +682,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/swiftdata.json",
    "status": "partial",
-   "note": "from SDK matrix swiftdata.json",
+   "note": "From SDK matrix swiftdata.json. Open: no shared model container or context for apps; no predicate fetch over persistent records; no live fetched results; no uniqueness or relationship constraints in the app stores; no iCloud sync.",
    "rea": [],
    "method": "assessed"
   },

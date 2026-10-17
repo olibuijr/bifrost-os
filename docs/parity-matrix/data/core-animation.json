@@ -40,7 +40,7 @@
    "apple": "CASpringAnimation",
    "bifrost": "springboard/sdk/src/view/animation.rs (Timing::spring, Timing::spring_with_velocity), springboard/ui/src/anim.rs (Animation::velocity, Curve::Spring), springboard/render/src/motion.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (mass, stiffness, damping, initial velocity)",
    "status": "partial",
-   "note": "Damping ratio, response and initial velocity reach apps through Timing::spring_with_velocity, and a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of); a headless test in animation.rs checks that a fling starts ahead of a spring from rest. Mass is not exposed to apps; it exists only in keypath_anim.rs."
+   "note": "Damping ratio, response and initial velocity reach apps through Timing::spring_with_velocity, and a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of); a headless test in animation.rs checks that a fling starts ahead of a spring from rest. Mass is not exposed to apps; it exists only in keypath_anim.rs. Refreshed 2026-10-17: initial velocity is covered by Timing::spring_with_velocity (sdk view/animation.rs); spring mass is still not exposed."
   },
   {
    "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
@@ -54,7 +54,7 @@
    "apple": "CACurrentMediaTime(), CADisplayLink",
    "bifrost": "springboard/sdk/src/view/animation.rs:376 (Window::next_wake, Window::tick), springboard/ui/src/frame_clock.rs (media_time, FrameLink, FrameLinks), springboard/sdk/src/display_link.rs (TimeStamp, DisplayLink)",
    "status": "partial",
-   "note": "the window ticks at 1/60 s while anything animates. The frame_clock model gives per-frame links with a FrameTick and wake intervals, and sdk display_link.rs has a refresh-period display link with missed-refresh accounting; neither is yet the app-facing CADisplayLink object. Verify on Midget."
+   "note": "the window ticks at 1/60 s while anything animates. The frame_clock model gives per-frame links with a FrameTick and wake intervals, and sdk display_link.rs has a refresh-period display link with missed-refresh accounting; neither is yet the app-facing CADisplayLink object. Verify on Midget. Refreshed 2026-10-17: covered by bifrost-app sdk/src/display_link.rs (DisplayLink::new with a refresh rate, refresh-period ticks) and bifrost-ui frame_rate.rs (FrameRateRange with minimum, maximum and preferred); tests display_link::tests, frame_rate::tests."
   },
   {
    "feature": "Preferred frame rate (CAFrameRateRange, ProMotion)",
@@ -156,13 +156,12 @@
   }
  ],
  "gaps": [
-  "No public CALayer class hierarchy for apps: layers are reached through ViewBase::layer and the layer-kind views.",
+  "No CALayer class hierarchy for apps: sdk layers.rs exposes LayerTree and LayerBatch, but layers are otherwise reached through ViewBase::layer and the layer-kind views.",
   "No keyframe, group or additive animations driven by the SDK window (keypath_anim.rs and keyframe models exist but are not the SDK's animate path).",
   "No key-path animations through Window::animate (typed view properties only).",
   "Gradient, text, replicator and emitter layers render through layer-kind views; per-property parity is not yet checked on Midget.",
-  "No app-facing CADisplayLink object or frame-rate preference (CAFrameRateRange) request API.",
   "No app-facing Metal layer or drawable (CAMetalLayer, CAMetalDrawable); the compositor is system-only.",
-  "Initial spring velocity and mass are not exposed to apps through Timing::spring.",
+  "Spring mass is not exposed through Timing::spring (initial velocity is, through Timing::spring_with_velocity).",
   "Layer filters beyond background blur are not modelled (per-shader inventory pending)."
  ]
 }

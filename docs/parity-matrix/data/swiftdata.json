@@ -19,7 +19,7 @@
       "apple": "ModelContainer, ModelContext",
       "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs (one .md file per note, atomic write; load, save, delete, Autosave); springboard/apps/notes-desktop/tests/parity_sdk-tests-11.rs; springboard/apps/books-desktop/src/books/store.rs; springboard/sdk/src/defaults.rs (atomic write of defaults.txt)",
       "status": "partial",
-      "note": "The notes file store's fetch, insert, update and delete, its id allocation and the debounced autosave are tested headless in parity_sdk-tests-11.rs. Gap: each app still hand-rolls its store; there is no shared container, no context, no unsaved-changes tracking and no SDK API."
+      "note": "The notes file store's fetch, insert, update and delete, its id allocation and the debounced autosave are tested headless in parity_sdk-tests-11.rs. Gap: each app still hand-rolls its store; there is no shared container, no context, no unsaved-changes tracking and no SDK API. Refreshed 2026-10-17: ui managed_context.rs (insert, fault in and out, update, delete, has_changes) and ui history.rs (transactions with tokens, since); tests managed_context::tests, history::tests."
     },
     {
       "feature": "Relationships between models (delete rules, inverses, model count limits)",
@@ -102,9 +102,8 @@
   "gaps": [
     "No model layer: no declarative model type, schema, or SDK-level container and context for persistent objects.",
     "No queryable record store: no predicate or sort-descriptor fetch over persistent records, and no live results that update views.",
-    "No relationships, uniqueness or index constraints between stored records.",
+    "No index constraints: uniqueness (ui model_store.rs declare_unique) and relations (ui relations.rs) are modelled, but no app store uses them.",
     "No pluggable data store interface and no store-level batching.",
-    "No change history or transaction tokens for records, so history-based sync cannot be built on SDK APIs.",
     "No iCloud or cross-device sync API for app model data.",
     "Undo records only what the app registers; there is no automatic capture of store changes as SwiftData's undo manager does."
   ]

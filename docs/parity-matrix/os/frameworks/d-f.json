@@ -5962,7 +5962,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-text.json",
    "status": "partial",
-   "note": "private framework, owner CoreText; from SDK matrix core-text.json",
+   "note": "Private framework, owner CoreText; from SDK matrix core-text.json. Open: no GPOS reader or feature selection (kern table pairs only), no ligatures outside colour emoji; metrics not yet compared with the reference on Midget.",
    "rea": [],
    "method": "assessed"
   },

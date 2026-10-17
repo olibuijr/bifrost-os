@@ -19,7 +19,7 @@
    "apple": "Carbon Accessibility: AXUIElement.h, AXRoleConstants.h, AXAttributeConstants.h, AXNotificationConstants.h, AXActionConstants.h",
    "bifrost": "springboard/src/shell/atspi/model.rs (build_ax, states, chrome_snap, parse_path), springboard/src/shell/atspi/mod.rs, docs/bifrost-ui.md (Accessibility bridge); tests springboard/tests/parity_sdk-tests-09.rs",
    "status": "partial",
-   "note": "The AT-SPI2 model maps app node trees and the shell chrome to roles, states, actions and object paths, with secure fields masked; headless tests in springboard/tests/parity_sdk-tests-09.rs. Gap: the D-Bus bridge (feature atspi) is not checked against a live screen reader."
+   "note": "The AT-SPI2 model maps app node trees and the shell chrome to roles, states, actions and object paths, with secure fields masked; headless tests in springboard/tests/parity_sdk-tests-09.rs. Gap: the D-Bus bridge (feature atspi) is not checked against a live screen reader. Refreshed 2026-10-17: announcements (polite and assertive) and custom actions are modelled in ui ax.rs (add_custom_action); tests ax::tests."
   },
   {
    "feature": "Accessibility text (AXText, attributed strings, text markers)",
@@ -47,7 +47,7 @@
    "apple": "Core Printing: PMCreatePageFormat, PMCreatePrintSettings, PMCreateSession, PMGetAdjustedPageRect",
    "bifrost": "springboard/ui/src/print.rs (PrintInfo, PaperSize, PrintOperation, Destination)",
    "status": "partial",
-   "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover paper size, margins and the imageable rect, the job attributes for copies, media, orientation and page range, and the PDF a job builds from text or pages (paper_sizes_report_their_points_and_pwg_keywords, job_attributes_carry_copies_media_orientation_and_the_page_range, a_text_job_builds_a_pdf_document). CUPS submission, printers() and available() are not covered. The shell print sheet is wired in springboard/src/shell/print_sheet.rs (wiring wave 5, 0.5.43); CUPS presence on the Midget image is unchecked; verify on Midget for parity."
+   "note": "Headless tests in springboard/ui/tests/parity_sdk-tests-03.rs cover paper size, margins and the imageable rect, the job attributes for copies, media, orientation and page range, and the PDF a job builds from text or pages (paper_sizes_report_their_points_and_pwg_keywords, job_attributes_carry_copies_media_orientation_and_the_page_range, a_text_job_builds_a_pdf_document). CUPS submission, printers() and available() are not covered. The shell print sheet is wired in springboard/src/shell/print_sheet.rs (wiring wave 5, 0.5.43); CUPS presence on the Midget image is unchecked; verify on Midget for parity. Refreshed 2026-10-17: ui print_pages.rs paginates views (begin_view_page); tests print_pages::tests."
   },
   {
    "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",
@@ -61,7 +61,7 @@
    "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
    "bifrost": "springboard/render/src/icc.rs, springboard/render/src/colorspace.rs; tests: springboard/render/tests/parity_sdk-tests-06.rs",
    "status": "partial",
-   "note": "Headless tests in render/tests/parity_sdk-tests-06.rs cover profile parsing and matrix-shaper conversion (the_colorants_of_a_white_rgb_profile...), tone curves, device profiles, video card gamma tables and the working-space transforms (an_srgb_red_is_a_less_saturated_red_in_display_p3). Gap: not wired into the shell or apps, no profile creation or lookup-table transforms, and not tested on Midget. PDF ICC-based images decode, but there is no profile or transform API for apps."
+   "note": "Headless tests in render/tests/parity_sdk-tests-06.rs cover profile parsing and matrix-shaper conversion (the_colorants_of_a_white_rgb_profile...), tone curves, device profiles, video card gamma tables and the working-space transforms (an_srgb_red_is_a_less_saturated_red_in_display_p3). Gap: not wired into the shell or apps, no profile creation or lookup-table transforms, and not tested on Midget. PDF ICC-based images decode, but there is no profile or transform API for apps. Refreshed 2026-10-17: sdk colorsync.rs (open, apply, gamma_ramps); tests colorsync::tests."
   },
   {
    "feature": "Speech Synthesis Manager",
@@ -94,9 +94,8 @@
  ],
  "gaps": [
   "Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.",
-  "Accessibility announcements (live regions) and custom actions beyond press.",
-  "ColorSync: springboard/render/src/cg/color.rs converts between matrix/TRC profiles, but there is no SDK profile or transform API for apps, no LUT-based profile support and no CMM.",
-  "Core Printing: the shell's print sheet exists (src/shell/print_sheet.rs), but there is no view pagination and no print panel plug-in mechanism.",
+  "No CMM or profile-matching API for apps: sdk colorsync.rs opens an ICC profile and converts colours and gamma ramps (render icc_lut.rs covers LUT tags).",
+  "No print panel plug-in mechanism: ui print_pages.rs paginates views, but apps cannot add panes to the print panel.",
   "HIShape: no shape or region type with boolean operations.",
   "Universal Access: no app-facing zoom focus API."
  ]
