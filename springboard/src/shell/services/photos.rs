@@ -35,6 +35,7 @@ use bifrost_ui::photo_changes::{self, Asset};
 use bifrost_ui::photo_fetch::{self, FetchOptions, Item, Sort};
 use bifrost_ui::photo_media::{self, kind_for_name, Kind};
 use bifrost_ui::photo_project::{Change, Project};
+use bifrost_ui::photo_request::Request;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -353,6 +354,48 @@ fn picker_call(params: &Json) -> Result<Json, String> {
     Err("the photo picker needs the person's own choice, and the shell has no picker sheet yet".into())
 }
 
+/// Checks a batch of library changes (`ops`: create, favourite or trash) against the assets the app can see and reports
+/// what it would write. Nothing is written yet: the favourite and trash flags live in the Photos app, so the service
+/// only plans the batch. The plan is checked by `photo_request::Request::plan`, which takes the names of the files
+/// (for the clash check) and the asset identifiers (for the favourite and trash checks) together.
+fn batch_call(params: &Json, seen: &[&Photo]) -> Result<Json, String> {
+    let ops = params.get("ops").and_then(Json::as_array).ok_or("perform needs ops")?;
+    let mut request = Request::new();
+    for op in ops {
+        match op.str_field("op").as_deref() {
+            Some("create") => {
+                request.create(&op.str_field("name").ok_or("create needs name")?);
+            }
+            Some("favourite") => {
+                let on = matches!(op.get("on"), Some(Json::Bool(true)));
+                request.set_favourite(&op.str_field("id").ok_or("favourite needs id")?, on);
+            }
+            Some("trash") => {
+                request.trash(&op.str_field("id").ok_or("trash needs id")?);
+            }
+            _ => return Err("perform ops are create, favourite or trash".into()),
+        }
+    }
+    let mut known: Vec<String> = Vec::new();
+    for p in seen {
+        known.push(local_identifier(p));
+        if let Some(name) = p.path.file_name().and_then(|n| n.to_str()) {
+            known.push(name.to_string());
+        }
+    }
+    let refs: Vec<&str> = known.iter().map(String::as_str).collect();
+    let plan = request.plan(&refs).map_err(|e| format!("{e:?}"))?;
+    let created = plan.created.iter().map(|c| Json::Obj(vec![("requested".into(), Json::Str(c.requested.clone())), ("name".into(), Json::Str(c.name.clone())), ("media_type".into(), Json::Str(kind_name(c.kind).into()))]));
+    let favourites = plan.favourites.iter().map(|(id, on)| Json::Obj(vec![("id".into(), Json::Str(id.clone())), ("on".into(), Json::Bool(*on))]));
+    let trashed = plan.trashed.iter().map(|id| Json::Str(id.clone()));
+    Ok(Json::Obj(vec![
+        ("created".into(), Json::Arr(created.collect())),
+        ("favourites".into(), Json::Arr(favourites.collect())),
+        ("trashed".into(), Json::Arr(trashed.collect())),
+        ("written".into(), Json::Bool(false)),
+    ]))
+}
+
 /// The answer to one method call. `photos` is the library scan; the caller loads it only for the methods that read it.
 /// Pure apart from reading picture headers.
 pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, photos: &[Photo]) -> Result<Json, String> {
@@ -423,6 +466,13 @@ pub fn answer(app_id: &str, has_permission: bool, method: &str, params: &Json, p
             }
         }
         "picker" => picker_call(params),
+        "perform" => {
+            if !granted(&access) {
+                return Err("photo library access is not granted".into());
+            }
+            let seen: Vec<&Photo> = listed(photos, &access).into_iter().map(|(p, _)| p).collect();
+            batch_call(params, &seen)
+        }
         "project" => {
             if !has_permission {
                 return Err("the photos permission is not granted".into());
@@ -448,7 +498,7 @@ impl SystemService for Photos {
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
         let has_permission = app_has_permission(app_id, PERMISSION);
         let is_granted = granted(&access_of(app_id, has_permission));
-        let reads_library = matches!(method, "fetch" | "image" | "observe" | "editing");
+        let reads_library = matches!(method, "fetch" | "image" | "observe" | "editing" | "perform");
         let library = if reads_library && is_granted { library::scan(&library::dirs()) } else { Vec::new() };
         answer(app_id, has_permission, method, params, &library)
     }
@@ -739,5 +789,62 @@ mod tests {
         assert!(answer(app, true, "project", &bad, &[]).is_err());
         let got = answer(app, true, "project", &params(vec![("op", Json::Str("get".into())), ("id", Json::Str("b".into()))]), &[]).unwrap();
         assert_eq!(got.get("sections").and_then(Json::as_array).map(|a| a.len()), Some(0));
+    }
+
+    fn op(fields: Vec<(&str, Json)>) -> Json {
+        params(fields)
+    }
+
+    fn batch(ops: Vec<Json>) -> Json {
+        params(vec![("ops", Json::Arr(ops))])
+    }
+
+    #[test]
+    fn a_batch_is_planned_and_nothing_is_written() {
+        let app = "is.example.photos-perform-plan";
+        granted(app);
+        let fav = id("a.png", 100);
+        let trash = id("b.png", 300);
+        let req = batch(vec![
+            op(vec![("op", Json::Str("favourite".into())), ("id", Json::Str(fav.clone())), ("on", Json::Bool(true))]),
+            op(vec![("op", Json::Str("trash".into())), ("id", Json::Str(trash.clone()))]),
+            op(vec![("op", Json::Str("create".into())), ("name", Json::Str("a.png".into()))]),
+        ]);
+        let r = answer(app, true, "perform", &req, &library()).unwrap();
+        assert_eq!(r.get("written").cloned(), Some(Json::Bool(false)));
+        let favs = r.get("favourites").and_then(Json::as_array).unwrap();
+        assert_eq!(favs.len(), 1);
+        assert_eq!(favs[0].str_field("id").as_deref(), Some(fav.as_str()));
+        assert_eq!(r.get("trashed").and_then(Json::as_array).unwrap()[0].as_str(), Some(trash.as_str()));
+        let created = r.get("created").and_then(Json::as_array).unwrap();
+        assert_eq!(created[0].str_field("name").as_deref(), Some("a-2.png"));
+        assert_eq!(created[0].str_field("media_type").as_deref(), Some("image"));
+    }
+
+    #[test]
+    fn a_batch_refuses_an_unknown_or_repeated_asset_and_a_bad_name() {
+        let app = "is.example.photos-perform-refuse";
+        granted(app);
+        let unknown = batch(vec![op(vec![("op", Json::Str("favourite".into())), ("id", Json::Str("PH-nope".into())), ("on", Json::Bool(true))])]);
+        assert!(answer(app, true, "perform", &unknown, &library()).is_err());
+        let fav = id("a.png", 100);
+        let twice = batch(vec![
+            op(vec![("op", Json::Str("favourite".into())), ("id", Json::Str(fav.clone())), ("on", Json::Bool(true))]),
+            op(vec![("op", Json::Str("trash".into())), ("id", Json::Str(fav))]),
+        ]);
+        assert!(answer(app, true, "perform", &twice, &library()).is_err());
+        let bad = batch(vec![op(vec![("op", Json::Str("create".into())), ("name", Json::Str("../x.jpg".into()))])]);
+        assert!(answer(app, true, "perform", &bad, &library()).is_err());
+    }
+
+    #[test]
+    fn a_batch_needs_ops_known_op_names_and_the_permission() {
+        let app = "is.example.photos-perform-shape";
+        granted(app);
+        assert!(answer(app, true, "perform", &Json::Null, &library()).is_err());
+        let unknown_op = batch(vec![op(vec![("op", Json::Str("rename".into()))])]);
+        assert!(answer(app, true, "perform", &unknown_op, &library()).is_err());
+        let denied = "is.example.photos-perform-denied";
+        assert!(answer(denied, false, "perform", &batch(vec![]), &library()).is_err());
     }
 }
