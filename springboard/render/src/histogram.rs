@@ -1,6 +1,6 @@
-//! Tone and brightness tools on 8-bit samples: histograms, histogram equalization, level stretching and piecewise
-//! linear tone curves. Each tool is a pure function of the samples or of a 256-entry lookup table, so a tone change
-//! costs one table build and one pass over the pixels.
+//! Tone and brightness tools on 8-bit samples: histograms, histogram equalization and specification, level stretching,
+//! gamma and piecewise linear tone curves. Each tool is a pure function of the samples or of a 256-entry lookup table,
+//! so a tone change costs one table build and one pass over the pixels.
 
 /// Counts how many samples take each of the 256 values.
 pub fn histogram(samples: &[u8]) -> [u32; 256] {
@@ -86,6 +86,44 @@ fn curve_value(points: &[(u8, u8)], x: u32) -> u8 {
     last.1
 }
 
+/// A gamma table: each value `v` maps to `255 * (v / 255)^(1 / gamma)`, rounded. A gamma of 1 is the identity and a
+/// gamma above 1 brightens the mid tones. Returns None when `gamma` is not a positive finite number.
+pub fn gamma_lut(gamma: f64) -> Option<[u8; 256]> {
+    if !gamma.is_finite() || gamma <= 0.0 {
+        return None;
+    }
+    let exponent = 1.0 / gamma;
+    Some(core::array::from_fn(|i| {
+        let v = (i as f64 / 255.0).powf(exponent) * 255.0;
+        v.round().clamp(0.0, 255.0) as u8
+    }))
+}
+
+/// Histogram specification: a table that reshapes the `source` histogram into the `target` one. Each source value maps
+/// to the smallest target value whose cumulative share reaches the source value's cumulative share, so the output
+/// follows the target's tones. An empty histogram on either side has nothing to match, so it maps to the identity.
+pub fn specification_lut(source: &[u32; 256], target: &[u32; 256]) -> [u8; 256] {
+    let s_total: u64 = source.iter().map(|&c| c as u64).sum();
+    let t_total: u64 = target.iter().map(|&c| c as u64).sum();
+    if s_total == 0 || t_total == 0 {
+        return identity_lut();
+    }
+    let mut t_cdf = [0u64; 256];
+    let mut acc = 0u64;
+    for (j, &c) in target.iter().enumerate() {
+        acc += c as u64;
+        t_cdf[j] = acc;
+    }
+    let mut s_acc = 0u64;
+    core::array::from_fn(|i| {
+        s_acc += source[i] as u64;
+        // Smallest j with t_cdf[j] / t_total >= s_acc / s_total, compared without division.
+        let need = s_acc as u128 * t_total as u128;
+        let j = t_cdf.iter().position(|&c| c as u128 * s_total as u128 >= need).unwrap_or(255);
+        j as u8
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +189,26 @@ mod tests {
         assert!(curve_lut(&[]).is_none());
         assert!(curve_lut(&[(10, 0), (10, 5)]).is_none(), "equal inputs have no slope");
         assert!(curve_lut(&[(90, 0), (10, 5)]).is_none());
+    }
+
+    #[test]
+    fn gamma_table_brightens_mid_tones_and_refuses_bad_gamma() {
+        let lut = gamma_lut(2.0).expect("a positive gamma");
+        assert_eq!((lut[0], lut[255]), (0, 255));
+        assert_eq!(lut[64], 128, "255 * sqrt(64 / 255) is 127.75");
+        assert_eq!(gamma_lut(1.0), Some(identity_lut()));
+        assert!(gamma_lut(0.0).is_none());
+        assert!(gamma_lut(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn specification_moves_the_source_tones_onto_the_target() {
+        let source = histogram(&[0, 0, 255, 255]);
+        let target = histogram(&[10, 20, 30, 40]);
+        let lut = specification_lut(&source, &target);
+        assert_eq!(lut[0], 20, "half the source sits at or below the target's second value");
+        assert_eq!(lut[255], 40, "the top of the source reaches the top of the target");
+        assert_eq!(specification_lut(&source, &[0u32; 256]), identity_lut());
     }
 
     #[test]
