@@ -432,7 +432,7 @@ mod tests {
     fn a_file_type_no_provider_draws_goes_to_the_app_that_declared_it() {
         let dir = scratch("app-draws");
         let picture = png_file(&dir, "drawn.png");
-        let file = dir.join("model.qzx-opaque");
+        let file = dir.join("model.textclipping");
         std::fs::write(&file, b"opaque bytes").unwrap();
         let path = file.to_str().unwrap().to_string();
         let mut s = service(&dir);
@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn an_app_that_gives_no_picture_leaves_the_icon() {
         let dir = scratch("app-refuses");
-        let file = dir.join("refused.qzx-opaque");
+        let file = dir.join("refused.textclipping");
         std::fs::write(&file, b"opaque bytes").unwrap();
         let path = file.to_str().unwrap().to_string();
         let mut s = service(&dir);
