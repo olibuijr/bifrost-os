@@ -152,6 +152,34 @@ impl ManagedDownloads {
         self.used_today
     }
 
+    /// Runs one step of the queue: picks the pack `next_ready` offers, starts it, and calls `transfer` with its id.
+    /// `transfer` returns true when the bytes arrived, which finishes the pack; false records a failed attempt. Returns
+    /// the pack id and the outcome, or `None` when nothing may start under `conditions`.
+    pub fn run_next<F: FnMut(&str) -> bool>(&mut self, conditions: Conditions, mut transfer: F) -> Option<(String, bool)> {
+        let pack = self.next_ready(conditions)?.to_string();
+        if !self.start(&pack, conditions) {
+            return None;
+        }
+        let ok = transfer(&pack);
+        if ok {
+            self.finish(&pack);
+        } else {
+            self.fail(&pack);
+        }
+        Some((pack, ok))
+    }
+
+    /// Runs steps until nothing more may start under `conditions`, and returns how many packs finished.
+    pub fn run_all<F: FnMut(&str) -> bool>(&mut self, conditions: Conditions, mut transfer: F) -> usize {
+        let mut done = 0;
+        while let Some((_, ok)) = self.run_next(conditions, &mut transfer) {
+            if ok {
+                done += 1;
+            }
+        }
+        done
+    }
+
     /// Starts a new day: the budget is available again, except for downloads still running in the background.
     pub fn reset_day(&mut self) {
         self.used_today = self.entries.iter().map(|e| e.reserved).sum();
@@ -294,6 +322,48 @@ mod tests {
             assert!(q.fail("levels"));
         }
         assert_eq!(q.state("levels"), Some(PackState::Queued));
+    }
+
+    #[test]
+    fn run_next_finishes_a_pack_the_transfer_delivers() {
+        let mut q = ManagedDownloads::new(100);
+        q.request("levels", 10, 1).unwrap();
+        assert_eq!(q.run_next(FOREGROUND, |_| true), Some(("levels".to_string(), true)));
+        assert_eq!(q.state("levels"), Some(PackState::Done));
+        assert_eq!(q.run_next(FOREGROUND, |_| true), None);
+    }
+
+    #[test]
+    fn run_next_records_a_failed_transfer_and_retries_later() {
+        let mut q = ManagedDownloads::new(100);
+        q.request("levels", 10, 1).unwrap();
+        assert_eq!(q.run_next(FOREGROUND, |_| false), Some(("levels".to_string(), false)));
+        assert_eq!(q.state("levels"), Some(PackState::Queued));
+    }
+
+    #[test]
+    fn run_next_does_nothing_offline_or_over_budget() {
+        let mut q = ManagedDownloads::new(50);
+        q.request("big", 60, 1).unwrap();
+        let mut calls = 0;
+        assert_eq!(q.run_next(BACKGROUND_WIRED, |_| { calls += 1; true }), None);
+        let offline = Conditions { network_available: false, ..FOREGROUND };
+        assert_eq!(q.run_next(offline, |_| { calls += 1; true }), None);
+        assert_eq!(calls, 0);
+        assert_eq!(q.state("big"), Some(PackState::Queued));
+    }
+
+    #[test]
+    fn run_all_drains_the_queue_within_the_budget() {
+        let mut q = ManagedDownloads::new(100);
+        q.request("a", 40, 1).unwrap();
+        q.request("b", 40, 2).unwrap();
+        q.request("c", 40, 3).unwrap();
+        // Background: only two 40-byte packs fit today's 100-byte budget.
+        assert_eq!(q.run_all(BACKGROUND_WIRED, |_| true), 2);
+        assert_eq!(q.state("c"), Some(PackState::Done));
+        assert_eq!(q.state("a"), Some(PackState::Queued));
+        assert_eq!(q.used_today(), 80);
     }
 
     #[test]
