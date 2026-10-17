@@ -3,6 +3,7 @@
 //! the content the shell reported, so the result always names windows that exist. Pure: no capture happens here.
 
 use crate::capture_content::{CaptureWindow, ShareableContent};
+use crate::Rect;
 
 /// The rule for the windows of a display. A listed window id always counts as outside any listed app, so
 /// it is the exception to that app's rule.
@@ -107,6 +108,47 @@ impl ContentFilter {
     pub fn captures_window(&self, content: &ShareableContent, id: u32) -> bool {
         self.captured(content).iter().any(|w| w.id == id)
     }
+
+    /// The rectangle of the display or the windows the stream shows, in global points. A window scope gives that
+    /// window's frame. A display scope with an exclusion rule gives the whole display. A display scope with an
+    /// inclusion rule gives the bounding box of the windows it captures. None when nothing is captured.
+    pub fn source_region(&self, content: &ShareableContent) -> Option<Rect> {
+        match &self.scope {
+            Scope::Window(id) => content.window(*id).map(|w| w.frame),
+            Scope::Display { display, rule } => match rule {
+                Rule::ExcludeWindows(_) | Rule::ExcludeApps { .. } => content.display(*display).map(|d| d.frame),
+                Rule::IncludeWindows(_) | Rule::IncludeApps { .. } => {
+                    let frames: Vec<Rect> = self.captured(content).iter().map(|w| w.frame).collect();
+                    bounding_box(&frames)
+                }
+            },
+        }
+    }
+
+    /// The frames of the on-screen windows this filter does not capture that overlap the source region. They are
+    /// blanked in the picture, so a window that is left out never shows through a captured one.
+    pub fn masked_frames(&self, content: &ShareableContent) -> Vec<Rect> {
+        let Some(region) = self.source_region(content) else { return Vec::new() };
+        content.windows.iter().filter(|w| w.on_screen && !self.captures_window(content, w.id)).filter(|w| overlaps(&w.frame, &region)).map(|w| w.frame).collect()
+    }
+}
+
+/// Whether two rectangles share some area (touching edges do not count).
+fn overlaps(a: &Rect, b: &Rect) -> bool {
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+}
+
+/// The smallest rectangle that holds every rectangle in `rects`, or None when there are none.
+pub fn bounding_box(rects: &[Rect]) -> Option<Rect> {
+    let first = rects.first()?;
+    let (mut x0, mut y0, mut x1, mut y1) = (first.x, first.y, first.x + first.w, first.y + first.h);
+    for r in &rects[1..] {
+        x0 = x0.min(r.x);
+        y0 = y0.min(r.y);
+        x1 = x1.max(r.x + r.w);
+        y1 = y1.max(r.y + r.h);
+    }
+    Some(Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
 }
 
 #[cfg(test)]
@@ -141,6 +183,37 @@ mod tests {
 
     fn ids(list: Vec<&CaptureWindow>) -> Vec<u32> {
         list.iter().map(|w| w.id).collect()
+    }
+
+    #[test]
+    fn a_window_region_is_that_window_and_masks_the_others() {
+        let c = sample();
+        assert_eq!(ContentFilter::window(2).source_region(&c), Some(rect(1100.0, 100.0, 200.0, 200.0)));
+        assert_eq!(ContentFilter::window(99).source_region(&c), None);
+        // no other window overlaps window 2's frame (window 4 only touches its bottom edge)
+        assert!(ContentFilter::window(2).masked_frames(&c).is_empty());
+        // a window that overlaps the captured one is blanked where it covers it
+        let mut overlapped = sample();
+        overlapped.windows.push(win(5, 40, rect(1150.0, 150.0, 100.0, 100.0)));
+        assert_eq!(ContentFilter::window(2).masked_frames(&overlapped), vec![rect(1150.0, 150.0, 100.0, 100.0)]);
+    }
+
+    #[test]
+    fn a_display_minus_excluded_apps_is_the_whole_display() {
+        let c = sample();
+        let f = ContentFilter::display(1, Rule::ExcludeApps { pids: vec![10], except: vec![] });
+        assert_eq!(f.source_region(&c), Some(rect(0.0, 0.0, 1000.0, 800.0)));
+        // the excluded app's two windows are blanked, the others are not
+        let masks = f.masked_frames(&c);
+        assert_eq!(masks, vec![rect(100.0, 100.0, 200.0, 200.0), rect(300.0, 300.0, 200.0, 200.0)]);
+    }
+
+    #[test]
+    fn one_app_is_the_bounding_box_of_its_windows() {
+        let c = sample();
+        let f = ContentFilter::display(1, Rule::IncludeApps { pids: vec![10], except: vec![] });
+        assert_eq!(f.source_region(&c), Some(rect(100.0, 100.0, 400.0, 400.0)));
+        assert_eq!(bounding_box(&[]), None);
     }
 
     #[test]
