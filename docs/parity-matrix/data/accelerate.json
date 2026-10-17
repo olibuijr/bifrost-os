@@ -26,14 +26,14 @@
       "apple": "vImage convolution kernels, dilation and erosion (Convolution, Morphology collections)",
       "bifrost": "springboard/render/src/gfx.rs:476 (blur), springboard/render/src/gfx.rs:423 (blur_material); springboard/render/src/morphology.rs (convolve, dilate, erode, open, close)",
       "status": "partial",
-      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path."
+      "note": "Kernel convolution, dilation, erosion, opening and closing on 8-bit planes are tested headless in springboard/render/tests/parity_sdk-complete-39.rs. Gap: no float or multi-channel planes, no separable fast path, and no GPU filter path. Refreshed 2026-10-17: exposed to apps as bifrost_app::kit::morphology (springboard/sdk/src/lib.rs); the convolution and morphology gap is closed for 8-bit planes (float and multi-channel are still missing)."
     },
     {
       "feature": "Image buffer geometry",
       "apple": "vImage geometric transforms (rotate, reflect, shear, scale) and resampling",
       "bifrost": "springboard/render/src/gfx/rotate.rs:157 (rotated), springboard/render/src/emoji.rs:402 (resample), springboard/src/shell/photos/edit.rs:214 (rotate)",
       "status": "partial",
-      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API. Built 2026-10-17: PixelTransfer::sheared, a 2x2 matrix shear about the centre with bounding-box output (sdk pixel_transfer.rs; tests pixel_transfer::tests)."
+      "note": "Quarter-turn rotation and a resample for emoji only. No shear, arbitrary-angle transform, or Lanczos resampling API. Built 2026-10-17: PixelTransfer::sheared, a 2x2 matrix shear about the centre with bounding-box output (sdk pixel_transfer.rs; tests pixel_transfer::tests). Refreshed 2026-10-17: shear and arbitrary-angle turn are PixelTransfer::sheared and rotated_by (springboard/sdk/src/pixel_transfer.rs, tests pixel_transfer::tests)."
     },
     {
       "feature": "Compositing and blend modes",
@@ -47,7 +47,7 @@
       "apple": "vImage convert-any-to-any (CMYK, planar and interleaved formats, YUV and RGB)",
       "bifrost": "springboard/render/src/pixel_layout.rs, springboard/sdk/src/lib.rs (kit::pixel_layout)",
       "status": "partial",
-      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget."
+      "note": "Pure model with host unit tests in pixel_layout::tests: CMYK to RGB, grey to RGB, luma, and plane split and join are also tested headless in springboard/render/tests/parity_sdk-complete-39.rs, and the SDK re-exports the module as kit::pixel_layout. Gap: float buffers are written but not read back, and the converter is not wired into apps or the shell and not yet tested on the VM or Midget. Refreshed 2026-10-17: CMYK, grey and plane split and join are exposed as kit::pixel_layout (springboard/sdk/src/lib.rs, tests pixel_layout::tests); the gap is closed. Float read-back and wiring remain."
     },
     {
       "feature": "Tone and brightness adjustment, histogram",
@@ -108,10 +108,7 @@
   ],
   "gaps": [
     "No SDK module for vDSP, vImage, BNNS, BLAS/LAPACK, sparse solvers or simd.",
-    "No app-facing DCT API. The FFT is now public as bifrost_app::fft (radix-2 complex forward and inverse, springboard/sdk/src/fft.rs, tests fft::tests); the DAW convolver still has its own copy. Built 2026-10-17: DCT and spectrogram now in the SDK (dct, spectrogram).",
     "No LZFSE or Brotli codec. The SDK compression module covers DEFLATE, zlib, LZ4 and LZMA (xz), and the PNG writer stores uncompressed blocks.",
-    "No general image convolution, morphology, or histogram API for apps (the arbitrary-angle turn is now PixelTransfer::rotated_by in springboard/sdk/src/pixel_transfer.rs, tests pixel_transfer::tests; no shear).",
-    "No public pixel-format conversion for CMYK or planar formats. Only NV12 and RGBA to RGBA exists, in the media layer.",
     "No neural network inference or training API for apps.",
     "No small-vector, matrix or quaternion types exposed to the SDK."
   ]

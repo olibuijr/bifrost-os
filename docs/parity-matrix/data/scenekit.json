@@ -12,7 +12,7 @@
    "apple": "SCNScene, SCNNode, SCNReferenceNode",
    "bifrost": "springboard/ui/src/scene3d.rs (Scene, Pose)",
    "status": "partial",
-   "note": "The node tree, pose composition, world matrices and handle checks are tested in ui/tests/parity_sdk-tests-19.rs (scene3d). Gap: nodes carry no geometry, nothing is removed from a scene, and no renderer draws the tree."
+   "note": "The node tree, pose composition, world matrices and handle checks are tested in ui/tests/parity_sdk-tests-19.rs (scene3d). Gap: nodes carry no geometry, nothing is removed from a scene, and no renderer draws the tree. Refreshed 2026-10-17: scene graph, camera and light models are in springboard/ui/src/scene3d.rs and shading.rs (tests scene3d::tests); the SDK does not expose them."
   },
   {
    "feature": "Views for 3D content",
@@ -107,9 +107,9 @@
   }
  ],
  "gaps": [
-  "No 3D scene graph, camera, light, mesh or material type anywhere in the SDK or render crates",
+  "No renderer draws the 3D scene tree, and no mesh or material type is app-facing: the scene graph, camera and light are ui models (scene3d.rs, shading.rs) and are not exposed through the SDK",
   "No 3D physics, rigid-body or contact simulation; list scroll physics is 2D only",
-  "No particle system, positional audio or 3D asset import",
+  "No particle system. Positional audio (ui scene_audio.rs) and OBJ import (ui scene_source.rs) are models only, not wired to audiod or apps",
   "No app-facing custom shader or render-pass API",
   "Apple deprecated SceneKit (macOS 26) in favour of RealityKit (doc header), so a parity target would be RealityKit, not SceneKit"
  ]

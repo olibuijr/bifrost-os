@@ -54,7 +54,7 @@
       "apple": "No direct Force Feedback counterpart; closest is a generic haptic call",
       "bifrost": "springboard/core/src/haptic_request.rs (Requests, Outcome, MIN_INTERVAL_MS); springboard/core/src/force_effect.rs (Device::pulse); springboard/sdk/src/runtime.rs:273 (haptic() sends ToShell::Haptic); springboard/src/shell/apphost.rs:1184 (default arm drops it)",
       "status": "partial",
-      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Per-app policy (30 ms minimum between pulses, device slot check) is in core. The shell still has no ToShell::Haptic arm, so an app's haptic call does not reach a device"
+      "note": "built on parity/team-k-force-feedback; not yet verified on Midget. Per-app policy (30 ms minimum between pulses, device slot check) is in core. The shell still has no ToShell::Haptic arm, so an app's haptic call does not reach a device Refreshed 2026-10-17: the evdev effect path exists in springboard/src/bare/pad_rumble.rs (Motor::open, play, stop; EVIOCSFF upload and EV_FF play events; tests pad_rumble::tests, declared in bare/mod.rs), with no caller yet."
     },
     {
       "feature": "Keyboard haptics setting (not force feedback)",
@@ -65,7 +65,7 @@
     }
   ],
   "gaps": [
-    "No evdev force-feedback path: EV_FF is not read, no EVIOCSFF effect upload, no play events (springboard/src/bare/input.rs has no EV_FF; grep count 0).",
+    "No effect reaches a controller yet: springboard/src/bare/pad_rumble.rs uploads effects (EVIOCSFF) and sends EV_FF play events (tests pad_rumble::tests), but nothing calls it, and springboard/src/bare/input.rs does not read EV_FF. Not verified on Midget",
     "Device-level FF discovery is only a pure check (springboard/core/src/gamepad.rs supports_rumble, force_effect.rs supports_constant_force); the evdev node scan does not yet call it.",
     "No SDK API for effects (constant, periodic, ramp, spring and friction) or for gain and autocenter properties.",
     "The SDK haptic() call is dropped by the shell (springboard/src/shell/apphost.rs:1184 default arm); the per-app policy in springboard/core/src/haptic_request.rs has no caller yet.",

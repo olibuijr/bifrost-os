@@ -40,7 +40,7 @@
       "apple": "Playback that Siri requests start in the app (Media Intents results point to playable media)",
       "bifrost": "springboard/src/svc.rs (pub mod audio, client), springboard/audiod/src/main.rs (audio service), springboard/apps/music-desktop/src/music/engine.rs, springboard/ui/src/media_queue.rs (PlaybackQueue), springboard/sdk/src/media_intents.rs (handle_request); springboard/sdk/tests/parity_sdk-complete-28.rs; springboard/ui/tests/parity_sdk-complete-28.rs",
       "status": "partial",
-      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget."
+      "note": "Playback is a shared service that survives app restarts, and bifrost_app::audio is the client. bifrost_app::media_intents now gives apps the media item, playback request and play queue types, and handle_request applies a request to the queue and returns its dialog; play, queue, search, advance and the end of the queue are tested headless. Gap: the queue is not yet handed to the audio service as a playlist, and a voice request reaching the app needs Midget. Refreshed 2026-10-17: ui media_search::needs_confirmation decides when a resolved item must be confirmed (springboard/ui/src/media_search.rs, tests media_search::tests); no sheet asks the person yet."
     },
     {
       "feature": "Now-playing state shown outside the app",
@@ -67,7 +67,7 @@
   "gaps": [
     "No system delivery of audio search requests and no Siri or voice request path for media (springboard/ui/src/media_search.rs models the request, but nothing routes system requests to apps).",
     "AudioSearch.Criteria filter fields (kind, genre, mood) are modelled (MediaFilter); no system delivery of them yet",
-    "No requestConfirmation for media intents (resolve() covers disambiguation, but nothing asks the person to confirm)",
+    "No confirmation prompt for media intents: ui media_search::needs_confirmation decides when a resolved item must be confirmed (tests media_search::tests), but no shell sheet asks the person",
     "No SDK call for an app to publish media metadata or a queue to the shell or to voice requests; Music and Podcasts keep their own state.",
     "Intents are served only while the app runs (docs/bifrost-ui.md:980); Apple media requests can launch and play without an open window."
   ]

@@ -19,7 +19,7 @@
    "apple": "Hotspot helper collection group",
    "bifrost": "springboard/sdk/src/hotspot_configuration.rs, springboard/sdk/src/accessory_hotspot.rs, springboard/sdk/src/hotspot_helper.rs",
    "status": "partial",
-   "note": "Network name and passphrase checks, the consent rule, the accessory join state and the sign-in helper's command queue and responses are tested headless in tests/parity_sdk-complete-01.rs. Gap: the system radio and supplicant that would deliver commands and join networks do not exist here, the shell does not use these models, and nothing is tested on Midget."
+   "note": "Network name and passphrase checks, the consent rule, the accessory join state and the sign-in helper's command queue and responses are tested headless in tests/parity_sdk-complete-01.rs. Gap: the system radio and supplicant that would deliver commands and join networks do not exist here, the shell does not use these models, and nothing is tested on Midget. Refreshed 2026-10-17: the configuration model (sdk hotspot_configuration) is tested headless in tests/parity_sdk-complete-01.rs."
   },
   {
    "feature": "Configuring a Wi-Fi accessory to join a network",
@@ -107,12 +107,12 @@
   }
  ],
  "gaps": [
-  "No VPN client or tunnel: no IKEv2, IPsec, WireGuard or custom packet-tunnel provider, and the VPN settings page is a static placeholder.",
-  "No app-facing Wi-Fi configuration API (NEHotspotConfiguration equivalent): join and add-network are shell-only.",
+  "No VPN tunnel I/O: core tunnel.rs has the session state machine and the profile store (tests tunnel::tests), but no IKEv2, IPsec, WireGuard or packet-tunnel provider moves packets, and the VPN settings page is a static placeholder",
+  "No Wi-Fi join or add-network path reaches the radio. The configuration model exists (sdk hotspot_configuration: HotspotConfiguration, validation, consent in apply; tests in tests/parity_sdk-complete-01.rs), but nothing applies it and no app can call it; join and add-network stay shell-only",
   "No content filter, URL filter or DNS proxy extension points for apps.",
   "No system-wide encrypted DNS (DoH or DoT) settings; only DHCP-supplied resolvers are applied.",
   "No network relay (HTTP/2 or HTTP/3 proxying) configuration.",
-  "No hotspot helper or tethering subsystem.",
+  "No tethering subsystem. The hotspot helper models (sdk hotspot_helper, accessory_hotspot) have no radio or supplicant behind them",
   "No local push connectivity when the internet is unavailable."
  ]
 }
