@@ -995,9 +995,10 @@ mod tests {
 
     #[test]
     fn relative_motion_integrates_and_clamps_to_the_panel() {
-        let (out, p) = mouse(&[(EV_REL, REL_X, 10), (EV_REL, REL_Y, -5), (EV_SYN, 0, 0)]);
+        // 1 and -1 count stay under the acceleration knee, so the travel is the raw travel
+        let (out, p) = mouse(&[(EV_REL, REL_X, 1), (EV_REL, REL_Y, -1), (EV_SYN, 0, 0)]);
         assert!(out.is_empty(), "motion alone draws nothing and sends no touch");
-        assert_eq!((p.x, p.y), (60.0, 20.0));
+        assert_eq!((p.x, p.y), (51.0, 24.0));
         let (_, p) = mouse(&[(EV_REL, REL_X, 9999), (EV_REL, REL_Y, -9999), (EV_SYN, 0, 0)]);
         assert_eq!((p.x, p.y), (99.0, 0.0));
     }
@@ -1007,14 +1008,15 @@ mod tests {
         let (out, _) = mouse(&[
             (EV_KEY, BTN_LEFT, 1),
             (EV_SYN, 0, 0),
-            (EV_REL, REL_X, 4),
+            (EV_REL, REL_X, 2),
             (EV_SYN, 0, 0),
             (EV_KEY, BTN_LEFT, 0),
             (EV_SYN, 0, 0),
         ]);
+        // 2 counts is the acceleration knee, so the move is not sped up
         assert_eq!(
             out,
-            vec![Event::Down { x: 50.0, y: 25.0, t: 0.0 }, Event::Move { x: 54.0, y: 25.0, t: 0.0 }, Event::Up { x: 54.0, y: 25.0, t: 0.0 }]
+            vec![Event::Down { x: 50.0, y: 25.0, t: 0.0 }, Event::Move { x: 52.0, y: 25.0, t: 0.0 }, Event::Up { x: 52.0, y: 25.0, t: 0.0 }]
         );
     }
 
