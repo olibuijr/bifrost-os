@@ -19,28 +19,28 @@
    "apple": "Product.purchase(options:), PurchaseAction, Product.PurchaseResult",
    "bifrost": "springboard/ui/src/purchase.rs (Price, Purchase, Outcome, Failure); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, store failures (network, store, unknown, restriction, unsold product) with retry for the transient ones, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*), parity_sdk-complete-27.rs and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not verified on Midget. Gap: no store payment sheet yet, which needs the shell and a store service."
+   "note": "Pure model: price text, one purchase attempt from the confirmation sheet to a final result, store failures (network, store, unknown, restriction, unsold product) with retry for the transient ones, and the install gate that allows a paid package only after success. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (purchase_*), parity_sdk-complete-27.rs and the purchase unit tests. The shell wiring (press_button refuses paid apps, open_sheet, finish_purchase in springboard/src/shell/store) is not verified on Midget. Gap: no store payment sheet yet, which needs the shell and a store service. Built 2026-10-17: SDK exposes the purchase model (bifrost_app::purchase, product); no payment is taken."
   },
   {
    "feature": "Transactions and entitlements",
    "apple": "Transaction, Transaction.updates, Transaction.all, Transaction.currentEntitlements",
    "bifrost": "springboard/ui/src/entitlement.rs (Ledger, Transaction), springboard/ui/src/subscription.rs (Renewal)",
    "status": "partial",
-   "note": "Pure ledger of purchases: record, revoke, finish, the latest purchase per product and the current entitlements on a day, with grace-period access. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (ledger_*) and the entitlement unit tests. The shell keeps installed state in apps/installed.json and reads it through AppStore::purchased; that path is not covered by these tests and not verified on Midget. No app-facing transaction API yet."
+   "note": "Pure ledger of purchases: record, revoke, finish, the latest purchase per product and the current entitlements on a day, with grace-period access. Tests: springboard/ui/tests/parity_sdk-tests-08.rs (ledger_*) and the entitlement unit tests. The shell keeps installed state in apps/installed.json and reads it through AppStore::purchased; that path is not covered by these tests and not verified on Midget. No app-facing transaction API yet. Built 2026-10-17: SDK exposes the entitlement ledger (bifrost_app::entitlement); tests springboard/ui/tests/parity_sdk-complete-27.rs."
   },
   {
    "feature": "Signed transaction verification (JWS)",
    "apple": "VerificationResult, VerificationResult.VerificationError",
    "bifrost": "springboard/ui/src/jws.rs",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. package hash is checked; there is no signed-receipt or signed-transaction verification"
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-storekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. package hash is checked; there is no signed-receipt or signed-transaction verification Built 2026-10-17: receipt shape and signature checks with a caller-supplied verifier (bifrost_app::store_receipt); tests springboard/sdk/src/store_receipt.rs::tests. Store signing key not wired yet."
   },
   {
    "feature": "Subscription status and renewal",
    "apple": "SubscriptionStatus, SubscriptionRenewalInfo, SubscriptionPeriod, Product.SubscriptionInfo.RenewalState",
    "bifrost": "springboard/ui/src/subscription.rs (Period, Renewal, State, Group, Change); tests: springboard/ui/tests/parity_sdk-complete-27.rs",
    "status": "partial",
-   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, the next expiration, and subscription groups (tier levels, an upgrade that takes effect now, a downgrade at renewal). Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*), parity_sdk-complete-27.rs and the subscription unit tests. Gap: no billing backend, so the store supplies the dates and the group membership."
+   "note": "Period arithmetic with month and year clamping, the paid, grace, billing-retry and expired states, the next expiration, and subscription groups (tier levels, an upgrade that takes effect now, a downgrade at renewal). Tests: springboard/ui/tests/parity_sdk-tests-08.rs (subscription_*), parity_sdk-complete-27.rs and the subscription unit tests. Gap: no billing backend, so the store supplies the dates and the group membership. Built 2026-10-17: SDK exposes bifrost_app::subscription."
   },
   {
    "feature": "Offers, offer codes and win-back offers",
@@ -54,7 +54,7 @@
    "apple": "PurchaseIntent, Product.PromotionInfo",
    "bifrost": "springboard/ui/src/promotion.rs (visible_in_display_order); springboard/ui/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "App-side queue of purchase intents (first in, first out, no duplicates, bounded), and the store-side order of promoted products that leaves out products the customer already owns, tested headless. Gap: nothing shows a promotion and the store page does not send intents yet, and the flow is not verified on Midget."
+   "note": "App-side queue of purchase intents (first in, first out, no duplicates, bounded), and the store-side order of promoted products that leaves out products the customer already owns, tested headless. Gap: nothing shows a promotion and the store page does not send intents yet, and the flow is not verified on Midget. Built 2026-10-17: SDK exposes bifrost_app::promotion."
   },
   {
    "feature": "App Store product page and overlay",

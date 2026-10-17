@@ -255,6 +255,11 @@ pub mod media_picker_view;
 pub mod now_playing_feedback;
 /// Routes menu bar, Control Center and media key transport requests to the app's remote command handlers.
 pub mod remote_routing;
+/// Purchase receipts the PC App Store signs; the caller supplies the signature check.
+pub mod store_receipt;
+/// StoreKit-shaped purchase models for the PC App Store: products and their types, purchases and their outcomes,
+/// the entitlement ledger, subscriptions, promotions. No payment is taken here.
+pub use bifrost_ui::{entitlement, product, promotion, purchase, subscription};
 pub mod thumbnails;
 pub mod thumbnail_error;
 pub mod peek_pdf;
