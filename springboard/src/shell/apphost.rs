@@ -9,7 +9,7 @@
 use super::app_window_table::WindowTable;
 use crate::gfx::{Damage, Surface};
 use bifrost_proto::sys::{self, Channel, Map, Recv};
-use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
+use bifrost_proto::{Configure, KeyInput, ToApp, ToShell, TouchKind, WindowInput, CHORD_CTRL, CHORD_SHIFT, SDK_VERSION};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -500,6 +500,9 @@ pub struct AppHost {
     fallback: bool,
     /// The extra windows the app has open, front to back (`ToShell::WindowOpen` and friends). The desk draws each one.
     pub windows: WindowTable,
+    /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
+    /// text edits go to it (`input`); the desk sets it (`set_key_window`).
+    pub key_window: u32,
     /// Each extra window's buffers, by window id (`ToShell::WindowBuffers`).
     window_bufs: std::collections::BTreeMap<u32, WinBufs>,
 }
@@ -604,6 +607,7 @@ impl AppHost {
             frame_scale: cfg.scale,
             fallback: false,
             windows: WindowTable::new(),
+            key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
         }
     }
@@ -810,7 +814,24 @@ impl AppHost {
     }
 
     pub fn key(&mut self, k: KeyInput) {
-        self.send(&ToApp::Key(k));
+        self.input(WindowInput::Key(k));
+    }
+
+    /// Input for the key window: the message carries the window id when it is an extra window (`WindowInput::to_app`).
+    pub fn input(&mut self, input: WindowInput) {
+        let m = input.to_app(self.key_window);
+        self.send(&m);
+    }
+
+    /// The desk made `window` the key window (0 is the main window). The app hears that the old one lost focus and that
+    /// the new one gained it, so an app with extra windows always knows which one takes the keys.
+    pub fn set_key_window(&mut self, window: u32) {
+        if self.key_window == window {
+            return;
+        }
+        let old = std::mem::replace(&mut self.key_window, window);
+        self.send(&ToApp::WindowFocus { window: old, focused: false });
+        self.send(&ToApp::WindowFocus { window, focused: true });
     }
 
     pub fn suspend(&mut self) {
@@ -1689,11 +1710,12 @@ impl Shell {
     /// Routes the shell keyboard's output to the foreground external app.
     /// Sends a Ctrl/Cmd chord to the external app in front. False when no external app is in front.
     pub(super) fn ext_chord(&mut self, key: u32, mods: u32) -> bool {
+        self.sync_key_windows();
         match self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             Some(Some(h)) => {
                 // a key equivalent of the app's own menu is a menu action, not a key (`performKeyEquivalent:`)
                 if let Some(id) = super::evkeys::char_for(key as u16, false).and_then(|c| super::desktop_bar::app_menu_chord(&h.app_menus, c, mods)) {
-                    h.send(&bifrost_proto::ToApp::MenuAction(id));
+                    h.input(WindowInput::MenuAction(id));
                     return true;
                 }
                 h.key(KeyInput::chord(key, mods));
@@ -1704,6 +1726,7 @@ impl Shell {
     }
 
     pub(super) fn ext_type_out(&mut self, out: Out, t: f64) {
+        self.sync_key_windows();
         if out == Out::Hide {
             self.ext_set_keyboard(false, t);
             return;
@@ -1766,7 +1789,7 @@ impl Shell {
         }
         let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) else { return };
         for c in comp {
-            h.send(&super::textinput::to_app(c));
+            h.input(super::textinput::to_input(c));
         }
     }
 
@@ -1971,6 +1994,7 @@ impl Shell {
         }
         // the extra windows follow each app's table: opened ones get a desk window, closed ones leave the desk
         self.desk_sync_extra_windows();
+        self.sync_key_windows();
         if badge_changed { self.dirty = true; }
         for (slot, on) in full_screen { self.desk_set_full_screen(super::AppId::External(slot as u8), on); }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
@@ -2335,6 +2359,31 @@ mod window_table_tests {
             out.push(ToApp::decode(&p).unwrap());
         }
         out
+    }
+
+    #[test]
+    fn the_key_window_gets_the_input_and_the_app_hears_each_focus_change() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        host.set_key_window(4);
+        host.input(WindowInput::Command(bifrost_proto::Command::SelectAll));
+        host.key(KeyInput::Code(30));
+        host.set_key_window(4);
+        host.set_key_window(0);
+        host.key(KeyInput::Code(9));
+        assert_eq!(
+            sent(&peer),
+            vec![
+                ToApp::WindowFocus { window: 0, focused: false },
+                ToApp::WindowFocus { window: 4, focused: true },
+                ToApp::WindowInput { window: 4, input: WindowInput::Command(bifrost_proto::Command::SelectAll) },
+                ToApp::WindowInput { window: 4, input: WindowInput::Key(KeyInput::Code(30)) },
+                ToApp::WindowFocus { window: 4, focused: false },
+                ToApp::WindowFocus { window: 0, focused: true },
+                ToApp::Key(KeyInput::Code(9)),
+            ],
+            "a repeated focus sends nothing; the main window's keys keep the legacy message"
+        );
     }
 
     #[test]

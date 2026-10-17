@@ -1576,6 +1576,20 @@ impl Shell {
         }
     }
 
+    /// Each app's key window follows the desk's front window: an extra window in front is key for its app, and every
+    /// other app's key window is its main window. Runs from the app host tick and before the input is routed.
+    pub(super) fn sync_key_windows(&mut self) {
+        let front = self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app);
+        for (slot, host) in self.ext.iter_mut().enumerate() {
+            let Some(h) = host else { continue };
+            let key = match front {
+                Some(AppId::ExternalWindow(s, id)) if s as usize == slot => u32::from(id),
+                _ => 0,
+            };
+            h.set_key_window(key);
+        }
+    }
+
     /// Removes an extra window's desk window without telling its app (the app's table already dropped it).
     fn desk_drop_extra_window(&mut self, slot: u8, id: u16) {
         if let Some(d) = self.desk.as_mut() {
