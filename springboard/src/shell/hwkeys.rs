@@ -897,9 +897,9 @@ impl Shell {
                 self.cmdtab_release(t);
                 vec![]
             }
-            Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
+            Shortcut::ReaderStep(forward) if self.screen_reader_on() || self.switch_scan_on() => self.reader_step(forward, t),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
-            Shortcut::ReaderActivate if self.screen_reader_on() => self.reader_activate(t),
+            Shortcut::ReaderActivate if self.screen_reader_on() || self.switch_scan_on() => self.reader_activate(t),
             Shortcut::SpeakSelection => {
                 self.speak_selection();
                 vec![]

@@ -3010,6 +3010,7 @@ impl Settings {
             Toggle::DimFlashingLights => flip(&mut self.a11y.dim_flashing_lights),
             Toggle::GuidedAccess => flip(&mut self.a11y.guided_access),
             Toggle::ScreenReader => flip(&mut self.a11y.screen_reader),
+            Toggle::SwitchScan => flip(&mut self.a11y.switch_scan),
             Toggle::StickyKeys => flip(&mut self.a11y.sticky_keys),
             Toggle::MouseKeys => flip(&mut self.a11y.mouse_keys),
             Toggle::AutoTime => {

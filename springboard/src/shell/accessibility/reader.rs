@@ -54,6 +54,8 @@ pub struct Reader {
     earcons: Vec<Earcon>,
     /// the screen reader mode seen by the last `note_mode` (None before the first, so a start is not a toggle)
     mode: Option<bool>,
+    /// Switch Scanning: the time the highlight steps next (None while scanning is off or has only just started)
+    scan_at: Option<f64>,
 }
 
 impl Reader {
@@ -125,6 +127,26 @@ impl Reader {
                 self.cue(ReaderEvent::ModeToggled(on));
             }
             None => self.mode = Some(on),
+        }
+    }
+
+    /// Switch Scanning: whether the highlight steps on now. With `on` false the timer is dropped; the first call after that
+    /// starts it (and does not step), then every `interval_ms` of `now` gives one step.
+    pub fn scan_due(&mut self, on: bool, now: f64, interval_ms: f64) -> bool {
+        if !on {
+            self.scan_at = None;
+            return false;
+        }
+        match self.scan_at {
+            None => {
+                self.scan_at = Some(now + interval_ms);
+                false
+            }
+            Some(at) if now >= at => {
+                self.scan_at = Some(now + interval_ms);
+                true
+            }
+            Some(_) => false,
         }
     }
 
@@ -275,6 +297,20 @@ impl Shell {
         out
     }
 
+    /// Whether Switch Scanning is on (Settings > Accessibility > Switch Scanning).
+    pub(in crate::shell) fn switch_scan_on(&self) -> bool {
+        self.settings.as_ref().map_or_else(|| AccessibilitySettings::load(&self.prefs).switch_scan, |st| st.accessibility().switch_scan)
+    }
+
+    /// The scan clock, once per tick: while Switch Scanning is on and the screen is in use, the highlight steps to the next
+    /// element every `SWITCH_SCAN_MS`, speaking it as a keyboard move does. A press of Ctrl+Alt+Space picks it.
+    pub(in crate::shell) fn switch_scan_tick(&mut self, t: f64) {
+        let on = self.switch_scan_on() && self.screen_on && !self.is_locked();
+        if self.reader.scan_due(on, t, super::SWITCH_SCAN_MS) {
+            self.reader_step(true, t);
+        }
+    }
+
     /// Ctrl+Alt+Right or Left: moves the screen reader's cursor within the current rotor and speaks the element it lands on.
     pub(in crate::shell) fn reader_step(&mut self, forward: bool, _t: f64) -> Vec<Effect> {
         let els = self.reader_walk();
@@ -350,7 +386,7 @@ impl Shell {
     /// Draws the focus ring around the cursor's element when the screen reader is on.
     pub(in crate::shell) fn draw_reader(&mut self, s: &mut Surface) {
         let mut drawn = false;
-        if self.screen_reader_on() {
+        if self.screen_reader_on() || self.switch_scan_on() {
             let els = self.reader_walk();
             if let Some(b) = self.reader.focused(&els).and_then(|e| e.bounds) {
                 let t = self.ui.pt(RING_PT);
@@ -380,6 +416,19 @@ mod tests {
             el("settings/c", "toggle", "C", "on", true),
             el("settings/d", "page", "D", "", true),
         ]
+    }
+
+    #[test]
+    fn scanning_steps_on_the_interval_and_starts_over_when_switched_off() {
+        let mut r = Reader::default();
+        assert!(!r.scan_due(false, 0.0, 1500.0), "off never steps");
+        assert!(!r.scan_due(true, 100.0, 1500.0), "the first call only starts the timer");
+        assert!(!r.scan_due(true, 1599.0, 1500.0), "the interval is not up");
+        assert!(r.scan_due(true, 1600.0, 1500.0), "the interval is up");
+        assert!(!r.scan_due(true, 2000.0, 1500.0), "the next step is a full interval later");
+        assert!(r.scan_due(true, 3100.0, 1500.0));
+        assert!(!r.scan_due(false, 3200.0, 1500.0));
+        assert!(!r.scan_due(true, 9000.0, 1500.0), "switching back on starts the timer again instead of stepping at once");
     }
 
     #[test]

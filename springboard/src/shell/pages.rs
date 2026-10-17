@@ -196,6 +196,8 @@ pub enum Toggle {
     GuidedAccess,
     /// Accessibility > Screen Reader (`a11y_screen_reader`)
     ScreenReader,
+    /// Accessibility > Switch Scanning (`a11y_switch_scan`)
+    SwitchScan,
     /// Accessibility > Keyboard > Sticky Keys (`a11y_sticky_keys`)
     StickyKeys,
     /// Accessibility > Keyboard > Mouse Keys: the keypad moves and clicks the pointer (`a11y.mouse_keys`)
@@ -1401,6 +1403,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
+                    Group::new(vec![Item::new("Switch Scanning").switch(a.switch_scan, Action::Toggle(Toggle::SwitchScan))])
+                        .header("SWITCH")
+                        .footer("A highlight steps through the screen by itself. Press Ctrl+Alt+Space to press the highlighted element, or Ctrl+Alt+Right to step by hand."),
                     Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
                         .header("SHORTCUT")
                         .footer("Press Option+Cmd+F5 to open a panel where you switch the chosen features on or off."),

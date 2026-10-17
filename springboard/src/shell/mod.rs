@@ -3358,6 +3358,7 @@ impl Shell {
     fn tick_inner(&mut self, t: f64) -> Vec<Effect> {
         let reader_on = self.screen_reader_on();
         self.reader.note_mode(reader_on);
+        self.switch_scan_tick(t);
         self.popup_cues.observe(self.desktop_menu.is_some() || self.power_menu.is_some());
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();
