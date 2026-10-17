@@ -2848,19 +2848,24 @@ Privacy model (owner decision, follows the reference platform):
 - **Precise Location per app**: `location.precise.<app id>` (default off = approximate). An approximate app gets its
   coordinates moved to the centre of a 0.027 degree grid (about 3 km, `location_auth::approximate`) and an accuracy of
   3 km (`location_auth::APPROXIMATE_ACCURACY`). Precise apps get the fixed fix unchanged.
-- **Purpose string**: `location_auth::request_purpose` returns the app's text for the level or `Missing`; a blank text
-  must refuse the request, so no prompt shows without a reason. Not wired yet: no manifest field carries the text.
+- **Purpose string**: the app's manifest `[privacy] location = "..."` (`Manifest.location_purpose`). A `location_request`
+  without it is refused by `privacy_permissions::location_purpose_gate` (built on `location_auth::request_purpose`), so no
+  prompt shows without a reason. The request sheet does not show the text yet.
 - **Retention**: the last fix lives in memory only. The service records when each app last got a fix
   (`Location::last_use`), in memory, never on disk and never a location history.
 - **No third-party lookup**: the IP-address estimate (`location.ip.*`) was removed. bifrost-cloud has no geo endpoint
   (checked `~/Projects/bifrost-cloud`: `device_locations` is encrypted sharing data, not IP geolocation), so there is no
   IP source. GeoClue2 is not built (no D-Bus client for it is in use; `zbus` exists only for AT-SPI and Wayland).
 
+- **Menu bar indicator state**: `Location::in_use(t, ACTIVE_WINDOW)` lists the apps with a live watch or a fix in the
+  last 5 s, sorted. The menu bar arrow (springboard/src/shell/desktop_bar.rs) is not drawn yet.
+
 Sources: one, the fixed location from the shell prefs (`location.manual.*`, 100 m). Settings has no row yet to set it
 or the switches: they are read from the prefs file only. Gaps still open: the Settings > Privacy > Location page
-(city search, global switch, per-app access and last-use list), the menu bar location indicator, the manifest
-purpose field, and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`, because the
-weather app does not run with an SDK `Ctx`).
+(city search, global switch, per-app access and last-use list), the menu bar arrow itself, the Allow Once choice
+(the request sheet is two buttons: Don't Allow and Allow; Allow Once needs a third button and a session-only grant),
+the purpose text on the sheet, and the Weather "My Location" wiring (its LOCATION constant is still `NotDetermined`,
+because the weather app does not run with an SDK `Ctx`).
 
 Altitude is always absent; reverse geocoding knows only the fixed place within 50 km, not a worldwide gazetteer;
 no heading, regions or background updates. Host-tested only (not run in this round); the rows stay partial until

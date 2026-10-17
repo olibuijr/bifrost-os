@@ -57,6 +57,9 @@ pub struct Manifest {
     pub intents: Vec<super::intents::ManifestIntent>,
     /// `[[quick_action]]` tables: the static Home Screen quick actions (`shell::quick_actions`).
     pub quick_actions: Vec<bifrost_ui::quick_actions::ShortcutItem>,
+    /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
+    /// location request without it is refused, so no prompt shows without a reason.
+    pub location_purpose: String,
 }
 
 impl Manifest {
@@ -86,6 +89,8 @@ impl Manifest {
         let mut m = Manifest::default();
         // inside an `[[intent]]` table keys belong to the intent; any other table header ends it (its keys are ignored)
         let mut table: Option<bool> = None;
+        // inside a `[privacy]` table the keys are the purpose strings (`location`); any other header ends it
+        let mut privacy = false;
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -93,6 +98,7 @@ impl Manifest {
             }
             if line.starts_with('[') && !line.contains('=') {
                 table = Some(line == "[[intent]]");
+                privacy = line == "[privacy]";
                 if line == "[[intent]]" {
                     m.intents.push(Default::default());
                 }
@@ -101,6 +107,12 @@ impl Manifest {
             let Some((k, v)) = line.split_once('=') else { continue };
             let (k, v) = (k.trim(), v.trim());
             let strs = || -> Vec<String> { v.trim_start_matches('[').trim_end_matches(']').split(',').map(|s| unquote(s.trim())).filter(|s| !s.is_empty()).collect() };
+            if privacy {
+                if k == "location" {
+                    m.location_purpose = unquote(v);
+                }
+                continue;
+            }
             if let Some(is_intent) = table {
                 if let (true, Some(i)) = (is_intent, m.intents.last_mut()) {
                     match k {
@@ -2106,6 +2118,16 @@ mod tests {
         let sys = Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nprovides = [\"keyboard\"]").unwrap();
         assert!(sys.is_system() && sys.exec.is_empty() && sys.provides == ["keyboard"]);
         assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nexec = \"../x\"").is_none());
+    }
+
+    #[test]
+    fn privacy_location_purpose_is_read_from_its_own_table() {
+        let text = "id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\nlocation = \"Finna næstu stöð\"\n[[intent]]\nid = \"i\"\nlocation = \"not this\"\n";
+        let m = Manifest::parse(text).unwrap();
+        assert_eq!(m.location_purpose, "Finna næstu stöð");
+        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"").unwrap().location_purpose.is_empty());
+        let after = Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\n[window]\nlocation = \"other table\"\n").unwrap();
+        assert!(after.location_purpose.is_empty(), "a later table ends [privacy]");
     }
 
     #[test]
