@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/passwords.rs; springboard/src/shell/passwords_page.rs",
+   "bifrost": "springboard/src/shell/passwords_page.rs",
    "status": "partial",
-   "note": "Passwords SDK and Settings page exist; App Intents declarations are not exposed.",
+   "note": "has: Passwords page (passwords_page.rs:46) and the SDK (sdk/src/passwords.rs); missing: App Intents declarations",
    "rea": []
   },
   {
@@ -40,7 +40,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/passwords_page.rs",
    "status": "partial",
-   "note": "Settings Passwords page exists; App Intents declarations are not exposed.",
+   "note": "has: Settings Passwords page (passwords_page.rs:46); missing: App Intents declarations",
    "rea": []
   },
   {
@@ -60,7 +60,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs",
    "status": "partial",
-   "note": "Settings search exists; the Apple search-terms intents are not exposed.",
+   "note": "has: settings search over pane titles and keywords; missing: the Apple search-term intents",
    "rea": []
   },
   {
@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs:1253",
    "status": "partial",
-   "note": "Energy page",
+   "note": "has: Energy page (pages.rs:1240) and Battery page (pages.rs:1253): power mode, low power, battery percentage; missing: power adapter versus battery split",
    "rea": []
   },
   {
@@ -100,7 +100,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs",
    "status": "partial",
-   "note": "settings search",
+   "note": "has: settings search; missing: intent listing in Search",
    "rea": []
   },
   {
@@ -120,7 +120,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
-   "note": "Same Print & Scan page; see PrintAndScan.",
+   "note": "has: Print & Scan page (print_scan_page.rs:114): printers, default printer, add by address, scanners; missing: printer options and supplies",
    "rea": []
   },
   {
@@ -180,7 +180,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/passwords_page.rs",
    "status": "partial",
-   "note": "passwords page",
+   "note": "has: passwords page (passwords_page.rs:46): list and detail; missing: import and export",
    "rea": []
   },
   {
@@ -200,7 +200,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
-   "note": "Same Print & Scan page; see PrintAndScan.",
+   "note": "has: Print & Scan page (print_scan_page.rs:114); missing: fax",
    "rea": []
   },
   {
@@ -220,7 +220,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
    "status": "partial",
-   "note": "Print & Scan page: printers from the local scheduler, default printer, add by address, scanners listed. Missing: printer options and supplies, sharing a printer, default paper size, scanning UI. Host only.",
+   "note": "has: Print & Scan page (print_scan_page.rs:114): printers from the local scheduler, default printer, add by address, scanners listed; missing: printer options and supplies, sharing a printer",
    "rea": []
   },
   {
