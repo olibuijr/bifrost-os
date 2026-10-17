@@ -117,6 +117,8 @@ pub mod imgtile;
 pub mod hdr_transfer;
 pub mod hdr_metadata;
 pub mod bayer;
+pub mod raw_color;
+pub mod glass_lens;
 pub mod lazy_image;
 pub mod depth_blur;
 pub mod render_intent;
