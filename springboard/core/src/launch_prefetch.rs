@@ -222,7 +222,7 @@ mod tests {
 
     const H: u64 = 3600;
     // day 100 at 09:00 UTC
-    const NOON: u64 = 100 * DAY + 9 * H;
+    const NOON: u64 = 400 * DAY + 9 * H;
 
     fn exe(name: &str) -> PathBuf {
         PathBuf::from(format!("/usr/lib/apps/{name}/{name}"))
