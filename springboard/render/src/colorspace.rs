@@ -45,7 +45,7 @@ impl Space {
     }
 
     /// CIE xy chromaticities of the red, green and blue primaries and of the white point.
-    fn chromaticities(self) -> ([(f64, f64); 3], (f64, f64)) {
+    pub fn chromaticities(self) -> ([(f64, f64); 3], (f64, f64)) {
         match self {
             Space::Srgb => ([(0.64, 0.33), (0.30, 0.60), (0.15, 0.06)], D65),
             Space::DisplayP3 => ([(0.680, 0.320), (0.265, 0.690), (0.150, 0.060)], D65),
@@ -135,9 +135,19 @@ fn xyz_of((x, y): (f64, f64)) -> [f64; 3] {
     [x / y, 1.0, (1.0 - x - y) / y]
 }
 
+/// XYZ of the D50 connection-space white with luminance 1.
+pub fn d50_xyz() -> [f64; 3] {
+    xyz_of(D50)
+}
+
 /// The matrix from linear RGB of `space` to XYZ, relative to the space's own white.
 fn rgb_to_xyz(space: Space) -> Mat3 {
     let (prim, white) = space.chromaticities();
+    rgb_to_xyz_of(prim, white)
+}
+
+/// The matrix from linear RGB with the given primaries and white (CIE xy) to XYZ relative to that white.
+fn rgb_to_xyz_of(prim: [(f64, f64); 3], white: (f64, f64)) -> Mat3 {
     let p = prim.map(xyz_of);
     // Columns are the primaries; scale each column so that RGB (1, 1, 1) lands on the white point.
     let cols: Mat3 = [[p[0][0], p[1][0], p[2][0]], [p[0][1], p[1][1], p[2][1]], [p[0][2], p[1][2], p[2][2]]];
@@ -152,7 +162,7 @@ fn rgb_to_xyz(space: Space) -> Mat3 {
 }
 
 /// Bradford chromatic adaptation from one white point to another (both as xy).
-fn adaptation(from: (f64, f64), to: (f64, f64)) -> Mat3 {
+pub fn adaptation(from: (f64, f64), to: (f64, f64)) -> Mat3 {
     if from == to {
         return [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     }
@@ -163,6 +173,12 @@ fn adaptation(from: (f64, f64), to: (f64, f64)) -> Mat3 {
         row[i] = dst[i] / src[i];
     }
     mul(inverse(BRADFORD), mul(scale, BRADFORD))
+}
+
+/// The colorant matrix of an RGB profile for the given primaries and white (CIE xy): the columns are the XYZ of the
+/// red, green and blue colorants relative to the D50 connection space, as an ICC matrix-shaper profile stores them.
+pub fn colorants_d50(prim: [(f64, f64); 3], white: (f64, f64)) -> Mat3 {
+    mul(adaptation(white, D50), rgb_to_xyz_of(prim, white))
 }
 
 /// Linear RGB to linear RGB matrix from `from` to `to`.
@@ -226,6 +242,36 @@ impl Transform {
     pub fn apply_u8(&self, rgb: [u8; 3]) -> [u8; 3] {
         let out = self.apply(rgb.map(|c| c as f64 / 255.0));
         out.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8)
+    }
+}
+
+#[cfg(test)]
+mod bradford_tests {
+    use super::*;
+
+    #[test]
+    fn bradford_d65_to_d50_matches_the_published_matrix() {
+        // Bradford D65 -> D50 as published (Lindbloom); the white points here come from their xy values, so the
+        // match is to about 1e-3.
+        let want: Mat3 = [[1.0478112, 0.0228866, -0.0501270], [0.0295424, 0.9904844, -0.0170491], [-0.0092345, 0.0150436, 0.7521316]];
+        let got = adaptation(D65, D50);
+        for i in 0..3 {
+            for j in 0..3 {
+                assert!((got[i][j] - want[i][j]).abs() < 1e-3, "[{i}][{j}] {} vs {}", got[i][j], want[i][j]);
+            }
+        }
+    }
+
+    #[test]
+    fn srgb_colorants_relative_to_d50_match_the_profile_values() {
+        // The sRGB colorants adapted to D50, as every sRGB ICC profile lists them (rXYZ, gXYZ, bXYZ columns).
+        let (prim, white) = Space::Srgb.chromaticities();
+        let m = colorants_d50(prim, white);
+        let col = |j: usize| [m[0][j], m[1][j], m[2][j]];
+        let close = |a: [f64; 3], b: [f64; 3]| (0..3).all(|i| (a[i] - b[i]).abs() < 2e-3);
+        assert!(close(col(0), [0.4361, 0.2225, 0.0139]));
+        assert!(close(col(1), [0.3851, 0.7169, 0.0971]));
+        assert!(close(col(2), [0.1431, 0.0606, 0.7141]));
     }
 }
 
