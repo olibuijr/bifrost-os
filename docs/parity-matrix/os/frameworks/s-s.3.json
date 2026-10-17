@@ -1393,11 +1393,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/speech.json",
+   "bifrost": "springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
    "status": "partial",
    "note": "private framework, owner Speech; from SDK matrix speech.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "On-device recognition: the whisper pipeline, the consent gate, the shell recognizer service and the SDK client are covered by unit tests. It needs the model download (Settings, Keyboard, Dictation, after consent) and a run on Midget; the pipeline transcript format is checked there."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpeechRecognitionSharedSupport.framework",

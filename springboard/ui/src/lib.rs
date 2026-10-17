@@ -1259,6 +1259,7 @@ pub mod sk_node;
 pub mod markup_adornment;
 pub mod ax_ignored;
 pub mod dictation_entry;
+pub mod whisper;
 pub mod route_address;
 pub mod model_seal;
 pub mod remote_session;

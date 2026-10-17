@@ -149,6 +149,8 @@ impl Alert {
             Command::CheckUpdate => ("Check for Update?", "BifrOSt asks the update server whether a new version exists.".to_string(), "Check", false),
             Command::DownloadUpdate => ("Download Update?", "The new version is downloaded and checked; nothing is installed until you restart.".to_string(), "Download", false),
             Command::ShareDiagnostics => ("Share with Developer?", "The build, crash logs and heartbeat are sent to the developer's update server on your network.".to_string(), "Share", false),
+            Command::DownloadSpeechModel => ("Download Speech Model?", format!("Dictation needs a model of about {} MB, stored on this computer. Your speech is recognized here and never uploaded.", bifrost_ui::whisper::MODEL_SIZE_BYTES / 1_000_000), "Download", false),
+            Command::RemoveSpeechModel => ("Remove Speech Model?", "Dictation stops working until the model is downloaded again.".to_string(), "Remove", true),
             Command::DeleteCrashLogs => ("Delete All Crash Logs?", "Every crash log on this computer is removed.".to_string(), "Delete", true),
             Command::InstallUpdate => ("Restart to Install?", "BifrOSt restarts into the new version. If it fails within a minute, the previous version comes back.".to_string(), "Restart", false),
             Command::RollbackSystem => ("Roll Back to Previous System?", "The system returns to the version before the last update. Your data is kept. The shell restarts.".to_string(), "Roll Back", true),
@@ -3083,6 +3085,17 @@ impl Settings {
                 });
                 self.diag_rx = Some(rx);
                 self.diag_note.clear();
+                self.rebuild(ui);
+                vec![]
+            }
+            Command::DownloadSpeechModel => {
+                // the consent is recorded and the download starts in a thread; a failed download is shown on the page
+                let _ = super::services::recognizer::grant_and_download(&super::services::recognizer::user_data_dir());
+                self.rebuild(ui);
+                vec![]
+            }
+            Command::RemoveSpeechModel => {
+                let _ = super::services::recognizer::remove_model(&super::services::recognizer::user_data_dir());
                 self.rebuild(ui);
                 vec![]
             }

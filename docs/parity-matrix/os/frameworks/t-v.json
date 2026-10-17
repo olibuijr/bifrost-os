@@ -136,11 +136,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/tipkit.json",
+   "bifrost": "springboard/ui/src/tips.rs, springboard/ui/src/tip.rs, springboard/ui/src/tooltip.rs, springboard/sdk/src/tips.rs, springboard/sdk/src/tooltips.rs",
    "status": "partial",
    "note": "from SDK matrix tipkit.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tips::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "tooltips::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "tips::tests"
+    }
+   ],
+   "ready_note": "The tip model (rules, datastore, groups, testing overrides), the popover placement and the tooltip hover state are covered by unit tests. The anchor modifier on SDK views and the shell hover delivery are not built, so apps place the popover by hand."
   },
   {
    "id": "path:/System/Library/Frameworks/Tk.framework",
