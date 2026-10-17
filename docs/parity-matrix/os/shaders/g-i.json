@@ -61,10 +61,19 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
+   "status": "partial",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "stereo::tests"
+    }
+   ],
+   "ready_note": "Ready: rectified-stereo block-matching disparity (SAD over shifted windows) in springboard/render/src/stereo.rs, tests stereo::tests. This is the matching kernel only, not a photogrammetry pipeline; no GLSL file was written."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe.metallib",
@@ -85,7 +94,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_base.metallib",
@@ -148,7 +166,16 @@
    "status": "partial",
    "note": "Materials are ordered named properties with a shading model; there is no shading graph compiler, so graph shaders are not generated.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "shading_graph::tests"
+    }
+   ],
+   "ready_note": "Ready: a validated scalar shading-graph evaluator (constant, input, add, multiply, mix, clamp nodes) in springboard/render/src/shading_graph.rs, tests shading_graph::tests. It is the smallest piece of a material graph compiler; no MaterialX parser or GLSL output was written."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_2.metallib",

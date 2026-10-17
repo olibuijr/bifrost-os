@@ -2360,7 +2360,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: a Cook-Torrance PBR shading function (GGX distribution, Smith visibility, Schlick Fresnel, Lambert diffuse; metallic and roughness) in springboard/render/src/pbr.rs, with tests pbr::tests. It is the per-point shading piece only: the rasteriser and GPU shaders are not written, and no GLSL file was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework/Versions/A/Resources/default.metallib",
@@ -2609,10 +2618,19 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
+   "status": "partial",
    "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "photosensitivity::tests"
+    }
+   ],
+   "ready_note": "Ready: WCAG 2.3.1 general-flash analysis (flash detection and the three-flashes-per-second rule) in springboard/render/src/photosensitivity.rs, tests photosensitivity::tests. Red-flash analysis is not implemented."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Portrait.framework/Versions/A/Resources/default.metallib",
@@ -2927,7 +2945,16 @@
    "status": "partial",
    "note": "Material and mesh models exist as pure data. No shader draws 3D content yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib",
@@ -2945,10 +2972,19 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
+   "status": "partial",
    "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added. Effects compositing and particles are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/default.metallib",
@@ -2969,7 +3005,16 @@
    "status": "partial",
    "note": "Map overlays, GeoJSON geometry and camera math exist; vector tile decoding and GPU tile drawing do not.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "stroke_coverage::tests"
+    }
+   ],
+   "ready_note": "Ready: anti-aliased polyline stroke coverage (distance to segments with a one-pixel edge) in springboard/render/src/stroke_coverage.rs, tests stroke_coverage::tests. Tile decoding and GPU tile drawing are still missing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/Resources/default.metallib",
@@ -3071,10 +3116,19 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
+   "status": "partial",
    "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "wallpaper_frame::tests"
+    }
+   ],
+   "ready_note": "Ready: one animated-wallpaper frame (diagonal gradient cross-faded by a ping-pong phase) in springboard/render/src/wallpaper_frame.rs, tests wallpaper_frame::tests. The CPU frame renderer only; no GLSL shader was written and no wallpaper app calls it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowEditor.framework/Versions/A/Resources/default.metallib",
@@ -3158,7 +3212,16 @@
    "status": "partial",
    "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "pbr::tests"
+    }
+   ],
+   "ready_note": "Ready: the PBR material shading function in springboard/render/src/pbr.rs (GGX, Smith, Schlick Fresnel, metallic/roughness), tests pbr::tests. The per-point piece only; no GPU rasteriser or GLSL shader was added."
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreTextureProcessing.framework/Versions/A/Resources/default.metallib",
