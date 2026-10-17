@@ -59,6 +59,7 @@ pub mod inertial_sensors;
 pub mod pedometer;
 pub mod permission_request;
 pub mod background_tasks;
+pub mod launch_prefetch;
 pub mod motion_activity;
 pub mod rumble;
 pub mod force_effect;

@@ -1872,8 +1872,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Device-to-device plug-ins (a Wi-Fi Aware plug-in and a peer-to-peer radio link plug-in) for the reference system's device sharing; no BifrOSt counterpart is cited, so this stays unclassified until the radio path is checked on hardware.",
+   "status": "n/a",
+   "note": "n/a: Apple's device-to-device link broker. The reference index shows its plug-ins awdl_d2d.bundle and WiFiAwareD2DPlugin.bundle, which bring up AWDL, Apple's proprietary peer-to-peer Wi-Fi link used for AirDrop and Continuity-style device sharing. There is no open equivalent and BifrOSt does not mirror those protocols.",
    "rea": [],
    "method": "assessed"
   },
@@ -1914,8 +1914,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: host of sysdiagnose plug-ins. The reference index shows PlugIns/AirPlayDiagnosticExtension.appex, BluetoothDiagnosticExtension.appex and similar, each with 40-odd localisations; they gather logs into an archive for filing with Apple. Diagnostic collection for upload to Apple is not mirrored; BifrOSt logs stay on the machine (bifrost-log, the Console app).",
    "rea": [],
    "method": "assessed"
   },
@@ -1935,8 +1935,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: daemon side of the sysdiagnose plug-in host (see DiagnosticExtensions). The reference index lists its awdgen.yaml, Apple's analytics metric definition file, so it feeds Apple analytics and diagnostic archives; BifrOSt sends no telemetry.",
    "rea": [],
    "method": "assessed"
   },
@@ -1956,8 +1956,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: the framework a sysdiagnose diagnostic extension links (sibling of DiagnosticExtensions and DiagnosticExtensionsDaemon). The reference index holds only plists and the signature; the plug-in system it serves collects archives for Apple and is not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -2007,8 +2007,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: client of the Diagnostics and Usage request service (DiagnosticRequestService), which Apple uses to task devices to upload diagnostics. Telemetry and diagnostics upload; BifrOSt has none.",
    "rea": [],
    "method": "assessed"
   },
@@ -2028,8 +2028,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: Apple's diagnostics request service. The reference index lists its Core Data models DRSCKConfigModel.momd (CloudKit configuration), DRSDataModel.momd and DRSTaskingDataModel.momd (server tasking), so it fetches Apple-side tasking over CloudKit and uploads diagnostics. BifrOSt has no Apple account, CloudKit or diagnostics upload.",
    "rea": [],
    "method": "assessed"
   },
@@ -2049,8 +2049,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: runs Apple Diagnostics (service hardware tests). The reference index shows com.apple.DiagnosticsKit.XPCTestService.sb (sandbox profile for the test service) and Localizable.loctable. It tests Apple hardware for Apple service flows; BifrOSt PC has generic hardware and no service-diagnostics flow.",
    "rea": [],
    "method": "assessed"
   },
@@ -2070,8 +2070,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: XPC service DiagnosticsSessionAvailabilityService (58 index entries, all localisations) that decides whether an Apple Diagnostics session may start. Part of the Apple hardware service diagnostics flow; not mirrored.",
    "rea": [],
    "method": "assessed"
   },
@@ -2091,8 +2091,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: Siri dialog template catalogs. The reference index holds 5515 entries, mostly Catalog/Templates/dialog/*.catfamily/*.cat files such as siri_errors_serverNotFound_dontCare.cat, Apple-authored response strings for Siri. BifrOSt's assistant writes its own replies (springboard/src/shell/assistant.rs) and cannot reuse Apple's templates.",
    "rea": [],
    "method": "assessed"
   },
@@ -2154,8 +2154,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal plumbing with no user- or app-visible surface. The reference index holds only Info.plist, version.plist and the code signature (9 entries): no resources, plug-ins, services or localised strings. The exact job is not confirmed from the index, but there is nothing visible to mirror and no other bundle in the index names it.",
    "rea": [],
    "method": "assessed"
   },
@@ -2174,11 +2174,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/sdk/src/directory_servers.rs; springboard/sdk/src/ldap_directory.rs",
    "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "note": "Settled ready this wave; see ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "directory_servers::tests"
+    }
+   ],
+   "ready_note": "Built this wave: a directory server list (Book) with add, remove, rename, enable, search-order moves, validation, persistence, a connection probe through ldapsearch and the OpenLDAP client defaults (URI and BASE lines). Passwords are never stored (the caller passes them from the keychain). It is the model and store behind the editor; no Settings pane draws it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DirectoryServer.framework",
@@ -2195,11 +2204,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/directory_node.rs; springboard/ui/src/directory_query.rs; springboard/ui/src/directory_local.rs; springboard/sdk/src/ldap_directory.rs; springboard/sdk/src/krb5_client.rs; packaging/arch/runtime-packages.txt (openldap, krb5)",
    "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "note": "Settled ready this wave; see ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_node::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_query::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "directory_local::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "ldap_directory::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "krb5_client::tests"
+    }
+   ],
+   "ready_note": "The reference component is the directory service (opendirectoryd with its Kerberos helper): nodes and records, record queries, the local user and group directory, and remote directories. BifrOSt covers each in code: sessions and nodes (directory_node), queries (directory_query), the local passwd and group tables as records (directory_local), LDAP servers read through ldapsearch (ldap_directory) and the Kerberos client (krb5_client), with openldap and krb5 in the runtime package set. Sign-in still checks only the installer account, a gap tracked on the public OpenDirectory row."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskImages.framework",
@@ -2387,8 +2425,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "n/a",
+   "note": "n/a: the index shows DisplayTransportServicesAgent.xpc, the agent that manages Apple's display transport links (external displays over USB-C, Thunderbolt and DisplayPort tunnelling on Apple hardware). On Arch the kernel DRM and typec drivers do this and BifrOSt's compositor only consumes the connectors, so there is no BifrOSt-owned layer.",
    "rea": [],
    "method": "assessed"
   },
@@ -2429,8 +2467,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, with no binary, strings or description.",
+   "status": "n/a",
+   "note": "n/a: multi-device sensing between a user's Apple devices; the index holds only plists plus a FeatureFlags/Domain/DistributedSensing.plist. Apple device-ecosystem feature with no open equivalent.",
    "rea": [],
    "method": "assessed"
   },
@@ -2450,8 +2488,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, with no binary, strings or description.",
+   "status": "n/a",
+   "note": "n/a: keeps timers in step across a user's Apple devices (iPhone, Watch, HomePod) over the Apple account and its device transport. BifrOSt timers are local to the Clock app; no Apple account or ecosystem transport exists. The index holds only plists.",
    "rea": [],
    "method": "assessed"
   },
@@ -2471,8 +2509,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, and no daemon binary.",
+   "status": "n/a",
+   "note": "n/a: daemon of DistributedTimers, which syncs timers across a user's Apple devices over the Apple account. No Apple account or device ecosystem in BifrOSt; the index holds only plists and the signature.",
    "rea": [],
    "method": "assessed"
   },
@@ -2717,8 +2755,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, with no binary, strings or description.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal service. The index shows the framework is only plists, with a separate ExtensionKit extension System/Library/ExtensionKit/Extensions/Drift.appex; tools/parity/os_inventory.py already classes it as an Apple internal service. No BifrOSt equivalent is wanted.",
    "rea": [],
    "method": "assessed"
   },
@@ -2788,11 +2826,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/core/src/launch_prefetch.rs; springboard/src/bare/app_policy.rs (note_launch at app launch); springboard/src/bin/shell.rs (warm_default worker at start-up)",
    "status": "os",
-   "note": "Purpose inferred from the name only: launch-time prefetch of app binaries. The reference index has no binary to confirm it, and no BifrOSt counterpart exists.",
+   "note": "Settled ready this wave; see ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "launch_prefetch::tests"
+    }
+   ],
+   "ready_note": "Built this wave: the shell records each app launch (id, executable, time) in a local state file, ranks apps by recency-weighted frequency with a bonus for the same hour of the day, and at start-up reads the executables of the top four within a 256 MB budget so the first launch finds them in the page cache. Local only, no telemetry. Tests cover ranking, hour wrap, ageing, bounds, text round trip, warm budget and persistence."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EAFirmwareUpdater.framework",
@@ -2810,8 +2857,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist for this framework, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: firmware updates for External Accessory (MFi) devices over Apple's accessory protocol. Apple-licensed accessory firmware with no open equivalent; the index holds Info.plist and an en.lproj only.",
    "rea": [],
    "method": "assessed"
   },
@@ -2861,8 +2908,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose inferred from the name only (enterprise data protection). The reference index holds only the Info.plist and version file, so the purpose is unverified.",
+   "status": "n/a",
+   "note": "n/a: enterprise data protection for managed (MDM) devices, by its name and the reference Info.plist (the only content in the index). BifrOSt has no MDM or managed-device mode, so there is no policy to enforce.",
    "rea": [],
    "method": "assessed"
   },
@@ -2903,8 +2950,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: Apple silicon display pipeline support; the index shows the matching kernel extensions EXDisplayPipeH17P.kext and EXDisplayPipeH18G.kext for Apple SoC generations. Apple hardware internals; BifrOSt PC drives Intel/AMD/NVIDIA display hardware through the Linux DRM drivers.",
    "rea": [],
    "method": "assessed"
   },
@@ -2924,8 +2971,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist and version file for this framework, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: same EX family as EXDisplayPipe (Apple silicon display and surface plumbing); the index holds only plists and the signature. Apple SoC internals; Linux DRM provides the surfaces BifrOSt uses.",
    "rea": [],
    "method": "assessed"
   },
@@ -2945,8 +2992,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: the reference index holds only the Info.plist for this framework, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: Apple's wireless accessory configuration (onboarding an accessory onto Wi-Fi), by its name and Info.plist, the only content in the index. Apple-only accessory protocol; BifrOSt has none.",
    "rea": [],
    "method": "assessed"
   },
@@ -3008,8 +3055,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only the framework name is known from its Info.plist, and the reference index has no binary or strings for it.",
+   "status": "n/a",
+   "note": "n/a: prompts and strings for Apple device-ecosystem features such as pairing and Continuity (51 index entries, almost all localisations, no code). The ecosystem it fronts is an Apple-only protocol and account feature BifrOSt does not mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3029,8 +3076,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only identifiers in the reference Info.plist; the name suggests boot firmware support, which is unverified.",
+   "status": "n/a",
+   "note": "n/a: Apple Mac EFI firmware update support (the index holds only plists). BifrOSt PC is a generic UEFI Arch machine whose boot loader the installer writes; Mac firmware images do not apply.",
    "rea": [],
    "method": "assessed"
   },
@@ -3050,8 +3097,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only identifiers and a tablet copy of the Info.plist are in the reference index, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal registry of ecosystem elements shared with the iOS family (a tablet copy of its Info.plist and an iOSSupport sibling of ElementRegistryClient are in the index). It has no resources, plug-ins or strings and no user-visible surface to mirror.",
    "rea": [],
    "method": "assessed"
   },
@@ -3071,8 +3118,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only identifiers and a tablet copy of the Info.plist are in the reference index, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: client of the Apple-internal ElementRegistry; the index lists both a macOS copy and System/iOSSupport/.../ElementRegistryClient.framework, i.e. iOS-family sharing code. Only plists and the signature; nothing user-visible.",
    "rea": [],
    "method": "assessed"
   },
@@ -3092,8 +3139,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only the Info.plist and version file are in the reference index, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: foundation layer of the Apple-internal ElementRegistry (see ElementRegistry and ElementRegistryClient). The index holds only Info.plist, version.plist and the signature; no user-visible surface.",
    "rea": [],
    "method": "assessed"
   },
@@ -3113,8 +3160,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Purpose not determined: only the Info.plist is in the reference index, with no binary or description.",
+   "status": "n/a",
+   "note": "n/a: Apple's per-account and per-region feature eligibility check, by its name and Info.plist (the only index content). Account and store gating for Apple-hosted features; BifrOSt has no Apple account.",
    "rea": [],
    "method": "assessed"
   },
@@ -3283,11 +3330,35 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/ui/src/whisper.rs; springboard/sdk/src/speech_whisper.rs; springboard/sdk/src/speech_recognizer.rs; springboard/src/shell/services/recognizer.rs",
    "status": "os",
-   "note": "Only the bundle identifier and Info.plist were read; the binary was not extracted, so the acoustic recognition job is unconfirmed.",
+   "note": "Settled ready this wave; see ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_whisper::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "speech_recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::recognizer::tests"
+    }
+   ],
+   "ready_note": "The reference component is the embedded (on-device) acoustic speech recogniser behind dictation and Siri. BifrOSt's on-device recogniser is the whisper pipeline (ui whisper), the SDK recogniser and its whisper backend, and the consent-gated shell recogniser service; the same code covers the public Speech rows. It needs the model download and is not yet verified on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmbeddedOSSupportHost.framework",
@@ -3305,8 +3376,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier and Info.plist were read; the binary was not extracted, so the peripherals it serves are unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: host driver support for Apple's embedded-OS coprocessors (T2 and bridge-style chips). The index shows the kernel extension AppleEmbeddedOSSupportHost.kext that references this framework. Apple hardware; BifrOSt PC has no such coprocessor.",
    "rea": [],
    "method": "assessed"
   },
@@ -3437,8 +3508,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the Info.plist and a Core Data model file are listed; the model schema and binary were not read, so the job is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: a Core Data store (Model.momd, Model.mom in the index) for on-device personal-context learning that feeds Apple's suggestion and intelligence features, in the same family as CoreDuet (already n/a). It has no meaning without Apple's suggestion services, which BifrOSt does not run. The model schema itself was not read.",
    "rea": [],
    "method": "assessed"
   },
@@ -3458,8 +3529,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Only the bundle identifier and Info.plist were read; the binary was not extracted, so the security store's role is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: Apple-internal store for link security state, by its name and Info.plist (the only index content). No resources, plug-ins or strings and nothing user-visible; BifrOSt link and TLS security is handled by the Linux stack and rustls.",
    "rea": [],
    "method": "assessed"
   },
@@ -3521,8 +3592,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "No bundle contents were extracted or listed beyond its name, so the purpose is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: a single binary with no resources plus a FeatureFlags/Domain/Ensemble.plist feature-flag domain in the index; an Apple feature-flagged multi-device component. No user-visible surface or open equivalent; the exact job is not confirmed from the index.",
    "rea": [],
    "method": "assessed"
   },
@@ -3563,8 +3634,8 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The bundle identifier and a Metal shader library are listed; the shader contents and binary were not read, so the job is unconfirmed.",
+   "status": "n/a",
+   "note": "n/a: the index shows a 712 KB default.metallib; the shader row for it is already n/a as machine-learning image processing. BifrOSt has no on-device model pipeline and ships no Apple ML models.",
    "rea": [],
    "method": "assessed"
   },
@@ -3981,11 +4052,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/extensionkit.json",
+   "bifrost": "springboard/src/shell/login_items_page.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "private framework, owner ExtensionKit; from SDK matrix extensionkit.json",
+   "note": "Settled ready this wave; see ready_note.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests"
+    }
+   ],
+   "ready_note": "The reference framework is the Login Items and Extensions pane that lists app extensions and background agents and lets the user turn them on or off. BifrOSt has that page: it reads extension and background-agent tables from installed manifests, builds the Settings groups, stores the off lists in preferences and filters runnable agents (shell::login_items_page::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FATCommon.framework",

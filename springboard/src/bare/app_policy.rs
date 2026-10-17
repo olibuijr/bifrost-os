@@ -421,6 +421,8 @@ pub fn command(
             .env("WAYLAND_DISPLAY", display)
             .env("WINIT_UNIX_BACKEND", "wayland");
     }
+    // remembered locally so the shell can warm the apps likely to open next (core launch_prefetch)
+    bifrost_core::launch_prefetch::note_launch(id, &exec);
     c.arg("--chdir")
         .arg(data)
         .arg("--")
