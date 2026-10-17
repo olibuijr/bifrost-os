@@ -2763,7 +2763,8 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
-                let ext = self.login_ext_cache.get();
+                let mut ext = self.login_ext_cache.get();
+                ext.refresh_off = services::background::off_from_pref(self.prefs.get(services::background::PREF_OFF));
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
                 st.set_login_items(logins, pending);
