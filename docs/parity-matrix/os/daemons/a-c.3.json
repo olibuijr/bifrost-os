@@ -43,7 +43,21 @@
    "status": "partial",
    "note": "rule: launch services and app link models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "launch_services::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "app_links::tests"
+    }
+   ],
+   "ready_note": "Launch services and app link models in the SDK (launch_services.rs, app_links.rs); the shell's launch service answers them."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.universalaccessAuthWarn.plist",
@@ -81,11 +95,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/universal_access_control.rs",
    "status": "partial",
-   "note": "Accessibility settings and zoom; no per-app universal access policy",
+   "note": "Accessibility settings and zoom; no per-app universal access policy; built 2026-10-17: per-app policy (universal_access_control service, a11y_app_denials pref) denies zoom, screen_reader, keyboard or pointer to one app; tests shell::services::universal_access_control::tests. The Settings editor for the policy is not built, so only the pref and service read it.",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::universal_access_control::tests"
+    }
+   ],
+   "ready_note": "The per-app policy is a model with the pref round trip and the service answers (allowed, denied) per calling app; global settings still decide whether a feature is on. The Settings page that edits the policy is not built, so apps can be denied through the pref only."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.universalaccessd.plist",
@@ -191,7 +214,16 @@
    "status": "partial",
    "note": "disk attach handling; a removable disk that appears posts a USB Disk Connected notice in Settings (built 2026-10-17, tests shell::services::disks::tests); built on arm; not yet verified on Midget",
    "rea": [],
-   "method": "heuristic"
+   "method": "heuristic",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::disks::tests"
+    }
+   ],
+   "ready_note": "The disk attach handler in shell/services/disks.rs posts the USB Disk Connected notice for a removable whole disk, through the shell's notification store."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.usermanagerhelper.plist",
@@ -262,7 +294,26 @@
    "status": "partial",
    "note": "rule: notification, live activity and focus models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "usernotif::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "notification::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "live_activity::tests"
+    }
+   ],
+   "ready_note": "Notification models (sdk notification.rs, usernotif.rs) and the live activity model in ui live_activity.rs. Delivery is done by the shell (see com.apple.usernotificationsd)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.usernotificationsd.plist",
@@ -361,9 +412,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/services/voice_banking.rs",
    "status": "gap",
-   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.",
+   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.; built 2026-10-17: the sample store (voice_banking service, a11y_voice_bank pref) keeps one good sample per script phrase, refuses bad rates and lengths, and reports progress; tests shell::services::voice_banking::tests. Still missing: the app must upload the audio itself (the shell keeps metadata only) and training a personal voice from the samples.",
    "rea": []
   },
   {
@@ -550,7 +601,21 @@
    "status": "partial",
    "note": "role filled by login_items_page.rs and login.rs; no separate process; no SMAppService registration daemon",
    "rea": [],
-   "method": "audit"
+   "method": "audit",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login_items_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::login::tests"
+    }
+   ],
+   "ready_note": "Login items are registered and listed by login.rs (model) and login_items_page.rs (the Settings page); no separate registration process, which is the design."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.xpc.otherbsd.plist",
@@ -571,7 +636,21 @@
    "status": "partial",
    "note": "rule: extension models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "extension::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "extensions::tests"
+    }
+   ],
+   "ready_note": "Extension models in the SDK (extension.rs) and the extension list in ui extensions.rs."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.openssh.ssh-agent.plist",
