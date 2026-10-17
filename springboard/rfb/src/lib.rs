@@ -2,10 +2,13 @@
 //! framebuffer those messages update. There are no sockets and no threads here; the Screen Sharing app owns the
 //! connection and calls these functions over any `Read` or `Write`.
 //!
-//! Supported: RFB 3.3, 3.7 and 3.8; security None (1) only; true-colour pixel formats of 8, 16 and 32 bits; Raw and
-//! CopyRect rectangles, plus the DesktopSize pseudo-encoding for resizes. Password (VNC) authentication is refused
-//! with `Error::Unsupported`, and no other encodings are requested, so a server must send Raw rectangles.
+//! Supported: RFB 3.3, 3.7 and 3.8; security None (1) and, when the caller gives a password, VNC authentication (2,
+//! the DES challenge in `des`; weak by design, so reach a server that needs more through an SSH tunnel); true-colour
+//! pixel formats of 8, 16 and 32 bits; Raw and CopyRect rectangles, plus the DesktopSize pseudo-encoding for resizes.
+//! A password-only server with no password given is refused with `Error::Unsupported`
+//! (`handshake::needs_password`), and no other encodings are requested, so a server must send Raw rectangles.
 
+pub mod des;
 pub mod framebuffer;
 pub mod handshake;
 pub mod keysym;

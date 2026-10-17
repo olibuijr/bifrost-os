@@ -1,5 +1,6 @@
-//! Screen Sharing: the viewer for VNC (RFB) servers. Type an address, connect, and the remote desktop shows in the
-//! window; pointer and keyboard go to it unless View Only is on. The clipboard moves both ways through the shell's
+//! Screen Sharing: the viewer for VNC (RFB) servers. Type an address (and a password when the server asks for one),
+//! connect, and the remote desktop shows in the window; pointer and keyboard go to it unless View Only is on. Tab
+//! moves between the address and the password box. The clipboard moves both ways through the shell's
 //! pasteboard. This computer's own server is the Remote app, switched on in Settings > Sharing.
 
 mod connection;
@@ -20,7 +21,11 @@ use view::{Area, View};
 /// Window layout in points, below the 52 pt band that holds the traffic lights and the large title.
 const MARGIN: f32 = 16.;
 const FIELD_Y: f32 = 112.;
-const FIELD_W: f32 = 420.;
+const FIELD_W: f32 = 300.;
+/// The password box sits right of the address, then the Connect button.
+const PASS_X: f32 = FIELD_W + 12.;
+const PASS_W: f32 = 190.;
+const BUTTON_X: f32 = PASS_X + PASS_W + 12.;
 const BUTTON_W: f32 = 120.;
 const ROW_H: f32 = 34.;
 const CHIP_Y: f32 = 160.;
@@ -35,6 +40,10 @@ type CacheKey = (u64, u32, u32, u32, i32, i32, usize, usize);
 
 struct ScreenSharing {
     address: String,
+    /// The password for a server that asks for one; shown as dots, never stored.
+    password: String,
+    /// Typing goes to the password box instead of the address.
+    focus_password: bool,
     conn: Option<Connection>,
     /// The status line under the controls: connection progress, the reason it ended, or the last clipboard result.
     message: String,
@@ -99,7 +108,8 @@ impl ScreenSharing {
         }
         // Dropping the old connection closes its socket.
         self.conn = None;
-        self.conn = Some(Connection::open(&addr));
+        let password = (!self.password.is_empty()).then(|| self.password.clone());
+        self.conn = Some(Connection::open_with(&addr, password));
         self.pressed = false;
         self.drawn = 0;
         self.cache = None;
@@ -113,6 +123,13 @@ impl ScreenSharing {
         self.message = "Disconnected.".to_string();
     }
 
+    /// Forgets the password once a connection has used it, so it is not kept on screen or in memory longer than needed.
+    fn clear_password_when_connected(&mut self) {
+        if self.conn.is_some() && !self.password.is_empty() && self.message.starts_with("Connected") {
+            self.password.clear();
+        }
+    }
+
     fn request_paste(&mut self, ctx: &Ctx) {
         self.paste_req = Some(Board::general().string(ctx, pasteboard::STRING));
         self.message = "Sending the clipboard...".to_string();
@@ -123,7 +140,11 @@ impl ScreenSharing {
         let col = self.col;
         let connected = self.conn.is_some();
         if matches!(kind, TouchKind::Up) {
-            if hit(x, y, col + FIELD_W + 16., FIELD_Y, BUTTON_W, ROW_H) {
+            if hit(x, y, col, FIELD_Y, FIELD_W, ROW_H) || hit(x, y, col + PASS_X, FIELD_Y, PASS_W, ROW_H) {
+                self.focus_password = x >= col + PASS_X;
+                return true;
+            }
+            if hit(x, y, col + BUTTON_X, FIELD_Y, BUTTON_W, ROW_H) {
                 if connected {
                     self.disconnect();
                 } else {
@@ -241,10 +262,11 @@ impl App for ScreenSharing {
                     }
                     return true;
                 }
-                // Not connected: typing fills in the address.
-                let before = self.address.len();
-                self.address.extend(t.chars().filter(|c| !c.is_control()));
-                self.address.len() != before
+                // Not connected: typing fills in the focused box.
+                let field = if self.focus_password { &mut self.password } else { &mut self.address };
+                let before = field.len();
+                field.extend(t.chars().filter(|c| !c.is_control()));
+                field.len() != before
             }
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
@@ -268,7 +290,14 @@ impl App for ScreenSharing {
                         self.connect();
                         true
                     }
-                    8 => self.address.pop().is_some(),
+                    8 => {
+                        let popped = if self.focus_password { self.password.pop() } else { self.address.pop() };
+                        popped.is_some()
+                    }
+                    9 => {
+                        self.focus_password = !self.focus_password;
+                        true
+                    }
                     _ => false,
                 }
             }
@@ -291,6 +320,7 @@ impl App for ScreenSharing {
                         self.message = format!("Connected to {name}.");
                         changed = true;
                     }
+                    self.clear_password_when_connected();
                 }
                 Status::Closed(reason) => ended = Some(reason),
             }
@@ -342,10 +372,17 @@ impl App for ScreenSharing {
 
         // The address field, the Connect or Disconnect button, then the three option chips.
         let (text, color) = if self.address.is_empty() { ("Address, such as 192.168.1.20", LABEL_2.now()) } else { (self.address.as_str(), LABEL.now()) };
+        let connected = self.conn.is_some();
+        // the box that has the keyboard gets a blue outline while not connected
+        let outline = |on: bool| if on && !connected { TINT } else { FIELD_BG.now() };
+        s.fill_rrect(u.pt(x - 2.), u.pt(FIELD_Y - 2.), u.pt(FIELD_W + 4.), u.pt(ROW_H + 4.), u.pt(11.), outline(!self.focus_password));
         s.fill_rrect(u.pt(x), u.pt(FIELD_Y), u.pt(FIELD_W), u.pt(ROW_H), u.pt(9.), FIELD_BG.now());
         s.blit(&u.text(text, MAC_TITLE2_PT, Weight::Regular, color), u.pt(x + 12.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
-        let connected = self.conn.is_some();
-        let bx = x + FIELD_W + 16.;
+        let (dots, dot_color) = if self.password.is_empty() { ("Password".to_string(), LABEL_2.now()) } else { ("\u{2022}".repeat(self.password.chars().count().min(24)), LABEL.now()) };
+        s.fill_rrect(u.pt(x + PASS_X - 2.), u.pt(FIELD_Y - 2.), u.pt(PASS_W + 4.), u.pt(ROW_H + 4.), u.pt(11.), outline(self.focus_password));
+        s.fill_rrect(u.pt(x + PASS_X), u.pt(FIELD_Y), u.pt(PASS_W), u.pt(ROW_H), u.pt(9.), FIELD_BG.now());
+        s.blit(&u.text(&dots, MAC_TITLE2_PT, Weight::Regular, dot_color), u.pt(x + PASS_X + 12.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
+        let bx = x + BUTTON_X;
         s.fill_rrect(u.pt(bx), u.pt(FIELD_Y), u.pt(BUTTON_W), u.pt(ROW_H), u.pt(9.), if connected { FIELD_BG.now() } else { TINT });
         let (label, label_color) = if connected { ("Disconnect", LABEL.now()) } else { ("Connect", WHITE) };
         s.blit(&u.text(label, MAC_TITLE2_PT, Weight::Regular, label_color), u.pt(bx + 18.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
@@ -369,6 +406,8 @@ impl App for ScreenSharing {
 fn main() {
     bifrost_app::run(ScreenSharing {
         address: String::new(),
+        password: String::new(),
+        focus_password: false,
         conn: None,
         message: "Type the address of the computer to view, then Connect.".to_string(),
         fit: true,

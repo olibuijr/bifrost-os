@@ -206,6 +206,21 @@ impl Watcher {
         self.registry.remove(a)
     }
 
+    /// Removes every attachment on `folder`. Returns how many were removed.
+    pub fn detach_folder(&mut self, folder: &Path) -> usize {
+        self.registry.remove_folder(folder)
+    }
+
+    /// Saves the attachments to `file_path(root)`, replacing the old file atomically, so a restart finds what the setup
+    /// app last left. The folder is created when it is missing.
+    pub fn save(&self, root: &Path) -> std::io::Result<()> {
+        let path = file_path(root);
+        std::fs::create_dir_all(root)?;
+        let tmp = path.with_extension("tsv.tmp");
+        std::fs::write(&tmp, self.registry.to_text())?;
+        std::fs::rename(&tmp, &path)
+    }
+
     /// The runs for the new files in the attached folders. Rescans only once `SCAN_EVERY` has passed since the last scan.
     pub fn poll(&mut self, now: Instant) -> Vec<Run> {
         if self.next_scan.is_some_and(|due| now < due) {
@@ -383,6 +398,26 @@ mod tests {
         let runs = w.poll(Instant::now() + SCAN_EVERY);
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].file, "b.txt");
+    }
+
+    #[test]
+    fn saved_attachments_come_back_after_a_restart_and_detaching_a_folder_is_saved() {
+        let root = tempfile::tempdir().unwrap();
+        let in_dir = tempfile::tempdir().unwrap();
+        let out_dir = tempfile::tempdir().unwrap();
+        let mut w = Watcher::new(Registry::new());
+        assert!(w.attach(Attachment::new(in_dir.path(), "files", "tag").unwrap()));
+        assert!(w.attach(Attachment::new(in_dir.path(), "notes", "import").unwrap()));
+        assert!(w.attach(Attachment::new(out_dir.path(), "files", "tag").unwrap()));
+        w.save(&root.path().join("data")).unwrap();
+        assert!(!file_path(&root.path().join("data")).with_extension("tsv.tmp").exists(), "the temporary file is renamed away");
+        let back = Watcher::new(Registry::from_text(&std::fs::read_to_string(file_path(&root.path().join("data"))).unwrap()));
+        assert_eq!(back.registry().to_text(), w.registry().to_text());
+        assert_eq!(w.detach_folder(in_dir.path()), 2);
+        assert_eq!(w.detach_folder(in_dir.path()), 0);
+        w.save(&root.path().join("data")).unwrap();
+        let after = Registry::from_text(&std::fs::read_to_string(file_path(&root.path().join("data"))).unwrap());
+        assert_eq!(after.folders(), vec![out_dir.path().to_path_buf()]);
     }
 
     #[test]

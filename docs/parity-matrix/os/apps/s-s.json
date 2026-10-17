@@ -193,11 +193,40 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/remote",
+   "bifrost": "springboard/apps/screen-sharing, springboard/rfb, springboard/apps/remote",
    "status": "partial",
-   "note": "remote desktop app",
+   "note": "remote desktop app Built 2026-10-17 (wave 13): VNC password authentication (springboard/rfb/src/des.rs, handshake::connect_with) and a Password box in the viewer (handshake::tests, des::tests, connection::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "handshake::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "des::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-rfb",
+     "filter": "message::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "connection::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-screen-sharing",
+     "filter": "view::tests"
+    }
+   ],
+   "ready_note": "Screen Sharing connects to a VNC (RFB) server, shows and controls its desktop (scale to fit, View Only, clipboard both ways) and answers VNC password authentication; the Remote app and Settings > Sharing are the server side. Gap: no TLS and no encodings beyond Raw and CopyRect."
   },
   {
    "id": "path:/System/Applications/Utilities/Screenshot.app",

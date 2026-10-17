@@ -287,11 +287,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/textutil.rs",
+   "bifrost": "springboard/cmd/src/bin/textutil.rs, springboard/cmd/src/textutil.rs",
    "status": "partial",
-   "note": "converts txt, html and rtf only (plain text and paragraphs, no styling); Word formats are not supported",
+   "note": "converts txt, html and rtf only (plain text and paragraphs, no styling); Word formats are not supported Built 2026-10-17 (wave 13): docx and odt read and write (textutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "textutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/textutil"
+    }
+   ],
+   "ready_note": "textutil -convert converts between txt, html, rtf, docx and odt (text and paragraph breaks; the zip packages are read and written with the shared zip module). Gap: no fonts, colours, images or tables, no old binary .doc, and no -info, -stdin or -encoding."
   },
   {
    "id": "path:/usr/bin/tftp",
@@ -452,11 +465,28 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/tiffinfo",
+   "bifrost": "springboard/cmd/src/bin/tiffutil.rs, springboard/cmd/src/tiffutil.rs, /usr/bin/tiffcp, /usr/bin/tiffinfo",
    "status": "partial",
-   "note": "tiffinfo covers the info query only; tiffutil's other operations are not implemented",
+   "note": "tiffinfo covers the info query only; tiffutil's other operations are not implemented Built 2026-10-17 (wave 13): springboard/cmd/src/tiffutil.rs (tiffutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "tiffutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tiffcp"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tiffutil"
+    }
+   ],
+   "ready_note": "tiffutil -info, -cat, -extract and the -lzw, -packbits and -none recompression map onto tiffinfo and tiffcp (Arch package libtiff). Gap: -cathidpicts, -jpeg and -g4 are refused."
   },
   {
    "id": "path:/usr/bin/time",
@@ -637,11 +667,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/tmutil.rs",
+   "bifrost": "springboard/cmd/src/bin/tmutil.rs, springboard/cmd/src/tmutil.rs",
    "status": "partial",
    "note": "Built 2026-10-17: latestbackup and isexcluded (springboard/cmd/src/tmutil.rs; tests tmutil::tests). Other modes still not replicated.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "tmutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/tmutil"
+    }
+   ],
+   "ready_note": "tmutil drives the snapshot backup: status, startbackup, listbackups, latestbackup, restore, isexcluded and add/removeexclusion. Gap: startbackup --block and per-path restore into an existing folder."
   },
   {
    "id": "path:/usr/bin/toe",
@@ -865,11 +908,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (net-snmp, which tools/parity/os_cli_packages.txt lists with traptoemail)",
+   "bifrost": "/usr/bin/traptoemail (net-snmp)",
    "status": "partial",
    "note": "ships with net-snmp (runtime-packages.txt), but installation is not checked and no BifrOSt script wraps it",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/traptoemail"
+    }
+   ],
+   "ready_note": "traptoemail is net-snmp's trap handler that mails a trap; the Arch package net-snmp (in runtime-packages.txt) ships it unchanged."
   },
   {
    "id": "path:/usr/bin/trash",
@@ -1513,11 +1564,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/usdextract.rs",
+   "bifrost": "springboard/cmd/src/bin/usdextract.rs, springboard/cmd/src/usdextract.rs",
    "status": "partial",
    "note": "Built 2026-10-17: usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package through unzip (springboard/cmd/src/usdextract.rs; tests usdextract::tests). Only the unpack form is built; any other usdextract options are not. Not verified on Midget.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "usdextract::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/usdextract"
+    }
+   ],
+   "ready_note": "usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package. Gap: only the unpack form."
   },
   {
    "id": "path:/usr/bin/usdrecord",

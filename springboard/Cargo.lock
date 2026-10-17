@@ -590,7 +590,9 @@ dependencies = [
  "bifrost-core",
  "bifrost-proto",
  "bifrost-ui",
+ "png",
  "springboard",
+ "tempfile",
 ]
 
 [[package]]
@@ -673,6 +675,14 @@ dependencies = [
  "bifrost-app",
  "bifrost-core",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-folder-actions"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
 ]
 
 [[package]]

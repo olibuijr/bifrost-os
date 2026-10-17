@@ -468,7 +468,15 @@
    "status": "partial",
    "note": "Midget 0.7.25: kvno installed, --version/--help probe failed",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/kvno"
+    }
+   ],
+   "ready_note": "kgetcred obtains a service ticket for a Kerberos principal; kvno from the Arch package krb5 (in runtime-packages.txt) does the same job."
   },
   {
    "id": "path:/usr/bin/kill.d",
@@ -1061,11 +1069,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt (valgrind, memcheck leak report)",
+   "bifrost": "springboard/cmd/src/bin/leaks.rs, springboard/cmd/src/leaks.rs, /usr/bin/valgrind",
    "status": "partial",
-   "note": "valgrind is listed in the runtime package list and its memcheck tool reports leaks for a program launched under it. Attaching to a running process as leaks(1) does is not supported, and neither step is verified on Midget.",
+   "note": "valgrind is listed in the runtime package list and its memcheck tool reports leaks for a program launched under it. Attaching to a running process as leaks(1) does is not supported, and neither step is verified on Midget. Built 2026-10-17 (wave 13): springboard/cmd/src/bin/leaks.rs wraps valgrind (leaks::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "leaks::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "valgrind --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/leaks"
+    }
+   ],
+   "ready_note": "leaks --atExit -- program runs the program under valgrind's memcheck and reports definite and indirect leaks, exiting 1 when it finds one. Gap: it cannot attach to a process that is already running; leaks PID is refused with a message."
   },
   {
    "id": "path:/usr/bin/leave",

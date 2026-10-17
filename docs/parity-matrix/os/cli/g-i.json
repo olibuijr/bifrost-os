@@ -70,9 +70,22 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/ifconfig.rs, springboard/cmd/src/ifconfig.rs",
    "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Built 2026-10-17: ifconfig lists every interface (flags, MTU, hardware address, IPv6 addresses) from /sys/class/net and /proc/net/if_inet6 (ifconfig::tests). Gap: IPv4 addresses (only netlink carries them) and any change to an interface.",
+   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Built 2026-10-17: ifconfig lists every interface (flags, MTU, hardware address, IPv6 addresses) from /sys/class/net and /proc/net/if_inet6 (ifconfig::tests). Gap: IPv4 addresses (only netlink carries them) and any change to an interface. Built 2026-10-17 (wave 13): IPv4 address, netmask and broadcast through the interface ioctls (ifconfig::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ifconfig::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ifconfig"
+    }
+   ],
+   "ready_note": "ifconfig lists every interface with flags, MTU, hardware address, the primary IPv4 address (netmask in hex, broadcast) and the IPv6 addresses. Gap: it only reads; changing an interface is refused (ip(8) does that)."
   },
   {
    "id": "path:/usr/bin/IOAccelMemory",
@@ -2485,11 +2498,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/ip",
+   "bifrost": "springboard/cmd/src/bin/ipconfig.rs, springboard/cmd/src/ipconfig.rs",
    "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
+   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Built 2026-10-17 (wave 13): springboard/cmd/src/ipconfig.rs and bin/ipconfig.rs (ipconfig::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "ipconfig::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/ipconfig"
+    }
+   ],
+   "ready_note": "ipconfig answers getifaddr, getv6address, ifcount and getoption (subnet_mask, router, domain_name_server) from the interface, route and resolver state. Gap: set, waitall and getpacket need the DHCP client's state and are refused."
   }
  ]
 }

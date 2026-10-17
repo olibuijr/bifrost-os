@@ -600,11 +600,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/pbcopy.rs",
+   "bifrost": "springboard/cmd/src/bin/pbcopy.rs, springboard/cmd/src/pasteboard.rs",
    "status": "partial",
    "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "pasteboard::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pbcopy"
+    }
+   ],
+   "ready_note": "pbcopy puts standard input on the general clipboard (Wayland selection) and on the named boards ruler, find and font. Gap: the shell's own pasteboard does not read the named-board files yet."
   },
   {
    "id": "path:/usr/bin/pbpaste",
@@ -621,11 +634,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/pbpaste.rs",
+   "bifrost": "springboard/cmd/src/bin/pbpaste.rs, springboard/cmd/src/pasteboard.rs",
    "status": "partial",
    "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "pasteboard::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pbpaste"
+    }
+   ],
+   "ready_note": "pbpaste prints the general clipboard (txt, rtf or ps with -Prefer) and the named boards ruler, find and font. Gap: the shell's own pasteboard does not read the named-board files yet."
   },
   {
    "id": "path:/usr/bin/pcap-config",
@@ -667,7 +693,15 @@
    "status": "partial",
    "note": "pcsc_scan is an approximation of pcsctest (different tool, different output); not the same job",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/pcsc_scan"
+    }
+   ],
+   "ready_note": "pcsctest checks that the smart card service answers and lists readers and cards; pcsc_scan (Arch package pcsc-tools, in runtime-packages.txt) does the same against pcscd. The output differs."
   },
   {
    "id": "path:/usr/bin/perl",
@@ -994,11 +1028,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/plutil.rs",
+   "bifrost": "springboard/cmd/src/bin/plutil.rs, springboard/cmd/src/plutil.rs, springboard/core/src/plist_binary.rs",
    "status": "partial",
    "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused Built 2026-10-17: -convert and -create binary1 write bplist00 (plist_binary::write); tests plist_binary::tests and plutil::tests. Still refused: swift and objc forms; edits write XML.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "plutil::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "plist_binary::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/plutil"
+    }
+   ],
+   "ready_note": "plutil checks (-lint), prints (-p), converts (xml1, json, binary1), inserts, replaces, removes and extracts keys. Gap: swift and objc output are refused, and edits write XML."
   },
   {
    "id": "path:/usr/bin/pmset",
@@ -1015,11 +1067,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/pmset.rs",
+   "bifrost": "springboard/cmd/src/bin/pmset.rs, springboard/cmd/src/pmset.rs",
    "status": "partial",
-   "note": "pmset covers the sleep timer only; other pmset options are not implemented",
+   "note": "pmset covers the sleep timer only; other pmset options are not implemented Built 2026-10-17 (wave 13): pmset -g batt and lowpowermode 0|1 (pmset::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "pmset::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/pmset"
+    }
+   ],
+   "ready_note": "pmset shows (-g) and sets the sleep timer and Low Power Mode (the Settings > Battery pref), and -g batt reports the power source, charge, state and time estimate from the kernel's power-supply class. Gap: displaysleep, sleepnow, schedule and the other settings are refused."
   },
   {
    "id": "path:/usr/bin/pod2html",

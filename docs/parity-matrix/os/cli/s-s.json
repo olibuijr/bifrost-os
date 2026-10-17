@@ -426,11 +426,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/secret-tool",
+   "bifrost": "springboard/cmd/src/bin/security.rs, springboard/cmd/src/security.rs, springboard/src/keychain.rs",
    "status": "partial",
-   "note": "secret-tool is libsecret, not the macOS keychain command; keychain subcommands are not mapped",
+   "note": "secret-tool is libsecret, not the macOS keychain command; keychain subcommands are not mapped Built 2026-10-17 (wave 13): springboard/cmd/src/security.rs over springboard::keychain::Store::open_group (security::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "security::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/security"
+    }
+   ],
+   "ready_note": "security add-, find- and delete-generic-password and dump-keychain work on the encrypted BifrOSt keychain (one access group, is.bifrost.security, in the shell data directory of the user who runs it); dump never prints a secret. Gap: certificates, identities, internet passwords and keychain-file management are refused."
   },
   {
    "id": "path:/usr/bin/sed",
@@ -694,11 +707,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/shortcuts.rs",
+   "bifrost": "springboard/cmd/src/bin/shortcuts.rs, springboard/cmd/src/shortcuts.rs",
    "status": "partial",
    "note": "runs only the steps the command line reaches; the Shortcuts library is not complete",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "shortcuts::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/shortcuts"
+    }
+   ],
+   "ready_note": "shortcuts lists, views and runs the shortcuts the Shortcuts app saves, with the same runner. Gap: run performs the steps the command line can reach and stops at the first step that needs a shell service or an answer."
   },
   {
    "id": "path:/usr/bin/showmount",
@@ -765,11 +791,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/sips.rs",
+   "bifrost": "springboard/cmd/src/bin/sips.rs, springboard/cmd/src/sips.rs",
    "status": "partial",
    "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused. Built 2026-10-17: -s format gif writes a GIF89a with a fixed 3-3-2 palette and LZW (sips::tests); other -s properties are still refused. Built 2026-10-17: -s formatOptions default|0-100 sets the JPEG quality of a conversion (sips::tests). Still refused: the other -s properties (rotation, flips, DPI, colour profile).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "sips::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/sips"
+    }
+   ],
+   "ready_note": "sips queries image size and format, resamples (-Z, --resampleWidth/Height) and converts to PNG, JPEG and GIF with a JPEG quality option. Gap: rotation, flips, DPI and colour profile properties are refused."
   },
   {
    "id": "path:/usr/bin/smbutil",
@@ -786,11 +825,29 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/smbclient",
+   "bifrost": "springboard/cmd/src/bin/smbutil.rs, springboard/cmd/src/smbutil.rs, /usr/bin/smbclient",
    "status": "partial",
-   "note": "smbclient covers shares; smbutil's own options are not replicated",
+   "note": "smbclient covers shares; smbutil's own options are not replicated Built 2026-10-17 (wave 13): springboard/cmd/src/smbutil.rs maps view, lookup and status onto the Samba client programs (smbutil::tests).",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "smbutil::tests"
+    },
+    {
+     "kind": "cmd",
+     "run": "smbclient --version",
+     "expect_exit": 0
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/smbutil"
+    }
+   ],
+   "ready_note": "smbutil view //[user@]host lists shares (smbclient -L), lookup resolves a NetBIOS name and status shows a host's names (nmblookup). Gap: statshares, identity, multichannel and dfs read the reference client's mount state and are refused."
   },
   {
    "id": "path:/usr/bin/snmp-bridge-mib",
@@ -3502,11 +3559,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/scutil.rs",
+   "bifrost": "springboard/cmd/src/bin/scutil.rs, springboard/cmd/src/scutil.rs",
    "status": "partial",
    "note": "covers --get/--set for ComputerName, LocalHostName, HostName, plus --dns and --proxy; other SystemConfiguration keys are not read",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "scutil::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/scutil"
+    }
+   ],
+   "ready_note": "scutil gets and sets ComputerName, LocalHostName and HostName and reads the DNS and proxy configuration. Gap: other SystemConfiguration keys are not read."
   },
   {
    "id": "path:/usr/sbin/securityd",
@@ -3794,11 +3864,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/chronyd",
+   "bifrost": "springboard/src/net/ntp.rs, /usr/bin/sntp",
    "status": "partial",
    "note": "chronyd is an NTP daemon, not the SNTP server sntpd; approximation only",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "net::ntp::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/sntp"
+    }
+   ],
+   "ready_note": "sntpd keeps the system clock right over SNTP: BifrOSt's SNTP client (net::ntp, RFC 4330 packets, step only past 2 s, resync every 6 h) does that, with systemd-timesyncd as the packaged service and sntp (Arch package ntp) for a one-off query. It is a client, not a time server."
   },
   {
    "id": "path:/usr/sbin/softwareupdate",
@@ -3815,11 +3898,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/softwareupdate.rs",
+   "bifrost": "springboard/cmd/src/bin/softwareupdate.rs, springboard/cmd/src/softwareupdate.rs",
    "status": "partial",
    "note": "--schedule on|off and the schedule query are built (softwareupdate::tests); updates install through bifrost pc midget update, not through a general software update service.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "softwareupdate::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/softwareupdate"
+    }
+   ],
+   "ready_note": "softwareupdate -l checks for and lists updates through the update agent, -i and -a download and stage the OS update, and --schedule shows or sets the background check. Gap: app updates have no install command on the agent's protocol yet."
   },
   {
    "id": "path:/usr/sbin/spctl",
@@ -4020,11 +4116,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/system_profiler.rs",
+   "bifrost": "springboard/cmd/src/bin/system_profiler.rs, springboard/cmd/src/profile.rs",
    "status": "partial",
    "note": "BifrOSt system_profiler is not verified and covers a subset of data types",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "profile::tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/bin/system_profiler"
+    }
+   ],
+   "ready_note": "system_profiler reports hardware, software, network, storage, displays, audio and USB as text or JSON at mini, basic or full detail, from the readers the System Information app uses. Gap: fewer data types than the reference."
   },
   {
    "id": "path:/usr/sbin/systemkeychain",

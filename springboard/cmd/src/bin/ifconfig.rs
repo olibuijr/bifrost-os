@@ -15,11 +15,11 @@ fn main() {
         Action::Help => println!("{}", ifconfig::USAGE),
         Action::List => {
             for iface in &ifaces {
-                print!("{}", ifconfig::render(iface, &inet6));
+                print!("{}", ifconfig::render_with(iface, ifconfig::read_inet4(&iface.name).as_ref(), &inet6));
             }
         }
         Action::Show(name) => match ifaces.iter().find(|i| i.name == name) {
-            Some(iface) => print!("{}", ifconfig::render(iface, &inet6)),
+            Some(iface) => print!("{}", ifconfig::render_with(iface, ifconfig::read_inet4(&iface.name).as_ref(), &inet6)),
             None => die("ifconfig", &format!("{name}: interface does not exist"), 1),
         },
     }
