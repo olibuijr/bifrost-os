@@ -5,8 +5,9 @@
 - Get Info writes an edited title, artist or album into the song's file through the shared tag writer (MP3 and ADTS
   ID3v2.4, M4A `ilst`), with the atomic temp-and-rename write. The other tags are kept. Files with chapters, and
   formats the writer does not take (FLAC, WAV), keep the edit in the sidecar only. Blank values clear the tag.
-  Known gap: an MP3 rewrite keeps only the fields the tag model holds (title, artist, album, album artist, track, year,
-  lyrics, cover); other ID3 frames such as genre, comments and chapters are kept unchanged; a tag that cannot be copied safely (ID3v2.2, compressed frames) is not rewritten.
+  An MP3 rewrite writes the fields the tag model holds (title, artist, album, album artist, track, year, lyrics,
+  cover) and keeps every other ID3 frame unchanged; a tag that cannot be copied safely (ID3v2.2, compressed frames) is not
+  rewritten.
 
 ## 1.11.0 — 2026-10-17
 
