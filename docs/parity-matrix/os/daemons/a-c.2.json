@@ -1307,11 +1307,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/updated",
+   "bifrost": "springboard/src/shell/migration.rs, springboard/src/shell/backup.rs, springboard/src/bin/shell.rs",
    "status": "partial",
-   "note": "Open. springboard/updated only checks and stages OS update offers. The app install and migration coordinator is not built.",
+   "note": "Built 2026-10-17: springboard --migrate DEST SOURCE [CATEGORY...] brings a user's shell data sets and app data folders from another disk (a data folder) or from a backup archive. With no category it lists the categories; with categories it stages only those through the backup restore, applied at the next start (springboard/src/shell/migration.rs). Gap: no Settings page picks categories yet, and an archive from another machine needs that machine's keychain key.",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::migration::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::backup::tests::write_entries_writes_only_what_the_picker_takes"
+    }
+   ],
+   "ready_note": "Folder and archive sources, categories, picked staging through the backup restore, and app folder names are tested in shell::migration::tests; the picker is write_entries in shell::backup."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.installd.user.plist",

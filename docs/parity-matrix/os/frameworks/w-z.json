@@ -195,9 +195,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
    "status": "partial",
-   "note": "Wallpaper extension points are not offered; BifrOSt wallpapers are image files chosen in springboard/src/shell/wallpaper_page.rs.",
+   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Gap: installed app wallpapers are not listed on Settings > Wallpaper, which shows only the packed stills (springboard/src/shell/wallpaper_page.rs), and no extension runs to draw a wallpaper.",
    "rea": [],
    "method": "assessed"
   },
@@ -311,11 +311,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
    "status": "partial",
-   "note": "Wallpaper kinds are represented by the shell's file-based wallpaper list in springboard/src/shell/wallpaper_page.rs; no typed SDK model.",
+   "note": "Built 2026-10-17: typed kinds (still, day) and the picture rules in springboard/src/shell/wallpaper_types.rs; manifest keys wallpaper_kind and wallpapers are parsed and checked against the package at install.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::wallpaper_types::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests::an_app_provides_its_wallpapers_through_the_manifest"
+    }
+   ],
+   "ready_note": "Kinds, picture paths, day slices (through wallpaper_schedule) and the install-time package check are tested."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchListKit.framework",
