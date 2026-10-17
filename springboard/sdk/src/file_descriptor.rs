@@ -139,6 +139,18 @@ impl FileDescriptor {
         Ok((reader, writer))
     }
 
+    /// Wraps a descriptor the shell handed to the app, such as a document grant or a pipe end, with the access
+    /// the grant allows. The wrapper owns the descriptor from then on and closes it on drop.
+    pub fn from_received(fd: OwnedFd, access: Access) -> Self {
+        FileDescriptor { access, file: File::from(fd) }
+    }
+
+    /// Gives the descriptor back as an owned system descriptor, for a caller that passes it on. The access mode is
+    /// lost with the wrapper, so the receiver must know it.
+    pub fn into_owned(self) -> OwnedFd {
+        OwnedFd::from(self.file)
+    }
+
     /// The system's number for this descriptor, for a caller that hands it to a child process or a system call.
     pub fn raw(&self) -> RawFd {
         self.file.as_raw_fd()
@@ -191,6 +203,20 @@ mod tests {
         assert!(matches!(writer.read(&mut [0u8; 1]), Err(FileError::NotReadable)));
         assert!(matches!(reader.write(b"x"), Err(FileError::NotWritable)));
         assert!(matches!(reader.write_at(b"x", 0), Err(FileError::NotWritable)));
+    }
+
+    #[test]
+    fn a_received_descriptor_keeps_the_access_it_was_given() {
+        let (mut reader, writer) = FileDescriptor::pipe().expect("the system can make a pipe");
+        let fd = writer.into_owned();
+        let mut wrapped = FileDescriptor::from_received(fd, Access::Write);
+        assert_eq!(wrapped.access(), Access::Write);
+        assert!(matches!(wrapped.read(&mut [0u8; 1]), Err(FileError::NotReadable)));
+        wrapped.write(b"q").expect("write through the received end");
+        drop(wrapped);
+        let mut buf = [0u8; 2];
+        assert_eq!(reader.read(&mut buf).expect("read"), 1);
+        assert_eq!(buf[0], b'q');
     }
 
     #[test]
