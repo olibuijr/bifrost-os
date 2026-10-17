@@ -1681,6 +1681,19 @@ Apps run deferred work while no window is open. Status: wired end to end on the 
   parsing, power and network rules, the gate order, budget and day reset, phase timing with a fake clock, one task per app,
   low power and switches, persistence to disk and broken store lines), `bifrost_app::background_tasks` (event parsing).
 
+## Process assertions (RunningBoard) and the SMB client
+
+`bifrost_app::running_board` (`springboard/sdk/src/running_board.rs`): `take(ctx, reason, limit_secs)` asks the shell to keep the app
+running while nothing shows it; `release(ctx, id)`, `held(ctx)`. The model is `bifrost_core::process_assertion` (reason of 1 to 64
+characters, 60 s default and 1 h at most, 8 per app, lapses by itself) and the service is `runningboard`
+(`springboard/src/shell/services/running_board.rs`); `shell::background::Suspender` reads it on every tick, so an app that holds one is not
+stopped (`Event::Assertion`) and a quit app loses them. Gaps: assertion domains and memory or CPU limits per process.
+
+`bifrost_app::smb` (`springboard/sdk/src/smb.rs`, SMBClient parity): `SmbUrl::parse("smb://[domain;][user@]host[:port][/share/...]")` refuses a
+password in the address; `list_shares`, `list_dir` and `get` run Samba's `smbclient` with the password in `PASSWD`, the session held to SMB 2.02
+or newer with encryption when offered, names checked against `;`, quotes, wildcards and `..`, and `NT_STATUS_*` mapped to `Error`. Gaps: the
+Files Connect to Server sheet still lists `ftp://` only (no password prompt there yet) and shares are not mounted into the file tree.
+
 ## File system events (`FSEventStream`, `NSFilePresenter` gap)
 
 `bifrost_app::fswatch::WatchStream::new(paths, latency, flags)` (Apple's `FSEventStream`) watches folders recursively over inotify (new
