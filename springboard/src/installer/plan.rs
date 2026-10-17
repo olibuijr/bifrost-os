@@ -52,6 +52,21 @@ pub struct Config {
     pub wallpaper: String,
 }
 
+/// Units the installer enables on the installed system (`systemctl enable`). `avahi-daemon` is the system's
+/// multicast DNS and DNS-SD responder (the `.local` names and service browsing), and `cups.socket` starts the
+/// print scheduler on the first client connection, so printing needs no always-on daemon.
+pub const ENABLED_UNITS: &[&str] = &[
+    "bifrost-update-guard.service",
+    "springboard.service",
+    "NetworkManager.service",
+    "sshd.service",
+    "seatd.service",
+    "power-profiles-daemon.service",
+    "bifrost-irq-priority.service",
+    "bifrost-mcp.service",
+    "avahi-daemon.service",
+    "cups.socket",
+];
 pub const DEFAULT_APPEARANCE: &str = "dark";
 pub const DEFAULT_ACCENT: &str = "blue";
 /// The shell's wallpaper pref (see `bin/shell.rs`: `prefs.get("wallpaper")`).
@@ -965,7 +980,9 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // unit immediately inside the target root and otherwise aborts the
         // install with status 1 on a fresh system.
         r.write(&sys("/etc/systemd/system/bifrost-irq-priority.service"), irq_priority_unit())?;
-        r.chroot(&["systemctl", "enable", "bifrost-update-guard.service", "springboard.service", "NetworkManager.service", "sshd.service", "seatd.service", "power-profiles-daemon.service", "bifrost-irq-priority.service", "bifrost-mcp.service"])?;
+        let mut enable = vec!["systemctl", "enable"];
+        enable.extend(ENABLED_UNITS.iter().copied());
+        r.chroot(&enable)?;
         r.chroot(&["systemctl", "set-default", "graphical.target"])?;
         // one initramfs: the fallback image is a second full build nobody boots on a fresh install
         r.write(&sys(&format!("/etc/mkinitcpio.d/{kernel}.preset")), &mkinitcpio_preset(kernel))?;
@@ -1094,6 +1111,14 @@ fn prune_assets(dir: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_installer_enables_the_mdns_responder_and_the_print_scheduler() {
+        assert!(super::ENABLED_UNITS.contains(&"avahi-daemon.service"));
+        assert!(super::ENABLED_UNITS.contains(&"cups.socket"));
+        assert!(super::ENABLED_UNITS.contains(&"bifrost-update-guard.service"), "the boot guard stays enabled");
+        assert_eq!(super::ENABLED_UNITS.iter().filter(|u| u.ends_with(".service") || u.ends_with(".socket")).count(), super::ENABLED_UNITS.len());
+    }
+
     #[test]
     fn prune_assets_keeps_only_the_packed_set() {
         let dir = std::env::temp_dir().join(format!("prune-assets-{}", std::process::id()));
