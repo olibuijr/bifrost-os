@@ -1970,7 +1970,21 @@
    "status": "partial",
    "note": "rule: crash report and call-stack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "crash_report::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "call_stack_tree::tests"
+    }
+   ],
+   "ready_note": "crash report and call-stack tree models (crash_report.rs, call_stack_tree.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.SCHelper.plist",
@@ -2170,7 +2184,16 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "the updated service: ping, state, configuration, staging and schedule (springboard/updated)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.Virtualization.AppleVirtualPlatformHIDBridge.plist",
@@ -2254,7 +2277,21 @@
    "status": "partial",
    "note": "rule: privacy permission service model",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "privacy_permissions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "permission_request::tests"
+    }
+   ],
+   "ready_note": "privacy permission model (sdk) and the permission request service (core)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.accessoryd.plist",
@@ -2275,7 +2312,21 @@
    "status": "partial",
    "note": "rule: accessory manager and external accessory models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "accessory_manager::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "external_accessory::tests"
+    }
+   ],
+   "ready_note": "accessory manager (core) and external accessory model (sdk)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.accessoryupdaterd.plist",
@@ -2399,7 +2450,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ],
+   "ready_note": "network path and VPN models; the firewall and DHCP are Linux units, outside these tests"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.alwaysonexclavesd.plist",
@@ -2523,7 +2588,16 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "the app installer path of the updated service and its install log (springboard/updated)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.appleh13camerad.plist",
@@ -2809,7 +2883,26 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "audiod",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "audio engine and device models (audio_engine.rs, audio_devices.rs) and the audiod service"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.audio.coreaudiod.plist",
@@ -2865,7 +2958,26 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "audiod",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "audio engine and device models and the audiod service"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.audio.systemsoundserverd.plist",
@@ -2886,7 +2998,26 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "audiod",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "audio engine and device models and the audiod service"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.audioanalyticsd.plist",
@@ -2928,7 +3059,26 @@
    "status": "partial",
    "note": "rule: audio engine and device models; the audiod service",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_engine::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "audio_devices::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "audiod",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "audio engine and device models and the audiod service"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.auditd.plist",
@@ -2970,7 +3120,21 @@
    "status": "partial",
    "note": "rule: disk arbitration, image and volume models; Disk Utility app",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "disk_session::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "disk_arbitration::tests"
+    }
+   ],
+   "ready_note": "disk session (core) and disk arbitration model (sdk)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.automountd.plist",
@@ -3026,7 +3190,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.backgroundtaskmanagementd.plist",
@@ -3047,7 +3225,21 @@
    "status": "partial",
    "note": "rule: background transfer and asset pack models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url_background::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "assetpack::tests"
+    }
+   ],
+   "ready_note": "background transfer model (url_background.rs) and asset pack model (assetpack.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.backupd-helper.plist",
@@ -3210,7 +3402,26 @@
    "status": "partial",
    "note": "rule: keychain, trust and local authentication models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "keychain::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "trust::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_auth::tests"
+    }
+   ],
+   "ready_note": "keychain, trust and local authentication models"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.bluetoothd.plist",
@@ -3316,7 +3527,16 @@
    "status": "partial",
    "note": "rule: the updated service and the app installer",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "updated",
+     "filter": "tests::"
+    }
+   ],
+   "ready_note": "the OS update installer path of the updated service (springboard/updated)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.bridgeOSUpdateProxy.plist",
@@ -3354,9 +3574,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/runtime-packages.txt",
+   "bifrost": "springboard/sdk/src/file_manager.rs, packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "systemd covers the per-user runtime directory (/run/user/UID); the per-user cache and temporary directories this helper creates at login are not provided.",
+   "note": "systemd covers the per-user runtime directory (/run/user/UID). ensure_login_directories (sdk file_manager.rs) now creates the per-user cache directory (0700) and the application support directory; nothing calls it at login yet, so wiring it into the session start is open.",
    "rea": []
   },
   {
@@ -3378,7 +3598,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cameraispd.plist",
@@ -3441,7 +3675,21 @@
    "status": "partial",
    "note": "rule: Wi-Fi models over the Linux wireless stack",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wlan::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "wifi_status::tests"
+    }
+   ],
+   "ready_note": "Wi-Fi models (wlan.rs, wifi_status.rs) over the Linux wireless stack"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.centaurid.plist",
@@ -3482,7 +3730,21 @@
    "status": "partial",
    "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "network_path::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "vpn_manager::tests"
+    }
+   ],
+   "ready_note": "network path and VPN models; DHCP and the firewall are Linux units, outside these tests"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cfprefsd.xpc.daemon.plist",
@@ -3543,7 +3805,16 @@
    "status": "partial",
    "note": "rule: time zone model; time sync is the Linux timesyncd unit",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "time_zone::tests"
+    }
+   ],
+   "ready_note": "time zone model; time sync itself is the Linux timesyncd unit, outside this test"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cloudd.plist",
@@ -3606,7 +3877,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cmio.iOSScreenCaptureAssistant.plist",
@@ -3648,7 +3933,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cmio.uvcassistantextension.plist",
@@ -3669,7 +3968,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.cmio.videodriverkithostextension.plist",
@@ -3690,7 +4003,21 @@
    "status": "partial",
    "note": "rule: camera and capture device models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "camera_device::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "device_browser::tests"
+    }
+   ],
+   "ready_note": "camera and capture device models (camera_device.rs, device_browser.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.colorsync.displayservices.plist",
@@ -3711,7 +4038,21 @@
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "icc::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "displays::tests"
+    }
+   ],
+   "ready_note": "colour profile (icc.rs) and display model (displays.rs)"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.colorsyncd.plist",
@@ -3763,9 +4104,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs",
+   "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs, springboard/sdk/src/system_config_store.rs",
    "status": "partial",
-   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant); no system-wide configuration store, DNS resolver or proxy service is provided.",
+   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). The system configuration store (sdk system_config_store.rs: State:/ and Setup:/ keys with a change revision) now exists, but nothing publishes network state into it yet, and no DNS resolver or proxy service is provided.",
    "rea": []
   },
   {
