@@ -605,6 +605,7 @@ pub mod directory_contacts;
 pub mod directory_local;
 pub mod access_control;
 pub mod recovery_key;
+pub mod credential_acl;
 pub mod permission_question;
 pub mod trust;
 pub mod focus;
