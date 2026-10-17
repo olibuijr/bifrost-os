@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn combiner_label_bytes() {
-        assert_eq!(&LABEL[..], &b"\\./"[..]);
+        assert_eq!(&LABEL[..3], &b"\\./"[..]);
         assert_eq!(&LABEL[3..], &b"/^\\"[..]);
         assert_eq!(LABEL, [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c]);
     }

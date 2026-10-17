@@ -429,7 +429,9 @@ mod tests {
         let d = opts(Style::Default);
         assert_eq!(decode(b"\\101", &d).unwrap(), b"A");
         assert_eq!(decode(b"\\^@\\^?", &d).unwrap(), b"\x00\x7f");
-        assert_eq!(decode(b"\\M-^?\\M^@\\M- ", &d).unwrap(), b"\xff\x80\xa0");
+        // `\M-` takes the next byte literally, so the DEL control form of meta is `\M^?` (as `meta` encodes it)
+        assert_eq!(decode(b"\\M^?\\M^@\\M- ", &d).unwrap(), b"\xff\x80\xa0");
+        assert_eq!(decode(b"\\M-^?", &d).unwrap(), b"\xde?");
         assert_eq!(decode(b"\\M--", &d).unwrap(), b"\xad");
         assert_eq!(decode(b"\\n\\t\\\\", &d).unwrap(), b"\n\t\\");
         assert_eq!(decode(b"a\\\nb\\$c", &d).unwrap(), b"abc");

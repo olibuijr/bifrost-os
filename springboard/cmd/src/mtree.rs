@@ -732,7 +732,8 @@ two\\040x type=file flags=uchg\n";
         sample_tree(&scratch.0);
         let opts = Options { root: scratch.0.clone(), ..Options::default() };
         let text = String::from_utf8(create(&opts).unwrap()).unwrap();
-        assert!(text.contains("\na\\040b type=file"), "{text}");
+        // the type comes from the `/set type=file` line above the entry, as mtree -c writes it
+        assert!(text.contains("/set type=file\na\\040b "), "{text}");
         assert!(text.contains("\\043file"), "{text}");
         assert!(text.contains("link=a\\040b"), "{text}");
         assert!(text.contains("/set type=dir\n"), "{text}");

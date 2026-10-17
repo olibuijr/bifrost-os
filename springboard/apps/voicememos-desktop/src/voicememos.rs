@@ -2733,7 +2733,8 @@ mod tests {
     #[test]
     fn the_speed_control_steps_and_is_kept_with_the_recording() {
         let (mut app, ui) = app("speed");
-        app.selected = Some(0);
+        // the speed belongs to a recording, so there must be one to select
+        one_recording(&mut app, 800);
         assert_eq!(app.rate_now(), 1.0, "normal speed until one is chosen");
         app.activate(&ui, Target::SpeedUp);
         assert_eq!(app.rate_now(), 1.5);

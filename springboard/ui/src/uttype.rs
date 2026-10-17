@@ -71,6 +71,7 @@ const TYPES: &[Entry] = &[
     Entry { id: "public.data", parent: &[], ext: &[], mime: "application/octet-stream", desc: "Document" },
     Entry { id: "public.item", parent: &[], ext: &[], mime: "", desc: "Item" },
     Entry { id: "public.content", parent: &["public.item"], ext: &[], mime: "", desc: "Document" },
+    Entry { id: "public.composite-content", parent: &["public.content"], ext: &[], mime: "", desc: "Document" },
     Entry { id: "public.text", parent: &["public.data", "public.content"], ext: &[], mime: "text/plain", desc: "Text" },
     Entry { id: "public.plain-text", parent: &["public.text"], ext: &["txt", "text", "log", "nfo", "list", "env", "prop", "rc", "ini", "conf", "cfg"], mime: "text/plain", desc: "Plain Text" },
     Entry { id: "public.utf8-plain-text", parent: &["public.plain-text"], ext: &[], mime: "", desc: "Plain Text" },
