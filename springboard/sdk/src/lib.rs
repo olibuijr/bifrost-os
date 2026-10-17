@@ -187,6 +187,7 @@ pub mod testing;
 pub mod usernotif;
 pub mod usernotif_model;
 pub mod contacts;
+pub mod contacts_intents;
 pub mod calendar;
 pub mod core_location;
 pub mod notification_schedule;
