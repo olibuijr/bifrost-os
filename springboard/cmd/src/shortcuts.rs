@@ -46,6 +46,55 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
     }
 }
 
+pub const AUTOMATOR_USAGE: &str = "usage: automator [-v] WORKFLOW (a saved shortcut: its name or id; see `shortcuts list`)";
+
+/// Reads the `automator` command line: `automator [-v] WORKFLOW`, where the workflow is a saved shortcut. `-v` is
+/// accepted (the run always prints each step). Input (`-i`), variables (`-D`) and a workflow file path are refused by
+/// name: the saved library is the only workflow store, and workflow bundles are not read.
+pub fn parse_automator(args: &[String]) -> Result<Cmd, String> {
+    let mut name: Vec<&str> = Vec::new();
+    for a in args.iter().map(String::as_str) {
+        match a {
+            "-h" | "-help" | "--help" => return Ok(Cmd::Help),
+            "-v" => {}
+            "-i" | "-D" | "-V" | "-r" => return Err(format!("{a} is not supported: shortcuts take no input or variables from the command line")),
+            _ if a.starts_with('-') => return Err(format!("unknown option {a}")),
+            _ => name.push(a),
+        }
+    }
+    if name.is_empty() {
+        return Ok(Cmd::Help);
+    }
+    let joined = name.join(" ");
+    if joined.ends_with(".workflow") || joined.contains('/') {
+        return Err(format!("{joined}: workflow bundles are not read; run a saved shortcut by name or id"));
+    }
+    Ok(Cmd::Run(joined))
+}
+
+/// Resolves `what`, runs the shortcut and prints one line per step. Returns the exit status: 0, or 1 when the name does
+/// not resolve or a step did not run.
+pub fn run_and_print(list: &[Shortcut], what: &str) -> i32 {
+    let i = match resolve(list, what) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("shortcuts: {e}");
+            return 1;
+        }
+    };
+    let mut status = 0;
+    for (k, step) in run_shortcut(&list[i]).iter().enumerate() {
+        match &step.outcome {
+            Ok(done) => println!("{}. {}: {done}", k + 1, step.line),
+            Err(why) => {
+                status = 1;
+                println!("{}. {}: {why}", k + 1, step.line);
+            }
+        }
+    }
+    status
+}
+
 /// The index of the shortcut `what` names: its id (its position in the list) or its name. A name matches exactly
 /// first, ignoring case, and otherwise as part of a name. A name that several shortcuts match asks for the id.
 pub fn resolve(list: &[Shortcut], what: &str) -> Result<usize, String> {
@@ -223,6 +272,17 @@ mod tests {
         assert!(parse(&words("view")).is_err());
         assert!(parse(&words("run")).is_err());
         assert_eq!(parse(&words("frobnicate")), Err("unknown command frobnicate".into()));
+    }
+
+    #[test]
+    fn automator_runs_a_saved_shortcut_by_name_and_refuses_what_it_cannot_do() {
+        assert_eq!(parse_automator(&words("Bedtime")), Ok(Cmd::Run("Bedtime".into())));
+        assert_eq!(parse_automator(&words("-v Save Battery")), Ok(Cmd::Run("Save Battery".into())));
+        assert_eq!(parse_automator(&[]), Ok(Cmd::Help));
+        assert_eq!(parse_automator(&words("-h")), Ok(Cmd::Help));
+        assert!(parse_automator(&words("-i text Bedtime")).unwrap_err().contains("-i is not supported"));
+        assert!(parse_automator(&words("-q Bedtime")).unwrap_err().contains("unknown option -q"));
+        assert!(parse_automator(&words("/tmp/x.workflow")).unwrap_err().contains("bundles are not read"));
     }
 
     #[test]

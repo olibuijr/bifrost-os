@@ -15,6 +15,7 @@ pub mod networksetup;
 pub mod newsyslog;
 pub mod diskutil;
 pub mod launchctl;
+pub mod leaks;
 pub mod leave;
 pub mod lastcomm;
 pub mod mdfind;
@@ -39,12 +40,15 @@ pub mod say;
 pub mod shortcuts;
 pub mod sips;
 pub mod screencapture;
+pub mod security;
+pub mod smbutil;
 pub mod profile;
 pub mod scutil;
 pub mod sw_vers;
 pub mod softwareupdate;
 pub mod textutil;
 pub mod tiff2icns;
+pub mod tiffutil;
 pub mod tmutil;
 pub mod units;
 pub mod usdextract;
@@ -55,4 +59,13 @@ pub mod what;
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {
     eprintln!("{tool}: {msg}");
     std::process::exit(code)
+}
+
+/// Runs `program` with `args`, then exits with its status (2 when it cannot start or was killed by a signal). Used by
+/// the tools that translate their command line into a call of a Linux program (`leaks`, `smbutil`, `tiffutil`).
+pub fn forward(tool: &str, program: &str, args: &[String]) -> ! {
+    match std::process::Command::new(program).args(args).status() {
+        Ok(status) => std::process::exit(status.code().unwrap_or(2)),
+        Err(e) => die(tool, &format!("{program} could not run: {e}"), 2),
+    }
 }
