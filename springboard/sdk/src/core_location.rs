@@ -267,6 +267,13 @@ pub fn reverse_geocode(ctx: &Ctx, coordinate: Coordinate) -> u32 {
     service::call(ctx, SERVICE, "reverse", &params)
 }
 
+/// Asks the shell which known places an address names (`geocodeAddressString:`). The reply decodes with
+/// [`decode_placemarks`]; an error reply names [`LocationError::GeocodeFoundNoResult`] when nothing matches.
+pub fn geocode_address(ctx: &Ctx, address: &str) -> u32 {
+    let params = Json::Obj(vec![("address".into(), Json::Str(address.into()))]);
+    service::call(ctx, SERVICE, "geocode", &params)
+}
+
 /// The location in a `current` reply or an update, or `None` for another shape or an invalid coordinate.
 pub fn decode_location(body: &Json) -> Option<Location> {
     let num = |k: &str| match body.get(k)? {
@@ -305,6 +312,11 @@ pub fn decode_placemark(body: &Json) -> Option<Placemark> {
         country: body.get("country").and_then(Json::as_str).unwrap_or("").to_string(),
         coordinate: Coordinate::new(n("latitude")?, n("longitude")?),
     })
+}
+
+/// The placemarks in a `geocode` reply; entries of another shape are skipped.
+pub fn decode_placemarks(body: &Json) -> Vec<Placemark> {
+    body.get("places").and_then(Json::as_array).map(|a| a.iter().filter_map(decode_placemark).collect()).unwrap_or_default()
 }
 
 /// The error in a `didFailWithError` body, or `None` for another shape or an unknown code.
@@ -453,6 +465,22 @@ mod tests {
         ]);
         let p = decode_placemark(&body).unwrap();
         assert_eq!((p.locality.as_str(), p.country.as_str()), ("Akureyri", "Iceland"));
+    }
+
+    #[test]
+    fn a_geocode_reply_decodes_to_every_placemark_and_skips_other_shapes() {
+        let place = |city: &str| {
+            Json::Obj(vec![
+                ("city".into(), Json::Str(city.into())),
+                ("country".into(), Json::Str("Iceland".into())),
+                ("latitude".into(), Json::Num(65.68)),
+                ("longitude".into(), Json::Num(-18.10)),
+            ])
+        };
+        let body = Json::Obj(vec![("places".into(), Json::Arr(vec![place("Akureyri"), Json::Null, place("Husavik")]))]);
+        let found = decode_placemarks(&body);
+        assert_eq!(found.iter().map(|p| p.locality.as_str()).collect::<Vec<_>>(), ["Akureyri", "Husavik"]);
+        assert!(decode_placemarks(&Json::Null).is_empty());
     }
 
     #[test]
