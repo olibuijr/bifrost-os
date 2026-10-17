@@ -702,6 +702,10 @@ fn run() -> std::io::Result<()> {
                         Ok(body) => body.into_bytes(),
                         Err(e) => format!("error: {e}\n").into_bytes(),
                     },
+                    Ok(Request::Notify(words)) => match springboard::shell::services::notify_bus::control(&mut shell, &words, t) {
+                        Ok(body) => format!("ok {body}\n").into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
                     Ok(Request::Perf) => jank.describe().into_bytes(),
                     Ok(Request::Trace(on)) => {
                         trace = on;

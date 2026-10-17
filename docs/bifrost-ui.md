@@ -624,6 +624,24 @@ The item model lives in the shell's `credentials` module, shared with the SDK.
 Gaps: the Passwords app shows a password without the passcode that Settings asks for (the shell has no app-side passcode prompt).
 Creating a secure note from an app needs a text editor and is still missing. Midget check: save, fill and remove one login from a test app.
 
+## notifyutil (command line for the notify bus, OS-layer row `notifyutil`)
+
+Apple's `notifyutil` posts, watches and sets the state of named notifications. BifrOSt has no Darwin notify daemon: the
+bus is the shell's `notify_bus` service (`springboard/src/shell/services/notify_bus.rs`, 0.5.41), which the command line
+reaches over the control socket as `notify <verb> <args>`. Verbs: `post NAME`, `set NAME VALUE`, `get NAME`,
+`register NAME` (a poll token owned by `control`, which the shell does not prune), `check TOKEN`, `cancel TOKEN`.
+The client is `springboard/cmd/src/notifyutil.rs` (`bifrost_cmd::notifyutil`) and `springboard/cmd/src/bin/notifyutil.rs`:
+`-p name`, `-w [count] name`, `-1 name`, `-g name`, `-s name value`, `-v`, `-z msec`.
+
+- **Gap**: names are BifrOSt names, not the Darwin system names (only the shell's `system.*` names are posted by the shell).
+- **Gap**: `-w` and `-1` poll the token every 50 ms; a post is seen up to that late. The bus pushes only to apps.
+- **Gap**: names cannot hold white space; state is a whole number up to 2^53 (the JSON number limit on the bus).
+- **Gap**: a killed `-w` leaves its token behind (cap 64 for the control owner).
+- Row status: `partial`. Not built or run on Midget yet (uncompiled in this round); host tests are in
+  `springboard/src/bare/control.rs` (`notify_requests_keep_their_words`), `springboard/src/shell/services/notify_bus.rs`
+  (`a_command_line_poll_token_survives_prune_and_sees_one_post`, `set_and_get_keep_a_whole_number_state_per_name`) and
+  `springboard/cmd/src/notifyutil.rs`.
+
 ## User notifications (`UNUserNotificationCenter`, roadmap item 5a)
 
 `bifrost_app::usernotif` (SDK) over `ToShell::Notify*` (tags 0x140 to 0x143) and `ToApp::Notification*` (tags 50 to 52); types in
