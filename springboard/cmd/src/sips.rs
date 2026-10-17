@@ -3,12 +3,15 @@
 //! Supported: `-g pixelWidth`, `-g pixelHeight` and `-g format` (also `--getProperty KEY`), one or more keys, and one or
 //! more files. The size and format come from the file's header, so no pixel data is decoded. PNG, GIF and JPEG are
 //! recognised.
-//! Refused with a message: resampling (`-Z` and the `--resample*` options), conversion (`-s` and `--setProperty`),
-//! rotation, flips, DPI and colour profile properties, and every other option. Those need an image pipeline; the
-//! message names `magick` from the imagemagick package for them.
+//! Resampling: `-Z N` (or `--resampleHeightWidthMax N`) makes the largest side N, never enlarging; `--resampleWidth W`
+//! and `--resampleHeight H` set one side and keep the aspect. The picture is decoded with the shell's image decoders
+//! (`bifrost_ui::cg::imageio`), resized, and written as PNG: in place, or to `--out FILE.png` (one file only). A JPEG or
+//! GIF is written back only with `--out` naming a `.png`, because no JPEG or GIF encoder is built.
+//! Refused with a message: conversion (`-s` and `--setProperty`), rotation, flips, DPI and colour profile properties,
+//! and every other option. Those need an image pipeline; the message names `magick` from the imagemagick package for them.
 //! Gap: TIFF, BMP, HEIC and the other formats are reported as unsupported.
 
-pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...";
+pub const USAGE: &str = "usage: sips -g pixelWidth | pixelHeight | format [-g KEY ...] FILE ...\n       sips -Z N | --resampleWidth W | --resampleHeight H [--out FILE.png] FILE";
 
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -76,17 +79,41 @@ impl Key {
     }
 }
 
+/// How a resample sizes the picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    /// `-Z N`: the largest side becomes N (a smaller picture is left as it is)
+    Max(u32),
+    /// `--resampleWidth W`: the width becomes W and the height follows the aspect
+    Width(u32),
+    /// `--resampleHeight H`: the height becomes H and the width follows the aspect
+    Height(u32),
+}
+
 /// The parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
     Help,
     Query { keys: Vec<Key>, files: Vec<String> },
+    Resample { target: Target, out: Option<String>, files: Vec<String> },
 }
 
-/// Reads the arguments. Properties come from `-g KEY` (or `--getProperty KEY`), files are the operands.
+/// The positive number after option `arg` at `args[i]`.
+fn number(args: &[String], i: usize, arg: &str) -> Result<u32, String> {
+    let v = args.get(i + 1).ok_or_else(|| format!("{arg} needs a number"))?;
+    match v.parse::<u32>() {
+        Ok(n) if n > 0 => Ok(n),
+        _ => Err(format!("{arg} needs a positive number, not {v}")),
+    }
+}
+
+/// Reads the arguments. Properties come from `-g KEY` (or `--getProperty KEY`); a resample from `-Z`, `--resampleWidth`
+/// or `--resampleHeight`, with `--out` for the file to write. Files are the operands.
 pub fn parse(args: &[String]) -> Result<Action, String> {
     let mut keys = Vec::new();
     let mut files = Vec::new();
+    let mut target = None;
+    let mut out = None;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -98,12 +125,47 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
                 i += 2;
                 continue;
             }
+            "-Z" | "--resampleHeightWidthMax" => {
+                target = Some(Target::Max(number(args, i, arg)?));
+                i += 2;
+                continue;
+            }
+            "--resampleWidth" => {
+                target = Some(Target::Width(number(args, i, arg)?));
+                i += 2;
+                continue;
+            }
+            "--resampleHeight" => {
+                target = Some(Target::Height(number(args, i, arg)?));
+                i += 2;
+                continue;
+            }
+            "--out" => {
+                out = Some(args.get(i + 1).ok_or_else(|| "--out needs a file name".to_string())?.clone());
+                i += 2;
+                continue;
+            }
             _ if arg.starts_with('-') => {
-                return Err(format!("option {arg} is not supported yet; sips here only reads properties with -g"));
+                return Err(format!("option {arg} is not supported yet; sips here reads properties with -g and resamples with -Z"));
             }
             _ => files.push(arg.to_string()),
         }
         i += 1;
+    }
+    if let Some(target) = target {
+        if !keys.is_empty() {
+            return Err("a resample and -g are separate runs: give one or the other".to_string());
+        }
+        if files.is_empty() {
+            return Err("sips needs at least one image file".to_string());
+        }
+        if out.is_some() && files.len() != 1 {
+            return Err("--out takes one image file".to_string());
+        }
+        return Ok(Action::Resample { target, out, files });
+    }
+    if out.is_some() {
+        return Err("--out is only for a resample".to_string());
     }
     if keys.is_empty() {
         return Err("sips needs -g pixelWidth, -g pixelHeight or -g format".to_string());
@@ -112,6 +174,39 @@ pub fn parse(args: &[String]) -> Result<Action, String> {
         return Err("sips needs at least one image file".to_string());
     }
     Ok(Action::Query { keys, files })
+}
+
+/// The size a `width` x `height` picture takes for `target`. `Max` never enlarges; a width or height is asked for exactly.
+pub fn target_size(width: usize, height: usize, target: Target) -> Result<(usize, usize), String> {
+    if width == 0 || height == 0 {
+        return Err("the picture has no pixels".to_string());
+    }
+    let scaled = |k: f64| (((width as f64 * k).round() as usize).max(1), ((height as f64 * k).round() as usize).max(1));
+    Ok(match target {
+        Target::Max(n) => {
+            let n = n as usize;
+            if width <= n && height <= n {
+                (width, height)
+            } else {
+                scaled(n as f64 / width.max(height) as f64)
+            }
+        }
+        Target::Width(w) => (w as usize, ((height as f64 * w as f64 / width as f64).round() as usize).max(1)),
+        Target::Height(h) => (((width as f64 * h as f64 / height as f64).round() as usize).max(1), h as usize),
+    })
+}
+
+/// Resamples the picture in `data` to `target` and returns it as PNG bytes. The picture is decoded with the shell's
+/// image decoders. `out_is_png` says the result will be written as a `.png` file, which a JPEG or GIF may be.
+pub fn resample(data: &[u8], target: Target, out_is_png: bool) -> Result<Vec<u8>, String> {
+    let info = info(data)?;
+    if info.format != Format::Png && !out_is_png {
+        return Err(format!("{} pictures are written back only as PNG: give --out a .png file", info.format.name()));
+    }
+    let img = bifrost_ui::cg::imageio::decode(data).ok_or_else(|| "the picture could not be decoded".to_string())?;
+    let (w, h) = target_size(img.w, img.h, target)?;
+    let img = if (w, h) == (img.w, img.h) { img } else { img.resized(w, h) };
+    Ok(springboard::pngenc::encode_rgb(img.w, img.h, &img.px))
 }
 
 /// Reads the format and size from the header of an image file's bytes.
@@ -250,8 +345,35 @@ mod tests {
     }
 
     #[test]
+    fn resample_options_parse_and_size_pictures() {
+        assert_eq!(parse(&args(&["-Z", "100", "a.png"])), Ok(Action::Resample { target: Target::Max(100), out: None, files: vec!["a.png".into()] }));
+        assert_eq!(
+            parse(&args(&["--resampleWidth", "64", "--out", "b.png", "a.jpg"])),
+            Ok(Action::Resample { target: Target::Width(64), out: Some("b.png".into()), files: vec!["a.jpg".into()] })
+        );
+        assert!(parse(&args(&["-Z", "0", "a.png"])).unwrap_err().contains("positive"));
+        assert!(parse(&args(&["-Z", "9", "-g", "format", "a.png"])).unwrap_err().contains("separate runs"));
+        assert!(parse(&args(&["-Z", "9", "a.png", "b.png", "--out", "c.png"])).unwrap_err().contains("one image"));
+        assert!(parse(&args(&["--out", "c.png", "a.png"])).unwrap_err().contains("only for a resample"));
+        assert_eq!(target_size(400, 200, Target::Max(100)), Ok((100, 50)));
+        assert_eq!(target_size(50, 40, Target::Max(100)), Ok((50, 40)), "never enlarged");
+        assert_eq!(target_size(400, 300, Target::Width(200)), Ok((200, 150)));
+        assert_eq!(target_size(400, 300, Target::Height(150)), Ok((200, 150)));
+        assert!(target_size(0, 3, Target::Max(9)).is_err());
+    }
+
+    #[test]
+    fn a_png_resamples_to_a_smaller_png() {
+        let px = vec![0xff00_00ffu32; 8]; // 4 x 2
+        let png = springboard::pngenc::encode_rgb(4, 2, &px);
+        let small = resample(&png, Target::Max(2), false).unwrap();
+        let back = info(&small).unwrap();
+        assert_eq!((back.width, back.height), (2, 1));
+        assert_eq!(back.format, Format::Png);
+    }
+
+    #[test]
     fn refuses_what_it_cannot_do() {
-        assert!(parse(&args(&["-Z", "100", "a.png"])).unwrap_err().contains("-Z"));
         assert!(parse(&args(&["-s", "format", "png", "a.png"])).unwrap_err().contains("-s"));
         assert!(parse(&args(&["-g", "dpiWidth", "a.png"])).unwrap_err().contains("dpiWidth"));
         assert!(parse(&args(&["-g"])).unwrap_err().contains("needs a property name"));
