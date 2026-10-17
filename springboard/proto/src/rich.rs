@@ -123,6 +123,18 @@ pub const NOTIF_AUTH_CRITICAL: u8 = 16;
 /// `UNAuthorizationOptions.provisional`: granted at once, delivered quietly, no prompt
 pub const NOTIF_AUTH_PROVISIONAL: u8 = 64;
 
+/// `UNNotificationPresentationOptions` bits a `willPresent` answer may carry: badge 1, sound 2, list 8, banner 16.
+/// Other bits make the message invalid.
+pub const NOTIF_PRESENT_MASK: u8 = NOTIF_PRESENT_BADGE | NOTIF_PRESENT_SOUND | NOTIF_PRESENT_LIST | NOTIF_PRESENT_BANNER;
+/// `UNNotificationPresentationOptions.badge`
+pub const NOTIF_PRESENT_BADGE: u8 = 1;
+/// `UNNotificationPresentationOptions.sound`
+pub const NOTIF_PRESENT_SOUND: u8 = 2;
+/// `UNNotificationPresentationOptions.list` (Notification Center)
+pub const NOTIF_PRESENT_LIST: u8 = 8;
+/// `UNNotificationPresentationOptions.banner`
+pub const NOTIF_PRESENT_BANNER: u8 = 16;
+
 /// What the user allowed for an app and whether Focus is on, as the settings query reports it. Sent as one byte of flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NotifSettings {
@@ -517,6 +529,7 @@ pub(crate) mod tag {
     pub const NOTIFICATION_LIST: u32 = 52;
     pub const NOTIFICATION_SETTINGS: u32 = 56;
     pub const NOTIFICATION_AUTHORIZED: u32 = 57;
+    pub const NOTIFICATION_WILL_PRESENT: u32 = 58;
     pub const SHARE_DONE: u32 = 53;
     pub const DRAG_DEST: u32 = 54;
     pub const DRAG_ENDED: u32 = 55;
@@ -527,6 +540,8 @@ pub(crate) mod tag {
     pub const NOTIFY_QUERY: u32 = 0x143;
     pub const NOTIFY_SETTINGS: u32 = 0x14a;
     pub const NOTIFY_AUTHORIZE: u32 = 0x14b;
+    pub const NOTIFY_PRESENT_REPLY: u32 = 0x14c;
+    pub const NOTIFY_PRESENT_DELEGATE: u32 = 0x14d;
     pub const SHARE: u32 = 0x144;
     pub const DRAG_BEGIN: u32 = 0x145;
     pub const DRAG_REGISTER: u32 = 0x146;
@@ -577,6 +592,15 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             u32_(b, *request);
             put(b, target, MAX_NOTIF_ID);
         }
+        ToApp::NotificationWillPresent { token, id, thread, category, title, body } => {
+            u32_(b, tag::NOTIFICATION_WILL_PRESENT);
+            u32_(b, *token);
+            put(b, id, MAX_NOTIF_ID);
+            put(b, thread, MAX_NOTIF_ID);
+            put(b, category, MAX_NOTIF_ID);
+            put(b, title, MAX_NOTIF_TEXT);
+            put(b, body, MAX_NOTIF_TEXT);
+        }
         ToApp::DistNotify { name, user_info } => {
             u32_(b, tag::DIST_NOTIFY);
             put_dist(b, name, user_info);
@@ -625,6 +649,14 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
         tag::NOTIFICATION_LIST => ToApp::NotificationList { request: r.u32()?, delivered: flag(r)?, ids: get_ids(r)? },
         tag::NOTIFICATION_SETTINGS => ToApp::NotificationSettings { request: r.u32()?, settings: NotifSettings::from_bits(r.u8()?).ok_or(DecodeError::BadValue)? },
         tag::NOTIFICATION_AUTHORIZED => ToApp::NotificationAuthorized { request: r.u32()?, granted: flag(r)? },
+        tag::NOTIFICATION_WILL_PRESENT => ToApp::NotificationWillPresent {
+            token: r.u32()?,
+            id: get(r, MAX_NOTIF_ID)?,
+            thread: get(r, MAX_NOTIF_ID)?,
+            category: get(r, MAX_NOTIF_ID)?,
+            title: get(r, MAX_NOTIF_TEXT)?,
+            body: get(r, MAX_NOTIF_TEXT)?,
+        },
         tag::DIST_NOTIFY => {
             let (name, user_info) = get_dist(r)?;
             ToApp::DistNotify { name, user_info }
@@ -687,6 +719,15 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
         ToShell::NotifyAuthorize { request, options } => {
             u32_(b, tag::NOTIFY_AUTHORIZE);
             u32_(b, *request);
+            b.push(*options);
+        }
+        ToShell::NotifyPresentDelegate { enabled } => {
+            u32_(b, tag::NOTIFY_PRESENT_DELEGATE);
+            b.push(*enabled as u8);
+        }
+        ToShell::NotifyPresentReply { token, options } => {
+            u32_(b, tag::NOTIFY_PRESENT_REPLY);
+            u32_(b, *token);
             b.push(*options);
         }
         ToShell::DistPost { name, user_info } => {
@@ -754,6 +795,14 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
                 return Err(DecodeError::BadValue);
             }
             ToShell::NotifyAuthorize { request, options }
+        }
+        tag::NOTIFY_PRESENT_DELEGATE => ToShell::NotifyPresentDelegate { enabled: flag(r)? },
+        tag::NOTIFY_PRESENT_REPLY => {
+            let (token, options) = (r.u32()?, r.u8()?);
+            if options & !NOTIF_PRESENT_MASK != 0 {
+                return Err(DecodeError::BadValue);
+            }
+            ToShell::NotifyPresentReply { token, options }
         }
         tag::DIST_POST => {
             let (name, user_info) = get_dist(r)?;
@@ -858,6 +907,37 @@ mod tests {
         let last = bytes.len() - 1;
         bytes[last] = 0x20;
         assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+    }
+
+    #[test]
+    fn notification_will_present_round_trips() {
+        app_rt(ToApp::NotificationWillPresent {
+            token: 7,
+            id: "note-1".into(),
+            thread: "t".into(),
+            category: "chat".into(),
+            title: "Hi".into(),
+            body: "There".into(),
+        });
+        app_rt(ToApp::NotificationWillPresent { token: 0, id: String::new(), thread: String::new(), category: String::new(), title: String::new(), body: String::new() });
+        shell_rt(ToShell::NotifyPresentDelegate { enabled: true });
+        shell_rt(ToShell::NotifyPresentDelegate { enabled: false });
+        for options in [0u8, 1, 2, 8, 16, NOTIF_PRESENT_MASK] {
+            shell_rt(ToShell::NotifyPresentReply { token: 9, options });
+        }
+    }
+
+    #[test]
+    fn notification_will_present_rejects_unknown_option_bits() {
+        let mut bytes = ToShell::NotifyPresentReply { token: 1, options: 0 }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 0x20;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        let mut bytes = ToShell::NotifyPresentDelegate { enabled: true }.encode();
+        let last = bytes.len() - 1;
+        bytes[last] = 2;
+        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
+        assert_eq!(NOTIF_PRESENT_MASK, 27);
     }
 
     #[test]
