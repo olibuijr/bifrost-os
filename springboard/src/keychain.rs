@@ -13,6 +13,8 @@
 //! (`Store::plain`, tests only) the file is plain text behind the same permissions.
 
 use bifrost_core::sha256::Sha256;
+use bifrost_ui::access_control::Presence;
+use bifrost_ui::credential_acl::{Binding, Denied};
 use bifrost_proto::{KeychainOp, KeychainStatus, MAX_KEYCHAIN_NAME, MAX_KEYCHAIN_VALUE};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -22,6 +24,9 @@ use std::path::{Path, PathBuf};
 pub const MAX_ITEMS: usize = 256;
 const MAGIC: &[u8; 4] = b"BKC1";
 const MAGIC_PLAIN: &[u8; 4] = b"BKP0";
+/// Reserved start of the service name under which an item's credential binding is kept next to it. Apps cannot add,
+/// read or delete a name with this start, and listings leave those entries out.
+const ACL_PREFIX: &str = "\u{1}acl\u{1}";
 
 /// What a keychain call returns on failure; `status()` is the wire form, `code()` the `OSStatus`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,6 +41,9 @@ pub enum Error {
     Param,
     /// errSecIO (-36): the store could not be read, decrypted or written
     Io(String),
+    /// errSecAuthFailed (-25293): the item's binding wants user presence the caller has not shown. Travels on the wire
+    /// as `NotPermitted`, the closest status the wire has.
+    AuthFailed,
 }
 
 impl Error {
@@ -46,6 +54,7 @@ impl Error {
             Error::NotPermitted => -25291,
             Error::Param => -50,
             Error::Io(_) => -36,
+            Error::AuthFailed => -25293,
         }
     }
 
@@ -53,7 +62,7 @@ impl Error {
         match self {
             Error::DuplicateItem => KeychainStatus::Duplicate,
             Error::ItemNotFound => KeychainStatus::NotFound,
-            Error::NotPermitted => KeychainStatus::NotPermitted,
+            Error::NotPermitted | Error::AuthFailed => KeychainStatus::NotPermitted,
             Error::Param => KeychainStatus::Param,
             Error::Io(_) => KeychainStatus::Io,
         }
@@ -81,6 +90,7 @@ impl Error {
             -25299 => Error::DuplicateItem,
             -25300 => Error::ItemNotFound,
             -25291 => Error::NotPermitted,
+            -25293 => Error::AuthFailed,
             -50 => Error::Param,
             other => Error::Io(format!("OSStatus {other}")),
         })
@@ -95,6 +105,7 @@ impl std::fmt::Display for Error {
             Error::NotPermitted => write!(f, "the app has no keychain permission"),
             Error::Param => write!(f, "invalid service, account or value (errSecParam)"),
             Error::Io(e) => write!(f, "keychain I/O error: {e}"),
+            Error::AuthFailed => write!(f, "the item needs user presence that was not shown (errSecAuthFailed)"),
         }
     }
 }
@@ -117,6 +128,8 @@ pub struct Listing {
 pub struct Store {
     path: PathBuf,
     keys: Option<Keys>,
+    /// The app this store belongs to; `None` for a group or a test store, where the caller names the owner.
+    owner: Option<String>,
 }
 
 struct Keys {
@@ -132,7 +145,7 @@ impl Store {
         let dir = path.parent().unwrap();
         make_private_dir(dir)?;
         let master = master_key(&dir.join(".master"))?;
-        Ok(Store { path, keys: Some(derive(&master, app_id)) })
+        Ok(Store { path, keys: Some(derive(&master, app_id)), owner: Some(app_id.to_string()) })
     }
 
     /// The store of an access group under the shell data dir `root`: `<root>/keychain/groups/<group>.kc`. Every app
@@ -147,17 +160,17 @@ impl Store {
         make_private_dir(&groups)?;
         let master = master_key(&dir.join(".master"))?;
         let path = groups.join(format!("{group}.kc"));
-        Ok(Store { path, keys: Some(derive(&master, &format!("group:{group}"))) })
+        Ok(Store { path, keys: Some(derive(&master, &format!("group:{group}"))), owner: None })
     }
 
     /// An encrypted store with a caller-supplied master key (tests, and a future key source such as a TPM).
     pub fn with_master(path: PathBuf, master: &[u8; 32], app_id: &str) -> Store {
-        Store { path, keys: Some(derive(master, app_id)) }
+        Store { path, keys: Some(derive(master, app_id)), owner: Some(app_id.to_string()) }
     }
 
     /// An unencrypted store (tests only).
     pub fn plain(path: PathBuf) -> Store {
-        Store { path, keys: None }
+        Store { path, keys: None, owner: None }
     }
 
     /// Runs one wire operation. Returns the secret for `Get`, empty otherwise.
@@ -186,14 +199,107 @@ impl Store {
     }
 
     /// `SecItemCopyMatching` (`kSecReturnData`): `ItemNotFound` when there is no such item.
+    ///
+    /// This is the owner's read: an item whose binding requires user presence answers `AuthFailed` here, because a
+    /// plain read shows none. Use [`Store::get_with_presence`] once the person has answered.
     pub fn get(&self, service: &str, account: &str) -> Result<Vec<u8>, Error> {
+        self.read(None, service, account, &Presence { enrolled_set_unchanged: true, ..Presence::default() })
+    }
+
+    /// The owner's read with the presence the person has just shown (`AuthFailed` when it does not meet the binding).
+    pub fn get_with_presence(&self, service: &str, account: &str, presence: &Presence) -> Result<Vec<u8>, Error> {
+        self.read(None, service, account, presence)
+    }
+
+    /// A read for `requester`, an app that is not necessarily the owner of this store. It succeeds only for an app the
+    /// item's binding lists, and the binding's presence requirement applies. An item with no binding is the owner's
+    /// alone, so any `requester` is refused with `NotPermitted`.
+    pub fn get_as(&self, requester: &str, service: &str, account: &str, presence: &Presence) -> Result<Vec<u8>, Error> {
+        self.read(Some(requester), service, account, presence)
+    }
+
+    fn read(&self, requester: Option<&str>, service: &str, account: &str, presence: &Presence) -> Result<Vec<u8>, Error> {
         check(service, account, None)?;
-        self.load()?.remove(&(service.to_string(), account.to_string())).map(|(v, _)| v).ok_or(Error::ItemNotFound)
+        let items = self.load()?;
+        let value = items.get(&(service.to_string(), account.to_string())).map(|(v, _)| v.clone()).ok_or(Error::ItemNotFound)?;
+        match binding_in(&items, service, account)? {
+            Some(b) => b.check_read(requester.unwrap_or_else(|| b.owner()), presence).map_err(denied)?,
+            None if requester.is_some() => return Err(Error::NotPermitted),
+            None => {}
+        }
+        Ok(value)
+    }
+
+    /// Refuses `by` unless it is the app this store belongs to (a store with no owner takes any name).
+    fn owned_by(&self, by: &str) -> Result<(), Error> {
+        match &self.owner {
+            Some(o) if o != by => Err(Error::NotPermitted),
+            _ => Ok(()),
+        }
+    }
+
+    /// Binds the item: which other apps may read it and what presence every read needs. Replaces an earlier binding.
+    /// `ItemNotFound` when there is no such item, `Param` when the binding names another item, `NotPermitted` when
+    /// the binding's owner is not the app this store belongs to.
+    pub fn bind(&self, service: &str, account: &str, binding: &Binding) -> Result<(), Error> {
+        check(service, account, None)?;
+        self.owned_by(binding.owner())?;
+        if binding.service() != service || binding.account() != account {
+            return Err(Error::Param);
+        }
+        let mut items = self.load()?;
+        if !items.contains_key(&(service.to_string(), account.to_string())) {
+            return Err(Error::ItemNotFound);
+        }
+        items.insert(acl_key(service, account), (binding.encode().into_bytes(), now()));
+        self.save(&items)
+    }
+
+    /// The item's binding, if it has one.
+    pub fn binding(&self, service: &str, account: &str) -> Result<Option<Binding>, Error> {
+        check(service, account, None)?;
+        binding_in(&self.load()?, service, account)
+    }
+
+    /// Lets `app` read the item. `by` must be the owner; an item with no binding yet gets one owned by `by`. Returns
+    /// false when the app was already listed.
+    pub fn grant(&self, by: &str, service: &str, account: &str, app: &str) -> Result<bool, Error> {
+        check(service, account, None)?;
+        self.owned_by(by)?;
+        let mut items = self.load()?;
+        if !items.contains_key(&(service.to_string(), account.to_string())) {
+            return Err(Error::ItemNotFound);
+        }
+        let mut binding = match binding_in(&items, service, account)? {
+            Some(b) => b,
+            None => Binding::new(by, service, account, None).map_err(denied)?,
+        };
+        let added = binding.grant(by, app).map_err(denied)?;
+        items.insert(acl_key(service, account), (binding.encode().into_bytes(), now()));
+        self.save(&items)?;
+        Ok(added)
+    }
+
+    /// Takes `app`'s grant away. `by` must be the owner. Returns false when the app was not listed.
+    pub fn revoke(&self, by: &str, service: &str, account: &str, app: &str) -> Result<bool, Error> {
+        check(service, account, None)?;
+        self.owned_by(by)?;
+        let mut items = self.load()?;
+        let Some(mut binding) = binding_in(&items, service, account)? else { return Ok(false) };
+        let removed = binding.revoke(by, app).map_err(denied)?;
+        items.insert(acl_key(service, account), (binding.encode().into_bytes(), now()));
+        self.save(&items)?;
+        Ok(removed)
     }
 
     /// Every item's `(service, account)` and modified time, sorted by service then account. No secrets are read out.
     pub fn list(&self) -> Result<Vec<Listing>, Error> {
-        Ok(self.load()?.into_iter().map(|((service, account), (_, modified))| Listing { service, account, modified }).collect())
+        Ok(self
+            .load()?
+            .into_iter()
+            .filter(|((service, _), _)| !service.starts_with(ACL_PREFIX))
+            .map(|((service, account), (_, modified))| Listing { service, account, modified })
+            .collect())
     }
 
     /// `SecItemUpdate`: replaces the value; `ItemNotFound` when there is no such item.
@@ -210,6 +316,7 @@ impl Store {
         check(service, account, None)?;
         let mut items = self.load()?;
         items.remove(&(service.to_string(), account.to_string())).ok_or(Error::ItemNotFound)?;
+        items.remove(&acl_key(service, account));
         self.save(&items)
     }
 
@@ -237,8 +344,33 @@ impl Store {
     }
 }
 
+/// Where an item's binding is kept: the reserved service name plus the item's service, under the item's account.
+fn acl_key(service: &str, account: &str) -> (String, String) {
+    (format!("{ACL_PREFIX}{service}"), account.to_string())
+}
+
+fn binding_in(items: &Items, service: &str, account: &str) -> Result<Option<Binding>, Error> {
+    let damaged = || Error::Io("keychain binding is damaged".into());
+    match items.get(&acl_key(service, account)) {
+        None => Ok(None),
+        Some((bytes, _)) => {
+            let text = std::str::from_utf8(bytes).map_err(|_| damaged())?;
+            Binding::decode(text).map(Some).ok_or_else(damaged)
+        }
+    }
+}
+
+/// The keychain error for a binding's refusal.
+fn denied(d: Denied) -> Error {
+    match d {
+        Denied::NotListed | Denied::NotOwner => Error::NotPermitted,
+        Denied::PresenceRequired => Error::AuthFailed,
+        Denied::BadName => Error::Param,
+    }
+}
+
 fn check(service: &str, account: &str, value: Option<&[u8]>) -> Result<(), Error> {
-    let ok = |s: &str| !s.is_empty() && s.len() <= MAX_KEYCHAIN_NAME && !s.contains('\0');
+    let ok = |s: &str| !s.is_empty() && s.len() <= MAX_KEYCHAIN_NAME && !s.contains('\0') && !s.starts_with(ACL_PREFIX);
     if !ok(service) || !ok(account) || value.is_some_and(|v| v.len() > MAX_KEYCHAIN_VALUE) {
         return Err(Error::Param);
     }
@@ -534,6 +666,83 @@ mod tests {
 
     fn enc(d: &Path, app: &str) -> Store {
         Store::with_master(d.join(format!("{app}.kc")), &[9u8; 32], app)
+    }
+
+    fn presence(passcode: bool) -> Presence {
+        Presence { passcode, biometry: false, enrolled_set_unchanged: true, watch: false }
+    }
+
+    #[test]
+    fn a_binding_stays_out_of_listings_and_apps_cannot_name_it() {
+        use bifrost_ui::access_control::Constraint;
+        let d = dir("acl-hidden");
+        let s = enc(&d, "mail");
+        s.add("imap", "ola", b"pw").unwrap();
+        s.bind("imap", "ola", &Binding::new("mail", "imap", "ola", Some(Constraint::DevicePasscode)).unwrap()).unwrap();
+        let listed = s.list().unwrap();
+        assert_eq!(listed.len(), 1, "only the item shows, not its binding");
+        assert_eq!(listed[0].service, "imap");
+        let reserved = format!("{ACL_PREFIX}imap");
+        assert_eq!(s.get(&reserved, "ola"), Err(Error::Param));
+        assert_eq!(s.add(&reserved, "ola", b"x"), Err(Error::Param));
+        assert_eq!(s.delete(&reserved, "ola"), Err(Error::Param));
+    }
+
+    #[test]
+    fn a_presence_binding_refuses_a_plain_read_and_allows_a_shown_one() {
+        use bifrost_ui::access_control::Constraint;
+        let d = dir("acl-presence");
+        let s = enc(&d, "mail");
+        s.add("imap", "ola", b"pw").unwrap();
+        assert_eq!(s.get("imap", "ola"), Ok(b"pw".to_vec()), "no binding, no presence needed");
+        s.bind("imap", "ola", &Binding::new("mail", "imap", "ola", Some(Constraint::DevicePasscode)).unwrap()).unwrap();
+        assert_eq!(s.get("imap", "ola"), Err(Error::AuthFailed));
+        assert_eq!(s.apply(&KeychainOp::Get { service: "imap".into(), account: "ola".into() }), Err(Error::AuthFailed));
+        assert_eq!(s.get_with_presence("imap", "ola", &presence(false)), Err(Error::AuthFailed));
+        assert_eq!(s.get_with_presence("imap", "ola", &presence(true)), Ok(b"pw".to_vec()));
+        assert_eq!(Error::AuthFailed.code(), -25293);
+        assert_eq!(Error::from_code(-25293), Some(Error::AuthFailed));
+        assert_eq!(Error::AuthFailed.status(), KeychainStatus::NotPermitted);
+    }
+
+    #[test]
+    fn another_app_reads_only_with_a_grant_and_only_the_owner_grants() {
+        let d = dir("acl-grant");
+        let s = enc(&d, "mail");
+        s.add("imap", "ola", b"pw").unwrap();
+        assert_eq!(s.get_as("calendar", "imap", "ola", &presence(false)), Err(Error::NotPermitted), "no binding: owner only");
+        assert_eq!(s.grant("calendar", "imap", "ola", "calendar"), Err(Error::NotPermitted), "a non-owner cannot grant itself");
+        assert_eq!(s.binding("imap", "ola"), Ok(None), "the refused grant left no binding behind");
+        assert_eq!(s.grant("mail", "imap", "ola", "calendar"), Ok(true));
+        assert_eq!(s.grant("mail", "imap", "ola", "calendar"), Ok(false));
+        assert_eq!(s.get_as("calendar", "imap", "ola", &presence(false)), Ok(b"pw".to_vec()));
+        assert_eq!(s.get_as("notes", "imap", "ola", &presence(false)), Err(Error::NotPermitted));
+        assert_eq!(s.get("imap", "ola"), Ok(b"pw".to_vec()), "the owner still reads");
+        assert_eq!(s.revoke("calendar", "imap", "ola", "calendar"), Err(Error::NotPermitted));
+        assert_eq!(s.revoke("mail", "imap", "ola", "calendar"), Ok(true));
+        assert_eq!(s.get_as("calendar", "imap", "ola", &presence(false)), Err(Error::NotPermitted));
+        assert_eq!(s.grant("mail", "imap", "missing", "calendar"), Err(Error::ItemNotFound));
+    }
+
+    #[test]
+    fn a_binding_persists_and_goes_with_the_item() {
+        use bifrost_ui::access_control::Constraint;
+        let d = dir("acl-persist");
+        let s = enc(&d, "mail");
+        s.add("imap", "ola", b"pw").unwrap();
+        s.bind("imap", "ola", &Binding::new("mail", "imap", "ola", Some(Constraint::UserPresence)).unwrap()).unwrap();
+        assert_eq!(s.bind("imap", "other", &Binding::new("mail", "imap", "ola", None).unwrap()), Err(Error::Param));
+        assert_eq!(s.bind("imap", "ola", &Binding::new("calendar", "imap", "ola", None).unwrap()), Err(Error::NotPermitted), "another app cannot own it");
+        let reopened = enc(&d, "mail");
+        let b = reopened.binding("imap", "ola").unwrap().expect("the binding was stored");
+        assert_eq!(b.owner(), "mail");
+        assert_eq!(b.presence(), Some(Constraint::UserPresence));
+        reopened.update("imap", "ola", b"pw2").unwrap();
+        assert!(reopened.binding("imap", "ola").unwrap().is_some(), "an update keeps the binding");
+        reopened.delete("imap", "ola").unwrap();
+        reopened.add("imap", "ola", b"fresh").unwrap();
+        assert_eq!(reopened.binding("imap", "ola").unwrap(), None, "a deleted item takes its binding along");
+        assert_eq!(reopened.get("imap", "ola"), Ok(b"fresh".to_vec()));
     }
 
     #[test]
