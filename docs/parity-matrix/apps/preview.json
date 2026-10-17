@@ -446,9 +446,9 @@
  "summary": {
   "features": 48,
   "parity": 6,
-  "partial": 36,
-  "gap": 3,
+  "partial": 38,
+  "gap": 1,
   "n/a": 3,
-  "coverage_pct": 53.3
+  "coverage_pct": 55.6
  }
 }
