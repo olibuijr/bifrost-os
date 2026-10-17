@@ -160,6 +160,19 @@ impl Policy {
         }
     }
 
+    /// Puts back a stored grant: the Unix time the fifteen-minute pass ends (None for none) and the local day
+    /// number of a until-midnight pass (None for none). Used when the grants are read from the settings file.
+    pub fn restore_ignore(&mut self, app: &str, until: Option<i64>, day: Option<i64>) {
+        match until {
+            Some(t) => self.ignored_until.insert(app.to_string(), t),
+            None => self.ignored_until.remove(app),
+        };
+        match day {
+            Some(d) => self.ignored_day.insert(app.to_string(), d),
+            None => self.ignored_day.remove(app),
+        };
+    }
+
     /// Whether a grant covers the app at `unix`.
     pub fn ignored(&self, app: &str, unix: i64, offset: i32) -> bool {
         self.ignored_until.get(app).is_some_and(|&until| until > unix) || self.ignored_day.get(app) == Some(&day_of(unix, offset))

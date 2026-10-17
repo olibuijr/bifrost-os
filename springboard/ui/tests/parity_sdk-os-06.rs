@@ -518,3 +518,13 @@ fn a_feature_needs_its_permission_to_be_granted() {
     assert_eq!(grants.require(Permission::Network), Ok(()));
     assert_eq!(grants.require(Permission::Audio), Err(Denied(Permission::Audio)));
 }
+
+#[test]
+fn a_stored_grant_is_restored_as_it_was_written() {
+    let mut p = Policy::default();
+    p.restore_ignore("files", Some(1_000 + 900), None);
+    assert!(p.ignored("files", 1_500, 0), "the fifteen-minute pass is still running");
+    assert!(!p.ignored("files", 2_000, 0), "and it has ended after its stored end");
+    p.restore_ignore("files", None, None);
+    assert!(!p.ignored("files", 1_500, 0), "clearing the grant removes it");
+}
