@@ -27,6 +27,28 @@ impl ManifestIntent {
     }
 }
 
+/// One runnable shortcut intent of an installed app: what Search and the Shortcuts action library list.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppShortcut {
+    pub app_id: String,
+    pub app_name: String,
+    pub intent: ManifestIntent,
+}
+
+/// The runnable shortcut intents of the given installed apps, in install order and then manifest order. Apps that
+/// declare none contribute nothing. Reads only what the manifests say; no app is launched.
+pub fn runnable_shortcuts(apps: &[super::apphost::Installed]) -> Vec<AppShortcut> {
+    apps.iter()
+        .flat_map(|app| {
+            app.manifest.intents.iter().filter(|i| i.runnable()).map(move |i| AppShortcut {
+                app_id: app.manifest.id.clone(),
+                app_name: app.manifest.name.clone(),
+                intent: i.clone(),
+            })
+        })
+        .collect()
+}
+
 /// The JSON-RPC request line that runs intent `id` with no parameters.
 pub fn request_line(id: &str) -> String {
     request_line_with(id, &[])
@@ -129,6 +151,25 @@ mod tests {
         let mut bad = intent(true, &[]);
         bad.id = "a\"b".into();
         assert!(!bad.runnable());
+    }
+
+    #[test]
+    fn runnable_shortcuts_lists_only_parameterless_shortcuts_per_app() {
+        use super::super::apphost::{Installed, Manifest};
+        let apps = [
+            Installed {
+                manifest: Manifest::parse("id = \"a.notes\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nshortcut = true\nparams = [\"text:string\"]\n").unwrap(),
+                dir: std::path::PathBuf::new(),
+            },
+            Installed {
+                manifest: Manifest::parse("id = \"a.quiet\"\nname = \"Quiet\"\nexec = \"x\"\n\n[[intent]]\nid = \"hush\"\ntitle = \"Hush\"\nshortcut = false\nparams = []\n").unwrap(),
+                dir: std::path::PathBuf::new(),
+            },
+        ];
+        let found = runnable_shortcuts(&apps);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].app_id.as_str(), found[0].app_name.as_str(), found[0].intent.id.as_str()), ("a.notes", "Notes", "new-note"));
+        assert!(runnable_shortcuts(&[]).is_empty());
     }
 
     #[test]
