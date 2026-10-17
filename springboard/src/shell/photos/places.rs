@@ -34,15 +34,20 @@ pub struct Cluster {
 
 /// Places the points (latitude, longitude) on a `width` x `height` map area and clusters them so that no two pins
 /// are closer than `cell` pixels. The zoom is the largest that keeps every point inside the area.
-pub fn layout(points: &[(f64, f64)], width: u32, height: u32, cell: f64) -> Vec<Cluster> {
+pub fn snapshot_for(points: &[(f64, f64)], width: u32, height: u32) -> Option<Snapshot> {
     if points.is_empty() || width == 0 || height == 0 {
-        return Vec::new();
+        return None;
     }
     let n = points.len() as f64;
     let lat = points.iter().map(|p| p.0).sum::<f64>() / n;
     let lon = points.iter().map(|p| p.1).sum::<f64>() / n;
     let zoom = Snapshot::fit_zoom(points, width, height, MARGIN_PX, MAX_ZOOM);
-    let snap = Snapshot { lat, lon, zoom, width, height };
+    Some(Snapshot { lat, lon, zoom, width, height })
+}
+
+/// Clusters the points on the map area, placed with the same snapshot the map tiles are drawn with.
+pub fn layout(points: &[(f64, f64)], width: u32, height: u32, cell: f64) -> Vec<Cluster> {
+    let Some(snap) = snapshot_for(points, width, height) else { return Vec::new() };
     let mut out: Vec<Cluster> = Vec::new();
     for (i, &(plat, plon)) in points.iter().enumerate() {
         let (x, y) = snap.point(plat, plon);

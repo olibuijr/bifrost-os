@@ -19,6 +19,7 @@ pub mod keychain;
 pub mod credentials;
 pub mod installer;
 pub mod layout;
+pub mod maptiles;
 pub mod media;
 pub mod pager;
 pub mod pngenc;

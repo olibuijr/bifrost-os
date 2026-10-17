@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 — 2026-10-17
+
+- The tile fetch, cache and loader moved into the shell (`springboard::maptiles`) so Photos can draw map tiles under its Places pins. Maps uses the same code through thin re-exports; the offline area helper stays here. Tiles are fetched on one thread each, paced as before, instead of the app dispatch queue.
+
 ## 0.6.2 — 2026-10-17
 
 - Keys, the menu bar, the toolbar and the Go and File menus act on the focused window. A touch on a window (the main one or a New Window) gives it the focus; closing the focused window gives it back to the main window. The GPX file opens into the window that asked for it.

@@ -213,9 +213,9 @@
    "area": "view",
    "apple": "sidebar Map",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/places.rs (gps_of, layout, cluster_at); springboard/src/shell/photos/mod.rs (Album::Places, draw_places, Target::Place)",
-   "note": "Places album of photos with EXIF GPS; pins cluster by screen distance at the fitted zoom; tapping a pin lists its photos. Map tiles are not drawn yet (graticule backdrop)",
-   "wire": "Draw map tiles from the Maps tile source (springboard/apps/maps-desktop/src/source.rs, loader.rs, cache.rs) behind the pins, and add a way back from a pin to the map"
+   "bifrost": "springboard/src/shell/photos/places.rs; springboard/src/shell/photos/mod.rs (Album::Places, draw_places, draw_place_tiles, refresh_places); springboard/src/maptiles",
+   "note": "Places album of photos with EXIF GPS; GPS is read on a worker; pins cluster by screen distance at the fitted zoom over the shared map tiles; tapping a pin lists its photos; < Places returns to the map. Not yet checked on Midget",
+   "wire": "Check tiles load and the < Places control on Midget, then promote to parity"
   },
   {
    "feature": "People & Pets face recognition",
@@ -320,10 +320,10 @@
    "feature": "Video / Live Photo playback and poster frame",
    "area": "view",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Turn On Live Photo; Make Poster Frame; Save Video Frame as Photo",
-   "status": "gap",
-   "bifrost": "",
-   "note": "library scans stills only",
-   "wire": "Include video files in library.rs and play them through the shell media player in the viewer"
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/video.rs (poster, open, is_playing); springboard/src/shell/photos/library.rs (is_video_name); springboard/src/shell/photos/mod.rs (follow_clip, draw_clip_controls, Target::ClipToggle, Target::ClipSeek)",
+   "note": "Movies (MP4, M4V, MOV) are in the library with poster frames from the media player; the viewer plays them with play/pause and a seek bar. Live Photo pairing and Make Poster Frame are not done. Not yet checked on Midget",
+   "wire": "Pair a Live Photo still with its movie and add Make Poster Frame; check playback and posters on Midget, then promote to parity"
   },
   {
    "feature": "Duplicates and bursts",
@@ -536,9 +536,9 @@
  "summary": {
   "features": 58,
   "parity": 16,
-  "partial": 34,
-  "gap": 3,
+  "partial": 35,
+  "gap": 2,
   "n/a": 5,
-  "coverage_pct": 62.3
+  "coverage_pct": 63.2
  }
 }
