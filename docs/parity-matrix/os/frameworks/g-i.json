@@ -1802,7 +1802,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Versioned storage behind the reference revisions daemon (Support/revisiond in the framework). BifrOSt has document autosave in place (springboard/sdk/src/document.rs) but no per-document version history, browse or restore. Build a revision store in the SDK document controller and a versions browser in the shell.",
+   "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell.",
    "rea": [],
    "method": "assessed"
   },
@@ -3170,7 +3170,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Its strings are the prompt that asks the user to approve a new USB accessory before it may control the device; build an approval prompt over udev and the kernel authorized attribute, since no package in the runtime lists provides it.",
+   "note": "Built 2026-10-17: USB accessory approval decisions (allow, deny, allow once, kernel authorized state, persisted approvals) in springboard/core/src/usb_approval.rs, tests usb_approval::tests. Still open: the approval prompt itself and the udev and sysfs authorized write-back in the shell.",
    "rea": [],
    "method": "assessed"
   },
@@ -4537,7 +4537,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "Build a shell-level administrator sign-in sheet for system changes such as installs and updates. The privd PAM check (springboard/src/privd/auth.rs) guards login and account changes, not update or install prompts, and springboard/updated asks for no password; packaging/arch/runtime-packages.txt has no polkit or other authorization agent.",
+   "note": "Built 2026-10-17: administrator sign-in policy (which changes need an administrator, grace period after a successful sign-in) in springboard/core/src/admin_sign_in.rs, tests admin_sign_in::tests. Still open: the sign-in sheet in the shell, and a polkit or other authorization agent for the install and update paths.",
    "rea": [],
    "method": "assessed"
   },
@@ -5124,7 +5124,7 @@
    "doc": "",
    "bifrost": "springboard/src/shell/gpu_page.rs",
    "status": "partial",
-   "note": "The Graphics page shows video memory when the driver exposes it (AMD mem_info_vram_total in sysfs). Gap: no background collector that reports GPU memory per process, which the reference collector daemon does.",
+   "note": "Built 2026-10-17: per-process GPU memory collector (drm-memory regions from fdinfo, one count per client, ranking by process) in springboard/core/src/gpu_memory.rs, tests gpu_memory::tests. Still open: the background collector that runs it and the per-process column in the Graphics page.",
    "rea": [],
    "method": "assessed"
   },
