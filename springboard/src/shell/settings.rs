@@ -248,6 +248,8 @@ struct Loads {
     account_view: Loaded<super::account_page::View>,
     /// a sign-in or sign-out that finished on its worker thread; `poll_loads` acts on it once
     account_done: Loaded<super::account_page::Landed>,
+    /// Network > Diagnose: the last finished run of the connection probes
+    net_diag: Loaded<Option<bifrost_core::net_probe::Report>>,
 }
 
 impl Loads {
@@ -267,12 +269,13 @@ impl Loads {
         landed |= self.printers.poll();
         landed |= self.screentime.poll();
         landed |= self.account_view.poll();
+        landed |= self.net_diag.poll();
         landed
     }
 
     /// A read is running.
     fn busy(&self) -> bool {
-        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy()
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.install_failures.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy() || self.net_diag.busy()
     }
 }
 
@@ -347,6 +350,8 @@ pub struct Settings {
     night: NightShift,
     /// the Night Shift time being picked: true for From
     night_edge: Option<bool>,
+    /// the probes Network > Diagnose runs (the system's own; tests swap in a fake)
+    net_probe: std::sync::Arc<dyn bifrost_core::net_probe::Probe + Send + Sync>,
     /// Battery > Schedule: the repeating wake and power-on times
     wake: bifrost_core::wake_schedule::Schedule,
     /// the Schedule entry whose time the time-of-day picker is editing
@@ -570,6 +575,7 @@ impl Settings {
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
+            net_probe: std::sync::Arc::new(bifrost_core::net_probe::SystemProbe::default()),
             wake: super::wake_page::load(prefs),
             wake_edge: None,
             alert: None,
@@ -681,6 +687,12 @@ impl Settings {
             PageId::Notifications => notify_page::spec(&self.notify),
             PageId::NotificationApp => notify_page::app_spec(&self.notify, &self.detail),
             PageId::NightShift => self.night.spec(self.opts.clock_24h),
+            PageId::Network => {
+                let mut s = spec(id, &self.model());
+                let (host, _) = super::net_diagnose_page::target_of(self.updater.url());
+                s.groups.extend(super::net_diagnose_page::groups(self.loads.net_diag.busy(), self.loads.net_diag.get().and_then(|r| r.as_ref()), &host));
+                s
+            }
             PageId::WakeSchedule => {
                 let (unix, off) = crate::bare::sys::wall_time();
                 super::wake_page::spec(&self.wake, self.opts.clock_24h, unix, i64::from(off))
@@ -2912,6 +2924,16 @@ impl Settings {
                 vec![]
             }
             Action::Wake(edit) => self.wake_edit(ui, prefs, edit),
+            Action::NetDiagnose => {
+                if !self.loads.net_diag.busy() {
+                    let (host, port) = super::net_diagnose_page::target_of(self.updater.url());
+                    let probe = self.net_probe.clone();
+                    // the resolve and connect have time limits, but they still run off the UI thread
+                    self.loads.net_diag.start("net-diagnose", move || Some(bifrost_core::net_probe::run(&*probe, &bifrost_core::net_probe::Target::new(&host, port))));
+                    self.rebuild_visible(ui);
+                }
+                vec![]
+            }
             Action::Night(edit) => {
                 match edit {
                     NightEdit::Scheduled | NightEdit::Manual => {
@@ -4198,6 +4220,48 @@ mod tests {
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::SystemSleepAfter(0)]);
         assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
+    }
+
+    /// Probes that answer from a table instead of the network.
+    struct FakeProbe {
+        resolves: bool,
+    }
+
+    impl bifrost_core::net_probe::Probe for FakeProbe {
+        fn link_states(&self) -> Vec<(String, String)> {
+            vec![("lo".into(), "unknown".into()), ("wlan0".into(), "up".into())]
+        }
+        fn global_addresses(&self) -> String {
+            "3: wlan0    inet 192.168.1.20/24 brd 192.168.1.255 scope global dynamic wlan0\n".into()
+        }
+        fn resolve(&self, _host: &str, port: u16) -> Vec<std::net::SocketAddr> {
+            if self.resolves { vec![std::net::SocketAddr::from(([192, 168, 1, 1], port))] } else { Vec::new() }
+        }
+        fn connect(&self, _addr: std::net::SocketAddr) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn network_diagnose_runs_the_probe_off_the_draw_thread_and_shows_the_diagnosis() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        st.net_probe = std::sync::Arc::new(FakeProbe { resolves: false });
+        tap_row(&mut st, &ui, &mut prefs, "Network");
+        assert_eq!(st.page(), PageId::Network);
+        assert!(st.row_centre(&ui, "Diagnose").is_some());
+        assert!(st.row_centre(&ui, "Name Lookup").is_none(), "no result before a run");
+        // tap without settling: the run is on its worker, the page says so
+        let (x, y) = st.row_centre(&ui, "Diagnose").unwrap();
+        assert_eq!(tap(&mut st, &ui, &mut prefs, x, y), vec![]);
+        assert!(st.loads.net_diag.busy() || st.loads.net_diag.get().is_some());
+        settle(&mut st, &ui);
+        let report = st.loads.net_diag.get().and_then(|r| r.as_ref()).expect("the run landed");
+        assert_eq!(report.diagnosis.stage, bifrost_core::net_diagnostic::Stage::Name);
+        // the steps and the diagnosis are on the page
+        assert!(st.row_centre(&ui, "Name Lookup").is_some());
+        assert!(st.row_centre(&ui, "Connection").is_some());
+        assert!(st.row_centre(&ui, report.diagnosis.title).is_some());
     }
 
     #[test]

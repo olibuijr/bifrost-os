@@ -3834,14 +3834,14 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/link_conditioner.rs, springboard/core/src/net_path.rs",
+   "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/sdk/src/link_conditioner.rs, springboard/core/src/net_path.rs",
    "status": "os",
    "note": "Network diagnosis: explains the first failing stage of a request (link, address, name lookup, connection, handshake, status) with the next step for the person.",
    "ready": true,
    "checks": [
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "net_diagnostic::tests"
     },
     {
@@ -3874,7 +3874,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/net_probe.rs, springboard/core/src/reachability.rs",
+   "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/core/src/net_probe.rs, springboard/core/src/reachability.rs",
    "status": "os",
    "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
@@ -3883,12 +3883,12 @@
    "checks": [
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "net_diagnostic::tests"
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "net_probe::tests"
     },
     {
@@ -3914,11 +3914,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/net_diagnostic.rs, springboard/sdk/src/net_probe.rs, springboard/core/src/net_path.rs",
+   "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/core/src/net_probe.rs, springboard/core/src/net_path.rs, springboard/src/shell/net_diagnose_page.rs, springboard/src/shell/settings.rs",
    "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Lead 2026-10-17: not ready: no Settings page runs the probe yet.",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::net_diagnose_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings::tests::network_diagnose_runs_the_probe_off_the_draw_thread_and_shows_the_diagnosis"
+    }
+   ],
+   "ready_note": "Settings > Network has a Diagnose row that runs net_probe (link, address, name lookup, connection to the update server's host) on a worker thread (Loaded) and lists the steps and the diagnosis with its advice; the probe code moved from the SDK to bifrost-core (the SDK re-exports it) so the shell can call it. Host tests drive the page with a fake probe; not verified on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SymptomReporter.framework",

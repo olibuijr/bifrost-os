@@ -80,7 +80,7 @@
     {
       "feature": "Network diagnostics",
       "apple": "CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticDiagnoseProblemInteractively (https://developer.apple.com/documentation/cfnetwork/network-diagnostics)",
-      "bifrost": "springboard/sdk/src/net_diagnostic.rs",
+      "bifrost": "springboard/core/src/net_diagnostic.rs",
       "status": "parity",
       "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No diagnostic window or API. The Wi-Fi page shows link state only."
     },

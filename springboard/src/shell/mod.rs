@@ -212,6 +212,7 @@ pub mod account_page;
 pub mod timeset_page;
 pub mod night_shift;
 pub mod wake_page;
+pub mod net_diagnose_page;
 pub mod notify_page;
 pub mod wallpaper_page;
 pub mod wallpaper_schedule;

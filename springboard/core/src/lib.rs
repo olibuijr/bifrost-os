@@ -180,6 +180,8 @@ pub mod serial_line;
 pub mod idle_monitor;
 pub mod sleep_assertions;
 pub mod wake_schedule;
+pub mod net_diagnostic;
+pub mod net_probe;
 pub mod launch_policy;
 pub mod app_transfer;
 pub mod app_disk_writes;

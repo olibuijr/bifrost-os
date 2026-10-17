@@ -431,6 +431,8 @@ pub enum Action {
     Night(super::night_shift::NightEdit),
     /// a Battery > Schedule row (see `wake_page::WakeEdit`)
     Wake(super::wake_page::WakeEdit),
+    /// Network > Diagnose: run the connection probes on a worker thread (see `net_diagnose_page`)
+    NetDiagnose,
     /// a Screen Time row: range, limits, Downtime, allowed apps, its passcode
     ScreenTime(super::screentime::page::StEdit),
     /// opens the "Other Network" sheet

@@ -11,7 +11,7 @@ after the waves merge).
 |---|---|---|
 | `springboard/sdk/src/host_addressing.rs` | Normalizes a host name, reads numeric addresses, orders and filters answers by family (IPv4 first, no repeats), and runs one lookup through `Idle`, `Resolving`, `Resolved`, `Failed`. A numeric address resolves at once with no query. The caller supplies the answer through `finish` or `fail`. | CFHost, CFHostCreateWithName, CFHostCreateWithAddress, CFHostStartInfoResolution, CFHostGetAddressing, CFHostCancelInfoResolution (https://developer.apple.com/documentation/cfnetwork/hosts) |
 | `springboard/sdk/src/dns_service.rs` | Service type names (`_http._tcp`), the full name in a domain (`_http._tcp.local.`), instance names with escaped dots, and TXT records in the length-prefixed `key=value` wire format (encode, decode, first key wins, flag keys with no value). It sends and receives nothing. | CFNetService, CFNetServiceCreate, CFNetServiceCreateTXTDataWithDictionary, CFNetServiceCreateDictionaryWithTXTData, CFNetServiceGetType, CFNetServiceGetDomain, CFNetServiceGetName, CFNetServiceGetPortNumber, CFNetServiceSetTXTData, CFNetServiceGetTXTData (https://developer.apple.com/documentation/cfnetwork/network-services) |
-| `springboard/sdk/src/net_diagnostic.rs` | Takes an observation of each stage (link, address, name, connection, security, status) and returns the first failing stage with a title and the next step. A status of 500 or more counts as a server failure. | CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticCreateWithStreams, CFNetDiagnosticDiagnoseProblemInteractively, CFNetDiagnosticStatusValues (https://developer.apple.com/documentation/cfnetwork/network-diagnostics) |
+| `springboard/core/src/net_diagnostic.rs` | Takes an observation of each stage (link, address, name, connection, security, status) and returns the first failing stage with a title and the next step. A status of 500 or more counts as a server failure. | CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticCreateWithStreams, CFNetDiagnosticDiagnoseProblemInteractively, CFNetDiagnosticStatusValues (https://developer.apple.com/documentation/cfnetwork/network-diagnostics) |
 
 Each module is registered with one `pub mod` line in `springboard/sdk/src/lib.rs`. Each has a
 `#[cfg(test)] mod tests` block with behaviour tests whose expected values were worked out by hand from the rules
@@ -40,7 +40,7 @@ so no row is `parity` or `os`.
 |---|---|---|---|
 | CFNetwork | Host name resolution | partial | springboard/sdk/src/host_addressing.rs |
 | CFNetwork | Network services (Bonjour) | partial | springboard/sdk/src/dns_service.rs |
-| CFNetwork | Network diagnostics | partial | springboard/sdk/src/net_diagnostic.rs |
+| CFNetwork | Network diagnostics | partial | springboard/core/src/net_diagnostic.rs |
 
 Still open in the matrix after this wave: the host lookup has no network query behind it yet (the resolver in
 springboard/src/deildu/dns.rs is internal), there is no browse or register transport, and the diagnosis is not
