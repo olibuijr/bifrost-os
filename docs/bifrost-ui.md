@@ -4293,3 +4293,36 @@ Until the wiring is built, the cloud accepts no location from this app, and the 
 Routes assumed where the contract left the answer shape open: `GET findmy/devices/pending` answers
 `{"pending": [{id, name, device_public_key}]}`; `GET findmy/devices/pending/{id}/key` answers `200` with the sealed key,
 `202` while waiting, and `404` once the request is denied or deleted; `GET findmy/shared-with-me` answers a bare array.
+
+## Layered app icons (IconFoundation, IconRendering: `bifrost_render::icon_doc`)
+
+One icon model and renderer for every app icon. Code: `springboard/render/src/icon_doc.rs`. Built-in icons:
+`springboard/res/icons/{terminal,camera,magnifier}`.
+
+- **Package.** An app ships `icon.json` beside its layer PNGs. The document has a `background` (`{"solid": "#rrggbb"}`
+  or `{"gradient": [top, bottom]}`, `#rrggbbaa` allowed) and up to four `layers`, each with `image` (a relative path,
+  no `..`), `x`, `y` (centre as fractions of the body, default 0.5), `scale` (width as a fraction of the body, default 1),
+  `blend` (`normal`, `multiply`, `screen`) and `opacity`. Unknown keys are ignored.
+- **Legacy.** A flat `icon.png` is a document with one full-body layer on a neutral plate (`PLATE_RGB`), so it is masked
+  the same way.
+- **Render.** `render(doc, layers, px, variant, tint)` composites the background and layers, masks them to the body (a
+  superellipse with exponent 5, `body_coverage`, 4x4 supersampled), draws a specular edge one px inside the body (brighter
+  at the top) and a drop shadow (the body moved down 2.5 percent of the canvas, box-blurred, 35 percent black). The body
+  is 80 percent of the canvas, centred, so the shadow has room. Output is premultiplied RGBA.
+- **Variants.** `Default` draws the layers as authored. `Dark` maps the background to a near-black plate (85 percent
+  toward `#1c1c1e`) and lightens the foreground 25 percent toward white. `Tinted` maps the background to a neutral grey
+  plate and the foreground's luma onto the tint (white takes the tint, black stays black). `set_style(variant, tint)`
+  publishes the choice; a change empties the cache. The style set in Settings > Appearance > Icon & widget style is not
+  wired yet (the shell's default is `Default` and the tint `DEFAULT_TINT`, systemBlue).
+- **One entry point.** `app_icon(app, path, size_pt, scale, variant)` loads the package (its `icon.json`, or the flat
+  image at `path`) and returns the icon at `size_pt x scale` device pixels from a process cache keyed by `IconKey`
+  (app, size in tenths of a point, scale in thousandths, variant). The Dock (`chrome/src/dock.rs`, `load_icon`) and the
+  home screen and launcher (`apphost::icon_image`) call it. Built-in icons use `render_builtin`, from bytes compiled in.
+- **Gaps (IconFoundation and IconRendering rows stay `partial`).** Not done: the Settings row for the style; the
+  Launchpad, app switcher and Files drawing through `app_icon` (the switcher draws window thumbnails, not app icons);
+  thumbnail service lookup; SVG layers (the render crate has no SVG rasteriser, so layers are PNG); the body and shadow
+  proportions are not yet compared with the reference icon grid on Midget. The cache is not invalidated when an app is
+  reinstalled with a new icon until the shell restarts.
+- **Tests.** Superellipse area at 32 to 256 px (within 0.01 of 0.9502), corner and centre coverage, Porter-Duff and
+  blend formulas, variant colour mapping, cache keys and eviction, legacy fallback on the plate and under the mask, the
+  shadow below and not above the body, JSON and hex parsing, and the built-in Terminal icon.
