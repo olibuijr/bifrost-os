@@ -23,6 +23,7 @@ pub mod assets;
 pub mod fontprefs;
 pub mod fontfallback;
 pub mod fontinfo;
+pub mod math;
 pub mod fontobj;
 pub mod kern;
 pub mod shape_ot;
