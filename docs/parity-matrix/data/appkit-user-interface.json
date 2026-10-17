@@ -107,7 +107,7 @@
     }
   ],
   "gaps": [
-    "App-facing sound, speech synthesis and haptics API",
+    "App-facing speech synthesis and haptics API (sdk system_sound SystemSounds::named gives synthesised system tones)",
     "NSScreen-style multi-display API for apps",
     "App dock tile badges/menus and custom cursors",
     "Full accessibility roles and rotors",

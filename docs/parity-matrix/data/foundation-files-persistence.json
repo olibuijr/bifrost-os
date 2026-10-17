@@ -104,6 +104,6 @@
     "On-disk purgeable data",
     "iCloud / cloud-synced documents and key-value store",
     "File versions",
-    "Metadata query sort descriptors, grouping and predicate parser"
+    "Metadata query grouping and a predicate text parser (sort descriptors are built)"
   ]
 }

@@ -40,7 +40,7 @@
       "apple": "CKError record-changed keys",
       "bifrost": "~/Projects/bifrost-cloud/crates/cloud-server/src/sync.rs (If-Match precondition); springboard/ui/src/record_sync.rs (Remote, Conflict, ConflictPolicy, resolve); springboard/sdk/src/cloud_records.rs (CloudZone save_expecting checks the cloud change tag)",
       "status": "partial",
-      "note": "Built 2026-10-17: SyncEngine::push and resolve now work on any Remote store, not only the local Database, and CloudZone implements Remote over the cloud records table: a stale change tag becomes a record-changed conflict with the cloud's version, settled with keep-local, keep-server or merge. Tests: record_sync::tests::a_remote_store_takes_the_same_queue_and_conflicts and cloud_records::tests::save_then_stale_save_is_a_conflict_on_the_cloud. Still partial: the data API has no compare-and-swap, so two devices writing between the read and the write can both pass the check; no app is wired yet."
+      "note": "Built 2026-10-17: SyncEngine::push and resolve now work on any Remote store, not only the local Database, and CloudZone implements Remote over the cloud records table: a stale change tag becomes a record-changed conflict with the cloud's version, settled with keep-local, keep-server or merge. Tests: record_sync::tests::a_remote_store_takes_the_same_queue_and_conflicts and cloud_records::tests::save_then_stale_save_is_a_conflict_on_the_cloud. Still partial: the data API has no compare-and-swap, so two devices writing between the read and the write can both pass the check; no app is wired yet. Refreshed 2026-10-17: covered by springboard/ui/src/record_sync.rs and springboard/sdk/src/cloud_records.rs; tests record_sync::tests, cloud_records::tests."
     },
     {
       "feature": "Shared records",
@@ -82,12 +82,12 @@
       "apple": "app local persistence",
       "bifrost": "springboard/sdk/src/defaults.rs, springboard/sdk/src/coding.rs",
       "status": "partial",
-      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices. Checked 2026-10-17: local by design, no sync to build here. Checked 2026-10-17: local by design, no sync to build here."
+      "note": "The per-app defaults store writes atomically and is covered by its own host tests. It stays on this machine and is not a CloudKit counterpart: nothing syncs between devices. Checked 2026-10-17: local by design, no sync to build here."
     }
   ],
   "gaps": [
-    "App record database with zones and queries",
-    "CKSyncEngine-style sync with change tokens",
+    "App record database: cloud_records::CloudZone and ui record_sync exist, but no queries and no app-facing API",
+    "Change-token pull: record_sync::SyncEngine keeps a server token and a push queue with conflicts; no change-token fetch is verified",
     "Subscriptions and push",
     "Record sharing between users",
     "Assets",

@@ -72,9 +72,8 @@
     }
   ],
   "gaps": [
-    "No app-facing SDK API to install a panic or uncaught-failure handler, or to read crash.log entries from an app",
-    "No per-failure delegate decision (shouldHandle / shouldLogException) and no handling or logging mask",
-    "No debugger-halt policy for selected failures; a panic aborts the release build after the hook writes",
+    "No app-facing process panic hook: an app captures failures with sdk exception_handler::ExceptionHandler::capture and lists them with crash_records; the panic hook stays with the shell",
+    "Halt mask only: hanging_mask is stored, but no debugger halt is performed; a panic aborts the release build after the hook writes",
     "Panic isolation exists only in SDK dispatch and shell job pools, not for arbitrary app code"
   ]
 }
