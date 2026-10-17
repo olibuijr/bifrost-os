@@ -3,11 +3,13 @@
 //! URLs and bodies come from [`crate::protocol`]. Every method blocks, so the window calls them from job threads
 //! (see [`crate::sync`]).
 
+use crate::crypto::{self, Machine};
 use crate::protocol::{self, Login, Sync};
 use bifrost_core::json::{self, Json};
 use springboard::deildu::http::{Client, Jar, Response, Transport};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The largest sync answer read. A first sync of a busy account is large.
@@ -24,6 +26,10 @@ pub struct Api {
     token: String,
     pub user_id: String,
     pub device_id: String,
+    /// The end-to-end encryption state of this device (see [`crate::crypto`]).
+    crypto: Mutex<Machine>,
+    /// The rooms that have `m.room.encryption`, as the syncs reported them. A send to one of them is encrypted.
+    encrypted_rooms: Mutex<HashSet<String>>,
 }
 
 impl Api {
@@ -34,7 +40,133 @@ impl Api {
         let url = protocol::login_url(base);
         let answer = call(&http, "POST", &url, None, Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
         let Login { user_id, access_token, device_id } = protocol::parse_login(&answer)?;
-        Ok(Api { http, base: base.to_string(), token: access_token, user_id, device_id })
+        let crypto = Mutex::new(Machine::new(&user_id, &device_id));
+        Ok(Api {
+            http,
+            base: base.to_string(),
+            token: access_token,
+            user_id,
+            device_id,
+            crypto,
+            encrypted_rooms: Mutex::new(HashSet::new()),
+        })
+    }
+
+    /// Takes in a sync answer before the window sees it: the rooms' encryption state is noted, the device keys of the
+    /// senders of room keys are fetched, the room keys are taken in and the encrypted messages are opened (or marked
+    /// undecryptable), and the one-time keys are topped up when the server runs low. Failures never stop the sync: a
+    /// message that cannot be opened shows as undecryptable.
+    pub fn process_sync(&self, sync: &mut Sync) {
+        if let Ok(mut rooms) = self.encrypted_rooms.lock() {
+            for room in sync.rooms.iter().filter(|r| r.encrypted) {
+                rooms.insert(room.id.clone());
+            }
+        }
+        let mut senders: Vec<String> =
+            sync.to_device.iter().filter(|e| e.kind == "m.room.encrypted").map(|e| e.sender.clone()).collect();
+        senders.sort();
+        senders.dedup();
+        if !senders.is_empty() {
+            let _ = self.query_devices(&senders);
+            if let Ok(mut m) = self.crypto.lock() {
+                m.receive(&sync.to_device);
+            }
+        }
+        for room in sync.rooms.iter_mut().filter(|r| !r.ciphertexts.is_empty()) {
+            if let Ok(mut m) = self.crypto.lock() {
+                m.decrypt_events(&room.id, &mut room.events, &room.ciphertexts);
+            }
+        }
+        if sync.otk_count.map_or(true, |n| n < crypto::OTK_FLOOR) {
+            let _ = self.upload_keys();
+        }
+    }
+
+    /// Whether `room` is end to end encrypted, as the syncs said.
+    pub fn is_encrypted(&self, room: &str) -> bool {
+        self.encrypted_rooms.lock().map(|r| r.contains(room)).unwrap_or(false)
+    }
+
+    /// Uploads this device's keys and a batch of one-time keys (`POST /keys/upload`). Returns the server's count of
+    /// signed one-time keys afterwards.
+    pub fn upload_keys(&self) -> Result<u64, String> {
+        let body = match self.crypto.lock() {
+            Ok(mut m) => m.upload_body(crypto::OTK_BATCH),
+            Err(_) => return Err("the encryption state is unavailable".into()),
+        };
+        let url = protocol::keys_upload_url(&self.base);
+        let text = body.encode();
+        let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((text.as_bytes(), "application/json")), CALL_LIMIT)?;
+        if let Ok(mut m) = self.crypto.lock() {
+            m.mark_published();
+        }
+        Ok(answer.get("one_time_key_counts").and_then(|c| c.get("signed_curve25519")).and_then(|v| v.as_u64()).unwrap_or(0))
+    }
+
+    /// Fetches and checks the device keys of `users` (`POST /keys/query`).
+    pub fn query_devices(&self, users: &[String]) -> Result<usize, String> {
+        let text = Machine::query_body(users).encode();
+        let url = protocol::keys_query_url(&self.base);
+        let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((text.as_bytes(), "application/json")), CALL_LIMIT)?;
+        self.with_crypto(|m| m.ingest_query(&answer))
+    }
+
+    /// Claims one one-time key for each device in `needed` and opens an Olm session with it (`POST /keys/claim`).
+    fn claim_sessions(&self, needed: &[(String, String)]) -> Result<usize, String> {
+        if needed.is_empty() {
+            return Ok(0);
+        }
+        let text = Machine::claim_body(needed).encode();
+        let url = protocol::keys_claim_url(&self.base);
+        let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((text.as_bytes(), "application/json")), CALL_LIMIT)?;
+        self.with_crypto(|m| m.ingest_claim(&answer))
+    }
+
+    /// Runs `f` on the encryption state.
+    fn with_crypto<T>(&self, f: impl FnOnce(&mut Machine) -> Result<T, String>) -> Result<T, String> {
+        let mut m = self.crypto.lock().map_err(|_| "the encryption state is unavailable".to_string())?;
+        f(&mut *m)
+    }
+
+    /// Sends `event_type` with `content` to the encrypted `room`: fetches the members' devices, claims one-time keys for
+    /// the devices without a session, shares the room key when it is new or due for rotation, then sends the
+    /// `m.room.encrypted` event.
+    fn send_encrypted(&self, room: &str, event_type: &str, content: &Json) -> Result<(), String> {
+        let members = self.joined_members(room)?;
+        self.query_devices(&members)?;
+        let missing = self.with_crypto(|m| Ok(m.devices_without_session(&members)))?;
+        self.claim_sessions(&missing)?;
+        let now = now_ms();
+        let (batch, _skipped) = self.with_crypto(|m| Ok(m.prepare_room(room, &members, now)))?;
+        if !batch.is_empty() {
+            self.send_room_keys(batch)?;
+        }
+        let encrypted = self.with_crypto(|m| m.encrypt_room_event(room, event_type, content))?;
+        let url = protocol::send_event_url(&self.base, room, "m.room.encrypted", &txn_id());
+        let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((encrypted.encode().as_bytes(), "application/json")), CALL_LIMIT)?;
+        protocol::parse_event_id(&answer).map(|_| ())
+    }
+
+    /// The user ids joined to `room` (`GET /rooms/{id}/joined_members`).
+    fn joined_members(&self, room: &str) -> Result<Vec<String>, String> {
+        let url = protocol::joined_members_url(&self.base, room);
+        let answer = call(&self.http, "GET", &url, Some(self.token.as_str()), None, CALL_LIMIT)?;
+        protocol::parse_joined_members(&answer)
+    }
+
+    /// Sends the room key messages, one `m.room.encrypted` to each device, in one to-device request.
+    fn send_room_keys(&self, batch: Vec<(String, String, Json)>) -> Result<(), String> {
+        let mut users: Vec<(String, Vec<(String, Json)>)> = Vec::new();
+        for (user, device, content) in batch {
+            match users.iter_mut().find(|(u, _)| *u == user) {
+                Some((_, devices)) => devices.push((device, content)),
+                None => users.push((user, vec![(device, content)])),
+            }
+        }
+        let messages = Json::Obj(users.into_iter().map(|(u, devices)| (u, Json::Obj(devices))).collect());
+        let text = protocol::obj(vec![("messages", messages)]).encode();
+        let url = protocol::send_to_device_url(&self.base, "m.room.encrypted", &txn_id());
+        call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((text.as_bytes(), "application/json")), CALL_LIMIT).map(|_| ())
     }
 
     /// One sync: the changes after `since`, or the whole state when there is no token. Long-polls for up to
@@ -52,6 +184,7 @@ impl Api {
 
     /// Uploads an image and sends it to `room` as an image message.
     pub fn send_image(&self, room: &str, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
+        self.refuse_media(room)?;
         let mxc = self.upload(name, mime, bytes)?;
         let info = protocol::ImageInfo { name, mxc: &mxc, mime, size: bytes.len() as u64 };
         self.send_content(room, &protocol::image_content(&info))
@@ -59,6 +192,7 @@ impl Api {
 
     /// Uploads any file and sends it to `room` as a file message.
     pub fn send_file(&self, room: &str, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
+        self.refuse_media(room)?;
         let mxc = self.upload(name, mime, bytes)?;
         let info = protocol::ImageInfo { name, mxc: &mxc, mime, size: bytes.len() as u64 };
         self.send_content(room, &protocol::file_content(&info))
@@ -76,6 +210,9 @@ impl Api {
 
     /// Reacts to the message `target` with `key` (an emoji).
     pub fn send_reaction(&self, room: &str, target: &str, key: &str) -> Result<(), String> {
+        if self.is_encrypted(room) {
+            return Err("Reactions are not sent in encrypted rooms yet".into());
+        }
         let url = protocol::send_event_url(&self.base, room, "m.reaction", &txn_id());
         let content = protocol::reaction_content(target, key);
         let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((content.as_bytes(), "application/json")), CALL_LIMIT)?;
@@ -140,7 +277,19 @@ impl Api {
             .map(|_| ())
     }
 
+    /// Pictures and files are not sent in encrypted rooms yet: uploading one would leave the file readable on the server.
+    fn refuse_media(&self, room: &str) -> Result<(), String> {
+        if self.is_encrypted(room) {
+            return Err("Pictures and files are not sent in encrypted rooms yet".into());
+        }
+        Ok(())
+    }
+
     fn send_content(&self, room: &str, content: &str) -> Result<(), String> {
+        if self.is_encrypted(room) {
+            let plain = json::parse(content)?;
+            return self.send_encrypted(room, "m.room.message", &plain);
+        }
         let url = protocol::send_url(&self.base, room, &txn_id());
         let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((content.as_bytes(), "application/json")), CALL_LIMIT)?;
         protocol::parse_event_id(&answer).map(|_| ())
@@ -186,6 +335,11 @@ fn answer(response: &Response) -> Result<Json, String> {
         Ok(body) => Err(protocol::error_text(&body).unwrap_or_else(|| format!("the server answered HTTP {}", response.status))),
         Err(_) => Err(format!("the server answered HTTP {}", response.status)),
     }
+}
+
+/// The wall clock in milliseconds since the epoch.
+fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// A transaction id unique to this run: the time and a counter.

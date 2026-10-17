@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-messages"
-version = "0.5.4"
+version = "0.6.0"
 edition = "2021"
 
 [lib]
@@ -16,3 +16,5 @@ bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
 # the shell's TLS transport (rustls, webpki roots) and its HTTPS client: every Matrix call goes through it
 springboard = { path = "../.." }
+# end-to-end encryption (Olm and Megolm), audited pure Rust; see src/crypto.rs. Builds are offline: fetch it first.
+vodozemac = "0.8"

@@ -26,11 +26,33 @@ pub struct Login {
     pub device_id: String,
 }
 
-/// One sync answer: the token for the next sync and the joined rooms that changed.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// One sync answer: the token for the next sync, the joined rooms that changed, the to-device messages addressed to this
+/// device (the Olm room keys of [`crate::crypto`]) and how many signed one-time keys the server still holds for it.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sync {
     pub next_batch: String,
     pub rooms: Vec<RoomUpdate>,
+    pub to_device: Vec<ToDevice>,
+    pub otk_count: Option<u64>,
+}
+
+/// A to-device message: `kind` is the event type (`m.room.encrypted` for Olm), `sender` the user who sent it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToDevice {
+    pub sender: String,
+    pub kind: String,
+    pub content: Json,
+}
+
+/// An encrypted room message as the sync gave it: the Megolm fields the decryptor needs, and the event id it fills in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ciphertext {
+    pub id: String,
+    pub algorithm: String,
+    pub sender_key: String,
+    pub device_id: String,
+    pub session_id: String,
+    pub body: String,
 }
 
 /// What a sync says about one joined room.
@@ -58,6 +80,10 @@ pub struct RoomUpdate {
     pub members: Vec<MemberUpdate>,
     /// The "marked as unread" flag the account holds for this room, when the sync carried one.
     pub marked_unread: Option<bool>,
+    /// The room has an `m.room.encryption` state event: its messages are sent end to end encrypted.
+    pub encrypted: bool,
+    /// The encrypted messages of the timeline, for the decryptor to replace their placeholder bodies.
+    pub ciphertexts: Vec<Ciphertext>,
 }
 
 /// A replacement text for a message: `target` now reads `body`.
@@ -106,8 +132,11 @@ pub enum Body {
     Emote(String),
     /// An image: its file name and its `mxc://` content URI.
     Image { name: String, mxc: String },
-    /// An end-to-end encrypted message. The client does not decrypt yet, so the text is not shown.
+    /// An end-to-end encrypted message that has not been through the decryptor (see [`crate::crypto::Machine::decrypt`]).
     Encrypted,
+    /// An encrypted message this device could not decrypt: no room key for it arrived, or it failed. The window shows
+    /// this placeholder and never the ciphertext.
+    Undecryptable,
     /// Another kind of message (a file, a video, ...), by its `msgtype`.
     Other(String),
     /// A message that was removed (its content is empty).
@@ -440,7 +469,85 @@ pub fn parse_sync(body: &Json) -> Result<Sync, String> {
             rooms.push(parse_room(id, room));
         }
     }
-    Ok(Sync { next_batch, rooms })
+    let to_device = raw_events(body.get("to_device"))
+        .iter()
+        .filter_map(|ev| {
+            Some(ToDevice {
+                sender: ev.str_field("sender")?,
+                kind: ev.str_field("type")?,
+                content: ev.get("content").cloned().unwrap_or(Json::Null),
+            })
+        })
+        .collect();
+    let otk_count = body.get("device_one_time_keys_count").and_then(|c| c.get("signed_curve25519")).and_then(|v| v.as_u64());
+    Ok(Sync { next_batch, rooms, to_device, otk_count })
+}
+
+/// The Megolm fields of an `m.room.encrypted` timeline event, or `None` when it lacks them.
+fn ciphertext(ev: &Json) -> Option<Ciphertext> {
+    let content = ev.get("content")?;
+    Some(Ciphertext {
+        id: ev.str_field("event_id")?,
+        algorithm: content.str_field("algorithm")?,
+        sender_key: content.str_field("sender_key").unwrap_or_default(),
+        device_id: content.str_field("device_id").unwrap_or_default(),
+        session_id: content.str_field("session_id")?,
+        body: content.str_field("ciphertext")?,
+    })
+}
+
+/// The message a decrypted room event carries (`{"type": "m.room.message", "content": ...}`), as the timeline shows it,
+/// with the event it answers. `None` for a decrypted event of another type.
+pub fn decrypted_body(plain: &Json) -> Option<(Body, Option<String>)> {
+    if plain.str_field("type").as_deref() != Some("m.room.message") {
+        return None;
+    }
+    let content = plain.get("content");
+    let reply_to = content
+        .and_then(|c| c.get("m.relates_to"))
+        .and_then(|r| r.get("m.in_reply_to"))
+        .and_then(|r| r.str_field("event_id"));
+    let body = match message_body(content) {
+        Body::Text(t) if reply_to.is_some() => Body::Text(strip_reply_fallback(&t)),
+        other => other,
+    };
+    Some((body, reply_to))
+}
+
+/// The URL that uploads this device's keys and one-time keys (`POST`).
+pub fn keys_upload_url(base: &str) -> String {
+    api(base, "/keys/upload")
+}
+
+/// The URL that asks for the device keys of users (`POST`).
+pub fn keys_query_url(base: &str) -> String {
+    api(base, "/keys/query")
+}
+
+/// The URL that claims one one-time key per device (`POST`).
+pub fn keys_claim_url(base: &str) -> String {
+    api(base, "/keys/claim")
+}
+
+/// The URL that lists the joined members of `room` (`GET`).
+pub fn joined_members_url(base: &str, room: &str) -> String {
+    api(base, &format!("/rooms/{}/joined_members", encode(room)))
+}
+
+/// The PUT that sends a to-device message of type `kind` to several devices at once.
+pub fn send_to_device_url(base: &str, kind: &str, txn: &str) -> String {
+    api(base, &format!("/sendToDevice/{}/{}", encode(kind), encode(txn)))
+}
+
+/// The user ids of a joined-members answer (`{"joined": {user_id: {...}}}`).
+pub fn parse_joined_members(body: &Json) -> Result<Vec<String>, String> {
+    if let Some(e) = error_text(body) {
+        return Err(e);
+    }
+    match body.get("joined") {
+        Some(Json::Obj(members)) => Ok(members.iter().map(|(user, _)| user.clone()).collect()),
+        _ => Err("the server did not send the members of the room".into()),
+    }
 }
 
 /// The `content_uri` of an upload answer.
@@ -468,11 +575,11 @@ fn field(body: &Json, key: &str) -> Result<String, String> {
     body.str_field(key).ok_or_else(|| format!("the server did not send {key}"))
 }
 
-fn text(s: &str) -> Json {
+pub(crate) fn text(s: &str) -> Json {
     Json::Str(s.to_string())
 }
 
-fn obj(pairs: Vec<(&str, Json)>) -> Json {
+pub(crate) fn obj(pairs: Vec<(&str, Json)>) -> Json {
     Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
@@ -500,6 +607,12 @@ fn parse_room(id: &str, room: &Json) -> RoomUpdate {
         redactions: timeline.iter().filter_map(redaction).collect(),
         members: state.iter().chain(timeline.iter()).filter_map(member).collect(),
         marked_unread: marked_unread(raw_events(room.get("account_data"))),
+        encrypted: state.iter().chain(timeline.iter()).any(|e| e.str_field("type").as_deref() == Some("m.room.encryption")),
+        ciphertexts: timeline
+            .iter()
+            .filter(|e| e.str_field("type").as_deref() == Some("m.room.encrypted"))
+            .filter_map(ciphertext)
+            .collect(),
     }
 }
 
@@ -907,7 +1020,67 @@ mod tests {
     #[test]
     fn a_sync_with_no_joined_rooms_is_empty() {
         let sync = parse_sync(&parse(r#"{"next_batch":"n","rooms":{"invite":{"!i:x":{}}}}"#)).unwrap();
-        assert_eq!(sync, Sync { next_batch: "n".into(), rooms: Vec::new() });
+        assert_eq!(sync, Sync { next_batch: "n".into(), rooms: Vec::new(), ..Sync::default() });
+    }
+
+    #[test]
+    fn a_sync_carries_to_device_messages_and_the_one_time_key_count() {
+        let sync = parse_sync(&parse(
+            r#"{"next_batch":"n","rooms":{},
+                "to_device":{"events":[
+                    {"type":"m.room.encrypted","sender":"@a:x","content":{"algorithm":"m.olm.v1.curve25519-aes-sha2"}},
+                    {"type":"m.room.encrypted","content":{}}]},
+                "device_one_time_keys_count":{"signed_curve25519":12}}"#,
+        ))
+        .unwrap();
+        assert_eq!(sync.to_device.len(), 1, "a to-device event without a sender is dropped");
+        assert_eq!(sync.to_device[0].sender, "@a:x");
+        assert_eq!(sync.to_device[0].kind, "m.room.encrypted");
+        assert_eq!(sync.otk_count, Some(12));
+    }
+
+    #[test]
+    fn a_room_with_encryption_lists_its_ciphertexts_for_the_decryptor() {
+        let sync = parse_sync(&parse(
+            r#"{"next_batch":"n","rooms":{"join":{"!r:x":{"state":{"events":[
+                    {"type":"m.room.encryption","state_key":"","content":{"algorithm":"m.megolm.v1.aes-sha2"}}]},
+                "timeline":{"events":[
+                    {"type":"m.room.encrypted","event_id":"$e1","sender":"@a:x","origin_server_ts":5,
+                     "content":{"algorithm":"m.megolm.v1.aes-sha2","sender_key":"SK","device_id":"D","session_id":"S","ciphertext":"CT"}}]}}}}}"#,
+        ))
+        .unwrap();
+        let room = &sync.rooms[0];
+        assert!(room.encrypted);
+        assert_eq!(room.events[0].body, Body::Encrypted);
+        assert_eq!(
+            room.ciphertexts,
+            vec![Ciphertext { id: "$e1".into(), algorithm: "m.megolm.v1.aes-sha2".into(), sender_key: "SK".into(), device_id: "D".into(), session_id: "S".into(), body: "CT".into() }]
+        );
+    }
+
+    #[test]
+    fn a_decrypted_text_is_the_body_of_a_message_event() {
+        let plain = parse(r#"{"type":"m.room.message","content":{"msgtype":"m.text","body":"hi"}}"#);
+        assert_eq!(decrypted_body(&plain), Some((Body::Text("hi".into()), None)));
+        let reaction = parse(r#"{"type":"m.reaction","content":{}}"#);
+        assert_eq!(decrypted_body(&reaction), None);
+    }
+
+    #[test]
+    fn the_key_endpoints_are_under_the_client_api() {
+        assert_eq!(keys_upload_url("https://h"), "https://h/_matrix/client/v3/keys/upload");
+        assert_eq!(keys_query_url("https://h"), "https://h/_matrix/client/v3/keys/query");
+        assert_eq!(keys_claim_url("https://h"), "https://h/_matrix/client/v3/keys/claim");
+        assert_eq!(joined_members_url("https://h", "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/joined_members");
+        assert_eq!(send_to_device_url("https://h", "m.room.encrypted", "t1"), "https://h/_matrix/client/v3/sendToDevice/m.room.encrypted/t1");
+    }
+
+    #[test]
+    fn a_joined_members_answer_lists_the_user_ids() {
+        let members = parse_joined_members(&parse(r#"{"joined":{"@a:x":{"display_name":"A"},"@b:x":{}}}"#)).unwrap();
+        assert_eq!(members.len(), 2);
+        assert!(members.contains(&"@b:x".to_string()));
+        assert!(parse_joined_members(&parse(r#"{"errcode":"M_FORBIDDEN","error":"no"}"#)).is_err());
     }
 
     #[test]

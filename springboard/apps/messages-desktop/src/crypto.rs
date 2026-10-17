@@ -1,0 +1,688 @@
+//! End-to-end encryption for the Matrix client. The cryptography is vodozemac (an audited, pure-Rust implementation of
+//! Olm and Megolm); this module is the glue: the device's Olm account, the Olm sessions with the other devices, the
+//! Megolm session per encrypted room, the wire shapes of the key endpoints and to-device messages, the rotation policy,
+//! and the pickles that keep the state. Nothing here opens a connection: [`crate::api`] makes the calls.
+//!
+//! Not done yet: device verification (every device is unverified, and the room info must say so), key backup, cross-
+//! signing, room keys for devices that appear after a session was shared, and pictures or reactions in encrypted rooms
+//! (refused by [`crate::api`]). A sign-in makes a new device, so the pickle of an earlier device is never reloaded.
+
+use crate::protocol::{self, Body, Ciphertext, Event, ToDevice};
+use bifrost_core::json::{self, Json};
+use std::collections::HashMap;
+use vodozemac::megolm::{GroupSession, InboundGroupSession, MegolmMessage, SessionConfig as MegolmConfig, SessionKey};
+use vodozemac::olm::{Account, AccountPickle, OlmMessage, Session, SessionConfig as OlmConfig};
+use vodozemac::{Curve25519PublicKey, Ed25519PublicKey, Ed25519Signature};
+
+/// The algorithm of the Olm messages that carry room keys between devices.
+pub const OLM_ALGORITHM: &str = "m.olm.v1.curve25519-aes-sha2";
+/// The algorithm of the Megolm messages that carry room events.
+pub const MEGOLM_ALGORITHM: &str = "m.megolm.v1.aes-sha2";
+/// The key algorithm of a signed one-time key, as the key endpoints name it.
+pub const OTK_ALGORITHM: &str = "signed_curve25519";
+/// A new outbound Megolm session replaces the current one after this many messages.
+pub const ROTATE_MESSAGES: u32 = 100;
+/// A new outbound Megolm session replaces the current one after this long, in milliseconds (one week).
+pub const ROTATE_AFTER_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+/// How many one-time keys a device uploads at a time.
+pub const OTK_BATCH: usize = 50;
+/// The server holding fewer signed one-time keys than this for the device makes the device upload more.
+pub const OTK_FLOOR: u64 = 20;
+
+/// What an outbound Megolm session was made for: when, how many messages it has carried, and the members it was shared
+/// with (sorted, so the order of a member list never looks like a change).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Outbound {
+    pub created_ms: u64,
+    pub messages: u32,
+    pub members: Vec<String>,
+}
+
+/// The rotation policy of a room's outbound Megolm session: rotate when the membership changed, after [`ROTATE_MESSAGES`]
+/// messages, or after [`ROTATE_AFTER_MS`].
+pub fn rotation_due(state: &Outbound, members: &[String], now_ms: u64) -> bool {
+    let mut now: Vec<String> = members.to_vec();
+    now.sort();
+    now.dedup();
+    now != state.members || state.messages >= ROTATE_MESSAGES || now_ms.saturating_sub(state.created_ms) >= ROTATE_AFTER_MS
+}
+
+/// A device of another user (or of this user, on another login), as the device keys said it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Device {
+    pub user_id: String,
+    pub device_id: String,
+    pub curve25519: String,
+    pub ed25519: String,
+}
+
+/// The crypto state of one login: the Olm account, the sessions, the device keys of the room members, and the Megolm
+/// sessions (outbound for the rooms this device sends to, inbound for the room keys it received).
+pub struct Machine {
+    user_id: String,
+    device_id: String,
+    account: Account,
+    /// Olm sessions with other devices, by the device's curve25519 key.
+    olm: HashMap<String, Session>,
+    /// The verified-by-self-signature devices of each user.
+    devices: HashMap<String, Vec<Device>>,
+    /// The outbound Megolm session of each encrypted room.
+    outbound: HashMap<String, (GroupSession, Outbound)>,
+    /// The inbound Megolm sessions, by (room id, session id).
+    inbound: HashMap<(String, String), InboundGroupSession>,
+}
+
+impl Machine {
+    /// A new device: a new Olm account with no keys published yet.
+    pub fn new(user_id: &str, device_id: &str) -> Machine {
+        Machine::with_account(user_id, device_id, Account::new())
+    }
+
+    fn with_account(user_id: &str, device_id: &str, account: Account) -> Machine {
+        Machine {
+            user_id: user_id.to_string(),
+            device_id: device_id.to_string(),
+            account,
+            olm: HashMap::new(),
+            devices: HashMap::new(),
+            outbound: HashMap::new(),
+            inbound: HashMap::new(),
+        }
+    }
+
+    /// The account, encrypted with `key` (32 bytes from [`new_pickle_key`]). Only the pickle is ever stored.
+    pub fn pickle(&self, key: &[u8; 32]) -> String {
+        self.account.pickle().encrypt(key)
+    }
+
+    /// The account a [`Machine::pickle`] gave back, with the same identity keys.
+    pub fn restore(user_id: &str, device_id: &str, key: &[u8; 32], pickled: &str) -> Result<Machine, String> {
+        let pickle = AccountPickle::from_encrypted(pickled, key).map_err(|e| e.to_string())?;
+        Ok(Machine::with_account(user_id, device_id, Account::from_pickle(pickle)))
+    }
+
+    /// The device's curve25519 (Olm) and ed25519 (signing) public keys, base64.
+    pub fn identity(&self) -> (String, String) {
+        let keys = self.account.identity_keys();
+        (keys.curve25519.to_base64(), keys.ed25519.to_base64())
+    }
+
+    /// The device keys this device publishes: its algorithms, its two keys and the self-signature over them.
+    pub fn device_keys(&self) -> Json {
+        let (curve, ed) = self.identity();
+        let unsigned = vec![
+            ("algorithms".to_string(), Json::Arr(vec![protocol::text(OLM_ALGORITHM), protocol::text(MEGOLM_ALGORITHM)])),
+            ("device_id".to_string(), protocol::text(&self.device_id)),
+            (
+                "keys".to_string(),
+                Json::Obj(vec![
+                    (format!("curve25519:{}", self.device_id), protocol::text(&curve)),
+                    (format!("ed25519:{}", self.device_id), protocol::text(&ed)),
+                ]),
+            ),
+            ("user_id".to_string(), protocol::text(&self.user_id)),
+        ];
+        let signature = self.account.sign(&canonical(&Json::Obj(unsigned.clone()))).to_base64();
+        self.with_signature(unsigned, &signature)
+    }
+
+    fn with_signature(&self, unsigned: Vec<(String, Json)>, signature: &str) -> Json {
+        let mut pairs = unsigned;
+        let by_device = Json::Obj(vec![(format!("ed25519:{}", self.device_id), protocol::text(signature))]);
+        pairs.push(("signatures".to_string(), Json::Obj(vec![(self.user_id.clone(), by_device)])));
+        Json::Obj(pairs)
+    }
+
+    /// The body of `POST /keys/upload`: the device keys and `count` new signed one-time keys. Call
+    /// [`Machine::mark_published`] once the server has answered.
+    pub fn upload_body(&mut self, count: usize) -> Json {
+        self.account.generate_one_time_keys(count);
+        let mut keys = Vec::new();
+        for (id, key) in self.account.one_time_keys() {
+            let unsigned = vec![("key".to_string(), protocol::text(&key.to_base64()))];
+            let signature = self.account.sign(&canonical(&Json::Obj(unsigned.clone()))).to_base64();
+            let signed = self.with_signature(unsigned, &signature);
+            keys.push((format!("{OTK_ALGORITHM}:{}", id.to_base64()), signed));
+        }
+        protocol::obj(vec![("device_keys", self.device_keys()), ("one_time_keys", Json::Obj(keys))])
+    }
+
+    /// Marks the one-time keys of the last [`Machine::upload_body`] as published, so they are not offered again.
+    pub fn mark_published(&mut self) {
+        self.account.mark_keys_as_published();
+    }
+
+    /// The body of `POST /keys/query` for `users`: all their devices.
+    pub fn query_body(users: &[String]) -> Json {
+        let asked = users.iter().map(|u| (u.clone(), Json::Arr(Vec::new()))).collect();
+        protocol::obj(vec![("device_keys", Json::Obj(asked))])
+    }
+
+    /// Takes in a `POST /keys/query` answer. A device counts only when its keys are the ones it names and it is signed by
+    /// its own ed25519 key; any other device is dropped. Returns how many devices were kept.
+    pub fn ingest_query(&mut self, answer: &Json) -> Result<usize, String> {
+        if let Some(e) = protocol::error_text(answer) {
+            return Err(e);
+        }
+        let Some(Json::Obj(users)) = answer.get("device_keys") else {
+            return Err("the server did not send device keys".into());
+        };
+        let mut kept = 0;
+        for (user, devices) in users {
+            let Json::Obj(list) = devices else { continue };
+            let found: Vec<Device> = list.iter().filter_map(|(device_id, value)| parse_device(user, device_id, value)).collect();
+            kept += found.len();
+            self.devices.insert(user.clone(), found);
+        }
+        Ok(kept)
+    }
+
+    /// The devices of `members` (users) except this device, as the last query saw them.
+    pub fn other_devices(&self, members: &[String]) -> Vec<Device> {
+        let mut out = Vec::new();
+        for user in members {
+            for device in self.devices.get(user).into_iter().flatten() {
+                if device.user_id != self.user_id || device.device_id != self.device_id {
+                    out.push(device.clone());
+                }
+            }
+        }
+        out
+    }
+
+    /// The body of `POST /keys/claim` for the devices in `needed` (user, device id).
+    pub fn claim_body(needed: &[(String, String)]) -> Json {
+        let mut by_user: Vec<(String, Json)> = Vec::new();
+        for (user, device) in needed {
+            let entry = (device.clone(), protocol::text(OTK_ALGORITHM));
+            match by_user.iter_mut().find(|(u, _)| u == user) {
+                Some((_, Json::Obj(devices))) => devices.push(entry),
+                _ => by_user.push((user.clone(), Json::Obj(vec![entry]))),
+            }
+        }
+        protocol::obj(vec![("one_time_keys", Json::Obj(by_user))])
+    }
+
+    /// The devices of `members` this device has no Olm session with, so a one-time key must be claimed for them.
+    pub fn devices_without_session(&self, members: &[String]) -> Vec<(String, String)> {
+        self.other_devices(members)
+            .into_iter()
+            .filter(|d| !self.olm.contains_key(&d.curve25519))
+            .map(|d| (d.user_id, d.device_id))
+            .collect()
+    }
+
+    /// Takes in a `POST /keys/claim` answer: for each device, the first one-time key whose signature checks out opens an
+    /// outbound Olm session. Returns how many sessions were made.
+    pub fn ingest_claim(&mut self, answer: &Json) -> Result<usize, String> {
+        if let Some(e) = protocol::error_text(answer) {
+            return Err(e);
+        }
+        let Some(Json::Obj(users)) = answer.get("one_time_keys") else {
+            return Err("the server did not send one-time keys".into());
+        };
+        let mut made = 0;
+        for (user, devices) in users {
+            let Json::Obj(list) = devices else { continue };
+            for (device_id, keys) in list {
+                let Json::Obj(offered) = keys else { continue };
+                let Some(device) = self.device(user, device_id).cloned() else { continue };
+                let session = offered.iter().find_map(|(name, value)| {
+                    let key_id = name.strip_prefix(&format!("{OTK_ALGORITHM}:"))?;
+                    if key_id.is_empty() || !verify_signed(value, user, device_id, &device.ed25519) {
+                        return None;
+                    }
+                    self.outbound_olm(&device, &value.str_field("key")?)
+                });
+                if let Some(session) = session {
+                    self.olm.insert(device.curve25519.clone(), session);
+                    made += 1;
+                }
+            }
+        }
+        Ok(made)
+    }
+
+    fn device(&self, user: &str, device_id: &str) -> Option<&Device> {
+        self.devices.get(user)?.iter().find(|d| d.device_id == device_id)
+    }
+
+    fn outbound_olm(&self, device: &Device, one_time_key: &str) -> Option<Session> {
+        let identity = Curve25519PublicKey::from_base64(&device.curve25519).ok()?;
+        let otk = Curve25519PublicKey::from_base64(one_time_key).ok()?;
+        Some(self.account.create_outbound_session(OlmConfig::version_2(), identity, otk))
+    }
+
+    /// Prepares the room key of `room` for `members`. When the outbound session is missing or due for rotation, makes a
+    /// new one and returns the to-device messages that carry its key (one per device, as `(user, device, content)`).
+    /// Devices with no Olm session are left out, and their count is returned too.
+    pub fn prepare_room(&mut self, room: &str, members: &[String], now_ms: u64) -> (Vec<(String, String, Json)>, usize) {
+        let mut sorted: Vec<String> = members.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        let due = match self.outbound.get(room) {
+            Some((_, state)) => rotation_due(state, &sorted, now_ms),
+            None => true,
+        };
+        if !due {
+            return (Vec::new(), 0);
+        }
+        let session = GroupSession::new(MegolmConfig::version_1());
+        let key = session.session_key().to_base64();
+        let session_id = session.session_id();
+        self.outbound.insert(room.to_string(), (session, Outbound { created_ms: now_ms, messages: 0, members: sorted.clone() }));
+
+        let mut messages = Vec::new();
+        let mut skipped = 0;
+        for device in self.other_devices(&sorted) {
+            let plain = protocol::obj(vec![
+                ("type", protocol::text("m.room_key")),
+                (
+                    "content",
+                    protocol::obj(vec![
+                        ("algorithm", protocol::text(MEGOLM_ALGORITHM)),
+                        ("room_id", protocol::text(room)),
+                        ("session_id", protocol::text(&session_id)),
+                        ("session_key", protocol::text(&key)),
+                    ]),
+                ),
+                ("sender", protocol::text(&self.user_id)),
+                ("sender_device", protocol::text(&self.device_id)),
+                ("keys", protocol::obj(vec![("ed25519", protocol::text(&self.identity().1))])),
+                ("recipient", protocol::text(&device.user_id)),
+                ("recipient_keys", protocol::obj(vec![("ed25519", protocol::text(&device.ed25519))])),
+            ]);
+            match self.encrypt_olm(&device.curve25519, &plain) {
+                Some(content) => messages.push((device.user_id.clone(), device.device_id.clone(), content)),
+                None => skipped += 1,
+            }
+        }
+        (messages, skipped)
+    }
+
+    /// The Olm `m.room.encrypted` content of `plain` for the device with curve25519 key `curve`, or `None` without a
+    /// session with it.
+    fn encrypt_olm(&mut self, curve: &str, plain: &Json) -> Option<Json> {
+        let (mine, _) = self.identity();
+        let session = self.olm.get_mut(curve)?;
+        let message = session.encrypt(plain.encode());
+        let (message_type, body) = message.to_parts();
+        let cipher = protocol::obj(vec![
+            ("type", Json::Num(message_type as f64)),
+            ("body", protocol::text(&vodozemac::base64_encode(&body))),
+        ]);
+        Some(protocol::obj(vec![
+            ("algorithm", protocol::text(OLM_ALGORITHM)),
+            ("sender_key", protocol::text(&mine)),
+            ("ciphertext", Json::Obj(vec![(curve.to_string(), cipher)])),
+        ]))
+    }
+
+    /// Takes in the to-device messages of a sync: an Olm message from a device this device has a session with (or a new
+    /// one, opened with a pre-key message) is opened, and a `m.room_key` in it becomes an inbound Megolm session. Returns
+    /// how many room keys were taken in. A message that does not open is dropped.
+    pub fn receive(&mut self, events: &[ToDevice]) -> usize {
+        let mut taken = 0;
+        for event in events.iter().filter(|e| e.kind == "m.room.encrypted") {
+            let Some(plain) = self.open_olm(&event.content) else { continue };
+            if self.accept_room_key(&event.sender, &plain) {
+                taken += 1;
+            }
+        }
+        taken
+    }
+
+    fn open_olm(&mut self, content: &Json) -> Option<Json> {
+        if content.str_field("algorithm")? != OLM_ALGORITHM {
+            return None;
+        }
+        let sender_key = content.str_field("sender_key")?;
+        let (mine, _) = self.identity();
+        let cipher = content.get("ciphertext")?.get(&mine)?;
+        let message_type = cipher.get("type")?.number()? as usize;
+        let bytes = vodozemac::base64_decode(&cipher.str_field("body")?).ok()?;
+        let message = OlmMessage::from_parts(message_type, &bytes).ok()?;
+        let their_curve = Curve25519PublicKey::from_base64(&sender_key).ok()?;
+        let plaintext = match &message {
+            OlmMessage::PreKey(pre) => {
+                let created = self.account.create_inbound_session(their_curve, pre).ok()?;
+                self.olm.insert(sender_key.clone(), created.session);
+                created.plaintext
+            }
+            OlmMessage::Normal(_) => self.olm.get_mut(&sender_key)?.decrypt(&message).ok()?,
+        };
+        json::parse(std::str::from_utf8(&plaintext).ok()?).ok()
+    }
+
+    /// Takes in one decrypted `m.room_key` if it names a device of `sender` whose signing key matches, and stores it as
+    /// the inbound Megolm session of its room.
+    fn accept_room_key(&mut self, sender: &str, plain: &Json) -> bool {
+        if plain.str_field("type").as_deref() != Some("m.room_key") {
+            return false;
+        }
+        let (Some(sender_device), Some(claimed_ed)) =
+            (plain.str_field("sender_device"), plain.get("keys").and_then(|k| k.str_field("ed25519")))
+        else {
+            return false;
+        };
+        let known = self.device(sender, &sender_device).is_some_and(|d| d.ed25519 == claimed_ed);
+        let Some(content) = plain.get("content") else { return false };
+        if !known || content.str_field("algorithm").as_deref() != Some(MEGOLM_ALGORITHM) {
+            return false;
+        }
+        let (Some(room), Some(session_id), Some(session_key)) =
+            (content.str_field("room_id"), content.str_field("session_id"), content.str_field("session_key"))
+        else {
+            return false;
+        };
+        let Ok(key) = SessionKey::from_base64(&session_key) else { return false };
+        let inbound = InboundGroupSession::new(&key, MegolmConfig::version_1());
+        self.inbound.insert((room, session_id), inbound);
+        true
+    }
+
+    /// Encrypts `content` as an event of type `event_type` in `room` with the room's outbound session, and returns the
+    /// `m.room.encrypted` content to send. Call [`Machine::prepare_room`] first.
+    pub fn encrypt_room_event(&mut self, room: &str, event_type: &str, content: &Json) -> Result<Json, String> {
+        let (mine, _) = self.identity();
+        let device_id = self.device_id.clone();
+        let (session, state) = self.outbound.get_mut(room).ok_or("no room key for this room yet")?;
+        let plain = protocol::obj(vec![
+            ("type", protocol::text(event_type)),
+            ("content", content.clone()),
+            ("room_id", protocol::text(room)),
+        ]);
+        let message = session.encrypt(plain.encode());
+        state.messages += 1;
+        Ok(protocol::obj(vec![
+            ("algorithm", protocol::text(MEGOLM_ALGORITHM)),
+            ("sender_key", protocol::text(&mine)),
+            ("device_id", protocol::text(&device_id)),
+            ("session_id", protocol::text(&session.session_id())),
+            ("ciphertext", protocol::text(&message.to_base64())),
+        ]))
+    }
+
+    /// Opens one encrypted room event with the inbound session of its room. `None` when there is no session for it or it
+    /// does not open (the caller shows the placeholder). A decrypted event of another type is `Body::Other`.
+    pub fn open_room_event(&mut self, room: &str, ct: &Ciphertext) -> Option<(Body, Option<String>)> {
+        if ct.algorithm != MEGOLM_ALGORITHM {
+            return None;
+        }
+        let inbound = self.inbound.get_mut(&(room.to_string(), ct.session_id.clone()))?;
+        let message = MegolmMessage::from_base64(&ct.body).ok()?;
+        let decrypted = inbound.decrypt(&message).ok()?;
+        let plain = json::parse(std::str::from_utf8(&decrypted.plaintext).ok()?).ok()?;
+        Some(match protocol::decrypted_body(&plain) {
+            Some(found) => found,
+            None => (Body::Other(plain.str_field("type").unwrap_or_default()), None),
+        })
+    }
+
+    /// Replaces the placeholder body of each encrypted event of `room` with its decrypted body, or with
+    /// [`Body::Undecryptable`] when this device cannot open it. Returns how many were opened.
+    pub fn decrypt_events(&mut self, room: &str, events: &mut [Event], ciphertexts: &[Ciphertext]) -> usize {
+        let mut opened = 0;
+        for ct in ciphertexts {
+            let Some(event) = events.iter_mut().find(|e| e.id == ct.id) else { continue };
+            match self.open_room_event(room, ct) {
+                Some((body, reply_to)) => {
+                    event.body = body;
+                    event.reply_to = reply_to;
+                    opened += 1;
+                }
+                None => event.body = Body::Undecryptable,
+            }
+        }
+        opened
+    }
+}
+
+/// A new 32-byte pickle key from the kernel's random source.
+pub fn new_pickle_key() -> Result<[u8; 32], String> {
+    use std::io::Read;
+    let mut key = [0u8; 32];
+    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut key)).map_err(|e| e.to_string())?;
+    Ok(key)
+}
+
+/// The keychain value of a device's pickle: the pickle key in hex, a newline, then the pickle. Both live in the keychain
+/// item, so the pickle is never stored without its key and never written to disk as plain text.
+pub fn vault_value(key: &[u8; 32], pickled: &str) -> String {
+    let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
+    format!("{hex}\n{pickled}")
+}
+
+/// The pickle key and pickle of a [`vault_value`]; `None` for a value that is not one.
+pub fn split_vault_value(value: &str) -> Option<([u8; 32], &str)> {
+    let (hex, pickled) = value.split_once('\n')?;
+    if hex.len() != 64 {
+        return None;
+    }
+    let mut key = [0u8; 32];
+    for (i, byte) in key.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(hex.get(i * 2..i * 2 + 2)?, 16).ok()?;
+    }
+    Some((key, pickled))
+}
+
+/// Where a device's pickle is kept. The app's keychain item is the real store; the window binds it through this trait.
+pub trait Vault {
+    fn load(&self, account: &str) -> Option<String>;
+    fn store(&mut self, account: &str, value: &str) -> Result<(), String>;
+}
+
+/// The keychain account a device's pickle is stored under.
+pub fn vault_account(user_id: &str, device_id: &str) -> String {
+    format!("{user_id}/{device_id}")
+}
+
+/// Makes the device for a new login and stores its pickle in `vault`. Each sign-in is a new device, as the access token is.
+pub fn open(vault: &mut dyn Vault, user_id: &str, device_id: &str) -> Result<Machine, String> {
+    let machine = Machine::new(user_id, device_id);
+    let key = new_pickle_key()?;
+    vault.store(&vault_account(user_id, device_id), &vault_value(&key, &machine.pickle(&key)))?;
+    Ok(machine)
+}
+
+/// The signing key and identity of one device in a keys/query answer, when the device is signed by its own key.
+fn parse_device(user: &str, device_id: &str, value: &Json) -> Option<Device> {
+    if value.str_field("user_id")? != user || value.str_field("device_id")? != device_id {
+        return None;
+    }
+    let keys = value.get("keys")?;
+    let curve25519 = keys.str_field(&format!("curve25519:{device_id}"))?;
+    let ed25519 = keys.str_field(&format!("ed25519:{device_id}"))?;
+    if !verify_signed(value, user, device_id, &ed25519) {
+        return None;
+    }
+    Some(Device { user_id: user.to_string(), device_id: device_id.to_string(), curve25519, ed25519 })
+}
+
+/// Checks the signature `user`'s `device` put on `value` (an object without its `signatures` and `unsigned` members)
+/// against the device's ed25519 key.
+fn verify_signed(value: &Json, user: &str, device_id: &str, ed25519: &str) -> bool {
+    let Some(sig) = value.get("signatures").and_then(|s| s.get(user)).and_then(|s| s.str_field(&format!("ed25519:{device_id}")))
+    else {
+        return false;
+    };
+    let Json::Obj(pairs) = value else { return false };
+    let unsigned = Json::Obj(pairs.iter().filter(|(k, _)| k != "signatures" && k != "unsigned").cloned().collect());
+    let (Ok(key), Ok(signature)) = (Ed25519PublicKey::from_base64(ed25519), Ed25519Signature::from_base64(&sig)) else {
+        return false;
+    };
+    key.verify(canonical(&unsigned).as_bytes(), &signature).is_ok()
+}
+
+/// The canonical JSON of a value (sorted keys, no spaces): the bytes a signature covers.
+pub fn canonical(value: &Json) -> String {
+    match value {
+        Json::Obj(pairs) => {
+            let mut sorted: Vec<&(String, Json)> = pairs.iter().collect();
+            sorted.sort_by(|a, b| a.0.cmp(&b.0));
+            let parts: Vec<String> = sorted.iter().map(|(k, v)| format!("{}:{}", json::quote(k), canonical(v))).collect();
+            format!("{{{}}}", parts.join(","))
+        }
+        Json::Arr(items) => format!("[{}]", items.iter().map(canonical).collect::<Vec<_>>().join(",")),
+        other => other.encode(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn members(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// A device's keys answer as `keys/query` would give it for `machine`.
+    fn query_answer(machine: &Machine) -> Json {
+        let keys = machine.device_keys();
+        protocol::obj(vec![("device_keys", Json::Obj(vec![(machine.user_id.clone(), Json::Obj(vec![(machine.device_id.clone(), keys)]))]))])
+    }
+
+    #[test]
+    fn a_fresh_outbound_session_is_not_rotated() {
+        let state = Outbound { created_ms: 1_000, messages: 3, members: members(&["@a:x", "@b:x"]) };
+        assert!(!rotation_due(&state, &members(&["@b:x", "@a:x"]), 2_000), "the member order is not a change");
+    }
+
+    #[test]
+    fn a_session_rotates_on_membership_change_messages_or_age() {
+        let base = Outbound { created_ms: 0, messages: 0, members: members(&["@a:x", "@b:x"]) };
+        assert!(rotation_due(&base, &members(&["@a:x", "@b:x", "@c:x"]), 1), "a member joined");
+        assert!(rotation_due(&base, &members(&["@a:x"]), 1), "a member left");
+        let busy = Outbound { messages: ROTATE_MESSAGES, ..base.clone() };
+        assert!(rotation_due(&busy, &members(&["@a:x", "@b:x"]), 1), "after 100 messages");
+        let old = Outbound { messages: 99, ..base.clone() };
+        assert!(!rotation_due(&old, &members(&["@a:x", "@b:x"]), ROTATE_AFTER_MS - 1));
+        assert!(rotation_due(&old, &members(&["@a:x", "@b:x"]), ROTATE_AFTER_MS), "after a week");
+    }
+
+    #[test]
+    fn the_upload_body_has_signed_device_keys_and_one_time_keys() {
+        let mut m = Machine::new("@a:x", "DEV1");
+        let body = m.upload_body(5);
+        let device = body.get("device_keys").expect("device_keys");
+        assert_eq!(device.str_field("user_id").as_deref(), Some("@a:x"));
+        assert_eq!(device.str_field("device_id").as_deref(), Some("DEV1"));
+        let keys = device.get("keys").expect("keys");
+        assert!(keys.str_field("curve25519:DEV1").is_some());
+        assert!(keys.str_field("ed25519:DEV1").is_some());
+        assert!(device.get("signatures").and_then(|s| s.get("@a:x")).and_then(|s| s.str_field("ed25519:DEV1")).is_some());
+        let Some(Json::Obj(otks)) = body.get("one_time_keys") else { panic!("one_time_keys") };
+        assert!(!otks.is_empty(), "the keys were generated");
+        for (id, otk) in otks {
+            assert!(id.starts_with("signed_curve25519:"), "{id}");
+            assert!(otk.str_field("key").is_some());
+            assert!(otk.get("signatures").is_some());
+        }
+    }
+
+    #[test]
+    fn the_query_and_claim_bodies_have_the_spec_shape() {
+        let query = Machine::query_body(&members(&["@b:x"]));
+        assert_eq!(query.get("device_keys").and_then(|d| d.get("@b:x")).and_then(|v| v.array()).map(|a| a.len()), Some(0));
+        let claim = Machine::claim_body(&[("@b:x".into(), "D1".into()), ("@b:x".into(), "D2".into()), ("@c:x".into(), "E".into())]);
+        let one = claim.get("one_time_keys").expect("one_time_keys");
+        assert_eq!(one.get("@b:x").and_then(|d| d.str_field("D1")).as_deref(), Some(OTK_ALGORITHM));
+        assert_eq!(one.get("@b:x").and_then(|d| d.str_field("D2")).as_deref(), Some(OTK_ALGORITHM));
+        assert_eq!(one.get("@c:x").and_then(|d| d.str_field("E")).as_deref(), Some(OTK_ALGORITHM));
+    }
+
+    #[test]
+    fn a_device_with_a_forged_signature_is_not_kept() {
+        let a = Machine::new("@a:x", "DEV1");
+        let mut b = Machine::new("@b:x", "DEVB");
+        assert_eq!(b.ingest_query(&query_answer(&a)), Ok(1));
+        let mut forged = query_answer(&a);
+        let Json::Obj(users) = &mut forged else { panic!() };
+        let Json::Obj(devices) = &mut users[0].1 else { panic!() };
+        let Json::Obj(fields) = &mut devices[0].1 else { panic!() };
+        fields.retain(|(k, _)| k != "signatures");
+        fields.push(("signatures".into(), protocol::obj(vec![("@a:x", protocol::obj(vec![("ed25519:DEV1", protocol::text("AAAA"))]))])));
+        assert_eq!(Machine::new("@b:x", "DEVB").ingest_query(&forged), Ok(0));
+    }
+
+    #[test]
+    fn a_room_key_round_trips_and_an_unknown_room_placeholder_is_undecryptable() {
+        let mut alice = Machine::new("@a:x", "DEVA");
+        let mut bob = Machine::new("@b:x", "DEVB");
+        bob.upload_body(2);
+        bob.mark_published();
+        // Bob's keys reach Alice as a claim answer; Alice's keys reach Bob as a query answer.
+        bob.ingest_query(&query_answer(&alice)).unwrap();
+        alice.ingest_query(&query_answer(&bob)).unwrap();
+        let upload = bob.upload_body(1);
+        let otks = upload.get("one_time_keys").cloned().unwrap();
+        let claim_answer =
+            protocol::obj(vec![("one_time_keys", protocol::obj(vec![("@b:x", protocol::obj(vec![("DEVB", otks)]))]))]);
+        assert_eq!(alice.ingest_claim(&claim_answer), Ok(1));
+
+        let room = "!r:x";
+        let people = members(&["@a:x", "@b:x"]);
+        let (to_device, skipped) = alice.prepare_room(room, &people, 0);
+        assert_eq!(skipped, 0);
+        assert_eq!(to_device.len(), 1, "one other device");
+        let events: Vec<ToDevice> = to_device
+            .into_iter()
+            .map(|(_, _, content)| ToDevice { sender: "@a:x".into(), kind: "m.room.encrypted".into(), content })
+            .collect();
+        assert_eq!(bob.receive(&events), 1, "the room key was taken in");
+
+        let text = protocol::obj(vec![("msgtype", protocol::text("m.text")), ("body", protocol::text("hello"))]);
+        let content = alice.encrypt_room_event(room, "m.room.message", &text).unwrap();
+        assert_eq!(content.str_field("algorithm").as_deref(), Some(MEGOLM_ALGORITHM));
+        let ct = Ciphertext {
+            id: "$1".into(),
+            algorithm: MEGOLM_ALGORITHM.into(),
+            sender_key: content.str_field("sender_key").unwrap(),
+            device_id: "DEVA".into(),
+            session_id: content.str_field("session_id").unwrap(),
+            body: content.str_field("ciphertext").unwrap(),
+        };
+        let (body, _) = bob.open_room_event(room, &ct).expect("bob opens it");
+        assert_eq!(body, Body::Text("hello".into()));
+
+        // A room this device holds no key for: the placeholder, never the ciphertext.
+        let mut events = vec![Event { id: "$1".into(), sender: "@a:x".into(), ts: 1, body: Body::Encrypted, reply_to: None }];
+        let other = Ciphertext { session_id: "unknown".into(), ..ct };
+        assert_eq!(bob.decrypt_events("!other:x", &mut events, &[other]), 0);
+        assert_eq!(events[0].body, Body::Undecryptable);
+    }
+
+    #[test]
+    fn a_pickle_round_trips_through_the_vault_value() {
+        let key = [7u8; 32];
+        let m = Machine::new("@a:x", "DEVA");
+        let (curve, ed) = m.identity();
+        let value = vault_value(&key, &m.pickle(&key));
+        let (got_key, pickled) = split_vault_value(&value).expect("a vault value");
+        assert_eq!(got_key, key);
+        let back = Machine::restore("@a:x", "DEVA", &got_key, pickled).unwrap();
+        assert_eq!(back.identity(), (curve, ed));
+        assert!(split_vault_value("not a vault value").is_none());
+    }
+
+    struct MemoryVault(HashMap<String, String>);
+
+    impl Vault for MemoryVault {
+        fn load(&self, account: &str) -> Option<String> {
+            self.0.get(account).cloned()
+        }
+        fn store(&mut self, account: &str, value: &str) -> Result<(), String> {
+            self.0.insert(account.to_string(), value.to_string());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_new_login_stores_its_pickle_under_its_device_only() {
+        let mut vault = MemoryVault(HashMap::new());
+        let m = open(&mut vault, "@a:x", "DEVA").unwrap();
+        let stored = vault.load(&vault_account("@a:x", "DEVA")).expect("stored");
+        assert!(!stored.contains(&m.identity().1), "the pickle does not show the signing key in plain text");
+        assert!(vault.load(&vault_account("@a:x", "OTHER")).is_none());
+    }
+}

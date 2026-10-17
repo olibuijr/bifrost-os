@@ -75,8 +75,9 @@ pub fn run_sync(api: Arc<Api>, tx: EventQueue, wake: Option<UnixStream>) {
         let mut since: Option<String> = None;
         loop {
             match api.sync(since.as_deref()) {
-                Ok(sync) => {
+                Ok(mut sync) => {
                     since = Some(sync.next_batch.clone());
+                    api.process_sync(&mut sync);
                     if !notify(&tx, &mut wake, Event::Synced(Ok(sync))) {
                         return;
                     }
