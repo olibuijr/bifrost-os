@@ -212,6 +212,67 @@ pub fn verify_signature(public_key: &[u8], signature: &[u8], data: &[u8]) -> Res
     Ok(key.is_valid_signature(signature, data))
 }
 
+/// An Ed25519 public key an app received from someone else, checked when it is made. Use it to verify signatures
+/// without keeping the raw bytes around.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SigningPublicKey {
+    raw: [u8; 32],
+}
+
+impl std::fmt::Debug for SigningPublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SigningPublicKey(Ed25519)")
+    }
+}
+
+impl SigningPublicKey {
+    /// A key from its 32 raw bytes. Any other length is `InvalidKeyLength`.
+    pub fn from_raw(raw: &[u8]) -> Result<SigningPublicKey, Error> {
+        let key = ed25519::PublicKey::from_raw_representation(raw).map_err(|_| Error::InvalidKeyLength)?;
+        Ok(SigningPublicKey { raw: key.raw_representation() })
+    }
+
+    /// The 32 raw bytes of the key.
+    pub fn raw(&self) -> [u8; 32] {
+        self.raw
+    }
+
+    /// True when `signature` is a valid Ed25519 signature of `data` under this key. A signature of the wrong length
+    /// is simply not valid.
+    pub fn is_valid_signature(&self, signature: &[u8], data: &[u8]) -> bool {
+        match ed25519::PublicKey::from_raw_representation(&self.raw) {
+            Ok(key) => key.is_valid_signature(signature, data),
+            Err(_) => false,
+        }
+    }
+}
+
+/// An X25519 public key an app received from a peer, checked when it is made. A low-order point is refused when the
+/// secret is agreed, as in [`KeyAgreementKey::agree`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct KeyAgreementPublicKey {
+    raw: [u8; 32],
+}
+
+impl std::fmt::Debug for KeyAgreementPublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("KeyAgreementPublicKey(X25519)")
+    }
+}
+
+impl KeyAgreementPublicKey {
+    /// A key from its 32 raw bytes. Any other length is `InvalidKeyLength`.
+    pub fn from_raw(raw: &[u8]) -> Result<KeyAgreementPublicKey, Error> {
+        let key = x25519::PublicKey::from_raw(raw).map_err(|_| Error::InvalidKeyLength)?;
+        Ok(KeyAgreementPublicKey { raw: key.raw() })
+    }
+
+    /// The 32 raw bytes of the key, to send to the peer.
+    pub fn raw(&self) -> [u8; 32] {
+        self.raw
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,6 +390,30 @@ mod tests {
     fn debug_output_never_shows_key_bytes() {
         assert_eq!(format!("{:?}", AesGcmKey::from_bytes(&[9u8; 32]).unwrap()), "AesGcmKey(256 bits)");
         assert_eq!(format!("{:?}", KeyAgreementKey::from_bytes(&[9u8; 32]).unwrap()), "KeyAgreementKey(X25519)");
+    }
+
+    #[test]
+    fn signing_public_key_round_trips_and_verifies() {
+        let key = SigningKey::from_bytes(&[7u8; 32]).unwrap();
+        let public = SigningPublicKey::from_raw(&key.public_key()).unwrap();
+        assert_eq!(public.raw(), key.public_key());
+        let sig = key.sign(b"hello");
+        assert!(public.is_valid_signature(&sig, b"hello"));
+        assert!(!public.is_valid_signature(&sig, b"hello!"));
+        assert!(!public.is_valid_signature(&sig[..63], b"hello"));
+        assert_eq!(SigningPublicKey::from_raw(&[0u8; 31]).err(), Some(Error::InvalidKeyLength));
+        assert_eq!(format!("{:?}", public), "SigningPublicKey(Ed25519)");
+    }
+
+    #[test]
+    fn key_agreement_public_key_agrees_with_the_private_side() {
+        let alice = KeyAgreementKey::from_bytes(&[3u8; 32]).unwrap();
+        let bob = KeyAgreementKey::from_bytes(&[4u8; 32]).unwrap();
+        let bob_public = KeyAgreementPublicKey::from_raw(&bob.public_key()).unwrap();
+        assert_eq!(bob_public.raw(), bob.public_key());
+        let from_object = alice.agree(&bob_public.raw()).unwrap();
+        assert_eq!(from_object, bob.agree(&alice.public_key()).unwrap());
+        assert_eq!(KeyAgreementPublicKey::from_raw(&[0u8; 33]).err(), Some(Error::InvalidKeyLength));
     }
 
     fn hex_to_bytes(s: &str) -> Vec<u8> {
