@@ -232,6 +232,21 @@ const FACES: &[(&str, &str)] = &[
     ("coolvetica", "Montserrat"),
     ("futura", "Montserrat"),
     ("fakt slab stencil pro", "IBM Plex Serif"),
+    ("lato", "Lato"),
+    ("menlo", "DejaVu Sans Mono"),
+    ("monaco", "DejaVu Sans Mono"),
+    ("new york", "Source Serif 4"),
+    ("optima", "Libertinus Sans"),
+    ("marion", "Libertinus Serif"),
+    ("luminari", "Noto Serif Display"),
+    ("journal sans inline", "Source Sans 3"),
+    ("microsoft sans serif", "Liberation Sans"),
+    ("kokonor", "Noto Serif Tibetan"),
+    ("nanum gothic", "Noto Sans CJK KR"),
+    ("nanumgothic", "Noto Sans CJK KR"),
+    ("nanum myeongjo", "Noto Serif CJK KR"),
+    ("nanummyeongjo", "Noto Serif CJK KR"),
+    ("nom na tong", "Noto Serif CJK SC"),
 ];
 
 /// The open face named for `family` in FACES, if any (case and surrounding space ignored).
@@ -246,27 +261,6 @@ pub fn class_of_family(family: &str) -> Option<FamilyClass> {
     TABLE.iter().find(|(n, _)| *n == key).map(|(_, c)| *c)
 }
 
-/// Reference family name (lowercase) to the open face that stands in for it, tried before the class list. Each face
-/// is packaged on Arch (`packaging/arch/runtime-packages.txt`) and is the family name fontconfig reports for it.
-const FACES: &[(&str, &str)] = &[
-    ("avenir", "Lato"), ("avenir next", "Lato"), ("avenir next condensed", "Lato"),
-    ("arial black", "Noto Sans"), ("arial unicode ms", "Noto Sans"),
-    ("andale mono", "DejaVu Sans Mono"),
-    ("athelas", "Liberation Serif"),
-    ("baskerville", "Libertinus Serif"), ("big caslon", "Libertinus Serif"), ("cochin", "Libertinus Serif"),
-    ("charter", "Charis SIL"),
-    ("american typewriter", "IBM Plex Serif"),
-    // faces from the macOS asset inventory (docs/parity-matrix/os/assets): the open stand-ins for their families
-    ("lato", "Lato"),
-    ("menlo", "DejaVu Sans Mono"), ("monaco", "DejaVu Sans Mono"),
-    ("new york", "Source Serif 4"),
-    ("optima", "Libertinus Sans"), ("marion", "Libertinus Serif"), ("luminari", "Noto Serif Display"),
-    ("journal sans inline", "Source Sans 3"), ("microsoft sans serif", "Liberation Sans"),
-    ("kokonor", "Noto Serif Tibetan"),
-    ("nanum gothic", "Noto Sans CJK KR"), ("nanumgothic", "Noto Sans CJK KR"),
-    ("nanum myeongjo", "Noto Serif CJK KR"), ("nanummyeongjo", "Noto Serif CJK KR"),
-    ("nom na tong", "Noto Serif CJK SC"),
-];
 
 
 /// The open families for `family`: its own face first, then the equivalents of its class. Empty when neither is known.
