@@ -84,6 +84,26 @@ pub fn read(path: &Path) -> io::Result<Contents> {
     }
 }
 
+/// Writes the store to `path` through a temporary file and a rename, creating the folder when needed.
+pub fn write(path: &Path, c: &Contents) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("ini.tmp");
+    fs::write(&tmp, encode(c))?;
+    fs::rename(&tmp, path)
+}
+
+/// Records the person's answer to an access request for an account type in the store at `path` (`accessGranted`).
+/// Returns false, and writes nothing, when the store does not hold that type.
+pub fn set_access(path: &Path, identifier: &str, granted: bool) -> io::Result<bool> {
+    let mut c = read(path)?;
+    let Some(t) = c.types.iter_mut().find(|t| t.identifier == identifier) else { return Ok(false) };
+    t.access_granted = granted;
+    write(path, &c)?;
+    Ok(true)
+}
+
 /// Serialises the store. Sections are `[store]`, `[type]` and `[account]`.
 pub fn encode(c: &Contents) -> String {
     let mut out = String::from(FILE_HEADER);
@@ -265,6 +285,21 @@ mod tests {
         assert_eq!(path_from(Some(OsString::from("/data")), Some(OsString::from("/home/u"))), Some(PathBuf::from("/data/bifrost/accounts.ini")));
         assert_eq!(path_from(Some(OsString::new()), Some(OsString::from("/home/u"))), Some(PathBuf::from("/home/u/.local/share/bifrost/accounts.ini")));
         assert_eq!(path_from(None, None), None);
+    }
+
+    #[test]
+    fn an_access_answer_is_written_for_a_known_type_only() {
+        let dir = std::env::temp_dir().join(format!("bifrost-account-access-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join(FILE_NAME);
+        write(&path, &sample()).unwrap();
+        assert_eq!(set_access(&path, "bifrost.mail", true).unwrap(), true);
+        assert!(read(&path).unwrap().account_type("bifrost.mail").unwrap().access_granted);
+        assert_eq!(set_access(&path, "bifrost.mail", false).unwrap(), true);
+        assert!(!read(&path).unwrap().account_type("bifrost.mail").unwrap().access_granted);
+        assert_eq!(set_access(&path, "unknown.type", true).unwrap(), false);
+        assert_eq!(read(&path).unwrap().types.len(), 1, "an unknown type writes nothing");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

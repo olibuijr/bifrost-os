@@ -654,6 +654,10 @@ impl Shell {
             self.auth_type(out, t);
             return vec![];
         }
+        // the account access sheet takes touches only: typing waits for the answer
+        if self.access_showing() {
+            return vec![];
+        }
         // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
         if matches!(out, Out::Named("Tab")) && !super::kb_input::get().tab_navigation && !matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_))) {
             return vec![];

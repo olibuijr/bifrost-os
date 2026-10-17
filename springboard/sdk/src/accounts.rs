@@ -13,6 +13,7 @@ use crate::error::ErrorCode;
 use crate::keychain::{self, Reply};
 use crate::Ctx;
 use bifrost_core::fsutil;
+use bifrost_core::json::Json;
 use bifrost_ui::account_store::{self, AccountEntry, Contents, TypeEntry};
 use std::ffi::OsString;
 use std::fmt;
@@ -508,6 +509,25 @@ impl fmt::Debug for AccountStore {
     }
 }
 
+/// Asks the person for access to accounts of one type (`requestAccessToAccounts`). The shell draws the Allow / Don't
+/// Allow sheet; the reply goes to [`access_answer`], and the app calls again while the sheet is up.
+pub fn request_access(ctx: &Ctx, account_type: &str) -> u32 {
+    let params = Json::Obj(vec![("type".into(), Json::Str(account_type.into()))]);
+    crate::service::call(ctx, "accounts", "request_access", &params)
+}
+
+/// Reads a reply to [`request_access`]: `None` while the sheet is up (call again), `Some(Ok(granted))` once the person
+/// answered, and `Some(Err(AccountTypeInvalid))` for a type the store does not hold.
+pub fn access_answer(reply: &Json) -> Option<Result<bool, AccountError>> {
+    if matches!(reply.get("pending"), Some(Json::Bool(true))) {
+        return None;
+    }
+    if reply.get("error").and_then(Json::as_str) == Some("account_type_invalid") {
+        return Some(Err(AccountError::AccountTypeInvalid));
+    }
+    Some(Ok(matches!(reply.get("granted"), Some(Json::Bool(true)))))
+}
+
 /// The keychain service every saved account credential is stored under.
 pub const CREDENTIAL_SERVICE: &str = "bifrost.accounts";
 
@@ -649,6 +669,18 @@ mod tests {
         assert_eq!(credential_from_reply(&missing), Err(AccountError::CredentialNotFound));
         let junk = Reply { request: 3, result: Ok(b"not a credential".to_vec()) };
         assert_eq!(credential_from_reply(&junk), Err(AccountError::CredentialNotFound));
+    }
+
+    #[test]
+    fn an_access_reply_is_pending_granted_refused_or_invalid() {
+        let pending = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("pending".into(), Json::Bool(true))]);
+        assert_eq!(access_answer(&pending), None);
+        let granted = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(true))]);
+        assert_eq!(access_answer(&granted), Some(Ok(true)));
+        let refused = Json::Obj(vec![("ok".into(), Json::Bool(true)), ("granted".into(), Json::Bool(false))]);
+        assert_eq!(access_answer(&refused), Some(Ok(false)));
+        let invalid = Json::Obj(vec![("ok".into(), Json::Bool(false)), ("error".into(), Json::Str("account_type_invalid".into()))]);
+        assert_eq!(access_answer(&invalid), Some(Err(AccountError::AccountTypeInvalid)));
     }
 
     #[test]
