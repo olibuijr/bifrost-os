@@ -298,11 +298,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
+   "bifrost": "springboard/render/src/appearance.rs, springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
    "status": "partial",
    "note": "rule: colour profile and display models",
    "rea": [],
-   "method": "rule"
+   "method": "rule",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::scheme_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::tinted_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "appearance::display_option_tests"
+    }
+   ],
+   "ready_note": "Light, Dark and Auto appearance with the cross-fade and observers (render appearance.rs, appearance::scheme_tests, tinted_tests, display_option_tests); colour profiles and display options in icc.rs and sdk displays.rs"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.Archetype.textcontextd.plist",
@@ -1357,7 +1376,7 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/note_url.rs",
    "status": "partial",
-   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks) and, built 2026-10-17, backlink_label for the panel line (tests note_url::tests). Still missing: no backlink indicator is drawn and no linked-notes panel exists yet.",
+   "note": "Note links (notes://note/<id>) are built and parsed. note_url.rs has the backlink model (linked_ids, backlinks), backlink_label for the panel line, and, built 2026-10-17, linked_panel (label and listed ids) and panel_titles (tests note_url::tests). Still missing: no backlink indicator is drawn and the linked-notes panel is not drawn yet.",
    "rea": [],
    "method": "audit"
   },
@@ -1695,7 +1714,7 @@
    "doc": "",
    "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
    "status": "partial",
-   "note": "Colour profile and display models exist (icc.rs, displays.rs). Built 2026-10-17: the on-screen display model for volume, brightness and keyboard brightness (ui osd.rs: hold, fade, bar segments; tests osd::tests). Still missing: no key press feeds it and the shell does not draw the display.",
+   "note": "Colour profile and display models exist (icc.rs, displays.rs). Built 2026-10-17: the on-screen display model for volume, brightness and keyboard brightness (ui osd.rs: hold, fade, bar segments; tests osd::tests). Still missing: no key press feeds it and the shell does not draw it. The shell already shows volume on its own HUD (springboard/src/shell/mod.rs volume_key), so osd.rs is not used by the shell yet.",
    "rea": [],
    "method": "rule"
   },
@@ -2102,9 +2121,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/assistant-client",
-   "status": "gap",
-   "note": "Assistant panel (Cmd+Shift+A), Settings page and the assistant client exist, but there is no on-device model, speech pipeline or account service behind them, and the reference agent role has no counterpart. Kept a gap.",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "rule: Apple speech, on-device model and account service; the reference agent is Apple's Siri service, which BifrOSt does not mirror. BifrOSt's assistant panel (springboard/src/shell/assistant*.rs) is its own feature and runs on no Apple model or account.",
    "rea": [],
    "method": "heuristic"
   },
