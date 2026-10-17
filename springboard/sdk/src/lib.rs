@@ -86,6 +86,8 @@ pub mod touch_events;
 pub mod launch_services;
 pub mod notify_bus;
 pub mod speech;
+/// Screenshots from the shell's screenshot service (`bifrost_app::screenshot`).
+pub mod screenshot;
 pub mod locale;
 pub mod time_zone;
 pub mod formatters;

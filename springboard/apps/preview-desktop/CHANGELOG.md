@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.7 — 2026-10-17
+
+- Preview > Speech > Start Speaking reads the selected PDF text, or the shown page's text when nothing is selected,
+  through the shell's speech service; Stop Speaking ends it. Pictures have no text to speak.
+- File > Take Screenshot > From Selection…, From Window… and From Entire Screen ask the shell's new screenshot service
+  (needs the Screen permission, added to the manifest). The picture is saved to Photos and opens in the viewer when the
+  file is there.
+
 ## 0.11.6 — 2026-10-17
 
 - Pages > Insert > Page from File… merges every page of another PDF after the shown page, and Pages > Insert > Blank

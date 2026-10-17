@@ -61,6 +61,8 @@ pub enum Reply {
     Found(String, Vec<Hit>),
     /// The text copied from a page: its lines, one to a line of the string.
     Copied(String),
+    /// The text read for speech: the selection's lines (empty when there is none) and the whole page's, one to a line.
+    Spoken(String, String),
 }
 
 /// A job for the PDF utility queue: it runs with the parsed file and returns its reply.

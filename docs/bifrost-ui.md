@@ -2954,6 +2954,25 @@ input, written from a thread so the shell never blocks on a long text.
 - Parity: `docs/parity-matrix/data/avfaudio.json` (speech synthesis row, partial). Notes and TextEdit have Speech menus
   (Note > Speech, Text > Speech) rather than Edit > Speech, because the shell's Edit menu takes no app items.
 - Not verified on Midget: the menus and the engine path need espeak-ng installed on the device.
+- Viewer (Preview) has Preview > Speech > Start Speaking, which speaks the PDF selection or else the page text
+  (`apps/preview-desktop/src/find.rs` `speech_text`).
+
+## Screenshot service (`bifrost_app::screenshot`, the `screenshot` service)
+
+Pictures of the screen for apps with the Screen permission. The shell takes the picture the way the screenshot toolbar
+does and saves it to Photos. Methods: `selection()` (drag a rectangle), `window()` (the window pick, with its shadow),
+`screen()` (the whole screen now). Each replies `{started: true}`, or an error for a locked screen, a missing permission
+or a capture already on screen. When the file has landed, the shell sends the event `captured` with body `{path}`; an app
+opens the path itself. A cancelled selection or window sends nothing; a file that does not land within 10 s is dropped.
+One request at a time.
+
+- Gaps: the file is in the Photos folder, not the app's data folder; no delay timer, no pointer option, no recording
+  (the toolbar keeps those); the event arrives on the shell tick after the file exists, not at the save.
+- Code: `springboard/src/shell/services/screenshot.rs` (`Shots` is the pure state machine; the service calls
+  `Shell::capture_request` and `take_screenshot`, and reads `Shell::shot_saved`), `springboard/sdk/src/screenshot.rs`
+  (client: `take`, `started_from_reply`, `captured_path`).
+- Parity: Viewer's File > Take Screenshot items (`apps/preview-desktop/src/main.rs`), row "Take Screenshot
+  (selection/window/screen)" in `docs/parity-matrix/apps/preview.json`, partial. Not verified on Midget.
 
 ## Local Authentication (`bifrost_app::local_auth`, the `local_auth` service)
 

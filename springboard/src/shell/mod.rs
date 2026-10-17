@@ -626,6 +626,8 @@ pub struct Shell {
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
     capture: Option<capture::Session>,
+    /// The pictures saved since the screenshot service last looked, in order (`services/screenshot.rs`).
+    pub(crate) shot_saved: Vec<PathBuf>,
     /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
     rec: Option<screenrec::Session>,
     /// the Options menu's choices, kept across capture sessions
@@ -945,6 +947,7 @@ impl Shell {
             markup_load: None,
             shot_tap: false,
             capture: None,
+            shot_saved: Vec::new(),
             rec: None,
             capture_prefs: capture::Prefs::default(),
             rec_display: (screenrec::FPS, false),
@@ -4446,6 +4449,7 @@ impl Shell {
         let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));
         let bytes = screenshot::encode(&img);
         let path = dir.join(&name);
+        self.shot_saved.push(path.clone());
         let photo = photos::library::Photo { path: path.clone(), mtime: unix, size: bytes.len() as u64 };
         crate::bare::sys::spawn_named("photo-save", move || {
             crate::gfx::affinity::background_thread();

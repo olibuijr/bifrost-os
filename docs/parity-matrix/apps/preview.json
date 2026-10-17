@@ -77,10 +77,10 @@
    "feature": "Take Screenshot (selection/window/screen)",
    "area": "menu",
    "apple": "MainMenu.nib File > Take Screenshot",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The shell's screenshot tool has no app-facing service, so the menu item cannot call it yet; needs a shell service first",
-   "wire": "Call the shell screenshot service and open the result via open_path main.rs:82; File submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/main.rs:2352",
+   "note": "File > Take Screenshot > From Selection, From Window and From Entire Screen call the shell's screenshot service (springboard/src/shell/services/screenshot.rs, SDK bifrost_app::screenshot); the captured file opens in the viewer. The file is saved to Photos, not the app's data folder. Not verified on Midget",
+   "wire": "Copy the picture into the app's data folder (the service reports the Photos path); verify the Screen permission prompt and a window pick on Midget"
   },
   {
    "feature": "Import from camera/scanner",
@@ -401,10 +401,10 @@
    "feature": "Speech: start/stop speaking",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Speech",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The PC has no voice engine, so there is nothing to speak with (Books reads aloud by timing only)",
-   "wire": "Send page text to the speech service; Edit > Speech submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/preview-desktop/src/main.rs:2372",
+   "note": "Preview > Speech > Start Speaking speaks the selected PDF text, else the page's text (find.rs speech_text), through the speech service; Stop Speaking ends it. Pictures have no text. Needs espeak-ng on the device; not verified on Midget",
+   "wire": "Speech is in the Preview menu, not Edit (the shell's Edit menu takes no app items); the speech bubble text and word highlighting while speaking are not done"
   },
   {
    "feature": "Settings: window mode, background, default PDF view, remember page, logical page numbers, image DPI",
@@ -430,8 +430,8 @@
    "apple": "Info.plist NSServices",
    "status": "gap",
    "bifrost": "",
-   "note": "Needs a shell service registration for the services menu; not done",
-   "wire": "Register an open-in-viewer service with the shell services menu"
+   "note": "The desktop Services menu (springboard/ui/src/services_menu.rs) is a fixed set of shell services with no app registration, so an open-images entry needs a shell change first",
+   "wire": "Add an image selection service to ui/src/services_menu.rs that routes the picture to the Viewer (open_path)"
   },
   {
    "feature": "3D scene viewing",
@@ -446,9 +446,9 @@
  "summary": {
   "features": 48,
   "parity": 6,
-  "partial": 34,
-  "gap": 5,
+  "partial": 36,
+  "gap": 3,
   "n/a": 3,
-  "coverage_pct": 51.1
+  "coverage_pct": 53.3
  }
 }
