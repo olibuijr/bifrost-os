@@ -153,7 +153,8 @@ pub fn read_tags(path: &Path) -> Result<Tags, Error> {
 pub fn write_tags(path: &Path, tags: &Tags) -> Result<(), Error> {
     let bytes = std::fs::read(path)?;
     let out = match detect(path)? {
-        Format::Mp3 | Format::Adts => id3::replace_tag(&bytes, tags),
+        Format::Mp3 | Format::Adts => id3::replace_tag(&bytes, tags)
+            .ok_or(Error::Invalid("the file's tag cannot be rewritten without losing frames (ID3v2.2 or compressed frames)"))?,
         Format::M4a => ilst::rewrite(&bytes, tags)?,
         _ => return Err(Error::Invalid("tags are written to MP3 and M4A files only")),
     };

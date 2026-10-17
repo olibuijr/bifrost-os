@@ -271,6 +271,11 @@ const PADDING: usize = 512;
 /// The ID3v2.4 tag that stores `tags`: title, artist, album, album artist, track, year, lyrics (USLT) and cover (APIC),
 /// UTF-8 text, then padding. Fields that are `None` are left out. The audio is not included.
 pub fn build(tags: &Tags) -> Vec<u8> {
+    build_with(tags, &[])
+}
+
+/// `build` with `kept` (whole frames, already in the v2.4 layout) placed after the frames `Tags` writes.
+fn build_with(tags: &Tags, kept: &[u8]) -> Vec<u8> {
     let mut frames = Vec::new();
     let texts = [(b"TIT2", &tags.title), (b"TPE1", &tags.artist), (b"TALB", &tags.album), (b"TPE2", &tags.album_artist)];
     for (id, value) in texts {
@@ -300,6 +305,7 @@ pub fn build(tags: &Tags) -> Vec<u8> {
         body.extend(cover);
         push_frame(&mut frames, b"APIC", &body);
     }
+    frames.extend_from_slice(kept);
     let mut out = b"ID3\x04\x00\x00".to_vec();
     out.extend(syncsafe_bytes(frames.len() + PADDING));
     out.extend(frames);
@@ -307,13 +313,49 @@ pub fn build(tags: &Tags) -> Vec<u8> {
     out
 }
 
-/// The file with its ID3v2 tag replaced by `build(tags)`: the audio frames and anything after them (an ID3v1 tag)
-/// are copied unchanged. Only the fields `Tags` knows are written; other frames of the old tag are dropped.
-pub fn replace_tag(file: &[u8], tags: &Tags) -> Vec<u8> {
+/// The file with its ID3v2 tag replaced: the fields `Tags` knows are written, every other frame of the old tag
+/// (genre, comments, chapters, ratings and the rest) is copied over unchanged, and the audio frames and anything after
+/// them (an ID3v1 tag) are kept. None when the old tag cannot be copied safely (version 2.2, or a compressed or
+/// encrypted frame), so a caller refuses the write rather than lose data.
+pub fn replace_tag(file: &[u8], tags: &Tags) -> Option<Vec<u8>> {
+    let kept = kept_frames(file, tags)?;
     let audio = &file[tag_len(file).min(file.len())..];
-    let mut out = build(tags);
+    let mut out = build_with(tags, &kept);
     out.extend_from_slice(audio);
-    out
+    Some(out)
+}
+
+/// The frames of the old tag that `build` does not write, re-encoded as v2.4 frames with their bodies unchanged.
+fn kept_frames(file: &[u8], tags: &Tags) -> Option<Vec<u8>> {
+    let Some(h) = Header::parse(file) else { return Some(Vec::new()) };
+    if h.version == 2 {
+        return None;
+    }
+    let body = file.get(10..10 + h.size)?;
+    let body = if h.unsync && h.version <= 3 { resync(body) } else { body.to_vec() };
+    let mut p = 0;
+    if h.extended {
+        let size = if h.version == 4 { syncsafe(&body) } else { be32(&body) + 4 };
+        p += size.min(body.len());
+    }
+    // the text frames `build` always owns; the year frames of v2.3 give way to TDRC when a year is written
+    let owned: &[&[u8; 4]] = &[b"TIT2", b"TPE1", b"TALB", b"TPE2", b"TRCK", b"TDRC"];
+    let mut out = Vec::new();
+    while let Some(frame) = Frame::read(&body, &mut p, h) {
+        let id = &frame.id;
+        if id == b"    " {
+            // a compressed or encrypted frame: it cannot be copied without its flags
+            return None;
+        }
+        let replaced = owned.contains(&id)
+            || (tags.year.is_some() && (id == b"TYER" || id == b"TDAT" || id == b"TIME"))
+            || (tags.lyrics.is_some() && id == b"USLT")
+            || (tags.cover.is_some() && id == b"APIC");
+        if !replaced {
+            push_frame(&mut out, id, &frame.data);
+        }
+    }
+    Some(out)
 }
 
 fn push_frame(out: &mut Vec<u8>, id: &[u8; 4], body: &[u8]) {
@@ -534,12 +576,12 @@ mod tests {
             lyrics: Some("line one\nline two".into()),
             chapters: Vec::new(),
         };
-        let out = replace_tag(V24, &tags);
+        let out = replace_tag(V24, &tags).unwrap();
         assert_eq!(parse(&out).unwrap(), tags, "write, then read back");
         // the audio (everything after the old tag) is byte-identical and follows the new tag
         assert_eq!(&out[tag_len(&out)..], &V24[tag_len(V24)..]);
         // replacing again keeps a single tag
-        let again = replace_tag(&out, &Tags { title: Some("Again".into()), ..Tags::default() });
+        let again = replace_tag(&out, &Tags { title: Some("Again".into()), ..Tags::default() }).unwrap();
         assert_eq!(parse(&again).unwrap().title.as_deref(), Some("Again"));
         assert_eq!(&again[tag_len(&again)..], &V24[tag_len(V24)..]);
         // the padding is inside the tag, not after it
@@ -550,5 +592,30 @@ mod tests {
     fn resync_only_touches_ff_00_pairs() {
         assert_eq!(resync(&[0xFF, 0x00, 0xFF, 0x00, 0x01, 0xFF]), [0xFF, 0xFF, 0x01, 0xFF]);
         assert_eq!(resync(&[0xFF, 0xE0]), [0xFF, 0xE0]);
+    }
+
+    #[test]
+    fn a_tag_edit_keeps_the_frames_it_does_not_write() {
+        // an old v2.4 tag with a title and a genre (TCON) the writer does not model
+        let mut frames = Vec::new();
+        push_frame(&mut frames, b"TIT2", &text_body("Old"));
+        push_frame(&mut frames, b"TCON", &text_body("Jazz"));
+        let mut file = b"ID3\x04\x00\x00".to_vec();
+        file.extend(syncsafe_bytes(frames.len()));
+        file.extend(&frames);
+        file.extend([0xff, 0xfb, 0x90, 0x00]);
+        let out = replace_tag(&file, &Tags { title: Some("New".into()), ..Tags::default() }).unwrap();
+        let tags = parse(&out).unwrap();
+        assert_eq!(tags.title.as_deref(), Some("New"));
+        assert!(out.windows(4).any(|w| w == b"TCON"), "the genre frame is kept");
+        assert_eq!(out.windows(3).filter(|w| *w == b"Old").count(), 0, "the old title is replaced");
+        assert!(out.ends_with(&[0xff, 0xfb, 0x90, 0x00]));
+    }
+
+    #[test]
+    fn a_tag_with_a_v22_header_is_not_rewritten() {
+        let mut file = b"ID3\x02\x00\x00\x00\x00\x00\x00".to_vec();
+        file.extend([0xff, 0xfb]);
+        assert!(replace_tag(&file, &Tags::default()).is_none());
     }
 }
