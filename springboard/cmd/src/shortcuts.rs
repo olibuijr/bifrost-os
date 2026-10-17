@@ -8,14 +8,19 @@
 //! Repeat, see `springboard::shortcuts::flow`). Other steps need the shell's own services (Wi-Fi, Low Power, Do Not
 //! Disturb, brightness, apps, screenshots, timers, notifications) or an answer from the user and are not run. Like the
 //! app, `run` stops at the first step that does not run, reports the rest as not run, and exits with 1.
+//!
+//! `drop NAME-OR-ID FILE...` runs a shortcut whose automation is "When a File Is Dropped" with the files as its input
+//! (`springboard::shortcuts::droplet`). `launcher NAME-OR-ID` writes a desktop launcher for such a shortcut into the
+//! account's applications folder; dropping files on that launcher runs `drop` with them, so the shortcut has a droplet
+//! icon wherever the launcher is listed.
 
 use crate::{open, pasteboard};
 use springboard::shortcuts::flow::{self, Done, Host};
-use springboard::shortcuts::{clean_file, Action, Shortcut};
+use springboard::shortcuts::{clean_file, droplet, Action, Shortcut};
 use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
-pub const USAGE: &str = "usage: shortcuts [-h] | list | view NAME-OR-ID | run NAME-OR-ID";
+pub const USAGE: &str = "usage: shortcuts [-h] | list | view NAME-OR-ID | run NAME-OR-ID | drop NAME-OR-ID FILE... | launcher NAME-OR-ID";
 
 /// The parsed command line.
 #[derive(Debug, PartialEq, Eq)]
@@ -24,6 +29,9 @@ pub enum Cmd {
     List,
     View(String),
     Run(String),
+    /// A shortcut name or id, then the absolute paths of the dropped files.
+    Drop(String, Vec<String>),
+    Launcher(String),
 }
 
 /// One step of a run: its plan line and what happened to it.
@@ -41,7 +49,16 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["list"] => Ok(Cmd::List),
         ["view", rest @ ..] if !rest.is_empty() => Ok(Cmd::View(rest.join(" "))),
         ["run", rest @ ..] if !rest.is_empty() => Ok(Cmd::Run(rest.join(" "))),
-        ["view" | "run"] => Err("view and run need a shortcut name or id".into()),
+        ["launcher", rest @ ..] if !rest.is_empty() => Ok(Cmd::Launcher(rest.join(" "))),
+        ["drop", rest @ ..] if !rest.is_empty() => {
+            // the name is every word before the first absolute path; the paths are the files
+            let at = rest.iter().position(|w| w.starts_with('/')).ok_or("drop needs the files after the shortcut")?;
+            if at == 0 {
+                return Err("drop needs a shortcut name or id before the files".into());
+            }
+            Ok(Cmd::Drop(rest[..at].join(" "), rest[at..].iter().map(|w| w.to_string()).collect()))
+        }
+        ["view" | "run" | "drop" | "launcher"] => Err("view, run, drop and launcher need a shortcut name or id".into()),
         [other, ..] => Err(format!("unknown command {other}")),
     }
 }
@@ -121,6 +138,45 @@ pub fn run_steps(s: &Shortcut, perform: impl FnMut(&Action) -> Result<String, St
 /// Runs `s` from the command line: the steps it can reach (see `Cli`), with output passed from step to step.
 pub fn run_shortcut(s: &Shortcut) -> Vec<Step> {
     steps_of(flow::run(&s.actions, &mut Cli))
+}
+
+/// Runs the droplet `s` with the dropped `paths` as its input. `Err` says why nothing ran: the shortcut is not a
+/// droplet, or none of the paths is usable (only absolute paths count).
+pub fn drop_shortcut(s: &Shortcut, paths: &[String]) -> Result<Vec<Step>, String> {
+    if !droplet::accepts(s) {
+        return Err(format!("{} does not run when files are dropped; set its automation to \"When a File Is Dropped\"", s.name));
+    }
+    let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+    droplet::run(s, &refs, &mut Cli).map(steps_of).ok_or_else(|| "none of the files has a usable absolute path".to_string())
+}
+
+/// The desktop launcher for droplet number `id`: dropping files on it runs `shortcuts drop <id> <files>`. The id, not
+/// the name, goes in the command so the name never needs quoting.
+pub fn launcher_entry(id: usize, s: &Shortcut) -> String {
+    let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
+    format!(
+        "[Desktop Entry]\nType=Application\nName={name}\nComment=Runs the shortcut {name} when files are dropped on it\nExec=shortcuts drop {id} %F\nIcon=application-x-executable\nTerminal=false\nCategories=Utility;\n"
+    )
+}
+
+/// Where the launcher of `s` is written: `<home>/.local/share/applications/bifrost-droplet-<name>.desktop`.
+pub fn launcher_path(home: &Path, s: &Shortcut) -> PathBuf {
+    let stem: String = clean_file(&s.name).chars().map(|c| if c.is_whitespace() { '-' } else { c }).collect();
+    home.join(".local/share/applications").join(format!("bifrost-droplet-{stem}.desktop"))
+}
+
+/// Writes the launcher of droplet `s` (number `id` in the list) and returns where. A shortcut that is not a droplet
+/// has none.
+pub fn write_launcher(home: &Path, id: usize, s: &Shortcut) -> Result<PathBuf, String> {
+    if !droplet::accepts(s) {
+        return Err(format!("{} is not a droplet; set its automation to \"When a File Is Dropped\" first", s.name));
+    }
+    let path = launcher_path(home, s);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    std::fs::write(&path, launcher_entry(id, s)).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
 }
 
 fn steps_of(steps: Vec<flow::Step>) -> Vec<Step> {
@@ -223,6 +279,47 @@ mod tests {
         assert!(parse(&words("view")).is_err());
         assert!(parse(&words("run")).is_err());
         assert_eq!(parse(&words("frobnicate")), Err("unknown command frobnicate".into()));
+    }
+
+    fn droplet_named(name: &str) -> Shortcut {
+        let mut s = named(name, vec![Action::ShowResult("got {Output}".into())]);
+        s.automation = Some(springboard::shortcuts::Automation::FileDropped);
+        s
+    }
+
+    #[test]
+    fn drop_reads_the_name_up_to_the_first_path() {
+        let cmd = parse(&words("drop Convert Images /home/a.png /home/b.png"));
+        assert_eq!(cmd, Ok(Cmd::Drop("Convert Images".into(), vec!["/home/a.png".into(), "/home/b.png".into()])));
+        assert_eq!(parse(&words("drop 3 /x")), Ok(Cmd::Drop("3".into(), vec!["/x".into()])));
+        assert!(parse(&words("drop Convert")).is_err(), "no files");
+        assert!(parse(&words("drop /x")).is_err(), "no shortcut");
+        assert_eq!(parse(&words("launcher Convert Images")), Ok(Cmd::Launcher("Convert Images".into())));
+        assert!(parse(&words("launcher")).is_err());
+    }
+
+    #[test]
+    fn dropped_files_are_the_input_of_a_droplet_only() {
+        let s = droplet_named("Convert");
+        let steps = drop_shortcut(&s, &["/home/a.png".into(), "relative.png".into(), "/home/b.png".into()]).unwrap();
+        assert_eq!(steps.last().unwrap().outcome, Ok("got /home/a.png\n/home/b.png".into()));
+        assert!(drop_shortcut(&s, &["relative.png".into()]).unwrap_err().contains("usable absolute path"));
+        let plain = named("Plain", vec![Action::ShowResult("x".into())]);
+        assert!(drop_shortcut(&plain, &["/x".into()]).unwrap_err().contains("does not run when files are dropped"));
+    }
+
+    #[test]
+    fn a_droplet_gets_a_launcher_that_runs_drop_with_its_files() {
+        let s = droplet_named("Convert Images");
+        let entry = launcher_entry(4, &s);
+        assert!(entry.contains("Name=Convert Images\n") && entry.contains("Exec=shortcuts drop 4 %F\n"), "{entry}");
+        let home = std::env::temp_dir().join(format!("shortcuts-launcher-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let path = write_launcher(&home, 4, &s).unwrap();
+        assert_eq!(path, home.join(".local/share/applications/bifrost-droplet-Convert-Images.desktop"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), entry);
+        assert!(write_launcher(&home, 0, &named("Plain", vec![])).unwrap_err().contains("not a droplet"));
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
