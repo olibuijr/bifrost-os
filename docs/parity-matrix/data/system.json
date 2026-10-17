@@ -101,6 +101,6 @@
   ],
   "gaps": [
     "File coordination is advisory and has no relinquish or save-negotiation step (springboard/sdk/src/file_coordination.rs:1-20).",
-    "The file-change feed must be polled by the app (springboard/sdk/src/fswatch.rs:185); no callback API."
+    "The file-change feed is polled, not pushed: the app calls the watch's deliver with the current time each tick and gets each batch through a callback (springboard/sdk/src/fswatch.rs:138); nothing wakes the app when a file changes."
   ]
 }

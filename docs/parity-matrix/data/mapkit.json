@@ -82,7 +82,7 @@
       "apple": "UserAnnotation, MapUserLocationButton, DefaultUserAnnotationContent",
       "bifrost": "springboard/ui/src/map_user_location.rs (UserLocation); springboard/ui/src/mapview.rs (UserTracking, MapCamera::follow); springboard/ui/src/location_auth.rs; springboard/ui/src/location.rs (LocationFix); tests: springboard/ui/tests/parity_sdk-complete-26.rs",
       "status": "partial",
-      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine. Wave 4 (2026-10-17): bifrost_app::maps::feed_user_location takes a shell location report into UserLocation (fix_from_location); the shell's location service still needs a Midget check; tests maps::tests."
+      "note": "UserLocation joins location authorization, the latest valid fix and the tracking button: tracking stays off without access, follows only a fix of at most 120 s age and 1000 m accuracy, and turns the camera to the heading in the heading state, all tested headless. Gap: no location sensor or location service feeds fixes into the model, and the user marker is not drawn; both need the lab machine. Wave 4 (2026-10-17): bifrost_app::maps::feed_user_location takes a shell location report into UserLocation (fix_from_location); the shell's location service still needs a Midget check; tests maps::tests. Refreshed 2026-10-17: The app-facing location service is springboard/sdk/src/core_location.rs (tests core_location::tests), so the gap for apps is closed; user location on a map stays partial until the map renders."
     },
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",
@@ -123,12 +123,11 @@
   "gaps": [
     "No map view or map tile rendering in the SDK or renderer, so no app can show a map",
     "No annotations, overlays or selectable map features",
-    "No reverse geocoding (coordinate to place or address)",
+    "Reverse geocoding is city level only: no street address or placemark parts (sdk core_location::reverse_geocode; shell springboard/src/shell/services/location.rs:287)",
     "No points-of-interest search, nearby search or search completion beyond city and place text search",
-    "No directions or routing",
-    "No location service API for apps (user location on a map)",
-    "No map snapshot or static map image export",
+    "No SDK routing API: directions exist only inside the maps app (springboard/apps/maps-desktop/src/route.rs, an OSRM-compatible server or a straight-line estimate)",
+    "No renderer composes a static map image: map_snapshot models the tiles, pins and zoom, but there is no tile source",
     "No maps URL handling or default navigation app",
-    "GeoJSON and IMDF parsing missing"
+    "IMDF parsing missing (GeoJSON is parsed: springboard/core/src/geojson.rs, springboard/ui/src/map_geojson.rs)"
   ]
 }

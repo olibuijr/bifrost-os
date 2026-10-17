@@ -225,7 +225,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/security.json",
    "status": "partial",
-   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms.",
+   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms. Refreshed 2026-10-17: Still open: certificate trust has no DER parsing or client-certificate types, update manifests are unsigned, and Authorization Services is missing.",
    "rea": [],
    "method": "assessed"
   },
@@ -785,11 +785,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/system.json",
+   "bifrost": "springboard/sdk/src/file_descriptor.rs, springboard/sdk/src/typed_path.rs, springboard/sdk/src/file_identity.rs, springboard/sdk/src/volume.rs, springboard/sdk/src/fswatch.rs, springboard/src/bare/docbroker.rs",
    "status": "partial",
    "note": "from SDK matrix system.json",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "file_descriptor::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "volume::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "fswatch::tests"
+    }
+   ],
+   "ready_note": "Typed file descriptors, paths, file identity, volume capacity and the filesystem watch are in the SDK. Advisory coordination and document grants stay partial (see the data file gaps)."
   },
   {
    "id": "path:/System/Library/Frameworks/SystemConfiguration.framework",

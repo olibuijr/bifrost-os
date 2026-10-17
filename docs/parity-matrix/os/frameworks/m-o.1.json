@@ -125,7 +125,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
    "status": "partial",
-   "note": "from SDK matrix mapkit.json",
+   "note": "from SDK matrix mapkit.json Refreshed 2026-10-17: Still open: no map renderer or tile source, no annotations or overlays, city-level reverse geocoding only, no SDK routing API, and no IMDF parsing.",
    "rea": [],
    "method": "assessed"
   },
@@ -167,7 +167,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/matter-support.json",
    "status": "partial",
-   "note": "from SDK matrix matter-support.json",
+   "note": "from SDK matrix matter-support.json Refreshed 2026-10-17: Still open: no Thread stack and no network transport for the Matter model; no accessory setup flow.",
    "rea": [],
    "method": "assessed"
   },
@@ -510,7 +510,7 @@
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metrickit.json",
    "status": "partial",
-   "note": "from SDK matrix metrickit.json Built 2026-10-17: stall duration histogram in sdk diagnostic_report (stall_histogram); tests diagnostic_report::tests. No delivery to apps yet.",
+   "note": "from SDK matrix metrickit.json Built 2026-10-17: stall duration histogram in sdk diagnostic_report (stall_histogram); tests diagnostic_report::tests. No delivery to apps yet. Refreshed 2026-10-17: Still open: no app-facing report API, no per-app metric collection, crash and hang records do not fill the call-stack tree, and no limit-kill diagnostics.",
    "rea": [],
    "method": "assessed"
   },

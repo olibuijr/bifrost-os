@@ -4,7 +4,7 @@
   "macos_since": "12.0",
   "status": "partial",
   "bifrost": "springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/bare/crashlog.rs, springboard/src/bare/heartbeat.rs, springboard/src/bare/jank.rs, springboard/core/src/host.rs, springboard/sdk/src/process_info.rs, springboard/core/src/log.rs, springboard/sdk/src/log.rs",
-  "summary": "BifrOSt records crashes, UI stalls and slow frames at system level and shows them to the user in Settings and Console, and it can share them with the developer. No app receives a metric report or a diagnostic report through an SDK API, so MetricKit's app-facing reporting (MXMetricManager, MetricReport, DiagnosticReport delivery) has no counterpart; the system-side capture is partly there.",
+  "summary": "BifrOSt records crashes, UI stalls and slow frames at system level and shows them to the user in Settings and Console, and it can share them with the developer. No app receives a metric report or a diagnostic report through an SDK API, so MetricKit's app-facing reporting (MXMetricManager, MetricReport, DiagnosticReport delivery) has no counterpart; the system-side capture is partly there. Refreshed 2026-10-17: Signposts are built: springboard/sdk/src/signpost.rs (Signposter, tests signpost::tests) and springboard/core/src/signpost.rs, and the Console app has a signposts view (springboard/apps/console-desktop/src/signposts.rs), so that gap is closed.",
   "rea_evidence": "ev_565127097c42ceb11f645dadcd0a33856ce72356eef3a38fdd4e03d1aa71b927",
   "features": [
     {
@@ -123,9 +123,8 @@
   "gaps": [
     "No app-facing report API: no MXMetricManager equivalent delivers daily metric reports or diagnostic reports to an app.",
     "No per-app metric collection beyond ProcessInfo counters: time-in-use, launch and resume timing, network, disk and GPU totals are not kept per app (frame_metrics has no caller yet).",
-    "Crash and hang records are one-line log entries with no structured call-stack tree (CallStackTree, CallStackThread, CallStackFrame) available to apps.",
+    "Crash and hang records are one-line log entries; the call-stack tree type exists (springboard/sdk/src/call_stack_tree.rs, tests call_stack_tree::tests) but no crash or hang record fills it.",
     "No exception diagnostics for memory or CPU limit kills, and no termination counts by category.",
-    "No signposter (mxSignpost, SignpostIntervalMetric): signposts and spin reports remain planned in docs/milestone-unified-logging.md.",
     "No per-process energy impact or pixel luminance metric."
   ]
 }

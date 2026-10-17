@@ -19,7 +19,7 @@
       "apple": "AudioBuffer, AudioBufferList",
       "bifrost": "springboard/src/media/audiofile.rs (interleaved S16 packets); springboard/third_party/symphonia-codec-aac/src/aac/mod.rs (planar AudioBuffer<f32> inside the AAC decoder)",
       "status": "partial",
-      "note": "Buffers are a Vec or a planar decoder buffer. There is no multi-buffer list type shared with apps."
+      "note": "Buffers are a Vec or a planar decoder buffer. There is no multi-buffer list type shared with apps. Refreshed 2026-10-17: The shared type exists (springboard/sdk/src/audio_format.rs, AudioBufferList with to_interleaved and to_pcm16; tests audio_format::tests); the decoders and the speaker do not use it yet."
     },
     {
       "feature": "Channel layouts and channel descriptions",
@@ -100,11 +100,10 @@
     }
   ],
   "gaps": [
-    "No shared audio format description type (sample rate, channel count, bits per sample, format flags) for apps or services; formats are passed as two loose integers.",
-    "No channel layout model: channel labels and layout tags are not carried through the audio path.",
+    "Formats are still passed as loose integers to the speaker and decoders: StreamFormat (springboard/audio/types, springboard/sdk/src/audio_format.rs) exists, but no service uses it yet.",
+    "Channel layouts are modelled (springboard/ui/src/channel_layout.rs) but no layout tag or per-channel label is carried through the audio service.",
     "No timestamp model beyond presentation and decode times in microseconds (no host time or sample time).",
-    "No buffer-list type shared between the decoders, the speaker and the capture path. Built 2026-10-17: bifrost_app::audio_format::AudioBufferList (interleaved or planar buffers, to_interleaved, to_pcm16), tests audio_format::tests; the decoders and the speaker do not use it yet.",
-    "No public format or codec identifier enum; APAC is not supported.",
+    "APAC is not supported; CodecId (springboard/audio/types/src/codec_id.rs) names linear PCM, AAC, MP3, FLAC and ALAC.",
     "SMPTE timecode is absent (n/a on a desktop with no timecode source)."
   ]
 }
