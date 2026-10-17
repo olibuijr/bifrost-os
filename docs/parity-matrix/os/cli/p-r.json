@@ -584,7 +584,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbcopy.rs",
    "status": "partial",
-   "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered",
+   "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
    "rea": [],
    "method": "assessed"
   },
@@ -605,7 +605,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbpaste.rs",
    "status": "partial",
-   "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered",
+   "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
    "rea": [],
    "method": "assessed"
   },
@@ -978,7 +978,7 @@
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/plutil.rs",
    "status": "partial",
-   "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused",
+   "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused Built 2026-10-17: -convert and -create binary1 write bplist00 (plist_binary::write); tests plist_binary::tests and plutil::tests. Still refused: swift and objc forms; edits write XML.",
    "rea": [],
    "method": "assessed"
   },

@@ -50,7 +50,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-date-time intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-date-time intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettings.appex",
@@ -148,7 +162,21 @@
    "bifrost": "springboard/src/shell/settings_intents.rs",
    "status": "partial",
    "note": "has: open-displays pane intent; missing: App Intents runtime serving it",
-   "rea": []
+   "rea": [],
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::settings_intents::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::settings_intents_are_found"
+    }
+   ],
+   "ready_note": "covers: the open-displays intent in the settings catalogue (settings_intents.rs); Search lists it and it opens its pane."
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FaceTimeNotificationExtension.appex",

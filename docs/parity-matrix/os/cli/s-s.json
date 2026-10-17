@@ -237,7 +237,16 @@
    "status": "partial",
    "note": "say runs espeak-ng, which runtime-packages.txt does not list yet",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "say::tests"
+    }
+   ],
+   "ready_note": "covers: say over espeak-ng (the package is listed in runtime-packages.txt), with the voice, rate and file options the tests cover."
   },
   {
    "id": "path:/usr/bin/sc_usage",
@@ -3442,11 +3451,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/bin/screencapture.rs",
+   "bifrost": "springboard/cmd/src/screencapture.rs, springboard/cmd/src/bin/screencapture.rs",
    "status": "partial",
    "note": "selection modes (-i, -w, -R) and video are refused",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "screencapture::tests"
+    }
+   ],
+   "ready_note": "covers: full-panel and -R captures to a file or the clipboard, -i and -w through the screenshot toolbar, and -v movies; the -R coordinates are panel pixels."
   },
   {
    "id": "path:/usr/sbin/scselect",
