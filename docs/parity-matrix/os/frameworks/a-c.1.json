@@ -5569,11 +5569,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "bifrost": "springboard/sdk/src/intents.rs",
    "status": "partial",
    "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "intents::tests"
+    }
+   ],
+   "ready_note": "Host tests for the App Intents model (sdk intents.rs: Intent, Param, ParamType, IntentResult), which is the schema layer the matrix row describes. Not verified on Midget; the Apple app's own intents are not ported."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppIntentsCLISupport.framework",

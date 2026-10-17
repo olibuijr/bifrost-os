@@ -105,6 +105,76 @@ pub fn ruleset(policies: &[AppPolicy]) -> Result<String, Error> {
     Ok(out)
 }
 
+/// The policy file the settings page writes and the boot service reads: one app per line as
+/// `<app id> <allow|block> <ports>`, where ports are `tcp/<n>` or `udp/<n>` separated by commas, or `-` for none. Blank
+/// lines and lines starting with `#` are skipped.
+pub fn parse_policies(text: &str) -> Result<Vec<AppPolicy>, String> {
+    let mut out = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let at = |msg: String| format!("line {}: {msg}", index + 1);
+        let mut fields = line.split_whitespace();
+        let app_id = fields.next().ok_or_else(|| at("no app id".into()))?.to_string();
+        let policy = match fields.next() {
+            Some("allow") => Policy::Allow,
+            Some("block") => Policy::Block,
+            other => return Err(at(format!("policy must be allow or block, not {}", other.unwrap_or("nothing")))),
+        };
+        let ports_field = fields.next().unwrap_or("-");
+        if fields.next().is_some() {
+            return Err(at("too many fields".into()));
+        }
+        let mut ports = Vec::new();
+        if ports_field != "-" {
+            for item in ports_field.split(',') {
+                ports.push(parse_port(item).map_err(|e| at(e))?);
+            }
+        }
+        out.push(AppPolicy { app_id, policy, ports });
+    }
+    Ok(out)
+}
+
+/// The boot step as pure logic: reads a policy file and returns the ruleset text to feed to `nft -f -`. Any error,
+/// including a conflict, comes back as text so the service can log it and leave the current rules in place.
+pub fn plan_from_file(text: &str) -> Result<String, String> {
+    let policies = parse_policies(text)?;
+    ruleset(&policies).map_err(|e| format!("{e:?}"))
+}
+
+/// One port from `tcp/<n>` or `udp/<n>`.
+fn parse_port(text: &str) -> Result<Port, String> {
+    let (proto, number) = text.split_once('/').ok_or_else(|| format!("port {text} needs a protocol, tcp/ or udp/"))?;
+    let proto = match proto {
+        "tcp" => Proto::Tcp,
+        "udp" => Proto::Udp,
+        _ => return Err(format!("unknown protocol {proto}")),
+    };
+    let number: u16 = number.parse().map_err(|_| format!("port number {number} is not 0 to 65535"))?;
+    Ok(Port { proto, number })
+}
+
+/// The policy file text for `policies`, in the form [`parse_policies`] reads. An app with no ports is written with `-`.
+pub fn format_policies(policies: &[AppPolicy]) -> String {
+    let mut out = String::new();
+    for p in policies {
+        let policy = match p.policy {
+            Policy::Allow => "allow",
+            Policy::Block => "block",
+        };
+        let ports = if p.ports.is_empty() {
+            "-".to_string()
+        } else {
+            p.ports.iter().map(|port| format!("{}/{}", port.proto.keyword(), port.number)).collect::<Vec<_>>().join(",")
+        };
+        out.push_str(&format!("{} {policy} {ports}\n", p.app_id));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,5 +237,43 @@ mod tests {
             ruleset(&[app("is.a", Policy::Block, vec![tcp(0)])]).unwrap_err(),
             Error::BadPort { app_id: "is.a".into(), number: 0 }
         );
+    }
+
+    #[test]
+    fn the_policy_file_round_trips() {
+        let policies = vec![app("is.chat", Policy::Block, vec![Port { proto: Proto::Udp, number: 5353 }, tcp(8080)]), app("is.none", Policy::Allow, vec![])];
+        let text = format_policies(&policies);
+        assert_eq!(text, "is.chat block udp/5353,tcp/8080\nis.none allow -\n");
+        assert_eq!(parse_policies(&text).unwrap(), policies);
+    }
+
+    #[test]
+    fn the_boot_plan_is_the_ruleset_for_the_file() {
+        let text = plan_from_file("is.chat block tcp/8080\n").unwrap();
+        assert!(text.contains("tcp dport 8080 drop comment \"is.chat\""));
+        assert_eq!(plan_from_file("").unwrap(), ruleset(&[]).unwrap());
+    }
+
+    #[test]
+    fn a_bad_file_or_a_conflict_gives_no_plan() {
+        assert!(plan_from_file("is.a block tcp/x\n").unwrap_err().starts_with("line 1:"));
+        let conflict = plan_from_file("is.a allow tcp/22\nis.b block tcp/22\n").unwrap_err();
+        assert!(conflict.starts_with("Conflict"), "{conflict}");
+    }
+
+    #[test]
+    fn the_policy_file_skips_comments_and_blank_lines() {
+        let text = "# managed by settings\n\nis.mail allow tcp/993\n";
+        assert_eq!(parse_policies(text).unwrap(), vec![app("is.mail", Policy::Allow, vec![tcp(993)])]);
+    }
+
+    #[test]
+    fn a_bad_policy_file_line_names_its_line() {
+        assert!(parse_policies("is.a maybe -\n").unwrap_err().starts_with("line 1: policy must be allow or block"));
+        assert!(parse_policies("is.a block tcp/x\n").unwrap_err().starts_with("line 1: port number x"));
+        assert!(parse_policies("is.a block 22\n").unwrap_err().contains("needs a protocol"));
+        assert!(parse_policies("is.a block sctp/22\n").unwrap_err().contains("unknown protocol sctp"));
+        assert!(parse_policies("is.a block tcp/22 extra\n").unwrap_err().contains("too many fields"));
+        assert!(parse_policies("ok block -\n\nis.b\n").unwrap_err().starts_with("line 3:"));
     }
 }
