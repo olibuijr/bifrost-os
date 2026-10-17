@@ -14,6 +14,9 @@ pub use bifrost_ui as controls;
 pub use bifrost_ui::{Command, Commands};
 /// The shared remote command centre (`CommandCenter`): app-side handlers for the transport actions the system sends.
 pub use bifrost_ui::remote_command;
+/// Media models for apps (no drawing): feedback and rating for the playing item, playlists, the media picker's
+/// selection rules, library queries, external player content items, and the playback arbiter.
+pub use bifrost_ui::{content_items, media_feedback, media_picker, media_playlist, media_query, playback_arbiter};
 pub use bifrost_proto as proto;
 pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, TouchKind};
 pub use bifrost_ui::touch::{TouchEvent, TouchPhase, TouchType};
