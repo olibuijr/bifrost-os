@@ -2,6 +2,7 @@
 //! built-in apps, driven by plain touch/key events and drawn into a Surface.
 
 pub mod pasteboard;
+pub mod pasteboard_transfer;
 pub mod battery;
 pub mod browser;
 pub mod accessibility;
