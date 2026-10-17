@@ -395,6 +395,9 @@ pub enum ToApp {
     Release { buf: u32, generation: u32 },
     /// Several windows (`app_windows`): the shell closed window `id` from its own controls. The app drops its state for it.
     WindowClosed { id: u32 },
+    /// The shell's full-screen state for the app's window changed (the green button, or the app's own request).
+    /// The window takes the whole screen, with the menu bar hidden until the pointer reaches the top edge.
+    FullScreen { on: bool },
     /// Several windows: the shell resized window `id` to `w` x `h` points.
     WindowConfigure { id: u32, w: f32, h: f32 },
     /// Several windows: a touch on window `id`, with the same fields as `Touch` (`touch` is the touch id).
@@ -673,6 +676,8 @@ pub enum ToShell {
     ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
     /// The app's dock badge (`NativeDockTile.badgeLabel`): a short label such as an unread count; empty clears it.
     SetBadge { label: String },
+    /// Enter (`on`) or leave full screen for the app's window (`NSWindow.toggleFullScreen`). Answered by `ToApp::FullScreen`.
+    SetFullScreen { on: bool },
     /// Sent only by the keyboard system app.
     KeyboardOut(KeyboardOut),
     /// Ask the user for a file (`NativeOpenPanel`). `filters` are UTIs or extensions; they only narrow the panel's list.
@@ -902,6 +907,10 @@ mod tag {
     pub const REMOTE_SHARING: u32 = 0x10c;
     pub const CONTEXT_MENU:u32=0x10d;
     pub const SET_BADGE: u32 = 0x10e;
+    /// App -> shell: enter or leave full screen for the app's window (`ToShell::SetFullScreen`).
+    pub const SET_FULL_SCREEN: u32 = 0x1c6;
+    /// Shell -> app: the window's full-screen state changed (`ToApp::FullScreen`).
+    pub const FULL_SCREEN: u32 = 0x1cc;
     pub const KEYBOARD_OUT: u32 = 0x10f;
     pub const DOC_OPEN: u32 = 0x110;
     pub const DOC_SAVE: u32 = 0x111;
@@ -1152,6 +1161,10 @@ impl ToApp {
                 u32_(&mut b, tag::WINDOW_CLOSED);
                 u32_(&mut b, *id);
             }
+            ToApp::FullScreen { on } => {
+                u32_(&mut b, tag::FULL_SCREEN);
+                b.push(*on as u8);
+            }
             ToApp::WindowConfigure { id, w, h } => {
                 u32_(&mut b, tag::WINDOW_CONFIGURE);
                 u32_(&mut b, *id);
@@ -1309,6 +1322,7 @@ impl ToApp {
             },
             tag::RELEASE => ToApp::Release { buf: r.u32()?, generation: r.u32()? },
             tag::WINDOW_CLOSED => ToApp::WindowClosed { id: r.u32()? },
+            tag::FULL_SCREEN => ToApp::FullScreen { on: r.u8()? != 0 },
             tag::WINDOW_CONFIGURE => {
                 let (id, w, h) = (r.u32()?, r.f32()?, r.f32()?);
                 if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
@@ -1668,6 +1682,10 @@ impl ToShell {
                 u32_(&mut b, tag::SET_BADGE);
                 str_(&mut b, label);
             }
+            ToShell::SetFullScreen { on } => {
+                u32_(&mut b, tag::SET_FULL_SCREEN);
+                b.push(*on as u8);
+            }
             ToShell::OpenUrl { url } => {
                 u32_(&mut b, tag::OPEN_URL);
                 str_(&mut b, url);
@@ -1858,6 +1876,7 @@ impl ToShell {
             }),
             tag::HAPTIC => ToShell::Haptic,
             tag::SET_BADGE => ToShell::SetBadge { label: r.str()? },
+            tag::SET_FULL_SCREEN => ToShell::SetFullScreen { on: r.u8()? != 0 },
             tag::DOCUMENT_STATE => ToShell::DocumentState { title: r.str()?, edited: r.u8()? != 0, represented: r.str()? },
             tag::OPEN_URL => ToShell::OpenUrl { url: r.str()? },
             tag::NOTIFY => ToShell::Notify { title: r.str()?, body: r.str()? },
@@ -2254,6 +2273,8 @@ mod tests {
             ToShell::Haptic,
             ToShell::SetBadge { label: "12".into() },
             ToShell::SetBadge { label: String::new() },
+            ToShell::SetFullScreen { on: true },
+            ToShell::SetFullScreen { on: false },
             ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None },
                 Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active, blending: BlendingMode::WithinWindow, emphasized: true, corners: Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. }) }]),
             ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
@@ -2674,6 +2695,7 @@ mod quick_action_tests {
         }
         let app = [
             ToApp::WindowClosed { id: 3 },
+            ToApp::FullScreen { on: true },
             ToApp::WindowConfigure { id: 3, w: 320.0, h: 240.0 },
             ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99 },
             ToApp::WindowRelease { id: 3, buf: 1, generation: 5 },

@@ -362,6 +362,8 @@ impl Shell {
     }
     pub(super) fn draw_desktop_bar(&self,s:&mut Surface) {
         let height=self.desktop_bar_height();if s.y0>=height{return;}
+        // a full-screen window covers the bar until the pointer reaches the top (`desk::bar_hidden`)
+        if self.desk_bar_hidden(){return;}
         // the backdrop depends only on the size and the wallpaper: blur it once, not every frame
         if bifrost_render::glass::gpu() {
             // Golden Gate: the bar is transparent over the wallpaper the presenter draws

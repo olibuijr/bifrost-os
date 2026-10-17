@@ -572,6 +572,8 @@ pub struct Shell {
     fullscreen: bool,
     /// Game Mode state with its leave hysteresis (`gamemode`)
     game: gamemode::Model,
+    /// where the pointer was last, for the menu bar that a full-screen window hides (`desk::bar_hidden`)
+    pointer_y: Option<f32>,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
     prefs: Prefs,
     /// Screen Zoom (Option+Cmd+8, =, -): the final-frame magnifier the GPU presenter draws (`accessibility::zoom`)
@@ -913,6 +915,7 @@ impl Shell {
             dnd: dnd::State::default(),
             fullscreen: false,
             game: Default::default(),
+            pointer_y: None,
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
             ota: None,
@@ -1204,7 +1207,12 @@ impl Shell {
 
     /// Game Mode's wish: Settings allows it (Automatic) and an installed game is in front, full screen.
     pub fn game_mode_wanted(&self) -> bool {
-        if self.options().game_mode != gamemode::GamePref::Automatic || !self.fullscreen {
+        if self.options().game_mode != gamemode::GamePref::Automatic {
+            return false;
+        }
+        // a video's full-screen flag, or the front window taken full screen by the green button or the app
+        let full = self.fullscreen || self.desk.as_ref().is_some_and(|d| d.front_full());
+        if !full {
             return false;
         }
         let Screen::App(AppId::External(n)) = self.screen else { return false };
@@ -2453,6 +2461,9 @@ impl Shell {
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // session event taps see the pointer first and may drop or move it (`services::event_services`)
         let Some(ev) = self.tap_pointer_event(ev) else { return vec![] };
+        if let Event::Down(_, y) | Event::Move(_, y) = ev {
+            self.pointer_y = Some(y);
+        }
         self.last_input = t;
         self.dirty = true;
         // a touch or key ends a screen saver and is not passed on (the display power key still sleeps)

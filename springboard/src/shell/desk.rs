@@ -126,7 +126,9 @@ pub struct Win {
     pub r: Rect,
     pub maximized: bool,
     pub minimized: bool,
-    /// the rectangle to go back to when un-maximized
+    /// full screen: the window is in its own space over the whole screen, with no menu bar, Dock or title bar
+    pub full: bool,
+    /// the rectangle to go back to when un-maximized or left full screen
     restore: Rect,
 }
 
@@ -309,6 +311,11 @@ pub const UNIFIED_BAR_PT: f32 = 52.0;
 /// Where a press moves window `w` instead of reaching the app: above `drag_height` (window px), except in the
 /// rectangles returned (window px). A full-size app's empty toolbar band drags; its traffic lights and the controls
 /// it publishes (`App::controls`) do not, as the native toolkit lets the empty part of a unified toolbar move the window.
+/// A full-screen window covers the menu bar; the bar comes back only while the pointer is in its band at the top.
+pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32) -> bool {
+    full && pointer_y.map_or(true, |y| y >= bar_h)
+}
+
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
     zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
 }
@@ -358,7 +365,8 @@ pub fn title_of(app: AppId, m: &Metrics) -> i32 {
 
 impl Win {
     pub fn body(&self, m: &Metrics) -> Rect {
-        let t = title_of(self.app, m);
+        // a full-screen window has no title bar: the app is the whole window
+        let t = if self.full { 0 } else { title_of(self.app, m) };
         Rect { x: self.r.x, y: self.r.y + t, w: self.r.w, h: (self.r.h - t).max(1) }
     }
 
@@ -503,7 +511,7 @@ impl Desk {
         let y = (a.y + (a.h - h) / 3 + n * step / 2).clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
         let at = self.band_top(app);
-        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, restore: r });
+        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r });
         at
     }
 
@@ -522,10 +530,38 @@ impl Desk {
         win.maximized = false;
     }
 
+    /// The space a full-screen window takes: the whole screen, under the menu bar and over the Dock.
+    pub fn screen_rect(m: &Metrics) -> Rect {
+        Rect { x: 0, y: 0, w: m.w, h: m.h }
+    }
+
+    /// Enters (`on`) or leaves full screen for window `i`. The window keeps the size it had to go back to. A
+    /// fixed-size window does not go full screen; returns whether the window changed state.
+    pub fn set_full_screen(&mut self, m: &Metrics, i: usize, on: bool) -> bool {
+        let w = &mut self.wins[i];
+        if size_limits(w.app).fixed || w.full == on {
+            return false;
+        }
+        if on {
+            w.restore = w.r;
+            w.r = Self::screen_rect(m);
+            w.maximized = false;
+        } else {
+            w.r = w.restore;
+        }
+        w.full = on;
+        true
+    }
+
+    /// Whether the front window is full screen (Game Mode reads it).
+    pub fn front_full(&self) -> bool {
+        self.front().is_some_and(|w| w.full)
+    }
+
     pub fn toggle_zoom(&mut self, m: &Metrics, i: usize) {
         let a = Self::area(m);
         let w = &mut self.wins[i];
-        if size_limits(w.app).fixed {
+        if size_limits(w.app).fixed || w.full {
             return; // a fixed-size window does not zoom (its green button is disabled on Golden Gate)
         }
         if w.maximized {
@@ -1029,6 +1065,30 @@ impl Shell {
         if let Some(d) = self.desk.as_mut() { d.return_to_previous(i); }
         self.desk_layout(i);
         self.desk_frame_changed(i);
+    }
+
+    /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
+    pub(super) fn desk_bar_hidden(&self) -> bool {
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full());
+        bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
+    }
+
+    /// Full screen for an app's window: the green button, or the app's own request (`ToShell::SetFullScreen`). The app
+    /// hears it as `ToApp::FullScreen`. Game Mode reads the front window's state (`Desk::front_full`).
+    pub(super) fn desk_set_full_screen(&mut self, app: AppId, on: bool) {
+        let m = self.desk_metrics();
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.index_of(app) else { return };
+        if !d.set_full_screen(&m, i, on) {
+            return;
+        }
+        self.desk_layout(i);
+        if let AppId::External(slot) = app {
+            if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
+                h.send(&bifrost_proto::ToApp::FullScreen { on });
+            }
+        }
+        self.dirty = true;
     }
 
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
@@ -1542,6 +1602,10 @@ impl Shell {
                                 Light::Minimize => {
                                     self.desk_minimize_window(i, t);
                                 }
+                                Light::Zoom if matches!(w.app, AppId::External(_)) => {
+                                    // the green button of an app window takes it full screen (its own space)
+                                    self.desk_set_full_screen(w.app, !w.full);
+                                }
                                 Light::Zoom => {
                                     self.desk.as_mut()?.toggle_zoom(&m, i);
                                     self.desk_layout(i);
@@ -1926,7 +1990,7 @@ impl Shell {
     fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64, shadow: bool) {
         let ui = &self.ui;
         let r = w.r;
-        let rad = if w.maximized { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
+        let rad = if w.maximized || w.full { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
         if !w.maximized && shadow {
@@ -1976,6 +2040,8 @@ impl Shell {
         #[cfg(not(feature = "desktop-wayland"))]
         { self.desk.as_mut().unwrap().buf = buf; }
         let ui = &self.ui;
+        // a full-screen window is the app alone: no rim, title or traffic lights
+        if w.full { return; }
         // hairline under the title bar and around the window
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
         if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
@@ -2359,7 +2425,7 @@ mod tests {
     fn a_full_size_app_drags_from_its_empty_toolbar_band_but_not_its_controls_or_lights() {
         let m = Metrics { pt: 1.5, ..metrics() };
         let r = Rect { x: 100, y: 50, w: 900, h: 600 };
-        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, restore: r };
+        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r };
         let node = |x: f32, y: f32| bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: "Back".into(), value: String::new(), bounds: bifrost_ui::Rect { x, y, w: 64.0, h: 32.0 }, enabled: true };
         let (band, holes) = zone_of(&w, &m, &[node(220.0, 10.0), node(220.0, 300.0)], true);
         assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "the unified bar is the drag band");
@@ -2466,6 +2532,31 @@ mod tests {
     }
 
     #[test]
+    fn full_screen_takes_the_screen_and_goes_back_to_its_size() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::External(0), (500, 400));
+        let before = d.wins[0].r;
+        assert!(d.set_full_screen(&m, 0, true));
+        assert!(d.wins[0].full && d.front_full());
+        assert_eq!(d.wins[0].r, Desk::screen_rect(&m), "the whole screen, under the menu bar");
+        assert!(!d.set_full_screen(&m, 0, true), "already full: no change");
+        d.toggle_zoom(&m, 0);
+        assert_eq!(d.wins[0].r, Desk::screen_rect(&m), "a full window does not zoom");
+        assert!(d.set_full_screen(&m, 0, false));
+        assert_eq!(d.wins[0].r, before);
+        assert!(!d.front_full());
+    }
+
+    #[test]
+    fn the_menu_bar_comes_back_only_at_the_top_edge() {
+        assert!(!bar_hidden(false, None, 24.0), "an ordinary window never hides it");
+        assert!(bar_hidden(true, None, 24.0), "no pointer seen yet: hidden");
+        assert!(bar_hidden(true, Some(400.0), 24.0));
+        assert!(!bar_hidden(true, Some(3.0), 24.0), "pointer at the top: shown");
+    }
+
+    #[test]
     fn a_frame_id_names_the_app_whose_level_it_takes() {
         // the wayland frame of an app is `win_id(app)`, and take_wayland_windows finds the app again from that id
         for (i, a) in apps().iter().enumerate() {
@@ -2496,7 +2587,7 @@ mod tests {
     #[test]
     fn hits_find_lights_title_content_and_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
         assert_eq!(w.hit(&m, 118.0, 115.0), Some(Hit::Light(Light::Close)));
         assert_eq!(w.hit(&m, 138.0, 115.0), Some(Hit::Light(Light::Minimize)));
         assert_eq!(w.hit(&m, 158.0, 115.0), Some(Hit::Light(Light::Zoom)));
@@ -2510,7 +2601,7 @@ mod tests {
     #[test]
     fn a_maximized_window_has_no_resize_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
         assert_eq!(w.hit(&m, 1.0, 600.0), Some(Hit::Content));
     }
 
