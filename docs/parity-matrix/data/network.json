@@ -10,9 +10,9 @@
     {
       "feature": "HTTP and URL-based loading",
       "apple": "URLSession (the framework page says to use URLSession for HTTP and URL loading)",
-      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/src/url_configuration.rs (URLSessionConfiguration, CachePolicy); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes)",
+      "bifrost": "springboard/sdk/src/url.rs (URLSession::shared, data_task, download_task, bytes); springboard/sdk/src/url_configuration.rs (URLSessionConfiguration, CachePolicy); springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); wired: springboard/apps/news-desktop/src/feed_cache.rs (Conditional::get over bifrost_app::url::URLSession::shared().bytes); sdk/src/proxy_settings.rs (ProxySettings via URLSession::with_proxy)",
       "status": "partial",
-      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache, and a URLSessionConfiguration model (request timeout cap, session headers, cache policy actions, resource expiry, connections per host; headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not read the configuration yet, and HTTP/2 is missing; the row needs a Midget check."
+      "note": "HTTP/1.1 with TLS, redirects and a memory URLCache, and a URLSessionConfiguration model (request timeout cap, session headers, cache policy actions, resource expiry, connections per host; headless tests in sdk/tests/parity_sdk-complete-34.rs). Gap: the transport does not read the configuration yet, and HTTP/2 is missing; the row needs a Midget check. Built 2026-10-17: URLSession carries its URLSessionConfiguration (request timeout caps each request, resource timeout bounds the transfer, session headers are added) and ProxySettings read from the environment in shared(); https requests tunnel through an HTTP proxy with CONNECT, plain http sends the absolute target (sdk url.rs, request_target, connect_status; tests url::tests). Gaps: HTTP/2; the cellular and waits-for-connectivity flags have no effect on PC."
     },
     {
       "feature": "Connections (NWConnection) to a remote endpoint",
@@ -31,16 +31,16 @@
     {
       "feature": "Service discovery on the local network",
       "apple": "NWBrowser, Bonjour (struct Bonjour, Bonjour Listener Provider)",
-      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon)",
+      "bifrost": "springboard/core/src/dns_browse.rs, springboard/sdk/src/network_browser.rs; springboard/core/tests/parity_sdk-tests-05.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs and springboard/sdk/src/network_path.rs (partial: browse lifecycle only, no daemon); sdk/src/avahi_publish.rs (Publication)",
       "status": "partial",
-      "note": "Service type rules, browse and resolve replies, and name building are tested headless in core/tests/parity_sdk-tests-05.rs, and the SDK exposes the browser under its own names in sdk/src/network_browser.rs. The shell's network service runs browse references over this model. Gaps: replies are fed in, with no socket or daemon query; there is no advertise or registration API; and the nearby-sharing beacon is a private protocol, not DNS-SD. Verify on Midget for parity."
+      "note": "Service type rules, browse and resolve replies, and name building are tested headless in core/tests/parity_sdk-tests-05.rs, and the SDK exposes the browser under its own names in sdk/src/network_browser.rs. The shell's network service runs browse references over this model. Gaps: replies are fed in, with no socket or daemon query; there is no advertise or registration API; and the nearby-sharing beacon is a private protocol, not DNS-SD. Verify on Midget for parity. Built 2026-10-17: Bonjour advertising through Avahi: sdk avahi_publish::Publication runs avahi-publish-service for a listener's Service and port and withdraws it on drop (tests avahi_publish::tests). Browsing is still fed by hand; no socket query."
     },
     {
       "feature": "Multicast groups",
       "apple": "NWConnectionGroup",
       "bifrost": "springboard/ui/src/multicast.rs (MulticastMembership); springboard/sdk/src/network_group.rs (ConnectionGroup); springboard/src/net/share.rs (join_multicast_v4)",
       "status": "partial",
-      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group. Built 2026-10-17: sdk network_group::ConnectionGroup binds a UDP socket, joins and leaves IPv4 groups through the membership model (invalid joins refused before the socket), sends to a group, receives without blocking, and sets TTL and loopback; tests network_group::tests. Gap: std::net has no SO_REUSEADDR, so two groups cannot share one port on a host; not checked on Midget."
+      "note": "Group membership rules, the 224.0.0.0/4 range and send options are tested headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: the model opens no socket, so the shell's join is not driven by it, and apps still cannot join a group. Built 2026-10-17: sdk network_group::ConnectionGroup binds a UDP socket, joins and leaves IPv4 groups through the membership model (invalid joins refused before the socket), sends to a group, receives without blocking, and sets TTL and loopback; tests network_group::tests. Gap: std::net has no SO_REUSEADDR, so two groups cannot share one port on a host; not checked on Midget. Built 2026-10-17: SO_REUSEADDR is set on the group socket (Linux, through the C library) so several groups share a port."
     },
     {
       "feature": "Custom Ethernet frames",
@@ -59,9 +59,9 @@
     {
       "feature": "TLS and security options",
       "apple": "NWProtocolTLS, sec_protocol_options_t, sec_protocol_metadata_t, sec_identity_t",
-      "bifrost": "springboard/ui/src/tls_options.rs (TlsOptions, Trust); springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots)",
+      "bifrost": "springboard/ui/src/tls_options.rs (TlsOptions, Trust); springboard/src/deildu/http.rs (rustls with graviola provider, webpki roots); sdk/src/tls_client.rs (client_config, connect)",
       "status": "partial",
-      "note": "Version range, protocol names, server name and pinned trust are validated headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: no handshake uses these options yet, the shell's client is still fixed, and client identities and TLS metadata are missing."
+      "note": "Version range, protocol names, server name and pinned trust are validated headless in springboard/ui/tests/parity_sdk-os-05.rs. Gap: no handshake uses these options yet, the shell's client is still fixed, and client identities and TLS metadata are missing. Built 2026-10-17: sdk tls_client maps TlsOptions to a rustls client config (protocol range, ALPN, server name, system roots or pinned SHA-256 certificates) and connects with it (tests tls_client::tests). The shell's own HTTP client is unchanged. Client identities and TLS metadata are still missing."
     },
     {
       "feature": "QUIC, WebSocket and custom framers",

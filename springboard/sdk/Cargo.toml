@@ -8,6 +8,9 @@ description = "SDK for BifrOSt apps: protocol client, event loop and the SpringB
 bifrost-core = { path = "../core" }
 bifrost-render = { path = "../render" }
 bifrost-ui = { path = "../ui" }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-graviola = "0.4"
+webpki-roots = "1.0"
 bifrost-proto = { path = "../proto" }
 bifrost-midi = { path = "../audio/midi" }
 bifrost-audio-engine = { path = "../audio/engine" }
