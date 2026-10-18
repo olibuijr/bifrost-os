@@ -225,6 +225,22 @@
         assert!(!rows.iter().any(|t|t.ends_with(name)),"{name} is not the front app: {rows:?}");
     }
 
+    /// The Apps grid hides the desk windows under it and gives them back, as they were, when it closes.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn appgrid_hides_desk_windows_and_restores_them_on_close() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        sh.desk.as_mut().unwrap().wins[0].minimized=true;
+        sh.appgrid_toggle(0.);
+        assert!(sh.overview.grid.visible());
+        assert!(sh.desk.as_ref().unwrap().wins.iter().all(|w|w.minimized),"the grid shows over no window");
+        sh.appgrid_toggle(0.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.wins[0].minimized,"a window the person had minimized stays minimized");
+        assert!(!d.wins[1].minimized,"a window that was open comes back");
+    }
+
     /// Window > Zoom acts on the front visible window, not on a minimized one that still sits last in the stack.
     #[cfg(feature="desktop-wayland")]
     #[test]
