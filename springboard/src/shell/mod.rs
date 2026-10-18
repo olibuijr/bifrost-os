@@ -2678,6 +2678,9 @@ impl Shell {
             self.fit_home = rotate::fit_wallpaper(wp, self.w, self.h);
         }
         self.wallpaper_uploaded = false;
+        // every install invalidates the presenter's key, not only the Effect::Wallpaper path
+        #[cfg(target_os = "linux")]
+        crate::gpu::wl::bump_wallpaper_generation();
         *self.bar_backdrop.borrow_mut() = None;
         self.bar_on_light = desktop_bar::wallpaper_is_light(self.home_still(), self.desktop_bar_height());
         if self.desk_active() {

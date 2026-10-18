@@ -207,6 +207,7 @@ fn run() -> std::io::Result<()> {
     let mut mapped = match map_wallpaper(&dir, &current_wallpaper) {
         Some(m) => m,
         None => {
+            eprintln!("springboard: wallpaper {current_wallpaper} could not be mapped, using wallpaper.raw");
             current_wallpaper.clear();
             map_file(&format!("{dir}/wallpaper.raw"))?
         }
@@ -1259,7 +1260,6 @@ fn run() -> std::io::Result<()> {
                 Effect::Wallpaper(id) => match map_wallpaper(&dir, &id).and_then(|m| View::from_raw(m).map(|v| (m, v))) {
                     Some((m, view)) => {
                         shell.set_wallpaper(view);
-                        springboard::gpu::wl::bump_wallpaper_generation();
                         // the first-frame caches follow the new still (boot-08): rebuilt in the background
                         if let Some(path) = springboard::first_frame_cache::wallpaper_path(&dir, &id) {
                             springboard::first_frame_cache::spawn_build_here((w as u32, h as u32), &dir, &path);
