@@ -450,8 +450,9 @@ impl Keyboard {
             if self.shown && (take_over || svc.owner == 0) {
                 svc.owner = id;
             }
-            // the process starts when a keyboard is shown, never because a view was created (a desktop never shows one)
-            if take_over && self.shown {
+            // the process starts when the keyboard in use is shown, also one created shown (the shell's, which the lock
+            // screen raises at once); a hidden view never starts it, and a desktop never shows one
+            if self.shown && svc.owner == id {
                 svc.ensure(w, h, s);
             }
             if svc.owner == id {
