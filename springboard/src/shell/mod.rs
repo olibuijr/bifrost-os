@@ -468,6 +468,11 @@ pub enum WifiAction {
 
 pub use bifrost_ui::Event;
 
+/// How long a still finger on the tablet desktop is held before it is a secondary click, ms.
+const DESK_HOLD_MS: f64 = 550.0;
+/// How far a held finger may drift and still count as still, pt.
+const DESK_HOLD_SLOP_PT: f32 = 10.0;
+
 /// A tap on the dark screen wakes it: down and up within this time and distance.
 const TAP_WAKE_MS: f64 = 300.0;
 const TAP_WAKE_PX: f32 = 40.0;
@@ -781,6 +786,9 @@ pub struct Shell {
     desk_kb_lift: Option<(AppId, i32, i32)>,
     /// the focus `desk_text_focus` reported at the last tick, so the keyboard follows a change of focus once
     desk_text_focus_last: Option<bool>,
+    /// a finger held still on the tablet desktop: (x, y, when it landed, fired). Held `DESK_HOLD_MS` it is a secondary
+    /// click (`desktop_pointer` with context, as a right button), and the lift that ends it does nothing else
+    desk_hold: Option<(f32, f32, f64, bool)>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -1171,6 +1179,7 @@ impl Shell {
             kb_touch: false,
             desk_kb_lift: None,
             desk_text_focus_last: None,
+            desk_hold: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -2127,6 +2136,7 @@ impl Shell {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         let mut due = wake::Wake::default();
         due.add(self.clock.next_wake(t, self.screen_on));
+        if let Some((_, _, t0, false)) = self.desk_hold { due.add(Some(t0 + DESK_HOLD_MS)); }
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
@@ -3068,9 +3078,39 @@ impl Shell {
         }
     }
 
+    /// Follows a finger for the tablet desktop's long press (`desk_hold`). True when the event is the lift of a press
+    /// that already fired as a secondary click: it is swallowed, so it cannot also choose the menu item under it.
+    fn desk_hold_event(&mut self, ev: Event, t: f64) -> bool {
+        match ev {
+            Event::Down(x, y, ..) => {
+                // not on the keyboard (its keys have their own long press), the terminal (selection) or an SDK app
+                // (its own gestures)
+                let own = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
+                let on_keyboard = self.desk_keyboard_visible() && y >= self.kb_top();
+                let held = self.desk_active() && self.form.is_tablet() && !self.is_locked() && !own && !on_keyboard;
+                self.desk_hold = held.then_some((x, y, t, false));
+                false
+            }
+            Event::Move(x, y, ..) => {
+                if let Some((hx, hy, _, false)) = self.desk_hold {
+                    let slop = self.ui.pt(DESK_HOLD_SLOP_PT);
+                    if (x - hx).powi(2) + (y - hy).powi(2) > slop * slop {
+                        self.desk_hold = None;
+                    }
+                }
+                false
+            }
+            Event::Up(..) => matches!(self.desk_hold.take(), Some((.., true))),
+            _ => false,
+        }
+    }
+
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         // usage is recorded before and after the event, so a switch it makes is credited from its own time
         self.st_mark(t);
+        if self.desk_hold_event(ev, t) {
+            return vec![];
+        }
         // a touch that is a key of the on-screen keyboard does not raise it again (a Hide lowers it)
         let on_keyboard = self.kb_touch;
         let fx = self.event_inner(ev, t);
@@ -3627,6 +3667,13 @@ impl Shell {
             }
         }
         self.desk_text_focus_last = now;
+        if let Some((x, y, t0, false)) = self.desk_hold {
+            if t - t0 >= DESK_HOLD_MS {
+                self.desk_hold = Some((x, y, t0, true));
+                self.desktop_pointer(x, y, true, t);
+                self.dirty = true;
+            }
+        }
         let fx = self.tick_pumped(t);
         self.st_mark(t);
         fx
